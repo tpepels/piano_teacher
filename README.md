@@ -1,3 +1,21 @@
+### Phase 1C: lesson generation is integrated
+
+The app generates a skeleton, an optional chord outline, and the full original
+notes for each hand and passage. It engraves the *currently required variant*
+as purpose-built MusicXML and grades precisely that same note set. Each
+variant requires three consecutive clean performances at target BPM; new
+variants invalidate the previous score and wait for image readiness.
+Level, tempo, hand and passage are persisted across sessions.
+
+An alignment check refuses to grade exercises if a required pitch/onset is
+not represented by a real notehead in Verovio's SVG timing map. Run
+\`python scripts/check_generated_lesson.py --output-dir /tmp/lesson-pngs
+"/path/to/song.mid"\` to examine every generated stage of the opening
+passage. Arch CI now also executes this actual rendering path.
+
+Original key signatures, unusual rhythms, mixed measures and polished exercise
+layouts still require Phase 2. Actual Godot and USB/audio testing is pending.
+
 ## Phase 1C: generated exercises now appear in practice
 
 The practice engine now uses a single active *generated lesson variant* for

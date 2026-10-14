@@ -10,17 +10,21 @@
   slowdown; clean attempts restore the selected target speed, and three
   clean *full* target-speed attempts are required for mastery. A future
   increment will improve rolling error detection between checkpoints.
-- **1C (generator foundation only):** deterministic skeleton, chord-outline
-  and original-note variants with source-note mappings and deduplication.
-  **NOW DISPLAYED AND GRADED THROUGH THE SAME VARIANT**. Real Verovio/Godot
-  acceptance is pending; use scripts/check_generated_lesson.py to verify.
-- **1D/1E (pending):** generated-exercise curriculum, persistent per-level
-  mastery, integrated Godot practice and full hardware validation.
+- **1C (integrated; graphical acceptance pending):** skeleton, chord-outline
+  and original-note variants are rendered as purpose-built lesson MusicXML
+  and graded from the same required notes. Per-level progress is persisted.
+  The app rejects missing noteheads rather than grading invisible pitches.
+  Real Verovio/Godot acceptance is pending: scripts/check_generated_lesson.py.
+- **1D (partially implemented):** stages, three-clean mastery, hand practice,
+  connected passages, and saved stage/tempo work at the backend level;
+  advanced mistake isolation and musical segmentation remain.
+- **1E (pending):** verified Godot lesson rendering, USB MIDI feedback,
+  synchronized audio, and extended real-piano practice trial.
 - **Phase 0 hardware acceptance (pending):** physical speakers, USB piano,
   and real fullscreen score following cannot be certified from unit tests.
 
-Local automated regression suite: 114 passed, one Godot-dependent test
-skipped in the development environment. Godot visuals and timing on Arch
+Local automated regression suite: 130 passed, one Godot-dependent test
+skipped in the development environment (Phase 1C development checkout). Godot visuals and timing on Arch
 still require verification.
 
 

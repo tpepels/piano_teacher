@@ -23,5 +23,15 @@ jobs:
           ./scripts/check_godot.sh
       - name: Real rendering and HTTP integration
         run: .venv/bin/python scripts/smoke_phase0.py
+      - name: Verify generated exercise engraving and PNGs
+        run: |
+          .venv/bin/python - <<'PY'
+          from pathlib import Path
+          import sys
+          sys.path.insert(0, 'scripts')
+          from smoke_phase0 import make_fixture
+          make_fixture(Path('/tmp/piano-generated-fixture.mid'))
+          PY
+          .venv/bin/python scripts/check_generated_lesson.py /tmp/piano-generated-fixture.mid
       - name: Boot Godot UI against a real local backend
         run: .venv/bin/python scripts/smoke_godot.py
