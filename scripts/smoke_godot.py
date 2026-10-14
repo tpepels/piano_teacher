@@ -99,6 +99,8 @@ def run(file: Path | None = None) -> int:
                 loaded = api("/load", {"path": str(fixture)})
                 if not loaded.get("loaded"):
                     raise RuntimeError("Backend did not load the MIDI fixture")
+                # Headless runs should not request a physical fullscreen window.
+                api("/settings", {"fullscreen": False})
                 api("/control", {"action": "tempo", "bpm": 240})
                 godot_process = subprocess.Popen(
                     [godot, "--headless", "--path", str(ROOT / "godot"),
