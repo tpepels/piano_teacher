@@ -57,7 +57,7 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote]) ->
     expected = [n for n in phrase.notes if hand == "both" or n.hand == hand]
     unused = set(range(len(played)))
     assessments: list[NoteAssessment] = []
-    onset_tolerance = max(0.085, 0.23 * seconds_per_beat)
+    onset_tolerance = 0.100
     search_window = max(0.35, 0.65 * seconds_per_beat)
     for note in expected:
         start = (note.start - phrase.start) * seconds_per_beat
@@ -79,7 +79,7 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote]) ->
             status = "short"  # key never released
         else:
             actual = max(0, event.release - event.onset)
-            tolerance = max(0.095, duration * 0.30)
+            tolerance = max(0.055, duration * 0.20)
             if actual < duration - tolerance:
                 status = "short"
             elif actual > duration + tolerance:
@@ -168,4 +168,3 @@ class Curriculum:
             self.bpm = self.start_bpm
             return "Next passage"
         return "Piece complete - all passages passed"
-

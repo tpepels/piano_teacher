@@ -1,46 +1,50 @@
 # Piano Teacher
 
-A small, native Linux piano practice app. Load your own `.mid`/`.midi`, connect a USB MIDI piano, and play the notes under the moving vertical bar. No accounts, web browser, or bundled songs.
+A native Linux piano tutor with a minimal **Godot 4** interface and Python practice engine. Load your own MIDI or MusicXML files. The score is engraved as **traditional piano sheet music** with treble and bass clefs by music21 + Verovio (no piano roll).
 
-## Run on Linux (including Arch)
-
-Install Python 3.10+ and your usual USB MIDI/ALSA support. In this directory:
+## Install and launch on Arch Linux
 
 ```bash
+sudo pacman -S godot python python-pip alsa-utils
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
-python -m piano_teacher
+pip install -e '.[godot]'
+./run.sh
 ```
 
-Alternatively run `piano-teacher /path/to/song.mid`. On Arch, if your Python installation needs system packages to build `python-rtmidi`, install `alsa-lib` and `pkgconf`. The RtMidi/Mido backend uses ALSA MIDI ports on Linux. To diagnose MIDI connectivity use `aconnect -l` (package `alsa-utils`). Your instrument needs a **MIDI** USB connection, rather than just an audio connection.
+`run.sh` starts a loopback-only Python backend and opens the Godot application. Connect your USB MIDI piano, press **Piano** to select its MIDI input (single devices are auto-selected), then **Open file** to load `.mid`, `.midi`, `.musicxml`, `.xml`, or `.mxl`. Use **Start**, **Previous** and **Next**, or Space/arrow keys. There is no account or network service; all processing is local. `aconnect -l` helps diagnose a missing ALSA MIDI connection.
 
-## What it does
+## Implemented in this first Godot iteration
 
-1. Select a MIDI file, then a connected MIDI input device.
-2. The piece is divided into **two-measure passages** (uses the MIDI time signature). Rests are kept; silent passages are skipped.
-3. Practice **right hand**, then **left hand**, then **both**. Named left/right MIDI tracks are respected; two pitched tracks are treated as lower/upper hands; a single unlabelled track is split at middle C (C4). Percussion channel 10 is ignored.
-4. Start at approximately **60% of the file's initial tempo**, up to 72 BPM. A visual count-in and optional audible click run before each attempt.
-5. The app measures **which notes**, **when you start them**, and **how long you hold each key**. Two perfect attempts at one speed increase tempo by about 12% (minimum 4 BPM). A mistake repeats the same passage and tempo. After passing original tempo, it advances to the next hand or passage.
-6. The background grid shows quarter-note beats, with horizontal note lengths and note names. Completed attempts show correct notes in green and errors/misses in red.
+- Godot 4 minimal, light-coloured interface with SVG score from Verovio, full-page score panel and overlaid playhead.
+- Python backend preserves accurate MIDI event timestamps independently from screen rendering.
+- Mido/Music21 import paths and hand identification, plus score engraving for the current exercise.
+- Two-measure learning with automatic overlapping connections: **1–2 → 3–4 → 1–4 → 5–6 → 3–6**, followed by full-piece practice.
+- Right hand then left hand then both for learning exercises (skips hands without notes). Connections assess both hands.
+- Starts at **40%** original tempo; adjusts speed after consecutive clean performances, with progressive smaller increments and slowdown after repeated failures.
+- Pitch, ±100 ms onset timing, and ±20% duration scoring (with a 55 ms minimum duration tolerance); extra notes and missed notes count as errors.
+- Automatic retry and progression, manual passage navigation, progress saved locally in SQLite under `$XDG_DATA_HOME/piano-teacher` (usually `~/.local/share/piano-teacher`).
 
-Use **Space** to start/stop, **left/right arrows** to move between passages. Set hand/tempo manually if needed. Playback/progression is automatic once started; stop it with Space. MIDI notes only count after the visual count-in.
+## Current limitations - important
 
-## Deliberate limitations of this first version
+This is an **initial playable vertical slice, not a finished teaching app**. Godot and the Verovio/music21 score pipeline have **not been run together on physical Linux hardware in this environment**. The playhead's horizontal movement currently follows the passage duration linearly across the page rather than the engraved horizontal positions of individual notes. This is especially inaccurate for multi-system four-measure scores. **Do not treat the graphic playhead as precisely aligned with notes yet.** Backend grading uses the actual passage time, independently.
 
-- This reads MIDI data, **not microphone audio**. You need a MIDI-enabled keyboard; analog-only audio cannot be scored.
-- The practice timeline is normalized to one tempo. MIDI tempo changes and expressive rubato are not reproduced as variations in the practice tempo.
-- A single unlabelled track uses a C4 hand split, which will not fit every arrangement. For more reliable hand separation, export separate left/right tracks or label them `Left Hand` / `Right Hand`.
-- Notes sustaining past a passage boundary are visually clipped and judged up to the boundary; carry-over notes are not separately requested at the next passage.
-- No backing-track synthesis. A simple optional click/metronome is provided through Qt Multimedia; keep the keyboard's local sound on so you can hear yourself.
-- MIDI pedal (CC64) is not scored; key release durations are.
+MIDI-to-score quantization and multi-staff inference depend on music21 and are not reliably correct for all performance MIDI files; manual hand reassignment and note/finger-number overlays are not implemented. MusicXML ties spanning multiple notes require a stronger canonical note merger. The inactive-hand greying currently works only for conventional two-part scores. The **Listen** button is intentionally disabled until on-demand synthesis is implemented. MIDI sustain pedal events are not yet scored. The legacy Qt piano-roll app remains in `piano_teacher/ui.py` but is not part of the new Godot entrypoint.
 
-## Tests
+## Backend-only testing
 
 ```bash
-pip install -e '.[test]'
-pytest -q
+python -m pytest -q
+python -m piano_teacher.server --no-midi
+# In another terminal:
+curl http://127.0.0.1:8765/state
 ```
 
-The parser, phrase segmentation, grading and curriculum can be tested without Qt or MIDI hardware.
+The Python backend deliberately binds only to `127.0.0.1`. To inspect Godot without a MIDI keyboard, start the server with `--no-midi` and then `godot --path godot` (but practice cannot be meaningfully graded without real MIDI input).
 
+## Next milestones
+
+1. Align playhead and highlight individual engraved notes using Verovio element geometry/timing data; handle multi-system scores.
+2. Canonical MusicXML/MIDI reconstruction: clef/staff accuracy, ties, quantization, hand corrections, note/finger overlays.
+3. End-to-end physical MIDI and latency tests, on-demand Listen synthesis, stronger scoring for pedal/legato, and contextual hand/tempo controls.
+4. Linux release packaging and visual usability polish.

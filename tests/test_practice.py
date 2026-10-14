@@ -60,3 +60,14 @@ def test_overlapping_repeated_pitch_matches_nearest():
     attempts = [PlayedNote(60, 0, .5), PlayedNote(60, 1, 1.5)]
     assert evaluate(phrase, 'right', 60, attempts).clean
 
+
+def test_fixed_hundred_millisecond_and_twenty_percent_tolerance():
+    from piano_teacher.practice import PlayedNote, evaluate
+    from piano_teacher.music import Note, Phrase
+    expected = Note(0, 1, 60, 0, 0, 'right')
+    phrase = Phrase(1, 1, 1, 0, 4, (expected,))
+    # 120 BPM: reference duration = 0.5 seconds.
+    assert evaluate(phrase,'right',120,[PlayedNote(60,0.099,0.599)]).clean
+    assert not evaluate(phrase,'right',120,[PlayedNote(60,0.101,0.601)]).clean
+    assert evaluate(phrase,'right',120,[PlayedNote(60,0.0,0.401)]).clean
+    assert not evaluate(phrase,'right',120,[PlayedNote(60,0.0,0.39)]).clean
