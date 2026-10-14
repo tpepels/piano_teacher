@@ -45,19 +45,53 @@ class ScoreOverlay extends Control:
     var cursor: Dictionary = {}
     var showing := false
     var image_size := Vector2.ZERO
+    var marks: Array = []
+    var active_page := -1
+
+    func _sheet_xy(x: float, y: float) -> Vector2:
+        # Match TextureRect.STRETCH_KEEP_ASPECT_CENTERED including letterboxing.
+        var factor: float = min(size.x / image_size.x, size.y / image_size.y)
+        var painted: Vector2 = image_size * factor
+        return (size - painted) * 0.5 + painted * Vector2(x, y)
 
     func _draw() -> void:
-        if not showing or cursor.is_empty() or image_size.x <= 0 or image_size.y <= 0:
+        if image_size.x <= 0.0 or image_size.y <= 0.0:
             return
-        # TextureRect uses KEEP_ASPECT_CENTERED, so include its letterboxing.
-        var scale_factor: float = min(size.x / image_size.x, size.y / image_size.y)
-        var displayed: Vector2 = image_size * scale_factor
-        var offset: Vector2 = (size - displayed) * 0.5
-        var x: float = offset.x + displayed.x * float(cursor.get("x", 0.0))
-        var top: float = offset.y + displayed.y * float(cursor.get("top", 0.0))
-        var bottom: float = offset.y + displayed.y * float(cursor.get("bottom", 1.0))
-        draw_line(Vector2(x, top), Vector2(x, bottom), Color("#C39351"), 2.5, true)
-        draw_circle(Vector2(x, top), 4.0, Color("#C39351"))
+        # A faint green ring confirms correct notes; stronger colour markers
+        # distinguish mistakes without altering the underlying engraving.
+        var palette := {
+            "correct": Color("#4A987B"), "wrong": Color("#BB4A4A"),
+            "missed": Color("#BB4A4A"), "extra": Color("#BB4A4A"),
+            "early": Color("#BA852B"), "late": Color("#BA852B"),
+            "short": Color("#8660AF"), "long": Color("#8660AF")
+        }
+        var labels := {"wrong":"×", "missed":"!", "extra":"+",
+                       "early":"←", "late":"→", "short":"−", "long":"+"}
+        for marker in marks:
+            if int(marker.get("page", -1)) != active_page:
+                continue
+            var status: String = str(marker.get("status", ""))
+            var color: Color = palette.get(status, Color("#BB4A4A"))
+            var center: Vector2 = _sheet_xy(float(marker.get("x", 0.0)), float(marker.get("y", 0.0)))
+            if status == "correct":
+                draw_arc(center, 9.0, 0.0, TAU, 20, Color(color, 0.37), 1.5, true)
+            else:
+                var radius := 12.0 if status == "missed" else 10.0
+                draw_circle(center, radius, Color(1, 1, 1, 0.60))
+                draw_arc(center, radius, 0.0, TAU, 24, color, 2.5, true)
+                var symbol: String = str(labels.get(status, "!"))
+                var font: Font = ThemeDB.fallback_font
+                draw_string(font, center + Vector2(12, -9), symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, color)
+                if status == "extra":
+                    draw_string(font, center + Vector2(12, 5), str(marker.get("label", "")), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, color)
+        if showing and not cursor.is_empty() and int(cursor.get("page", -1)) == active_page:
+            var x: float = float(cursor.get("x", 0.0))
+            var top: float = float(cursor.get("top", 0.0))
+            var bottom: float = float(cursor.get("bottom", 1.0))
+            var start: Vector2 = _sheet_xy(x, top)
+            var end: Vector2 = _sheet_xy(x, bottom)
+            draw_line(start, end, Color("#C39351"), 2.5, true)
+            draw_circle(start, 4.0, Color("#C39351"))
 
 func _ready() -> void:
     _build_interface()
@@ -285,16 +319,27 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     speed_label.text = "%d BPM" % int(parsed.get("bpm", 0))
     hand_label.text = "%s hand · %d%% speed" % [str(parsed.get("hand", "right")).capitalize(), int(round(float(parsed.get("bpm", 0)) / max(1.0, float(parsed.get("original_bpm", 1))) * 100.0))]
     feedback_label.text = str(parsed.get("feedback", ""))
+    var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
+    if unpositioned > 0:
+        feedback_label.text += " · %d unpositioned note(s)" % unpositioned
     progress_label.text = "Exercise %d/%d  ·  %d mastered" % [int(parsed.get("exercise", 1)),int(parsed.get("exercise_count", 1)),int(parsed.get("mastered", 0))]
     start_button.text = "Stop" if bool(parsed.get("running", false)) else "Start"
+    score_overlay.marks = parsed.get("feedback_marks", [])
+    score_overlay.queue_redraw()
     var new_revision := int(parsed.get("revision", 0))
     if new_revision != revision:
         revision = new_revision
         layout_revision = -1
         score_layout = {}
         current_page = -1
+        score_view.texture = null
         score_overlay.showing = false
+        score_overlay.marks = []
         _request_layout()
+    if str(parsed.get("phase", "")) == "feedback" and not score_overlay.marks.is_empty():
+        var target_page: int = int(score_overlay.marks[0].get("page", 0))
+        if current_page != target_page and layout_revision == revision:
+            _request_score(target_page)
     var placeholder: Control = score_view.get_parent().get_node("Placeholder") as Control
     placeholder.visible = score_view.texture == null
 
@@ -353,6 +398,7 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     score_view.texture = ImageTexture.create_from_image(picture)
     score_overlay.image_size = Vector2(picture.get_width(), picture.get_height())
     current_page = requested_page
+    score_overlay.active_page = current_page
     rendered_revision = revision
     score_overlay.queue_redraw()
     (score_view.get_parent().get_node("Placeholder") as Control).hide()

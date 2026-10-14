@@ -27,9 +27,13 @@ pip install -e '.[godot]'
 
 ## Current limitations - important
 
-This is an **initial playable vertical slice, not a finished teaching app**. Godot and the Verovio/music21 score pipeline have **not been run together on physical Linux hardware in this environment**. The playhead's horizontal movement currently follows the passage duration linearly across the page rather than the engraved horizontal positions of individual notes. This is especially inaccurate for multi-system four-measure scores. **Do not treat the graphic playhead as precisely aligned with notes yet.** Backend grading uses the actual passage time, independently.
+This is an **initial playable vertical slice, not a finished teaching app**. Godot and the Verovio/music21 score pipeline have **not been run together on physical Linux hardware in this environment**. The playhead now uses quarter-beat timestamps linked to actual Verovio SVG notehead positions, rather than assuming uniform horizontal spacing. It handles score line and page changes. **It has not been verified end-to-end with a local Verovio/Godot runtime or physical MIDI hardware.** The cursor currently interpolates between engraved note/rest *onsets*, holds after the last positioned event and may not reach the exact barline during long final rests. Tempo/passage grading remains independent of rendering. The score service explicitly reports missing geometry instead of silently using inaccurate percentage-based positioning.
 
 MIDI-to-score quantization and multi-staff inference depend on music21 and are not reliably correct for all performance MIDI files; manual hand reassignment and note/finger-number overlays are not implemented. MusicXML ties spanning multiple notes require a stronger canonical note merger. The inactive-hand greying currently works only for conventional two-part scores. The **Listen** button is intentionally disabled until on-demand synthesis is implemented. MIDI sustain pedal events are not yet scored. The legacy Qt piano-roll app remains in `piano_teacher/ui.py` but is not part of the new Godot entrypoint.
+
+## Engraving geometry API
+
+After loading a piece, the backend offers `GET /score/layout` (quarter-beat anchors, system/page identifiers, normalized notehead coordinates), and `GET /score.svg?page=0` (zero-based page index). The state endpoint includes `beat` and `duration_beats`. Godot interpolates the cursor in beat space between server samples and transforms normalized coordinates into the *aspect-fitted SVG image area* to prevent offsets from letterboxing. The API reports an error when no graphical timing correspondence is available. The backend caches the layout by score revision.
 
 ## Backend-only testing
 
@@ -40,11 +44,11 @@ python -m piano_teacher.server --no-midi
 curl http://127.0.0.1:8765/state
 ```
 
-The Python backend deliberately binds only to `127.0.0.1`. To inspect Godot without a MIDI keyboard, start the server with `--no-midi` and then `godot --path godot` (but practice cannot be meaningfully graded without real MIDI input).
+The Python backend deliberately binds only to `127.0.0.1`. The geometry and wrap handling are verified with synthetic Verovio-shaped SVG/timemap tests; these do not substitute for testing a real score engraving. To inspect Godot without a MIDI keyboard, start the server with `--no-midi` and then `godot --path godot` (but practice cannot be meaningfully graded without real MIDI input).
 
 ## Next milestones
 
-1. Align playhead and highlight individual engraved notes using Verovio element geometry/timing data; handle multi-system scores.
+1. Run a real Godot/Verovio integration smoke test on Arch; address SVG renderer and engraving/font compatibility; highlight individual engraved notes from assessment results.
 2. Canonical MusicXML/MIDI reconstruction: clef/staff accuracy, ties, quantization, hand corrections, note/finger overlays.
 3. End-to-end physical MIDI and latency tests, on-demand Listen synthesis, stronger scoring for pedal/legato, and contextual hand/tempo controls.
 4. Linux release packaging and visual usability polish.

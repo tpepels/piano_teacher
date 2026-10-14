@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 from .learning import LearningPlan
 from .practice import Recorder, evaluate
 from .score import import_piece, render_layout, EngravedScore
+from .feedback import project_assessment
 
 
 class PracticeEngine:
@@ -35,6 +36,9 @@ class PracticeEngine:
         self._layout_cache: EngravedScore | None = None
         self._layout_revision = -1
         self.next_at = 0.0
+        self.pending_result = None
+        self.feedback_marks: list[dict] = []
+        self.feedback_unmapped = 0
         self.midi_port = None
         self.midi_device = ""
         self.enable_midi = enable_midi
@@ -84,6 +88,9 @@ class PracticeEngine:
             self._restore()
             self.feedback = "Press Start to practice"
             self.score_revision += 1
+            self.pending_result = None
+            self.feedback_marks = []
+            self.feedback_unmapped = 0
 
     def _restore(self):
         p = self.plan
@@ -114,6 +121,24 @@ class PracticeEngine:
         self.auto=False
         self.next_at=0
         self.recorder=None
+        self.pending_result=None
+        self.feedback_marks=[]
+        self.feedback_unmapped=0
+
+    def _commit_pending(self) -> str:
+        """Apply a completed attempt after feedback has been shown on its own score."""
+        if self.pending_result is None or self.plan is None:
+            return ""
+        p = self.plan
+        result = self.pending_result
+        self.pending_result = None
+        before = (p.index, p.hand)
+        message = p.apply_result(correct=result.correct,
+                                 total=len(result.notes), extras=result.extra_notes)
+        if (p.index, p.hand) != before:
+            self.score_revision += 1
+        self._save()
+        return message
 
     def start(self):
         with self.lock:
@@ -124,6 +149,9 @@ class PracticeEngine:
             self.running=True
             self.auto=True
             self.next_at=0
+            self.pending_result=None
+            self.feedback_marks=[]
+            self.feedback_unmapped=0
             self.recorder=Recorder()
             phrase=self.plan.exercise.phrase
             measures=max(1, phrase.last_bar - phrase.first_bar+1)
@@ -133,6 +161,8 @@ class PracticeEngine:
 
     def control(self, action: str, **kwargs) -> None:
         with self.lock:
+            if self.pending_result is not None:
+                self._commit_pending()
             if action == "stop":
                 self._stop()
                 self.feedback="Stopped"
@@ -162,8 +192,18 @@ class PracticeEngine:
         if not self.plan:
             return
         now=time.monotonic()
-        if self.next_at and now >= self.next_at:
-            self.start()
+        if self.pending_result is not None:
+            if self.next_at and now >= self.next_at:
+                message = self._commit_pending()
+                self.feedback_marks=[]
+                self.feedback_unmapped=0
+                if self.auto and message != "Piece mastered":
+                    self.start()
+                else:
+                    self.next_at=0
+                    self.auto=False
+                    self.feedback = message or self.feedback
+            return
         if not self.running or now < self.run_at:
             return
         phrase=self.plan.exercise.phrase
@@ -171,20 +211,23 @@ class PracticeEngine:
         if now < self.run_at+duration+0.20:
             return
         result=evaluate(phrase,self.plan.hand,self.plan.bpm,self.recorder.presses if self.recorder else [])
-        old_key=self.plan.identity
-        old_index=self.plan.index
-        old_hand=self.plan.hand
-        info=self.plan.apply_result(correct=result.correct,total=len(result.notes),extras=result.extra_notes)
-        self.feedback=result.summary+" - "+info
+        # Keep the just-played score visible for feedback. Curriculum changes
+        # are applied only after the display interval, never mid-feedback.
+        try:
+            projection = project_assessment(result, phrase, self.plan.bpm,
+                                            self.engraving().layout)
+            self.feedback_marks = projection["marks"]
+            self.feedback_unmapped = projection["unmapped"]
+        except (ValueError, RuntimeError, KeyError) as exc:
+            self.feedback_marks = []
+            self.feedback_unmapped = len(result.notes)
+            self.feedback = f"Engraving feedback unavailable: {exc}"
+        else:
+            self.feedback = result.summary
         self.running=False
         self.recorder=None
-        self.score_revision+=int((old_index,old_hand)!=(self.plan.index,self.plan.hand))
-        self._save()
-        if self.auto and info!="Piece mastered":
-            self.next_at=now+2
-        else:
-            self.auto=False
-            self.next_at=0
+        self.pending_result=result
+        self.next_at=now+2.5 if self.auto else 0
 
     def state(self) -> dict:
         with self.lock:
@@ -197,7 +240,7 @@ class PracticeEngine:
             seconds=(ex.phrase.end-ex.phrase.start)*60/p.bpm
             elapsed=now-self.run_at
             progress=min(1.0,max(0.0, elapsed/seconds)) if self.running else 0.0
-            phase="count_in" if self.running and elapsed<0 else "playing" if self.running else "feedback" if self.next_at else "ready"
+            phase="count_in" if self.running and elapsed<0 else "playing" if self.running else "feedback" if self.pending_result is not None else "ready"
             return {"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
                     "exercise":p.index+1,"exercise_count":len(p.exercises),
@@ -206,7 +249,9 @@ class PracticeEngine:
                     "countdown":max(0,-elapsed) if self.running else 0,
                     "progress":progress,"duration":seconds,"beat":progress * (ex.phrase.end - ex.phrase.start),
                     "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
-                    "device":self.midi_device,"feedback":self.feedback,"revision":self.score_revision}
+                    "device":self.midi_device,"feedback":self.feedback,"revision":self.score_revision,
+                    "feedback_marks":self.feedback_marks if phase == "feedback" else [],
+                    "feedback_unmapped":self.feedback_unmapped if phase == "feedback" else 0}
 
     def engraving(self) -> EngravedScore:
         with self.lock:

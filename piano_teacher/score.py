@@ -81,6 +81,29 @@ def import_piece(path: str | Path) -> tuple[Piece, object]:
     return Piece(path.stem, bpm, tuple(events), phrases), notation
 
 
+def _pitches_from_verovio(toolkit, events: list[dict]) -> dict[str, int]:
+    """Read sounding MIDI pitches of Verovio note IDs, not displayed accidental glyphs.
+
+    getMIDIValuesForElement resolves key signatures, chromatic spelling and
+    accidentals, unlike manually interpreting an SVG notehead's height.
+    """
+    note_ids = {str(identifier) for event in events for identifier in event.get("on", [])}
+    try:
+        toolkit.renderToMIDI()  # Required before getMIDIValuesForElement
+    except Exception:
+        return {}
+    result = {}
+    for identifier in note_ids:
+        try:
+            data = json.loads(toolkit.getMIDIValuesForElement(identifier))
+            pitch = data.get("pitch") if isinstance(data, dict) else None
+            if isinstance(pitch, (int, float)) and 0 <= pitch <= 127:
+                result[identifier] = int(pitch)
+        except (TypeError, ValueError, AttributeError, KeyError):
+            continue
+    return result
+
+
 @dataclass(frozen=True)
 class EngravedScore:
     pages: tuple[str, ...]
@@ -154,7 +177,8 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
         raise ValueError("Verovio produced an invalid note timing map") from exc
     if not isinstance(events, list):
         raise ValueError("Verovio produced no note timing map")
-    layout = layout_from_pages(list(pages), events, total_beats)
+    pitches = _pitches_from_verovio(toolkit, events)
+    layout = layout_from_pages(list(pages), events, total_beats, pitches=pitches)
     return EngravedScore(pages, layout)
 
 

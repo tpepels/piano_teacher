@@ -111,7 +111,8 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
     return PageGeometry(width, height, found)
 
 
-def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float) -> dict:
+def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
+                      pitches: dict[str, int] | None = None) -> dict:
     """Return exact note/rest-onset anchors for synchronized, multi-system playback.
 
     A system is selected by the *next onset* at a wrap. Between onsets in one
@@ -127,6 +128,9 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float) 
         for identifier, (x, y, system) in page.elements.items():
             where[identifier] = (i, x, y, system)
     groups = defaultdict(list)
+    positioned_notes = []
+    seen_note_ids = set()
+    pitches = pitches or {}
     for event in timemap:
         if "qstamp" not in event:
             continue
@@ -137,6 +141,11 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float) 
             if identifier in where:
                 page, x, y, system = where[identifier]
                 groups[(page, system, round(max(0, beat), 7))].append((x, y))
+                if identifier in pitches and identifier not in seen_note_ids:
+                    positioned_notes.append({"id": identifier, "beat": round(max(0, beat), 7),
+                                             "pitch": pitches[identifier], "page": page,
+                                             "x": x, "y": y, "system": system})
+                    seen_note_ids.add(identifier)
     if not groups:
         raise ValueError("Verovio supplied no engraved/timed note matches; cannot align playhead")
     # Each staff system is bounded by its own note positions. Even on a page
@@ -158,6 +167,7 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float) 
     if any(anchors[i]["beat"] < anchors[i-1]["beat"] for i in range(1,len(anchors))):
         raise AssertionError("Unsorted engraving anchors")
     return {"pages": len(svgs), "beats": total_beats, "anchors": anchors,
+            "notes": sorted(positioned_notes, key=lambda n: (n["beat"], n["pitch"], n["id"])),
             "widths": [p.width for p in pages], "heights": [p.height for p in pages]}
 
 

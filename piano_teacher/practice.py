@@ -17,13 +17,14 @@ class PlayedNote:
 @dataclass(frozen=True)
 class NoteAssessment:
     note: Note
-    status: Literal["correct", "early", "late", "short", "long", "missed"]
+    status: Literal["correct", "early", "late", "short", "long", "missed", "wrong"]
 
 
 @dataclass(frozen=True)
 class Assessment:
     notes: tuple[NoteAssessment, ...]
     extra_notes: int
+    unmatched_played: tuple[PlayedNote, ...] = ()
 
     @property
     def correct(self) -> int:
@@ -87,7 +88,23 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote]) ->
             else:
                 status = "correct"
         assessments.append(NoteAssessment(note, status))
-    return Assessment(tuple(assessments), len(unused))
+    # Reclassify a missing pitch as 'wrong' only when an as-yet-unmatched
+    # played note started at the expected beat. This avoids counting an
+    # incorrect chord note as both 'missed' and 'extra'. Exact-pitch matching
+    # is completed first so a wrong note cannot steal another correct note.
+    for i, entry in enumerate(assessments):
+        if entry.status != "missed":
+            continue
+        expected_onset = (entry.note.start - phrase.start) * seconds_per_beat
+        candidates = [(abs(played[j].onset - expected_onset), j)
+                      for j in unused
+                      if abs(played[j].onset - expected_onset) <= onset_tolerance]
+        if candidates:
+            _, index = min(candidates)
+            unused.remove(index)
+            assessments[i] = NoteAssessment(entry.note, "wrong")
+    leftovers = tuple(played[i] for i in sorted(unused))
+    return Assessment(tuple(assessments), len(leftovers), leftovers)
 
 
 class Recorder:
