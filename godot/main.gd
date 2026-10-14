@@ -1098,7 +1098,7 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     score_overlay.queue_redraw()
     _layout_moving_score()
     _refresh_score_status()
-    if int(last_state.get("awaiting_score_revision", -1)) == revision:
+    if str(last_state.get("phase", "")) == "loading" and int(last_state.get("awaiting_score_revision", -1)) == revision:
         _send_action({"action": "score_ready", "revision": revision})
 
 func _send_action(command: Dictionary) -> void:

@@ -63,3 +63,4 @@ def test_frontend_ack_requires_current_png():
     gd=(Path(__file__).resolve().parents[1] / 'godot/main.gd').read_text()
     assert '"action": "score_ready", "revision": revision' in gd
     assert 'rendered_revision == revision and score_view.texture != null' in gd
+    assert 'str(last_state.get("phase", "")) == "loading"' in gd
