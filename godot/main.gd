@@ -54,6 +54,16 @@ var device_button: Button
 var start_button: Button
 var score_view: TextureRect
 var score_overlay: ScoreOverlay
+var score_frame: Control
+var score_content: Control
+var score_crop_origin := Vector2.ZERO
+var score_crop_size := Vector2.ONE
+var count_tick_index := -1
+var play_tick_index := -1
+var count_in_display: Label
+var click_player: AudioStreamPlayer
+var click_high: AudioStreamWAV
+var click_low: AudioStreamWAV
 var device_menu: PopupMenu
 var device_names: Array = []
 var revision := -1
@@ -77,12 +87,12 @@ class ScoreOverlay extends Control:
     var image_size := Vector2.ZERO
     var marks: Array = []
     var active_page := -1
+    var crop_origin := Vector2.ZERO
+    var crop_size := Vector2.ONE
 
     func _sheet_xy(x: float, y: float) -> Vector2:
-        # Match TextureRect.STRETCH_KEEP_ASPECT_CENTERED including letterboxing.
-        var factor: float = min(size.x / image_size.x, size.y / image_size.y)
-        var painted: Vector2 = image_size * factor
-        return (size - painted) * 0.5 + painted * Vector2(x, y)
+        # Preserve Verovio notehead coordinates after cropping and scrolling.
+        return size * ((Vector2(x, y) - crop_origin) / crop_size)
 
     func _draw() -> void:
         if image_size.x <= 0.0 or image_size.y <= 0.0:
@@ -125,6 +135,11 @@ class ScoreOverlay extends Control:
 
 func _ready() -> void:
     _build_interface()
+    click_high = _make_count_click(1160.0)
+    click_low = _make_count_click(770.0)
+    click_player = AudioStreamPlayer.new()
+    click_player.volume_db = -5.0
+    add_child(click_player)
     resized.connect(_update_responsive_layout)
     _update_responsive_layout()
     state_request = _new_request(_on_state)
@@ -157,6 +172,77 @@ func _ready() -> void:
     )
     add_child(scan_timer)
     set_process(true)
+
+func _make_count_click(frequency: float) -> AudioStreamWAV:
+    # Locally generated sound: no MIDI output device or soundfont required.
+    const RATE := 44100
+    const FRAMES := 4200
+    var samples := PackedByteArray()
+    samples.resize(FRAMES * 2)
+    for i in range(FRAMES):
+        var t: float = float(i) / float(RATE)
+        var envelope: float = pow(1.0 - float(i) / float(FRAMES), 4.0)
+        var wave: float = sin(TAU * frequency * t) * envelope * 0.46
+        samples.encode_s16(i * 2, int(wave * 32767.0))
+    var audio := AudioStreamWAV.new()
+    audio.format = AudioStreamWAV.FORMAT_16_BITS
+    audio.mix_rate = RATE
+    audio.stereo = false
+    audio.data = samples
+    return audio
+
+func _count_tick(accent: bool) -> void:
+    if click_player == null:
+        return
+    click_player.stream = click_high if accent else click_low
+    click_player.play()
+
+func _update_count_in() -> void:
+    var phase: String = str(last_state.get("phase", ""))
+    if phase == "playing":
+        count_tick_index = -1
+        var elapsed: float = float(Time.get_ticks_msec() - last_state_tick) / 1000.0
+        var seconds_per_beat: float = 60.0 / maxf(12.0, float(last_state.get("bpm", 60)))
+        var beat: float = maxf(0.0, float(last_state.get("beat", 0.0)) + elapsed / seconds_per_beat)
+        var current: int = int(floor(beat))
+        if current != play_tick_index:
+            play_tick_index = current
+            _count_tick(current % maxi(1, int(last_state.get("count_in_beats", 4))) == 0)
+        count_in_display.text = "PLAY"
+        count_in_display.visible = beat < 0.45
+        return
+    play_tick_index = -1
+    if phase != "count_in":
+        count_tick_index = -1
+        count_in_display.visible = false
+        return
+    var beats: int = maxi(1, int(last_state.get("count_in_beats", 4)))
+    var seconds_per_beat: float = 60.0 / maxf(12.0, float(last_state.get("bpm", 60)))
+    var since_poll: float = float(Time.get_ticks_msec() - last_state_tick) / 1000.0
+    var remaining: float = maxf(0.0, float(last_state.get("countdown", 0.0)) - since_poll)
+    var step: int = clampi(beats - int(ceil(remaining / seconds_per_beat)), 0, beats - 1)
+    if step != count_tick_index:
+        count_tick_index = step
+        _count_tick(step == 0)
+    count_in_display.text = "%d" % (beats - step)
+    count_in_display.visible = true
+
+func _layout_moving_score() -> void:
+    if score_view.texture == null or score_frame == null or score_content == null:
+        return
+    var viewport := score_frame.size
+    var image := score_overlay.image_size
+    if viewport.x < 10.0 or viewport.y < 10.0 or image.y <= 0.0:
+        return
+    var displayed_height: float = viewport.y * 0.80
+    var displayed_width: float = image.x * displayed_height / image.y
+    score_content.size = Vector2(displayed_width, displayed_height)
+    var x: float = (viewport.x - displayed_width) * 0.5
+    if not score_overlay.cursor.is_empty() and score_overlay.showing:
+        var note_x: float = (float(score_overlay.cursor.get("x", 0.0)) - score_crop_origin.x) / score_crop_size.x
+        x = viewport.x * 0.38 - note_x * displayed_width
+        x = clampf(x, minf(0.0, viewport.x - displayed_width - viewport.x * 0.10), viewport.x * 0.26)
+    score_content.position = Vector2(x, (viewport.y - displayed_height) * 0.5)
 
 func _new_request(callback: Callable) -> HTTPRequest:
     var req := HTTPRequest.new()
@@ -201,7 +287,8 @@ func _button(label: String, callback: Callable, primary := false) -> Button:
     button.text = label
     # Long song titles must not force a container wider than the viewport.
     button.clip_text = true
-    button.custom_minimum_size = Vector2(88, 45)
+    # Short controls must fit their text; library rows override width.
+    button.custom_minimum_size = Vector2(mini(220, maxi(96, 42 + label.length() * 9)), 45)
     var style := StyleBoxFlat.new()
     style.bg_color = ACCENT if primary else Color("#ECEFEA")
     style.set_corner_radius_all(11)
@@ -403,6 +490,8 @@ func _build_interface() -> void:
     folder_edit.custom_minimum_size = Vector2(0, 48)
     folder_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     folder_edit.placeholder_text = "~/Music/Piano Teacher"
+    folder_edit.add_theme_color_override("font_color", INK)
+    folder_edit.add_theme_color_override("font_placeholder_color", MUTED)
     folder_edit.text_submitted.connect(func(_text: String): _save_folder())
     folder_row.add_child(folder_edit)
     folder_row.add_child(_button("Browse…", _browse_folder))
@@ -420,6 +509,8 @@ func _build_interface() -> void:
     fullscreen_toggle.text = "Fullscreen application  (F11 to toggle)"
     fullscreen_toggle.button_pressed = true
     fullscreen_toggle.toggled.connect(_on_fullscreen_toggle)
+    fullscreen_toggle.add_theme_color_override("font_color", INK)
+    fullscreen_toggle.add_theme_color_override("font_hover_color", INK)
     settings_content.add_child(fullscreen_toggle)
     settings_message = _label("", 14, MUTED)
     settings_layout.add_child(settings_message)
@@ -474,16 +565,22 @@ func _build_interface() -> void:
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
     score_area.custom_minimum_size = Vector2(0, 170)
     score_margin.add_child(score_area)
+    score_frame = score_area
+    score_frame.clip_contents = true
+    score_frame.resized.connect(_layout_moving_score)
+    score_content = Control.new()
+    score_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    score_frame.add_child(score_content)
     score_view = TextureRect.new()
     score_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    score_view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-    score_area.add_child(score_view)
+    score_view.stretch_mode = TextureRect.STRETCH_SCALE
+    score_content.add_child(score_view)
     score_overlay = ScoreOverlay.new()
     score_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    score_area.add_child(score_overlay)
+    score_content.add_child(score_overlay)
     # Score status must live inside the score panel: feedback_label is replaced
     # by regular state polling and cannot hold engraving errors reliably.
     score_status_panel = CenterContainer.new()
@@ -500,6 +597,13 @@ func _build_interface() -> void:
     score_retry_button = _button("Retry score", _retry_score)
     score_retry_button.visible = false
     status_content.add_child(score_retry_button)
+    count_in_display = _label("4", 66, ACCENT, true)
+    count_in_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    count_in_display.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    count_in_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    count_in_display.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    count_in_display.visible = false
+    score_frame.add_child(count_in_display)
     var information := HBoxContainer.new()
     practice_layout.add_child(information)
     progress_label = _label("", 14, MUTED)
@@ -720,13 +824,12 @@ func _poll() -> void:
             state_pending = false
 
 func _process(_delta: float) -> void:
-    if last_state.is_empty() or not bool(last_state.get("running", false)):
-        score_overlay.showing = false
-        score_overlay.queue_redraw()
-        return
-    if str(last_state.get("phase", "")) != "playing" or layout_revision != revision:
-        score_overlay.showing = false
-        score_overlay.queue_redraw()
+    _update_count_in()
+    if last_state.is_empty() or str(last_state.get("phase", "")) != "playing" or layout_revision != revision:
+        if score_overlay.showing:
+            score_overlay.showing = false
+            score_overlay.queue_redraw()
+            _layout_moving_score()
         return
     var elapsed: float = float(Time.get_ticks_msec() - last_state_tick) / 1000.0
     var beat: float = float(last_state.get("beat", 0.0)) + elapsed * float(last_state.get("bpm", 60.0)) / 60.0
@@ -744,6 +847,7 @@ func _process(_delta: float) -> void:
         return
     score_overlay.cursor = cursor
     score_overlay.showing = true
+    _layout_moving_score()
     score_overlay.queue_redraw()
 
 func _position_at_beat(beat: float) -> Dictionary:
@@ -786,7 +890,14 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     passage_label.text = "%s · Measures %d–%d" % [kind, int(parsed.get("first_bar", 0)), int(parsed.get("last_bar", 0))]
     speed_label.text = "%d BPM" % int(parsed.get("bpm", 0))
     hand_label.text = "%s hand · %d%% speed" % [str(parsed.get("hand", "right")).capitalize(), int(round(float(parsed.get("bpm", 0)) / max(1.0, float(parsed.get("original_bpm", 1))) * 100.0))]
-    feedback_label.text = str(parsed.get("feedback", ""))
+    var phase: String = str(parsed.get("phase", "ready"))
+    if phase == "count_in":
+        feedback_label.text = "Count in · prepare to play"
+    elif phase == "playing":
+        var midi_count: int = int(parsed.get("midi_notes", 0))
+        feedback_label.text = "Playing · %d MIDI notes received" % midi_count if midi_count > 0 else "Playing · listening for your piano"
+    else:
+        feedback_label.text = str(parsed.get("feedback", ""))
     feedback_label.tooltip_text = feedback_label.text
     var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
     if unpositioned > 0:
@@ -868,13 +979,33 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if picture.get_width() < 32 or picture.get_height() < 32:
         _score_failed("The engraved score image is unexpectedly small")
         return
-    score_view.texture = ImageTexture.create_from_image(picture)
-    score_overlay.image_size = Vector2(picture.get_width(), picture.get_height())
+    # Remove empty page margins without breaking notehead annotations.
+    var original_size := Vector2(picture.get_width(), picture.get_height())
+    var opaque_bounds := picture.get_used_rect()
+    if opaque_bounds.size.x < 16 or opaque_bounds.size.y < 16:
+        _score_failed("The engraving image contains no visible musical notation")
+        return
+    var pad := maxi(18, int(0.035 * float(opaque_bounds.size.y)))
+    var crop_rect := Rect2i(
+        Vector2i(maxi(0, opaque_bounds.position.x - pad), maxi(0, opaque_bounds.position.y - pad)),
+        Vector2i(0, 0)
+    )
+    var right := mini(picture.get_width(), opaque_bounds.end.x + pad)
+    var bottom := mini(picture.get_height(), opaque_bounds.end.y + pad)
+    crop_rect.size = Vector2i(right, bottom) - crop_rect.position
+    var cropped := picture.get_region(crop_rect)
+    score_crop_origin = Vector2(crop_rect.position) / original_size
+    score_crop_size = Vector2(crop_rect.size) / original_size
+    score_view.texture = ImageTexture.create_from_image(cropped)
+    score_overlay.image_size = Vector2(cropped.get_width(), cropped.get_height())
+    score_overlay.crop_origin = score_crop_origin
+    score_overlay.crop_size = score_crop_size
     current_page = requested_page
     score_overlay.active_page = current_page
     rendered_revision = revision
     score_error = ""
     score_overlay.queue_redraw()
+    _layout_moving_score()
     _refresh_score_status()
 
 func _send_action(command: Dictionary) -> void:
