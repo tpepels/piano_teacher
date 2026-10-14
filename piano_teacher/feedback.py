@@ -10,7 +10,7 @@ from .practice import Assessment
 from .score_geometry import locate_beat
 
 
-def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layout: dict) -> dict:
+def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layout: dict, *, played_from_beat: float = 0.0) -> dict:
     """Return positioned note errors and leftover played notes for one attempt.
 
     Engraving matches require both pitch and onset, with a bounded tolerance
@@ -47,7 +47,7 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
     # The extra note has no notated notehead. Use the real beat-time x
     # coordinate, with an explicit estimated-position marker near the system.
     for played in assessment.unmatched_played:
-        beat = played.onset * bpm / 60
+        beat = played_from_beat + played.onset * bpm / 60
         if beat < 0 or beat > layout.get("beats", 0):
             unmapped += 1
             continue

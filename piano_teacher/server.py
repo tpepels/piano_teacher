@@ -20,6 +20,8 @@ from .score import import_piece, render_layout, EngravedScore
 from .feedback import project_assessment
 from .library import ScoreLibrary
 from .raster import rasterize_score
+from .recovery import check_two_bar_window
+from .music import Phrase
 
 
 class PracticeEngine:
@@ -31,6 +33,10 @@ class PracticeEngine:
         self.fingerprint = ""
         self.recorder: Recorder | None = None
         self.run_at = 0.0
+        self.play_from_beat = 0.0
+        self.next_boundary_beat = 0.0
+        self.pending_rewind: float | None = None
+        self.feedback_seconds = 2.5
         self.paused = False
         self.paused_at = 0.0
         self.transport_id = 0
@@ -155,6 +161,8 @@ class PracticeEngine:
         self.count_in_beats=0
         self.next_at=0
         self.awaiting_score_revision=None
+        self.pending_rewind=None
+        self.play_from_beat=0.0
         self.recorder=None
         self.pending_result=None
         self.feedback_marks=[]
@@ -175,13 +183,15 @@ class PracticeEngine:
         self._save()
         return message
 
-    def start(self):
+    def start(self, *, from_beat: float = 0.0):
         with self.lock:
             if self.plan is None:
                 raise ValueError("Open a piece first")
             # A user must be able to watch the time-driven score without a
             # connected instrument. Only actual MIDI input enables assessment.
             self.preview_only = self.midi_port is None
+            phrase=self.plan.exercise.phrase
+            self.play_from_beat=max(0.0,min(float(from_beat),phrase.end-phrase.start-1e-6))
             self.paused=False
             self.paused_at=0.0
             self.transport_id+=1
@@ -190,12 +200,15 @@ class PracticeEngine:
             self.next_at=0
             self.awaiting_score_revision=None
             self.pending_result=None
+            self.pending_rewind=None
             self.feedback_marks=[]
             self.feedback_unmapped=0
             self.recorder=Recorder()
-            phrase=self.plan.exercise.phrase
             measures=max(1, phrase.last_bar - phrase.first_bar+1)
-            self.count_in_beats=max(1,round((phrase.end-phrase.start)/measures))
+            beats_per_bar=(phrase.end-phrase.start)/measures
+            self.count_in_beats=max(1,round(2*beats_per_bar))
+            self.next_boundary_beat = min(phrase.end-phrase.start,
+                (int(self.play_from_beat/(2*beats_per_bar))+1)*2*beats_per_bar)
             self.run_at=time.monotonic()+self.count_in_beats*60/self.plan.bpm
             self.feedback="Count in, then play"
 
@@ -276,10 +289,44 @@ class PracticeEngine:
                     self.auto=False
                     self.feedback = message or self.feedback
             return
+        if self.pending_rewind is not None:
+            if now >= self.next_at:
+                where = self.pending_rewind
+                self.start(from_beat=where)
+            return
         if not self.running or self.paused or now < self.run_at:
             return
         phrase=self.plan.exercise.phrase
-        duration=(phrase.end - phrase.start)*60/self.plan.bpm
+        total_beats=phrase.end-phrase.start
+        elapsed_beats=max(0.0,(now-self.run_at)*self.plan.bpm/60)
+        score_beat=self.play_from_beat+elapsed_beats
+        beats_per_bar=total_beats/max(1,phrase.last_bar-phrase.first_bar+1)
+        # Defer five-error recovery until the two-bar boundary. Silent
+        # previews never generate failure, assessment or mastery.
+        while not self.preview_only and self.next_boundary_beat and score_beat >= self.next_boundary_beat:
+            decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
+                self.recorder.presses if self.recorder else [],
+                from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
+                beats_per_bar=beats_per_bar)
+            if decision is not None:
+                self.plan.streak=0
+                self.plan.failures+=1
+                before=self.plan.bpm
+                self.plan.bpm=max(12,round(before*.9))
+                self._save()
+                self.pending_rewind=decision.restart_beat
+                self.running=False
+                self.recorder=None
+                self.next_at=now+self.feedback_seconds
+                self.feedback=(f"{decision.errors} wrong or missed notes - retrying from "
+                               f"measure {phrase.first_bar + int(decision.restart_beat/beats_per_bar)} "
+                               f"at {self.plan.bpm} BPM")
+                return
+            previous_boundary=self.next_boundary_beat
+            self.next_boundary_beat=min(total_beats,self.next_boundary_beat+2*beats_per_bar)
+            if self.next_boundary_beat <= previous_boundary + 1e-7:
+                self.next_boundary_beat=0.0
+        duration=(total_beats-self.play_from_beat)*60/self.plan.bpm
         if now < self.run_at+duration+0.20:
             return
         if self.preview_only:
@@ -288,12 +335,15 @@ class PracticeEngine:
             self._stop()
             self.feedback = "Timing preview complete - connect a USB MIDI piano for scoring"
             return
-        result=evaluate(phrase,self.plan.hand,self.plan.bpm,self.recorder.presses if self.recorder else [])
+        active_phrase=Phrase(phrase.number,phrase.first_bar,phrase.last_bar,
+            phrase.start+self.play_from_beat,phrase.end,
+            tuple(n for n in phrase.notes if n.start>=phrase.start+self.play_from_beat-1e-7))
+        result=evaluate(active_phrase,self.plan.hand,self.plan.bpm,self.recorder.presses if self.recorder else [])
         # Keep the just-played score visible for feedback. Curriculum changes
         # are applied only after the display interval, never mid-feedback.
         try:
             projection = project_assessment(result, phrase, self.plan.bpm,
-                                            self.engraving().layout)
+                                            self.engraving().layout, played_from_beat=self.play_from_beat)
             self.feedback_marks = projection["marks"]
             self.feedback_unmapped = projection["unmapped"]
         except (ValueError, RuntimeError, KeyError) as exc:
@@ -304,8 +354,14 @@ class PracticeEngine:
             self.feedback = result.summary
         self.running=False
         self.recorder=None
+        if self.play_from_beat>1e-6:
+            # A clean *partial* recovery cannot confer full passage mastery.
+            self.pending_rewind=0.0
+            self.feedback="Retry complete - now play the whole passage"
+            self.next_at=now+self.feedback_seconds
+            return
         self.pending_result=result
-        self.next_at=now+2.5 if self.auto else 0
+        self.next_at=now+self.feedback_seconds if self.auto else 0
 
     def state(self) -> dict:
         with self.lock:
@@ -318,21 +374,24 @@ class PracticeEngine:
             now=self.paused_at if self.paused else time.monotonic()
             seconds=(ex.phrase.end-ex.phrase.start)*60/p.bpm
             elapsed=now-self.run_at
-            progress=min(1.0,max(0.0, elapsed/seconds)) if self.running else 0.0
-            phase=("paused" if self.paused else "count_in" if elapsed<0 else "playing") if self.running else "feedback" if self.pending_result is not None else "loading" if self.awaiting_score_revision is not None else "ready"
+            exercise_beat=self.play_from_beat+max(0.0,elapsed*p.bpm/60)
+            progress=min(1.0,max(0.0, exercise_beat/(ex.phrase.end-ex.phrase.start))) if self.running else 0.0
+            phase=("paused" if self.paused else "count_in" if elapsed<0 else "playing") if self.running else "feedback" if self.pending_result is not None else "loading" if self.awaiting_score_revision is not None else "recovering" if self.pending_rewind is not None else "ready"
             return {"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
                     "exercise":p.index+1,"exercise_count":len(p.exercises),
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,
                     "streak":p.streak,"mastered":len(p.mastered),"phase":phase,
                     "countdown":max(0,-elapsed) if self.running else 0,
+                    "lead_in_bars":2,"play_from_beat":self.play_from_beat,
+                    "recovery_beat":self.pending_rewind,
                     "clock_beat":elapsed*p.bpm/60 if self.running else 0.0,
                     "paused":self.paused,"transport_id":self.transport_id,
                     "awaiting_score_revision":self.awaiting_score_revision,
                     "count_in_beats":self.count_in_beats if self.running else 0,
                     "midi_notes":len(self.recorder.presses) if self.recorder is not None else 0,
                     "preview_only":self.preview_only,
-                    "progress":progress,"duration":seconds,"beat":progress * (ex.phrase.end - ex.phrase.start),
+                    "progress":progress,"duration":seconds,"beat":exercise_beat if self.running else 0.0,
                     "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
                     "device":self.midi_device,"feedback":self.feedback,"revision":self.score_revision,
                     "feedback_marks":self.feedback_marks if phase == "feedback" else [],
