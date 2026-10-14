@@ -80,6 +80,8 @@ var rendered_revision := -1
 var action_pending := false
 var last_state: Dictionary = {}
 var last_state_tick := 0
+var state_request_started_ms := 0
+var last_audio_transport_id := -1
 # Opt-in diagnostic hook for the actual headless UI integration test only.
 var phase0_smoke_mode := false
 var phase0_last_phase := ""
@@ -213,35 +215,46 @@ func _count_tick(accent: bool) -> void:
     if phase0_smoke_mode:
         print("PHASE0_CLICK:", str(last_state.get("phase", "")))
 
+func _transport_beat_now() -> float:
+    # One backend-authoritative musical clock for count-in, sound and cursor.
+    # The snapshot is anchored to the midpoint of the HTTP request rather
+    # than arrival time, to reduce local loopback latency bias.
+    var beat: float = float(last_state.get("clock_beat", 0.0))
+    if bool(last_state.get("running", false)) and not bool(last_state.get("paused", false)):
+        var elapsed: float = maxf(0.0, float(Time.get_ticks_msec() - last_state_tick) / 1000.0)
+        beat += elapsed * float(last_state.get("bpm", 60.0)) / 60.0
+    return beat
+
 func _update_count_in() -> void:
-    var phase: String = str(last_state.get("phase", ""))
-    if phase == "playing":
-        count_tick_index = -1
-        var elapsed: float = float(Time.get_ticks_msec() - last_state_tick) / 1000.0
-        var seconds_per_beat: float = 60.0 / maxf(12.0, float(last_state.get("bpm", 60)))
-        var beat: float = maxf(0.0, float(last_state.get("beat", 0.0)) + elapsed / seconds_per_beat)
-        var current: int = int(floor(beat))
-        if current != play_tick_index:
-            play_tick_index = current
-            _count_tick(current % maxi(1, int(last_state.get("count_in_beats", 4))) == 0)
-        count_in_display.text = "PLAY"
-        count_in_display.visible = beat < 0.45
-        return
-    play_tick_index = -1
-    if phase != "count_in":
-        count_tick_index = -1
+    if last_state.is_empty() or not bool(last_state.get("running", false)):
+        count_tick_index = -999
+        play_tick_index = -1
         count_in_display.visible = false
         return
-    var beats: int = maxi(1, int(last_state.get("count_in_beats", 4)))
-    var seconds_per_beat: float = 60.0 / maxf(12.0, float(last_state.get("bpm", 60)))
-    var since_poll: float = float(Time.get_ticks_msec() - last_state_tick) / 1000.0
-    var remaining: float = maxf(0.0, float(last_state.get("countdown", 0.0)) - since_poll)
-    var step: int = clampi(beats - int(ceil(remaining / seconds_per_beat)), 0, beats - 1)
-    if step != count_tick_index:
-        count_tick_index = step
-        _count_tick(step == 0)
-    count_in_display.text = "%d" % (beats - step)
-    count_in_display.visible = true
+    var beat: float = _transport_beat_now()
+    var paused: bool = bool(last_state.get("paused", false))
+    var attempt: int = int(last_state.get("transport_id", 0))
+    if attempt != last_audio_transport_id:
+        count_tick_index = -999
+        play_tick_index = -1
+        last_audio_transport_id = attempt
+    if paused:
+        # A paused count-in and a paused score both freeze on their last beat.
+        count_tick_index = int(floor(beat + 0.00001))
+        count_in_display.text = "PAUSED"
+        count_in_display.visible = true
+        return
+    var tick: int = int(floor(beat + 0.00001))
+    if tick != count_tick_index:
+        count_tick_index = tick
+        var bar_beats: int = maxi(1, int(last_state.get("count_in_beats", 4)))
+        _count_tick(posmod(tick, bar_beats) == 0)
+    if beat < 0.0:
+        count_in_display.text = "%d" % maxi(1, int(ceil(-beat)))
+        count_in_display.visible = true
+    else:
+        count_in_display.text = "PLAY"
+        count_in_display.visible = beat < 0.45
 
 func _layout_moving_score() -> void:
     if score_view.texture == null or score_frame == null or score_content == null:
@@ -847,25 +860,23 @@ func _toggle_fullscreen() -> void:
 func _poll() -> void:
     if not state_pending:
         state_pending = true
+        state_request_started_ms = Time.get_ticks_msec()
         if state_request.request(URL + "/state") != OK:
             state_pending = false
 
 func _process(_delta: float) -> void:
     _update_count_in()
-    var phase: String = str(last_state.get("phase", ""))
-    # During the audible count-in, park the beam at the first beat. At PLAY,
-    # it advances solely from elapsed clock time and BPM, not MIDI messages.
-    if last_state.is_empty() or (phase != "count_in" and phase != "playing") or layout_revision != revision:
+    if last_state.is_empty() or not bool(last_state.get("running", false)) or layout_revision != revision:
         if score_overlay.showing:
             score_overlay.showing = false
             score_overlay.queue_redraw()
             _layout_moving_score()
         return
-    var beat := 0.0
-    if phase == "playing":
-        var elapsed: float = float(Time.get_ticks_msec() - last_state_tick) / 1000.0
-        beat = float(last_state.get("beat", 0.0)) + elapsed * float(last_state.get("bpm", 60.0)) / 60.0
-    beat = clampf(beat, 0.0, float(last_state.get("duration_beats", 1.0)))
+    # Count-in uses negative beats and waits on the first note. During play,
+    # position advances at BPM regardless of the user's MIDI performance.
+    var clock: float = _transport_beat_now()
+    var beat: float = clampf(maxf(0.0, clock), 0.0, float(last_state.get("duration_beats", 1.0)))
+    var active: bool = not bool(last_state.get("paused", false)) and clock >= 0.0
     var cursor: Dictionary = _position_at_beat(beat)
     if cursor.is_empty():
         score_overlay.showing = false
@@ -879,10 +890,9 @@ func _process(_delta: float) -> void:
         return
     score_overlay.cursor = cursor
     score_overlay.showing = true
-    score_overlay.transport_active = phase == "playing"
+    score_overlay.transport_active = active
     _layout_moving_score()
-    # A phase transition is insufficient: measure the visible moving beam.
-    if phase0_smoke_mode and phase == "playing":
+    if phase0_smoke_mode and active:
         var cursor_tick: int = int(floor(beat * 4.0))
         if cursor_tick > phase0_last_cursor_tick:
             phase0_last_cursor_tick = cursor_tick
@@ -922,7 +932,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if typeof(parsed) != TYPE_DICTIONARY:
         return
     last_state = parsed
-    last_state_tick = Time.get_ticks_msec()
+    # The backend sampled the clock during this HTTP round trip. Estimate
+    # that sample at the midpoint so music never waits for the poll interval.
+    last_state_tick = int((state_request_started_ms + Time.get_ticks_msec()) / 2.0)
     if not bool(parsed.get("loaded", false)):
         feedback_label.text = str(parsed.get("feedback", "Open a score"))
         _refresh_score_status()
@@ -936,7 +948,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if phase0_smoke_mode and phase != phase0_last_phase:
         phase0_last_phase = phase
         print("PHASE0_PHASE:", phase)
-    if phase == "count_in":
+    if phase == "paused":
+        feedback_label.text = "Paused · Space to resume · R to restart"
+    elif phase == "count_in":
         feedback_label.text = "Count in · follow the cyan line when it starts"
     elif phase == "playing":
         var midi_count: int = int(parsed.get("midi_notes", 0))
@@ -951,7 +965,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if unpositioned > 0:
         feedback_label.text += " · %d unpositioned note(s)" % unpositioned
     progress_label.text = "Exercise %d/%d  ·  %d mastered" % [int(parsed.get("exercise", 1)),int(parsed.get("exercise_count", 1)),int(parsed.get("mastered", 0))]
-    start_button.text = "Stop  ·  Space" if bool(parsed.get("running", false)) else "Start  ·  Space"
+    start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Stop  ·  Space" if bool(parsed.get("running", false)) else "Start  ·  Space"
+    start_button.tooltip_text = "Space: start/stop/resume · P: pause · R: restart"
     start_button.disabled = not bool(parsed.get("running", false)) and (score_view.texture == null or layout_revision != revision)
     score_overlay.marks = parsed.get("feedback_marks", [])
     score_overlay.queue_redraw()
@@ -1099,10 +1114,21 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     _poll()
 
 func _toggle_playing() -> void:
+    if bool(last_state.get("paused", false)):
+        _send_action({"action": "resume"})
+        return
     if not bool(last_state.get("running", false)) and (score_view.texture == null or layout_revision != revision):
         feedback_label.text = "Preparing sheet music - wait for the notes before starting"
         return
     _send_action({"action": "stop" if bool(last_state.get("running", false)) else "start"})
+
+func _toggle_pause() -> void:
+    if bool(last_state.get("running", false)):
+        _send_action({"action": "resume" if bool(last_state.get("paused", false)) else "pause"})
+
+func _restart_practice() -> void:
+    if score_view.texture != null and layout_revision == revision:
+        _send_action({"action": "restart"})
 
 func _listen() -> void:
     pass
@@ -1154,6 +1180,15 @@ func _unhandled_key_input(event: InputEvent) -> void:
         match event.keycode:
             KEY_SPACE:
                 _toggle_playing()
+                get_viewport().set_input_as_handled()
+            KEY_P:
+                _toggle_pause()
+                get_viewport().set_input_as_handled()
+            KEY_R:
+                _restart_practice()
+                get_viewport().set_input_as_handled()
+            KEY_S:
+                _send_action({"action":"stop"})
                 get_viewport().set_input_as_handled()
             KEY_LEFT:
                 _send_action({"action":"previous"})

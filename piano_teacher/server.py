@@ -31,6 +31,9 @@ class PracticeEngine:
         self.fingerprint = ""
         self.recorder: Recorder | None = None
         self.run_at = 0.0
+        self.paused = False
+        self.paused_at = 0.0
+        self.transport_id = 0
         self.running = False
         self.auto = False
         self.preview_only = False
@@ -97,7 +100,7 @@ class PracticeEngine:
         # Timestamp in the hardware input callback, not on the rendering thread.
         now = time.monotonic()
         with self.lock:
-            if self.running and self.recorder:
+            if self.running and not self.paused and now >= self.run_at and self.recorder:
                 if message.type == "note_on":
                     self.recorder.add(message.note, message.velocity > 0, now - self.run_at)
                 elif message.type == "note_off":
@@ -143,6 +146,8 @@ class PracticeEngine:
         self.db.commit()
 
     def _stop(self):
+        self.paused=False
+        self.paused_at=0.0
         self.running=False
         self.auto=False
         self.preview_only=False
@@ -175,6 +180,9 @@ class PracticeEngine:
             # A user must be able to watch the time-driven score without a
             # connected instrument. Only actual MIDI input enables assessment.
             self.preview_only = self.midi_port is None
+            self.paused=False
+            self.paused_at=0.0
+            self.transport_id+=1
             self.running=True
             self.auto=not self.preview_only
             self.next_at=0
@@ -196,8 +204,25 @@ class PracticeEngine:
                 self._stop()
                 self.feedback="Stopped"
                 return
-            if action == "start":
-                self.start()
+            if action in ("start", "restart"):
+                self.start()  # Fresh count-in; previous MIDI notes cannot carry over.
+                return
+            if action == "pause":
+                if not self.running or self.paused:
+                    raise ValueError("Cannot pause unless an exercise is playing")
+                self.paused_at = time.monotonic()
+                self.paused = True
+                self.feedback = "Paused"
+                return
+            if action == "resume":
+                if not self.running or not self.paused:
+                    raise ValueError("Cannot resume unless an exercise is paused")
+                # Shift time-zero by the exact suspended duration, preserving
+                # both the count-in and all note timestamps on the same clock.
+                self.run_at += time.monotonic() - self.paused_at
+                self.paused_at = 0.0
+                self.paused = False
+                self.feedback = "Count in" if time.monotonic() < self.run_at else "Playing"
                 return
             p=self.plan
             if not p:
@@ -233,7 +258,7 @@ class PracticeEngine:
                     self.auto=False
                     self.feedback = message or self.feedback
             return
-        if not self.running or now < self.run_at:
+        if not self.running or self.paused or now < self.run_at:
             return
         phrase=self.plan.exercise.phrase
         duration=(phrase.end - phrase.start)*60/self.plan.bpm
@@ -269,19 +294,22 @@ class PracticeEngine:
             self._update()
             p=self.plan
             if not p:
-                return {"loaded":False,"running":False,"feedback":self.feedback,"device":self.midi_device,"revision":self.score_revision}
+                return {"loaded":False,"running":False,"paused":False,"transport_id":self.transport_id,
+                        "clock_beat":0.0,"feedback":self.feedback,"device":self.midi_device,"revision":self.score_revision}
             ex=p.exercise
-            now=time.monotonic()
+            now=self.paused_at if self.paused else time.monotonic()
             seconds=(ex.phrase.end-ex.phrase.start)*60/p.bpm
             elapsed=now-self.run_at
             progress=min(1.0,max(0.0, elapsed/seconds)) if self.running else 0.0
-            phase="count_in" if self.running and elapsed<0 else "playing" if self.running else "feedback" if self.pending_result is not None else "ready"
+            phase=("paused" if self.paused else "count_in" if elapsed<0 else "playing") if self.running else "feedback" if self.pending_result is not None else "ready"
             return {"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
                     "exercise":p.index+1,"exercise_count":len(p.exercises),
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,
                     "streak":p.streak,"mastered":len(p.mastered),"phase":phase,
                     "countdown":max(0,-elapsed) if self.running else 0,
+                    "clock_beat":elapsed*p.bpm/60 if self.running else 0.0,
+                    "paused":self.paused,"transport_id":self.transport_id,
                     "count_in_beats":self.count_in_beats if self.running else 0,
                     "midi_notes":len(self.recorder.presses) if self.recorder is not None else 0,
                     "preview_only":self.preview_only,
