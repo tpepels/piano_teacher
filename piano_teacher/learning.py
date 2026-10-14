@@ -42,6 +42,7 @@ class LearningPlan:
         self.index = 0
         self.hand_index = 0
         self.variant_index = 0
+        self._variants_cached: tuple | None = None
         self.streak = 0
         self.failures = 0
         self.bpm = self.start_bpm
@@ -70,7 +71,10 @@ class LearningPlan:
 
     @property
     def variants(self) -> tuple[ExerciseVariant, ...]:
-        return generate_variants(self.exercise.phrase, self.hand)
+        key = (self.index, self.hand)
+        if self._variants_cached is None or self._variants_cached[0] != key:
+            self._variants_cached = (key, generate_variants(self.exercise.phrase, self.hand))
+        return self._variants_cached[1]
 
     @property
     def active_variant(self) -> ExerciseVariant:

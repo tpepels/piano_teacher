@@ -93,8 +93,17 @@ def _render_measure(measure: ET.Element, segments: list[tuple[int, int, int, boo
     chords = defaultdict(list)
     for start, end, pitch, begin_tie, end_tie in segments:
         chords[start, end, begin_tie, end_tie].append(pitch)
-    events = sorted([(start, end, first, last, sorted(set(pitches)))
-                     for (start, end, first, last), pitches in chords.items()])
+    events = []
+    for (start, end, first, last), pitches in chords.items():
+        # Same-pitch unisons from different source tracks are separate
+        # assessable events; retain one in each independent voice.
+        remaining = sorted(pitches)
+        while remaining:
+            layer = sorted(set(remaining))
+            events.append((start, end, first, last, layer))
+            for pitch in layer:
+                remaining.remove(pitch)
+    events.sort()
     lanes: list[list[tuple]] = []
     endings: list[int] = []
     for event in events:
