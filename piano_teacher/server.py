@@ -44,6 +44,7 @@ class PracticeEngine:
         self._layout_revision = -1
         self._page_png: dict[int, bytes] = {}
         self.next_at = 0.0
+        self.awaiting_score_revision: int | None = None
         self.pending_result = None
         self.feedback_marks: list[dict] = []
         self.feedback_unmapped = 0
@@ -153,6 +154,7 @@ class PracticeEngine:
         self.preview_only=False
         self.count_in_beats=0
         self.next_at=0
+        self.awaiting_score_revision=None
         self.recorder=None
         self.pending_result=None
         self.feedback_marks=[]
@@ -186,6 +188,7 @@ class PracticeEngine:
             self.running=True
             self.auto=not self.preview_only
             self.next_at=0
+            self.awaiting_score_revision=None
             self.pending_result=None
             self.feedback_marks=[]
             self.feedback_unmapped=0
@@ -200,6 +203,12 @@ class PracticeEngine:
         with self.lock:
             if self.pending_result is not None:
                 self._commit_pending()
+            if action == "score_ready":
+                revision = int(kwargs.get("revision", -1))
+                # Ignore delayed PNG acknowledgements from older passages.
+                if self.awaiting_score_revision == revision and revision == self.score_revision:
+                    self.start()
+                return
             if action == "stop":
                 self._stop()
                 self.feedback="Stopped"
@@ -248,11 +257,20 @@ class PracticeEngine:
         now=time.monotonic()
         if self.pending_result is not None:
             if self.next_at and now >= self.next_at:
+                previous_revision = self.score_revision
                 message = self._commit_pending()
                 self.feedback_marks=[]
                 self.feedback_unmapped=0
                 if self.auto and message != "Piece mastered":
-                    self.start()
+                    if self.score_revision != previous_revision:
+                        # Never consume the next count-in while Godot is still
+                        # rendering the newly selected score and its note map.
+                        self.awaiting_score_revision = self.score_revision
+                        self.auto = False
+                        self.feedback = "Preparing next passage"
+                        self.next_at = 0
+                    else:
+                        self.start()
                 else:
                     self.next_at=0
                     self.auto=False
@@ -301,7 +319,7 @@ class PracticeEngine:
             seconds=(ex.phrase.end-ex.phrase.start)*60/p.bpm
             elapsed=now-self.run_at
             progress=min(1.0,max(0.0, elapsed/seconds)) if self.running else 0.0
-            phase=("paused" if self.paused else "count_in" if elapsed<0 else "playing") if self.running else "feedback" if self.pending_result is not None else "ready"
+            phase=("paused" if self.paused else "count_in" if elapsed<0 else "playing") if self.running else "feedback" if self.pending_result is not None else "loading" if self.awaiting_score_revision is not None else "ready"
             return {"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
                     "exercise":p.index+1,"exercise_count":len(p.exercises),
@@ -310,6 +328,7 @@ class PracticeEngine:
                     "countdown":max(0,-elapsed) if self.running else 0,
                     "clock_beat":elapsed*p.bpm/60 if self.running else 0.0,
                     "paused":self.paused,"transport_id":self.transport_id,
+                    "awaiting_score_revision":self.awaiting_score_revision,
                     "count_in_beats":self.count_in_beats if self.running else 0,
                     "midi_notes":len(self.recorder.presses) if self.recorder is not None else 0,
                     "preview_only":self.preview_only,

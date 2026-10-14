@@ -72,8 +72,8 @@ def test_frontend_has_time_driven_beam_and_prevents_start_before_notation():
     assert 'float(last_state.get("clock_beat", 0.0))' in gd
     assert 'beat += elapsed * float(last_state.get("bpm", 60.0)) / 60.0' in gd
     assert 'score_overlay.transport_active = active' in gd
-    assert 'var start_margin: float = viewport.x * 0.045' in gd
-    assert 'var lower_bound: float = minf(start_margin, viewport.x * 0.955 - displayed_width)' in gd
-    assert 'score_content.position = Vector2(x, (viewport.y - displayed_height) * 0.5)' in gd
+    assert 'var margin: float = viewport.x * 0.045' in gd
+    assert 'var min_x: float = viewport.x * 0.96 - displayed_width' in gd
+    assert 'score_content.position.lerp(Vector2(target_x, target_y), blend)' in gd
     assert 'start_button.disabled = false' in gd
     assert 'Preparing sheet music - wait for the notes' in gd

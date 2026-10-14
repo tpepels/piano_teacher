@@ -72,6 +72,8 @@ class PageGeometry:
     height: float
     # id -> (x, y, containing-system-id), in viewBox-relative coordinates
     elements: dict[str, tuple[float, float, str]]
+    # Rightmost measured barline x for each system (if discoverable).
+    system_ends: dict[str, float]
 
 
 def parse_svg_geometry(svg: str) -> PageGeometry:
@@ -83,6 +85,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
     matrix: dict[ET.Element, Matrix] = {}
     systems: dict[ET.Element, str] = {}
     found: dict[str, tuple[float, float, str]] = {}
+    system_ends: dict[str, float] = {}
 
     def walk(node: ET.Element, ancestor: Matrix, system: str):
         transform = _mul(ancestor, _transform(node.get("transform", "")))
@@ -108,7 +111,36 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
         if not all(math.isfinite(v) for v in normalized[:2]):
             raise ValueError("Non-finite SVG note position")
         found[identifier] = normalized
-    return PageGeometry(width, height, found)
+    # Use only actual Verovio right barlines for terminal held-note timing.
+    # Accept SVG lines and absolute move-to paths; unknown glyphs are ignored.
+    for elem in root.iter():
+        if "barLine" not in _classes(elem):
+            continue
+        positions = []
+        for item in elem.iter():
+            tag = item.tag.rsplit("}", 1)[-1]
+            try:
+                if tag == "line" and item.get("x1") is not None:
+                    x = float(item.get("x1"))
+                    y = float(item.get("y1", "0"))
+                elif tag == "path":
+                    match = re.match(r"\s*M\s*(%s)[,\s]+(%s)" % (NUMBERS.pattern, NUMBERS.pattern),
+                                     item.get("d", ""))
+                    if match is None:
+                        continue
+                    x, y = float(match.group(1)), float(match.group(2))
+                else:
+                    continue
+                actual_x, _ = _apply(matrix[item], x, y)
+                fraction = (actual_x - bx) / width
+                if math.isfinite(fraction) and -0.01 <= fraction <= 1.01:
+                    positions.append(fraction)
+            except (ValueError, KeyError):
+                continue
+        if positions:
+            system = systems[elem]
+            system_ends[system] = max(system_ends.get(system, -float("inf")), max(positions))
+    return PageGeometry(width, height, found, system_ends)
 
 
 def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
@@ -166,6 +198,14 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
     anchors.sort(key=lambda a: (a["beat"], a["page"], a["system"]))
     if any(anchors[i]["beat"] < anchors[i-1]["beat"] for i in range(1,len(anchors))):
         raise AssertionError("Unsorted engraving anchors")
+    # Continue through a sustained final note only where the actual final
+    # barline can be located. Otherwise hold at the final timed glyph.
+    last = anchors[-1]
+    page = pages[last["page"]]
+    boundary = page.system_ends.get(last["system"])
+    if (boundary is not None and last["beat"] < total_beats - 1e-7
+            and boundary > last["x"] + 1e-5):
+        anchors.append({**last, "beat": total_beats, "x": boundary, "terminal": True})
     return {"pages": len(svgs), "beats": total_beats, "anchors": anchors,
             "notes": sorted(positioned_notes, key=lambda n: (n["beat"], n["pitch"], n["id"])),
             "widths": [p.width for p in pages], "heights": [p.height for p in pages]}

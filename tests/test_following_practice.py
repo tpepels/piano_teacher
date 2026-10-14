@@ -68,7 +68,7 @@ def test_godot_produces_metronome_and_follows_score():
     source = (ROOT / "godot/main.gd").read_text()
     for expected in ("AudioStreamWAV.new()", "samples.encode_s16", "count_in_beats",
                      "count_tick_index", "play_tick_index", "click_player.play()",
-                     "func _layout_moving_score()", "score_content.position =",
+                     "func _layout_moving_score(delta: float = 0.0)", "score_content.position =",
                      "score_frame.clip_contents = true", "score_overlay.crop_origin"):
         assert expected in source
 

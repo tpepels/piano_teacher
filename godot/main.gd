@@ -82,6 +82,7 @@ var last_state: Dictionary = {}
 var last_state_tick := 0
 var state_request_started_ms := 0
 var last_audio_transport_id := -1
+var follow_system_key := ""
 # Opt-in diagnostic hook for the actual headless UI integration test only.
 var phase0_smoke_mode := false
 var phase0_last_phase := ""
@@ -256,33 +257,52 @@ func _update_count_in() -> void:
         count_in_display.text = "PLAY"
         count_in_display.visible = beat < 0.45
 
-func _layout_moving_score() -> void:
+func _layout_moving_score(delta: float = 0.0) -> void:
     if score_view.texture == null or score_frame == null or score_content == null:
         return
-    var viewport := score_frame.size
-    var image := score_overlay.image_size
-    if viewport.x < 10.0 or viewport.y < 10.0 or image.y <= 0.0:
+    var viewport: Vector2 = score_frame.size
+    var image: Vector2 = score_overlay.image_size
+    if viewport.x < 10.0 or viewport.y < 10.0 or image.x <= 0.0 or image.y <= 0.0:
         return
-    # Keep noteheads undistorted. Make room for musical movement by zooming
-    # until either the reading width or the safe vertical space is reached.
-    var scale: float = minf(
-        maxf(viewport.y * 0.85 / image.y, viewport.x * 1.65 / image.x),
-        viewport.y * 0.94 / image.y
-    )
+    # Frame the active grand-staff system instead of every system on a page.
+    # These bounds are measured from Verovio noteheads.
+    var base_scale: float = maxf(viewport.y * 0.84 / image.y, viewport.x * 1.55 / image.x)
+    var scale: float = base_scale
+    var midpoint: float = 0.5
+    var key := ""
+    if score_overlay.showing and not score_overlay.cursor.is_empty():
+        var cursor: Dictionary = score_overlay.cursor
+        var top: float = (float(cursor.get("top", 0.0)) - score_crop_origin.y) / score_crop_size.y
+        var bottom: float = (float(cursor.get("bottom", 1.0)) - score_crop_origin.y) / score_crop_size.y
+        var system_span: float = clampf(bottom - top, 0.20, 1.0)
+        scale = maxf(base_scale, minf(base_scale * 2.2, viewport.y * 0.65 / (image.y * system_span)))
+        midpoint = (top + bottom) * 0.5
+        key = "%d/%d/%s/%d" % [revision, int(cursor.get("page", 0)),
+               str(cursor.get("system", "")), int(last_state.get("transport_id", 0))]
     var displayed_width: float = image.x * scale
     var displayed_height: float = image.y * scale
     score_content.size = Vector2(displayed_width, displayed_height)
-    var x: float = (viewport.x - displayed_width) * 0.5
-    if not score_overlay.cursor.is_empty() and score_overlay.showing:
+    var target_x: float = (viewport.x - displayed_width) * 0.5
+    if score_overlay.showing and not score_overlay.cursor.is_empty():
         var note_x: float = (float(score_overlay.cursor.get("x", 0.0)) - score_crop_origin.x) / score_crop_size.x
-        var position_in_score: float = note_x * displayed_width
-        # At the opening, the beam moves right across the score. Once it
-        # reaches the 42% reading position, the notation scrolls left beneath
-        # it. Short phrases still get a moving line; nothing waits for MIDI.
-        var start_margin: float = viewport.x * 0.045
-        var lower_bound: float = minf(start_margin, viewport.x * 0.955 - displayed_width)
-        x = clampf(viewport.x * 0.42 - position_in_score, lower_bound, start_margin)
-    score_content.position = Vector2(x, (viewport.y - displayed_height) * 0.5)
+        var target_reading_x: float = viewport.x * 0.42
+        var margin: float = viewport.x * 0.045
+        if displayed_width > viewport.x * 0.91:
+            var min_x: float = viewport.x * 0.96 - displayed_width
+            target_x = clampf(target_reading_x - note_x * displayed_width, min_x, margin)
+    var target_y: float = (viewport.y - displayed_height) * 0.5
+    if displayed_height > viewport.y:
+        target_y = clampf(viewport.y * 0.5 - midpoint * displayed_height,
+                          viewport.y * 0.96 - displayed_height, viewport.y * 0.04)
+    # The PNG and feedback overlay share a parent, and therefore stay aligned
+    # during panning. Smoothing is independent of frame rate.
+    # Snap on staff/page changes rather than drifting over another system.
+    if delta <= 0.0 or key != follow_system_key:
+        score_content.position = Vector2(target_x, target_y)
+    else:
+        var blend: float = 1.0 - exp(-14.0 * delta)
+        score_content.position = score_content.position.lerp(Vector2(target_x, target_y), blend)
+    follow_system_key = key
 
 func _new_request(callback: Callable) -> HTTPRequest:
     var req := HTTPRequest.new()
@@ -870,7 +890,7 @@ func _process(_delta: float) -> void:
         if score_overlay.showing:
             score_overlay.showing = false
             score_overlay.queue_redraw()
-            _layout_moving_score()
+            _layout_moving_score(_delta)
         return
     # Count-in uses negative beats and waits on the first note. During play,
     # position advances at BPM regardless of the user's MIDI performance.
@@ -891,7 +911,7 @@ func _process(_delta: float) -> void:
     score_overlay.cursor = cursor
     score_overlay.showing = true
     score_overlay.transport_active = active
-    _layout_moving_score()
+    _layout_moving_score(_delta)
     if phase0_smoke_mode and active:
         var cursor_tick: int = int(floor(beat * 4.0))
         if cursor_tick > phase0_last_cursor_tick:
@@ -950,6 +970,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         print("PHASE0_PHASE:", phase)
     if phase == "paused":
         feedback_label.text = "Paused · Space to resume · R to restart"
+    elif phase == "loading":
+        feedback_label.text = "Preparing next passage · count-in waits for score"
     elif phase == "count_in":
         feedback_label.text = "Count in · follow the cyan line when it starts"
     elif phase == "playing":
@@ -982,6 +1004,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         score_overlay.showing = false
         score_overlay.marks = []
         _request_layout()
+    if str(parsed.get("phase", "")) == "loading" and layout_revision == revision and rendered_revision == revision and score_view.texture != null:
+        _send_action({"action": "score_ready", "revision": revision})
     if str(parsed.get("phase", "")) == "feedback" and not score_overlay.marks.is_empty():
         var target_page: int = int(score_overlay.marks[0].get("page", 0))
         if current_page != target_page and layout_revision == revision:
@@ -1074,6 +1098,8 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     score_overlay.queue_redraw()
     _layout_moving_score()
     _refresh_score_status()
+    if int(last_state.get("awaiting_score_revision", -1)) == revision:
+        _send_action({"action": "score_ready", "revision": revision})
 
 func _send_action(command: Dictionary) -> void:
     _send_post("/control", command)

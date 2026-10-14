@@ -1,3 +1,17 @@
+## Phase 1: score-following and transition improvements
+
+- Score panning now frames the active engraved staff system, with frame-rate
+  independent smoothing and immediate system/page relocation. The note-marker
+  overlay and PNG share the same transform.
+- For sustained endings, the time line can continue to the actual engraved
+  right barline when its SVG geometry is available; it does not fabricate an
+  endpoint when none is measurable.
+- On automatic hand/passage changes, the next count-in **waits for Godot to
+  render the correct new score revision**. Stale acknowledgements are ignored.
+  Manual Stop cancels a pending transition.
+- These changes have deterministic geometry and HTTP-state unit tests.
+  Real Godot rendering/audio remain to be validated on Arch Linux.
+
 ## Phase 1 in progress: one musical clock
 
 The Python practice engine owns a single signed musical position: negative
