@@ -95,38 +95,34 @@ class LearningPlan:
         self.streak = self.failures = 0
 
     def apply_result(self, *, correct: int, total: int, extras: int = 0) -> str:
-        """Advance only on clean performances; adapt increments to accuracy."""
+        """A clean run restores tempo; three target-speed clean runs confer mastery.
+
+        Recovery slowdowns happen on five pitch errors in a two-bar window.
+        Partial retries never call this method.
+        """
         if total <= 0:
             return "No notes to assess"
-        accuracy = correct / total
-        clean = accuracy == 1 and extras == 0
-        if clean:
-            self.streak += 1
-            self.failures = 0
-        else:
+        clean = correct == total and extras == 0
+        if not clean:
             self.streak = 0
             self.failures += 1
-        if clean and self.streak >= 2:
+            return f"Repeat - {correct}/{total} correct, {extras} extra"
+        self.failures = 0
+        if self.bpm < self.piece.bpm:
             self.streak = 0
-            if self.bpm < self.piece.bpm:
-                # Smaller steps as the player approaches original tempo.
-                step = 0.10 if self.bpm < self.piece.bpm * 0.7 else 0.05
-                self.bpm = min(self.piece.bpm, max(self.bpm + 1, round(self.bpm + self.piece.bpm * step)))
-                return f"Tempo increased to {self.bpm} BPM"
-            previous = self.identity
-            self.mastered[previous] = self.piece.bpm
-            if self.hand_index + 1 < len(self.hands):
-                self.hand_index += 1
-                self.bpm = self.start_bpm
-                return f"Mastered {previous}; now {self.hand} hand"
-            if self.index + 1 < len(self.exercises):
-                self.select(self.index + 1)
-                return f"Mastered {previous}; next passage"
-            return "Piece mastered"
-        if self.failures >= 3 and self.bpm > self.start_bpm:
-            self.failures = 0
-            self.bpm = max(self.start_bpm, round(self.bpm - self.piece.bpm * 0.05))
-            return f"Slowing down to {self.bpm} BPM"
-        if clean:
-            return "Repeat once more"
-        return f"Repeat - {correct}/{total} correct, {extras} extra"
+            self.bpm = min(self.piece.bpm, max(self.bpm + 1, round(self.bpm * 1.10)))
+            return f"Tempo increased to {self.bpm} BPM"
+        self.streak += 1
+        if self.streak < 3:
+            return f"Clean pass {self.streak}/3 - repeat"
+        self.streak = 0
+        previous = self.identity
+        self.mastered[previous] = self.piece.bpm
+        if self.hand_index + 1 < len(self.hands):
+            self.hand_index += 1
+            self.bpm = self.start_bpm
+            return f"Mastered {previous}; now {self.hand} hand"
+        if self.index + 1 < len(self.exercises):
+            self.select(self.index + 1)
+            return f"Mastered {previous}; next passage"
+        return "Piece mastered"
