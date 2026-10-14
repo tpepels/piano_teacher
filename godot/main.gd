@@ -234,7 +234,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if new_revision != revision:
         revision = new_revision
         _request_score()
-    var placeholder := score_view.get_parent().get_node("Placeholder")
+    var placeholder: Control = score_view.get_parent().get_node("Placeholder") as Control
     placeholder.visible = score_view.texture == null
 
 func _request_score() -> void:
@@ -255,7 +255,7 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         feedback_label.text = "Unable to display the engraved score"
         return
     score_view.texture = ImageTexture.create_from_image(picture)
-    score_view.get_parent().get_node("Placeholder").hide()
+    (score_view.get_parent().get_node("Placeholder") as Control).hide()
     if requested_revision != revision:
         _request_score()
 
