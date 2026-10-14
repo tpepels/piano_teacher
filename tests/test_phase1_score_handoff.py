@@ -29,7 +29,7 @@ def test_auto_advance_waits_for_correct_revision(tmp_path, monkeypatch):
         e.auto=True
         e.plan.hand_index=len(e.plan.hands)-1
         e.plan.bpm=e.plan.piece.bpm
-        e.plan.streak=1
+        e.plan.streak=2
         state=e.state()
         assert state['phase']=='loading'
         assert state['exercise']==2

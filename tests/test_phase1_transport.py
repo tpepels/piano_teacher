@@ -28,14 +28,14 @@ def harness(tmp_path, monkeypatch):
 def test_signed_beat_is_continuous_at_downbeat(harness):
     e, t = harness
     e.start()
-    assert e.state()['clock_beat'] == pytest.approx(-4)
+    assert e.state()['clock_beat'] == pytest.approx(-8)
     assert e.state()['transport_id'] == 1
-    t[0] = 103
-    assert e.state()['clock_beat'] == pytest.approx(-2)
     t[0] = 106
+    assert e.state()['clock_beat'] == pytest.approx(-4)
+    t[0] = 112
     assert e.state()['phase'] == 'playing'
     assert e.state()['clock_beat'] == pytest.approx(0)
-    t[0] = 108.25
+    t[0] = 114.25
     assert e.state()['clock_beat'] == pytest.approx(1.5)
     assert e.state()['beat'] == pytest.approx(1.5)
 
@@ -46,12 +46,12 @@ def test_pause_during_count_in_freezes_clock(harness):
     t[0] = 102.25
     e.control('pause')
     assert e.state()['phase'] == 'paused'
-    assert e.state()['clock_beat'] == pytest.approx(-2.5)
+    assert e.state()['clock_beat'] == pytest.approx(-6.5)
     t[0] = 192.25
-    assert e.state()['clock_beat'] == pytest.approx(-2.5)
+    assert e.state()['clock_beat'] == pytest.approx(-6.5)
     e.control('resume')
     assert e.state()['phase'] == 'count_in'
-    t[0] = 196
+    t[0] = 202
     assert e.state()['phase'] == 'playing'
     assert e.state()['clock_beat'] == pytest.approx(0)
 
@@ -59,7 +59,7 @@ def test_pause_during_count_in_freezes_clock(harness):
 def test_pause_preserves_recorded_midi_timing(harness):
     e, t = harness
     e.start()
-    t[0] = 107.5
+    t[0] = 113.5
     e._receive(SimpleNamespace(type='note_on', note=60, velocity=90))
     assert len(e.recorder.presses) == 1
     e.control('pause')
@@ -78,12 +78,12 @@ def test_pause_preserves_recorded_midi_timing(harness):
 def test_restart_clears_attempt_but_not_mastery(harness):
     e, t = harness
     e.start()
-    t[0] = 107.5
+    t[0] = 113.5
     e._receive(SimpleNamespace(type='note_on', note=60, velocity=90))
     ident = e.transport_id
     e.control('restart')
     assert e.state()['phase'] == 'count_in'
-    assert e.state()['clock_beat'] == pytest.approx(-4)
+    assert e.state()['clock_beat'] == pytest.approx(-8)
     assert e.transport_id == ident + 1
     assert e.state()['midi_notes'] == 0
     assert e.plan.index == 0 and not e.plan.mastered
@@ -106,12 +106,12 @@ def test_invalid_pause_and_resume_rejected(harness):
 def test_paused_preview_never_advances_learning(harness):
     e, t = harness
     e.start()
-    t[0] = 107
+    t[0] = 113
     e.control('pause')
     t[0] = 407
     assert e.state()['phase'] == 'paused'
     e.control('resume')
-    t[0] = 420.3
+    t[0] = 426.3
     state = e.state()
     assert state['phase'] == 'ready' and not state['running']
     assert state['mastered'] == 0

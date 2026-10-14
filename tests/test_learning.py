@@ -18,29 +18,30 @@ def test_overlapping_connections_and_performance():
 
 
 def test_right_then_both_for_single_hand_piece():
-    c=LearningPlan(make_piece(2))
-    assert c.hands == ('right','both')
+    c = LearningPlan(make_piece(2))
+    assert c.hands == ('right', 'both')
     assert c.bpm == 48
-    assert c.apply_result(correct=2,total=2) == 'Repeat once more'
-    assert c.apply_result(correct=2,total=2).startswith('Tempo increased')
-    assert c.bpm == 60
+    assert 'Tempo increased' in c.apply_result(correct=2, total=2)
     while c.bpm < c.piece.bpm:
-        c.apply_result(correct=2,total=2)
-        c.apply_result(correct=2,total=2)
-    assert c.apply_result(correct=2,total=2) == 'Repeat once more'
-    assert 'Mastered' in c.apply_result(correct=2,total=2)
-    # The next pair at original tempo moves to the combined-hands stage.
+        c.apply_result(correct=2, total=2)
+    assert c.streak == 0
+    assert c.apply_result(correct=2, total=2) == 'Clean pass 1/3 - repeat'
+    assert c.apply_result(correct=2, total=2) == 'Clean pass 2/3 - repeat'
+    assert 'Mastered' in c.apply_result(correct=2, total=2)
     assert c.hand == 'both'
 
 
-def test_failures_slow_down_and_manual_jump():
-    c=LearningPlan(make_piece())
-    c.set_bpm(90)
-    for _ in range(3): c.apply_result(correct=1,total=2)
-    assert c.bpm < 90
+def test_failures_reset_streak_but_do_not_slow_without_five_errors():
+    c = LearningPlan(make_piece())
+    c.set_bpm(120)
+    c.apply_result(correct=2,total=2)
+    assert c.streak == 1
+    c.apply_result(correct=1,total=2)
+    assert c.streak == 0 and c.bpm == 120
     c.jump(2)
     assert c.exercise.kind == 'connect'
     assert c.hand == 'both'
+
 
 
 def test_gapped_passages_are_not_joined():
