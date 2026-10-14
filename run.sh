@@ -25,7 +25,7 @@ BACKEND_PID=$!
 trap 'kill "$BACKEND_PID" 2>/dev/null || true' EXIT
 # Fail visibly if the Python backend exits before Godot connects.
 BACKEND_READY=0
-for _ in $(seq 1 30); do
+for _ in $(seq 1 150); do
   if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
     echo "Piano Teacher backend exited during startup." >&2
     wait "$BACKEND_PID" || true
