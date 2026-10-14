@@ -1,3 +1,23 @@
+## Diagnose sheet-music rendering
+
+The Python Verovio wheel bundles Bravura and Leipzig music-font resources. Piano Teacher
+loads these from the installed Python package rather than relying on Verovio's
+original build-time default path, which can be invalid on Arch Linux.
+
+After updating, verify engraving **without Godot** using a MIDI or MusicXML file:
+
+```bash
+cd ~/Projects/piano_teacher
+source .venv/bin/activate
+python scripts/check_engraving.py "/path/to/your/file.midi"
+```
+
+This exercises the actual import, music-font loading, engraving, SVG geometry
+and note timing map. It should report `ENGRAVING OK` with page and anchor counts.
+If the installed wheel lacks fonts, it will report the missing resource path and
+the precise reinstall command. After the standalone check passes, run `./run.sh`.
+The Mesa `DRI_PRIME` warning is unrelated to score rendering.
+
 # Piano Teacher
 
 A native Linux piano tutor with a minimal **Godot 4** interface and Python practice engine. Load your own MIDI or MusicXML files. The score is engraved as **traditional piano sheet music** with treble and bass clefs by music21 + Verovio (no piano roll).

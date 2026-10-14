@@ -95,13 +95,54 @@ def _pitches_from_verovio(toolkit, events: list[dict]) -> dict[str, int]:
     result = {}
     for identifier in note_ids:
         try:
-            data = json.loads(toolkit.getMIDIValuesForElement(identifier))
+            data = _verovio_object(toolkit.getMIDIValuesForElement(identifier), "MIDI pitch")
             pitch = data.get("pitch") if isinstance(data, dict) else None
             if isinstance(pitch, (int, float)) and 0 <= pitch <= 127:
                 result[identifier] = int(pitch)
         except (TypeError, ValueError, AttributeError, KeyError):
             continue
     return result
+
+
+def _verovio_resources(verovio_module) -> Path:
+    """Resolve fonts next to the installed Python module, not a build-time path.
+
+    The Verovio Python wheel includes Bravura and Leipzig in verovio/data.
+    """
+    module_file = getattr(verovio_module, "__file__", None)
+    if not module_file:
+        raise RuntimeError("Verovio installation has no module location; cannot find its music fonts")
+    path = Path(module_file).resolve().parent / "data"
+    missing = [name for name in ("Bravura.xml", "Leipzig.xml") if not (path / name).is_file()]
+    if missing:
+        raise RuntimeError(
+            f"Verovio music fonts are missing from {path}: {', '.join(missing)}. "
+            "Reinstall the complete Python wheel with "
+            "python -m pip install --force-reinstall --no-cache-dir 'verovio>=5,<6'"
+        )
+    return path
+
+
+def _create_verovio_toolkit(verovio_module):
+    """Load the bundled fonts explicitly before importing or engraving music."""
+    resources = _verovio_resources(verovio_module)
+    # Avoid the default font path baked into some wheels at build time.
+    toolkit = verovio_module.toolkit(False)
+    if not toolkit.setResourcePath(str(resources)):
+        raise RuntimeError(f"Verovio could not load its Bravura/Leipzig fonts from {resources}")
+    return toolkit
+
+
+def _verovio_object(value, description: str):
+    """Accept native Python results from the 5.x binding or older JSON strings."""
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, (str, bytes, bytearray)):
+        try:
+            return json.loads(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Verovio returned invalid {description}") from exc
+    raise ValueError(f"Verovio returned unexpected {description} type: {type(value).__name__}")
 
 
 @dataclass(frozen=True)
@@ -155,13 +196,15 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     if not list(out.parts):
         raise ValueError(f"No notation found for measures {first}-{last}")
     xml = GeneralObjectExporter(out).parse().decode("utf-8")
-    toolkit = verovio.toolkit()
+    toolkit = _create_verovio_toolkit(verovio)
     # Use one common layout for the SVGs and timing map. Timemap qstamps are
     # quarter-note units and remain correct when the practice tempo changes.
-    toolkit.setOptions(json.dumps({"inputFrom": "xml", "scale": 48,
-                                   "pageWidth": 2200, "pageHeight": 1350,
-                                   "adjustPageHeight": True, "breaks": "auto",
-                                   "svgViewBox": True, "svgFontType": "embedded"}))
+    options = {"inputFrom": "xml", "scale": 48,
+               "pageWidth": 2200, "pageHeight": 1350,
+               "adjustPageHeight": True, "breaks": "auto",
+               "svgViewBox": True, "smuflTextFont": "embedded"}
+    if not toolkit.setOptions(options):
+        raise RuntimeError("Verovio rejected its engraving options")
     if not toolkit.loadData(xml):
         raise ValueError("Verovio could not engrave this passage")
     count = toolkit.getPageCount()
@@ -171,8 +214,8 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     if any("<svg" not in svg for svg in pages):
         raise ValueError("Verovio returned an invalid SVG page")
     try:
-        events = json.loads(toolkit.renderToTimemap(json.dumps({"includeRests": True,
-                                                                 "includeMeasures": True})))
+        events = _verovio_object(toolkit.renderToTimemap(
+            {"includeRests": True, "includeMeasures": True}), "note timing map")
     except (ValueError, TypeError) as exc:
         raise ValueError("Verovio produced an invalid note timing map") from exc
     if not isinstance(events, list):
