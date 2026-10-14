@@ -1,3 +1,19 @@
+## Generated exercise prototype (not yet enabled)
+
+The backend now has a small, pure lesson generator in
+piano_teacher/exercise_generator.py. It keeps the imported MIDI as a reference
+and creates a simpler one-note-per-beat skeleton, an outer-chord-tone outline,
+and the original exercise when these represent distinct stages. Generated
+notes have source indexes so a future Godot lesson renderer and evaluator can
+work with exactly the same note set. On the uploaded Merry-Go-Round of Life
+MIDI (2,346 notes, 117 two-bar passages), the first passage produces a
+12-note skeleton instead of the original 24 notes.
+
+This generator is **not yet connected to the visible practice curriculum**.
+Until the generated notation and grading are integrated, the current
+application continues presenting the source excerpts. That is the remaining
+core deliverable of Phase 1C.
+
 ## Adaptive lesson runtime - Phase 1A/1B
 
 The original MIDI file is still the *source*, not the future final exercise

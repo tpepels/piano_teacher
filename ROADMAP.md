@@ -1,5 +1,29 @@
 # Piano Teacher - adaptive MIDI-to-exercise piano tutor
 
+## Current implementation status
+
+- **1A (implemented, visual/audio acceptance pending):** two empty moving
+  lead-in bars, one signed beat clock, automatic repeated attempts and
+  deliberate feedback intervals.
+- **1B (implemented at two-bar checkpoints, refinement pending):** five
+  wrong/missing required notes trigger boundary-aligned rewind and 10%
+  slowdown; clean attempts restore the selected target speed, and three
+  clean *full* target-speed attempts are required for mastery. A future
+  increment will improve rolling error detection between checkpoints.
+- **1C (generator foundation only):** deterministic skeleton, chord-outline
+  and original-note variants with source-note mappings and deduplication.
+  **NOT YET DISPLAYED OR GRADED**. Enabling this requires engraving generated
+  exercise notes and using the same generated notes for scoring.
+- **1D/1E (pending):** generated-exercise curriculum, persistent per-level
+  mastery, integrated Godot practice and full hardware validation.
+- **Phase 0 hardware acceptance (pending):** physical speakers, USB piano,
+  and real fullscreen score following cannot be certified from unit tests.
+
+Local automated regression suite: 114 passed, one Godot-dependent test
+skipped in the development environment. Godot visuals and timing on Arch
+still require verification.
+
+
 ## Product definition (confirmed 2026-10-14)
 
 The app is a fullscreen, offline Linux **piano teacher**, not a MIDI player,
