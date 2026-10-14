@@ -147,6 +147,24 @@ func _new_request(callback: Callable) -> HTTPRequest:
     req.request_completed.connect(callback)
     return req
 
+func _decode_json(body: PackedByteArray) -> Variant:
+    # HTTPRequest can complete with an empty body when the Python service is
+    # unavailable. JSON.parse_string() logs a parser error in that case.
+    if body.is_empty():
+        return null
+    var document := JSON.new()
+    if document.parse(body.get_string_from_utf8()) != OK:
+        return null
+    return document.data
+
+func _http_failure(code: int, body: PackedByteArray) -> String:
+    var response = _decode_json(body)
+    if typeof(response) == TYPE_DICTIONARY:
+        return str(response.get("error", "Request failed (HTTP %d)" % code))
+    if code == 0:
+        return "Practice engine unavailable. Start Piano Teacher with ./run.sh"
+    return "Practice engine request failed (HTTP %d)" % code
+
 func _label(text: String, size: int, color: Color, bold := false) -> Label:
     var label := Label.new()
     label.text = text
@@ -455,9 +473,11 @@ func _request_library() -> void:
 func _on_library(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     library_pending = false
     if code != 200:
-        library_message.text = "Cannot scan the music folder. Check the backend."
+        library_message.text = _http_failure(code, body)
+        home_count_label.text = "Practice engine unavailable"
+        home_resume_button.disabled = true
         return
-    var parsed = JSON.parse_string(body.get_string_from_utf8())
+    var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
     library_info = parsed
@@ -525,9 +545,9 @@ func _request_settings() -> void:
 func _on_settings(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     settings_pending = false
     if code != 200:
-        settings_message.text = "Settings unavailable"
+        settings_message.text = _http_failure(code, body)
         return
-    var parsed = JSON.parse_string(body.get_string_from_utf8())
+    var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
     preferences = parsed
@@ -618,9 +638,9 @@ func _position_at_beat(beat: float) -> Dictionary:
 func _on_state(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     state_pending = false
     if code != 200:
-        feedback_label.text = "Backend unavailable - run ./run.sh"
+        feedback_label.text = _http_failure(code, body)
         return
-    var parsed = JSON.parse_string(body.get_string_from_utf8())
+    var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
     last_state = parsed
@@ -673,9 +693,9 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
         _request_layout()
         return
     if code != 200:
-        feedback_label.text = "Engraving layout failed: " + body.get_string_from_utf8().substr(0, 140)
+        feedback_label.text = "Engraving layout failed: " + _http_failure(code, body)
         return
-    var parsed = JSON.parse_string(body.get_string_from_utf8())
+    var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY or not parsed.has("anchors"):
         feedback_label.text = "Invalid engraving geometry"
         return
@@ -704,7 +724,7 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
             _request_score(0)
         return
     if code != 200:
-        feedback_label.text = "Engraving failed: " + body.get_string_from_utf8().substr(0, 150)
+        feedback_label.text = "Engraving failed: " + _http_failure(code, body)
         return
     var picture := Image.new()
     if picture.load_svg_from_buffer(body, 1.5) != OK:
@@ -735,11 +755,11 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     action_pending = false
     var path := last_post_path
     if code != 200:
-        var response = JSON.parse_string(body.get_string_from_utf8())
-        var message: String = str(response.get("error", "Request failed")) if typeof(response) == TYPE_DICTIONARY else "Request failed"
+        var message := _http_failure(code, body)
         feedback_label.text = message
         settings_message.text = message
         library_message.text = message
+        home_recent_label.text = message
         return
     if path == "/library/open":
         _navigate("practice")
@@ -763,7 +783,7 @@ func _request_devices() -> void:
 func _on_devices(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     if code != 200:
         return
-    var parsed = JSON.parse_string(body.get_string_from_utf8())
+    var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
     device_names = parsed.get("devices", [])

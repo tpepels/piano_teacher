@@ -62,7 +62,13 @@ def test_settings_persist_and_reset_recent_on_folder_change(tmp_path):
 
 
 def test_missing_folder_is_reported_without_exception(tmp_path):
-    lib = ScoreLibrary(config_dir=tmp_path / 'config')
+    # Do not depend on whether the actual user's default Music directory exists.
+    config_dir = tmp_path / 'config'
+    config_dir.mkdir()
+    (config_dir / 'settings.json').write_text(json.dumps({
+        'music_dir': str(tmp_path / 'missing-folder'),
+    }))
+    lib = ScoreLibrary(config_dir=config_dir)
     info = lib.scan()
     assert info['count'] == 0
     assert 'error' in info

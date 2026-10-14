@@ -36,6 +36,24 @@ python -m pytest -q
 - Completed attempts remain on the original score for 2.5 seconds before automatic tempo, hand or exercise progression. The feedback remains correctly associated with its source score.
 - Automatic retry and progression, manual passage navigation, progress saved locally in SQLite under `$XDG_DATA_HOME/piano-teacher` (usually `~/.local/share/piano-teacher`).
 
+## Recover from an interrupted Git update (local `run.sh` changes)
+
+If `git pull --ff-only` says that local changes in `run.sh` would be overwritten, **preserve** your local changes before updating:
+
+```bash
+cd ~/Projects/piano_teacher
+git stash push -m "local run.sh before piano teacher update" -- run.sh
+git pull --ff-only
+source .venv/bin/activate
+python -m pip install -e '.[godot,test]'
+python -m pytest -q
+./run.sh
+```
+
+The stash preserves your previous `run.sh` changes; see them with `git stash list` or `git stash show -p stash@{0}`. Do not blindly apply the old launcher over the new one. If other files have local modifications, inspect `git status` before attempting the pull again.
+
+`run.sh` uses the checkout's `.venv/bin/python` where available, exports the repository root on `PYTHONPATH`, checks that `piano_teacher.server` imports, and waits for its `/state` endpoint before starting Godot. The Godot interface now handles empty, invalid or unavailable HTTP responses without emitting JSON parse errors. If the Python backend cannot start, check the terminal message; an unrelated `DRI_PRIME` warning from Mesa is not a backend failure.
+
 ## Current limitations - important
 
 This is an **initial playable vertical slice, not a finished teaching app**. Godot and the Verovio/music21 score pipeline have **not been run together on physical Linux hardware in this environment**. The playhead now uses quarter-beat timestamps linked to actual Verovio SVG notehead positions, rather than assuming uniform horizontal spacing. It handles score line and page changes. **It has not been verified end-to-end with a local Verovio/Godot runtime or physical MIDI hardware.** The cursor currently interpolates between engraved note/rest *onsets*, holds after the last positioned event and may not reach the exact barline during long final rests. Tempo/passage grading remains independent of rendering. The score service explicitly reports missing geometry instead of silently using inaccurate percentage-based positioning.
