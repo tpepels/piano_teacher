@@ -12,6 +12,7 @@ After a pull and `pip install -e '.[godot,test]'`, run:
 python -m pytest -q
 ./scripts/check_godot.sh
 python scripts/smoke_phase0.py
+python scripts/smoke_godot.py
 python scripts/smoke_phase0.py --file "$HOME/Music/Piano Teacher/your-piece.midi"
 ./run.sh
 ```

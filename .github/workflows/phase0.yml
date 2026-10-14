@@ -23,3 +23,5 @@ jobs:
           ./scripts/check_godot.sh
       - name: Real rendering and HTTP integration
         run: .venv/bin/python scripts/smoke_phase0.py
+      - name: Boot Godot UI against a real local backend
+        run: .venv/bin/python scripts/smoke_godot.py
