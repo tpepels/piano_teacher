@@ -435,7 +435,7 @@ func _card_body(panel: PanelContainer, margin: int = 28) -> MarginContainer:
     return body
 
 func _navigate(screen: String) -> void:
-    if screen != "practice" and current_screen == "practice" and bool(last_state.get("running", false)):
+    if screen != "practice" and current_screen == "practice" and str(last_state.get("phase", "")) in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]:
         _send_action({"action": "stop"})
     current_screen = screen
     for key in screens:

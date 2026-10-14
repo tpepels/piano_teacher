@@ -398,8 +398,8 @@ class PracticeEngine:
                     "progress":progress,"duration":seconds,"beat":exercise_beat if self.running else 0.0,
                     "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
                     "device":self.midi_device,"feedback":self.feedback,"revision":self.score_revision,
-                    "feedback_marks":self.feedback_marks if phase == "feedback" else [],
-                    "feedback_unmapped":self.feedback_unmapped if phase == "feedback" else 0}
+                    "feedback_marks":self.feedback_marks if phase in ("feedback", "recovering") else [],
+                    "feedback_unmapped":self.feedback_unmapped if phase in ("feedback", "recovering") else 0}
 
     def engraving(self) -> EngravedScore:
         with self.lock:

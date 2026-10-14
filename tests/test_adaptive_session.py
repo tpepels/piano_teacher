@@ -158,3 +158,25 @@ def test_existing_database_migrates_without_losing_progress(tmp_path):
         assert "target_bpm" in {r[1] for r in engine.db.execute("PRAGMA table_info(sessions)")}
     finally:
         engine.db.close()
+
+
+def test_leaving_practice_stops_scheduled_retries():
+    from pathlib import Path
+    code=(Path(__file__).resolve().parents[1]/"godot"/"main.gd").read_text()
+    assert '"recovering", "loading"' in code
+    assert '_send_action({"action": "stop"})' in code
+
+
+def test_three_quarter_time_has_six_lead_in_beats(tmp_path,monkeypatch):
+    now=[20.0]
+    monkeypatch.setattr(server.time,"monotonic",lambda:now[0])
+    notes=(Note(0,1,60,0,0,"right"),Note(4,5,62,0,0,"right"))
+    e=PracticeEngine(tmp_path,enable_midi=False)
+    e.plan=LearningPlan(Piece("3/4",100,notes,(Phrase(1,1,2,0,6,notes),)))
+    try:
+        e.start()
+        assert e.state()["lead_in_bars"]==2
+        assert e.state()["count_in_beats"]==6
+        assert e.state()["clock_beat"]==pytest.approx(-6)
+    finally:
+        e.db.close()
