@@ -100,7 +100,9 @@ def test_godot_loads_png_with_same_notehead_coordinates():
     script = (Path(__file__).resolve().parents[1] / "godot/main.gd").read_text()
     assert '"/score.png?page=%d"' in script
     assert "picture.load_png_from_buffer(body)" in script
-    assert "score_overlay.image_size = Vector2(picture.get_width(), picture.get_height())" in script
+    assert "score_overlay.image_size = Vector2(cropped.get_width(), cropped.get_height())" in script
+    assert "picture.get_used_rect()" in script
+    assert "score_overlay.crop_origin = score_crop_origin" in script
     assert "score_overlay.active_page = current_page" in script
     assert "func _sheet_xy(x: float, y: float)" in script
     assert "picture.load_svg_from_buffer" not in script

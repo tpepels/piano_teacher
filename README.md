@@ -1,3 +1,18 @@
+## Audible count-in, moving notation and live MIDI feedback
+
+Start begins your **own MIDI-piano practice performance**. It does not play
+the imported MIDI file. The app now plays a clearly audible count-in, then
+beats while you perform. The display counts down, flashes PLAY at the start,
+and reports incoming USB MIDI note-ons so input problems are visible.
+
+The score is cropped to its engraved content, enlarged and moves horizontally
+beneath the timed playhead. The complete inactive staff, including ledger lines
+and stems, becomes faint during one-hand exercises. Imported tempo markings
+are removed from individual short lessons; the selected BPM remains in the UI.
+
+The Listen button remains disabled pending a proper piano-sound demonstration
+player. Actual device and sound synchronization still need on-machine testing.
+
 ## Diagnose sheet-music rendering
 
 The Python Verovio wheel bundles Bravura and Leipzig music-font resources. Piano Teacher

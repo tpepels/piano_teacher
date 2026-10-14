@@ -76,6 +76,8 @@ def test_render_pipeline_passes_dicts_and_has_note_geometry(tmp_path, monkeypatc
             return []
         def getContextByClass(self, kind):
             return None
+        def recurse(self):
+            return self
 
     class Part:
         def __init__(self):
@@ -106,6 +108,8 @@ def test_render_pipeline_passes_dicts_and_has_note_geometry(tmp_path, monkeypatc
     music21.stream = SimpleNamespace(Measure=Measure, Part=Part, Score=Score)
     music21.clef = SimpleNamespace(Clef=type("Clef", (), {}))
     music21.key = SimpleNamespace(KeySignature=type("KeySignature", (), {}))
+    music21.tempo = SimpleNamespace(MetronomeMark=type("MetronomeMark", (), {}))
+    music21.metadata = SimpleNamespace(Metadata=lambda title: SimpleNamespace(title=title))
     xml_module = ModuleType("music21.musicxml")
     exporter_module = ModuleType("music21.musicxml.m21ToXml")
     exporter_module.GeneralObjectExporter = Exporter
