@@ -9,6 +9,19 @@ else
   echo "Godot 4 is required. On Arch: sudo pacman -S godot" >&2
   exit 1
 fi
+# Validate GDScript before launching the fullscreen window. Python unit tests
+# cannot catch parse errors, which otherwise appear as an empty grey screen.
+PARSER_OUTPUT=""
+if ! PARSER_OUTPUT="$("$GODOT" --headless --path godot --check-only --script res://main.gd 2>&1)"; then
+  printf '%s\n' "$PARSER_OUTPUT" >&2
+  echo "Godot cannot parse the Piano Teacher interface. See the script error above." >&2
+  exit 1
+fi
+if [[ "$PARSER_OUTPUT" == *"SCRIPT ERROR"* || "$PARSER_OUTPUT" == *"Parse Error:"* ]]; then
+  printf '%s\n' "$PARSER_OUTPUT" >&2
+  echo "Godot reported a script parse error. The application was not launched." >&2
+  exit 1
+fi
 # A few Python/Arch editable-install combinations omit the project from sys.path.
 # Explicitly select this checkout and its venv; do not start a disconnected GUI.
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"

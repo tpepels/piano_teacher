@@ -15,7 +15,13 @@ GODOT = shutil.which("godot") or shutil.which("godot4")
 
 def test_moving_score_does_not_reference_undeclared_scroll_state():
     source = (ROOT / "godot" / "main.gd").read_text(encoding="utf-8")
-    assert "scroll_target_x" not in source
+    # A named scroll target is fine once declared; assignment without
+    # declaration caused the original fullscreen grey-screen regression.
+    assignments = [line for line in source.splitlines()
+                   if line.strip().startswith("scroll_target_x =")]
+    declarations = [line for line in source.splitlines()
+                    if line.strip().startswith("var scroll_target_x")]
+    assert not assignments or declarations
 
 
 @pytest.mark.skipif(GODOT is None, reason="Godot 4 binary is not installed")
