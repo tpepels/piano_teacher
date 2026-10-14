@@ -92,3 +92,24 @@ The Python backend deliberately binds only to `127.0.0.1`. The geometry and wrap
 2. Canonical MusicXML/MIDI reconstruction: clef/staff accuracy, ties, quantization, hand corrections, note/finger overlays.
 3. End-to-end physical MIDI and latency tests, on-demand Listen synthesis, stronger scoring for pedal/legato, and contextual hand/tempo controls.
 4. Linux release packaging and visual usability polish.
+
+## Troubleshooting blank scores and fullscreen layout
+
+The Godot interface reflows the Home cards and Music Folder controls to fit
+smaller or scaled laptop displays. Long file names are truncated instead of
+forcing content beyond the right edge; Home and Settings can scroll vertically.
+F11 switches between fullscreen and windowed display.
+
+After opening a song, the score panel displays **Preparing sheet music** while
+the Python service imports and engraves the score. First-time MIDI engraving
+may take longer than five seconds, so the frontend now waits for completion.
+If MusicXML conversion, Verovio engraving, or SVG decoding fails, the score
+panel shows the **actual error and a Retry score button** rather than leaving
+an indefinite *Choose a piece* placeholder. Errors when opening an item from
+the library remain visible on the library screen even after the periodic
+folder scan.
+
+If the score still fails, run `./run.sh` from a terminal and report the error
+shown **inside the score panel** together with the terminal output. A Python
+test run alone cannot validate real Godot SVG rendering; the frontend needs
+interactive testing on your display.

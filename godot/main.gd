@@ -17,6 +17,15 @@ var settings_pending := false
 var library_info: Dictionary = {}
 var preferences: Dictionary = {}
 var home_count_label: Label
+var home_cards: BoxContainer
+var page_margins: Array[MarginContainer] = []
+var folder_controls: BoxContainer
+var practice_settings_button: Button
+var score_status_panel: CenterContainer
+var score_status_label: Label
+var score_retry_button: Button
+var score_error := ""
+var library_error := ""
 var home_recent_label: Label
 var home_resume_button: Button
 var library_search: LineEdit
@@ -114,10 +123,17 @@ class ScoreOverlay extends Control:
 
 func _ready() -> void:
     _build_interface()
+    resized.connect(_update_responsive_layout)
+    _update_responsive_layout()
     state_request = _new_request(_on_state)
     score_request = _new_request(_on_score)
     layout_request = _new_request(_on_layout)
+    # Verovio can take longer to engrave a dense MIDI score on the first run.
+    # Do not abandon the request after the generic five-second timeout.
+    layout_request.timeout = 90.0
+    score_request.timeout = 45.0
     action_request = _new_request(_on_action)
+    action_request.timeout = 90.0
     device_request = _new_request(_on_devices)
     library_request = _new_request(_on_library)
     settings_request = _new_request(_on_settings)
@@ -174,11 +190,15 @@ func _label(text: String, size: int, color: Color, bold := false) -> Label:
     font.font_names = PackedStringArray(["Inter", "Noto Sans", "DejaVu Sans"])
     font.font_weight = 700 if bold else 400
     label.add_theme_font_override("font", font)
+    label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     return label
 
 func _button(label: String, callback: Callable, primary := false) -> Button:
     var button := Button.new()
     button.text = label
+    # Long song titles must not force a container wider than the viewport.
+    button.clip_text = true
     button.custom_minimum_size = Vector2(88, 45)
     var style := StyleBoxFlat.new()
     style.bg_color = ACCENT if primary else Color("#ECEFEA")
@@ -205,9 +225,11 @@ func _screen(name: String) -> MarginContainer:
     panel.name = name
     panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     panel.visible = false
+    # Spacing is recomputed from the actual window width in fullscreen mode.
     for side in ["left", "right", "top", "bottom"]:
-        panel.add_theme_constant_override("margin_" + side, 56)
+        panel.add_theme_constant_override("margin_" + side, 24)
     add_child(panel)
+    page_margins.append(panel)
     return panel
 
 func _stack(separation: int = 12) -> VBoxContainer:
@@ -261,8 +283,14 @@ func _build_interface() -> void:
     # Home: a title, one recent piece and two decisions, with ample whitespace.
     var home := _screen("Home")
     screens["home"] = home
+    var home_scroll := ScrollContainer.new()
+    home_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    home_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    home_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    home.add_child(home_scroll)
     var home_layout := _stack(26)
-    home.add_child(home_layout)
+    home_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    home_scroll.add_child(home_layout)
     var home_nav := HBoxContainer.new()
     home_layout.add_child(home_nav)
     home_nav.add_child(_label("PIANO  /  TEACHER", 15, ACCENT, true))
@@ -273,7 +301,8 @@ func _build_interface() -> void:
     home_layout.add_child(header)
     header.add_child(_label("Practice the music you love.", 44, INK, true))
     header.add_child(_label("Short passages. Both hands. Steady progress.", 20, MUTED))
-    var home_row := HBoxContainer.new()
+    var home_row := BoxContainer.new()
+    home_cards = home_row
     home_row.add_theme_constant_override("separation", 20)
     home_layout.add_child(home_row)
     var library_card := _card()
@@ -293,6 +322,9 @@ func _build_interface() -> void:
     _card_body(recent_card, 32).add_child(recent_inner)
     recent_inner.add_child(_label("LAST OPENED", 13, MUTED, true))
     home_recent_label = _label("No recent piece", 25, INK, true)
+    home_recent_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    home_recent_label.clip_text = true
+    home_recent_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     recent_inner.add_child(home_recent_label)
     recent_inner.add_child(_label("Pick up where you left off", 15, MUTED))
     home_resume_button = _button("Continue  →", _resume_last, true)
@@ -311,6 +343,9 @@ func _build_interface() -> void:
     library_head.add_child(_button("Music folder", func(): _navigate("settings")))
     library_layout.add_child(_label("Your music", 39, INK, true))
     library_path_label = _label("Looking for scores…", 15, MUTED)
+    library_path_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    library_path_label.clip_text = true
+    library_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     library_layout.add_child(library_path_label)
     var library_controls := HBoxContainer.new()
     library_controls.add_theme_constant_override("separation", 12)
@@ -338,8 +373,14 @@ func _build_interface() -> void:
     # Settings are explicit, and keep the practice screen free from controls.
     var settings_page := _screen("Settings")
     screens["settings"] = settings_page
+    var settings_scroll := ScrollContainer.new()
+    settings_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    settings_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    settings_page.add_child(settings_scroll)
     var settings_layout := _stack(21)
-    settings_page.add_child(settings_layout)
+    settings_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    settings_scroll.add_child(settings_layout)
     var settings_head := HBoxContainer.new()
     settings_layout.add_child(settings_head)
     settings_head.add_child(_button("← Back", func(): _navigate("home")))
@@ -352,11 +393,12 @@ func _build_interface() -> void:
     _card_body(settings_card, 32).add_child(settings_content)
     settings_content.add_child(_label("MUSIC LIBRARY", 13, ACCENT, true))
     settings_content.add_child(_label("Piano Teacher scans this folder and its subfolders automatically.", 15, MUTED))
-    var folder_row := HBoxContainer.new()
+    var folder_row := BoxContainer.new()
+    folder_controls = folder_row
     folder_row.add_theme_constant_override("separation", 12)
     settings_content.add_child(folder_row)
     folder_edit = LineEdit.new()
-    folder_edit.custom_minimum_size = Vector2(420, 48)
+    folder_edit.custom_minimum_size = Vector2(0, 48)
     folder_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     folder_edit.placeholder_text = "~/Music/Piano Teacher"
     folder_edit.text_submitted.connect(func(_text: String): _save_folder())
@@ -393,6 +435,9 @@ func _build_interface() -> void:
     heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     top.add_child(heading)
     title_label = _label("Piano Teacher", 27, INK, true)
+    title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    title_label.clip_text = true
+    title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     heading.add_child(title_label)
     passage_label = _label("", 14, MUTED)
     heading.add_child(passage_label)
@@ -404,13 +449,15 @@ func _build_interface() -> void:
     hand_label = _label("", 13, MUTED)
     hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(hand_label)
-    top.add_child(_button("Settings", func(): _navigate("settings")))
+    practice_settings_button = _button("Settings", func(): _navigate("settings"))
+    top.add_child(practice_settings_button)
     var score_panel := _card()
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(score_panel)
     var score_margin := _card_body(score_panel, 26)
     var score_area := Control.new()
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    score_area.custom_minimum_size = Vector2(0, 170)
     score_margin.add_child(score_area)
     score_view = TextureRect.new()
     score_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -421,12 +468,22 @@ func _build_interface() -> void:
     score_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_area.add_child(score_overlay)
-    var placeholder := _label("Choose a piece from your library to begin", 18, MUTED)
-    placeholder.name = "Placeholder"
-    placeholder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-    score_area.add_child(placeholder)
+    # Score status must live inside the score panel: feedback_label is replaced
+    # by regular state polling and cannot hold engraving errors reliably.
+    score_status_panel = CenterContainer.new()
+    score_status_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    score_area.add_child(score_status_panel)
+    var status_content := _stack(12)
+    status_content.custom_minimum_size = Vector2(280, 85)
+    status_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    score_status_panel.add_child(status_content)
+    score_status_label = _label("Choose a piece from your library", 18, MUTED)
+    score_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    score_status_label.clip_text = true
+    status_content.add_child(score_status_label)
+    score_retry_button = _button("Retry score", _retry_score)
+    score_retry_button.visible = false
+    status_content.add_child(score_retry_button)
     var information := HBoxContainer.new()
     practice_layout.add_child(information)
     progress_label = _label("", 14, MUTED)
@@ -462,6 +519,57 @@ func _build_interface() -> void:
     device_menu.id_pressed.connect(_choose_device)
     add_child(device_menu)
     _navigate("home")
+    _refresh_score_status()
+
+func _update_responsive_layout() -> void:
+    # Fit smaller laptops and high-DPI/scaled fullscreen windows. Fixed-size
+    # cards and long labels previously forced the right edge off-screen.
+    var width: float = size.x
+    var margin: int = 56 if width >= 1550 else 32 if width >= 1100 else 16
+    for panel in page_margins:
+        panel.add_theme_constant_override("margin_left", margin)
+        panel.add_theme_constant_override("margin_right", margin)
+        panel.add_theme_constant_override("margin_top", 28 if width >= 900 else 14)
+        panel.add_theme_constant_override("margin_bottom", 28 if width >= 900 else 14)
+    if home_cards != null:
+        home_cards.vertical = width < 1380
+    if folder_controls != null:
+        folder_controls.vertical = width < 1000
+    if practice_settings_button != null:
+        practice_settings_button.visible = width >= 1050
+
+func _refresh_score_status() -> void:
+    if score_status_panel == null or score_view == null:
+        return
+    score_status_panel.visible = score_view.texture == null
+    if not score_status_panel.visible:
+        return
+    if not score_error.is_empty():
+        score_status_label.text = "Unable to display sheet music:\n" + score_error
+        score_retry_button.visible = true
+    elif bool(last_state.get("loaded", false)):
+        score_status_label.text = "Preparing sheet music…"
+        score_retry_button.visible = false
+    else:
+        score_status_label.text = "Choose a piece from your library"
+        score_retry_button.visible = false
+
+func _score_failed(message: String) -> void:
+    score_error = message
+    feedback_label.text = message
+    _refresh_score_status()
+
+func _retry_score() -> void:
+    if not bool(last_state.get("loaded", false)) or layout_pending or score_pending:
+        return
+    score_error = ""
+    score_layout = {}
+    layout_revision = -1
+    rendered_revision = -1
+    current_page = -1
+    score_view.texture = null
+    _refresh_score_status()
+    _request_layout()
 
 func _request_library() -> void:
     if library_pending or library_request == null:
@@ -518,7 +626,9 @@ func _populate_library() -> void:
         library_rows.add_child(button)
         visible += 1
     var issue: String = str(library_info.get("error", ""))
-    if not issue.is_empty():
+    if not library_error.is_empty():
+        library_message.text = library_error
+    elif not issue.is_empty():
         library_message.text = issue
     elif pieces.is_empty():
         library_message.text = "No scores yet. Add .mid, .midi or MusicXML files to this folder."
@@ -528,6 +638,8 @@ func _populate_library() -> void:
         library_message.text = "%d files  ·  %d shown  ·  Automatically refreshed" % [pieces.size(), visible]
 
 func _open_library_piece(identifier: String) -> void:
+    library_error = ""
+    library_message.text = "Opening score…"
     _send_post("/library/open", {"id": identifier})
 
 func _resume_last() -> void:
@@ -647,6 +759,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     last_state_tick = Time.get_ticks_msec()
     if not bool(parsed.get("loaded", false)):
         feedback_label.text = str(parsed.get("feedback", "Open a score"))
+        _refresh_score_status()
         return
     title_label.text = str(parsed.get("title", "Piano Teacher"))
     var kind := str(parsed.get("kind", "learn")).capitalize()
@@ -668,6 +781,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         score_layout = {}
         current_page = -1
         score_view.texture = null
+        score_error = ""
+        _refresh_score_status()
         score_overlay.showing = false
         score_overlay.marks = []
         _request_layout()
@@ -675,8 +790,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         var target_page: int = int(score_overlay.marks[0].get("page", 0))
         if current_page != target_page and layout_revision == revision:
             _request_score(target_page)
-    var placeholder: Control = score_view.get_parent().get_node("Placeholder") as Control
-    placeholder.visible = score_view.texture == null
+    _refresh_score_status()
 
 func _request_layout() -> void:
     if layout_pending:
@@ -685,7 +799,7 @@ func _request_layout() -> void:
     requested_layout_revision = revision
     if layout_request.request(URL + "/score/layout") != OK:
         layout_pending = false
-        feedback_label.text = "Cannot request score geometry"
+        _score_failed("Cannot request score geometry from the practice engine")
 
 func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     layout_pending = false
@@ -693,11 +807,11 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
         _request_layout()
         return
     if code != 200:
-        feedback_label.text = "Engraving layout failed: " + _http_failure(code, body)
+        _score_failed(_http_failure(code, body))
         return
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY or not parsed.has("anchors"):
-        feedback_label.text = "Invalid engraving geometry"
+        _score_failed("The engraving engine returned invalid note positions")
         return
     score_layout = parsed
     layout_revision = revision
@@ -715,7 +829,7 @@ func _request_score(page: int) -> void:
     requested_revision = revision
     if score_request.request(URL + "/score.svg?page=%d" % page) != OK:
         score_pending = false
-        feedback_label.text = "Cannot request score page"
+        _score_failed("Cannot request score page from the practice engine")
 
 func _on_score(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     score_pending = false
@@ -724,19 +838,20 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
             _request_score(0)
         return
     if code != 200:
-        feedback_label.text = "Engraving failed: " + _http_failure(code, body)
+        _score_failed(_http_failure(code, body))
         return
     var picture := Image.new()
     if picture.load_svg_from_buffer(body, 1.5) != OK:
-        feedback_label.text = "Unable to display the engraved score"
+        _score_failed("Godot could not render the SVG score generated by Verovio")
         return
     score_view.texture = ImageTexture.create_from_image(picture)
     score_overlay.image_size = Vector2(picture.get_width(), picture.get_height())
     current_page = requested_page
     score_overlay.active_page = current_page
     rendered_revision = revision
+    score_error = ""
     score_overlay.queue_redraw()
-    (score_view.get_parent().get_node("Placeholder") as Control).hide()
+    _refresh_score_status()
 
 func _send_action(command: Dictionary) -> void:
     _send_post("/control", command)
@@ -756,13 +871,18 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     var path := last_post_path
     if code != 200:
         var message := _http_failure(code, body)
+        if path == "/library/open":
+            library_error = "Cannot open score: " + message
         feedback_label.text = message
         settings_message.text = message
         library_message.text = message
         home_recent_label.text = message
         return
     if path == "/library/open":
+        library_error = ""
+        score_error = ""
         _navigate("practice")
+        _refresh_score_status()
     elif path == "/settings":
         settings_message.text = "Settings saved"
         _request_settings()
