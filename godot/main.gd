@@ -80,6 +80,9 @@ var rendered_revision := -1
 var action_pending := false
 var last_state: Dictionary = {}
 var last_state_tick := 0
+# Opt-in diagnostic hook for the actual headless UI integration test only.
+var phase0_smoke_mode := false
+var phase0_last_phase := ""
 
 class ScoreOverlay extends Control:
     var cursor: Dictionary = {}
@@ -140,7 +143,10 @@ class ScoreOverlay extends Control:
             draw_circle(start, 5.0, cyan)
 
 func _ready() -> void:
+    phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     _build_interface()
+    if phase0_smoke_mode:
+        _navigate("practice")
     click_high = _make_count_click(1160.0)
     click_low = _make_count_click(770.0)
     click_player = AudioStreamPlayer.new()
@@ -914,6 +920,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     speed_label.text = "%d BPM" % int(parsed.get("bpm", 0))
     hand_label.text = "%s hand · %d%% speed" % [str(parsed.get("hand", "right")).capitalize(), int(round(float(parsed.get("bpm", 0)) / max(1.0, float(parsed.get("original_bpm", 1))) * 100.0))]
     var phase: String = str(parsed.get("phase", "ready"))
+    if phase0_smoke_mode and phase != phase0_last_phase:
+        phase0_last_phase = phase
+        print("PHASE0_PHASE:", phase)
     if phase == "count_in":
         feedback_label.text = "Count in · follow the cyan line when it starts"
     elif phase == "playing":
@@ -1031,6 +1040,8 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     score_overlay.active_page = current_page
     rendered_revision = revision
     score_error = ""
+    if phase0_smoke_mode:
+        print("PHASE0_SCORE_READY:", picture.get_width(), "x", picture.get_height())
     start_button.disabled = false
     score_overlay.queue_redraw()
     _layout_moving_score()

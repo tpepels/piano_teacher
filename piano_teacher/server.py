@@ -384,6 +384,12 @@ class Handler(BaseHTTPRequestHandler):
             self._json(200,self.engine.preferences() if route == "/settings" else self.engine.state())
         except (KeyError, ValueError, TypeError, RuntimeError) as exc:
             self._json(400,{"error":str(exc)})
+        except Exception as exc:
+            # Converter and plugin exceptions must not close the HTTP socket,
+            # leaving Godot with no actionable error message.
+            import traceback
+            traceback.print_exc()
+            self._json(500, {"error": f"Piano Teacher could not complete this request: {exc}"})
     def log_message(self, format, *args):
         return
 

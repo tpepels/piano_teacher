@@ -221,3 +221,28 @@ If the score still fails, run `./run.sh` from a terminal and report the error
 shown **inside the score panel** together with the terminal output. A Python
 test run alone cannot validate real Godot SVG rendering; the frontend needs
 interactive testing on your display.
+
+## Phase 0 - real practice-screen smoke
+
+The headless Godot smoke now runs beyond a home-screen boot. It loads a real
+two-hand MIDI fixture through the local backend, waits until the **actual
+practice scene** loads a PNG score, watches Godot receive count-in and playing
+states, and checks that a silent preview ends without awarding mastery.
+
+To exercise the same full path with your MIDI file:
+
+```bash
+cd ~/Projects/piano_teacher
+source .venv/bin/activate
+python scripts/smoke_phase0.py --file "$HOME/Music/Piano Teacher/your-piece.midi"
+python scripts/smoke_godot.py --file "$HOME/Music/Piano Teacher/your-piece.midi"
+```
+
+The scripts use temporary configuration and progress storage, and do not
+modify user MIDI files or the existing learning database. Close `./run.sh`
+before running the Godot test: port 8765 must be free. A successful smoke is
+reported as `PHASE 0 GODOT PRACTICE SMOKE PASSED`.
+
+This tests actual import, notation-image loading, and transport transition in
+Godot; it does **not** verify physical audio output, MIDI latency or the
+subjective visual appearance on your monitor. Those still require a live test.
