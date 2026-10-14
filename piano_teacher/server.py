@@ -19,6 +19,7 @@ from .practice import Recorder, evaluate
 from .score import import_piece, render_layout, EngravedScore
 from .feedback import project_assessment
 from .library import ScoreLibrary
+from .raster import rasterize_score
 
 
 class PracticeEngine:
@@ -36,6 +37,7 @@ class PracticeEngine:
         self.score_revision = 0
         self._layout_cache: EngravedScore | None = None
         self._layout_revision = -1
+        self._page_png: dict[int, bytes] = {}
         self.next_at = 0.0
         self.pending_result = None
         self.feedback_marks: list[dict] = []
@@ -284,6 +286,7 @@ class PracticeEngine:
                 phrase=p.exercise.phrase
                 self._layout_cache = render_layout(self.score,phrase.first_bar,phrase.last_bar,p.hand,
                                                    total_beats=phrase.end - phrase.start)
+                self._page_png.clear()
                 self._layout_revision=self.score_revision
             return self._layout_cache
 
@@ -292,6 +295,17 @@ class PracticeEngine:
         if not 0 <= page < len(score.pages):
             raise ValueError("Invalid score page")
         return score.pages[page]
+
+    def engraved_png(self, page: int = 0) -> bytes:
+        # Verovio glyph references are not rendered consistently by Godot SVG.
+        # Keep the SVG for geometry, but send a verified raster page to the UI.
+        with self.lock:
+            score = self.engraving()
+            if not 0 <= page < len(score.pages):
+                raise ValueError("Invalid score page")
+            if page not in self._page_png:
+                self._page_png[page] = rasterize_score(score.pages[page])
+            return self._page_png[page]
 
     def geometry(self) -> dict:
         return self.engraving().layout
@@ -321,11 +335,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200,{"devices":self.engine.ports()})
             elif route=="/score/layout":
                 self._json(200,self.engine.geometry())
-            elif route=="/score.svg":
+            elif route in ("/score.svg", "/score.png"):
                 from urllib.parse import parse_qs
                 values=parse_qs(urlsplit(self.path).query).get("page", ["0"])
                 page=int(values[0])
-                self._reply(200,self.engine.engraved(page).encode(),"image/svg+xml; charset=utf-8")
+                if route=="/score.png":
+                    self._reply(200,self.engine.engraved_png(page),"image/png")
+                else:
+                    self._reply(200,self.engine.engraved(page).encode(),"image/svg+xml; charset=utf-8")
             else:
                 self._json(404,{"error":"Not found"})
         except Exception as exc:

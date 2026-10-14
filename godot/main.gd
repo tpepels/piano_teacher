@@ -21,6 +21,8 @@ var home_cards: BoxContainer
 var page_margins: Array[MarginContainer] = []
 var folder_controls: BoxContainer
 var practice_settings_button: Button
+var practice_navigation: HBoxContainer
+var practice_header: HBoxContainer
 var score_status_panel: CenterContainer
 var score_status_label: Label
 var score_retry_button: Button
@@ -427,30 +429,43 @@ func _build_interface() -> void:
     screens["practice"] = practice_page
     var practice_layout := _stack(19)
     practice_page.add_child(practice_layout)
-    var top := HBoxContainer.new()
-    top.add_theme_constant_override("separation", 18)
-    practice_layout.add_child(top)
-    top.add_child(_button("← Library", func(): _navigate("library")))
+    # Navigation and lesson metadata are separate rows. A long title or
+    # small viewport must never squeeze BPM into a one-letter column.
+    practice_navigation = HBoxContainer.new()
+    practice_navigation.add_theme_constant_override("separation", 12)
+    practice_layout.add_child(practice_navigation)
+    practice_navigation.add_child(_button("← Library", func(): _navigate("library")))
+    practice_navigation.add_child(_space())
+    practice_settings_button = _button("Settings", func(): _navigate("settings"))
+    practice_navigation.add_child(practice_settings_button)
+
+    practice_header = HBoxContainer.new()
+    practice_header.add_theme_constant_override("separation", 20)
+    practice_layout.add_child(practice_header)
     var heading := _stack(2)
     heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    top.add_child(heading)
+    practice_header.add_child(heading)
     title_label = _label("Piano Teacher", 27, INK, true)
     title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     title_label.clip_text = true
     title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     heading.add_child(title_label)
     passage_label = _label("", 14, MUTED)
+    passage_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    passage_label.clip_text = true
     heading.add_child(passage_label)
     var tempo := _stack(2)
-    top.add_child(tempo)
+    tempo.custom_minimum_size = Vector2(190, 0)
+    tempo.size_flags_horizontal = Control.SIZE_SHRINK_END
+    practice_header.add_child(tempo)
     speed_label = _label("-- BPM", 20, INK)
+    speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(speed_label)
     hand_label = _label("", 13, MUTED)
+    hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(hand_label)
-    practice_settings_button = _button("Settings", func(): _navigate("settings"))
-    top.add_child(practice_settings_button)
     var score_panel := _card()
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(score_panel)
@@ -460,6 +475,7 @@ func _build_interface() -> void:
     score_area.custom_minimum_size = Vector2(0, 170)
     score_margin.add_child(score_area)
     score_view = TextureRect.new()
+    score_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
     score_view.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -487,9 +503,13 @@ func _build_interface() -> void:
     var information := HBoxContainer.new()
     practice_layout.add_child(information)
     progress_label = _label("", 14, MUTED)
+    progress_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     information.add_child(progress_label)
     information.add_child(_space())
     feedback_label = _label("Ready", 14, MUTED)
+    feedback_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    feedback_label.clip_text = true
+    feedback_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     information.add_child(feedback_label)
     var controls := HBoxContainer.new()
@@ -535,8 +555,8 @@ func _update_responsive_layout() -> void:
         home_cards.vertical = width < 1380
     if folder_controls != null:
         folder_controls.vertical = width < 1000
-    if practice_settings_button != null:
-        practice_settings_button.visible = width >= 1050
+    if practice_header != null:
+        practice_header.add_theme_constant_override("separation", 12 if width < 850 else 20)
 
 func _refresh_score_status() -> void:
     if score_status_panel == null or score_view == null:
@@ -767,6 +787,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     speed_label.text = "%d BPM" % int(parsed.get("bpm", 0))
     hand_label.text = "%s hand · %d%% speed" % [str(parsed.get("hand", "right")).capitalize(), int(round(float(parsed.get("bpm", 0)) / max(1.0, float(parsed.get("original_bpm", 1))) * 100.0))]
     feedback_label.text = str(parsed.get("feedback", ""))
+    feedback_label.tooltip_text = feedback_label.text
     var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
     if unpositioned > 0:
         feedback_label.text += " · %d unpositioned note(s)" % unpositioned
@@ -827,7 +848,7 @@ func _request_score(page: int) -> void:
     score_pending = true
     requested_page = page
     requested_revision = revision
-    if score_request.request(URL + "/score.svg?page=%d" % page) != OK:
+    if score_request.request(URL + "/score.png?page=%d" % page) != OK:
         score_pending = false
         _score_failed("Cannot request score page from the practice engine")
 
@@ -841,8 +862,11 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         _score_failed(_http_failure(code, body))
         return
     var picture := Image.new()
-    if picture.load_svg_from_buffer(body, 1.5) != OK:
-        _score_failed("Godot could not render the SVG score generated by Verovio")
+    if picture.load_png_from_buffer(body) != OK:
+        _score_failed("The practice engine sent an invalid score image (PNG)")
+        return
+    if picture.get_width() < 32 or picture.get_height() < 32:
+        _score_failed("The engraved score image is unexpectedly small")
         return
     score_view.texture = ImageTexture.create_from_image(picture)
     score_overlay.image_size = Vector2(picture.get_width(), picture.get_height())

@@ -30,6 +30,39 @@ By default, the folder is `~/Music/Piano Teacher` (created on first launch). Use
 
 The main menu includes **Browse library**, **Continue**, **Settings** and **Quit**. Settings is a separate screen for choosing a folder, selecting or refreshing the USB MIDI device and toggling fullscreen. The practice view retains only **Previous, Start/Stop, Next** and a disabled **Listen** control. Press **Escape** while practicing to return to the library, **Space** to start/stop, and **Left/Right** to navigate exercises. The engine stops an active attempt when leaving practice.
 
+## Practice screen and sheet-music display
+
+The practice view now separates the navigation bar from the title, tempo and hand
+labels, so text cannot wrap vertically and take up the full screen.
+
+Verovio still engraves the notes and supplies timing/position metadata, but
+Python now rasterizes the SVG pages through CairoSVG before Godot displays them.
+The backend caches the PNG per score revision and checks that there is visible
+ink. A failed conversion or blank page is reported rather than presented as a
+white score. The original SVG remains available for troubleshooting.
+
+After updating the code, reinstall the Godot extras to include CairoSVG:
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+source .venv/bin/activate
+python -m pip install -e '.[godot,test]'
+python -m pytest -q
+./run.sh
+```
+
+To verify actual Verovio engraving **and** PNG rendering without Godot:
+
+```bash
+python scripts/check_engraving.py --output /tmp/piano-score.png "$HOME/Music/Piano Teacher/your-file.midi"
+```
+
+The first page should be saved as `/tmp/piano-score.png`. Open it with an image
+viewer. The backend endpoints are `GET /score.png?page=0` for the application,
+`GET /score.svg?page=0` for examining the original engraving, and
+`GET /score/layout` for timing and notehead coordinates.
+
 ## Install and launch on Arch Linux
 
 ```bash
