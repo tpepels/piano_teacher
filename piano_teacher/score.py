@@ -8,6 +8,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 from .score_geometry import layout_from_pages
+from .lesson_score import LessonScore
 
 from .music import Note, Piece, _bar_boundaries, _phrases, load_midi
 
@@ -194,6 +195,8 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
         from music21.musicxml.m21ToXml import GeneralObjectExporter
     except ImportError as exc:
         raise RuntimeError("Engraving requires verovio and music21: pip install -e '.[godot]'") from exc
+    if isinstance(notation, LessonScore):
+        return _engrave_xml(notation.musicxml, hand, total_beats)
     sc = copy.deepcopy(notation)
     if not list(sc.recurse().getElementsByClass(stream.Measure)):
         sc.makeMeasures(inPlace=True)
@@ -232,6 +235,11 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     if not list(out.parts):
         raise ValueError(f"No notation found for measures {first}-{last}")
     xml = GeneralObjectExporter(out).parse().decode("utf-8")
+    return _engrave_xml(xml, hand, total_beats)
+
+
+def _engrave_xml(xml: str, hand: str, total_beats: float) -> EngravedScore:
+    import verovio
     toolkit = _create_verovio_toolkit(verovio)
     # Use one common layout for the SVGs and timing map. Timemap qstamps are
     # quarter-note units and remain correct when the practice tempo changes.

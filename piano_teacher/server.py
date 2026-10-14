@@ -22,6 +22,7 @@ from .library import ScoreLibrary
 from .raster import rasterize_score
 from .recovery import check_two_bar_window
 from .music import Phrase
+from .lesson_score import build_lesson_score
 
 
 class PracticeEngine:
@@ -65,6 +66,8 @@ class PracticeEngine:
         columns={row[1] for row in self.db.execute("PRAGMA table_info(sessions)")}
         if "target_bpm" not in columns:
             self.db.execute("ALTER TABLE sessions ADD COLUMN target_bpm INTEGER")
+        if "variant_index" not in columns:
+            self.db.execute("ALTER TABLE sessions ADD COLUMN variant_index INTEGER NOT NULL DEFAULT 0")
         self.db.execute("CREATE TABLE IF NOT EXISTS mastery (fingerprint TEXT, exercise TEXT, bpm INTEGER, PRIMARY KEY (fingerprint, exercise))")
         self.db.commit()
 
@@ -135,7 +138,7 @@ class PracticeEngine:
         p = self.plan
         if p is None:
             return
-        row = self.db.execute("SELECT exercise,hand,bpm,streak,target_bpm FROM sessions WHERE fingerprint=?",(self.fingerprint,)).fetchone()
+        row = self.db.execute("SELECT exercise,hand,bpm,streak,target_bpm,variant_index FROM sessions WHERE fingerprint=?",(self.fingerprint,)).fetchone()
         if row:
             p.select(min(max(0,int(row[0])),len(p.exercises)-1))
             if row[1] in p.hands:
@@ -143,6 +146,7 @@ class PracticeEngine:
             p.set_bpm(int(row[4] or p.piece.bpm))
             p.bpm = int(row[2])
             p.streak = int(row[3])
+            p.variant_index = min(max(0,int(row[5])),len(p.variants)-1)
         for key,bpm in self.db.execute("SELECT exercise,bpm FROM mastery WHERE fingerprint=?",(self.fingerprint,)):
             p.mastered[key]=bpm
 
@@ -150,8 +154,8 @@ class PracticeEngine:
         p=self.plan
         if p is None:
             return
-        self.db.execute("INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm) VALUES (?,?,?,?,?,?)",
-                        (self.fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm))
+        self.db.execute("INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm,variant_index) VALUES (?,?,?,?,?,?,?)",
+                        (self.fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm,p.variant_index))
         for key, bpm in p.mastered.items():
             self.db.execute("INSERT OR REPLACE INTO mastery VALUES (?,?,?)", (self.fingerprint,key,bpm))
         self.db.commit()
@@ -179,10 +183,10 @@ class PracticeEngine:
         p = self.plan
         result = self.pending_result
         self.pending_result = None
-        before = (p.index, p.hand)
+        before = p.identity
         message = p.apply_result(correct=result.correct,
                                  total=len(result.notes), extras=result.extra_notes)
-        if (p.index, p.hand) != before:
+        if p.identity != before:
             self.score_revision += 1
         self._save()
         return message
@@ -194,7 +198,7 @@ class PracticeEngine:
             # A user must be able to watch the time-driven score without a
             # connected instrument. Only actual MIDI input enables assessment.
             self.preview_only = self.midi_port is None
-            phrase=self.plan.exercise.phrase
+            phrase=self.plan.active_phrase
             self.play_from_beat=max(0.0,min(float(from_beat),phrase.end-phrase.start-1e-6))
             self.paused=False
             self.paused_at=0.0
@@ -300,7 +304,7 @@ class PracticeEngine:
             return
         if not self.running or self.paused or now < self.run_at:
             return
-        phrase=self.plan.exercise.phrase
+        phrase=self.plan.active_phrase
         total_beats=phrase.end-phrase.start
         elapsed_beats=max(0.0,(now-self.run_at)*self.plan.bpm/60)
         score_beat=self.play_from_beat+elapsed_beats
@@ -375,6 +379,7 @@ class PracticeEngine:
                 return {"loaded":False,"running":False,"paused":False,"transport_id":self.transport_id,
                         "clock_beat":0.0,"feedback":self.feedback,"device":self.midi_device,"revision":self.score_revision}
             ex=p.exercise
+            variant=p.active_variant
             now=self.paused_at if self.paused else time.monotonic()
             seconds=(ex.phrase.end-ex.phrase.start)*60/p.bpm
             elapsed=now-self.run_at
@@ -384,6 +389,8 @@ class PracticeEngine:
             return {"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
                     "exercise":p.index+1,"exercise_count":len(p.exercises),
+                    "lesson_level":variant.level,"lesson_level_number":p.variant_index+1,
+                    "lesson_level_count":len(p.variants),"required_notes":len(variant.notes),
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,"target_bpm":p.target_bpm,
                     "streak":p.streak,"mastered":len(p.mastered),"phase":phase,
                     "countdown":max(0,-elapsed) if self.running else 0,
@@ -407,8 +414,9 @@ class PracticeEngine:
                 raise ValueError("No piece loaded")
             if self._layout_revision != self.score_revision or self._layout_cache is None:
                 p=self.plan
-                phrase=p.exercise.phrase
-                self._layout_cache = render_layout(self.score,phrase.first_bar,phrase.last_bar,p.hand,
+                phrase=p.active_phrase
+                notation=build_lesson_score(phrase)
+                self._layout_cache = render_layout(notation,phrase.first_bar,phrase.last_bar,p.hand,
                                                    total_beats=phrase.end - phrase.start)
                 self._page_png.clear()
                 self._layout_revision=self.score_revision

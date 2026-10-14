@@ -2,6 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from .music import Phrase, Piece
+from .exercise_generator import ExerciseVariant, generate_variants
 
 @dataclass(frozen=True)
 class Exercise:
@@ -40,6 +41,7 @@ class LearningPlan:
             raise ValueError("Piece has no practice passages")
         self.index = 0
         self.hand_index = 0
+        self.variant_index = 0
         self.streak = 0
         self.failures = 0
         self.bpm = self.start_bpm
@@ -67,8 +69,20 @@ class LearningPlan:
         return self.hands[self.hand_index]
 
     @property
+    def variants(self) -> tuple[ExerciseVariant, ...]:
+        return generate_variants(self.exercise.phrase, self.hand)
+
+    @property
+    def active_variant(self) -> ExerciseVariant:
+        return self.variants[self.variant_index]
+
+    @property
+    def active_phrase(self) -> Phrase:
+        return self.active_variant.phrase
+
+    @property
     def identity(self) -> str:
-        return f"{self.exercise.key}:{self.hand}"
+        return f"{self.exercise.key}:{self.hand}:{self.active_variant.level}"
 
     def jump(self, amount: int) -> None:
         self.select(min(len(self.exercises) - 1, max(0, self.index + amount)))
@@ -78,6 +92,7 @@ class LearningPlan:
             raise ValueError("Exercise index out of bounds")
         self.index = index
         self.hand_index = 0
+        self.variant_index = 0
         self.bpm = self.start_bpm
         self.target_bpm = self.piece.bpm
         self.streak = 0
@@ -87,6 +102,7 @@ class LearningPlan:
         if hand not in self.hands:
             raise ValueError(f"Hand {hand!r} unavailable")
         self.hand_index = self.hands.index(hand)
+        self.variant_index = 0
         self.streak = self.failures = 0
         self.bpm = self.start_bpm
         self.target_bpm = self.piece.bpm
@@ -122,8 +138,13 @@ class LearningPlan:
         self.streak = 0
         previous = self.identity
         self.mastered[previous] = self.target_bpm
+        if self.variant_index + 1 < len(self.variants):
+            self.variant_index += 1
+            self.bpm = self.start_bpm
+            return f"Mastered {previous}; introducing {self.active_variant.level}"
         if self.hand_index + 1 < len(self.hands):
             self.hand_index += 1
+            self.variant_index = 0
             self.bpm = self.start_bpm
             return f"Mastered {previous}; now {self.hand} hand"
         if self.index + 1 < len(self.exercises):

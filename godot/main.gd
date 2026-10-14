@@ -997,7 +997,11 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         return
     title_label.text = str(parsed.get("title", "Piano Teacher"))
     var kind := str(parsed.get("kind", "learn")).capitalize()
-    passage_label.text = "%s · Measures %d–%d" % [kind, int(parsed.get("first_bar", 0)), int(parsed.get("last_bar", 0))]
+    var lesson_level: String = str(parsed.get("lesson_level", "original")).capitalize()
+    passage_label.text = "%s · Measures %d–%d · %s (%d/%d) · %d required notes" % [
+        kind, int(parsed.get("first_bar", 0)), int(parsed.get("last_bar", 0)),
+        lesson_level, int(parsed.get("lesson_level_number", 1)),
+        int(parsed.get("lesson_level_count", 1)), int(parsed.get("required_notes", 0))]
     speed_label.text = "%d BPM" % int(parsed.get("bpm", 0))
     hand_label.text = "%s hand · %d%% speed" % [str(parsed.get("hand", "right")).capitalize(), int(round(float(parsed.get("bpm", 0)) / max(1.0, float(parsed.get("original_bpm", 1))) * 100.0))]
     var phase: String = str(parsed.get("phase", "ready"))
