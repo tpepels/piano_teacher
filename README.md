@@ -1,3 +1,30 @@
+## Phase 1C: generated exercises now appear in practice
+
+The practice engine now uses a single active *generated lesson variant* for
+the displayed MusicXML, SVG/PNG, note evaluation and five-error recovery.
+For complex passages it teaches a skeleton, then chord outline, then original
+notes. Each variant requires three clean full playthroughs at target speed
+before advancing. The selected variant is saved in the existing SQLite session
+database (automatically migrated), and each stage transition invalidates the
+old score so Godot waits for the new image before the next count-in.
+
+The generated lesson notation has both treble and bass staves, explicit
+rests, chords and ties, and separate voices for overlapping events. Before
+it can be graded, the backend checks that Verovio provided a uniquely
+positioned notehead for every required note. It fails with a visible error
+if required notes are missing; it does not silently grade undisplayed pitches.
+
+Run the real renderer diagnostic when able:
+
+\`\`\`bash
+python scripts/check_generated_lesson.py --output-dir /tmp/piano-lessons "/path/to/song.midi"
+\`\`\`
+
+It exports a PNG for each generated stage of the first exercise and checks
+their required pitch/onset correspondences. The in-app layout, audio clicks,
+and MIDI hardware remain pending on-machine verification. Exotic irregular
+rhythms and preservation of all original notation metadata remain Phase 2.
+
 ## Generated exercise prototype (not yet enabled)
 
 The backend now has a small, pure lesson generator in

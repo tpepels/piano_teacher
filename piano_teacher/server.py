@@ -23,6 +23,7 @@ from .raster import rasterize_score
 from .recovery import check_two_bar_window
 from .music import Phrase
 from .lesson_score import build_lesson_score
+from .lesson_validation import require_lesson_alignment
 
 
 class PracticeEngine:
@@ -416,8 +417,10 @@ class PracticeEngine:
                 p=self.plan
                 phrase=p.active_phrase
                 notation=build_lesson_score(phrase)
-                self._layout_cache = render_layout(notation,phrase.first_bar,phrase.last_bar,p.hand,
-                                                   total_beats=phrase.end - phrase.start)
+                layout = render_layout(notation,phrase.first_bar,phrase.last_bar,p.hand,
+                                       total_beats=phrase.end - phrase.start)
+                require_lesson_alignment(phrase, layout.layout, p.hand)
+                self._layout_cache = layout
                 self._page_png.clear()
                 self._layout_revision=self.score_revision
             return self._layout_cache

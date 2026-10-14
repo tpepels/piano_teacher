@@ -54,7 +54,9 @@ def test_layout_cached_until_score_revision_changes(tmp_path, monkeypatch):
     def fake_render(score, first, last, hand, *, total_beats):
         calls.append((first,last,hand,total_beats))
         return EngravedScore(("<svg>page 1</svg>","<svg>page 2</svg>"),
-                             {"pages":2,"anchors":[{"beat":0,"x":.1}],"beats":total_beats})
+                             {"pages":2,"anchors":[{"beat":0,"x":.1}],"beats":total_beats,
+                              "notes":[{"pitch":n.pitch,"beat":n.start-score.phrase.start}
+                                       for n in score.phrase.notes]})
     monkeypatch.setattr(server,"render_layout",fake_render)
     assert engine.engraved(0) == "<svg>page 1</svg>"
     assert engine.engraved(1) == "<svg>page 2</svg>"

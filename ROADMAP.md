@@ -12,8 +12,8 @@
   increment will improve rolling error detection between checkpoints.
 - **1C (generator foundation only):** deterministic skeleton, chord-outline
   and original-note variants with source-note mappings and deduplication.
-  **NOT YET DISPLAYED OR GRADED**. Enabling this requires engraving generated
-  exercise notes and using the same generated notes for scoring.
+  **NOW DISPLAYED AND GRADED THROUGH THE SAME VARIANT**. Real Verovio/Godot
+  acceptance is pending; use scripts/check_generated_lesson.py to verify.
 - **1D/1E (pending):** generated-exercise curriculum, persistent per-level
   mastery, integrated Godot practice and full hardware validation.
 - **Phase 0 hardware acceptance (pending):** physical speakers, USB piano,
