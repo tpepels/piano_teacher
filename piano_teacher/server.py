@@ -61,7 +61,10 @@ class PracticeEngine:
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
         data_dir.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(data_dir / "progress.db", check_same_thread=False)
-        self.db.execute("CREATE TABLE IF NOT EXISTS sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER, target_bpm INTEGER)")
+        columns={row[1] for row in self.db.execute("PRAGMA table_info(sessions)")}
+        if "target_bpm" not in columns:
+            self.db.execute("ALTER TABLE sessions ADD COLUMN target_bpm INTEGER")
         self.db.execute("CREATE TABLE IF NOT EXISTS mastery (fingerprint TEXT, exercise TEXT, bpm INTEGER, PRIMARY KEY (fingerprint, exercise))")
         self.db.commit()
 
@@ -132,12 +135,13 @@ class PracticeEngine:
         p = self.plan
         if p is None:
             return
-        row = self.db.execute("SELECT exercise,hand,bpm,streak FROM sessions WHERE fingerprint=?",(self.fingerprint,)).fetchone()
+        row = self.db.execute("SELECT exercise,hand,bpm,streak,target_bpm FROM sessions WHERE fingerprint=?",(self.fingerprint,)).fetchone()
         if row:
             p.select(min(max(0,int(row[0])),len(p.exercises)-1))
             if row[1] in p.hands:
                 p.set_hand(row[1])
-            p.set_bpm(int(row[2]))
+            p.set_bpm(int(row[4] or p.piece.bpm))
+            p.bpm = int(row[2])
             p.streak = int(row[3])
         for key,bpm in self.db.execute("SELECT exercise,bpm FROM mastery WHERE fingerprint=?",(self.fingerprint,)):
             p.mastered[key]=bpm
@@ -146,8 +150,8 @@ class PracticeEngine:
         p=self.plan
         if p is None:
             return
-        self.db.execute("INSERT OR REPLACE INTO sessions VALUES (?,?,?,?,?)",
-                        (self.fingerprint,p.index,p.hand,p.bpm,p.streak))
+        self.db.execute("INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm) VALUES (?,?,?,?,?,?)",
+                        (self.fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm))
         for key, bpm in p.mastered.items():
             self.db.execute("INSERT OR REPLACE INTO mastery VALUES (?,?,?)", (self.fingerprint,key,bpm))
         self.db.commit()
@@ -380,7 +384,7 @@ class PracticeEngine:
             return {"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
                     "exercise":p.index+1,"exercise_count":len(p.exercises),
-                    "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,
+                    "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,"target_bpm":p.target_bpm,
                     "streak":p.streak,"mastered":len(p.mastered),"phase":phase,
                     "countdown":max(0,-elapsed) if self.running else 0,
                     "lead_in_bars":2,"play_from_beat":self.play_from_beat,

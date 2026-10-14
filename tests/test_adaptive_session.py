@@ -103,3 +103,39 @@ def test_godot_has_virtual_lead_in_notation():
     assert "lead_width_px" in script and "lead_first" in script
     assert 'cursor["x"] = float(cursor.get("x", 0.0)) + clock / lead_beats * fraction' in script
     assert "if _transport_beat_now() < 0.0:" in script
+
+
+def test_custom_target_recovers_instead_of_running_to_original_midi_speed(tmp_path, monkeypatch):
+    e, now = boot(tmp_path, monkeypatch, 2)
+    try:
+        e.control("tempo", bpm=80)
+        e.start()
+        now[0] = e.run_at + 8 * 60 / e.plan.bpm + .1
+        assert e.state()["bpm"] == 72
+        assert e.plan.target_bpm == 80
+        e.plan.apply_result(correct=8, total=8)
+        assert e.plan.bpm == 79
+        e.plan.apply_result(correct=8, total=8)
+        assert e.plan.bpm == 80
+    finally:
+        e.db.close()
+
+
+def test_target_bpm_survives_engine_reload(tmp_path, monkeypatch):
+    e, now = boot(tmp_path, monkeypatch, 2)
+    try:
+        e.fingerprint = "tempo-persistence"
+        e.plan.set_bpm(80)
+        e.plan.bpm = 72
+        e._save()
+    finally:
+        e.db.close()
+    other = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        other.plan = LearningPlan(piece(2))
+        other.fingerprint = "tempo-persistence"
+        other._restore()
+        assert other.plan.target_bpm == 80
+        assert other.plan.bpm == 72
+    finally:
+        other.db.close()

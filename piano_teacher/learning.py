@@ -43,6 +43,7 @@ class LearningPlan:
         self.streak = 0
         self.failures = 0
         self.bpm = self.start_bpm
+        self.target_bpm = piece.bpm
         self.mastered: dict[str, int] = {}
 
     @property
@@ -78,6 +79,7 @@ class LearningPlan:
         self.index = index
         self.hand_index = 0
         self.bpm = self.start_bpm
+        self.target_bpm = self.piece.bpm
         self.streak = 0
         self.failures = 0
 
@@ -87,11 +89,13 @@ class LearningPlan:
         self.hand_index = self.hands.index(hand)
         self.streak = self.failures = 0
         self.bpm = self.start_bpm
+        self.target_bpm = self.piece.bpm
 
     def set_bpm(self, bpm: int) -> None:
         if bpm < 12 or bpm > 300:
             raise ValueError("BPM must be between 12 and 300")
         self.bpm = bpm
+        self.target_bpm = bpm
         self.streak = self.failures = 0
 
     def apply_result(self, *, correct: int, total: int, extras: int = 0) -> str:
@@ -108,16 +112,16 @@ class LearningPlan:
             self.failures += 1
             return f"Repeat - {correct}/{total} correct, {extras} extra"
         self.failures = 0
-        if self.bpm < self.piece.bpm:
+        if self.bpm < self.target_bpm:
             self.streak = 0
-            self.bpm = min(self.piece.bpm, max(self.bpm + 1, round(self.bpm * 1.10)))
+            self.bpm = min(self.target_bpm, max(self.bpm + 1, round(self.bpm * 1.10)))
             return f"Tempo increased to {self.bpm} BPM"
         self.streak += 1
         if self.streak < 3:
             return f"Clean pass {self.streak}/3 - repeat"
         self.streak = 0
         previous = self.identity
-        self.mastered[previous] = self.piece.bpm
+        self.mastered[previous] = self.target_bpm
         if self.hand_index + 1 < len(self.hands):
             self.hand_index += 1
             self.bpm = self.start_bpm
