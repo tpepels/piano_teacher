@@ -1,117 +1,148 @@
-# Piano Teacher - path to a complete MIDI-based piano tutor
+# Piano Teacher - adaptive MIDI-to-exercise piano tutor
 
-## Target product
+## Product definition (confirmed 2026-10-14)
 
-An offline, fullscreen Linux piano-learning application with a small, elegant
-Godot interface. Load a user-owned MIDI or MusicXML song and practice its
-traditional piano notation using a USB MIDI keyboard. An audible count-in
-begins a strict clock: the cyan timing beam and score advance at the selected
-BPM regardless of player input. Real playing is judged note by note; listening
-to a demonstration is a separate action.
+The app is a fullscreen, offline Linux **piano teacher**, not a MIDI player,
+karaoke transcription or static sheet-music viewer. It accepts user-owned MIDI
+(and MusicXML), analyses musical material and generates a progressive sequence
+of **purpose-made, playable exercises**. The original score is a reference,
+not the default lesson presentation. The final destination is a correct,
+full-tempo rendition of the imported piece.
 
-The app is inspired by the timed sheet-music experience of learning products
-such as Simply Piano but is not a copy of their lessons or proprietary content.
+Non-negotiable teaching behaviour:
 
-## Development milestones and acceptance gates
+1. Difficult material is **simplified first** (remove optional chord tones,
+   lighten accompaniment, simplify hard rhythmic figures without shifting the
+   overall musical time grid), then deliberately restored in later exercises.
+   Original note positions remain traceable and the full original is revisited.
+2. **Two empty moving bars precede every attempt**. The score/lead-in moves
+   from the first audible count-in beat; the first playable note arrives at the
+   timing marker exactly two bars later. Count-in and notation use one musical
+   clock. Rests and empty bars are genuinely time-bearing.
+3. **Five distinct wrong or missed required notes** within a rolling
+   two-measure window trigger recovery. Continue through the *end* of the
+   current two-measure chunk, then rewind to an appropriate boundary about two
+   bars earlier. Every retry begins with the same two moving lead-in bars.
+   Do not double count one wrong pitch as both missed and extra.
+4. On threshold failure slow by **10%** (minimum 12 BPM). Following a clean
+   pass increase in increments, bounded by the exercise's target BPM. Neither
+   a slowed success nor an unconnected timing preview awards full mastery.
+5. Require **three consecutive clean performances at the current exercise's
+   target tempo** to progress. Incorrect attempts reset the clean streak.
+   Persist passage, hand, simplification level, target tempo and mastery.
 
-These milestones are sequential for the core practice experience. Do not
-claim a milestone done merely because unit tests pass: Godot parsing, actual
-engraving, a connected piano and audio timing must also be exercised.
+User can always Stop, Pause, Restart, navigate exercises or override tempo.
+Attempts chain automatically with a short, understandable feedback interval.
+Listen/demonstration is a separate audio mode; silent previews never grade.
 
-### 0 - Stable startup and verifiable vertical slice
+## Delivery order and acceptance gates
 
-- Fix missing modules, permissions, parser failures, dependency mismatches and
-  UI errors that silently produce grey or blank windows.
-- Run `python -m pytest -q` and `scripts/check_godot.sh` before release.
-- Exercise the real MIDI import, Verovio SVG, CairoSVG PNG, Godot texture, and
-  USB input with a short real file.
-- **Gate:** app opens fullscreen, displays score, starts and completes a
-  two-measure timed preview, and exits cleanly on the target Arch system.
+We develop the core experience in short testable increments. A Python-only
+test pass never constitutes Godot/hardware acceptance.
 
-### 1 - Trustworthy transport and following notation
+### Phase 0 - Stable launch and import-to-screen vertical slice [in progress]
 
-- Share one time base for backend, count-in audio, animated playhead, MIDI
-  timestamping and metronome; account for latency and pause/restart.
-- Start at a musical time-zero line, move continuously at the selected BPM and
-  scroll notation with a comfortable read-ahead distance, even in silence.
-- Handle multi-system/page transitions, rests, tempo overrides, repeat, restart,
-  interruptions, automatic passage change and score preprocessing.
-- **Gate:** 30 repeated starts/stops at 40/80/120 BPM with no stuck state;
-  musical position and audio clicks stay synchronized on target hardware.
+Reliable executable launcher, Verovio fonts and CairoSVG assets, Python API,
+Godot scene parsing and actual startup, real score PNG geometry, isolated
+backend ownership of port 8765 and readable runtime errors.
 
-### 2 - Reliable score import and readable notation
+**Acceptance:** application opens on target Arch machine; loads a real MIDI,
+shows a real engraved score, enters/exits a timed preview without a grey or
+blank screen; backend and headless Godot integration checks pass.
 
-- Use a canonical beat-based event model shared by engraving, scoring and demo.
-- Quantize performed MIDI sensitively; preserve original timing as an option;
-  avoid nonsensical ledger-line stacks and inconsistent time signatures.
-- Handle tempo maps, pickups, ties, chords, rests, voices, pedal data, difficult
-  rhythms, and correctly map notation to source MIDI events.
-- Correctly identify left/right hands and permit persistent reassignment.
-- **Gate:** a test corpus of at least 20 varied real MIDI/MusicXML pieces
-  renders legible staves, with correct note/event correspondence. Unsupported
-  files get actionable errors rather than fake notation.
+### Phase 1 - Adaptive moving-lesson runtime [begin implementation now]
 
-### 3 - MIDI hardware, calibration and scoring
+- **1A - Lesson timeline:** one signed beat clock; two moving empty bars
+  before every attempt; fixed-tempo visual movement from the very first
+  count-in beat; continuous note timing after lead-in; pauses/stops/restarts;
+  next-attempt scheduling with short visible feedback intervals.
+- **1B - Error recovery:** identify distinct wrong/missed required notes on
+  the active exercise; detect five within a rolling two-bar window; do not
+  interrupt mid-chunk; rewind to a safe preceding boundary; slow by 10%;
+  retry with the two moving lead-in bars; recover speed incrementally after
+  a clean pass without granting premature mastery.
+- **1C - MIDI-to-exercise generation:** infer track/hand roles, measure
+  structure and phrase boundaries; generate simpler musical variants then
+  progressively restore omitted notes, chords and rhythms, with traceable
+  source-to-exercise mappings. Do not engrave MIDI unchanged and call it a
+  lesson. Preserve the original for the final performance exercise.
+- **1D - Curriculum and repetition:** separate per-hand learning, both-hand
+  integration, bridges across fragments, three clean repeats per exercise at
+  its target tempo, persistent mastery and meaningful manual override.
+- **1E - End-to-end adaptive lesson:** responsive Godot presentation for
+  lead-in, note arrivals, mistake markers, feedback, retries, level changes
+  and exercise readiness; real-engraving smoke against imported pieces.
 
-- Device discovery/reconnection; visible note-input diagnostic; latency
-  calibration; sustain pedal and overlapping chords; repeat-note matching.
-- Score pitch, onset (nominal ±100ms), release (nominal ±20% duration), extras,
-  missed notes, hands and error categories correctly.
-- Highlight mistakes on their engraved noteheads during/after a pass.
-- **Gate:** deterministic recording fixtures plus live hardware trials agree;
-  empty-input previews never award mastery or progress the curriculum.
+**Acceptance:** take a sufficiently complex imported MIDI and automatically
+produce at least two different exercise variants; watch two moving lead-in
+measures; perform/replay a passage three times; deliberate mistakes cause a
+deferred two-bar rewind and 10% slowdown; clean playing restores target tempo
+and only then advances. No hardware input means visual preview only.
 
-### 4 - Complete adaptive lesson progression
+### Phase 2 - Musical representation and notation fidelity
 
-- Teach the two-measure blocks per hand, then both; bridge every adjacent
-  block with four-measure uninterrupted connections, and conclude with the
-  whole piece.
-- Start around 40% tempo; advance speed from verified clean repeats; isolate
-  recurring mistakes; allow manual hand, passage and tempo override.
-- Preserve per-hand, per-passage, per-tempo mastery over restarts.
-- **Gate:** a 16+ measure composition can be completed end to end without
-  manual intervention, with reasonable recovery after repeated errors.
+Canonical quarter-beat timebase and stable note IDs shared by source notes,
+simplified lesson variants, engraving, evaluation and demonstrations. Better
+quantization, pickup bars, multiple voices, ties, chords, tempo maps, rests,
+hand assignments and outlier ledger lines. Allow persistent hand corrections.
 
-### 5 - Demonstration playback and practice tools
+**Acceptance:** a corpus of at least 20 representative MIDI/MusicXML imports
+produces readable *lesson notation*, and every displayed required note maps
+back to the correct MIDI pitch/time. Unsupported material reports limitations.
 
-- Implement Listen using a local piano sound generator (e.g., FluidSynth),
-  with both-hands/one-hand demos and selected passage playback.
-- Metronome on/off/volume, adjustable loop regions, slowdown and clear audio
-  routing without dependence on the connected keyboard synthesizer.
-- **Gate:** demo pitches and timings correspond to the same score events
-  evaluated in practice; playback stops reliably and does not count as playing.
+### Phase 3 - Input calibration and robust feedback
 
-### 6 - Finished UX, preferences and progress
+MIDI device discovery/reconnect, latency calibration, sustained/repeated
+notes, chords/pedal, note-on/off capture, pitch and rhythm matching,
+early/late/short/long, extras vs wrongs, and correct on-score highlighting.
 
-- Calm full-screen home/library/practice/settings screens; responsive layout,
-  stable large notation, prominent timing beam, subtle inactive staff.
-- Library search, sort, recent/continue; settings for device, folder, hand
-  corrections, latency, visual toggles, notation labels and audio.
-- Explain loading errors and prerequisites without exposing implementation
-  details; keyboard-only control; accessible contrasts/text scaling.
-- **Gate:** first-run-to-practice flow succeeds without a terminal walkthrough.
+**Acceptance:** deterministic performance fixtures and live keyboard trials
+produce matching note assessments. A preview without input never masters.
 
-### 7 - Packaging, reliability and release
+### Phase 4 - Personalized teaching and longer pieces
 
-- Produce an Arch-ready installable distribution with bundled/validated Python
-  and Verovio assets, Godot runtime and an appropriate audio backend.
-- End-to-end startup/import/score/clock/scoring/persistence smoke suite, with
-  short and dense example scores; renderer/geometry screenshot comparisons.
-- Manage file errors, USB disconnects, rapid navigation and shutdown cleanly.
-- **Gate:** clean-machine installation and an extended real-piano rehearsal
-  complete with no manual dependency repair or unhandled exception.
+Refine difficulty estimation, error-aware section boundaries, repeated
+trouble-spot isolation, adaptive threshold policies, tempo recovery and
+longer-form progression. Per-piece retained settings/mastery across sessions.
 
-## Definition of feature-complete
+**Acceptance:** a 16+ bar piece is taught without manual passage navigation;
+later full-piece practice retains all original notes.
 
-User points the application to a music folder, selects a suitable MIDI/MusicXML
-piece, verifies or corrects hands, presses Start, hears a measured count-in,
-then follows a scrolling full-size score while playing at adjustable tempo.
-Correctness feedback is located on the score; the lesson engine adapts,
-repeats difficult transitions and remembers mastery. Listen plays a piano
-demo separately. The application works offline and can be installed and used
-without editing code.
+### Phase 5 - Listen, demonstrate and supporting practice tools
 
-Features deliberately outside the first feature-complete release: microphone
-note detection, copyrighted course catalogue, PDF/photograph transcription,
-online accounts, cloud synchronization and automatic high-confidence
-fingering for arbitrary imported songs.
+Local piano soundfont playback with optional one-hand demonstration,
+metronome options, section loop selection and audio routing. Playback cannot
+be confused with recorded student MIDI.
+
+**Acceptance:** demo sound and engraving share the same event/time model.
+
+### Phase 6 - Graphics, UX and accessibility
+
+Purpose-built exercise-score layout, large notation, uncluttered full-screen
+home/library/practice/settings, subtle inactive hand, readable moving beam,
+optional note names/finger hints, transparent feedback and difficulty settings.
+
+**Acceptance:** new user can import music and learn without editing files or
+running terminal commands.
+
+### Phase 7 - Packaging and release
+
+Arch-ready installable application, dependency/resource bundling, offline
+operation, deterministic Python and real-Godot smoke tests, score snapshots,
+performance/load tests, crash recovery, clean shutdown and USB unplug/replug.
+
+**Acceptance:** clean-machine installation and extended real-piano practice
+session without manual dependency repairs or unhandled errors.
+
+## Current testing policy
+
+For each increment, provide deterministic backend tests, source/GDScript
+checks, and as soon as available headless Godot integration. Hardware/audio
+validation can be deferred explicitly but must not be claimed complete.
+Avoid treating source-based assertions as proof of visual correctness.
+Do not wait for CI; report local tests and exact commands to run on Arch.
+
+## Deliberate first-release exclusions
+
+No microphone recognition, copyrighted song/course catalogue, scanned score
+recognition, automatic guaranteed fingering, online accounts or cloud sync.
