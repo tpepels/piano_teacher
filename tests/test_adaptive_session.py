@@ -139,3 +139,22 @@ def test_target_bpm_survives_engine_reload(tmp_path, monkeypatch):
         assert other.plan.bpm == 72
     finally:
         other.db.close()
+
+
+def test_existing_database_migrates_without_losing_progress(tmp_path):
+    import sqlite3
+    with sqlite3.connect(tmp_path / "progress.db") as database:
+        database.execute("CREATE TABLE sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER)")
+        database.execute("INSERT INTO sessions VALUES (?,?,?,?,?)", ("old-piece",0,"right",64,1))
+    engine=PracticeEngine(tmp_path,enable_midi=False)
+    try:
+        engine.plan=LearningPlan(piece(2))
+        engine.fingerprint="old-piece"
+        engine._restore()
+        assert engine.plan.bpm==64
+        assert engine.plan.target_bpm==100
+        assert engine.plan.streak==1
+        engine._save()
+        assert "target_bpm" in {r[1] for r in engine.db.execute("PRAGMA table_info(sessions)")}
+    finally:
+        engine.db.close()

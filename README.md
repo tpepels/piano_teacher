@@ -1,3 +1,35 @@
+## Adaptive lesson runtime - Phase 1A/1B
+
+The original MIDI file is still the *source*, not the future final exercise
+format. We have begun separating the adaptive lesson transport and recovery
+controller from the imported score. The next phase (1C) must transform
+source MIDI into progressively simplified, hand-specific exercises, then
+engrave the *generated exercises*, not just crop the source notation.
+
+Implemented in the current increment:
+
+- Each attempt has **two empty moving bars**. The Godot canvas draws blank
+  staves before the original score and scrolls them immediately using the
+  same signed beat clock as the audible metronome. No piano is required to
+  watch a timing preview.
+- The backend examines actual played pitches at **two-bar boundaries**.
+  Five wrong or missing *required* pitches cause a feedback break followed by
+  a retry from that two-bar section. Repeated mistakes reduce tempo by 10%.
+- A retry inside a longer excerpt only assesses notes from its new starting
+  position, and never counts as a clean full-passage mastery run.
+- Clean attempts increase tempo in steps towards the **chosen target BPM**,
+  which may differ from the MIDI's original tempo. Three consecutive clean
+  full-passage attempts *at that target* are required to advance.
+- Exercise target BPM and the current tempo are saved separately. Existing
+  SQLite session databases are migrated without discarding progress.
+- Existing automatic practice progression still waits for the next score PNG
+  to be displayed before starting its count-in.
+
+Still pending before calling Phase 1 complete: generated simplified exercises,
+note-by-note rolling error detection between boundaries, real Godot rendering
+checks, and audio/MIDI hardware verification. Python source assertions do not
+prove that the blank staff graphics are correctly rendered on screen.
+
 ## Phase 1: score-following and transition improvements
 
 - Score panning now frames the active engraved staff system, with frame-rate
