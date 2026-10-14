@@ -1,3 +1,19 @@
+## Validate Godot before running the application
+
+Python tests alone cannot detect GDScript parse errors such as undeclared
+variables. On a Linux machine with Godot installed, the Python test suite now
+also checks the Godot script with the real headless parser:
+
+```bash
+python -m pytest -q
+./scripts/check_godot.sh
+./run.sh
+```
+
+The last two commands are separate deliberately: the parser test should fail
+before the fullscreen application is launched when there is a GDScript error.
+This is independent of the `DRI_PRIME` Mesa device-selection warning.
+
 ## Audible count-in, moving notation and live MIDI feedback
 
 Start begins your **own MIDI-piano practice performance**. It does not play

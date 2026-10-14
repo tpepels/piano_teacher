@@ -259,7 +259,6 @@ func _layout_moving_score() -> void:
         var start_margin: float = viewport.x * 0.045
         var lower_bound: float = minf(start_margin, viewport.x * 0.955 - displayed_width)
         x = clampf(viewport.x * 0.42 - position_in_score, lower_bound, start_margin)
-    scroll_target_x = x
     score_content.position = Vector2(x, (viewport.y - displayed_height) * 0.5)
 
 func _new_request(callback: Callable) -> HTTPRequest:
