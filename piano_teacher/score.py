@@ -5,6 +5,9 @@ import copy
 from dataclasses import replace
 import json
 from pathlib import Path
+from dataclasses import dataclass
+
+from .score_geometry import layout_from_pages
 
 from .music import Note, Piece, _bar_boundaries, _phrases, load_midi
 
@@ -78,8 +81,20 @@ def import_piece(path: str | Path) -> tuple[Piece, object]:
     return Piece(path.stem, bpm, tuple(events), phrases), notation
 
 
-def render_measures(notation: object, first: int, last: int, hand: str = "both") -> str:
-    """Engrave a selected score range as an actual SVG score via Verovio."""
+@dataclass(frozen=True)
+class EngravedScore:
+    pages: tuple[str, ...]
+    layout: dict
+
+
+def render_layout(notation: object, first: int, last: int, hand: str = "both",
+                  *, total_beats: float) -> EngravedScore:
+    """Render *all* score pages and bind their noteheads to Verovio qstamps.
+
+    The returned layout has exact engraved onset anchors, page/system IDs, and
+    SVG viewBox dimensions. A mismatched engraving raises an explicit error;
+    there is deliberately no fake percentage-based cursor fallback.
+    """
     try:
         import verovio
         from music21 import stream, clef, key
@@ -101,14 +116,13 @@ def render_measures(notation: object, first: int, last: int, hand: str = "both")
         for i, measure in enumerate(selected):
             copied = copy.deepcopy(measure)
             if i == 0:
-                original = measure
                 for element_type in (clef.Clef, key.KeySignature):
                     if not list(copied.getElementsByClass(element_type)):
-                        context = original.getContextByClass(element_type)
+                        context = measure.getContextByClass(element_type)
                         if context is not None:
                             copied.insert(0, copy.deepcopy(context))
             if hand != "both" and len(parts) >= 2:
-                # For ordinary two-part piano MusicXML: top is right, bottom is left.
+                # For ordinary two-part piano MusicXML: top right, bottom left.
                 inactive = (hand == "right" and index == len(parts) - 1) or (hand == "left" and index == 0)
                 if inactive:
                     for item in copied.recurse().notes:
@@ -119,13 +133,33 @@ def render_measures(notation: object, first: int, last: int, hand: str = "both")
         raise ValueError(f"No notation found for measures {first}-{last}")
     xml = GeneralObjectExporter(out).parse().decode("utf-8")
     toolkit = verovio.toolkit()
-    toolkit.setOptions(json.dumps({"inputFrom": "xml", "scale": 48, "pageWidth": 1750,
-                                   "pageHeight": 1100, "adjustPageHeight": True,
-                                   "breaks": "auto", "svgViewBox": True,
-                                   "svgFontType": "embedded"}))
+    # Use one common layout for the SVGs and timing map. Timemap qstamps are
+    # quarter-note units and remain correct when the practice tempo changes.
+    toolkit.setOptions(json.dumps({"inputFrom": "xml", "scale": 48,
+                                   "pageWidth": 2200, "pageHeight": 1350,
+                                   "adjustPageHeight": True, "breaks": "auto",
+                                   "svgViewBox": True, "svgFontType": "embedded"}))
     if not toolkit.loadData(xml):
         raise ValueError("Verovio could not engrave this passage")
-    svg = toolkit.renderToSVG(1)
-    if not svg or "<svg" not in svg:
-        raise ValueError("Verovio returned no SVG score")
-    return svg
+    count = toolkit.getPageCount()
+    if count < 1 or count > 256:
+        raise ValueError(f"Unexpected engraving page count: {count}")
+    pages = tuple(toolkit.renderToSVG(i) for i in range(1, count + 1))
+    if any("<svg" not in svg for svg in pages):
+        raise ValueError("Verovio returned an invalid SVG page")
+    try:
+        events = json.loads(toolkit.renderToTimemap(json.dumps({"includeRests": True,
+                                                                 "includeMeasures": True})))
+    except (ValueError, TypeError) as exc:
+        raise ValueError("Verovio produced an invalid note timing map") from exc
+    if not isinstance(events, list):
+        raise ValueError("Verovio produced no note timing map")
+    layout = layout_from_pages(list(pages), events, total_beats)
+    return EngravedScore(pages, layout)
+
+
+def render_measures(notation: object, first: int, last: int, hand: str = "both") -> str:
+    """Legacy single-page SVG API. Prefer render_layout for synchronized UI."""
+    # When no exact phrase duration is available, only SVG rendering is needed;
+    # use a duration larger than any excerpt (the caller ignores anchors).
+    return render_layout(notation, first, last, hand, total_beats=1_000_000).pages[0]

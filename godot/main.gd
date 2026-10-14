@@ -10,6 +10,7 @@ const ACCENT := Color("#3B574C")
 
 var state_request: HTTPRequest
 var score_request: HTTPRequest
+var layout_request: HTTPRequest
 var action_request: HTTPRequest
 var device_request: HTTPRequest
 var title_label: Label
@@ -29,25 +30,40 @@ var revision := -1
 var state_pending := false
 var score_pending := false
 var requested_revision := -1
+var layout_revision := -1
+var requested_layout_revision := -1
+var layout_pending := false
+var score_layout: Dictionary = {}
+var current_page := -1
+var requested_page := -1
+var rendered_revision := -1
 var action_pending := false
 var last_state: Dictionary = {}
 var last_state_tick := 0
 
 class ScoreOverlay extends Control:
-    var position_fraction := 0.0
+    var cursor: Dictionary = {}
     var showing := false
+    var image_size := Vector2.ZERO
+
     func _draw() -> void:
-        if not showing:
+        if not showing or cursor.is_empty() or image_size.x <= 0 or image_size.y <= 0:
             return
-        # The exact engraving note-to-pixel map is the next rendering milestone.
-        var x := size.x * (0.095 + position_fraction * 0.83)
-        draw_line(Vector2(x, size.y * 0.12), Vector2(x, size.y * 0.87), Color("#C39351"), 2.5, true)
-        draw_circle(Vector2(x, size.y * 0.12), 4.0, Color("#C39351"))
+        # TextureRect uses KEEP_ASPECT_CENTERED, so include its letterboxing.
+        var scale_factor: float = min(size.x / image_size.x, size.y / image_size.y)
+        var displayed: Vector2 = image_size * scale_factor
+        var offset: Vector2 = (size - displayed) * 0.5
+        var x: float = offset.x + displayed.x * float(cursor.get("x", 0.0))
+        var top: float = offset.y + displayed.y * float(cursor.get("top", 0.0))
+        var bottom: float = offset.y + displayed.y * float(cursor.get("bottom", 1.0))
+        draw_line(Vector2(x, top), Vector2(x, bottom), Color("#C39351"), 2.5, true)
+        draw_circle(Vector2(x, top), 4.0, Color("#C39351"))
 
 func _ready() -> void:
     _build_interface()
     state_request = _new_request(_on_state)
     score_request = _new_request(_on_score)
+    layout_request = _new_request(_on_layout)
     action_request = _new_request(_on_action)
     device_request = _new_request(_on_devices)
     var poll := Timer.new()
@@ -57,6 +73,7 @@ func _ready() -> void:
     add_child(poll)
     _poll()
     _request_devices()
+    set_process(true)
 
 func _new_request(callback: Callable) -> HTTPRequest:
     var req := HTTPRequest.new()
@@ -200,11 +217,54 @@ func _poll() -> void:
         state_pending = true
         if state_request.request(URL + "/state") != OK:
             state_pending = false
-    if not last_state.is_empty() and last_state.get("phase", "") == "playing":
-        var elapsed := float(Time.get_ticks_msec() - last_state_tick) / 1000.0
-        var duration := max(0.1, float(last_state.get("duration", 1)))
-        score_overlay.position_fraction = min(1.0, float(last_state.get("progress", 0)) + elapsed / duration)
+
+func _process(_delta: float) -> void:
+    if last_state.is_empty() or not bool(last_state.get("running", false)):
+        score_overlay.showing = false
         score_overlay.queue_redraw()
+        return
+    if str(last_state.get("phase", "")) != "playing" or layout_revision != revision:
+        score_overlay.showing = false
+        score_overlay.queue_redraw()
+        return
+    var elapsed: float = float(Time.get_ticks_msec() - last_state_tick) / 1000.0
+    var beat: float = float(last_state.get("beat", 0.0)) + elapsed * float(last_state.get("bpm", 60.0)) / 60.0
+    beat = clampf(beat, 0.0, float(last_state.get("duration_beats", 1.0)))
+    var cursor: Dictionary = _position_at_beat(beat)
+    if cursor.is_empty():
+        score_overlay.showing = false
+        score_overlay.queue_redraw()
+        return
+    var page: int = int(cursor.get("page", 0))
+    if current_page != page or rendered_revision != revision:
+        _request_score(page)
+        score_overlay.showing = false
+        score_overlay.queue_redraw()
+        return
+    score_overlay.cursor = cursor
+    score_overlay.showing = true
+    score_overlay.queue_redraw()
+
+func _position_at_beat(beat: float) -> Dictionary:
+    var points: Array = score_layout.get("anchors", [])
+    if points.is_empty():
+        return {}
+    var at: int = 0
+    for i in range(points.size()):
+        if float(points[i].get("beat", 0.0)) <= beat + 0.000001:
+            at = i
+        else:
+            break
+    var left: Dictionary = points[at]
+    var position: Dictionary = left.duplicate()
+    if at + 1 < points.size():
+        var right: Dictionary = points[at + 1]
+        if int(left.get("page", 0)) == int(right.get("page", 0)) and str(left.get("system", "")) == str(right.get("system", "")):
+            var span: float = float(right.get("beat", 0.0)) - float(left.get("beat", 0.0))
+            if span > 0:
+                var fraction: float = clampf((beat - float(left.get("beat", 0.0))) / span, 0.0, 1.0)
+                position["x"] = lerpf(float(left["x"]), float(right["x"]), fraction)
+    return position
 
 func _on_state(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     state_pending = false
@@ -227,26 +287,62 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     feedback_label.text = str(parsed.get("feedback", ""))
     progress_label.text = "Exercise %d/%d  ·  %d mastered" % [int(parsed.get("exercise", 1)),int(parsed.get("exercise_count", 1)),int(parsed.get("mastered", 0))]
     start_button.text = "Stop" if bool(parsed.get("running", false)) else "Start"
-    score_overlay.showing = bool(parsed.get("running", false)) and str(parsed.get("phase", "")) == "playing"
-    score_overlay.position_fraction = float(parsed.get("progress", 0))
-    score_overlay.queue_redraw()
     var new_revision := int(parsed.get("revision", 0))
     if new_revision != revision:
         revision = new_revision
-        _request_score()
+        layout_revision = -1
+        score_layout = {}
+        current_page = -1
+        score_overlay.showing = false
+        _request_layout()
     var placeholder: Control = score_view.get_parent().get_node("Placeholder") as Control
     placeholder.visible = score_view.texture == null
 
-func _request_score() -> void:
-    if score_pending:
+func _request_layout() -> void:
+    if layout_pending:
+        return
+    layout_pending = true
+    requested_layout_revision = revision
+    if layout_request.request(URL + "/score/layout") != OK:
+        layout_pending = false
+        feedback_label.text = "Cannot request score geometry"
+
+func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+    layout_pending = false
+    if requested_layout_revision != revision:
+        _request_layout()
+        return
+    if code != 200:
+        feedback_label.text = "Engraving layout failed: " + body.get_string_from_utf8().substr(0, 140)
+        return
+    var parsed = JSON.parse_string(body.get_string_from_utf8())
+    if typeof(parsed) != TYPE_DICTIONARY or not parsed.has("anchors"):
+        feedback_label.text = "Invalid engraving geometry"
+        return
+    score_layout = parsed
+    layout_revision = revision
+    _request_score(0)
+
+func _request_score(page: int) -> void:
+    if score_pending or layout_revision != revision:
+        return
+    if page == current_page and rendered_revision == revision:
+        return
+    if page < 0 or page >= int(score_layout.get("pages", 0)):
         return
     score_pending = true
+    requested_page = page
     requested_revision = revision
-    if score_request.request(URL + "/score.svg") != OK:
+    if score_request.request(URL + "/score.svg?page=%d" % page) != OK:
         score_pending = false
+        feedback_label.text = "Cannot request score page"
 
 func _on_score(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     score_pending = false
+    if requested_revision != revision:
+        if layout_revision == revision:
+            _request_score(0)
+        return
     if code != 200:
         feedback_label.text = "Engraving failed: " + body.get_string_from_utf8().substr(0, 150)
         return
@@ -255,9 +351,11 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         feedback_label.text = "Unable to display the engraved score"
         return
     score_view.texture = ImageTexture.create_from_image(picture)
+    score_overlay.image_size = Vector2(picture.get_width(), picture.get_height())
+    current_page = requested_page
+    rendered_revision = revision
+    score_overlay.queue_redraw()
     (score_view.get_parent().get_node("Placeholder") as Control).hide()
-    if requested_revision != revision:
-        _request_score()
 
 func _send_action(command: Dictionary) -> void:
     _send_post("/control", command)

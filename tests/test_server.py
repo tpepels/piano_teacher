@@ -41,3 +41,44 @@ def test_progress_persists(tmp_path):
     assert second.plan.bpm==70
     assert second.plan.mastered['learn:1-2:right']==100
     second.db.close()
+
+
+def test_layout_cached_until_score_revision_changes(tmp_path, monkeypatch):
+    """Multiple UI polls/pages must not repeatedly engrave the same exercise."""
+    from piano_teacher.score import EngravedScore
+    from piano_teacher import server
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    engine.plan = LearningPlan(fixture_piece())
+    engine.score = object()
+    calls = []
+    def fake_render(score, first, last, hand, *, total_beats):
+        calls.append((first,last,hand,total_beats))
+        return EngravedScore(("<svg>page 1</svg>","<svg>page 2</svg>"),
+                             {"pages":2,"anchors":[{"beat":0,"x":.1}],"beats":total_beats})
+    monkeypatch.setattr(server,"render_layout",fake_render)
+    assert engine.engraved(0) == "<svg>page 1</svg>"
+    assert engine.engraved(1) == "<svg>page 2</svg>"
+    assert engine.geometry()["pages"] == 2
+    assert calls == [(1,2,"right",8)]
+    with __import__('pytest').raises(ValueError,match="Invalid score page"):
+        engine.engraved(2)
+    engine.control("hand",hand="both")
+    assert engine.geometry()["pages"] == 2
+    assert calls[-1] == (1,2,"both",8)
+    assert len(calls) == 2
+    engine.db.close()
+
+
+def test_playhead_beat_state_at_countin_and_play(tmp_path):
+    engine=PracticeEngine(tmp_path,enable_midi=False)
+    engine.plan=LearningPlan(fixture_piece())
+    engine.control("start")
+    state=engine.state()
+    assert state["beat"] == 0
+    assert state["duration_beats"] == 8
+    assert state["phase"] == "count_in"
+    engine.run_at=__import__('time').monotonic() - 1.0
+    state=engine.state()
+    assert state["phase"] == "playing"
+    assert 0 < state["beat"] < 8
+    engine.db.close()

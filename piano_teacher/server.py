@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 
 from .learning import LearningPlan
 from .practice import Recorder, evaluate
-from .score import import_piece, render_measures
+from .score import import_piece, render_layout, EngravedScore
 
 
 class PracticeEngine:
@@ -32,7 +32,8 @@ class PracticeEngine:
         self.auto = False
         self.feedback = "Open a MIDI or MusicXML file"
         self.score_revision = 0
-        self.last_score = ""
+        self._layout_cache: EngravedScore | None = None
+        self._layout_revision = -1
         self.next_at = 0.0
         self.midi_port = None
         self.midi_device = ""
@@ -203,15 +204,30 @@ class PracticeEngine:
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,
                     "streak":p.streak,"mastered":len(p.mastered),"phase":phase,
                     "countdown":max(0,-elapsed) if self.running else 0,
-                    "progress":progress,"duration":seconds,"running":self.running,
+                    "progress":progress,"duration":seconds,"beat":progress * (ex.phrase.end - ex.phrase.start),
+                    "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
                     "device":self.midi_device,"feedback":self.feedback,"revision":self.score_revision}
 
-    def engraved(self) -> str:
+    def engraving(self) -> EngravedScore:
         with self.lock:
             if not self.plan:
                 raise ValueError("No piece loaded")
-            p=self.plan
-            return render_measures(self.score,p.exercise.phrase.first_bar,p.exercise.phrase.last_bar,p.hand)
+            if self._layout_revision != self.score_revision or self._layout_cache is None:
+                p=self.plan
+                phrase=p.exercise.phrase
+                self._layout_cache = render_layout(self.score,phrase.first_bar,phrase.last_bar,p.hand,
+                                                   total_beats=phrase.end - phrase.start)
+                self._layout_revision=self.score_revision
+            return self._layout_cache
+
+    def engraved(self, page: int = 0) -> str:
+        score=self.engraving()
+        if not 0 <= page < len(score.pages):
+            raise ValueError("Invalid score page")
+        return score.pages[page]
+
+    def geometry(self) -> dict:
+        return self.engraving().layout
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -232,8 +248,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200,self.engine.state())
             elif route=="/devices":
                 self._json(200,{"devices":self.engine.ports()})
+            elif route=="/score/layout":
+                self._json(200,self.engine.geometry())
             elif route=="/score.svg":
-                self._reply(200,self.engine.engraved().encode(),"image/svg+xml; charset=utf-8")
+                from urllib.parse import parse_qs
+                values=parse_qs(urlsplit(self.path).query).get("page", ["0"])
+                page=int(values[0])
+                self._reply(200,self.engine.engraved(page).encode(),"image/svg+xml; charset=utf-8")
             else:
                 self._json(404,{"error":"Not found"})
         except Exception as exc:
