@@ -33,6 +33,7 @@ class PracticeEngine:
         self.run_at = 0.0
         self.running = False
         self.auto = False
+        self.count_in_beats = 0
         self.feedback = "Open a MIDI or MusicXML file"
         self.score_revision = 0
         self._layout_cache: EngravedScore | None = None
@@ -143,6 +144,7 @@ class PracticeEngine:
     def _stop(self):
         self.running=False
         self.auto=False
+        self.count_in_beats=0
         self.next_at=0
         self.recorder=None
         self.pending_result=None
@@ -179,8 +181,8 @@ class PracticeEngine:
             self.recorder=Recorder()
             phrase=self.plan.exercise.phrase
             measures=max(1, phrase.last_bar - phrase.first_bar+1)
-            count_in_beats=max(1,round((phrase.end-phrase.start)/measures))
-            self.run_at=time.monotonic()+count_in_beats*60/self.plan.bpm
+            self.count_in_beats=max(1,round((phrase.end-phrase.start)/measures))
+            self.run_at=time.monotonic()+self.count_in_beats*60/self.plan.bpm
             self.feedback="Count in, then play"
 
     def control(self, action: str, **kwargs) -> None:
@@ -271,6 +273,8 @@ class PracticeEngine:
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,
                     "streak":p.streak,"mastered":len(p.mastered),"phase":phase,
                     "countdown":max(0,-elapsed) if self.running else 0,
+                    "count_in_beats":self.count_in_beats if self.running else 0,
+                    "midi_notes":len(self.recorder.presses) if self.recorder is not None else 0,
                     "progress":progress,"duration":seconds,"beat":progress * (ex.phrase.end - ex.phrase.start),
                     "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
                     "device":self.midi_device,"feedback":self.feedback,"revision":self.score_revision,

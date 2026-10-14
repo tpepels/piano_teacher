@@ -145,6 +145,35 @@ def _verovio_object(value, description: str):
     raise ValueError(f"Verovio returned unexpected {description} type: {type(value).__name__}")
 
 
+def _fade_inactive_staff(svg: str, hand: str) -> str:
+    """De-emphasize every inactive staff element: beams, ledger lines and notes.
+
+    Verovio emits both staves as SVG groups with the ``staff`` class, ordered
+    from upper to lower in each system. We preserve IDs and geometry intact.
+    Scores not containing exactly two staves per system are left unchanged.
+    """
+    if hand not in ("left", "right"):
+        return svg
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(svg)
+    changed = False
+    for system in root.iter():
+        if "system" not in system.get("class", "").split():
+            continue
+        staves = [item for item in system.iter()
+                  if "staff" in item.get("class", "").split()]
+        if len(staves) != 2:
+            continue  # Cannot safely infer the inactive stave in larger scores.
+        inactive = staves[1] if hand == "right" else staves[0]
+        inactive.set("opacity", "0.16")
+        changed = True
+    if not changed:
+        return svg
+    ET.register_namespace("", "http://www.w3.org/2000/svg")
+    ET.register_namespace("xlink", "http://www.w3.org/1999/xlink")
+    return ET.tostring(root, encoding="unicode")
+
+
 @dataclass(frozen=True)
 class EngravedScore:
     pages: tuple[str, ...]
@@ -161,7 +190,7 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     """
     try:
         import verovio
-        from music21 import stream, clef, key
+        from music21 import stream, clef, key, tempo, metadata
         from music21.musicxml.m21ToXml import GeneralObjectExporter
     except ImportError as exc:
         raise RuntimeError("Engraving requires verovio and music21: pip install -e '.[godot]'") from exc
@@ -169,6 +198,8 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     if not list(sc.recurse().getElementsByClass(stream.Measure)):
         sc.makeMeasures(inPlace=True)
     out = stream.Score()
+    # Do not insert a generic Music21 Fragment title above every short lesson.
+    out.metadata = metadata.Metadata(title=" ")
     parts = list(sc.parts) or [sc]
     for index, part in enumerate(parts):
         p = stream.Part()
@@ -185,6 +216,11 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
                         context = measure.getContextByClass(element_type)
                         if context is not None:
                             copied.insert(0, copy.deepcopy(context))
+            # MIDI imports may have many original tempo changes. The practice
+            # lesson uses one selected BPM, shown in the header instead.
+            for metronome in list(copied.recurse().getElementsByClass(tempo.MetronomeMark)):
+                if metronome.activeSite is not None:
+                    metronome.activeSite.remove(metronome)
             if hand != "both" and len(parts) >= 2:
                 # For ordinary two-part piano MusicXML: top right, bottom left.
                 inactive = (hand == "right" and index == len(parts) - 1) or (hand == "left" and index == 0)
@@ -210,7 +246,8 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     count = toolkit.getPageCount()
     if count < 1 or count > 256:
         raise ValueError(f"Unexpected engraving page count: {count}")
-    pages = tuple(toolkit.renderToSVG(i) for i in range(1, count + 1))
+    pages = tuple(_fade_inactive_staff(toolkit.renderToSVG(i), hand)
+                  for i in range(1, count + 1))
     if any("<svg" not in svg for svg in pages):
         raise ValueError("Verovio returned an invalid SVG page")
     try:
