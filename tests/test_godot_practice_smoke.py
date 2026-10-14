@@ -22,3 +22,10 @@ def test_smoke_uses_isolated_storage_and_accepts_a_real_song():
     assert '"--no-midi"' in SMOKE
     assert 'parser.add_argument("--file", type=Path,' in SMOKE
     assert 'fixture.write_bytes(file.read_bytes())' in SMOKE
+
+
+def test_smoke_requires_moving_visible_cursor_and_scheduled_count_in_clicks():
+    assert "await_condition(moving_cursor_observed" in SMOKE
+    assert "PHASE0_CURSOR_BEAT:" in SCENE
+    assert 'log.count("PHASE0_CLICK:count_in") >= 2' in SMOKE
+    assert "PHASE0_CLICK:" in SCENE

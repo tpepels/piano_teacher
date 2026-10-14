@@ -1,3 +1,16 @@
+## Phase 0: strict animation and count-in smoke gates
+
+The headless Godot smoke test now checks beyond scene launch: a real PNG
+score must be displayed, at least two count-in metronome clicks must be
+scheduled, and the *visible screen-space timing beam must actually advance*
+through multiple strictly increasing beats. The unplugged-keyboard preview
+must finish without earning mastery.
+
+Run `python scripts/smoke_godot.py` while the normal application is closed.
+Use `--file /path/to/song.midi` to exercise your own song. On failure, the
+smoke prints the Godot log. Headless audio tick scheduling is verified, but
+speaker output and USB keyboard timing still require hardware validation.
+
 ## Phase 0 - real integration smoke
 
 The automated Phase 0 check generates a short two-hand MIDI and exercises the

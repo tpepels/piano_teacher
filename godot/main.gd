@@ -83,6 +83,7 @@ var last_state_tick := 0
 # Opt-in diagnostic hook for the actual headless UI integration test only.
 var phase0_smoke_mode := false
 var phase0_last_phase := ""
+var phase0_last_cursor_tick := -1
 
 class ScoreOverlay extends Control:
     var cursor: Dictionary = {}
@@ -208,6 +209,9 @@ func _count_tick(accent: bool) -> void:
         return
     click_player.stream = click_high if accent else click_low
     click_player.play()
+    # The smoke confirms clock scheduling; it cannot test physical speakers.
+    if phase0_smoke_mode:
+        print("PHASE0_CLICK:", str(last_state.get("phase", "")))
 
 func _update_count_in() -> void:
     var phase: String = str(last_state.get("phase", ""))
@@ -877,6 +881,15 @@ func _process(_delta: float) -> void:
     score_overlay.showing = true
     score_overlay.transport_active = phase == "playing"
     _layout_moving_score()
+    # A phase transition is insufficient: measure the visible moving beam.
+    if phase0_smoke_mode and phase == "playing":
+        var cursor_tick: int = int(floor(beat * 4.0))
+        if cursor_tick > phase0_last_cursor_tick:
+            phase0_last_cursor_tick = cursor_tick
+            var cropped_x: float = (float(cursor.get("x", 0.0)) - score_crop_origin.x) / score_crop_size.x
+            var screen_x: float = score_content.position.x + cropped_x * score_content.size.x
+            print("PHASE0_CURSOR_BEAT:", beat, " SCREEN_X:", screen_x,
+                  " VISIBLE:", score_overlay.showing)
     score_overlay.queue_redraw()
 
 func _position_at_beat(beat: float) -> Dictionary:

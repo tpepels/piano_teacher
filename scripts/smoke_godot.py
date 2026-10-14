@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import socket
@@ -24,6 +25,24 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from smoke_phase0 import make_fixture
 
 URL = "http://127.0.0.1:8765"
+CURSOR_RE = re.compile(r"PHASE0_CURSOR_BEAT:([0-9.]+) SCREEN_X:([-0-9.]+) VISIBLE:(true|false)")
+
+
+def cursor_samples(log: str) -> list[tuple[float, float]]:
+    """Accept actual, visible Godot beam coordinates only."""
+    return [(float(beat), float(x)) for beat, x, visible in CURSOR_RE.findall(log)
+            if visible == "true"]
+
+
+def moving_cursor_observed(log: str) -> bool:
+    """Reject false passes where the UI says PLAY but the line is static."""
+    samples = cursor_samples(log)
+    if len(samples) < 3:
+        return False
+    if any(samples[i][0] <= samples[i - 1][0] for i in range(1, len(samples))):
+        return False
+    return (samples[-1][0] - samples[0][0] >= 0.5 and
+            max(x for _, x in samples) - min(x for _, x in samples) >= 8.0)
 
 
 def api(route: str, data: dict | None = None, timeout: float = 90) -> dict:
@@ -124,6 +143,13 @@ def run(file: Path | None = None) -> int:
                     godot_process, ui_log, timeout=10,
                     description="Godot timed playing state")
                 print("PASS Godot observed count-in and playing phases", flush=True)
+                await_condition(lambda log: log.count("PHASE0_CLICK:count_in") >= 2,
+                                godot_process, ui_log, timeout=6,
+                                description="count-in click scheduling")
+                print("PASS Godot scheduled metronome clicks for the count-in", flush=True)
+                await_condition(moving_cursor_observed, godot_process, ui_log,
+                                timeout=10, description="visible moving timing line")
+                print("PASS Godot timing beam moves in musical time", flush=True)
                 deadline = time.monotonic() + 12
                 while time.monotonic() < deadline:
                     state = api("/state", timeout=2)
