@@ -97,6 +97,8 @@ class ScoreOverlay extends Control:
     var active_page := -1
     var crop_origin := Vector2.ZERO
     var crop_size := Vector2.ONE
+    var lead_first: Dictionary = {}
+    var lead_width_px := 0.0
 
     func _sheet_xy(x: float, y: float) -> Vector2:
         # Preserve Verovio notehead coordinates after cropping and scrolling.
@@ -105,6 +107,23 @@ class ScoreOverlay extends Control:
     func _draw() -> void:
         if image_size.x <= 0.0 or image_size.y <= 0.0:
             return
+        # Two empty, moving lead-in bars belong to the lesson canvas, not the
+        # imported MIDI. They scroll with the same transform as the score.
+        if showing and lead_width_px > 2.0 and not lead_first.is_empty():
+            var first_x: float = _sheet_xy(float(lead_first.get("x", 0.0)), 0.0).x
+            var top: float = _sheet_xy(0.0, float(lead_first.get("top", 0.0))).y
+            var bottom: float = _sheet_xy(0.0, float(lead_first.get("bottom", 1.0))).y
+            var left: float = first_x - lead_width_px
+            var ink := Color(Color("#75867C"), 0.45)
+            var staff_gap: float = maxf(5.0, (bottom - top) / 17.0)
+            for j in range(5):
+                var offset: float = float(j) * staff_gap
+                draw_line(Vector2(left, top + offset), Vector2(first_x, top + offset), ink, 1.1, true)
+                draw_line(Vector2(left, bottom - offset), Vector2(first_x, bottom - offset), ink, 1.1, true)
+            for k in range(3):
+                var bx: float = left + lead_width_px * float(k) / 2.0
+                draw_line(Vector2(bx, top), Vector2(bx, top + 4.0 * staff_gap), ink, 1.25, true)
+                draw_line(Vector2(bx, bottom - 4.0 * staff_gap), Vector2(bx, bottom), ink, 1.25, true)
         # A faint green ring confirms correct notes; stronger colour markers
         # distinguish mistakes without altering the underlying engraving.
         var palette := {
@@ -289,7 +308,12 @@ func _layout_moving_score(delta: float = 0.0) -> void:
         var margin: float = viewport.x * 0.045
         if displayed_width > viewport.x * 0.91:
             var min_x: float = viewport.x * 0.96 - displayed_width
-            target_x = clampf(target_reading_x - note_x * displayed_width, min_x, margin)
+            if _transport_beat_now() < 0.0:
+                # The incoming score moves immediately during count-in.
+                # Never clamp away the blank measures before the first note.
+                target_x = target_reading_x - note_x * displayed_width
+            else:
+                target_x = clampf(target_reading_x - note_x * displayed_width, min_x, margin)
     var target_y: float = (viewport.y - displayed_height) * 0.5
     if displayed_height > viewport.y:
         target_y = clampf(viewport.y * 0.5 - midpoint * displayed_height,
@@ -895,8 +919,9 @@ func _process(_delta: float) -> void:
     # Count-in uses negative beats and waits on the first note. During play,
     # position advances at BPM regardless of the user's MIDI performance.
     var clock: float = _transport_beat_now()
-    var beat: float = clampf(maxf(0.0, clock), 0.0, float(last_state.get("duration_beats", 1.0)))
-    var active: bool = not bool(last_state.get("paused", false)) and clock >= 0.0
+    var play_from: float = float(last_state.get("play_from_beat", 0.0))
+    var beat: float = clampf(play_from + maxf(0.0, clock), 0.0, float(last_state.get("duration_beats", 1.0)))
+    var active: bool = not bool(last_state.get("paused", false))
     var cursor: Dictionary = _position_at_beat(beat)
     if cursor.is_empty():
         score_overlay.showing = false
@@ -908,6 +933,17 @@ func _process(_delta: float) -> void:
         score_overlay.showing = false
         score_overlay.queue_redraw()
         return
+    score_overlay.lead_first = {}
+    score_overlay.lead_width_px = 0.0
+    if clock < 0.0:
+        # The cursor crosses two time-bearing empty bars before the first
+        # required note, including after a recovery rewind.
+        var lead_beats: float = maxf(1.0, float(last_state.get("count_in_beats", 8)))
+        var virtual_width: float = score_frame.size.x * 0.80
+        var fraction: float = virtual_width / maxf(1.0, score_content.size.x) * score_crop_size.x
+        score_overlay.lead_first = cursor.duplicate()
+        score_overlay.lead_width_px = virtual_width
+        cursor["x"] = float(cursor.get("x", 0.0)) + clock / lead_beats * fraction
     score_overlay.cursor = cursor
     score_overlay.showing = true
     score_overlay.transport_active = active
@@ -972,8 +1008,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         feedback_label.text = "Paused · Space to resume · R to restart"
     elif phase == "loading":
         feedback_label.text = "Preparing next passage · count-in waits for score"
+    elif phase == "recovering":
+        feedback_label.text = str(parsed.get("feedback", "Short break before retry"))
     elif phase == "count_in":
-        feedback_label.text = "Count in · follow the cyan line when it starts"
+        feedback_label.text = "Two moving lead-in bars · notes arrive after the count"
     elif phase == "playing":
         var midi_count: int = int(parsed.get("midi_notes", 0))
         if bool(parsed.get("preview_only", false)):
@@ -986,7 +1024,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
     if unpositioned > 0:
         feedback_label.text += " · %d unpositioned note(s)" % unpositioned
-    progress_label.text = "Exercise %d/%d  ·  %d mastered" % [int(parsed.get("exercise", 1)),int(parsed.get("exercise_count", 1)),int(parsed.get("mastered", 0))]
+    progress_label.text = "Exercise %d/%d  ·  %d/3 clean  ·  %d mastered" % [int(parsed.get("exercise", 1)),int(parsed.get("exercise_count", 1)),int(parsed.get("streak", 0)),int(parsed.get("mastered", 0))]
     start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Stop  ·  Space" if bool(parsed.get("running", false)) else "Start  ·  Space"
     start_button.tooltip_text = "Space: start/stop/resume · P: pause · R: restart"
     start_button.disabled = not bool(parsed.get("running", false)) and (score_view.texture == null or layout_revision != revision)
