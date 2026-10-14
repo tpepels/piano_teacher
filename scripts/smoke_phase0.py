@@ -99,6 +99,17 @@ def check(path: Path | None = None):
             _, data = query(root, "/control", {"action": "start"})
             beginning = json.loads(data)
             assert beginning["phase"] == "count_in" and beginning["preview_only"]
+            _, paused_raw = query(root, "/control", {"action": "pause"})
+            paused = json.loads(paused_raw)
+            assert paused["phase"] == "paused" and paused["clock_beat"] < 0
+            _, resumed_raw = query(root, "/control", {"action": "resume"})
+            resumed = json.loads(resumed_raw)
+            assert resumed["phase"] == "count_in"
+            assert resumed["transport_id"] == beginning["transport_id"]
+            _, restarted_raw = query(root, "/control", {"action": "restart"})
+            restarted = json.loads(restarted_raw)
+            assert restarted["phase"] == "count_in"
+            assert restarted["transport_id"] > beginning["transport_id"]
             engine.run_at = time.monotonic() - .25
             assert json.loads(query(root, "/state")[1])["phase"] == "playing"
             engine.run_at = time.monotonic() - beginning["duration"] - 1

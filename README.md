@@ -1,3 +1,24 @@
+## Phase 1 in progress: one musical clock
+
+The Python practice engine owns a single signed musical position: negative
+beats represent the audible count-in; zero is the downbeat; positive beats
+represent the performance. The Godot playhead and click scheduling derive
+from that same clock plus an estimate of the HTTP transit delay, instead
+of separate counters. The line continues to advance at BPM even in silence.
+
+- **Space:** start/stop; when paused, resume.
+- **P:** pause or resume without losing recorded MIDI timing.
+- **R:** restart the current exercise and repeat the count-in.
+- **S:** stop.
+
+Automated tests cover precise beats, pausing mid-count-in and mid-performance,
+MIDI timestamp preservation, restart and device-free non-grading. Hardware
+validation is deferred: use `python -m pytest -q`,
+`./scripts/check_godot.sh`, `python scripts/smoke_phase0.py`
+and `python scripts/smoke_godot.py` on Arch when available. The latter
+commands exercise real Verovio/Godot, but speaker and USB timing still
+require an actual piano test. Phase 1 is not yet accepted end to end.
+
 ## Phase 0: strict animation and count-in smoke gates
 
 The headless Godot smoke test now checks beyond scene launch: a real PNG

@@ -68,9 +68,10 @@ def test_tempo_control_changes_count_in_and_cursor_speed(tmp_path, monkeypatch):
 
 def test_frontend_has_time_driven_beam_and_prevents_start_before_notation():
     gd = (Path(__file__).resolve().parents[1] / "godot" / "main.gd").read_text()
-    assert 'if phase == "playing":' in gd
-    assert 'float(last_state.get("beat", 0.0)) + elapsed * float(last_state.get("bpm", 60.0)) / 60.0' in gd
-    assert 'score_overlay.transport_active = phase == "playing"' in gd
+    assert 'func _transport_beat_now() -> float:' in gd
+    assert 'float(last_state.get("clock_beat", 0.0))' in gd
+    assert 'beat += elapsed * float(last_state.get("bpm", 60.0)) / 60.0' in gd
+    assert 'score_overlay.transport_active = active' in gd
     assert 'var start_margin: float = viewport.x * 0.045' in gd
     assert 'var lower_bound: float = minf(start_margin, viewport.x * 0.955 - displayed_width)' in gd
     assert 'score_content.position = Vector2(x, (viewport.y - displayed_height) * 0.5)' in gd
