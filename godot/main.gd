@@ -84,6 +84,7 @@ var last_state_tick := 0
 class ScoreOverlay extends Control:
     var cursor: Dictionary = {}
     var showing := false
+    var transport_active := false
     var image_size := Vector2.ZERO
     var marks: Array = []
     var active_page := -1
@@ -130,8 +131,13 @@ class ScoreOverlay extends Control:
             var bottom: float = float(cursor.get("bottom", 1.0))
             var start: Vector2 = _sheet_xy(x, top)
             var end: Vector2 = _sheet_xy(x, bottom)
-            draw_line(start, end, Color("#C39351"), 2.5, true)
-            draw_circle(start, 4.0, Color("#C39351"))
+            # The cyan beam is the timing rule, not a progress indicator tied
+            # to key presses. It travels at the clock's BPM even in silence.
+            var cyan := Color("#00ACC4") if transport_active else Color("#6BABB4")
+            draw_line(start, end, Color(cyan, 0.13), 23.0, true)
+            draw_line(start, end, Color(cyan, 0.29), 11.0, true)
+            draw_line(start, end, cyan, 3.5, true)
+            draw_circle(start, 5.0, cyan)
 
 func _ready() -> void:
     _build_interface()
@@ -234,14 +240,26 @@ func _layout_moving_score() -> void:
     var image := score_overlay.image_size
     if viewport.x < 10.0 or viewport.y < 10.0 or image.y <= 0.0:
         return
-    var displayed_height: float = viewport.y * 0.80
-    var displayed_width: float = image.x * displayed_height / image.y
+    # Keep noteheads undistorted. Make room for musical movement by zooming
+    # until either the reading width or the safe vertical space is reached.
+    var scale: float = minf(
+        maxf(viewport.y * 0.85 / image.y, viewport.x * 1.65 / image.x),
+        viewport.y * 0.94 / image.y
+    )
+    var displayed_width: float = image.x * scale
+    var displayed_height: float = image.y * scale
     score_content.size = Vector2(displayed_width, displayed_height)
     var x: float = (viewport.x - displayed_width) * 0.5
     if not score_overlay.cursor.is_empty() and score_overlay.showing:
         var note_x: float = (float(score_overlay.cursor.get("x", 0.0)) - score_crop_origin.x) / score_crop_size.x
-        x = viewport.x * 0.38 - note_x * displayed_width
-        x = clampf(x, minf(0.0, viewport.x - displayed_width - viewport.x * 0.10), viewport.x * 0.26)
+        var position_in_score: float = note_x * displayed_width
+        # At the opening, the beam moves right across the score. Once it
+        # reaches the 42% reading position, the notation scrolls left beneath
+        # it. Short phrases still get a moving line; nothing waits for MIDI.
+        var start_margin: float = viewport.x * 0.045
+        var lower_bound: float = minf(start_margin, viewport.x * 0.955 - displayed_width)
+        x = clampf(viewport.x * 0.42 - position_in_score, lower_bound, start_margin)
+    scroll_target_x = x
     score_content.position = Vector2(x, (viewport.y - displayed_height) * 0.5)
 
 func _new_request(callback: Callable) -> HTTPRequest:
@@ -825,14 +843,19 @@ func _poll() -> void:
 
 func _process(_delta: float) -> void:
     _update_count_in()
-    if last_state.is_empty() or str(last_state.get("phase", "")) != "playing" or layout_revision != revision:
+    var phase: String = str(last_state.get("phase", ""))
+    # During the audible count-in, park the beam at the first beat. At PLAY,
+    # it advances solely from elapsed clock time and BPM, not MIDI messages.
+    if last_state.is_empty() or (phase != "count_in" and phase != "playing") or layout_revision != revision:
         if score_overlay.showing:
             score_overlay.showing = false
             score_overlay.queue_redraw()
             _layout_moving_score()
         return
-    var elapsed: float = float(Time.get_ticks_msec() - last_state_tick) / 1000.0
-    var beat: float = float(last_state.get("beat", 0.0)) + elapsed * float(last_state.get("bpm", 60.0)) / 60.0
+    var beat := 0.0
+    if phase == "playing":
+        var elapsed: float = float(Time.get_ticks_msec() - last_state_tick) / 1000.0
+        beat = float(last_state.get("beat", 0.0)) + elapsed * float(last_state.get("bpm", 60.0)) / 60.0
     beat = clampf(beat, 0.0, float(last_state.get("duration_beats", 1.0)))
     var cursor: Dictionary = _position_at_beat(beat)
     if cursor.is_empty():
@@ -847,6 +870,7 @@ func _process(_delta: float) -> void:
         return
     score_overlay.cursor = cursor
     score_overlay.showing = true
+    score_overlay.transport_active = phase == "playing"
     _layout_moving_score()
     score_overlay.queue_redraw()
 
@@ -892,10 +916,13 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     hand_label.text = "%s hand · %d%% speed" % [str(parsed.get("hand", "right")).capitalize(), int(round(float(parsed.get("bpm", 0)) / max(1.0, float(parsed.get("original_bpm", 1))) * 100.0))]
     var phase: String = str(parsed.get("phase", "ready"))
     if phase == "count_in":
-        feedback_label.text = "Count in · prepare to play"
+        feedback_label.text = "Count in · follow the cyan line when it starts"
     elif phase == "playing":
         var midi_count: int = int(parsed.get("midi_notes", 0))
-        feedback_label.text = "Playing · %d MIDI notes received" % midi_count if midi_count > 0 else "Playing · listening for your piano"
+        if bool(parsed.get("preview_only", false)):
+            feedback_label.text = "Timing preview · connect your piano to enable scoring"
+        else:
+            feedback_label.text = "Playing · %d MIDI notes received" % midi_count if midi_count > 0 else "Playing · listening for your piano"
     else:
         feedback_label.text = str(parsed.get("feedback", ""))
     feedback_label.tooltip_text = feedback_label.text
@@ -904,6 +931,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         feedback_label.text += " · %d unpositioned note(s)" % unpositioned
     progress_label.text = "Exercise %d/%d  ·  %d mastered" % [int(parsed.get("exercise", 1)),int(parsed.get("exercise_count", 1)),int(parsed.get("mastered", 0))]
     start_button.text = "Stop  ·  Space" if bool(parsed.get("running", false)) else "Start  ·  Space"
+    start_button.disabled = not bool(parsed.get("running", false)) and (score_view.texture == null or layout_revision != revision)
     score_overlay.marks = parsed.get("feedback_marks", [])
     score_overlay.queue_redraw()
     var new_revision := int(parsed.get("revision", 0))
@@ -1004,6 +1032,7 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     score_overlay.active_page = current_page
     rendered_revision = revision
     score_error = ""
+    start_button.disabled = false
     score_overlay.queue_redraw()
     _layout_moving_score()
     _refresh_score_status()
@@ -1047,6 +1076,9 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     _poll()
 
 func _toggle_playing() -> void:
+    if not bool(last_state.get("running", false)) and (score_view.texture == null or layout_revision != revision):
+        feedback_label.text = "Preparing sheet music - wait for the notes before starting"
+        return
     _send_action({"action": "stop" if bool(last_state.get("running", false)) else "start"})
 
 func _listen() -> void:

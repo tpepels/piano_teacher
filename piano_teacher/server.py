@@ -33,6 +33,7 @@ class PracticeEngine:
         self.run_at = 0.0
         self.running = False
         self.auto = False
+        self.preview_only = False
         self.count_in_beats = 0
         self.feedback = "Open a MIDI or MusicXML file"
         self.score_revision = 0
@@ -144,6 +145,7 @@ class PracticeEngine:
     def _stop(self):
         self.running=False
         self.auto=False
+        self.preview_only=False
         self.count_in_beats=0
         self.next_at=0
         self.recorder=None
@@ -170,10 +172,11 @@ class PracticeEngine:
         with self.lock:
             if self.plan is None:
                 raise ValueError("Open a piece first")
-            if self.enable_midi and self.midi_port is None:
-                raise ValueError("Connect your USB MIDI piano first")
+            # A user must be able to watch the time-driven score without a
+            # connected instrument. Only actual MIDI input enables assessment.
+            self.preview_only = self.enable_midi and self.midi_port is None
             self.running=True
-            self.auto=True
+            self.auto=not self.preview_only
             self.next_at=0
             self.pending_result=None
             self.feedback_marks=[]
@@ -236,6 +239,12 @@ class PracticeEngine:
         duration=(phrase.end - phrase.start)*60/self.plan.bpm
         if now < self.run_at+duration+0.20:
             return
+        if self.preview_only:
+            # Never grade an empty MIDI recording or retry forever simply
+            # because the user's piano has not been connected yet.
+            self._stop()
+            self.feedback = "Timing preview complete - connect a USB MIDI piano for scoring"
+            return
         result=evaluate(phrase,self.plan.hand,self.plan.bpm,self.recorder.presses if self.recorder else [])
         # Keep the just-played score visible for feedback. Curriculum changes
         # are applied only after the display interval, never mid-feedback.
@@ -275,6 +284,7 @@ class PracticeEngine:
                     "countdown":max(0,-elapsed) if self.running else 0,
                     "count_in_beats":self.count_in_beats if self.running else 0,
                     "midi_notes":len(self.recorder.presses) if self.recorder is not None else 0,
+                    "preview_only":self.preview_only,
                     "progress":progress,"duration":seconds,"beat":progress * (ex.phrase.end - ex.phrase.start),
                     "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
                     "device":self.midi_device,"feedback":self.feedback,"revision":self.score_revision,
