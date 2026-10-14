@@ -34,6 +34,9 @@ def cursor_samples(log: str) -> list[tuple[float, float]]:
             if visible == "true"]
 
 
+PAN_RE = re.compile(r"CONTENT_X:([-0-9.]+)")
+
+
 def moving_cursor_observed(log: str) -> bool:
     """Reject false passes where the UI says PLAY but the line is static."""
     samples = cursor_samples(log)
@@ -41,8 +44,10 @@ def moving_cursor_observed(log: str) -> bool:
         return False
     if any(samples[i][0] <= samples[i - 1][0] for i in range(1, len(samples))):
         return False
-    return (samples[-1][0] - samples[0][0] >= 0.5 and
-            max(x for _, x in samples) - min(x for _, x in samples) >= 8.0)
+    pans = [float(value) for value in PAN_RE.findall(log)]
+    beam_motion = max(x for _, x in samples) - min(x for _, x in samples)
+    score_motion = max(pans) - min(pans) if pans else 0.0
+    return samples[-1][0] - samples[0][0] >= 0.5 and max(beam_motion, score_motion) >= 8.0
 
 
 def api(route: str, data: dict | None = None, timeout: float = 90) -> dict:
@@ -138,9 +143,10 @@ def run(file: Path | None = None) -> int:
                     lambda log: "PHASE0_PHASE:count_in" in log,
                     godot_process, ui_log, timeout=10,
                     description="Godot count-in state")
+                lead_seconds = started["count_in_beats"] * 60.0 / started["bpm"]
                 await_condition(
                     lambda log: "PHASE0_PHASE:playing" in log,
-                    godot_process, ui_log, timeout=10,
+                    godot_process, ui_log, timeout=max(10, lead_seconds + 8),
                     description="Godot timed playing state")
                 print("PASS Godot observed count-in and playing phases", flush=True)
                 await_condition(lambda log: log.count("PHASE0_CLICK:count_in") >= 2,

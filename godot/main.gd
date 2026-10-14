@@ -955,7 +955,7 @@ func _process(_delta: float) -> void:
             var cropped_x: float = (float(cursor.get("x", 0.0)) - score_crop_origin.x) / score_crop_size.x
             var screen_x: float = score_content.position.x + cropped_x * score_content.size.x
             print("PHASE0_CURSOR_BEAT:", beat, " SCREEN_X:", screen_x,
-                  " VISIBLE:", score_overlay.showing)
+                  " VISIBLE:", score_overlay.showing, " CONTENT_X:", score_content.position.x)
     score_overlay.queue_redraw()
 
 func _position_at_beat(beat: float) -> Dictionary:

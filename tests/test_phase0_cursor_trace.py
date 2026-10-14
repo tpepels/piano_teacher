@@ -25,3 +25,9 @@ def test_static_hidden_and_backward_beams_fail():
     assert not module.moving_cursor_observed(_trace([(.1, 200, "true"), (.4, 200, "true"), (.8, 200, "true")]))
     assert not module.moving_cursor_observed(_trace([(.1, 200, "false"), (.4, 300, "false"), (.8, 400, "false")]))
     assert not module.moving_cursor_observed(_trace([(.1, 200, "true"), (.8, 300, "true"), (.6, 400, "true")]))
+
+
+def test_stationary_beam_with_scrolling_score_counts_as_motion():
+    transcript = _trace([(0.05, 310, "true"), (.32, 310, "true"), (.71, 310, "true")])
+    transcript += "\nCONTENT_X:-100\nCONTENT_X:-170\nCONTENT_X:-240"
+    assert module.moving_cursor_observed(transcript)
