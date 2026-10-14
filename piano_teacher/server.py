@@ -18,6 +18,7 @@ from .learning import LearningPlan
 from .practice import Recorder, evaluate
 from .score import import_piece, render_layout, EngravedScore
 from .feedback import project_assessment
+from .library import ScoreLibrary
 
 
 class PracticeEngine:
@@ -42,6 +43,7 @@ class PracticeEngine:
         self.midi_port = None
         self.midi_device = ""
         self.enable_midi = enable_midi
+        self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
         data_dir.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(data_dir / "progress.db", check_same_thread=False)
@@ -66,6 +68,26 @@ class PracticeEngine:
                 self.midi_port = mido.open_input(name, callback=self._receive)
                 self.midi_device = name
             self._stop()
+            self.library.update(midi_device=name)
+
+    def library_listing(self) -> dict:
+        with self.lock:
+            return self.library.scan()
+
+    def preferences(self) -> dict:
+        with self.lock:
+            return self.library.public_settings()
+
+    def set_preferences(self, **changes) -> dict:
+        with self.lock:
+            return self.library.update(**changes)
+
+    def load_library(self, identifier: str) -> None:
+        with self.lock:
+            path = self.library.resolve(identifier)
+        self.load(str(path))  # Parse before recording success.
+        with self.lock:
+            self.library.mark_opened(identifier)
 
     def _receive(self, message):
         # Timestamp in the hardware input callback, not on the rendering thread.
@@ -291,6 +313,10 @@ class Handler(BaseHTTPRequestHandler):
             route=urlsplit(self.path).path
             if route=="/state":
                 self._json(200,self.engine.state())
+            elif route=="/library":
+                self._json(200,self.engine.library_listing())
+            elif route=="/settings":
+                self._json(200,self.engine.preferences())
             elif route=="/devices":
                 self._json(200,{"devices":self.engine.ports()})
             elif route=="/score/layout":
@@ -313,6 +339,10 @@ class Handler(BaseHTTPRequestHandler):
             route=urlsplit(self.path).path
             if route=="/load":
                 self.engine.load(args["path"])
+            elif route=="/library/open":
+                self.engine.load_library(args["id"])
+            elif route=="/settings":
+                self.engine.set_preferences(**args)
             elif route=="/device":
                 self.engine.connect(args.get("name",""))
             elif route=="/control":
@@ -320,7 +350,7 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 self._json(404,{"error":"Not found"})
                 return
-            self._json(200,self.engine.state())
+            self._json(200,self.engine.preferences() if route == "/settings" else self.engine.state())
         except (KeyError, ValueError, TypeError, RuntimeError) as exc:
             self._json(400,{"error":str(exc)})
     def log_message(self, format, *args):

@@ -8,6 +8,7 @@ config/description="Practice your own piano scores, two measures at a time."
 [display]
 window/size/viewport_width=1220
 window/size/viewport_height=780
+window/size/mode=3
 window/stretch/mode="canvas_items"
 
 [rendering]

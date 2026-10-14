@@ -4,10 +4,30 @@ extends Control
 const URL := "http://127.0.0.1:8765"
 const INK := Color("#293B34")
 const MUTED := Color("#7F8982")
-const PAPER := Color("#F6F5F0")
+const PAPER := Color("#F3F5EF")
 const WHITE := Color("#FFFEFA")
-const ACCENT := Color("#3B574C")
+const ACCENT := Color("#325A4C")
 
+var current_screen := "home"
+var screens: Dictionary = {}
+var library_request: HTTPRequest
+var settings_request: HTTPRequest
+var library_pending := false
+var settings_pending := false
+var library_info: Dictionary = {}
+var preferences: Dictionary = {}
+var home_count_label: Label
+var home_recent_label: Label
+var home_resume_button: Button
+var library_search: LineEdit
+var library_path_label: Label
+var library_rows: VBoxContainer
+var library_message: Label
+var folder_edit: LineEdit
+var folder_dialog: FileDialog
+var fullscreen_toggle: CheckButton
+var settings_message: Label
+var last_post_path := ""
 var state_request: HTTPRequest
 var score_request: HTTPRequest
 var layout_request: HTTPRequest
@@ -23,7 +43,6 @@ var device_button: Button
 var start_button: Button
 var score_view: TextureRect
 var score_overlay: ScoreOverlay
-var file_dialog: FileDialog
 var device_menu: PopupMenu
 var device_names: Array = []
 var revision := -1
@@ -100,6 +119,8 @@ func _ready() -> void:
     layout_request = _new_request(_on_layout)
     action_request = _new_request(_on_action)
     device_request = _new_request(_on_devices)
+    library_request = _new_request(_on_library)
+    settings_request = _new_request(_on_settings)
     var poll := Timer.new()
     poll.wait_time = 0.15
     poll.autostart = true
@@ -107,6 +128,16 @@ func _ready() -> void:
     add_child(poll)
     _poll()
     _request_devices()
+    _request_settings()
+    _request_library()
+    var scan_timer := Timer.new()
+    scan_timer.wait_time = 5.0
+    scan_timer.autostart = true
+    scan_timer.timeout.connect(func():
+        if current_screen == "home" or current_screen == "library":
+            _request_library()
+    )
+    add_child(scan_timer)
     set_process(true)
 
 func _new_request(callback: Callable) -> HTTPRequest:
@@ -121,8 +152,10 @@ func _label(text: String, size: int, color: Color, bold := false) -> Label:
     label.text = text
     label.add_theme_color_override("font_color", color)
     label.add_theme_font_size_override("font_size", size)
-    if bold:
-        label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
+    var font := SystemFont.new()
+    font.font_names = PackedStringArray(["Inter", "Noto Sans", "DejaVu Sans"])
+    font.font_weight = 700 if bold else 400
+    label.add_theme_font_override("font", font)
     return label
 
 func _button(label: String, callback: Callable, primary := false) -> Button:
@@ -135,64 +168,229 @@ func _button(label: String, callback: Callable, primary := false) -> Button:
     style.content_margin_left = 18
     style.content_margin_right = 18
     button.add_theme_stylebox_override("normal", style)
-    button.add_theme_stylebox_override("hover", style)
+    var hover := style.duplicate() as StyleBoxFlat
+    hover.bg_color = Color("#426A5B") if primary else Color("#DDE8DD")
+    button.add_theme_stylebox_override("hover", hover)
+    button.add_theme_stylebox_override("pressed", hover)
+    var disabled_style := style.duplicate() as StyleBoxFlat
+    disabled_style.bg_color = Color("#E9EBE6")
+    button.add_theme_stylebox_override("disabled", disabled_style)
     button.add_theme_color_override("font_color", WHITE if primary else INK)
     button.add_theme_color_override("font_hover_color", WHITE if primary else INK)
+    button.add_theme_color_override("font_disabled_color", MUTED)
+    button.add_theme_font_size_override("font_size", 15)
     button.pressed.connect(callback)
     return button
+
+func _screen(name: String) -> MarginContainer:
+    var panel := MarginContainer.new()
+    panel.name = name
+    panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    panel.visible = false
+    for side in ["left", "right", "top", "bottom"]:
+        panel.add_theme_constant_override("margin_" + side, 56)
+    add_child(panel)
+    return panel
+
+func _stack(separation: int = 12) -> VBoxContainer:
+    var stack := VBoxContainer.new()
+    stack.add_theme_constant_override("separation", separation)
+    return stack
+
+func _space() -> Control:
+    var spacer := Control.new()
+    spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    return spacer
+
+func _card() -> PanelContainer:
+    var panel := PanelContainer.new()
+    var style := StyleBoxFlat.new()
+    style.bg_color = WHITE
+    style.set_corner_radius_all(17)
+    style.set_border_width_all(1)
+    style.border_color = Color("#DFE4DC")
+    style.shadow_color = Color(0.14, 0.2, 0.15, 0.05)
+    style.shadow_size = 6
+    panel.add_theme_stylebox_override("panel", style)
+    return panel
+
+func _card_body(panel: PanelContainer, margin: int = 28) -> MarginContainer:
+    var body := MarginContainer.new()
+    for side in ["left", "right", "top", "bottom"]:
+        body.add_theme_constant_override("margin_" + side, margin)
+    panel.add_child(body)
+    return body
+
+func _navigate(screen: String) -> void:
+    if screen != "practice" and current_screen == "practice" and bool(last_state.get("running", false)):
+        _send_action({"action": "stop"})
+    current_screen = screen
+    for key in screens:
+        (screens[key] as Control).visible = str(key) == screen
+    if screen == "library":
+        _request_library()
+    elif screen == "settings":
+        _request_settings()
+        _request_devices()
 
 func _build_interface() -> void:
     var background := ColorRect.new()
     background.color = PAPER
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    background.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(background)
-    var margins := MarginContainer.new()
-    margins.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    for side in ["left", "right", "top", "bottom"]:
-        margins.add_theme_constant_override("margin_" + side, 30)
-    add_child(margins)
-    var layout := VBoxContainer.new()
-    layout.add_theme_constant_override("separation", 17)
-    margins.add_child(layout)
 
+    # Home: a title, one recent piece and two decisions, with ample whitespace.
+    var home := _screen("Home")
+    screens["home"] = home
+    var home_layout := _stack(26)
+    home.add_child(home_layout)
+    var home_nav := HBoxContainer.new()
+    home_layout.add_child(home_nav)
+    home_nav.add_child(_label("PIANO  /  TEACHER", 15, ACCENT, true))
+    home_nav.add_child(_space())
+    home_nav.add_child(_button("Settings", func(): _navigate("settings")))
+    home_nav.add_child(_button("Quit", func(): get_tree().quit()))
+    var header := _stack(12)
+    home_layout.add_child(header)
+    header.add_child(_label("Practice the music you love.", 44, INK, true))
+    header.add_child(_label("Short passages. Both hands. Steady progress.", 20, MUTED))
+    var home_row := HBoxContainer.new()
+    home_row.add_theme_constant_override("separation", 20)
+    home_layout.add_child(home_row)
+    var library_card := _card()
+    library_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    home_row.add_child(library_card)
+    var library_inner := _stack(17)
+    _card_body(library_card, 32).add_child(library_inner)
+    library_inner.add_child(_label("YOUR MUSIC", 13, MUTED, true))
+    home_count_label = _label("Discovering your music…", 25, INK, true)
+    library_inner.add_child(home_count_label)
+    library_inner.add_child(_label("MIDI and MusicXML from your selected folder", 15, MUTED))
+    library_inner.add_child(_button("Browse library  →", func(): _navigate("library"), true))
+    var recent_card := _card()
+    recent_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    home_row.add_child(recent_card)
+    var recent_inner := _stack(17)
+    _card_body(recent_card, 32).add_child(recent_inner)
+    recent_inner.add_child(_label("LAST OPENED", 13, MUTED, true))
+    home_recent_label = _label("No recent piece", 25, INK, true)
+    recent_inner.add_child(home_recent_label)
+    recent_inner.add_child(_label("Pick up where you left off", 15, MUTED))
+    home_resume_button = _button("Continue  →", _resume_last, true)
+    recent_inner.add_child(home_resume_button)
+    home_layout.add_child(_label("Connect your USB MIDI keyboard and select your music. Progress stays on this computer.", 14, MUTED))
+
+    # Library: automatic indexing without manually opening each MIDI file.
+    var library_page := _screen("Library")
+    screens["library"] = library_page
+    var library_layout := _stack(22)
+    library_page.add_child(library_layout)
+    var library_head := HBoxContainer.new()
+    library_layout.add_child(library_head)
+    library_head.add_child(_button("← Home", func(): _navigate("home")))
+    library_head.add_child(_space())
+    library_head.add_child(_button("Music folder", func(): _navigate("settings")))
+    library_layout.add_child(_label("Your music", 39, INK, true))
+    library_path_label = _label("Looking for scores…", 15, MUTED)
+    library_layout.add_child(library_path_label)
+    var library_controls := HBoxContainer.new()
+    library_controls.add_theme_constant_override("separation", 12)
+    library_layout.add_child(library_controls)
+    library_search = LineEdit.new()
+    library_search.placeholder_text = "Search your music"
+    library_search.custom_minimum_size = Vector2(0, 48)
+    library_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    library_search.text_changed.connect(func(_text: String): _populate_library())
+    library_controls.add_child(library_search)
+    library_controls.add_child(_button("Refresh", _request_library))
+    var library_panel := _card()
+    library_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    library_layout.add_child(library_panel)
+    var scroll := ScrollContainer.new()
+    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    _card_body(library_panel, 22).add_child(scroll)
+    library_rows = _stack(6)
+    library_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.add_child(library_rows)
+    library_message = _label("", 14, MUTED)
+    library_layout.add_child(library_message)
+
+    # Settings are explicit, and keep the practice screen free from controls.
+    var settings_page := _screen("Settings")
+    screens["settings"] = settings_page
+    var settings_layout := _stack(21)
+    settings_page.add_child(settings_layout)
+    var settings_head := HBoxContainer.new()
+    settings_layout.add_child(settings_head)
+    settings_head.add_child(_button("← Back", func(): _navigate("home")))
+    settings_head.add_child(_space())
+    settings_layout.add_child(_label("Settings", 39, INK, true))
+    settings_layout.add_child(_label("Only the options you need to practice.", 16, MUTED))
+    var settings_card := _card()
+    settings_layout.add_child(settings_card)
+    var settings_content := _stack(24)
+    _card_body(settings_card, 32).add_child(settings_content)
+    settings_content.add_child(_label("MUSIC LIBRARY", 13, ACCENT, true))
+    settings_content.add_child(_label("Piano Teacher scans this folder and its subfolders automatically.", 15, MUTED))
+    var folder_row := HBoxContainer.new()
+    folder_row.add_theme_constant_override("separation", 12)
+    settings_content.add_child(folder_row)
+    folder_edit = LineEdit.new()
+    folder_edit.custom_minimum_size = Vector2(420, 48)
+    folder_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    folder_edit.placeholder_text = "~/Music/Piano Teacher"
+    folder_edit.text_submitted.connect(func(_text: String): _save_folder())
+    folder_row.add_child(folder_edit)
+    folder_row.add_child(_button("Browse…", _browse_folder))
+    folder_row.add_child(_button("Save folder", _save_folder, true))
+    settings_content.add_child(_label("PIANO INPUT", 13, ACCENT, true))
+    var device_row := HBoxContainer.new()
+    device_row.add_theme_constant_override("separation", 12)
+    settings_content.add_child(device_row)
+    device_button = _button("Choose USB MIDI piano", _show_devices)
+    device_row.add_child(device_button)
+    device_row.add_child(_button("Refresh devices", _request_devices))
+    device_row.add_child(_space())
+    settings_content.add_child(_label("DISPLAY", 13, ACCENT, true))
+    fullscreen_toggle = CheckButton.new()
+    fullscreen_toggle.text = "Fullscreen application  (F11 to toggle)"
+    fullscreen_toggle.button_pressed = true
+    fullscreen_toggle.toggled.connect(_on_fullscreen_toggle)
+    settings_content.add_child(fullscreen_toggle)
+    settings_message = _label("", 14, MUTED)
+    settings_layout.add_child(settings_message)
+
+    # Practice: standard engraving remains the central and dominant element.
+    var practice_page := _screen("Practice")
+    screens["practice"] = practice_page
+    var practice_layout := _stack(19)
+    practice_page.add_child(practice_layout)
     var top := HBoxContainer.new()
-    layout.add_child(top)
-    var heading := VBoxContainer.new()
-    heading.add_theme_constant_override("separation", 4)
+    top.add_theme_constant_override("separation", 18)
+    practice_layout.add_child(top)
+    top.add_child(_button("← Library", func(): _navigate("library")))
+    var heading := _stack(2)
+    heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     top.add_child(heading)
     title_label = _label("Piano Teacher", 27, INK, true)
     heading.add_child(title_label)
-    passage_label = _label("Open a score to begin", 14, MUTED)
+    passage_label = _label("", 14, MUTED)
     heading.add_child(passage_label)
-    var stretch := Control.new()
-    stretch.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    top.add_child(stretch)
-    var tempo := VBoxContainer.new()
-    tempo.add_theme_constant_override("separation", 3)
+    var tempo := _stack(2)
     top.add_child(tempo)
-    speed_label = _label("-- BPM", 19, INK)
+    speed_label = _label("-- BPM", 20, INK)
     speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(speed_label)
-    hand_label = _label("USB MIDI piano", 13, MUTED)
+    hand_label = _label("", 13, MUTED)
     hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(hand_label)
-    top.add_child(_button("Open file", _open_file))
-    device_button = _button("Piano", _show_devices)
-    top.add_child(device_button)
-
-    var score_panel := PanelContainer.new()
+    top.add_child(_button("Settings", func(): _navigate("settings")))
+    var score_panel := _card()
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    var panel_style := StyleBoxFlat.new()
-    panel_style.bg_color = WHITE
-    panel_style.set_corner_radius_all(14)
-    panel_style.set_border_width_all(1)
-    panel_style.border_color = Color("#E6E7E0")
-    score_panel.add_theme_stylebox_override("panel", panel_style)
-    layout.add_child(score_panel)
-    var score_margin := MarginContainer.new()
-    for side in ["left", "right", "top", "bottom"]:
-        score_margin.add_theme_constant_override("margin_" + side, 22)
-    score_panel.add_child(score_margin)
+    practice_layout.add_child(score_panel)
+    var score_margin := _card_body(score_panel, 26)
     var score_area := Control.new()
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
     score_margin.add_child(score_area)
@@ -205,46 +403,163 @@ func _build_interface() -> void:
     score_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_area.add_child(score_overlay)
-    var placeholder := _label("Choose a MIDI or MusicXML file to start practicing", 18, MUTED)
+    var placeholder := _label("Choose a piece from your library to begin", 18, MUTED)
     placeholder.name = "Placeholder"
     placeholder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     placeholder.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     placeholder.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     score_area.add_child(placeholder)
-
     var information := HBoxContainer.new()
-    layout.add_child(information)
-    progress_label = _label("", 13, MUTED)
+    practice_layout.add_child(information)
+    progress_label = _label("", 14, MUTED)
     information.add_child(progress_label)
-    var filler := Control.new()
-    filler.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    information.add_child(filler)
-    feedback_label = _label("Connect a piano, then play", 13, MUTED)
+    information.add_child(_space())
+    feedback_label = _label("Ready", 14, MUTED)
     feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     information.add_child(feedback_label)
-
     var controls := HBoxContainer.new()
     controls.alignment = BoxContainer.ALIGNMENT_CENTER
-    controls.add_theme_constant_override("separation", 14)
-    layout.add_child(controls)
-    controls.add_child(_button("← Previous", func(): _send_action({"action":"previous"})))
-    start_button = _button("Start", _toggle_playing, true)
+    controls.add_theme_constant_override("separation", 15)
+    practice_layout.add_child(controls)
+    controls.add_child(_button("← Previous", func(): _send_action({"action": "previous"})))
+    start_button = _button("Start  ·  Space", _toggle_playing, true)
+    start_button.custom_minimum_size = Vector2(148, 53)
     controls.add_child(start_button)
-    controls.add_child(_button("Next →", func(): _send_action({"action":"next"})))
+    controls.add_child(_button("Next →", func(): _send_action({"action": "next"})))
     var listen := _button("Listen", _listen)
     listen.disabled = true
-    listen.tooltip_text = "Demonstration playback is planned for a subsequent milestone"
+    listen.tooltip_text = "On-demand audio demonstration is not implemented yet"
     controls.add_child(listen)
 
-    file_dialog = FileDialog.new()
-    file_dialog.access = FileDialog.ACCESS_FILESYSTEM
-    file_dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-    file_dialog.filters = PackedStringArray(["*.mid, *.midi ; MIDI", "*.musicxml, *.xml, *.mxl ; MusicXML"])
-    file_dialog.file_selected.connect(func(path: String): _send_post("/load", {"path":path}))
-    add_child(file_dialog)
+    folder_dialog = FileDialog.new()
+    folder_dialog.access = FileDialog.ACCESS_FILESYSTEM
+    folder_dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
+    folder_dialog.use_native_dialog = true
+    folder_dialog.dir_selected.connect(func(path: String):
+        folder_edit.text = path
+        _save_folder()
+    )
+    add_child(folder_dialog)
     device_menu = PopupMenu.new()
     device_menu.id_pressed.connect(_choose_device)
     add_child(device_menu)
+    _navigate("home")
+
+func _request_library() -> void:
+    if library_pending or library_request == null:
+        return
+    library_pending = true
+    if library_request.request(URL + "/library") != OK:
+        library_pending = false
+
+func _on_library(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+    library_pending = false
+    if code != 200:
+        library_message.text = "Cannot scan the music folder. Check the backend."
+        return
+    var parsed = JSON.parse_string(body.get_string_from_utf8())
+    if typeof(parsed) != TYPE_DICTIONARY:
+        return
+    library_info = parsed
+    home_count_label.text = "%d scores available" % int(parsed.get("count", 0))
+    library_path_label.text = str(parsed.get("folder", ""))
+    _populate_library()
+    var recent: String = str(parsed.get("last_piece", ""))
+    home_resume_button.disabled = recent.is_empty()
+    var exists_in_library := false
+    for entry in parsed.get("pieces", []):
+        if str(entry.get("id", "")) == recent:
+            exists_in_library = true
+            break
+    home_resume_button.disabled = not exists_in_library
+    home_recent_label.text = recent.get_file().get_basename().replace("_", " ") if not recent.is_empty() else "No recent piece"
+
+func _populate_library() -> void:
+    if library_rows == null:
+        return
+    for child in library_rows.get_children():
+        library_rows.remove_child(child)
+        child.queue_free()
+    var pieces: Array = library_info.get("pieces", [])
+    var query := library_search.text.strip_edges().to_lower()
+    var visible := 0
+    for entry in pieces:
+        var title: String = str(entry.get("title", "Untitled"))
+        var location: String = str(entry.get("folder", ""))
+        if not query.is_empty() and not (title + " " + location).to_lower().contains(query):
+            continue
+        var identifier: String = str(entry.get("id", ""))
+        var format_name: String = str(entry.get("format", ""))
+        var hint: String = location if not location.is_empty() else "Music folder"
+        var button := _button("%s     ·     %s     ·     %s" % [title, format_name, hint], func(): _open_library_piece(identifier))
+        button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+        button.custom_minimum_size = Vector2(0, 58)
+        button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        library_rows.add_child(button)
+        visible += 1
+    var issue: String = str(library_info.get("error", ""))
+    if not issue.is_empty():
+        library_message.text = issue
+    elif pieces.is_empty():
+        library_message.text = "No scores yet. Add .mid, .midi or MusicXML files to this folder."
+    elif visible == 0:
+        library_message.text = "No matching scores."
+    else:
+        library_message.text = "%d files  ·  %d shown  ·  Automatically refreshed" % [pieces.size(), visible]
+
+func _open_library_piece(identifier: String) -> void:
+    _send_post("/library/open", {"id": identifier})
+
+func _resume_last() -> void:
+    var identifier: String = str(library_info.get("last_piece", ""))
+    if not identifier.is_empty():
+        _open_library_piece(identifier)
+
+func _request_settings() -> void:
+    if settings_pending or settings_request == null:
+        return
+    settings_pending = true
+    if settings_request.request(URL + "/settings") != OK:
+        settings_pending = false
+
+func _on_settings(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+    settings_pending = false
+    if code != 200:
+        settings_message.text = "Settings unavailable"
+        return
+    var parsed = JSON.parse_string(body.get_string_from_utf8())
+    if typeof(parsed) != TYPE_DICTIONARY:
+        return
+    preferences = parsed
+    folder_edit.text = str(preferences.get("music_dir", ""))
+    fullscreen_toggle.set_pressed_no_signal(bool(preferences.get("fullscreen", true)))
+    _apply_window_mode(bool(preferences.get("fullscreen", true)))
+    var saved_device := str(preferences.get("midi_device", ""))
+    if not saved_device.is_empty() and str(last_state.get("device", "")) == "" and not device_names.is_empty():
+        if device_names.has(saved_device):
+            _choose_device(device_names.find(saved_device))
+
+func _save_folder() -> void:
+    _send_post("/settings", {"music_dir": folder_edit.text.strip_edges()})
+
+func _browse_folder() -> void:
+    if DirAccess.dir_exists_absolute(folder_edit.text):
+        folder_dialog.current_dir = folder_edit.text
+    folder_dialog.popup_centered_ratio(0.7)
+
+func _apply_window_mode(fullscreen: bool) -> void:
+    var expected := Window.MODE_FULLSCREEN if fullscreen else Window.MODE_WINDOWED
+    if get_window().mode != expected:
+        get_window().mode = expected
+
+func _on_fullscreen_toggle(enabled: bool) -> void:
+    _apply_window_mode(enabled)
+    _send_post("/settings", {"fullscreen": enabled})
+
+func _toggle_fullscreen() -> void:
+    var enabled := get_window().mode != Window.MODE_FULLSCREEN
+    fullscreen_toggle.set_pressed_no_signal(enabled)
+    _on_fullscreen_toggle(enabled)
 
 func _poll() -> void:
     if not state_pending:
@@ -323,7 +638,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if unpositioned > 0:
         feedback_label.text += " · %d unpositioned note(s)" % unpositioned
     progress_label.text = "Exercise %d/%d  ·  %d mastered" % [int(parsed.get("exercise", 1)),int(parsed.get("exercise_count", 1)),int(parsed.get("mastered", 0))]
-    start_button.text = "Stop" if bool(parsed.get("running", false)) else "Start"
+    start_button.text = "Stop  ·  Space" if bool(parsed.get("running", false)) else "Start  ·  Space"
     score_overlay.marks = parsed.get("feedback_marks", [])
     score_overlay.queue_redraw()
     var new_revision := int(parsed.get("revision", 0))
@@ -410,6 +725,7 @@ func _send_post(path: String, payload: Dictionary) -> void:
     if action_pending:
         return
     action_pending = true
+    last_post_path = path
     var err := action_request.request(URL + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(payload))
     if err != OK:
         action_pending = false
@@ -417,16 +733,26 @@ func _send_post(path: String, payload: Dictionary) -> void:
 
 func _on_action(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     action_pending = false
+    var path := last_post_path
     if code != 200:
         var response = JSON.parse_string(body.get_string_from_utf8())
-        feedback_label.text = str(response.get("error", "Request failed")) if typeof(response) == TYPE_DICTIONARY else "Request failed"
+        var message: String = str(response.get("error", "Request failed")) if typeof(response) == TYPE_DICTIONARY else "Request failed"
+        feedback_label.text = message
+        settings_message.text = message
+        library_message.text = message
+        return
+    if path == "/library/open":
+        _navigate("practice")
+    elif path == "/settings":
+        settings_message.text = "Settings saved"
+        _request_settings()
+        _request_library()
+    elif path == "/device":
+        _request_settings()
     _poll()
 
 func _toggle_playing() -> void:
     _send_action({"action": "stop" if bool(last_state.get("running", false)) else "start"})
-
-func _open_file() -> void:
-    file_dialog.popup_centered_ratio(0.78)
 
 func _listen() -> void:
     pass
@@ -444,22 +770,37 @@ func _on_devices(_result: int, code: int, _headers: PackedStringArray, body: Pac
     device_menu.clear()
     for i in range(device_names.size()):
         device_menu.add_item(str(device_names[i]), i)
-    if device_names.size() == 1 and str(last_state.get("device", "")) == "":
-        _choose_device(0)
+    device_button.text = str(last_state.get("device", "Choose USB MIDI piano")) if not str(last_state.get("device", "")).is_empty() else "Choose USB MIDI piano"
+    if str(last_state.get("device", "")) == "":
+        var saved: String = str(preferences.get("midi_device", ""))
+        if device_names.has(saved) and not saved.is_empty():
+            _choose_device(device_names.find(saved))
+        elif device_names.size() == 1:
+            _choose_device(0)
 
 func _show_devices() -> void:
     _request_devices()
-    device_menu.position = Vector2i(device_button.get_screen_position()) + Vector2i(0, device_button.size.y)
+    device_menu.position = Vector2i(device_button.get_screen_position()) + Vector2i(0, int(device_button.size.y))
     device_menu.popup()
 
 func _choose_device(id: int) -> void:
     if id < 0 or id >= device_names.size():
         return
     _send_post("/device", {"name":device_names[id]})
-    device_button.text = "Piano ✓"
+    device_button.text = str(device_names[id]) + "  ✓"
 
 func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
+        if event.keycode == KEY_F11:
+            _toggle_fullscreen()
+            get_viewport().set_input_as_handled()
+            return
+        if event.keycode == KEY_ESCAPE and current_screen == "practice":
+            _navigate("library")
+            get_viewport().set_input_as_handled()
+            return
+        if current_screen != "practice":
+            return
         match event.keycode:
             KEY_SPACE:
                 _toggle_playing()

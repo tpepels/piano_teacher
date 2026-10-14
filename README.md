@@ -2,6 +2,14 @@
 
 A native Linux piano tutor with a minimal **Godot 4** interface and Python practice engine. Load your own MIDI or MusicXML files. The score is engraved as **traditional piano sheet music** with treble and bass clefs by music21 + Verovio (no piano roll).
 
+## Fullscreen music library and settings
+
+The application now launches into a **fullscreen home menu** (press **F11** to switch between fullscreen and windowed). Select **Browse library** to see a searchable list of pieces. There is no need to open MIDI files one by one: Piano Teacher indexes all `.mid`, `.midi`, `.musicxml`, `.xml`, and `.mxl` files in your configured directory **and subfolders** automatically. The list refreshes approximately every five seconds while the home or library screen is visible. Folder scanning reads filenames only; full scores are parsed when you select a piece.
+
+By default, the folder is `~/Music/Piano Teacher` (created on first launch). Use **Settings > Music library > Browse...** to select any existing folder on Linux. The choice, fullscreen setting, MIDI device and last successfully loaded score are saved locally in `~/.config/piano-teacher/settings.json` or `$XDG_CONFIG_HOME/piano-teacher/settings.json`. The **Continue** button on the main menu opens the last score and the existing SQLite mastery database restores its learning position. If the file has been removed, the button is disabled. Music files are never moved or rewritten.
+
+The main menu includes **Browse library**, **Continue**, **Settings** and **Quit**. Settings is a separate screen for choosing a folder, selecting or refreshing the USB MIDI device and toggling fullscreen. The practice view retains only **Previous, Start/Stop, Next** and a disabled **Listen** control. Press **Escape** while practicing to return to the library, **Space** to start/stop, and **Left/Right** to navigate exercises. The engine stops an active attempt when leaving practice.
+
 ## Install and launch on Arch Linux
 
 ```bash
@@ -13,17 +21,19 @@ python -m pytest -q
 ./run.sh
 ```
 
-`run.sh` starts a loopback-only Python backend and opens the Godot application. Connect your USB MIDI piano, press **Piano** to select its MIDI input (single devices are auto-selected), then **Open file** to load `.mid`, `.midi`, `.musicxml`, `.xml`, or `.mxl`. Use **Start**, **Previous** and **Next**, or Space/arrow keys. There is no account or network service; all processing is local. `aconnect -l` helps diagnose a missing ALSA MIDI connection.
+`run.sh` starts a loopback-only Python backend and opens the Godot application. Drop MIDI or MusicXML scores into your music folder, choose one from the library, connect your USB MIDI piano through Settings (single available devices are auto-selected), then use **Start**, **Previous** and **Next**, or Space/arrow keys. There is no account or network service; all processing is local. `aconnect -l` helps diagnose a missing ALSA MIDI connection.
 
 ## Implemented in this first Godot iteration
 
-- Godot 4 minimal, light-coloured interface with SVG score from Verovio, full-page score panel and overlaid playhead.
+- Godot 4 fullscreen, light-coloured interface with a home screen, automatically indexed music library, settings and a separate distraction-free practice screen. The SVG score comes from Verovio, with a full-page score panel and overlaid playhead.
 - Python backend preserves accurate MIDI event timestamps independently from screen rendering.
 - Mido/Music21 import paths and hand identification, plus score engraving for the current exercise.
 - Two-measure learning with automatic overlapping connections: **1–2 → 3–4 → 1–4 → 5–6 → 3–6**, followed by full-piece practice.
 - Right hand then left hand then both for learning exercises (skips hands without notes). Connections assess both hands.
 - Starts at **40%** original tempo; adjusts speed after consecutive clean performances, with progressive smaller increments and slowdown after repeated failures.
-- Pitch, ±100 ms onset timing, and ±20% duration scoring (with a 55 ms minimum duration tolerance); extra notes and missed notes count as errors.
+- Pitch, ±100 ms onset timing, and ±20% duration scoring (with a 55 ms minimum duration tolerance); wrong pitches are distinguished from missed and extra notes.
+- After every attempt, noteheads on the engraved score receive small coloured feedback markers for correct, wrong, early, late, too-short, too-long and missed notes. Unrequested extra notes are marked above the system at their timed x-position, labelled by pitch (not falsely assigned to an engraved notehead). If MIDI-to-engraving alignment fails for a note, the feedback reports it as unpositioned.
+- Completed attempts remain on the original score for 2.5 seconds before automatic tempo, hand or exercise progression. The feedback remains correctly associated with its source score.
 - Automatic retry and progression, manual passage navigation, progress saved locally in SQLite under `$XDG_DATA_HOME/piano-teacher` (usually `~/.local/share/piano-teacher`).
 
 ## Current limitations - important
@@ -34,7 +44,16 @@ MIDI-to-score quantization and multi-staff inference depend on music21 and are n
 
 ## Engraving geometry API
 
-After loading a piece, the backend offers `GET /score/layout` (quarter-beat anchors, system/page identifiers, normalized notehead coordinates), and `GET /score.svg?page=0` (zero-based page index). The state endpoint includes `beat` and `duration_beats`. Godot interpolates the cursor in beat space between server samples and transforms normalized coordinates into the *aspect-fitted SVG image area* to prevent offsets from letterboxing. The API reports an error when no graphical timing correspondence is available. The backend caches the layout by score revision.
+After loading a piece, the backend offers `GET /score/layout` (quarter-beat anchors, system/page identifiers, normalized notehead coordinates), and `GET /score.svg?page=0` (zero-based page index). The state endpoint includes `beat` and `duration_beats`. Godot interpolates the cursor in beat space between server samples and transforms normalized coordinates into the *aspect-fitted SVG image area* to prevent offsets from letterboxing. The API reports an error when no graphical timing correspondence is available. The backend caches the layout by score revision. The layout now also includes positioned noteheads with Verovio IDs, sounding MIDI pitches and quarter-beat onsets. At the end of an attempt `GET /state` provides `feedback_marks` (note ID, page, x, y, status) and `feedback_unmapped` during the feedback interval. For pitches, the engine queries Verovio's MIDI output rather than guessing sharps/flats from the visual notehead position.
+
+## Additional backend API
+
+- `GET /library` - recursively list supported local scores, metadata, recent ID and missing-folder diagnostics.
+- `POST /library/open` with `{ "id": "subfolder/score.mid" }` - open a validated score inside the configured folder, then record it as recent.
+- `GET /settings` - read stored preferences.
+- `POST /settings` - save one or more of `music_dir` (existing directory), `fullscreen` (boolean), or `midi_device` (name). Music folder changes reset the recent score.
+
+No additional web server is exposed: all endpoints remain on `127.0.0.1`.
 
 ## Backend-only testing
 
@@ -45,11 +64,13 @@ python -m piano_teacher.server --no-midi
 curl http://127.0.0.1:8765/state
 ```
 
+If `ModuleNotFoundError: piano_teacher` appears, make sure you are in the repository root and use `./run.sh`: the launcher now explicitly sets the source directory on `PYTHONPATH`, selects the project's `.venv/bin/python` when present, validates its import, and waits for a ready backend before opening Godot. Pytest also sets the project root on its import path. The `DRI_PRIME` warning reported by Mesa is independent of this backend import failure.
+
 The Python backend deliberately binds only to `127.0.0.1`. The geometry and wrap handling are verified with synthetic Verovio-shaped SVG/timemap tests; these do not substitute for testing a real score engraving. To inspect Godot without a MIDI keyboard, start the server with `--no-midi` and then `godot --path godot` (but practice cannot be meaningfully graded without real MIDI input).
 
 ## Next milestones
 
-1. Run a real Godot/Verovio integration smoke test on Arch; address SVG renderer and engraving/font compatibility; highlight individual engraved notes from assessment results.
+1. Run a real Godot/Verovio integration smoke test on Arch; verify that Verovio 5.7 returns note MIDI values for all rendered notes, that actual SVG pages open in Godot, and that each result marker aligns to its notehead.
 2. Canonical MusicXML/MIDI reconstruction: clef/staff accuracy, ties, quantization, hand corrections, note/finger overlays.
 3. End-to-end physical MIDI and latency tests, on-demand Listen synthesis, stronger scoring for pedal/legato, and contextual hand/tempo controls.
 4. Linux release packaging and visual usability polish.
