@@ -8,7 +8,8 @@ A native Linux piano tutor with a minimal **Godot 4** interface and Python pract
 sudo pacman -S godot python python-pip alsa-utils
 python -m venv .venv
 source .venv/bin/activate
-pip install -e '.[godot]'
+pip install -e '.[godot,test]'
+python -m pytest -q
 ./run.sh
 ```
 
