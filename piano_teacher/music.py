@@ -145,14 +145,3 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     boundaries = _bar_boundaries(end, changes)
     return Piece(Path(path).stem, bpm, tuple(notes), _phrases(notes, boundaries, bars_per_phrase), split_pitch)
 
-
-def with_split(piece: Piece, split_pitch: int) -> Piece:
-    """Change pitch fallback while retaining automatic named/two-track assignment.
-
-    Reimporting is required to get the original track names. This helper only
-    applies to notes assigned using pitch, and is not used by the GUI.
-    """
-    assigned = [replace(n, hand="left" if n.pitch < split_pitch else "right") for n in piece.notes]
-    boundaries = sorted({b for phrase in piece.phrases for b in (phrase.start, phrase.end)})
-    return replace(piece, notes=tuple(assigned), phrases=_phrases(assigned, boundaries, 1), split_pitch=split_pitch)
-

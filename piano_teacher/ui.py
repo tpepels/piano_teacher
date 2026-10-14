@@ -2,18 +2,45 @@
 from __future__ import annotations
 
 import math
+import struct
 import sys
+import tempfile
 import time
+import wave
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QSettings, QTimer, QRectF
+from PySide6.QtCore import Qt, QSettings, QTimer, QRectF, QUrl
 from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
+    QApplication, QCheckBox, QComboBox, QFileDialog, QHBoxLayout, QLabel, QMainWindow,
     QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget, QSizePolicy,
 )
 
 from .midi_input import MidiInput
+
+try:
+    from PySide6.QtMultimedia import QSoundEffect
+except ImportError:  # Can still be used with a visual count-in.
+    QSoundEffect = None
+
+
+def make_click() -> str:
+    """Generate a short PCM metronome tick without an external audio file."""
+    path = str(Path(tempfile.gettempdir()) / "piano_teacher_click.wav")
+    if Path(path).exists():
+        return path
+    rate, count = 22050, 1102
+    samples = bytearray()
+    for i in range(count):
+        envelope = math.exp(-i / 240)
+        amplitude = int(12000 * envelope * math.sin(2 * math.pi * 1000 * i / rate))
+        samples.extend(struct.pack('<h', amplitude))
+    with wave.open(path, 'wb') as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(rate)
+        out.writeframes(samples)
+    return path
 from .music import Piece, Phrase, load_midi, note_name
 from .practice import Assessment, Curriculum, Recorder, evaluate
 
@@ -139,12 +166,18 @@ class Window(QMainWindow):
         self.recorder: Recorder | None = None
         self.start_at = 0.0
         self.running = False
+        self.result_visible = False
         self.generation = 0
         self.count_in = 4
         self.last_beat: int | None = None
         self.timer = QTimer(self)
         self.timer.setInterval(16)
         self.timer.timeout.connect(self.tick)
+        self.click = None
+        if QSoundEffect is not None:
+            self.click = QSoundEffect(self)
+            self.click.setSource(QUrl.fromLocalFile(make_click()))
+            self.click.setVolume(0.35)
 
         outer = QWidget()
         self.setCentralWidget(outer)
@@ -211,6 +244,10 @@ class Window(QMainWindow):
         self.input_status = QLabel("No device connected")
         self.input_status.setObjectName("caption")
         midi_row.addWidget(self.input_status)
+        self.click_check = QCheckBox("Click")
+        self.click_check.setChecked(self.click is not None)
+        self.click_check.setEnabled(self.click is not None)
+        midi_row.addWidget(self.click_check)
         layout.addLayout(midi_row)
 
         self.setStyleSheet(f"""
@@ -300,7 +337,7 @@ class Window(QMainWindow):
                 self.hand.addItem(phase.title(), phase)
             self.hand.setCurrentIndex(s.phase_index)
             self.tempo.setValue(s.bpm)
-            if self.roll.phrase is not s.phrase or self.roll.hand != s.hand:
+            if not self.result_visible and (self.roll.phrase is not s.phrase or self.roll.hand != s.hand):
                 self.roll.set_passage(s.phrase, s.hand)
         else:
             self.title.setText("PIANO TEACHER")
@@ -367,6 +404,7 @@ class Window(QMainWindow):
         beat_seconds = 60.0 / s.bpm
         self.start_at = time.monotonic() + self.count_in * beat_seconds
         self.running = True
+        self.result_visible = False
         self.roll.assessment = None
         self.roll.progress = 0.0
         self.roll.countdown = str(self.count_in)
@@ -385,6 +423,11 @@ class Window(QMainWindow):
         beat_seconds = 60.0 / s.bpm
         elapsed = time.monotonic() - self.start_at
         self.roll.progress = elapsed / ((s.phrase.end - s.phrase.start) * beat_seconds)
+        beat_number = math.floor(elapsed / beat_seconds)
+        if beat_number != self.last_beat:
+            self.last_beat = beat_number
+            if self.click and self.click_check.isChecked():
+                self.click.play()
         if elapsed < 0:
             self.roll.countdown = str(max(1, math.ceil(-elapsed / beat_seconds)))
         else:
@@ -394,6 +437,7 @@ class Window(QMainWindow):
         if elapsed >= passage_seconds + max(.3, .28 * beat_seconds):
             result = evaluate(s.phrase, s.hand, s.bpm, self.recorder.presses if self.recorder else [])
             self.stop(clear_visual=False)
+            self.result_visible = True
             self.roll.assessment = result
             self.roll.progress = 1.0
             self.roll.update()
@@ -407,6 +451,7 @@ class Window(QMainWindow):
     def retry_if_current(self, generation: int) -> None:
         if self.generation != generation or self.running or not self.session:
             return
+        self.result_visible = False
         self.roll.set_passage(self.session.phrase, self.session.hand)
         self.begin()
         self.render_state()
@@ -417,6 +462,8 @@ class Window(QMainWindow):
         self.running = False
         self.recorder = None
         if clear_visual:
+            self.result_visible = False
+            self.roll.assessment = None
             self.roll.countdown = ""
             self.roll.progress = 0.0
             self.roll.update()
