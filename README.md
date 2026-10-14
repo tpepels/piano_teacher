@@ -1,3 +1,26 @@
+## Phase 0 - real integration smoke
+
+The automated Phase 0 check generates a short two-hand MIDI and exercises the
+actual music21 -> Verovio -> CairoSVG -> PNG renderer and HTTP practice service.
+It verifies library import, note coordinates, decoded PNG, count-in and a timed
+preview without false mastery. It runs in an Arch Linux GitHub Actions container
+with the Godot binary installed, so the GDScript check cannot silently skip.
+
+After a pull and `pip install -e '.[godot,test]'`, run:
+
+```bash
+python -m pytest -q
+./scripts/check_godot.sh
+python scripts/smoke_phase0.py
+python scripts/smoke_phase0.py --file "$HOME/Music/Piano Teacher/your-piece.midi"
+./run.sh
+```
+
+The smoke checks rendering and API semantics but does not prove that audio,
+score animation, or USB MIDI hardware work in a visible Godot session. This
+still requires on-machine testing before Phase 0 can be declared complete.
+The launcher now stops if port 8765 is already occupied by an older backend.
+
 ## Validate Godot before running the application
 
 Python tests alone cannot detect GDScript parse errors such as undeclared

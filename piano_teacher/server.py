@@ -174,7 +174,7 @@ class PracticeEngine:
                 raise ValueError("Open a piece first")
             # A user must be able to watch the time-driven score without a
             # connected instrument. Only actual MIDI input enables assessment.
-            self.preview_only = self.enable_midi and self.midi_port is None
+            self.preview_only = self.midi_port is None
             self.running=True
             self.auto=not self.preview_only
             self.next_at=0

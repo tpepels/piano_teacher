@@ -33,6 +33,12 @@ if ! "$PYTHON" -c 'import piano_teacher.server' >/dev/null; then
   echo "Cannot import piano_teacher. Run: source .venv/bin/activate && pip install -e '.[godot,test]'" >&2
   exit 1
 fi
+# Never connect the new UI to an older backend still using our port.
+if "$PYTHON" -c 'import socket,sys; s=socket.socket(); s.settimeout(0.25); sys.exit(0 if s.connect_ex(("127.0.0.1",8765)) == 0 else 1)' >/dev/null 2>&1; then
+  echo "Cannot start Piano Teacher: 127.0.0.1:8765 is already in use." >&2
+  echo "Close the previous Piano Teacher backend, then run ./run.sh again." >&2
+  exit 1
+fi
 "$PYTHON" -m piano_teacher.server &
 BACKEND_PID=$!
 trap 'kill "$BACKEND_PID" 2>/dev/null || true' EXIT

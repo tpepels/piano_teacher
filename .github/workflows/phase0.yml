@@ -1,0 +1,25 @@
+name: Phase 0 smoke
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  arch-linux:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 20
+    steps:
+      - name: Install dependencies
+        run: pacman -Syu --noconfirm --needed git python python-pip godot cairo pango
+      - uses: actions/checkout@v4
+      - name: Install application
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e '.[godot,test]'
+      - name: Run Python and Godot validation
+        run: |
+          .venv/bin/python -m pytest -q
+          ./scripts/check_godot.sh
+      - name: Real rendering and HTTP integration
+        run: .venv/bin/python scripts/smoke_phase0.py
