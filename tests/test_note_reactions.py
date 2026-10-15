@@ -54,6 +54,18 @@ func run() -> void:
     app.score_overlay.size = Vector2(1200, 240)
     app.note_reactions.size = Vector2(1200, 240)
     app.note_reactions.staff_gap_fraction = .04
+    app.living_chords = [{"beat":0.0, "notes":[
+        {"id":"na", "page":0, "x":.32, "y":.52, "pitch":60, "hand":"right"},
+        {"id":"nb", "page":0, "x":.32, "y":.47, "pitch":64, "hand":"right"}]}]
+    app.last_state = {"phase":"ready", "running":false, "mode":"practice",
+        "play_from_beat":0.0}
+    app._process(.016)
+    assert(app.score_overlay.next_chord.size() == 2,
+        "Ready stage must highlight the next real chord before Play")
+    app.last_state["phase"] = "feedback"
+    app._process(.016)
+    assert(app.score_overlay.next_chord.is_empty(),
+        "Feedback must not overwrite judged notes with a fresh teal cue")
     app.score_overlay.next_chord = [
         {"id":"na", "page":0, "x":.32, "y":.52, "emphasis":1.0},
         {"id":"nb", "page":0, "x":.32, "y":.47, "emphasis":1.0}]
