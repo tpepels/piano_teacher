@@ -1412,6 +1412,20 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         passage_label.text = "WARM-UP %d/3 · %s · Measures %d–%d" % [
             hand_step, str(parsed.get("hand", "left")).to_upper(),
             int(parsed.get("first_bar", 1)), int(parsed.get("last_bar", 8))]
+    # The live bar number comes from Python's source meter grid. Do not infer
+    # measures from elapsed seconds in Godot (pickup and changing meters).
+    var current_bar: int = int(parsed.get("current_bar", 0))
+    var phase_for_bar: String = str(parsed.get("phase", "ready"))
+    if current_bar > 0 and phase_for_bar in ["count_in", "playing", "paused"]:
+        var first_bar: int = int(parsed.get("first_bar", 1))
+        var last_bar: int = int(parsed.get("last_bar", first_bar))
+        var bar_text := "Measure %d of %d" % [current_bar, last_bar]
+        if bool(parsed.get("warmup", false)):
+            var hand_step: int = ["left", "right", "both"].find(str(parsed.get("hand", "left"))) + 1
+            passage_label.text = "WARM-UP %d/3 · %s · %s" % [
+                hand_step, str(parsed.get("hand", "left")).to_upper(), bar_text]
+        else:
+            passage_label.text = "%s · %s" % [kind, bar_text]
     speed_label.text = "%d BPM · target %d" % [int(parsed.get("bpm", 0)),int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
     speed_label.add_theme_font_size_override("font_size", _ui_font(16 if size.x < 900 else 18))
     speed_label.tooltip_text = "Current practice tempo and your selected target"
