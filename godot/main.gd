@@ -375,7 +375,10 @@ func _readable_ui_scale() -> float:
     return clampf(minf(size.x / 1150.0, size.y / 760.0), 1.0, 1.75)
 
 func _ui_font(base: int) -> int:
-    return maxi(12, int(round(float(base) * ui_scale)))
+    # Keep important labels at a readable physical pixel size. The earlier
+    # 13-15px defaults remained miniature at desktop/fullscreen resolutions.
+    var legibility := 1.35 if size.x >= 1100.0 else 1.12
+    return maxi(16, int(round(float(base) * ui_scale * legibility)))
 
 func _resize_ui_fonts(node: Node) -> void:
     if node is Control and node.has_meta("ui_font_base"):
@@ -404,7 +407,8 @@ func _button(label: String, callback: Callable, primary := false) -> Button:
     # Long song titles must not force a container wider than the viewport.
     button.clip_text = true
     # Short controls must fit their text; library rows override width.
-    button.custom_minimum_size = Vector2(mini(220, maxi(96, 42 + label.length() * 9)), 45) * ui_scale
+    var text_width: float = theme.default_font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, _ui_font(15)).x
+    button.custom_minimum_size = Vector2(clampf(text_width + 34 * ui_scale, 110, 380), 50 * ui_scale)
     var style := StyleBoxFlat.new()
     style.bg_color = Design.PINE if primary else Design.PANEL
     style.set_corner_radius_all(8)
@@ -693,7 +697,8 @@ func _build_interface() -> void:
     mode_choice.add_item("Practice rhythm")
     mode_choice.add_item("Perform passage")
     mode_choice.add_item("Perform whole piece")
-    mode_choice.custom_minimum_size = Vector2(150, 38)
+    mode_choice.custom_minimum_size = Vector2(210 * ui_scale, 48 * ui_scale)
+    mode_choice.add_theme_font_size_override("font_size", _ui_font(15))
     mode_choice.item_selected.connect(func(index: int):
         _send_action({"action": "learn" if index == 0 else "practice" if index == 1 else "perform", "scope":"whole" if index == 3 else "current"}))
     practice_navigation.add_child(mode_choice)
@@ -701,6 +706,7 @@ func _build_interface() -> void:
     practice_navigation.add_child(listen_button)
     hints_toggle = CheckButton.new()
     hints_toggle.text = "Hints"
+    hints_toggle.add_theme_font_size_override("font_size", _ui_font(15))
     hints_toggle.tooltip_text = "Keep key hints visible while learning notes"
     hints_toggle.toggled.connect(func(enabled: bool): _send_action({"action":"hints", "enabled":enabled}))
     practice_navigation.add_child(hints_toggle)
@@ -891,11 +897,15 @@ func _update_responsive_layout() -> void:
                 var font_size := _ui_font(13 if width < 900 else 15)
                 child.add_theme_font_size_override("font_size", font_size)
                 if child == mode_choice:
-                    child.custom_minimum_size.x = 150 * ui_scale
+                    child.custom_minimum_size.x = 220 * ui_scale
                 elif child is CheckButton:
                     child.custom_minimum_size.x = 75
                 else:
                     child.custom_minimum_size.x = child.get_theme_font("font").get_string_size(child.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x + 38
+    if mode_choice != null:
+        mode_choice.add_theme_font_size_override("font_size", _ui_font(15))
+    if hints_toggle != null:
+        hints_toggle.add_theme_font_size_override("font_size", _ui_font(15))
     if practice_controls != null:
         practice_controls.columns = 3 if width < 700 else 5
         var compact := size.y < 720.0
@@ -908,7 +918,7 @@ func _update_responsive_layout() -> void:
                 var control_width := 148 if child == start_button else 112
                 if width >= 900:
                     control_width = 180 if child == start_button else 140
-                child.custom_minimum_size = Vector2(control_width, 38 if compact else 45) * ui_scale
+                child.custom_minimum_size = Vector2(control_width, 42 if compact else 52) * ui_scale
                 child.add_theme_font_size_override("font_size", _ui_font(13 if width < 900 else 15))
         title_label.add_theme_font_size_override("font_size", _ui_font(22 if width < 900 else 27))
 
@@ -1362,8 +1372,13 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         return
     title_label.text = str(parsed.get("title", "Piano Teacher"))
     var kind := str(parsed.get("kind", "learn")).capitalize()
-    passage_label.text = "%s · Measures %d–%d" % [
-        kind, int(parsed.get("first_bar", 0)), int(parsed.get("last_bar", 0))]
+    passage_label.text = ("%s · Measures %d–%d" % [
+        kind, int(parsed.get("first_bar", 0)), int(parsed.get("last_bar", 0))])
+    if bool(parsed.get("warmup", false)):
+        var hand_step: int = (["left", "right", "both"].find(str(parsed.get("hand", "left"))) + 1)
+        passage_label.text = "WARM-UP %d/3 · %s · Measures %d–%d" % [
+            hand_step, str(parsed.get("hand", "left")).to_upper(),
+            int(parsed.get("first_bar", 1)), int(parsed.get("last_bar", 8))]
     speed_label.text = "%d BPM · target %d" % [int(parsed.get("bpm", 0)),int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
     speed_label.add_theme_font_size_override("font_size", _ui_font(16 if size.x < 900 else 18))
     speed_label.tooltip_text = "Current practice tempo and your selected target"
@@ -1385,7 +1400,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     mode_choice.select(0 if learning else 2 if str(parsed.get("mode", "")) == "perform" else 1)
     if str(parsed.get("mode", "")) == "listen":
         mode_choice.text = "Listen"
-    mode_choice.disabled = false
+    mode_choice.disabled = bool(parsed.get("warmup", false))
     hints_toggle.disabled = not learning or str(parsed.get("phase", "")) == "loading"
     hints_toggle.set_pressed_no_signal(bool(parsed.get("hints_enabled", false)))
     hint_keyboard.update_state(teaching if learning else {})
@@ -1457,6 +1472,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         lesson_info_label.text = "Idea complete. Play a new piano key to continue, or press Space."
     if not learning:
         progress_label.text = "Clean runs %d of 3 at %d BPM" % [int(parsed.get("streak", 0)), int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
+        if bool(parsed.get("warmup", false)):
+            var name: String = "Both hands" if str(parsed.get("hand", "")) == "both" else str(parsed.get("hand", "")).capitalize() + " hand"
+            progress_label.text = "%s · %d of 3 clean runs · Next hand unlocks when mastered" % [
+                name, int(parsed.get("streak", 0))]
         if str(parsed.get("mode", "")) == "perform":
             progress_label.text = "Perform · keep going to the end; review follows"
         elif str(parsed.get("mode", "")) == "listen":
@@ -1735,7 +1754,8 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         _refresh_score_status()
         # Warm-ups arrive as repeatable Perform sessions. Do not silently
         # replace them with the normal imported-piece Learn curriculum.
-        if not (opened is Dictionary and str(opened.get("mode", "")) == "perform"):
+        if not (opened is Dictionary and (bool(opened.get("warmup", false))
+                or str(opened.get("mode", "")) == "perform")):
             _send_action({"action":"learn"})
     elif path == "/settings":
         settings_message.text = "Settings saved"
