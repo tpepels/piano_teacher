@@ -14,7 +14,7 @@ func present(beat: float, beats_per_bar: int, running: bool, paused: bool) -> vo
     var step := posmod(int(floor(beat + .00001)), maxi(1, beats_per_bar))
     var show := running and not paused and beat < 0.0
     var next_count := clampi(beats_per_bar, 1, 8)
-    var fraction := beat - floor(beat)
+    var fraction: float = beat - floorf(beat)
     if visible != show or count != next_count or (show and current != step) or (show and absf(beat_fraction - fraction) > 0.01):
         visible = show
         count = next_count
