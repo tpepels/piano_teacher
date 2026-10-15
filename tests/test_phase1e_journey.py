@@ -74,10 +74,12 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
             assert all(mark["status"]=="correct" for mark in feedback["feedback_marks"])
             t[0]=e.next_at+.01
             after=e.state()
-            assert after["bpm"]==expected_bpm
             if after["phase"]=="loading":
+                # A harder generated level starts at the novice pace.
                 assert expected_bpm==80
+                assert after["bpm"] == e.plan.start_bpm
                 break
+            assert after["bpm"]==expected_bpm
             assert after["phase"]=="count_in"
         else:
             pytest.fail("Three clean target-speed repeats did not unlock the next level")
