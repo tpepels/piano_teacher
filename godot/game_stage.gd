@@ -17,8 +17,10 @@ func _init() -> void:
 func present(state: Dictionary) -> void:
     var next_phase: String = str(state.get("phase", "ready"))
     var next_progress: float = clampf(float(state.get("progress", 0.0)), 0.0, 1.0)
+    var result: Variant = state.get("take_result")
+    var failed_take: bool = (result is Dictionary and not bool(result.get("clean", false)))
     var next_accent: Color = (
-        ERROR if next_phase == "feedback" and not bool(state.get("take_result", {}).get("clean", false))
+        ERROR if next_phase == "feedback" and failed_take
         else AMBER if next_phase in ["paused", "recovering"]
         else AURA)
     if phase != next_phase or absf(next_progress-progress) > 0.003 or accent != next_accent:
