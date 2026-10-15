@@ -30,18 +30,18 @@ class Warmup:
 
 
 WARMUPS = (
-    Warmup("chords", "Chord Changes", "Triads and inversions",
-           "C-G-Am-F block chords, smooth right-hand inversions and steady left-hand roots.", 68, (4, 4), 8),
-    Warmup("finger-patterns", "Five-Finger Ladders", "Hanon-inspired coordination",
-           "Original even-eighth-note five-finger patterns rising and falling in parallel hands.", 76, (4, 4), 8),
-    Warmup("classical-melody", "Classical Melody", "Legato and Alberti bass",
-           "Original eight-bar G-major phrase with clear cadences and broken-chord accompaniment.", 64, (3, 4), 8),
-    Warmup("pop-accompaniment", "Pop Accompaniment", "Syncopated pop chords",
-           "C-G-Am-F with offbeat right-hand chord stabs and root-fifth bass patterns.", 88, (4, 4), 8),
-    Warmup("jazz-voicings", "Jazz Chord Voicings", "ii-V-I and ninth/thirteenth colours",
-           "Dm9-G13-Cmaj9-Am9 with left-hand roots and syncopated right-hand colour tones.", 66, (4, 4), 8),
-    Warmup("jazz-phrasing", "Jazz Phrasing", "Swing eighths and melodic space",
-           "Original swung C-major improvisation phrases over a repeating ii-V-I-vi groove.", 72, (4, 4), 8),
+    Warmup("chords", "Chord Changes", "Simple triads",
+           "C-G-Am-F: two half-note chords per bar with alternating bass notes.", 68, (4, 4), 8),
+    Warmup("finger-patterns", "Five-Finger Ladders", "Slow finger independence",
+           "Original Hanon-inspired five-finger figures, two half notes per bar.", 70, (4, 4), 8),
+    Warmup("classical-melody", "Classical Melody", "Melody and accompaniment",
+           "Original G-major phrase in 3/4: a half note plus a quarter note per bar.", 64, (3, 4), 8),
+    Warmup("pop-accompaniment", "Pop Accompaniment", "Steady pop harmony",
+           "C-G-Am-F: half-note chord changes with roots and fifths, no syncopation yet.", 72, (4, 4), 8),
+    Warmup("jazz-voicings", "Jazz Chord Voicings", "Simple ii-V-I-vi colours",
+           "Dm9-G13-Cmaj9-Am9: compact right-hand voicings in half notes.", 60, (4, 4), 8),
+    Warmup("jazz-phrasing", "Jazz Phrasing", "Melodic questions and answers",
+           "Easy jazz-influenced two-note phrases, in half notes before swing subdivisions.", 66, (4, 4), 8),
 )
 _BY_SLUG = {w.slug: w for w in WARMUPS}
 
@@ -88,43 +88,33 @@ def _chords(n: _Notes) -> None:
     for bar in range(8):
         upper, root, fifth = harmony[bar % 4]
         t = bar * 4
-        n.chord("right", upper, t, 1.75)
-        n.chord("right", upper, t + 2, 1.75, 70)
-        n.add("left", root, t, 1.85, 74)
-        n.add("left", fifth, t + 2, 1.85, 70)
+        n.chord("right", upper, t, 2)
+        n.chord("right", upper, t + 2, 2)
+        n.add("left", root, t, 2)
+        n.add("left", fifth, t + 2, 2)
 
 
 def _finger_patterns(n: _Notes) -> None:
-    # An original repeating five-finger figure, not a copied Hanon étude.
-    scale = [48, 50, 52, 53, 55, 57, 59, 60, 62, 64]
-    pattern = [0, 1, 2, 3, 4, 3, 2, 1]
-    for bar, root in enumerate((0, 1, 2, 3, 3, 2, 1, 0)):
-        for step, degree in enumerate(pattern):
-            pitch = scale[root + degree]
-            start = bar * 4 + Fraction(step, 2)
-            n.add("left", pitch, start, Fraction(9, 20), 66)
-            n.add("right", pitch + 12, start, Fraction(9, 20), 80)
+    # Slow, original ascending/descending figures (not a copied Hanon étude).
+    pitches = [48, 50, 52, 53, 55, 53, 52, 50,
+               48, 50, 52, 53, 55, 53, 52, 48]
+    for index, pitch in enumerate(pitches):
+        for hand, octave in (("left", 0), ("right", 12)):
+            n.add(hand, pitch + octave, index * 2, 2)
 
 
 def _classical_melody(n: _Notes) -> None:
-    melody = [
-        [(67, 0, 1), (71, 1, .5), (74, 1.5, .5), (72, 2, 1)],
-        [(71, 0, 1), (69, 1, .5), (67, 1.5, .5), (69, 2, 1)],
-        [(71, 0, 1), (74, 1, 1), (76, 2, 1)],
-        [(74, 0, 1), (72, 1, .5), (71, 1.5, .5), (69, 2, 1)],
-        [(67, 0, 1), (71, 1, .5), (74, 1.5, .5), (78, 2, 1)],
-        [(76, 0, .5), (74, .5, .5), (72, 1, 1), (69, 2, 1)],
-        [(71, 0, 1), (69, 1, .5), (66, 1.5, .5), (67, 2, 1)],
-        [(67, 0, 2.75)],
-    ]
-    accompaniment = [(55, 62, 59), (50, 57, 54), (52, 59, 55), (50, 57, 54),
-                     (55, 62, 59), (48, 55, 52), (50, 57, 54), (55, 62, 59)]
-    for bar, line in enumerate(melody):
-        for pitch, offset, length in line:
-            n.add("right", pitch, bar * 3 + beat(offset), beat(length) * Fraction(9, 10), 82)
-        root, fifth, third = accompaniment[bar]
-        for step, pitch in enumerate((root, fifth, third, fifth)):
-            n.add("left", pitch, bar * 3 + Fraction(step * 3, 4), Fraction(13, 20), 60)
+    # In 3/4 one half note followed by a quarter keeps each bar clear.
+    melody = [(67, 71), (74, 71), (69, 67), (66, 69),
+              (67, 74), (72, 69), (71, 66), (67, 67)]
+    bass = [(55, 59), (50, 57), (52, 55), (50, 54),
+            (55, 59), (48, 55), (50, 57), (55, 55)]
+    for bar in range(8):
+        t = bar * 3
+        n.add("right", melody[bar][0], t, 2)
+        n.add("right", melody[bar][1], t + 2, 1)
+        n.add("left", bass[bar][0], t, 2)
+        n.add("left", bass[bar][1], t + 2, 1)
 
 
 def _pop(n: _Notes) -> None:
@@ -133,45 +123,35 @@ def _pop(n: _Notes) -> None:
     for bar in range(8):
         upper, root, fifth = harmony[bar % 4]
         t = bar * 4
-        for offset, length, strength in ((0, .8, 72), (1.5, .425, 84),
-                                         (2.5, .45, 78), (3.5, .375, 86)):
-            n.chord("right", upper, t + beat(offset), beat(length), strength)
-        for offset, pitch in ((0, root), (1.5, fifth), (2, root), (3.5, fifth)):
-            n.add("left", pitch, t + beat(offset), Fraction(9, 20), 78)
+        n.chord("right", upper, t, 2)
+        n.chord("right", upper, t + 2, 2)
+        n.add("left", root, t, 2)
+        n.add("left", fifth, t + 2, 2)
 
 
 def _jazz_voicings(n: _Notes) -> None:
-    # Dm9 / G13 / Cmaj9 / Am9; playable colours without huge hand stretches.
-    harmony = [((60, 64, 69), (50, 53)), ((59, 64, 69), (43, 53)),
-               ((59, 62, 64, 67), (48, 52)), ((59, 60, 64, 67), (45, 48))]
+    harmony = [((65, 72, 76), 50, 57), ((65, 71, 76), 43, 50),
+               ((64, 71, 74), 48, 55), ((60, 64, 71), 45, 52)]
     for bar in range(8):
-        upper, lower = harmony[bar % 4]
+        upper, root, fifth = harmony[bar % 4]
         t = bar * 4
-        n.chord("left", lower, t, 1.65, 71)
-        n.chord("left", lower, t + 2.5, 1.1, 65)
-        n.chord("right", upper, t + Fraction(1, 2), 1.2, 76)
-        n.chord("right", upper, t + 3, Fraction(4, 5), 68)
+        n.chord("right", upper, t, 2)
+        n.chord("right", upper, t + 2, 2)
+        n.add("left", root, t, 2)
+        n.add("left", fifth, t + 2, 2)
 
 
 def _jazz_phrasing(n: _Notes) -> None:
-    # True triplet-swing offbeats and deliberate rests, not equal straight 8ths.
-    lines = [
-        (62, 65, 69, 72, 69), (67, 71, 74, 77, 76),
-        (64, 67, 71, 74, 72), (60, 64, 67, 71, 69),
-        (65, 69, 72, 74, 72), (71, 74, 77, 79, 77),
-        (72, 71, 67, 64, 62), (60, 64, 67, 64, 60),
-    ]
+    # Questions and answers first; swing and syncopation come in later levels.
+    melody = [(62, 65), (67, 71), (64, 67), (60, 64),
+              (65, 69), (71, 74), (72, 67), (64, 60)]
     roots = (50, 43, 48, 45)
-    for bar, melody in enumerate(lines):
-        t = Fraction(bar * 4)
-        n.add("left", roots[bar % 4], t, Fraction(7, 10), 67)
-        n.add("left", roots[bar % 4] + 7, t + 2, Fraction(7, 10), 60)
-        for offset, pitch, length in zip(
-                (Fraction(0), Fraction(2, 3), Fraction(1), Fraction(8, 3), Fraction(3)),
-                melody,
-                (Fraction(3, 5), Fraction(1, 4), Fraction(9, 10),
-                 Fraction(1, 4), Fraction(7, 10))):
-            n.add("right", pitch, t + offset, length, 83)
+    for bar, (first, second) in enumerate(melody):
+        t = bar * 4
+        n.add("right", first, t, 2)
+        n.add("right", second, t + 2, 2)
+        n.add("left", roots[bar % 4], t, 2)
+        n.add("left", roots[bar % 4] + 7, t + 2, 2)
 
 
 _COMPOSERS = {
