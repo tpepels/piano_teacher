@@ -178,6 +178,7 @@ func run() -> void:
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait","generated Learn opens")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,"choose practice target")
+    await wait_for(func(): return not app.action_pending and not app.apply_tempo_button.disabled,"Pause acknowledged and tempo control enabled")
     app.tempo_setting.value = 80
     press("Apply tempo")
     await wait_for(func(): return not app.action_pending and int(app.last_state.get("target_bpm",0)) == 80,"chosen target acknowledged")

@@ -135,11 +135,17 @@ def test_guided_pause_stop_retry_and_stage_change_clear_old_keys(learner):
     old = e.state()['revision']
     e.control('next')
     assert e.state()['revision'] > old
-    assert e.state()['mode'] == 'learn'
-    assert e.state()['teaching']['target_index'] == 0
+    # This fixture's next curriculum section is the full original
+    # performance: navigation prepares that route without reusing Learn.
+    assert e.state()['mode'] == 'perform' and e.state()['kind'] == 'perform'
+    assert e.state()['teaching'] is None
+    assert e.plan.active_phrase.notes == e.plan.piece.notes
+    assert e.state()['awaiting_score_revision'] == e.state()['revision']
+    assert e.state()['performance_summary'] is None and not e.plan.mastered
     e.control('score_ready', revision=old)
     send(e, 60)
     assert e.state()['phase'] == 'loading'
+    assert e.recorder is None and e.state()['teaching'] is None
     e.control('stop')
     send(e, 60)
     assert e.state()['phase'] == 'ready' and not e.state()['running']

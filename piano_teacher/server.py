@@ -31,6 +31,7 @@ from .lesson_timing import lead_in_beats
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
 from .live_feedback import settled_assessment
 from .instruction import next_full_attempt
+from .learner_state import LearnerStateStore, guided_units, next_guided_unit, placement_candidate
 
 
 class PracticeEngine:
@@ -66,6 +67,8 @@ class PracticeEngine:
         self._demo_thread: threading.Thread | None = None
         self._demo_score_ready = False
         self.performance_summary: dict | None = None
+        self.course_guided = False
+        self._guided_prepared = False
         self.transport_id = 0
         self.mode = "practice"
         self.teaching = None
@@ -112,6 +115,7 @@ class PracticeEngine:
                 self.db.execute(f"ALTER TABLE sessions ADD COLUMN {column} {declaration}")
         self.db.execute("CREATE TABLE IF NOT EXISTS mastery (fingerprint TEXT, exercise TEXT, bpm INTEGER, PRIMARY KEY (fingerprint, exercise))")
         self.db.commit()
+        self.learner_store = LearnerStateStore(self.db)
 
     def ports(self) -> list[str]:
         if not self.enable_midi:
@@ -210,6 +214,7 @@ class PracticeEngine:
                     self.teaching.receive(pitch=message.note,
                         is_on=message.type == "note_on" and message.velocity > 0,
                         channel=getattr(message, "channel", 0), at=now)
+                    self._save_guided_preparation()
                 return
             if self.mode == "listen":
                 return
@@ -227,6 +232,7 @@ class PracticeEngine:
         with self.lock:
             self._stop()
             self._reset_trouble()
+            self.course_guided = False
             self.source = str(Path(path).resolve())
             self.fingerprint = hashlib.sha256(Path(path).read_bytes()).hexdigest()
             self.plan = LearningPlan(piece)
@@ -334,6 +340,164 @@ class PracticeEngine:
         self._demo_audio=None
         self._demo_score_ready=False
         self.performance_summary=None
+        self._guided_prepared=False
+
+    def _learner_saved(self, stage_key: str | None = None) -> dict:
+        if self.fingerprint and self.plan is not None:
+            return self.learner_store.read(self.fingerprint, stage_key or self.plan.identity)
+        # Older in-process clients can bind an unsaved plan directly.
+        return {"resume_unit": None, "completed_units": [], "trouble_units": [],
+                "skip_status": "active", "skip_reason": ""}
+
+    def _guided_unit(self) -> dict | None:
+        if self.plan is None or self.mode != "learn" or self.guided_range is None:
+            return None
+        return next((unit for unit in guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)
+                     if (unit["start_beat"], unit["end_beat"]) == self.guided_range), None)
+
+    def _save_guided_preparation(self):
+        if self._guided_prepared or self.teaching is None or self.mode != "learn":
+            return
+        snapshot = self.teaching.snapshot(now=time.monotonic())
+        if not snapshot["completed"]:
+            return
+        unit = self._guided_unit()
+        if unit is not None and self.fingerprint:
+            self.learner_store.complete_unit(self.fingerprint, self.plan.identity, unit,
+                                            assisted=snapshot["assisted_count"] > 0)
+        self._guided_prepared = True
+
+    def _learner_snapshot(self) -> dict:
+        p = self.plan
+        units = guided_units(p.active_variant, p.piece.bar_boundaries)
+        saved = self._learner_saved()
+        saved["trouble_units"] = [{key: value for key, value in spot.items() if key != "stage_key"}
+                                 for spot in self._valid_trouble_spots(stage_key=p.identity)]
+        current = self._guided_unit()
+        completed = saved["completed_units"]
+        prepared = sum(any(all(unit[field] == previous.get(field)
+                               for field in ("start_beat", "end_beat", "source_indices"))
+                           for previous in completed) for unit in units)
+        next_state = saved if current is None else {**saved, "resume_unit": None,
+                                                    "completed_units": completed+[current]}
+        following = next_guided_unit(p.active_variant, p.piece.bar_boundaries, next_state)
+        return {**saved, "course_guided": self.course_guided, "prepared_units": prepared,
+                "total_units": len(units), "current_unit": current, "next_unit": following,
+                "unit_number": next((i+1 for i, unit in enumerate(units) if unit == current), 0)}
+
+    def _begin_course_stage(self, *, bump_revision: bool = True, explicit_learn: bool = False):
+        if self.plan.exercise.kind == "perform" and not explicit_learn:
+            self._prepare_perform()
+            return
+        unit = next_guided_unit(self.plan.active_variant, self.plan.piece.bar_boundaries, self._learner_saved())
+        if unit is None and explicit_learn:
+            unit = next(iter(guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)), None)
+        if unit is None:
+            self._prepare_practice()
+        else:
+            self._begin_learn(from_beat=unit["start_beat"], bump_revision=bump_revision)
+
+    def _select_step(self, step):
+        p = self.plan
+        p.select(step.exercise_index)
+        p.hand_index = p.hands.index(step.hand)
+        p.variant_index = next(i for i, variant in enumerate(p.variants) if variant.level == step.level)
+        self._reset_trouble()
+
+    def _skip_stage(self, reason):
+        p = self.plan
+        if (p is None or not isinstance(reason, str) or not reason.strip()
+                or p.lesson_step_number >= len(p.lesson_steps)):
+            raise ValueError("Choose an available next step and explain the skip")
+        following = p.lesson_steps[p.lesson_step_number]
+        if self.fingerprint:
+            self.learner_store.mark_skipped(self.fingerprint, p.identity, reason=reason)
+        self._stop()
+        self._select_step(following)
+        self.course_guided = True
+        self._begin_course_stage()
+        self._save()
+
+    def _place_original(self):
+        if self.plan is None:
+            raise ValueError("Open a piece first")
+        p = self.plan
+        candidate = placement_candidate(p)
+        if candidate is None:
+            raise ValueError("You are already playing the original notes")
+        if self.fingerprint:
+            for step in p.lesson_steps[p.lesson_step_number-1:]:
+                if step.key == candidate.key:
+                    break
+                self.learner_store.mark_skipped(self.fingerprint, step.key,
+                    reason="Student chose to try the original notes", status="placed")
+        self._stop()
+        self._select_step(candidate)
+        self.course_guided = True
+        self._begin_course_stage()
+        self._save()
+
+    def _valid_trouble_spots(self, *, stage_key: str | None = None) -> list[dict]:
+        if self.plan is None or not self.fingerprint:
+            return []
+        p = self.plan
+        steps = {step.key: step for step in p.lesson_steps}
+        canonical = {}
+        valid = []
+        for stored in self.learner_store.trouble_for_piece(self.fingerprint):
+            key = stored["stage_key"]
+            step = steps.get(key)
+            if step is None or (stage_key is not None and stage_key != key):
+                continue
+            if key not in canonical:
+                variant = next((variant for variant in p._stage_variants(p.exercises[step.exercise_index], step.hand)
+                                if variant.level == step.level), None)
+                canonical[key] = guided_units(variant, p.piece.bar_boundaries) if variant else ()
+            unit = next((unit for unit in canonical[key]
+                         if all(unit[field] == stored.get(field)
+                                for field in ("start_beat", "end_beat", "source_indices"))), None)
+            if unit is not None:
+                valid.append({**stored, **unit})
+        return valid
+
+    def _revisit_trouble(self, stage_key, start_beat):
+        # Saved evidence can outlive a course revision. Validate the exact
+        # current source binding before stopping or selecting another stage.
+        if (self.plan is None or not self.fingerprint or not isinstance(stage_key, str)
+                or isinstance(start_beat, bool) or not isinstance(start_beat, (int, float))
+                or not math.isfinite(start_beat)):
+            raise ValueError("Choose a saved trouble spot for this piece")
+        p = self.plan
+        step = next((step for step in p.lesson_steps if step.key == stage_key), None)
+        stored = next((unit for unit in self._valid_trouble_spots(stage_key=stage_key)
+                       if unit["stage_key"] == stage_key and unit["start_beat"] == start_beat), None)
+        if step is None or stored is None:
+            raise ValueError("This trouble spot is no longer available")
+        unit = stored
+        bpm = p.bpm
+        self._stop()
+        self._select_step(step)
+        p.bpm = bpm
+        self.learner_store.reactivate(self.fingerprint, stage_key)
+        self.course_guided = True
+        self.retry_range = {field: unit[field] for field in ("first_bar", "last_bar", "start_beat", "end_beat")}
+        self._begin_learn(from_beat=unit["start_beat"], recovery=True)
+        self._save()
+
+    def _record_saved_trouble(self, phrase: Phrase, result, *, start: float, end: float, errors: int):
+        if not self.fingerprint:
+            return
+        unit = next((unit for unit in guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)
+                     if unit["start_beat"] == start and unit["end_beat"] == end), None)
+        # An extra during a silent unit is still in the performance summary,
+        # but cannot become a guided key-finding task without source attacks.
+        if unit is None:
+            return
+        pitches = sorted({entry.note.pitch for entry in result.notes if entry.status != "correct"
+                          and phrase.start+start <= entry.note.start < phrase.start+end})
+        self.learner_store.record_trouble(self.fingerprint, self.plan.identity, unit,
+                                         errors=errors, pitches=pitches)
+        self.learner_store.save_resume(self.fingerprint, self.plan.identity, unit)
 
     def _reset_trouble(self):
         self._trouble_key = None
@@ -382,6 +546,9 @@ class PracticeEngine:
             self._guided_return = (self.plan.identity, grid[first])
         self.mode = "learn"
         self.guided_range = (grid[first], grid[end_index])
+        unit = self._guided_unit()
+        if unit is not None and self.fingerprint:
+            self.learner_store.save_resume(self.fingerprint, self.plan.identity, unit)
         if bump_revision:
             self.score_revision += 1
         self.transport_id += 1
@@ -394,6 +561,7 @@ class PracticeEngine:
         self.feedback = "Preparing a short idea to learn"
         self.next_action = (f"Learn bars {self.display_phrase().first_bar}-{self.display_phrase().last_bar} "
                             "at your own pace, then retry the rhythm.")
+        self._save()
 
     def _guided_marks(self, snapshot: dict) -> list[dict]:
         if (self.plan is None or self._layout_revision != self.score_revision
@@ -592,6 +760,8 @@ class PracticeEngine:
         self.pending_result = None
         if result.correct == len(result.notes) and result.extra_notes == 0:
             self._reset_trouble()
+            if self.fingerprint:
+                self.learner_store.resolve_trouble(self.fingerprint, p.identity)
         self.retry_range = None
         before = (p.identity, p.bpm)
         message = p.apply_result(correct=result.correct,
@@ -692,7 +862,31 @@ class PracticeEngine:
             if action == "seek":
                 self._seek(kwargs.get("bar"))
                 return
+            if action == "learn_next":
+                if (self.mode != "learn" or self.teaching is None
+                        or not self.teaching.snapshot(now=time.monotonic())["completed"]):
+                    raise ValueError("Find the current notes before continuing to the next idea")
+                self._save_guided_preparation()
+                if self._guided_return is not None:
+                    self._prepare_practice()
+                else:
+                    self._begin_course_stage()
+                return
+            if action == "skip_stage":
+                self._skip_stage(kwargs.get("reason"))
+                return
+            if action == "place_original":
+                self._place_original()
+                return
+            if action == "revisit_trouble":
+                self._revisit_trouble(kwargs.get("stage_key"), kwargs.get("start_beat"))
+                return
             if action in ("learn", "learn_retry"):
+                if action == "learn":
+                    self.course_guided = True
+                    if "from_beat" not in kwargs:
+                        self._begin_course_stage(explicit_learn=True)
+                        return
                 previous_start = self.guided_range[0] if self.guided_range else 0.0
                 self._begin_learn(from_beat=float(kwargs.get("from_beat", previous_start if action == "learn_retry" else 0.0)),
                                   recovery=self._guided_return is not None and action == "learn_retry")
@@ -769,6 +963,9 @@ class PracticeEngine:
             if not p:
                 raise ValueError("Open a piece first")
             was_guided = self.mode == "learn"
+            guided_start = self.guided_range[0] if self.guided_range is not None else 0.0
+            guided_return = self._guided_return
+            guided_retry_range = self.retry_range
             self._stop()
             self._reset_trouble()
             if action == "next":
@@ -785,7 +982,15 @@ class PracticeEngine:
             self.feedback="Ready"
             self.next_action="Start when you are ready."
             if was_guided:
-                self._begin_learn(bump_revision=False)
+                if action == "tempo":
+                    recovery = guided_return is not None and guided_return[0] == p.identity
+                    if recovery:
+                        self.retry_range = guided_retry_range
+                    self._begin_learn(from_beat=guided_start, bump_revision=False, recovery=recovery)
+                elif self.course_guided:
+                    self._begin_course_stage(bump_revision=False, explicit_learn=action == "hand")
+                else:
+                    self._begin_learn(bump_revision=False)
             self._save()
 
     def _update(self):
@@ -801,6 +1006,7 @@ class PracticeEngine:
         if self.mode == "learn" and self.teaching is not None:
             self.teaching.set_connected(self._piano_connected(), now=now)
             self.teaching.tick(now=now)
+            self._save_guided_preparation()
             return
         if self.paused:
             return
@@ -813,10 +1019,14 @@ class PracticeEngine:
         if self.pending_result is not None:
             if self.next_at and now >= self.next_at:
                 previous_revision = self.score_revision
+                previous_identity = self.plan.identity
                 message = self._commit_pending()
                 self.feedback_marks=[]
                 self.feedback_unmapped=0
                 if self.auto and message != "Piece mastered":
+                    if self.course_guided and self.plan.identity != previous_identity:
+                        self._begin_course_stage()
+                        return
                     if self.score_revision != previous_revision:
                         # Never consume the next count-in while Godot is still
                         # rendering the newly selected score and its note map.
@@ -867,6 +1077,20 @@ class PracticeEngine:
                 # BPM selected for the next retry. Re-scaling the recorded
                 # timestamps early would move mistakes to incorrect notes.
                 self.feedback_marks=self._live_feedback((now-self.run_at))
+                if self.fingerprint:
+                    unit = next((unit for unit in guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)
+                                 if unit["start_beat"] == decision.restart_beat and unit["end_beat"] == decision.end_beat), None)
+                    if unit is not None:
+                        assessed = evaluate(Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
+                            phrase.start+self.play_from_beat, phrase.end,
+                            tuple(note for note in phrase.notes if note.start >= phrase.start+self.play_from_beat)),
+                            self.plan.hand, self.plan.bpm, self.recorder.presses if self.recorder else [])
+                        pitches = sorted({entry.note.pitch for entry in assessed.notes
+                            if entry.status in ("missed", "wrong")
+                            and phrase.start+decision.restart_beat <= entry.note.start < phrase.start+decision.end_beat})
+                        self.learner_store.record_trouble(self.fingerprint, self.plan.identity, unit,
+                                                         errors=decision.errors, pitches=pitches)
+                        self.learner_store.save_resume(self.fingerprint, self.plan.identity, unit)
                 self.plan.streak=0
                 self.plan.failures+=1
                 before=self.plan.bpm
@@ -928,6 +1152,13 @@ class PracticeEngine:
         self.recorder=None
         if self.mode == "perform":
             self.performance_summary = self._performance_review(phrase, result)
+            if self.fingerprint:
+                if result.clean:
+                    self.learner_store.resolve_trouble(self.fingerprint, self.plan.identity)
+                else:
+                    for unit in self.performance_summary["weakest_bars"]:
+                        self._record_saved_trouble(phrase, result, start=unit["start_beat"],
+                                                  end=unit["end_beat"], errors=unit["errors"])
             self.next_action = ("Review your performance, then Practice the weakest section."
                 if self.performance_summary["weakest_bars"] else "Clean performance. Choose Practice to build your clean-run streak.")
             self.auto = False
@@ -986,6 +1217,9 @@ class PracticeEngine:
             p=self.plan
             seek_grid = self._seek_grid()
             input_activity = {
+                "learner": self._learner_snapshot() if p is not None else None,
+                "placement_available": placement_candidate(p) is not None if p is not None else False,
+                "skip_available": p.lesson_step_number < len(p.lesson_steps) if p is not None else False,
                 "seek_available": self.paused and seek_grid is not None,
                 "seek_range": ({"first_bar": p.active_phrase.first_bar, "last_bar": p.active_phrase.last_bar}
                                if seek_grid is not None else None),
@@ -1047,6 +1281,8 @@ class PracticeEngine:
                 teaching["fragment"] = {"first_bar": phrase.first_bar, "last_bar": phrase.last_bar,
                     "start_beat": self.guided_range[0], "end_beat": self.guided_range[1]}
                 teaching["session_id"] = self.transport_id
+                teaching["has_more_units"] = (result["learner"]["next_unit"] is not None
+                                               and self._guided_return is None)
                 phase = self._phase(now)
                 feedback = str(teaching.get("feedback", "Find the highlighted notes at your own pace."))
                 if phase == "loading":
@@ -1057,6 +1293,9 @@ class PracticeEngine:
                 elif phase == "guided_complete":
                     feedback = "You found every note. Ready to add rhythm?"
                     result["next_action"] = "Retry rhythm from these bars." if self._guided_return else "Ready to add rhythm? Choose Practice."
+                    if teaching["has_more_units"]:
+                        feedback = "You found this idea. Continue with the next short idea."
+                        result["next_action"] = "Choose Next idea to learn the next part of the passage."
                 elif phase == "paused":
                     feedback = "Paused — resume when you are ready."
                 elif phase == "guided_wait":
@@ -1128,6 +1367,7 @@ class PracticeEngine:
                 raise ValueError("Open a piece first")
             p = self.plan
             return {
+                "trouble_spots": self._valid_trouble_spots(),
                 "route_version": p.route_version,
                 "current_step": p.lesson_step_number,
                 "total_steps": len(p.lesson_steps),
@@ -1137,7 +1377,9 @@ class PracticeEngine:
                      "hand": step.hand, "level": step.level, "key": step.key,
                      "kind": step.kind, "first_bar": step.first_bar,
                      "last_bar": step.last_bar, "required_notes": step.required_notes,
-                     "completed": step.key in p.mastered}
+                     "completed": step.key in p.mastered,
+                     "skip_status": self._learner_saved(step.key)["skip_status"],
+                     "skip_reason": self._learner_saved(step.key)["skip_reason"]}
                     for i, step in enumerate(p.lesson_steps)
                 ],
             }

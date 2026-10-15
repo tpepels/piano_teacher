@@ -16,7 +16,7 @@ GODOT = shutil.which("godot") or shutil.which("godot4")
 @pytest.mark.skipif(GODOT is None, reason="Godot 4 is not installed")
 @pytest.mark.parametrize("scenario", [
     "primary_transport", "secondary_stop", "focused_shortcuts", "practice_detours",
-    "settings_back_origin", "abandon_practice", "compact_feedback", "instructional_transition", "modes", "pause_choices", "focus_trap",
+    "settings_back_origin", "abandon_practice", "compact_feedback", "instructional_transition", "modes", "pause_choices", "focus_trap", "learner_progression",
 ])
 def test_actual_practice_interactions(scenario, tmp_path):
     # Isolate any Godot user settings from the real desktop session.

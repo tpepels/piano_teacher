@@ -125,6 +125,9 @@ var performance_review: VBoxContainer
 var performance_text: Label
 var weak_button: Button
 var pause_sheet: Control
+var skip_stage_button: Button
+var placement_button: Button
+var apply_tempo_button: Button
 
 func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
@@ -631,7 +634,8 @@ func _build_interface() -> void:
     tempo_setting.suffix = " BPM"
     tempo_setting.custom_minimum_size = Vector2(160, 44)
     tempo_row.add_child(tempo_setting)
-    tempo_row.add_child(_button("Apply tempo", func(): _send_action({"action": "tempo", "bpm": int(tempo_setting.value)})))
+    apply_tempo_button = _button("Apply tempo", func(): _send_action({"action": "tempo", "bpm": int(tempo_setting.value)}))
+    tempo_row.add_child(apply_tempo_button)
     metronome_toggle = CheckButton.new()
     metronome_toggle.text = "Metronome during practice · count-in always audible"
     metronome_toggle.toggled.connect(func(enabled: bool): _send_post("/settings", {"metronome": enabled}))
@@ -906,6 +910,14 @@ func _build_lesson_screen() -> void:
         )
         hand_buttons[hand] = button
         hand_row.add_child(button)
+    var course_choices := HBoxContainer.new()
+    course_choices.add_theme_constant_override("separation", 8)
+    content.add_child(course_choices)
+    skip_stage_button = _button("Skip this step · no mastery", func(): _send_action({"action":"skip_stage", "reason":"Learner chose to skip this step"}))
+    skip_stage_button.custom_minimum_size.x = 250
+    course_choices.add_child(skip_stage_button)
+    placement_button = _button("Try original notes", func(): _send_action({"action":"place_original"}))
+    course_choices.add_child(placement_button)
     var scroll := ScrollContainer.new()
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -935,6 +947,16 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
     for child in lesson_rows.get_children():
         lesson_rows.remove_child(child)
         child.queue_free()
+    var trouble: Array = parsed.get("trouble_spots", [])
+    if not trouble.is_empty():
+        lesson_rows.add_child(_label("Your trouble spots", 18, INK, true))
+        for spot in trouble:
+            var stage_key: String = str(spot.get("stage_key", ""))
+            var from_beat: float = float(spot.get("start_beat", 0))
+            var revisit := _button("Revisit bars %d–%d" % [int(spot.get("first_bar", 1)),int(spot.get("last_bar", 1))],
+                func(): _send_action({"action":"revisit_trouble", "stage_key":stage_key, "start_beat":from_beat}))
+            revisit.tooltip_text = "Find these notes again, then return to rhythm practice"
+            lesson_rows.add_child(revisit)
     var groups: Dictionary = {}
     for step in parsed.get("steps", []):
         var key := str(step.get("exercise", 0))
@@ -945,6 +967,8 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
         group["complete"] = bool(group["complete"]) and bool(step.get("completed", false))
         group["current"] = bool(group["current"]) or int(step.get("number", 0)) == int(parsed.get("current_step", 0))
         var detail := "%s: %s" % [str(step.get("hand", "")).capitalize(), str(step.get("level", "")).capitalize()]
+        if str(step.get("skip_status", "active")) in ["skipped", "placed"] and not bool(step.get("completed", false)):
+            detail += " (%s; not mastered)" % str(step["skip_status"])
         group["labels"].append(detail)
     for key in groups:
         var group: Dictionary = groups[key]
@@ -1124,6 +1148,7 @@ func _poll() -> void:
             state_pending = false
 
 func _process(_delta: float) -> void:
+    apply_tempo_button.disabled = action_pending
     _update_count_in()
     if str(last_state.get("mode", "practice")) == "learn":
         _layout_guided_score()
@@ -1305,6 +1330,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     lesson_info_label.text = str(explanations.get(stage, ""))
     var learning: bool = str(parsed.get("mode", "practice")) == "learn"
     var teaching: Dictionary = parsed.get("teaching", {}) if parsed.get("teaching") is Dictionary else {}
+    var learner: Dictionary = parsed.get("learner", {}) if parsed.get("learner") is Dictionary else {}
+    placement_button.visible = bool(parsed.get("placement_available", false))
+    skip_stage_button.disabled = not bool(parsed.get("skip_available", false))
     mode_choice.select(0 if learning else 2 if str(parsed.get("mode", "")) == "perform" else 1)
     if str(parsed.get("mode", "")) == "listen":
         mode_choice.text = "Listen"
@@ -1316,6 +1344,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         var targets: int = int(teaching.get("target_count", 0))
         lesson_info_label.text = "Find the highlighted notes at your own pace."
         progress_label.text = "Notes found %d of %d · No rhythm scoring yet" % [int(teaching.get("target_index", 0)), targets]
+        if not learner.is_empty():
+            var unit_number: int = int(learner.get("unit_number", 0))
+            var context: String = "Idea %d of %d" % [unit_number,int(learner.get("total_units", 1))] if unit_number > 0 else "Selected bars %d–%d" % [int(parsed.get("first_bar", 1)),int(parsed.get("last_bar", 1))]
+            progress_label.text = "%s · Notes found %d of %d" % [context,int(teaching.get("target_index", 0)),targets]
     for hand in hand_buttons:
         var button: Button = hand_buttons[hand]
         button.disabled = not parsed.get("hands", []).has(hand) or str(parsed.get("hand", "")) == hand
@@ -1386,6 +1418,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         start_button.text = "Resume  ·  Space" if phase == "paused" else "Try rhythm · Space" if phase in ["guided_complete", "disconnected"] else "Pause  ·  Space" if phase in ["guided_wait", "loading"] else "Learn · Space"
         if phase == "guided_complete" and bool(parsed.get("guided_recovery", false)):
             start_button.text = "Retry rhythm"
+        elif phase == "guided_complete" and bool(teaching.get("has_more_units", false)):
+            start_button.text = "Next idea · Space"
     elif str(parsed.get("mode", "")) == "listen" and not active_transport:
         start_button.text = "Listen again"
     start_button.tooltip_text = "Space: start, pause or resume · R: restart · S: stop"
@@ -1610,6 +1644,7 @@ func _send_post(path: String, payload: Dictionary) -> void:
 func _on_action(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     action_pending = false
     var path := last_post_path
+    var completed_action := last_control_action
     if code != 200:
         var message := _http_failure(code, body)
         if path == "/library/open":
@@ -1622,6 +1657,8 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         return
     if path == "/control":
         _on_state(_result, code, _headers, body, action_request_started_ms)
+        if completed_action in ["skip_stage", "place_original", "revisit_trouble"]:
+            _navigate("practice")
     elif path == "/library/open":
         library_error = ""
         score_error = ""
@@ -1646,6 +1683,10 @@ func _toggle_playing() -> void:
         return
     if str(last_state.get("mode", "practice")) == "learn":
         var phase: String = str(last_state.get("phase", "ready"))
+        var teaching: Dictionary = last_state.get("teaching", {}) if last_state.get("teaching") is Dictionary else {}
+        if phase == "guided_complete" and bool(teaching.get("has_more_units", false)) and not bool(last_state.get("guided_recovery", false)):
+            _send_action({"action":"learn_next"})
+            return
         _send_action({"action": "resume" if phase == "paused" else "practice" if phase in ["guided_complete", "disconnected"] else "pause" if phase in ["guided_wait", "loading"] else "learn_retry"})
         return
     if bool(last_state.get("paused", false)):

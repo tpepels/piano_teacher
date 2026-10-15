@@ -82,10 +82,10 @@ Files: focused Godot controls/views and interaction/capture tests; avoid gratuit
 
 Files: focused learner-progress module/SQLite migration, `learning.py` and server/UI integration, representative generated fixture journeys.
 
-- [ ] Write failing tests for saved trouble spots, resumable musical units, optional placement/skip with distinct non-mastered status, documented redundant-stage criteria and target-tempo continuity.
-- [ ] Implement meaningful progression using the consolidated course; preserve three-clean mastery and exact source coverage. Teach successive short ideas before combining hands/phrases.
-- [ ] Test easy melody, mixed-meter two-hand music, sparse rests, dense fast section, repeated chord, absent MIDI and complete 237-bar source.
-- [ ] Run the whole simulated learner journey from import through Learn, hints, timed recovery/restoration/mastery, next stage, Listen and Perform. Run all preservation checks and final independent review, commit P5 and report exact results/remaining limitations.
+- [x] Write failing tests for saved trouble spots, resumable musical units, optional placement/skip with distinct non-mastered status, documented redundant-stage criteria and target-tempo continuity.
+- [x] Implement meaningful progression using the consolidated course; preserve three-clean mastery and exact source coverage. Teach successive short ideas before combining hands/phrases.
+- [x] Test easy melody, mixed-meter two-hand music, sparse rests, dense fast section, repeated chord, absent MIDI and complete 237-bar source.
+- [x] Run the whole simulated learner journey from import through Learn, hints, timed recovery/restoration/mastery, next stage, Listen and Perform. Run all preservation checks and final independent review, commit P5 and report exact results/remaining limitations.
 
 ## Execution ledger
 
@@ -103,3 +103,6 @@ Files: focused learner-progress module/SQLite migration, `learning.py` and serve
 - P2 committed: `65379b2`. P3 complete: 378 P0–P3 tests passed in 124.25 seconds, parser and independent review pass, 20 real desktop frames and PCM playback verified. Report `docs/teaching-p3-verification.md`.
 
 - P3 committed: `3a5e463`. P4 complete: 18 actual UI frames at three exact sizes/fullscreen, all pause controls, modal focus and source seek verified. Full run396passes/two outdated assertions corrected, 29 focused checks and affected28-frame learner journey pass; see `docs/teaching-p4-verification.md`.
+
+- P4 committed: `848c5de`. P5 complete: fresh full suite **450 passed in 157.57 seconds**, parser/review/whitespace pass. Continuous36-frame learner journey,40 playback frames at30/40/80/120 BPM, three exact UI sizes/fullscreen and actual2346-note complete-source alignment pass. See `docs/teaching-p5-verification.md`.
+- Integration: user explicitly authorized main; origin/main remains baseline `7670eb5`. Preserve supplied untracked handoff files and the host worktree.

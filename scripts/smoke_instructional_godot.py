@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import argparse
 import json
+from array import array
+from io import BytesIO
 import os
 from pathlib import Path
 import shutil
@@ -19,6 +21,8 @@ import sys
 import threading
 import time
 import traceback
+from urllib.request import urlopen
+import wave
 from unittest.mock import patch
 
 import mido
@@ -53,7 +57,7 @@ def make_fixture(path: Path) -> None:
     midi.save(path)
 
 
-def run(output: Path) -> dict:
+def run(output: Path, *, finish_modes: bool = False) -> dict:
     godot = shutil.which("godot") or shutil.which("godot4")
     if not godot:
         raise RuntimeError("Godot 4 is required")
@@ -151,7 +155,8 @@ def run(output: Path) -> dict:
             with transcript.open("w") as ui_log:
                 desktop = subprocess.Popen([godot, "--path", str(ROOT / "godot"),
                     "--resolution", "1536x960", "--audio-driver", "Dummy", "--script",
-                    str(ROOT / "tests/godot/instructional_journey.gd"), "--", str(output), str(music)],
+                    str(ROOT / "tests/godot/instructional_journey.gd"), "--", str(output), str(music),
+                    "1" if finish_modes else "0"],
                     cwd=ROOT, env=environment, stdout=ui_log, stderr=subprocess.STDOUT)
                 until(lambda text: "INSTRUCTIONAL_STAGE:wrong-ready" in text, "normal UI import and tempo selection")
                 initial = engine.state()
@@ -160,6 +165,8 @@ def run(output: Path) -> dict:
                 assert engine.source == str(source.resolve())
                 assert initial["bpm"] == initial["target_bpm"] == 240
                 assert initial["lesson_level"] == "skeleton" and initial["teaching"]["target_count"] == 8
+                assert "learner" in initial, "Stateful learner course contract is required"
+                assert initial["learner"]["total_units"] == 2 and initial["learner"]["prepared_units"] == 0
                 identity = engine.plan.identity
                 send(61)
                 wrong = engine.state()
@@ -174,20 +181,80 @@ def run(output: Path) -> dict:
                 last_phase = None
                 recovery_solved = False
                 next_variant = False
+                prepared_all = False
+                listened = False
+                summary = None
+                revisited = False
+                earned_variant = None
+                perform_transport = None
+                perform_beat = -100.0
                 full_clean_tempos = []
-                deadline = time.monotonic() + 100
+                deadline = time.monotonic() + 160
                 while time.monotonic() < deadline:
                     text = content()
                     if desktop.poll() is not None:
                         break
                     state = engine.state()
-                    if state.get("mastered", 0) == 1:
+                    if state.get("mastered", 0) == 1 and not next_variant:
                         assert attempt == 9, f"Mastery arrived after unexpected attempt {attempt}"
                         assert state["lesson_level"] == "original" and engine.plan.identity != identity
                         next_variant = True
-                        log("three clean target-speed takes unlock actual original variant", attempt=attempt)
-                        desktop.wait(timeout=15)
-                        break
+                        assert state["mode"] == "learn" and len(engine.plan.active_variant.notes) == 32
+                        assert state["target_bpm"] == 240 and state["streak"] == 0
+                        earned_variant = {"mode":state["mode"],"level":state["lesson_level"],
+                            "source_notes":len(engine.plan.active_variant.notes),"mastered":state["mastered"]}
+                        log("three clean target-speed takes unlock actual original variant in Learn", attempt=attempt)
+                        if not finish_modes:
+                            desktop.wait(timeout=15)
+                            break
+                    if next_variant:
+                        assert state["mastered"] == 1 and state["streak"] == 0
+                        if state["mode"] == "listen" and state["running"] and not listened:
+                            assert state["bpm"] == state["target_bpm"] == 240 and state["required_notes"] == 32
+                            assert engine.recorder is None and state["midi_notes"] == 0
+                            demo = state["demo"]
+                            assert demo["source_ids"] == [f"{engine.plan.identity}:{index}" for index in engine.plan.active_variant.source_indices]
+                            with urlopen("http://127.0.0.1:8765"+demo["url"],timeout=15) as response:
+                                raw = response.read()
+                            (output/"earned-original-demo.wav").write_bytes(raw)
+                            with wave.open(BytesIO(raw),"rb") as audio:
+                                assert audio.getsampwidth() == 2 and audio.getnframes()/audio.getframerate() >= 4
+                                pcm = array("h",audio.readframes(audio.getnframes()))
+                            if sys.byteorder != "little":
+                                pcm.byteswap()
+                            assert max(abs(value) for value in pcm) > 100
+                            listened = True
+                            log("same earned original source has real Listen PCM without mastery", source_notes=32)
+                        if state["mode"] == "perform" and state["running"]:
+                            assert listened and state["bpm"] == 240 and state["target_bpm"] == 240
+                            if perform_transport is None:
+                                perform_transport = state["transport_id"]
+                            assert state["transport_id"] == perform_transport
+                            assert state["clock_beat"] >= perform_beat-.05 and state["recovery_beat"] is None
+                            perform_beat = state["clock_beat"]
+                        if state["phase"] == "performance_complete" and summary is None:
+                            summary = state["performance_summary"]
+                            assert summary["correct"] == 0 and summary["total"] == 32 and summary["accuracy_percent"] == 0
+                            assert summary["missed"] == 32 and state["learner"]["trouble_units"]
+                            log("same original Perform finishes all misses and saves source trouble", summary=summary)
+                        if summary is not None and state["mode"] == "learn" and state["phase"] == "guided_wait":
+                            assert state["teaching"]["fragment"]["start_beat"] == 0
+                            assert state["teaching"]["fragment"]["first_bar"] == 1
+                            assert len(state["teaching"]["expected_notes"]) == 2
+                            revisited = True
+                            if not any(entry["event"] == "saved source trouble revisited without false mastery" for entry in journal):
+                                log("saved source trouble revisited without false mastery")
+                        time.sleep(.003)
+                        continue
+                    if state["mode"] == "learn" and state["phase"] == "guided_wait" \
+                            and not state.get("guided_recovery") and not prepared_all \
+                            and state["teaching"]["fragment"]["start_beat"] == 8:
+                        until(lambda text: "INSTRUCTIONAL_STAGE:next-idea-ready" in text,"visible Next idea reaches second source fragment")
+                        solve_guided("second guided idea completed without mastery")
+                        prepared = engine.state()["learner"]
+                        assert prepared["prepared_units"] == prepared["total_units"] == 2
+                        prepared_all = True
+                        continue
                     if state["mode"] == "learn" and state.get("guided_recovery") \
                             and state["phase"] == "guided_wait" and not recovery_solved:
                         assert attempt == 2 and state["first_bar"] == 3 and state["last_bar"] == 4
@@ -252,16 +319,22 @@ def run(output: Path) -> dict:
                                 full_clean_tempos.append(state["bpm"])
                     time.sleep(.003)
                 else:
-                    raise RuntimeError("Whole learner journey exceeded 100 seconds")
+                    raise RuntimeError("Whole learner journey exceeded 160 seconds")
                 text = content()
                 if desktop.returncode or "INSTRUCTIONAL_RESULT:PASS" not in text:
                     raise RuntimeError(f"Instructional desktop failed ({desktop.returncode}):\n{text}")
-                assert next_variant and recovery_solved and attempt == 9
+                assert next_variant and recovery_solved and prepared_all and attempt == 9
+                if finish_modes:
+                    assert listened and summary is not None and revisited
                 assert full_clean_tempos == [194, 213, 234, 240, 240, 240]
                 result = json.loads((output / "result.json").read_text())
                 assert result["failures"] == []
                 result["elapsed_seconds"] = time.monotonic()-begun
                 result["full_clean_tempos"] = full_clean_tempos
+                result["earned_variant"] = earned_variant
+                result["finished_modes"] = finish_modes
+                result["revisited_trouble"] = revisited
+                result["performance_summary"] = summary
                 (output / "result.json").write_text(json.dumps(result, indent=2))
                 print(f"INSTRUCTIONAL JOURNEY PASSED: {len(result['frames'])} frames, "
                       f"{result['elapsed_seconds']:.1f}s; {output}", flush=True)
@@ -286,9 +359,10 @@ def run(output: Path) -> dict:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=Path("/tmp/piano-teaching-p2"))
+    parser.add_argument("--finish-modes",action="store_true",help="Continue the earned stage through Listen, Perform and saved trouble")
     options = parser.parse_args()
     try:
-        run(options.output_dir)
+        run(options.output_dir,finish_modes=options.finish_modes)
     except Exception as error:
         traceback.print_exc()
         print(f"INSTRUCTIONAL JOURNEY FAILED: {error}", file=sys.stderr)

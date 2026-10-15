@@ -21,7 +21,7 @@ func wait_for(predicate: Callable, description: String, seconds: float = 25.0) -
     var deadline := Time.get_ticks_msec() + int(seconds * 1000)
     while not predicate.call():
         if Time.get_ticks_msec() >= deadline:
-            check(false, "Timed out: " + description)
+            check(false, "Timed out: " + description + " [mode=%s phase=%s bpm=%s action_pending=%s]" % [str(app.last_state.get("mode","")),phase(),str(app.last_state.get("bpm",0)),str(app.action_pending)])
             return false
         await process_frame
     return true
@@ -107,6 +107,9 @@ func capture(label: String, beat: float = -999) -> Dictionary:
         "transition":app.last_state.get("transition_in_seconds"),
         "retry_range":app.last_state.get("retry_range"), "score_height":app.score_frame.size.y,
         "notation_occluded_by_pause":obscured}
+    if str(app.last_state.get("mode","")) == "listen":
+        entry["audio_playing"] = app.demo_player.player.playing
+        entry["pcm_bytes"] = app.demo_player.player.stream.data.size() if app.demo_player.player.stream is AudioStreamWAV else 0
     if not selected.is_empty() and not obscured:
         var point := position(selected)*scale
         entry["note_id"] = str(selected.id)
@@ -140,9 +143,57 @@ func wait_running(bpm: int, offset: float) -> bool:
         and absf(float(app.last_state.get("play_from_beat", -1))-offset) < .01,
         "count-in at %d BPM from beat %s" % [bpm,str(offset)])
 
+func finish_earned_modes() -> void:
+    check(int(app.last_state.target_bpm) == 240,"Earned stage preserves chosen target before manual tempo change")
+    press("Settings")
+    await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending and not app.action_pending,"choose tempo for earned-stage example")
+    app.tempo_setting.value = 240
+    await wait_for(func(): return not app.apply_tempo_button.disabled,"tempo control is available after pending transport")
+    app.apply_tempo_button.pressed.emit()
+    await wait_for(func(): return not app.action_pending and int(app.last_state.get("bpm",0)) == 240,"ordinary Apply target sets current example tempo")
+    press("← Back")
+    await wait_for(func(): return score_ready() and not app.action_pending,"earned original score and controls ready")
+    press("Listen")
+    await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "listen" \
+        and phase() == "playing" and app.demo_player.player.playing,"same earned original notes play actual local PCM")
+    check(app.demo_player.player.stream is AudioStreamWAV and app.demo_player.player.stream.data.size() > 10000,
+        "Continuous learner journey includes an actual AudioStreamWAV")
+    await capture("29-earned-original-listen")
+    await wait_for(func(): return str(app.last_state.get("mode","")) == "listen" and phase() == "ready","earned original example finishes naturally")
+    check(int(app.last_state.mastered) == 1 and int(app.last_state.streak) == 0,"Example adds no original-stage mastery")
+    app.mode_choice.select(2)
+    app.mode_choice.item_selected.emit(2)
+    await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "perform" and phase() == "count_in","same original variant enters Perform")
+    await capture("30-earned-original-perform-count-in")
+    await wait_for(func(): return phase() == "playing" and app._transport_beat_now() >= 9,"all missed original notes do not interrupt Perform")
+    var first := await capture("31-earned-original-perform-moving-a",13)
+    await wait_for(func(): return phase() == "playing" and app._transport_beat_now() >= 10,"original Perform keeps moving through misses")
+    var second := await capture("32-earned-original-perform-moving-b",13)
+    check(float(second.note_x) < float(first.note_x)-8,"Continuous journey ends with actual uninterrupted score movement")
+    await wait_for(func(): return phase() == "performance_complete","original Perform reaches its held endpoint")
+    check(int(app.last_state.mastered) == 1 and int(app.last_state.streak) == 0,"All-missed original Perform adds no mastery")
+    await capture("33-earned-original-performance-review")
+    press("Lesson path")
+    await wait_for(func(): return app.current_screen == "lesson" and not app.lesson_pending,"saved source trouble appears in lesson path")
+    var revisit: Button = null
+    for button in app.find_children("*","Button",true,false):
+        if button.is_visible_in_tree() and not button.disabled and button.text.begins_with("Revisit bars"):
+            revisit = button
+            break
+    check(revisit != null,"Actual saved trouble has an actionable lesson-row control")
+    if revisit != null:
+        revisit.pressed.emit()
+    await wait_for(func(): return app.current_screen == "practice" and score_ready() \
+        and str(app.last_state.get("mode","")) == "learn" and phase() == "guided_wait", "saved trouble returns to its exact source in Learn")
+    check(int(app.last_state.first_bar) == 1 and int(app.last_state.last_bar) == 2,
+        "The earliest equally weak saved source chunk is revisited")
+    await capture("34-saved-original-trouble-revisited",0)
+    print("INSTRUCTIONAL_STAGE:trouble-revisited")
+
 func run() -> void:
     var args := OS.get_cmdline_user_args()
     folder = args[0]
+    var continue_modes := args.size() > 2 and args[2] == "1"
     var music := args[1]
     check(DisplayServer.get_name() != "headless", "Actual desktop renderer required")
     root.mode = Window.MODE_WINDOWED
@@ -152,7 +203,7 @@ func run() -> void:
     root.add_child(app)
     await wait_for(func(): return not app.preferences.is_empty(), "normal initial settings")
     press("Settings")
-    await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending, "normal Settings")
+    await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending and not app.action_pending, "normal Settings")
     app.folder_edit.text = music
     press("Save folder")
     await wait_for(func(): return not app.action_pending and str(app.preferences.get("music_dir", "")) == music,
@@ -173,9 +224,10 @@ func run() -> void:
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait",
         "import enters source-generated Learn")
     press("Settings")
-    await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending, "choose target tempo")
+    await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending and not app.action_pending, "choose target tempo")
     app.tempo_setting.value = 240
-    press("Apply tempo")
+    await wait_for(func(): return not app.apply_tempo_button.disabled,"tempo control is available after pending transport")
+    app.apply_tempo_button.pressed.emit()
     await wait_for(func(): return not app.action_pending and int(app.last_state.get("target_bpm", 0)) == 240,
         "chosen target tempo remains authoritative")
     press("← Back")
@@ -189,6 +241,15 @@ func run() -> void:
     print("INSTRUCTIONAL_STAGE:hint-rendered")
     await wait_for(func(): return phase() == "guided_complete", "learner finds opening pitches")
     await capture("03-learn-complete", 7)
+    while bool(app.last_state.teaching.get("has_more_units",false)):
+        check(app.start_button.text.to_lower().contains("next idea"),"Preparation offers the next useful source idea")
+        app.start_button.pressed.emit()
+        await wait_for(func(): return score_ready() and phase() == "guided_wait" \
+            and int(app.last_state.get("first_bar",0)) == 3,"Next idea loads the successive two-bar source unit")
+        await capture("03-next-guided-idea",0)
+        print("INSTRUCTIONAL_STAGE:next-idea-ready")
+        await wait_for(func(): return phase() == "guided_complete","all source ideas are prepared with actual MIDI")
+        await capture("03-all-guided-ideas-complete",7)
     app.start_button.pressed.emit()
     await wait_running(240,0)
     await capture("04-practice-count-in",0)
@@ -252,10 +313,13 @@ func run() -> void:
         await wait_for(func(): return phase() == "feedback", "clean whole musical attempt at " + str(bpm))
         check(int(app.last_state.mastered) == 0, "Mastery waits until full target streak is committed")
         await capture("%02d-whole-feedback-%d" % [frames.size(),bpm])
-    await wait_for(func(): return score_ready() and int(app.last_state.get("mastered",0)) == 1 \
+    await wait_for(func(): return score_ready() and phase() == "guided_wait" and int(app.last_state.get("mastered",0)) == 1 \
         and str(app.last_state.get("lesson_level", "")) == "original", "actual next generated level after three target passes")
-    check(int(app.last_state.get("required_notes",0)) == 32, "Next variant restores original chord notes")
+    check(str(app.last_state.get("mode","")) == "learn" and int(app.last_state.get("required_notes",0)) == 16,
+        "Next original variant prepares its first real chord idea")
     await capture("28-next-original-variant")
+    if continue_modes:
+        await finish_earned_modes()
     app.stop_button.pressed.emit()
     await wait_for(func(): return not app.action_pending and not bool(app.last_state.get("running",true)), "Stop remains available after advancement")
     for child in app.get_children():

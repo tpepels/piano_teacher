@@ -337,6 +337,41 @@ func test_focus_trap() -> void:
         "Paused Listen accepts a null seek range and offers no seek action")
     check(not app.pause_sheet.bar_choice.editable, "Unavailable Listen seek cannot be edited")
 
+func test_learner_progression() -> void:
+    app.action_pending = true
+    app._process(0.0)
+    check(app.apply_tempo_button.disabled, "Tempo waits visibly for an in-flight pause instead of dropping a click")
+    app.action_pending = false
+    app._process(0.0)
+    check(not app.apply_tempo_button.disabled, "Tempo becomes available after the acknowledgement")
+    var learned := state("guided_complete")
+    learned["mode"] = "learn"
+    learned["teaching"] = {"completed":true,"has_more_units":true,"target_count":4,"target_index":4}
+    learned["learner"] = {"prepared_units":1,"total_units":4,"unit_number":1}
+    learned["placement_available"] = true
+    learned["skip_available"] = true
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(learned).to_utf8_buffer())
+    check(app.start_button.text.contains("Next idea"), "Prepared idea offers the next musical unit")
+    app.commands.clear()
+    app.start_button.pressed.emit()
+    expect_command("learn_next", "Guided units advance before full-passage rhythm")
+    check(app.progress_label.text.contains("Idea"), "Short-unit context is readable")
+    app.skip_stage_button.pressed.emit()
+    check(app.commands.back().get("action") == "skip_stage", "Skip is a real explicit choice")
+    check(app.skip_stage_button.text.contains("no mastery"), "Skip never pretends mastery")
+    app.placement_button.pressed.emit()
+    check(app.commands.back().get("action") == "place_original", "Optional placement selects original source notes")
+    var overview: Dictionary = {"completed_steps":0,"total_steps":3,"steps":[],"trouble_spots":[{"stage_key":"source-stage","first_bar":3,"last_bar":4,"start_beat":8,"errors":5}]}
+    app._on_lesson(0,200,PackedStringArray(),JSON.stringify(overview).to_utf8_buffer())
+    var found := false
+    for node in app.lesson_rows.find_children("*","Button",true,false):
+        if node.text.contains("Revisit bars"):
+            node.pressed.emit()
+            var command: Dictionary = app.commands.back()
+            check(command.get("action") == "revisit_trouble" and command.get("stage_key") == "source-stage" and is_equal_approx(float(command.get("start_beat", -1)), 8.0), "Saved trouble selects its exact source unit: " + str(command))
+            found = true
+    check(found, "Saved trouble has a visible functioning revisit action")
+
 func run() -> void:
     root.mode = Window.MODE_WINDOWED
     root.size = Vector2i(800, 600)
@@ -365,6 +400,7 @@ func run() -> void:
         "modes": test_modes()
         "pause_choices": test_pause_choices()
         "focus_trap": await test_focus_trap()
+        "learner_progression": test_learner_progression()
         _: check(false, "Unknown interaction scenario: " + scenario)
     print("PRACTICE_INTERACTION_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

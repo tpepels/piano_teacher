@@ -138,15 +138,27 @@ func capture(bpm: int, label: String) -> Dictionary:
     check(app.score_content.size.distance_to(baseline_size) < 0.5,
         "%d BPM %s: notation scale stays stable" % [bpm, label])
     var ink := local_ink(frame, position)
-    check(int(ink.pixels) >= 6 and int(ink.rows) >= 3 and int(ink.columns) >= 3,
-        "%d BPM %s: actual rendered notehead ink exists (%s)" % [bpm, label, str(ink)])
+    var paused_modal: bool = bool(app.last_state.get("paused", false))
+    var modal_ink: Dictionary = {}
+    if paused_modal:
+        # The real pause sheet deliberately shades the staff. Its Resume text
+        # must render, while note geometry remains frozen until it is uncovered.
+        check(app.pause_sheet.is_visible_in_tree(), "%d BPM %s: actual pause sheet is visible" % [bpm, label])
+        var resume_center: Vector2 = app.pause_sheet.resume_button.get_global_rect().get_center()
+        modal_ink = local_ink(frame, (resume_center - Vector2(12, 0)) * pixel_scale)
+        check(int(modal_ink.pixels) >= 6 and int(modal_ink.rows) >= 3 and int(modal_ink.columns) >= 3,
+            "%d BPM %s: actual rendered Resume text exists (%s)" % [bpm, label, str(modal_ink)])
+    else:
+        check(int(ink.pixels) >= 6 and int(ink.rows) >= 3 and int(ink.columns) >= 3,
+            "%d BPM %s: actual rendered notehead ink exists (%s)" % [bpm, label, str(ink)])
     var filename := "frame-%d-%s.png" % [bpm, label]
     check(frame.save_png(folder + "/" + filename) == OK, "Save rendered frame " + filename)
     var result := {"bpm": bpm, "label": label, "beat": app.rendered_clock,
         "phase": app.last_state.get("phase", ""), "note_id": tracked_id,
         "note_x": position.x, "note_y": position.y, "beam_x": beam.x,
         "width": app.score_content.size.x, "height": app.score_content.size.y,
-        "ink": ink, "frame": filename, "pixel_scale": [pixel_scale.x, pixel_scale.y]}
+        "ink": ink, "paused_modal": paused_modal, "modal_ink": modal_ink,
+        "frame": filename, "pixel_scale": [pixel_scale.x, pixel_scale.y]}
     samples.append(result)
     write_samples()
     return result

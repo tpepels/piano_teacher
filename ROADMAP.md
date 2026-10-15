@@ -2,6 +2,21 @@
 
 ## Current implementation status — 2026-10-15
 
+- **Teaching interactions implemented:** imported music opens in untimed Learn,
+  with fresh note/chord recognition and contextual keyboard hints. Successive
+  source ideas lead to timed Practice; recurring mistakes lead back to guided
+  help. Prepared ideas, trouble spots and explicit unmastered skip/placement
+  choices are saved locally.
+- **Listen and Perform work:** Listen produces local source-timed audio without
+  recording or grading the learner. Perform runs uninterrupted and reviews
+  accuracy, timing, missed pitches and weak sections. Whole-piece Perform uses
+  every original event. Three clean full target-speed Practice attempts remain
+  the mastery rule.
+- **Pause and readable task context:** current/target tempo, mode, hand and input
+  status remain visible; a keyboard-accessible pause sheet offers Resume, Retry,
+  Listen, tempo, hand, safe source-bar practice and Exit. Actual compact,
+  desktop and fullscreen captures are verified in the milestone reports.
+
 - **Visible software playback verified:** actual desktop/HTTP frames at 30, 40,
   80 and 120 BPM track the same rendered note moving left under a stable timing
   line. Count-in, pause/resume, restart, rests and multi-page/system projection
@@ -24,7 +39,9 @@
   behavior on the target instrument, speaker audibility and latency must be
   checked with the user. Software captures do not replace this gate.
 
-See `docs/verification-2026-10-15.md` for exact local evidence and limitations.
+See `docs/teaching-p0-baseline.md` through `docs/teaching-p5-verification.md`
+and `docs/teaching-methodology.md` for teaching evidence and limitations;
+`docs/verification-2026-10-15.md` records the earlier playback baseline.
 The remaining roadmap below describes product direction and hardware acceptance;
 older CI notes at the end are historical evidence, not the current test count.
 
@@ -138,9 +155,10 @@ later full-piece practice retains all original notes.
 
 ### Phase 5 - Listen, demonstrate and supporting practice tools
 
-Local piano soundfont playback with optional one-hand demonstration,
-metronome options, section loop selection and audio routing. Playback cannot
-be confused with recorded student MIDI.
+Active-variant local synthesis, metronome options and source-bar practice are
+implemented. A sampled piano/soundfont, explicit audio routing and section-end
+loop selection remain future improvements. Playback is isolated from recorded
+student MIDI and cannot earn Practice credit.
 
 **Acceptance:** demo sound and engraving share the same event/time model.
 

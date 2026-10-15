@@ -33,7 +33,26 @@ Select your actual piano in **Settings → Piano input**. A virtual MIDI Through
 port is not automatically treated as a connected instrument. Play a note to
 verify actual input activity. A saved available device reconnects automatically.
 
-## Practice
+## Learn and practise
+
+Opening a piece starts **Learn notes**. Find the highlighted note or chord on
+your MIDI piano at your own pace. A wrong note or a hesitation reveals a small
+keyboard with exact pitch names. Release repeated keys before playing them
+again. **Next idea** prepares the following source measures; **Try rhythm**
+brings the passage together in timed Practice. Your prepared ideas and trouble
+spots are saved locally.
+
+Use **Listen** to hear the active lesson's actual notes at the selected tempo.
+It plays a locally synthesized piano-like tone, including rests and held notes.
+Your input is not graded during the example. **Perform passage** and
+**Perform whole piece** continue through mistakes, then show a review and a
+button to practise the weakest section. Perform does not earn Practice credit.
+
+The lesson path offers saved trouble revisits, optional original-note placement
+and explicit skips. Skipped or placed steps are labelled as unmastered. Required
+Practice steps still need three clean full runs at the selected target tempo.
+
+## Timed Practice
 
 Press **Start**. A short, audible count-in begins immediately, with clefs, meter
 and rests on the moving staff. The first note arrives at its musical
@@ -52,8 +71,12 @@ the opening notes' spacing, so motion flows through the downbeat.
 
 Preparation lasts at most one bar and approximately four seconds. Settings can
 turn off practice metronome beats; the preparation count-in remains audible.
-Start does not synthesize the imported song. Piano-sound demonstration is not
-yet implemented and there is no inactive Listen button.
+**Listen** is separate from student Practice and cannot award clean runs.
+
+Pause opens Resume, Retry, Listen, tempo, hand and source-bar choices. Resume
+keeps the same attempt; Retry and bar selection begin a fresh count-in. A
+later-bar retry must be followed by the full passage before mastery is possible.
+The pause sheet supports keyboard focus and fits the compact desktop layout.
 
 Controls:
 
@@ -132,6 +155,8 @@ pixels**, not just increasing backend beats or camera log messages:
 ```bash
 python scripts/check_visible_playback.py --output-dir /tmp/piano-visible
 python scripts/check_desktop_ui.py "/path/to/music.mid" --output-dir /tmp/piano-ui
+python scripts/smoke_student_journey.py --output-dir /tmp/piano-student
+python scripts/smoke_learning_ui.py --output-dir /tmp/piano-learning-ui
 ```
 
 The visible playback check captures the same note at 30, 40, 80 and 120 BPM,
@@ -145,8 +170,9 @@ existing user data and source files.
 
 Automated Godot tests also exercise real engraving through multiple systems and
 pages, transparent cropping, screen-space note projection, feedback and musical
-joins. See [the local verification record](docs/verification-2026-10-15.md) for
-results and the remaining physical acceptance work.
+joins. See [the teaching verification](docs/teaching-p5-verification.md) and
+[methodology](docs/teaching-methodology.md) for results and remaining limitations;
+[the earlier playback record](docs/verification-2026-10-15.md) preserves baseline evidence.
 
 ## Troubleshooting and implementation
 
@@ -165,12 +191,12 @@ to score geometry.
 
 The loopback API binds only to `127.0.0.1:8765`. Principal endpoints are `/state`,
 `/control`, `/library`, `/library/open`, `/settings`, `/devices`, `/device`,
-`/lesson`, `/score/layout`, `/score.png?page=0` and `/score.svg?page=0`. Settings
+`/lesson`, `/demo.wav?token=...`, `/score/layout`, `/score.png?page=0` and `/score.svg?page=0`. Settings
 accept `music_dir`, `fullscreen`, `midi_device` and `metronome`. Layout contains
 real notehead IDs/pitches, onset anchors, staff lines, system bounds and pages.
 
-Python modules own importing, generated lessons, grading, recovery, curriculum
-and SQLite persistence. Godot's `main.gd` owns navigation and API integration;
+Python modules own importing, generated lessons, grading, recovery, curriculum,
+guided recognition, local audio and SQLite persistence. Godot's `main.gd` owns navigation and API integration;
 `score_strip.gd` owns tiled score coordinates and `practice_theme.gd` the shared
 dark theme. The older Qt entrypoint remains available separately.
 
@@ -181,8 +207,10 @@ validation with the student's instrument. Software desktop checks establish
 visible motion and click scheduling, not physical timing quality.
 
 General MIDI quantization, hand corrections, preserved source engraving/key
-metadata, pedal scoring, fingering hints, musical phrase inference and piano
-synthesis remain future work. Irregular supported durations are split into tied
+metadata, pedal scoring, fingering hints, musical phrase inference and sampled
+acoustic piano sound remain future work. Listen currently uses simple harmonic
+synthesis, decodes the full WAV in memory and retains a disk cache without an
+eviction policy. Irregular supported durations are split into tied
 notes/rests or explicit tuplets for engraving; original MIDI events remain the
 assessment source. Very long pieces preload cropped score textures: memory use
 grows with the piece, with additional transient raster memory.
