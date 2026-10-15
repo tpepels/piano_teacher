@@ -42,6 +42,7 @@ func run() -> void:
     # Simulate *measurement* jitter as well as network latency. The previous
     # clock chased noisy readings at up to 6% different speeds. Musical
     # movement should not pump even when the observed timestamp is uncertain.
+    state["clock_beat"] = -3.0
     var jitter_clock = load("res://visual_transport_clock.gd").new()
     jitter_clock.accept(state, base_ms, base_ms)
     var last_beat: float = jitter_clock.now(base_ms)
