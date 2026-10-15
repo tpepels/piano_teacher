@@ -67,6 +67,25 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Phase 7.6a - phase-locked score motion (first pass)
+
+The scrolling camera still places the actual engraved beat under a fixed rule
+42% across the stage. Screen motion now uses a dedicated visual musical clock
+which follows the backend's tempo, without resetting screen position on every
+variable-latency HTTP poll. Backend corrections are limited to +/-6% of nominal
+rate, preventing poll-driven sudden accelerations or backwards movement. A new
+attempt, tempo change, pause or resume explicitly resets/freezes the clock.
+
+This addresses **timing jitter**, not all **engraving-spacing variation**:
+Verovio sometimes places equal-duration attacks at unequal horizontal
+distances. True constant-pixel-speed movement with exact per-note timing
+requires further proportional re-layout of that real engraving, without
+stretching noteheads, ties or staff lines. Do not replace notation with
+approximate graphical notes or use camera easing that moves attacks off-time.
+
+The regression suite includes a standalone Godot test with alternating
+HTTP delays, 68 BPM motion, downbeat, pause/resume and new-attempt resets.
+
 ## Phase 7.6 polish - animated game transport
 Retry, Play/Pause and Listen/Practice have distinct engraved icons and
 animated press/hover depth; the active transport has a subtle pulse.

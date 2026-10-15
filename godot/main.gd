@@ -18,6 +18,7 @@ const GameStage := preload("res://game_stage.gd")
 const GameStreak := preload("res://game_streak.gd")
 const GameCountIn := preload("res://game_countin.gd")
 const GameTransportButton := preload("res://game_transport_button.gd")
+const VisualTransportClock := preload("res://visual_transport_clock.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -125,6 +126,7 @@ var last_state: Dictionary = {}
 var hand_unlock_message := ""
 var hand_unlock_until_ms := 0
 var last_state_tick := 0
+var visual_transport_clock = VisualTransportClock.new()
 var state_request_started_ms := 0
 var last_audio_transport_id := -1
 var follow_system_key := ""
@@ -266,9 +268,11 @@ func _count_tick(accent: bool) -> void:
         print("PHASE0_CLICK:", str(last_state.get("phase", "")))
 
 func _transport_beat_now() -> float:
-    # One backend-authoritative musical clock for count-in, sound and cursor.
-    # The snapshot is anchored to the midpoint of the HTTP request rather
-    # than arrival time, to reduce local loopback latency bias.
+    # Keep the score's musical clock phase-locked across uneven HTTP replies.
+    # The Python engine remains authoritative for note timing and assessment.
+    if visual_transport_clock.matches(last_state):
+        return visual_transport_clock.now(Time.get_ticks_msec())
+    # Direct-state smoke fixtures, before any network snapshot is received.
     var beat: float = float(last_state.get("clock_beat", 0.0))
     if bool(last_state.get("running", false)) and not bool(last_state.get("paused", false)):
         var elapsed: float = maxf(0.0, float(Time.get_ticks_msec() - last_state_tick) / 1000.0)
@@ -1929,7 +1933,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     # The backend sampled the clock during this HTTP round trip. Estimate
     # that sample at the midpoint so music never waits for the poll interval.
     var started_ms: int = state_request_started_ms if sample_started_ms < 0 else sample_started_ms
-    last_state_tick = int((started_ms + Time.get_ticks_msec()) / 2.0)
+    var received_ms: int = Time.get_ticks_msec()
+    last_state_tick = int((started_ms + received_ms) / 2.0)
+    visual_transport_clock.accept(parsed, last_state_tick, received_ms)
     if not bool(parsed.get("loaded", false)):
         game_stage.present(parsed)
         game_streak.present({})
