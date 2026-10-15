@@ -622,9 +622,14 @@ class PracticeEngine:
         self.teaching = None
         self.guided_range = None
         self.score_revision += 1
-        self.awaiting_score_revision = self.score_revision
-        self.feedback = "Preparing rhythm practice"
-        self.next_action = "Get ready to retry the rhythm." if return_context else "Get ready to play in time."
+        # Warm-ups must return from Listen to an idle, rendered exercise.
+        # The student starts when ready with a fresh piano key, not because
+        # a score download completed.
+        self.awaiting_score_revision = None if self.is_builtin_warmup else self.score_revision
+        self.feedback = "Warm-up ready" if self.is_builtin_warmup else "Preparing rhythm practice"
+        self.next_action = ("Play a piano key to start the count-in."
+                            if self.is_builtin_warmup else
+                            "Get ready to retry the rhythm." if return_context else "Get ready to play in time.")
 
     def _prepare_listen(self):
         if self.plan is None:
