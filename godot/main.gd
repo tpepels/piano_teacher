@@ -1572,13 +1572,17 @@ func _poll() -> void:
 func _process(_delta: float) -> void:
     # Animate short-lived hit pulses between HTTP state samples.
     var ticks: int = Time.get_ticks_msec()
+    var effects_were_visible: bool = (not score_overlay.hit_pulses.is_empty()
+        or not score_overlay.wrong_ghosts.is_empty())
     for index in range(score_overlay.hit_pulses.size() - 1, -1, -1):
         if int(score_overlay.hit_pulses[index].get("until_ms", 0)) <= ticks:
             score_overlay.hit_pulses.remove_at(index)
     for index in range(score_overlay.wrong_ghosts.size() - 1, -1, -1):
         if int(score_overlay.wrong_ghosts[index].get("until_ms", 0)) <= ticks:
             score_overlay.wrong_ghosts.remove_at(index)
-    if not score_overlay.hit_pulses.is_empty() or not score_overlay.wrong_ghosts.is_empty():
+    # Redraw the *last* expiry too. Otherwise a paused score may retain
+    # the final faded wrong pitch until another transport update arrives.
+    if effects_were_visible:
         score_overlay.queue_redraw()
     apply_tempo_button.disabled = action_pending
     _update_count_in()
