@@ -142,6 +142,45 @@ func _run() -> void:
     await process_frame
     await process_frame
 
+    # Imported MIDI starting-point dialog must expose the entire source,
+    # synchronize slider and editable measure, and remain usable without MIDI.
+    scene.call("_show_open_picker", {
+        "title": "Long Imported Piano Piece",
+        "piece_last_bar": 128,
+        "selected_start_bar": 87
+    })
+    await process_frame
+    var picker: ConfirmationDialog = scene.get("open_picker")
+    var measure: SpinBox = scene.get("open_measure")
+    var slider: HSlider = scene.get("open_measure_slider")
+    var start_mode: OptionButton = scene.get("open_mode")
+    _check(picker.visible, "MIDI opening did not present a starting-measure selector")
+    _check(measure.max_value == 128 and measure.min_value == 1,
+        "Starting-measure selector does not cover the entire MIDI piece")
+    _check(measure.value == 87 and slider.value == 87,
+        "The saved source measure was not selected")
+    _check(start_mode.item_count == 2,
+        "MIDI opening must offer both Learn Notes and Practice Rhythm")
+    measure.value = 104
+    _check(slider.value == 104, "Measure spinner did not synchronize the timeline")
+    slider.value = 23
+    _check(measure.value == 23, "Measure timeline did not synchronize the spinner")
+    picker.hide()
+
+    scene.call("_update_hand_stages", {"hand_stages": [
+        {"hand":"left", "active":false, "complete":true, "locked":false},
+        {"hand":"right", "active":true, "complete":false, "locked":false},
+        {"hand":"both", "active":false, "complete":false, "locked":true}]})
+    var ribbon: Control = scene.get("practice_stage_bar")
+    var stage_labels: Dictionary = scene.get("practice_stage_labels")
+    _check(ribbon.visible, "Hand progression must be visible while practising")
+    _check("DONE" in stage_labels["left"].text
+        and "NOW" in stage_labels["right"].text
+        and "LOCKED" in stage_labels["both"].text,
+        "The hand progression does not show completed, current and locked stages")
+    scene.call("_update_hand_stages", {"hand_stages": []})
+    _check(not ribbon.visible, "Hand ribbon should disappear when no hand course exists")
+
     var pause: Control = scene.get("pause_sheet")
     pause.call("present", {"paused":true, "mode":"practice", "bpm":68,
         "hand":"left", "hands":["left","right","both"],
