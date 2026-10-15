@@ -74,6 +74,7 @@ class PracticeEngine:
         self.performance_summary: dict | None = None
         self.review_stage_identity: str | None = None
         self.review_end_beat: float | None = None
+        self.review_session_complete = False
         self.course_guided = False
         self._guided_prepared = False
         self.transport_id = 0
@@ -380,6 +381,7 @@ class PracticeEngine:
         self.performance_summary=None
         self.review_stage_identity=None
         self.review_end_beat=None
+        self.review_session_complete=False
         self._guided_prepared=False
 
     def _learner_saved(self, stage_key: str | None = None) -> dict:
@@ -907,6 +909,7 @@ class PracticeEngine:
             self._guided_return = None
             self.performance_summary = None
             self.review_stage_identity = None
+            self.review_session_complete = False
             # A user must be able to watch the time-driven score without a
             # connected instrument. Only actual MIDI input enables assessment.
             self.preview_only = not self._piano_connected()
@@ -1385,6 +1388,7 @@ class PracticeEngine:
             # auto-advance to a different passage.
             self.auto = False
             self.review_end_beat = None
+            self.review_session_complete = True
             self.pending_rewind = None
             self.retry_range = None
             self.open_from_beat = 0.0
@@ -1414,7 +1418,7 @@ class PracticeEngine:
             return "count_in" if now < self.run_at else "playing"
         if self.mode == "perform" and self.performance_summary is not None:
             return "performance_complete"
-        if self.mode == "practice" and self.performance_summary is not None and self.pending_result is None:
+        if self.mode == "practice" and self.review_session_complete and self.performance_summary is not None:
             return "review"
         return ("feedback" if self.pending_result is not None else "loading" if self.awaiting_score_revision is not None
                 else "recovering" if self.pending_rewind is not None else "ready")
