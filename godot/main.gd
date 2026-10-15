@@ -2020,23 +2020,6 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     _update_note_feedback_hud(parsed)
     speed_label.text = "%d BPM · target %d" % [int(parsed.get("bpm", 0)),int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
     var recovery_notice: Variant = parsed.get("recovery_notice")
-    # Recovery actions are already written below the score. Do not cover
-    # the playable stave with a second, oversized overlay.
-    practice_playback_banner.visible = false
-    if practice_playback_banner.visible:
-        var notice: Dictionary = recovery_notice
-        if str(notice.get("kind", "")) == "speedup":
-            practice_playback_banner.text = (
-                "Clean slower passage  ·  Tempo %d → %d BPM  ·  Keep practising"
-                % [int(notice.get("from_bpm", 0)), int(notice.get("to_bpm", 0))])
-            practice_playback_banner.add_theme_color_override("font_color", Color("#79DAAD"))
-        else:
-            practice_playback_banner.text = (
-                "%d missing/wrong pitches  ·  Tempo %d → %d BPM  ·  Retry measures %d–%d"
-                % [int(notice.get("errors", 0)), int(notice.get("from_bpm", 0)),
-                   int(notice.get("to_bpm", 0)), int(notice.get("first_bar", 1)),
-                   int(notice.get("last_bar", 1))])
-            practice_playback_banner.add_theme_color_override("font_color", Color("#F6BC70"))
     speed_label.add_theme_font_size_override("font_size", _ui_font(16 if size.x < 900 else 18))
     speed_label.tooltip_text = "Current practice tempo and your selected target"
     hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
@@ -2218,6 +2201,22 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             progress_label.text = hand_unlock_message
             progress_label.add_theme_color_override("font_color", Color("#78DBAD"))
             progress_label.tooltip_text = hand_unlock_message
+    # Some recovery transitions provide only recovery_notice, without a
+    # next_action. Keep the essential tempo and measure changes in the normal
+    # instruction line; never restore the in-score banner.
+    if (recovery_notice is Dictionary and next_action.is_empty()
+            and str(parsed.get("mode", "")) == "practice"
+            and phase in ["ready", "feedback", "recovering", "loading"]
+            and str(challenge.get("kind", "")) != "success"):
+        var notice: Dictionary = recovery_notice
+        var previous_tempo: int = int(notice.get("from_bpm", 0))
+        var new_tempo: int = int(notice.get("to_bpm", 0))
+        if str(notice.get("kind", "")) == "speedup":
+            lesson_info_label.text = "Tempo %d → %d BPM · keep practising" % [previous_tempo, new_tempo]
+        else:
+            lesson_info_label.text = "Tempo %d → %d BPM · retry measures %d–%d" % [
+                previous_tempo, new_tempo, int(notice.get("first_bar", 1)),
+                int(notice.get("last_bar", 1))]
     # During graded playback, notation and MIDI note reactions provide the
     # information. Preserve warnings for ungraded previews and audio errors.
     var busy_music: bool = phase in ["playing", "count_in"] and not learning

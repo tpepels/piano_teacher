@@ -208,6 +208,14 @@ func test_short_challenge_loop() -> void:
         "Failed take must never appear as a clean completion")
     check(app.game_phase_cue.message == "RETRY",
         "A failed take must not appear to be a success")
+    pending["recovery_notice"] = {"kind":"slowdown", "from_bpm":80,
+        "to_bpm":68, "first_bar":3, "last_bar":4}
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
+    check("80" in app.lesson_info_label.text and "68" in app.lesson_info_label.text
+        and "3–4" in app.lesson_info_label.text,
+        "Recovery tempo and retry bars remain visible below score")
+    check(not app.practice_playback_banner.visible,
+        "Recovery guidance must not obscure moving sheet music")
     pending["preview_only"] = true
     pending["phase"] = "playing"
     pending["take_result"] = null

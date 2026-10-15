@@ -73,7 +73,9 @@ A small phase cue presents Ready, Get Ready, Pause, Clean Pass, Retry,
 Short Retry or Preparing. It follows backend states without restarting its
 animation on each HTTP poll. Beat lights remain the sole numeric count-in.
 The former large recovery banner no longer obscures the score; detailed
-next-action instructions remain below it. During active graded playback,
+next-action instructions and backend tempo-change notices remain below it.
+A phase cue fades out when Playing begins instead of vanishing abruptly.
+During active graded playback,
 redundant status text and full hand-stage cards are hidden. Preview warnings,
 audio failures and unmapped-feedback messages stay readable. The full
 teaching context returns at Ready, Pause and Feedback. All musical timing

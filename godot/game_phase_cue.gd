@@ -12,6 +12,9 @@ var opacity := 0.0
 var target_opacity := 0.0
 var last_key := ""
 var onset := 0.0
+var fading_message := ""
+var fading_accent := TEAL
+var fading_alpha := 0.0
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -57,7 +60,14 @@ func present(state: Dictionary) -> void:
     if key != last_key:
         last_key = key
         onset = 0.0
-        # New phases ease in once; repeat HTTP polls do not retrigger them.
+        if next_message.is_empty() and not message.is_empty():
+            fading_message = message
+            fading_accent = accent
+            fading_alpha = opacity
+        elif not next_message.is_empty():
+            fading_message = ""
+            fading_alpha = 0.0
+        # Only an actual phase change starts the entrance animation.
         opacity = minf(opacity, 0.55)
     message = next_message
     accent = next_accent
@@ -74,23 +84,31 @@ func _process(delta: float) -> void:
     if onset < 1.0 and target_opacity > 0.0:
         onset = minf(1.0, onset + delta * 6.0)
         queue_redraw()
+    if fading_alpha > 0.0:
+        fading_alpha = maxf(0.0, fading_alpha - delta * 4.3)
+        if fading_alpha <= .001:
+            fading_message = ""
+        queue_redraw()
 
 func _draw() -> void:
-    if message.is_empty() or opacity <= .001 or size.x < 25.0:
+    var rendered_text: String = message if not message.is_empty() else fading_message
+    var rendered_alpha: float = opacity if not message.is_empty() else fading_alpha
+    var rendered_tone: Color = accent if not message.is_empty() else fading_accent
+    if rendered_text.is_empty() or rendered_alpha <= .001 or size.x < 25.0:
         return
     var font: Font = ThemeDB.fallback_font
     var font_size := 15
-    var ink_width: float = font.get_string_size(message,
+    var ink_width: float = font.get_string_size(rendered_text,
         HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
     var bubble_width: float = minf(size.x - 2.0, ink_width + 31.0)
     var x: float = maxf(0.0, size.x - bubble_width - 1.0)
     var slide: float = (1.0 - onset) * 9.0
     var rect := Rect2(x + slide, 1.0, bubble_width, minf(size.y - 2.0, 32.0))
-    draw_rect(rect, Color("#152B29", .83 * opacity))
+    draw_rect(rect, Color("#152B29", .83 * rendered_alpha))
     draw_rect(Rect2(rect.position, Vector2(2.0, rect.size.y)),
-        Color(accent, opacity * .86))
+        Color(rendered_tone, rendered_alpha * .86))
     var baseline: float = rect.position.y + (rect.size.y +
         font.get_ascent(font_size) - font.get_descent(font_size)) * .5
     draw_string(font, Vector2(rect.position.x + 13.0, baseline),
-        message, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 18.0,
-        font_size, Color("#EDF8EF", opacity))
+        rendered_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 18.0,
+        font_size, Color("#EDF8EF", rendered_alpha))
