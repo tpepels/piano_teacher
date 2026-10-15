@@ -20,6 +20,7 @@ class Note:
     source_id: str = ""
     voice: str = ""
     spelling: tuple[str, int, int] | None = None
+    velocity: int = 85  # Original MIDI attack dynamics for sampled Listen
 
 
 def source_note_id(note: Note, index: int) -> str:
@@ -157,7 +158,7 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     discarded_orphan_releases = 0
     for track_idx, track in enumerate(midi.tracks):
         tick = 0
-        open_notes: dict[tuple[int, int], tuple[int, int]] = {}
+        open_notes: dict[tuple[int, int], tuple[int, int, int]] = {}
         for ordinal, msg in enumerate(track):
             tick += msg.time
             if msg.type == "track_name":
@@ -178,9 +179,9 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
             if msg.type == "note_on" and msg.velocity > 0:
                 if key in open_notes:
                     raise ValueError(f"overlapping MIDI note on track {track_idx}, channel {msg.channel}, pitch {msg.note}; use separate voices/channels")
-                open_notes[key] = tick, ordinal
+                open_notes[key] = tick, ordinal, msg.velocity
             elif key in open_notes:
-                start_tick, attack = open_notes.pop(key)
+                start_tick, attack, attack_velocity = open_notes.pop(key)
                 if tick == start_tick:
                     # Some piano MIDI exports contain instantaneous placeholder
                     # note pairs. They have no sounding duration and cannot be
@@ -192,7 +193,8 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
                     raise ValueError(f"Invalid MIDI event ordering on track {track_idx}, pitch {msg.note}")
                 notes.append(Note(start_tick / ticks, tick / ticks, msg.note, track_idx, msg.channel,
                                   source_id=f"midi-t{track_idx}-e{attack}",
-                                  voice=f"midi-t{track_idx}-c{msg.channel}"))
+                                  voice=f"midi-t{track_idx}-c{msg.channel}",
+                                  velocity=attack_velocity))
             else:
                 # Many MIDI performance exports include unmatched channel
                 # releases from pedal/voice processing. With no corresponding
