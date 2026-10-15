@@ -29,6 +29,9 @@ class FixtureApp extends "res://main.gd":
     func _request_layout() -> void:
         pass
 
+    func _poll() -> void:
+        pass
+
 var failures: Array[String] = []
 var app: FixtureApp
 
