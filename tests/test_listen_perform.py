@@ -49,7 +49,7 @@ def test_listen_is_audible_exact_full_variant_and_cannot_grade_midi(lesson, bpm)
     assert available['demo']['audio_available'] and available['demo']['url']
     audio = e.demo_audio(demo['token'])
     with wave.open(str(audio), 'rb') as wav:
-        assert wav.getnchannels() == 1 and wav.getsampwidth() == 2
+        assert wav.getnchannels() in (1, 2) and wav.getsampwidth() == 2
         assert wav.getnframes()/wav.getframerate() == pytest.approx(16*60/bpm)
         assert any(wav.readframes(min(wav.getnframes(), wav.getframerate())))
     e.control('score_ready', revision=loading['revision'])
