@@ -10,3 +10,5 @@ else
   exit 1
 fi
 "$GODOT" --headless --path godot --check-only --script res://main.gd
+# Layout is executable Godot behavior, not a Python-only geometry simulation.
+bash scripts/check_phase2_ui.sh
