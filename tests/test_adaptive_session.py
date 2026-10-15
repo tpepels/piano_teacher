@@ -102,7 +102,7 @@ def test_godot_has_virtual_lead_in_notation():
     script=(Path(__file__).resolve().parents[1]/"godot"/"main.gd").read_text()
     assert "lead_width_px" in script and "lead_first" in script
     assert 'cursor["x"] = float(initial_cursor.get("x", 0.0)) + clock / lead_beats * fraction' in script
-    assert 'target_x = target_reading_x - note_x * displayed_width' in script
+    assert 'target_x = viewport.x * 0.42 - note_x * displayed_width' in script
 
 
 def test_custom_target_recovers_instead_of_running_to_original_midi_speed(tmp_path, monkeypatch):
