@@ -243,6 +243,32 @@ func test_instructional_transition() -> void:
     check(app.start_button.text.contains("Pause"), "Guided preparation offers Pause")
     check(app.commands.back().get("action") == "pause", "Primary transport pauses guided preparation")
 
+func test_modes() -> void:
+    check(app.mode_choice.item_count == 4, "Learn, Practice and section/whole Perform are available")
+    app.mode_choice.item_selected.emit(2)
+    check(app.commands.back().get("action") == "perform", "Perform is a functioning mode")
+    app.commands.clear()
+    app.listen_button.pressed.emit()
+    check(app.commands.back().get("action") == "listen", "Listen requests real active-variant audio")
+    var review := state("performance_complete")
+    review["mode"] = "perform"
+    review["performance_summary"] = {"accuracy_percent":25.0,"correct":1,"total":4,"early":1,"late":1,"missed_pitches":[64],"extra_notes":1,"weakest_bars":[{"first_bar":3,"last_bar":4,"errors":3}]}
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(review).to_utf8_buffer())
+    check(app.performance_review.visible, "Finished Perform shows a persistent review")
+    check(app.performance_text.text.contains("25") and app.performance_text.text.contains("3–4"), "Review names accuracy and weakest measures")
+    app.weak_button.pressed.emit()
+    check(app.commands.back().get("action") == "practice_weak", "Weakest section starts real practice")
+    for pending_mode in ["listen", "perform"]:
+        app._navigate("practice")
+        show_state("ready")
+        app.action_pending = true
+        app.last_post_path = "/control"
+        app.last_control_action = pending_mode
+        app.commands.clear()
+        app._navigate("library")
+        check(app.commands.back().get("action") == "stop", "Leaving during mode preparation preserves Stop intent")
+        app.action_pending = false
+
 func run() -> void:
     root.mode = Window.MODE_WINDOWED
     root.size = Vector2i(800, 600)
@@ -268,6 +294,7 @@ func run() -> void:
         "abandon_practice": test_abandon_practice()
         "compact_feedback": await test_compact_feedback()
         "instructional_transition": test_instructional_transition()
+        "modes": test_modes()
         _: check(false, "Unknown interaction scenario: " + scenario)
     print("PRACTICE_INTERACTION_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

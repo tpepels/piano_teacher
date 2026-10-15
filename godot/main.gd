@@ -119,10 +119,20 @@ var score_margin_box: MarginContainer
 var hint_keyboard: Control
 var mode_choice: OptionButton
 var hints_toggle: CheckButton
+var demo_player: Node
+var listen_button: Button
+var performance_review: VBoxContainer
+var performance_text: Label
+var weak_button: Button
 
 func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     _build_interface()
+    demo_player = preload("res://demo_player.gd").new()
+    add_child(demo_player)
+    demo_player.prepared.connect(func(token: String, ready_revision: int):
+        _send_action({"action":"demo_ready", "token":token, "revision":ready_revision}))
+    demo_player.failed.connect(func(message: String): feedback_label.text = message)
     if phase0_smoke_mode:
         _navigate("practice")
     click_high = _make_count_click(1160.0)
@@ -440,7 +450,7 @@ func _navigate(screen: String) -> void:
         settings_return_screen = current_screen
     if screen != "practice" and (current_screen == "practice" or screen in ["home", "library"]):
         var phase: String = str(last_state.get("phase", ""))
-        var starting: bool = action_pending and last_post_path == "/control" and last_control_action in ["start", "restart", "resume", "score_ready", "learn", "learn_retry", "practice"]
+        var starting: bool = action_pending and last_post_path == "/control" and last_control_action in ["start", "restart", "resume", "score_ready", "learn", "learn_retry", "practice", "listen", "perform"]
         if screen in ["settings", "lesson"]:
             if phase in ["count_in", "playing", "guided_wait", "feedback", "recovering", "loading"] or starting:
                 _send_action({"action": "pause"})
@@ -648,12 +658,17 @@ func _build_interface() -> void:
     practice_navigation.add_child(_button("← Library", func(): _navigate("library")))
     mode_choice = OptionButton.new()
     mode_choice.disabled = true
+    mode_choice.fit_to_longest_item = false
     mode_choice.add_item("Learn notes")
     mode_choice.add_item("Practice rhythm")
+    mode_choice.add_item("Perform passage")
+    mode_choice.add_item("Perform whole piece")
     mode_choice.custom_minimum_size = Vector2(150, 38)
     mode_choice.item_selected.connect(func(index: int):
-        _send_action({"action": "learn" if index == 0 else "practice"}))
+        _send_action({"action": "learn" if index == 0 else "practice" if index == 1 else "perform", "scope":"whole" if index == 3 else "current"}))
     practice_navigation.add_child(mode_choice)
+    listen_button = _button("Listen", func(): _send_action({"action":"listen"}))
+    practice_navigation.add_child(listen_button)
     hints_toggle = CheckButton.new()
     hints_toggle.text = "Hints"
     hints_toggle.tooltip_text = "Keep key hints visible while learning notes"
@@ -770,6 +785,13 @@ func _build_interface() -> void:
     feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     information.add_child(feedback_label)
+    performance_review = VBoxContainer.new()
+    performance_review.visible = false
+    information.add_child(performance_review)
+    performance_text = _label("", 14, INK)
+    performance_review.add_child(performance_text)
+    weak_button = _button("Practice weakest section", func(): _send_action({"action":"practice_weak"}))
+    performance_review.add_child(weak_button)
     var controls_center := CenterContainer.new()
     practice_layout.add_child(controls_center)
     var controls := GridContainer.new()
@@ -821,6 +843,17 @@ func _update_responsive_layout() -> void:
         folder_controls.vertical = width < 1000
     if practice_header != null:
         practice_header.add_theme_constant_override("separation", 12 if width < 850 else 20)
+        practice_navigation.add_theme_constant_override("separation", 6 if width < 900 else 12)
+        for child in practice_navigation.get_children():
+            if child is Button:
+                var font_size := 13 if width < 900 else 15
+                child.add_theme_font_size_override("font_size", font_size)
+                if child == mode_choice:
+                    child.custom_minimum_size.x = 150
+                elif child is CheckButton:
+                    child.custom_minimum_size.x = 75
+                else:
+                    child.custom_minimum_size.x = child.get_theme_font("font").get_string_size(child.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x + 38
     if practice_controls != null:
         practice_controls.columns = 3 if width < 700 else 5
         var compact := size.y < 720.0
@@ -1258,7 +1291,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     lesson_info_label.text = str(explanations.get(stage, ""))
     var learning: bool = str(parsed.get("mode", "practice")) == "learn"
     var teaching: Dictionary = parsed.get("teaching", {}) if parsed.get("teaching") is Dictionary else {}
-    mode_choice.select(0 if learning else 1)
+    mode_choice.select(0 if learning else 2 if str(parsed.get("mode", "")) == "perform" else 1)
+    if str(parsed.get("mode", "")) == "listen":
+        mode_choice.text = "Listen"
     mode_choice.disabled = false
     hints_toggle.disabled = not learning or str(parsed.get("phase", "")) == "loading"
     hints_toggle.set_pressed_no_signal(bool(parsed.get("hints_enabled", false)))
@@ -1273,6 +1308,16 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     practice_progress.value = float(parsed.get("progress", 0.0))
     stop_button.disabled = not bool(parsed.get("running", false))
     var phase: String = str(parsed.get("phase", "ready"))
+    if demo_player != null:
+        demo_player.synchronize(parsed)
+    listen_button.disabled = not bool(parsed.get("loaded", false))
+    var summary: Dictionary = parsed.get("performance_summary", {}) if parsed.get("performance_summary") is Dictionary else {}
+    performance_review.visible = not summary.is_empty()
+    if not summary.is_empty():
+        var weakest: Array = summary.get("weakest_bars", [])
+        var bars: String = "%d–%d" % [int(weakest[0].get("first_bar", 1)),int(weakest[0].get("last_bar", 1))] if not weakest.is_empty() else "—"
+        performance_text.text = "%.0f%% correct · %d early · %d late · %d missed pitches · %d extra\nWeakest measures %s · Review only; Practice earns clean runs." % [float(summary.get("accuracy_percent", 0)),int(summary.get("early", 0)),int(summary.get("late", 0)),summary.get("missed_pitches", []).size(),int(summary.get("extra_notes", 0)),bars]
+        weak_button.disabled = weakest.is_empty()
     var active_transport: bool = _has_active_transport()
     if not learning:
         stop_button.disabled = not active_transport
@@ -1298,6 +1343,12 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             feedback_label.text = "Playing · %d MIDI notes received" % midi_count if midi_count > 0 else "Playing · listening for your piano"
     else:
         feedback_label.text = str(parsed.get("feedback", ""))
+    if str(parsed.get("mode", "")) == "listen":
+        feedback_label.text = "Listening · follow the score" if bool(parsed.get("running", false)) else str(parsed.get("feedback", "Preparing Listen audio"))
+        if bool(parsed.get("paused", false)):
+            feedback_label.text = "Listen paused · Space to resume"
+        if demo_player != null and bool(demo_player.get("audio_error")):
+            feedback_label.text = "Listen audio could not load. Choose Listen to try again."
     feedback_label.tooltip_text = feedback_label.text
     var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
     if unpositioned > 0:
@@ -1317,6 +1368,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         start_button.text = "Resume  ·  Space" if phase == "paused" else "Try rhythm · Space" if phase in ["guided_complete", "disconnected"] else "Pause  ·  Space" if phase in ["guided_wait", "loading"] else "Learn · Space"
         if phase == "guided_complete" and bool(parsed.get("guided_recovery", false)):
             start_button.text = "Retry rhythm"
+    elif str(parsed.get("mode", "")) == "listen" and not active_transport:
+        start_button.text = "Listen again"
     start_button.tooltip_text = "Space: start, pause or resume · R: restart · S: stop"
     start_button.disabled = not active_transport and (score_view.texture == null or layout_revision != revision)
     score_overlay.marks = []
@@ -1570,6 +1623,9 @@ func _has_active_transport() -> bool:
     return bool(last_state.get("running", false)) or str(last_state.get("phase", "")) in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]
 
 func _toggle_playing() -> void:
+    if str(last_state.get("mode", "")) == "listen" and not _has_active_transport():
+        _send_action({"action":"listen"})
+        return
     if str(last_state.get("mode", "practice")) == "learn":
         var phase: String = str(last_state.get("phase", "ready"))
         _send_action({"action": "resume" if phase == "paused" else "practice" if phase in ["guided_complete", "disconnected"] else "pause" if phase in ["guided_wait", "loading"] else "learn_retry"})

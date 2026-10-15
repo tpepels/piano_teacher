@@ -64,10 +64,10 @@ Files: new focused synthesis/demonstration module; `server.py`, Godot audio and 
 
 Interfaces: demonstration consumes the active generated note set and selected BPM, with independent mode/phase metadata and no student recorder. Perform uses existing clock/assessment, disables automatic rewind and yields a summary with accuracy/timing/missed pitches/weakest bars.
 
-- [ ] Write failing tests for audible sample content/pitch/duration, shared source identity, rests/held endings and zero assessment/mastery credit.
-- [ ] Implement local bounded-memory audible synthesis and Listen transport, with real sound-producing playback and an honest loading/error state.
-- [ ] Write failing Perform tests: misses continue through endpoint; original whole-song stage retains every source note; summary can select weakest section.
-- [ ] Implement Perform and real rendered/audio software checks; run full learner journey and suite, commit P3.
+- [x] Write failing tests for audible sample content/pitch/duration, shared source identity, rests/held endings and zero assessment/mastery credit.
+- [x] Implement local bounded-memory audible synthesis and Listen transport, with real sound-producing playback and an honest loading/error state.
+- [x] Write failing Perform tests: misses continue through endpoint; original whole-song stage retains every source note; summary can select weakest section.
+- [x] Implement Perform and real rendered/audio software checks; run full learner journey and suite, commit P3.
 
 ## P4 — Dark learning UI and navigation
 
@@ -99,3 +99,5 @@ Files: focused learner-progress module/SQLite migration, `learning.py` and serve
 - P1 complete: 292 tests, parser, independent review and real normal/compact learner journeys pass. Source-stable guided recognition and contextual keyboard implemented; retries and loading preserve physical key state. Report `docs/teaching-p1-verification.md`.
 
 - P2 complete: 321 tests passed in 105.86 seconds, Godot parser and independent review pass. Actual 28-frame learner journey covers two failures, guided return, tempo restoration and three full clean target passes. Report `docs/teaching-p2-verification.md`.
+
+- P2 committed: `65379b2`. P3 complete: 378 P0–P3 tests passed in 124.25 seconds, parser and independent review pass, 20 real desktop frames and PCM playback verified. Report `docs/teaching-p3-verification.md`.

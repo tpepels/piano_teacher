@@ -1,0 +1,232 @@
+extends SceneTree
+# Real Godot controls, HTTP polling, downloaded PCM and rendered moving notation.
+
+var app: Control
+var folder := ""
+var frames: Array = []
+var failures: Array[String] = []
+
+func _initialize() -> void:
+    call_deferred("run")
+
+func check(ok: bool, description: String) -> void:
+    if not ok:
+        failures.append(description)
+        print("MODES_FAIL:",description)
+
+func wait_for(predicate: Callable, description: String, seconds: float = 25.0) -> bool:
+    var deadline := Time.get_ticks_msec()+int(seconds*1000)
+    while not predicate.call():
+        if Time.get_ticks_msec() >= deadline:
+            check(false,"Timed out: "+description)
+            return false
+        await process_frame
+    return true
+
+func press(text: String) -> void:
+    for button in app.find_children("*","Button",true,false):
+        if button.is_visible_in_tree() and button.text == text and not button.disabled:
+            button.pressed.emit()
+            return
+    check(false,"Visible enabled control missing: "+text)
+
+func phase() -> String:
+    return str(app.last_state.get("phase",""))
+
+func score_ready() -> bool:
+    return app.score_view.texture != null and app.layout_revision == app.revision \
+        and app.rendered_revision == app.revision and not app.layout_pending and not app.score_pending
+
+func demo_player() -> AudioStreamPlayer:
+    for player in app.find_children("*","AudioStreamPlayer",true,false):
+        if player.stream is AudioStreamWAV and player.stream.data.size() > 10000:
+            return player
+    return null
+
+func note_position(note: Dictionary) -> Vector2:
+    var local: Vector2 = (Vector2(float(note.x),float(note.y))-app.score_crop_origin) \
+        /app.score_crop_size*app.score_content.size
+    return app.score_content.get_global_transform_with_canvas()*local
+
+func note_ink(picture: Image, point: Vector2) -> int:
+    var pixels := 0
+    for y in range(int(point.y)-7,int(point.y)+8):
+        for x in range(int(point.x)+1,int(point.x)+25):
+            if x >= 0 and y >= 0 and x < picture.get_width() and y < picture.get_height():
+                var color := picture.get_pixel(x,y)
+                if maxf(color.r,maxf(color.g,color.b)) > .5:
+                    pixels += 1
+    return pixels
+
+func capture(label: String, track_beat: float = -999) -> Dictionary:
+    await process_frame
+    await RenderingServer.frame_post_draw
+    var picture := root.get_texture().get_image()
+    var scale := Vector2(picture.get_size())/root.get_visible_rect().size
+    var panel: Rect2 = app.score_frame.get_global_rect()
+    var selected: Dictionary = {}
+    for note in app.score_layout.get("notes",[]):
+        if track_beat > -998:
+            if absf(float(note.get("beat",-100))-track_beat) < .01:
+                selected = note
+                break
+        elif panel.grow(-10).has_point(note_position(note)) and note_ink(picture,note_position(note)*scale) >= 8:
+            selected = note
+            break
+    check(not selected.is_empty(),"Real engraved score remains visible in "+label)
+    var entry := {"frame":label+".png","phase":phase(),"mode":app.last_state.get("mode",""),
+        "beat":app._transport_beat_now(),"bpm":app.last_state.get("bpm",0),
+        "mastered":app.last_state.get("mastered",-1),"streak":app.last_state.get("streak",-1),
+        "score_height":app.score_frame.size.y}
+    if not selected.is_empty():
+        var point := note_position(selected)*scale
+        entry["note_id"] = str(selected.id)
+        entry["note_x"] = point.x
+        entry["note_y"] = point.y
+        entry["notehead_ink"] = note_ink(picture,point)
+        check(int(entry.notehead_ink) >= 8,"Actual note pixels exist in "+label)
+    var player := demo_player()
+    if player != null:
+        entry["audio_playing"] = player.playing
+        entry["audio_position"] = player.get_playback_position()
+        entry["pcm_bytes"] = player.stream.data.size()
+    check(picture.save_png(folder+"/"+label+".png") == OK,"Save actual mode frame "+label)
+    check(app.start_button.is_visible_in_tree() and app.stop_button.is_visible_in_tree(),
+        "Transport controls stay visible in "+label)
+    var viewport := root.get_visible_rect()
+    entry["viewport"] = str(viewport)
+    entry["primary_bounds"] = str(app.start_button.get_global_rect())
+    entry["stop_bounds"] = str(app.stop_button.get_global_rect())
+    for control in [app.start_button,app.stop_button]:
+        check(viewport.encloses(control.get_global_rect()),"Transport control fits actual viewport in "+label)
+    check(app.score_frame.size.y >= 135,"Notation retains135px height in "+label)
+    if app.performance_review.is_visible_in_tree():
+        entry["review_bounds"] = str(app.performance_review.get_global_rect())
+        entry["weak_button_bounds"] = str(app.weak_button.get_global_rect())
+        check(viewport.encloses(app.performance_review.get_global_rect()),"Summary fits actual viewport")
+        check(viewport.encloses(app.weak_button.get_global_rect()),"Weak-section button fits actual viewport")
+    for button in app.practice_navigation.get_children():
+        if button is Button and button.is_visible_in_tree() and not button.text.is_empty():
+            var font: Font = button.get_theme_font("font")
+            var font_size: int = button.get_theme_font_size("font_size")
+            var text_width := font.get_string_size(button.text,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x
+            check(button.size.x >= text_width+12,
+                "Navigation text has actual visible width: "+button.text+" in "+label)
+    frames.append(entry)
+    print("MODES_FRAME:",label)
+    return entry
+
+func labels_text() -> String:
+    var text := ""
+    for label in app.find_children("*","Label",true,false):
+        if label.is_visible_in_tree():
+            text += " "+label.text.to_lower()
+    return text
+
+func run() -> void:
+    var args := OS.get_cmdline_user_args()
+    folder = args[0]
+    var music := args[1]
+    check(DisplayServer.get_name() != "headless","Actual desktop renderer required")
+    root.mode = Window.MODE_WINDOWED
+    root.size = Vector2i(int(args[2]),int(args[3])) if args.size() >= 4 else Vector2i(1536,960)
+    app = load("res://main.gd").new()
+    app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    root.add_child(app)
+    await wait_for(func(): return not app.preferences.is_empty(),"normal initial settings")
+    press("Settings")
+    await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,"normal Settings")
+    app.folder_edit.text = music
+    press("Save folder")
+    await wait_for(func(): return not app.action_pending and str(app.preferences.get("music_dir","")) == music,"user import folder saved")
+    press("Choose USB MIDI piano")
+    await wait_for(func(): return not app.device_pending and app.device_names.has("Journey test piano"),"test piano listed")
+    app.device_menu.id_pressed.emit(app.device_names.find("Journey test piano"))
+    app.device_menu.hide()
+    await wait_for(func(): return not app.action_pending and str(app.last_state.get("device","")) == "Journey test piano","input selected in MIDI menu")
+    press("← Back")
+    press("Browse library  →")
+    await wait_for(func(): return app.current_screen == "library" and not app.library_pending and app.library_rows.get_child_count() == 1,"temporary user file listed")
+    var piece := app.library_rows.get_child(0) as Button
+    check(piece.text.contains("Imported rest and held ending"),"Library opens arbitrary user MIDI")
+    piece.pressed.emit()
+    await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait","import enters generated Learn")
+    press("Settings")
+    await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,"choose tempo")
+    app.tempo_setting.value = 240
+    press("Apply tempo")
+    await wait_for(func(): return not app.action_pending and int(app.last_state.get("target_bpm",0)) == 240,"chosen target240 acknowledged")
+    press("← Back")
+    await wait_for(func(): return score_ready() and phase() == "guided_wait","active generated score ready")
+    await capture("01-imported-generated-lesson")
+    print("MODES_STAGE:import-ready")
+    await create_timer(.25).timeout
+    press("Listen")
+    await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "listen" \
+        and phase() == "playing" and demo_player() != null and demo_player().playing,"real downloaded PCM starts playing")
+    var player := demo_player()
+    check(player.stream is AudioStreamWAV,"Listen uses actual AudioStreamWAV")
+    var nonzero := false
+    for value in player.stream.data:
+        if value != 0:
+            nonzero = true
+            break
+    check(nonzero,"Real AudioStreamWAV contains nonzero PCM samples")
+    var audio_a := await capture("02-listen-player-active")
+    print("MODES_STAGE:audio-playing")
+    await create_timer(.3).timeout
+    var audio_b := await capture("03-listen-player-advancing")
+    check(float(audio_b.audio_position) > float(audio_a.audio_position)+.1,
+        "The local audio player actually advances playback")
+    await wait_for(func(): return str(app.last_state.get("mode","")) == "listen" and phase() == "ready","demo naturally completes")
+    await capture("04-listen-complete-no-mastery")
+    check(int(app.last_state.get("mastered",-1)) == 0 and int(app.last_state.get("streak",-1)) == 0,
+        "Listen completion never confers clean credit")
+    check(app.mode_choice.item_count >= 3,"Distinct Perform mode is visible")
+    check(app.mode_choice.get_item_text(2).to_lower().contains("perform"),"Third mode clearly names Perform")
+    app.mode_choice.select(2)
+    app.mode_choice.item_selected.emit(2)
+    await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "perform" and phase() == "count_in","Perform loads source score then counts in")
+    await capture("05-perform-count-in")
+    await wait_for(func(): return phase() == "playing" and app._transport_beat_now() >= .2,"uninterrupted performance starts")
+    await capture("06-perform-playing")
+    print("MODES_STAGE:perform-playing")
+    var transport := int(app.last_state.transport_id)
+    await wait_for(func(): return phase() == "playing" and app._transport_beat_now() >= 7.5,"five missed notes do not interrupt")
+    var before := await capture("07-perform-before-failed-boundary",10)
+    await wait_for(func(): return phase() == "playing" and app._transport_beat_now() >= 8.5,"perform crosses completed failed chunk")
+    var after := await capture("08-perform-after-failed-boundary",10)
+    check(int(app.last_state.transport_id) == transport and int(app.last_state.bpm) == 240,
+        "Perform never rewinds or slows after five missed notes")
+    check(str(before.note_id) == str(after.note_id) and float(after.note_x) < float(before.note_x)-8,
+        "Actual score continues moving across the failed two-bar boundary")
+    await wait_for(func(): return phase() == "performance_complete","all-missed Perform reaches musical endpoint")
+    await capture("09-performance-summary")
+    var summary_text := labels_text()
+    for word in ["0%","early","late","missed","weakest"]:
+        check(summary_text.contains(word),"Visible performance summary includes "+word)
+    var weak_button: Button = null
+    for button in app.find_children("*","Button",true,false):
+        var text: String = button.text.to_lower()
+        if button.is_visible_in_tree() and not button.disabled and text.contains("practice") and text.contains("weak"):
+            weak_button = button
+            break
+    check(weak_button != null,"Weakest section has a real visible Practice control")
+    if weak_button != null:
+        weak_button.pressed.emit()
+    await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "practice" and phase() == "count_in","weak section starts actual timed Practice")
+    await capture("10-weak-section-practice-count-in")
+    print("MODES_STAGE:weak-practice-playing")
+    await create_timer(.15).timeout
+    app.stop_button.pressed.emit()
+    await wait_for(func(): return not app.action_pending and not bool(app.last_state.get("running",true)),"Stop abandons weak practice safely")
+    for child in app.get_children():
+        if child is Timer:
+            child.stop()
+    await wait_for(func(): return not app.state_pending and not app.device_pending and not app.library_pending \
+        and not app.settings_pending and not app.lesson_pending and not app.action_pending \
+        and not app.layout_pending and not app.score_pending,"drain normal requests before exit")
+    var result := FileAccess.open(folder+"/result.json",FileAccess.WRITE)
+    result.store_string(JSON.stringify({"frames":frames,"failures":failures,"renderer":DisplayServer.get_name()},"  "))
+    print("MODES_RESULT:","PASS" if failures.is_empty() else "FAIL")
+    quit(0 if failures.is_empty() else 1)

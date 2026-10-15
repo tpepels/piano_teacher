@@ -12,6 +12,7 @@ from pathlib import Path
 import sqlite3
 import threading
 import time
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
@@ -27,7 +28,7 @@ from .music import Phrase
 from .lesson_score import build_lesson_score
 from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats
-from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at
+from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
 from .live_feedback import settled_assessment
 from .instruction import next_full_attempt
 
@@ -59,6 +60,12 @@ class PracticeEngine:
         self._trouble_count = 0
         self._guided_recovery_pending = False
         self._guided_return: tuple[str, float] | None = None
+        self.demo: dict | None = None
+        self._demo_audio = None
+        self._demo_cache = None
+        self._demo_thread: threading.Thread | None = None
+        self._demo_score_ready = False
+        self.performance_summary: dict | None = None
         self.transport_id = 0
         self.mode = "practice"
         self.teaching = None
@@ -90,6 +97,7 @@ class PracticeEngine:
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
         data_dir.mkdir(parents=True, exist_ok=True)
+        self._data_dir = data_dir
         self.db = sqlite3.connect(data_dir / "progress.db", check_same_thread=False)
         self.db.execute("CREATE TABLE IF NOT EXISTS sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER, target_bpm INTEGER)")
         columns={row[1] for row in self.db.execute("PRAGMA table_info(sessions)")}
@@ -202,6 +210,8 @@ class PracticeEngine:
                     self.teaching.receive(pitch=message.note,
                         is_on=message.type == "note_on" and message.velocity > 0,
                         channel=getattr(message, "channel", 0), at=now)
+                return
+            if self.mode == "listen":
                 return
             if self.running and not self.paused and now >= self.run_at and self.recorder:
                 if message.type == "note_on":
@@ -320,6 +330,10 @@ class PracticeEngine:
         self.retry_range=None
         self._guided_recovery_pending=False
         self._guided_return=None
+        self.demo=None
+        self._demo_audio=None
+        self._demo_score_ready=False
+        self.performance_summary=None
 
     def _reset_trouble(self):
         self._trouble_key = None
@@ -423,6 +437,123 @@ class PracticeEngine:
         self.feedback = "Preparing rhythm practice"
         self.next_action = "Get ready to retry the rhythm." if return_context else "Get ready to play in time."
 
+    def _prepare_listen(self):
+        if self.plan is None:
+            raise ValueError("Open a piece first")
+        from .demo import DemoAudioCache
+        self._stop()
+        self.mode = "listen"
+        self.teaching = None
+        self.guided_range = None
+        self.score_revision += 1
+        self.awaiting_score_revision = self.score_revision
+        self.feedback = "Preparing an audible example"
+        self.next_action = "Listen to the notes, then choose Learn or Practice."
+        if self._demo_cache is None:
+            self._demo_cache = DemoAudioCache(self._data_dir / "demo-audio")
+        variant, bpm = self.plan.active_variant, self.plan.bpm
+        audio_end = max(variant.phrase.end, max((note.end for note in variant.notes), default=variant.phrase.end))
+        token = uuid.uuid4().hex
+        self.demo = {"token": token, "url": "", "audio_available": False,
+                     "duration_seconds": (audio_end-variant.phrase.start)*60/bpm, "ready": False,
+                     "stage_key": self.plan.identity,
+                     "source_ids": [f"{self.plan.identity}:{index}"
+                                    for index in variant.source_indices]}
+        revision, cache = self.score_revision, self._demo_cache
+        # Waveform synthesis never holds the transport/MIDI lock. Immutable
+        # inputs and the token+revision guard make Stop/navigation authoritative
+        # even when an obsolete render finishes much later.
+        def render():
+            try:
+                audio = cache.render(variant, bpm)
+            except Exception:
+                with self.lock:
+                    if self.demo is not None and self.demo["token"] == token and self.score_revision == revision:
+                        self.awaiting_score_revision = None
+                        self.feedback = "The audio example could not be prepared. Try Listen again."
+                        self.next_action = self.feedback
+                        self.demo["error"] = self.feedback
+                return
+            with self.lock:
+                if self.demo is not None and self.demo["token"] == token and self.score_revision == revision:
+                    self._demo_audio = audio
+                    self.demo.update(url=f"/demo.wav?token={token}", audio_available=True,
+                                     duration_seconds=audio.duration_seconds)
+        self._demo_thread = threading.Thread(target=render, name="piano-demo-render", daemon=True)
+        self._demo_thread.start()
+
+    def demo_audio(self, token: str) -> Path:
+        with self.lock:
+            if self.demo is None or token != self.demo["token"] or self._demo_audio is None:
+                raise ValueError("This audio example is no longer current")
+            return self._demo_audio.path
+
+    def _start_listen_if_ready(self):
+        if (self.mode != "listen" or self.demo is None or self.paused or self.running
+                or self.awaiting_score_revision != self.score_revision
+                or self._demo_audio is None or not self._demo_score_ready or not self.demo["ready"]):
+            return
+        self.awaiting_score_revision = None
+        self.transport_id += 1
+        self.running = True
+        self.run_at = time.monotonic()
+        self.feedback = "Listen to this example"
+
+    def _prepare_perform(self, *, scope: str = "current"):
+        if self.plan is None:
+            raise ValueError("Open a piece first")
+        if scope not in ("current", "whole"):
+            raise ValueError("Choose the current passage or whole piece")
+        self._stop()
+        p = self.plan
+        if scope == "whole":
+            bpm = p.bpm
+            index = next((i for i, exercise in reversed(list(enumerate(p.exercises)))
+                          if exercise.kind == "perform"), None)
+            p.select(index if index is not None else 0)
+            p.hand_index = p.hands.index("both") if "both" in p.hands else 0
+            p.variant_index = len(p.variants)-1
+            p.bpm = bpm
+            self._reset_trouble()
+        self.mode = "perform"
+        self.teaching = None
+        self.guided_range = None
+        self.score_revision += 1
+        self.awaiting_score_revision = self.score_revision
+        self.feedback = "Preparing your performance"
+        self.next_action = "Keep playing through the passage. Review comes at the end."
+
+    def _performance_review(self, phrase: Phrase, result) -> dict:
+        grid = phrase_grid(phrase, self.plan.piece.bar_boundaries)
+        weaknesses = []
+        for start, end in two_bar_chunks(grid):
+            errors = sum(entry.status != "correct" and phrase.start+start <= entry.note.start < phrase.start+end
+                         for entry in result.notes)
+            errors += sum(start <= note.onset*self.plan.bpm/60 < end for note in result.unmatched_played)
+            if errors:
+                first = next(i for i, beat in enumerate(grid) if abs(beat-start) < 1e-6)
+                last = next(i for i, beat in enumerate(grid) if abs(beat-end) < 1e-6)
+                weaknesses.append({"first_bar": phrase.first_bar+first, "last_bar": phrase.first_bar+last-1,
+                                   "start_beat": start, "end_beat": end, "errors": errors})
+        timing = {status: sum(entry.status == status for entry in result.notes)
+                  for status in ("early", "late", "short", "long")}
+        return {"accuracy_percent": round(100*result.correct/max(1, len(result.notes)), 1),
+                "correct": result.correct, "total": len(result.notes), **timing, "timing": timing,
+                "missed_pitches": sorted({entry.note.pitch for entry in result.notes if entry.status == "missed"}),
+                "missed": sum(entry.status == "missed" for entry in result.notes),
+                "wrong": sum(entry.status == "wrong" for entry in result.notes),
+                "extra_notes": result.extra_notes,
+                "weakest_bars": sorted(weaknesses, key=lambda entry: (-entry["errors"], entry["first_bar"]))}
+
+    def _practice_weak(self):
+        if self.mode != "perform" or not self.performance_summary or not self.performance_summary["weakest_bars"]:
+            raise ValueError("Finish a performance with a difficult section first")
+        selected = dict(self.performance_summary["weakest_bars"][0])
+        self._prepare_practice()
+        self.pending_rewind = selected["start_beat"]
+        self.retry_range = {key: value for key, value in selected.items() if key != "errors"}
+        self.next_action = f"Practice bars {selected['first_bar']}-{selected['last_bar']} at {self.plan.bpm} BPM."
+
     def _commit_pending(self) -> str:
         """Apply a completed attempt after feedback has been shown on its own score."""
         if self.pending_result is None or self.plan is None:
@@ -441,17 +572,18 @@ class PracticeEngine:
         self._save()
         return message
 
-    def start(self, *, from_beat: float = 0.0):
+    def start(self, *, from_beat: float = 0.0, mode: str = "practice"):
         with self.lock:
             if self.plan is None:
                 raise ValueError("Open a piece first")
             if self.mode == "learn":
                 self._prepare_practice()
                 return
-            self.mode = "practice"
+            self.mode = mode
             self.teaching = None
             self.guided_range = None
             self._guided_return = None
+            self.performance_summary = None
             # A user must be able to watch the time-driven score without a
             # connected instrument. Only actual MIDI input enables assessment.
             self.preview_only = not self._piano_connected()
@@ -461,7 +593,7 @@ class PracticeEngine:
             self.paused_at=0.0
             self.transport_id+=1
             self.running=True
-            self.auto=not self.preview_only
+            self.auto=mode == "practice" and not self.preview_only
             self.next_at=0
             self.awaiting_score_revision=None
             self.pending_result=None
@@ -501,11 +633,32 @@ class PracticeEngine:
                     if self.paused:
                         self._deferred_score_ack = revision
                         return
-                    if self.mode == "learn" and self.teaching is not None:
+                    if self.mode == "listen":
+                        self._demo_score_ready = True
+                        self._start_listen_if_ready()
+                    elif self.mode == "learn" and self.teaching is not None:
                         self.awaiting_score_revision = None
                         self.teaching.start(now=time.monotonic())
                     else:
-                        self.start(from_beat=self.pending_rewind or 0.0)
+                        self.start(from_beat=self.pending_rewind or 0.0,
+                                   mode="perform" if self.mode == "perform" else "practice")
+                return
+            if action == "demo_ready":
+                if (self.mode == "listen" and self.demo is not None
+                        and self.demo["audio_available"]
+                        and kwargs.get("token") == self.demo["token"]
+                        and int(kwargs.get("revision", -1)) == self.score_revision):
+                    self.demo["ready"] = True
+                    self._start_listen_if_ready()
+                return
+            if action == "listen":
+                self._prepare_listen()
+                return
+            if action == "perform":
+                self._prepare_perform(scope=str(kwargs.get("scope", "current")))
+                return
+            if action == "practice_weak":
+                self._practice_weak()
                 return
             if action in ("learn", "learn_retry"):
                 previous_start = self.guided_range[0] if self.guided_range else 0.0
@@ -526,6 +679,9 @@ class PracticeEngine:
                 self.next_action="Start when you are ready."
                 return
             if action in ("start", "restart"):
+                if self.mode == "listen":
+                    self._prepare_listen()
+                    return
                 if self.mode == "learn":
                     self.control("practice")
                     return
@@ -538,7 +694,7 @@ class PracticeEngine:
                     self.awaiting_score_revision = self.score_revision
                     self.feedback = "Preparing sheet music"
                     return
-                self.start()  # Fresh count-in; previous MIDI notes cannot carry over.
+                self.start(mode="perform" if self.mode == "perform" else "practice")
                 return
             if action == "pause":
                 if self.paused:
@@ -575,6 +731,7 @@ class PracticeEngine:
                     revision = self._deferred_score_ack
                     self._deferred_score_ack = None
                     self.control("score_ready", revision=revision)
+                self._start_listen_if_ready()
                 return
             p=self.plan
             if not p:
@@ -614,6 +771,12 @@ class PracticeEngine:
             self.teaching.tick(now=now)
             return
         if self.paused:
+            return
+        if self.mode == "listen":
+            if self.running and self.demo is not None and now >= self.run_at+self.demo["duration_seconds"]:
+                self.running = False
+                self.feedback = "Example complete"
+                self.next_action = "Choose Learn to find the notes, or Practice to play the rhythm."
             return
         if self.pending_result is not None:
             if self.next_at and now >= self.next_at:
@@ -661,7 +824,7 @@ class PracticeEngine:
         beats_per_bar=grid[1]-grid[0]
         # Defer five-error recovery until the two-bar boundary. Silent
         # previews never generate failure, assessment or mastery.
-        while not self.preview_only and self.next_boundary_beat and score_beat >= self.next_boundary_beat:
+        while self.mode == "practice" and not self.preview_only and self.next_boundary_beat and score_beat >= self.next_boundary_beat:
             decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
                 self.recorder.presses if self.recorder else [],
                 from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
@@ -731,6 +894,12 @@ class PracticeEngine:
             self.feedback = result.summary
         self.running=False
         self.recorder=None
+        if self.mode == "perform":
+            self.performance_summary = self._performance_review(phrase, result)
+            self.next_action = ("Review your performance, then Practice the weakest section."
+                if self.performance_summary["weakest_bars"] else "Clean performance. Choose Practice to build your clean-run streak.")
+            self.auto = False
+            return
         if self.play_from_beat>1e-6:
             # A clean *partial* recovery cannot confer full passage mastery.
             self.pending_rewind=0.0
@@ -750,6 +919,8 @@ class PracticeEngine:
             return "loading" if self.awaiting_score_revision is not None else self.teaching.snapshot(now=now)["phase"]
         if self.running:
             return "count_in" if now < self.run_at else "playing"
+        if self.mode == "perform" and self.performance_summary is not None:
+            return "performance_complete"
         return ("feedback" if self.pending_result is not None else "loading" if self.awaiting_score_revision is not None
                 else "recovering" if self.pending_rewind is not None else "ready")
 
@@ -788,6 +959,8 @@ class PracticeEngine:
                 "retry_range": self.retry_range,
                 "guided_recovery": self._guided_recovery_pending or self._guided_return is not None,
                 "pause_context": self.pause_context,
+                "demo": dict(self.demo) if self.demo is not None else None,
+                "performance_summary": self.performance_summary,
                 "midi_input_count": self.midi_input_count,
                 "midi_input_note": self.midi_input_note,
                 "midi_input_age": (max(0.0, time.monotonic() - self.midi_input_at)
@@ -830,8 +1003,8 @@ class PracticeEngine:
                     "progress":progress,"duration":seconds,"beat":exercise_beat if self.running else 0.0,
                     "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
                     "device":self.midi_device,"feedback":"Paused" if self.paused else self.feedback,"revision":self.score_revision,
-                    "feedback_marks":self.feedback_marks if (self.pause_context if self.paused else phase) in ("feedback", "recovering") else live_marks,
-                    "feedback_unmapped":self.feedback_unmapped if (self.pause_context if self.paused else phase) in ("feedback", "recovering") else 0}
+                    "feedback_marks":self.feedback_marks if (self.pause_context if self.paused else phase) in ("feedback", "recovering", "performance_complete") else live_marks,
+                    "feedback_unmapped":self.feedback_unmapped if (self.pause_context if self.paused else phase) in ("feedback", "recovering", "performance_complete") else 0}
             if self.mode == "learn" and self.teaching is not None:
                 teaching = self.teaching.snapshot(now=time.monotonic())
                 phrase = self.display_phrase()
@@ -958,6 +1131,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200,self.engine.preferences())
             elif route=="/devices":
                 self._json(200,{"devices":self.engine.ports()})
+            elif route=="/demo.wav":
+                from urllib.parse import parse_qs
+                token = parse_qs(urlsplit(self.path).query).get("token", [""])[0]
+                path = self.engine.demo_audio(token)
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(path.stat().st_size))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                with path.open("rb") as audio_file:
+                    while block := audio_file.read(65536):
+                        self.wfile.write(block)
             elif route=="/score/layout":
                 self._json(200,self.engine.geometry())
             elif route in ("/score.svg", "/score.png"):
