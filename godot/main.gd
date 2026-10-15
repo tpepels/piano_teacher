@@ -10,6 +10,7 @@ const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
 const ScoreStrip := preload("res://score_strip.gd")
 const ScoreOverlay := preload("res://score_overlay.gd")
+const ChallengeFlow := preload("res://challenge_flow.gd")
 const LivingScore := preload("res://living_score.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
 
@@ -1993,6 +1994,18 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         var remaining = parsed.get("transition_in_seconds")
         if remaining != null:
             lesson_info_label.text = ("After resume · " if phase == "paused" else "Next in %.1f s · " % maxf(0.0, float(remaining))) + next_action
+    # The backend's judged take and persisted streak are the ONLY sources
+    # for this three-clean-pass challenge. No UI-side scoring or timers.
+    var challenge: Dictionary = ChallengeFlow.present(parsed)
+    if bool(challenge.get("visible", false)):
+        progress_label.text = str(challenge.get("label", ""))
+        progress_label.tooltip_text = str(challenge.get("detail", ""))
+        var challenge_kind: String = str(challenge.get("kind", ""))
+        progress_label.add_theme_color_override("font_color",
+            Color("#78DBAD") if challenge_kind == "success" else
+            Color("#F0B971") if challenge_kind in ["retry", "recovering"] else INK)
+        if challenge_kind == "success":
+            lesson_info_label.text = str(challenge.get("detail", ""))
     start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Pause  ·  Space" if active_transport else "Start  ·  Space"
     if learning:
         start_button.text = "Resume  ·  Space" if phase == "paused" else "Try rhythm · Space" if phase in ["guided_complete", "disconnected"] else "Pause  ·  Space" if phase in ["guided_wait", "loading"] else "Learn · Space"
