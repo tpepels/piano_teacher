@@ -192,6 +192,41 @@ func _run() -> void:
     await process_frame
     await process_frame
 
+    # Regression for the user's real 1536x960 screenshot: opening Settings
+    # must not show only a narrow slice of its wide contents. Check the
+    # actual Godot-placed fields, not merely the panel's outer bounds.
+    scene.call("_navigate", "settings")
+    await process_frame
+    await process_frame
+    var settings_panel: Control = scene.get("overlay_drawer")
+    var settings_page: Control = pages["settings"]
+    _check(overlay.visible and settings_page.is_visible_in_tree(),
+        "Settings must open as a readable contextual sheet")
+    _check(settings_panel.size.x >= minf(viewport.x, 500.0) - 2.0,
+        "Settings drawer narrowed to a clipped strip")
+    _check(_in_viewport(settings_panel, viewport),
+        "Settings drawer overflows the viewport")
+    var essential: Array[Control] = [
+        scene.get("folder_edit"), scene.get("device_button"),
+        scene.get("tempo_setting"), scene.get("apply_tempo_button"),
+        scene.get("metronome_toggle"), scene.get("fullscreen_toggle")]
+    for field in essential:
+        var rect: Rect2 = field.get_global_rect()
+        _check(rect.position.x >= settings_panel.get_global_rect().position.x - 2.0
+            and rect.end.x <= viewport.x + 2.0,
+            "Settings control clipped horizontally: " + field.name)
+        _check(field.size.x >= 80.0,
+            "Settings control too narrow to use: " + field.name)
+    for control in settings_page.find_children("*", "Button", true, false):
+        if control.is_visible_in_tree():
+            _check(control.get_global_rect().end.x <= viewport.x + 2.0,
+                "Settings button disappears beyond right edge: " + control.text)
+            _check(control.size.x + 2.0 >= control.get_combined_minimum_size().x,
+                "Settings button text clipped: " + control.text)
+    scene.call("_navigate", "practice")
+    await process_frame
+    await process_frame
+
     # Imported MIDI starting-point dialog must expose the entire source,
     # synchronize slider and editable measure, and remain usable without MIDI.
     scene.call("_show_open_picker", {
