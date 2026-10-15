@@ -26,7 +26,7 @@ var home_cards: BoxContainer
 var page_margins: Array[MarginContainer] = []
 var folder_controls: BoxContainer
 var practice_settings_button: Button
-var practice_navigation: HBoxContainer
+var practice_navigation: HFlowContainer
 var practice_header: HBoxContainer
 var score_status_panel: CenterContainer
 var score_status_label: Label
@@ -111,10 +111,12 @@ var metronome_toggle: CheckButton
 var stop_button: Button
 var lesson_info_label: Label
 var practice_progress: ProgressBar
-var practice_controls: GridContainer
+var practice_controls: HFlowContainer
 var hand_buttons: Dictionary = {}
 var device_pending := false
 var practice_layout_box: VBoxContainer
+var practice_score_panel: PanelContainer
+var practice_playback_banner: Label
 var score_margin_box: MarginContainer
 var hint_keyboard: Control
 var mode_choice: OptionButton
@@ -688,8 +690,10 @@ func _build_interface() -> void:
     practice_page.add_child(practice_layout)
     # Navigation and lesson metadata are separate rows. A long title or
     # small viewport must never squeeze BPM into a one-letter column.
-    practice_navigation = HBoxContainer.new()
-    practice_navigation.add_theme_constant_override("separation", 12)
+    practice_navigation = HFlowContainer.new()
+    practice_navigation.add_theme_constant_override("h_separation", 10)
+    practice_navigation.add_theme_constant_override("v_separation", 8)
+    practice_navigation.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(practice_navigation)
     practice_navigation.add_child(_button("← Library", func(): _navigate("library")))
     mode_choice = OptionButton.new()
@@ -712,7 +716,6 @@ func _build_interface() -> void:
     hints_toggle.tooltip_text = "Keep key hints visible while learning notes"
     hints_toggle.toggled.connect(func(enabled: bool): _send_action({"action":"hints", "enabled":enabled}))
     practice_navigation.add_child(hints_toggle)
-    practice_navigation.add_child(_space())
     practice_navigation.add_child(_button("Lesson path", func(): _navigate("lesson")))
     practice_settings_button = _button("Settings", func(): _navigate("settings"))
     practice_navigation.add_child(practice_settings_button)
@@ -744,9 +747,11 @@ func _build_interface() -> void:
     hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(hand_label)
-    lesson_info_label = _label("", 14, INK)
+    lesson_info_label = _label("", 17, INK)
+    lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_layout.add_child(lesson_info_label)
     var score_panel := _card()
+    practice_score_panel = score_panel
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(score_panel)
     var score_margin := _card_body(score_panel, 26)
@@ -756,7 +761,7 @@ func _build_interface() -> void:
     score_margin.add_child(score_region)
     var score_area := Control.new()
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    score_area.custom_minimum_size = Vector2(0, 170)
+    score_area.custom_minimum_size = Vector2(0, 210)
     score_region.add_child(score_area)
     score_frame = score_area
     score_frame.clip_contents = true
@@ -807,7 +812,7 @@ func _build_interface() -> void:
     practice_progress = ProgressBar.new()
     practice_progress.show_percentage = false
     practice_progress.max_value = 1.0
-    practice_progress.custom_minimum_size = Vector2(0, 5)
+    practice_progress.custom_minimum_size = Vector2(0, 9)
     practice_progress.add_theme_stylebox_override("background", Design.surface(Design.PANEL, 3))
     practice_progress.add_theme_stylebox_override("fill", Design.surface(Design.SAGE, 3))
     (practice_progress.get_theme_stylebox("background") as StyleBoxFlat).set_content_margin_all(0)
@@ -816,10 +821,10 @@ func _build_interface() -> void:
     var information := VBoxContainer.new()
     information.add_theme_constant_override("separation", 4)
     practice_layout.add_child(information)
-    progress_label = _label("", 14, MUTED)
+    progress_label = _label("", 17, INK)
     progress_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     information.add_child(progress_label)
-    feedback_label = _label("Ready", 14, MUTED)
+    feedback_label = _label("Ready", 17, MUTED)
     feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     information.add_child(feedback_label)
@@ -830,24 +835,25 @@ func _build_interface() -> void:
     performance_review.add_child(performance_text)
     weak_button = _button("Practice weakest section", func(): _send_action({"action":"practice_weak"}))
     performance_review.add_child(weak_button)
-    var controls_center := CenterContainer.new()
-    practice_layout.add_child(controls_center)
-    var controls := GridContainer.new()
+    # Flow containers wrap whole readable buttons instead of clipping labels
+    # when the practice window is narrow or the user uses larger UI fonts.
+    var controls := HFlowContainer.new()
     practice_controls = controls
-    controls.columns = 5
+    controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    controls.alignment = FlowContainer.ALIGNMENT_CENTER
     controls.add_theme_constant_override("h_separation", 12)
-    controls.add_theme_constant_override("v_separation", 8)
-    controls_center.add_child(controls)
-    controls.add_child(_button("← Previous", func(): _send_action({"action": "previous"})))
+    controls.add_theme_constant_override("v_separation", 9)
+    practice_layout.add_child(controls)
+    controls.add_child(_button("Previous", func(): _send_action({"action": "previous"})))
     start_button = _button("Start  ·  Space", _toggle_playing, true)
-    start_button.custom_minimum_size = Vector2(148, 53)
+    start_button.custom_minimum_size = Vector2(174 * ui_scale, 56 * ui_scale)
     controls.add_child(start_button)
     stop_button = _button("Stop", func(): _send_action({"action": "stop"}))
     stop_button.tooltip_text = "End this attempt · S"
     stop_button.disabled = true
     controls.add_child(stop_button)
     controls.add_child(_button("Restart", _restart_practice))
-    controls.add_child(_button("Next →", func(): _send_action({"action": "next"})))
+    controls.add_child(_button("Next", func(): _send_action({"action": "next"})))
     _build_lesson_screen()
 
     folder_dialog = FileDialog.new()
@@ -878,51 +884,61 @@ func _update_responsive_layout() -> void:
     _resize_ui_fonts(self)
     if hint_keyboard != null:
         hint_keyboard.set_ui_scale(ui_scale)
-    # Fit smaller laptops and high-DPI/scaled fullscreen windows. Fixed-size
-    # cards and long labels previously forced the right edge off-screen.
     var width: float = size.x
-    var margin: int = int(round(float(56 if width >= 1550 else 32 if width >= 1100 else 16) * ui_scale))
+    var compact: bool = size.y < 750.0
+    # Leave sufficient space for score, keyboard, and transport at all sizes.
+    # Margins are not multiplied twice by UI scale.
+    var margin: int = 26 if width >= 1100.0 else 14
     for panel in page_margins:
         panel.add_theme_constant_override("margin_left", margin)
         panel.add_theme_constant_override("margin_right", margin)
-        panel.add_theme_constant_override("margin_top", int(round(float(28 if width >= 900 else 14) * ui_scale)))
-        panel.add_theme_constant_override("margin_bottom", int(round(float(28 if width >= 900 else 14) * ui_scale)))
+        panel.add_theme_constant_override("margin_top", 14 if compact else 19)
+        panel.add_theme_constant_override("margin_bottom", 14 if compact else 19)
     if home_cards != null:
         home_cards.vertical = width < 1380
     if folder_controls != null:
         folder_controls.vertical = width < 1000
-    if practice_header != null:
-        practice_header.add_theme_constant_override("separation", 12 if width < 850 else 20)
-        practice_navigation.add_theme_constant_override("separation", 6 if width < 900 else 12)
-        for child in practice_navigation.get_children():
-            if child is Button:
-                var font_size := _ui_font(13 if width < 900 else 15)
-                child.add_theme_font_size_override("font_size", font_size)
-                if child == mode_choice:
-                    child.custom_minimum_size.x = 220 * ui_scale
-                elif child is CheckButton:
-                    child.custom_minimum_size.x = 75
-                else:
-                    child.custom_minimum_size.x = child.get_theme_font("font").get_string_size(child.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x + 38
+    if practice_header == null:
+        return
+    practice_header.add_theme_constant_override("separation", 16)
+    practice_navigation.add_theme_constant_override("h_separation", 10 if width >= 1000.0 else 7)
+    practice_navigation.add_theme_constant_override("v_separation", 7)
     if mode_choice != null:
         mode_choice.add_theme_font_size_override("font_size", _ui_font(15))
+        mode_choice.custom_minimum_size = Vector2(minf(235.0, maxf(170.0, width * 0.22)), 50.0)
     if hints_toggle != null:
         hints_toggle.add_theme_font_size_override("font_size", _ui_font(15))
+    for child in practice_navigation.get_children():
+        if child is Button and child != mode_choice and child != hints_toggle:
+            var button := child as Button
+            var font_size := _ui_font(15)
+            button.add_theme_font_size_override("font_size", font_size)
+            var measured: float = button.get_theme_font("font").get_string_size(
+                button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+            button.custom_minimum_size = Vector2(maxf(110.0, measured + 36.0), 50.0)
+            button.clip_text = false
     if practice_controls != null:
-        practice_controls.columns = 3 if width < 700 else 5
-        var compact := size.y < 720.0
-        practice_layout_box.add_theme_constant_override("separation", int(round(float(9 if compact else 19) * ui_scale)))
-        score_frame.custom_minimum_size.y = (140 if compact else 170) * ui_scale
+        practice_layout_box.add_theme_constant_override("separation", 10 if compact else 14)
+        score_frame.custom_minimum_size.y = 170 if compact else 220
         for side in ["left", "right", "top", "bottom"]:
-            score_margin_box.add_theme_constant_override("margin_" + side, int(round(float(10 if compact else 26) * ui_scale)))
+            score_margin_box.add_theme_constant_override("margin_" + side, 12 if compact else 20)
         for child in practice_controls.get_children():
             if child is Button:
-                var control_width := 148 if child == start_button else 112
-                if width >= 900:
-                    control_width = 180 if child == start_button else 140
-                child.custom_minimum_size = Vector2(control_width, 42 if compact else 52) * ui_scale
-                child.add_theme_font_size_override("font_size", _ui_font(13 if width < 900 else 15))
-        title_label.add_theme_font_size_override("font_size", _ui_font(22 if width < 900 else 27))
+                var button := child as Button
+                var font_size := _ui_font(15)
+                button.add_theme_font_size_override("font_size", font_size)
+                var measured: float = button.get_theme_font("font").get_string_size(
+                    button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+                button.custom_minimum_size = Vector2(
+                    maxf(132.0, measured + 38.0), 51.0 if compact else 57.0)
+                button.clip_text = false
+        title_label.add_theme_font_size_override("font_size", _ui_font(25))
+        passage_label.add_theme_font_size_override("font_size", _ui_font(15))
+        speed_label.add_theme_font_size_override("font_size", _ui_font(19))
+        hand_label.add_theme_font_size_override("font_size", _ui_font(15))
+        progress_label.add_theme_font_size_override("font_size", _ui_font(16))
+        feedback_label.add_theme_font_size_override("font_size", _ui_font(17))
+        lesson_info_label.add_theme_font_size_override("font_size", _ui_font(16))
 
 func _build_lesson_screen() -> void:
     var page := _screen("Lesson")
@@ -1425,6 +1441,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     # Keep Practice selectable after Listen, or the learner would get stuck
     # in demonstration mode until reopening the warm-up from the library.
     mode_choice.disabled = false
+    hints_toggle.visible = learning
     hints_toggle.disabled = not learning or str(parsed.get("phase", "")) == "loading"
     hints_toggle.set_pressed_no_signal(bool(parsed.get("hints_enabled", false)))
     if learning:
