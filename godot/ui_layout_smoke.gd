@@ -88,6 +88,14 @@ func _run() -> void:
         {"id": "real-attack", "pitch": 60, "page": 1,
          "x": 0.3, "y": 0.14, "hand": "right"})
     _check(outside.is_empty(), "Wrong note must not fabricate a missing source staff")
+    var live_overlay: Control = scene.get("score_overlay")
+    live_overlay.wrong_ghosts.append({"until_ms": Time.get_ticks_msec()-2,
+        "page":0, "x":0.3, "y":0.14, "label":"D4"})
+    live_overlay.hit_pulses.append({"until_ms":Time.get_ticks_msec()-2,
+        "page":0, "x":0.3, "y":0.14, "status":"on_time"})
+    scene.call("_process", 0.016)
+    _check(live_overlay.wrong_ghosts.is_empty() and live_overlay.hit_pulses.is_empty(),
+        "Expired played-note ghosts must vanish even while the score is stationary")
 
     # The same real HUD code used by state polling must make missing
     # feedback readable without waiting for a physical piano.
