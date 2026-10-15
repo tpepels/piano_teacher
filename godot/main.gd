@@ -291,7 +291,9 @@ func _layout_moving_score(delta: float = 0.0) -> void:
         return
     # Frame the active grand-staff system instead of every system on a page.
     # These bounds are measured from Verovio noteheads.
-    var base_scale: float = maxf(viewport.y * 0.84 / image.y, viewport.x * 1.55 / image.x)
+    # Fit the entire exercise when stopped. The old max() enlarged the page
+    # past the frame, hiding the clef and most notes before any music played.
+    var base_scale: float = minf(viewport.y * 0.82 / image.y, viewport.x * 0.95 / image.x)
     var scale: float = base_scale
     var midpoint: float = 0.5
     var key := ""
@@ -300,7 +302,10 @@ func _layout_moving_score(delta: float = 0.0) -> void:
         var top: float = (float(cursor.get("top", 0.0)) - score_crop_origin.y) / score_crop_size.y
         var bottom: float = (float(cursor.get("bottom", 1.0)) - score_crop_origin.y) / score_crop_size.y
         var system_span: float = clampf(bottom - top, 0.20, 1.0)
-        scale = maxf(base_scale, minf(base_scale * 2.2, viewport.y * 0.65 / (image.y * system_span)))
+        # A modest practice zoom keeps both staves readable without turning a
+        # short two-measure lesson into a mostly clipped, empty staff.
+        scale = maxf(base_scale, minf(viewport.x * 1.20 / image.x,
+                                     viewport.y * 0.65 / (image.y * system_span)))
         midpoint = (top + bottom) * 0.5
         key = "%d/%d/%s/%d" % [revision, int(cursor.get("page", 0)),
                str(cursor.get("system", "")), int(last_state.get("transport_id", 0))]
@@ -1115,6 +1120,34 @@ func _request_score(page: int) -> void:
         score_pending = false
         _score_failed("Cannot request score page from the practice engine")
 
+func _visible_engraving_bounds(picture: Image) -> Rect2i:
+    # CairoSVG produces opaque white pages. Image.get_used_rect() includes
+    # every white pixel and cannot crop their margins. Sample the actual ink.
+    picture.convert(Image.FORMAT_RGBA8)
+    var rgba: PackedByteArray = picture.get_data()
+    var width: int = picture.get_width()
+    var height: int = picture.get_height()
+    var left: int = width
+    var top: int = height
+    var right: int = -1
+    var bottom: int = -1
+    # Coarse sampling is sufficient for a bounding box and avoids a slow
+    # pixel-by-pixel GDScript pass over a large raster.
+    for y in range(0, height, 2):
+        for x in range(0, width, 2):
+            var offset: int = (y * width + x) * 4
+            if rgba[offset] >= 240 and rgba[offset + 1] >= 240 and rgba[offset + 2] >= 240:
+                continue
+            left = mini(left, x)
+            right = maxi(right, x)
+            top = mini(top, y)
+            bottom = maxi(bottom, y)
+    if right < left or bottom < top:
+        return Rect2i(0, 0, 0, 0)
+    return Rect2i(left, top, mini(width - left, right - left + 2),
+                  mini(height - top, bottom - top + 2))
+
+
 func _on_score(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     score_pending = false
     if requested_revision != revision:
@@ -1133,7 +1166,7 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         return
     # Remove empty page margins without breaking notehead annotations.
     var original_size := Vector2(picture.get_width(), picture.get_height())
-    var opaque_bounds := picture.get_used_rect()
+    var opaque_bounds := _visible_engraving_bounds(picture)
     if opaque_bounds.size.x < 16 or opaque_bounds.size.y < 16:
         _score_failed("The engraving image contains no visible musical notation")
         return

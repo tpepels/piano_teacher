@@ -17,3 +17,12 @@ def test_system_wrap_snaps_correctly():
     assert 'key != follow_system_key' in SOURCE
     assert 'str(cursor.get("system", ""))' in SOURCE
     assert 'score_overlay.cursor = cursor' in SOURCE
+
+
+def test_opaque_white_margins_are_cropped_before_fitting_score():
+    # A source check guards the UI path; rendered acceptance remains on Godot.
+    assert 'func _visible_engraving_bounds(picture: Image)' in SOURCE
+    assert 'var opaque_bounds := _visible_engraving_bounds(picture)' in SOURCE
+    assert 'picture.get_used_rect()' not in SOURCE.split('func _on_score(')[1]
+    assert 'var base_scale: float = minf(' in SOURCE
+    assert 'viewport.x * 1.20 / image.x' in SOURCE
