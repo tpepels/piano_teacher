@@ -127,9 +127,16 @@ class LessonStep:
 
 class LearningPlan:
     """Adaptive, manually navigable practice sequence independent of the GUI."""
-    def __init__(self, piece: Piece) -> None:
+    def __init__(self, piece: Piece, *, warmup: bool = False) -> None:
         self.piece = piece
-        self.exercises = build_exercises(piece)
+        self.warmup = warmup
+        if warmup:
+            # Short three-stage course, with full eight-bar phrases.
+            duration = piece.bar_boundaries[-1] if piece.bar_boundaries else max(n.end for n in piece.notes)
+            bars = len(piece.bar_boundaries) - 1 if piece.bar_boundaries else piece.phrases[-1].last_bar
+            self.exercises = (Exercise("warmup", Phrase(0, 1, bars, 0.0, duration, piece.notes), "warmup:all"),)
+        else:
+            self.exercises = build_exercises(piece)
         if not self.exercises:
             raise ValueError("Piece has no practice passages")
         self.index = 0
@@ -147,6 +154,8 @@ class LearningPlan:
 
     @property
     def start_bpm(self) -> int:
+        if self.warmup:
+            return min(getattr(self, "target_bpm", self.piece.bpm), self.piece.bpm)
         return min(getattr(self, "target_bpm", self.piece.bpm), max(12, round(self.piece.bpm * 0.4)))
 
     @property
@@ -155,6 +164,8 @@ class LearningPlan:
 
     @property
     def hands(self) -> tuple[str, ...]:
+        if self.warmup:
+            return ("left", "right", "both")
         if self.exercise.kind != "learn":
             return ("both",)
         available = {n.hand for n in self.exercise.phrase.notes}
@@ -207,9 +218,9 @@ class LearningPlan:
         if self._lesson_steps_cache is None:
             steps: list[LessonStep] = []
             for index, ex in enumerate(self.exercises):
-                if ex.kind == "learn":
+                if ex.kind in ("learn", "warmup"):
                     available = {note.hand for note in ex.phrase.notes}
-                    individual = tuple(hand for hand in ("right", "left") if hand in available)
+                    individual = tuple(hand for hand in (("left", "right") if self.warmup else ("right", "left")) if hand in available)
                     hands = individual + (("both",) if len(individual) > 1 else ())
                 else:
                     hands = ("both",)
