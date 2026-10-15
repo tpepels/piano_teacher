@@ -67,6 +67,13 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Phase 7.6 polish - animated game transport
+Retry, Play/Pause and Listen/Practice have distinct engraved icons and
+animated press/hover depth; the active transport has a subtle pulse.
+The count-in LEDs animate from the authoritative beat clock. The in-stage
+progress rail eases toward engine progress without changing musical timing
+or progression rules.
+
 ## Phase 7.6 polish - Exit and Listen audio
 Exit is visible in the practice header; Ctrl+Q also closes the app
 from fullscreen or a drawer. Settings → Listen Audio has a separate

@@ -44,6 +44,13 @@ func _draw() -> void:
         var glow := filled and state == "success"
         if glow:
             draw_circle(pos, 13 + reveal * 3, Color(ON, .09 + reveal * .16))
+            if reveal > 0.05:
+                for ray in range(8):
+                    var angle := TAU * float(ray) / 8.0
+                    var outward := Vector2(cos(angle), sin(angle))
+                    draw_line(pos + outward * 12.0,
+                        pos + outward * (13.0 + reveal * 8.0),
+                        Color(ON, reveal * 0.7), 1.5, true)
         draw_circle(pos, 9, Color("#182526"))
         draw_arc(pos, 9, 0, TAU, 28, Color(tone if filled else OFF, .9 if filled else .6), 2, true)
         if filled:

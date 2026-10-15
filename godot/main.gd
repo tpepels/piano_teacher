@@ -17,6 +17,7 @@ const GameBackdrop := preload("res://game_backdrop.gd")
 const GameStage := preload("res://game_stage.gd")
 const GameStreak := preload("res://game_streak.gd")
 const GameCountIn := preload("res://game_countin.gd")
+const GameTransportButton := preload("res://game_transport_button.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -537,6 +538,17 @@ func _game_button(button: Button, central := false) -> void:
     button.add_theme_color_override("font_disabled_color", Color("#748B82"))
     button.clip_text = false
 
+
+func _transport_button(label: String, callback: Callable, kind: String, central := false) -> Button:
+    var button := GameTransportButton.new()
+    button.text = label
+    button.clip_text = false
+    button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+    button.pressed.connect(callback)
+    button.configure(kind)
+    button.custom_minimum_size = Vector2(198 if central else 158, 66 if central else 60)
+    _game_button(button, central)
+    return button
 
 func _show_listen_volume(db: float) -> void:
     if listen_volume_label != null:
@@ -1139,20 +1151,14 @@ func _build_interface() -> void:
     controls.add_theme_constant_override("h_separation", 12)
     controls.add_theme_constant_override("v_separation", 9)
     practice_layout.add_child(controls)
-    practice_retry_button = _button("Retry", _restart_practice)
+    practice_retry_button = _transport_button("Retry", _restart_practice, "retry")
     practice_retry_button.tooltip_text = "Repeat the current passage · R"
-    practice_retry_button.custom_minimum_size = Vector2(140 * ui_scale, 58 * ui_scale)
     controls.add_child(practice_retry_button)
-    _game_button(practice_retry_button)
-    start_button = _button("Play", _toggle_playing, true)
-    start_button.custom_minimum_size = Vector2(184 * ui_scale, 62 * ui_scale)
+    start_button = _transport_button("Play", _toggle_playing, "play", true)
     controls.add_child(start_button)
-    _game_button(start_button, true)
-    listen_button = _button("Listen", _listen_or_return_to_practice)
+    listen_button = _transport_button("Listen", _listen_or_return_to_practice, "listen")
     listen_button.tooltip_text = "Hear this passage, or return to practice · L"
-    listen_button.custom_minimum_size = Vector2(140 * ui_scale, 58 * ui_scale)
     controls.add_child(listen_button)
-    _game_button(listen_button)
     # Keyboard and Lesson Path retain Stop, passage navigation and mode
     # choices, without competing with the three routine controls.
     stop_button = _button("Stop attempt", func(): _send_action({"action": "stop"}))
@@ -1282,12 +1288,14 @@ func _update_responsive_layout() -> void:
         for child in practice_controls.get_children():
             if child is Button:
                 var button := child as Button
-                var font_size := _ui_font(15)
+                var central: bool = button == start_button
+                var font_size := _ui_font(19 if central else 17)
                 button.add_theme_font_size_override("font_size", font_size)
                 var measured: float = button.get_theme_font("font").get_string_size(
                     button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
                 button.custom_minimum_size = Vector2(
-                    maxf(132.0, measured + 38.0), 51.0 if compact else 57.0)
+                    maxf(170.0 if central else 150.0, measured + 66.0),
+                    58.0 if compact else 68.0 if central else 62.0)
                 button.clip_text = false
         title_label.add_theme_font_size_override("font_size", _ui_font(25))
         passage_label.add_theme_font_size_override("font_size", _ui_font(15))
@@ -2171,6 +2179,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         start_button.text = "Back to warm-up" if bool(parsed.get("warmup", false)) else "Listen again"
     start_button.tooltip_text = "Play, pause or resume · Space · Play any piano key when ready"
     start_button.disabled = not active_transport and (score_view.texture == null or layout_revision != revision)
+    start_button.call("configure", "pause" if start_button.text == "Pause" else "play",
+        active_transport and not bool(parsed.get("paused", false)))
+    listen_button.call("configure", "practice" if str(parsed.get("mode", "")) == "listen" else "listen",
+        str(parsed.get("mode", "")) == "listen")
     score_overlay.marks = []
     for marker in parsed.get("feedback_marks", []):
         score_overlay.marks.append(ScoreStrip.map_point(marker, score_layout) if score_layout.has("strip_size") else marker)

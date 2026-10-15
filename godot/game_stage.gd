@@ -8,6 +8,7 @@ const AMBER := Color("#F0BC76")
 
 var phase := "ready"
 var progress := 0.0
+var shown_progress := 0.0
 var accent := AURA
 
 func _init() -> void:
@@ -23,10 +24,18 @@ func present(state: Dictionary) -> void:
         ERROR if next_phase == "feedback" and failed_take
         else AMBER if next_phase in ["paused", "recovering"]
         else AURA)
+    if next_progress < progress - 0.08:
+        shown_progress = next_progress # New attempt: reset immediately.
     if phase != next_phase or absf(next_progress-progress) > 0.003 or accent != next_accent:
         phase = next_phase
         progress = next_progress
         accent = next_accent
+        queue_redraw()
+
+func _process(delta: float) -> void:
+    # Smooth presentation only. The backend is still the musical clock.
+    if absf(shown_progress - progress) > 0.0005:
+        shown_progress = move_toward(shown_progress, progress, delta * 0.75)
         queue_redraw()
 
 func _draw() -> void:
@@ -65,6 +74,8 @@ func _draw() -> void:
             draw_line(Vector2(x, y), Vector2(x, y + vertical * minf(length, h * .18)), trim, 2.0)
     # Tiny in-stage transport rail, not a competing website progress bar.
     draw_rect(Rect2(1, h - 4, maxf(0, w - 2), 2), Color("#789B90", .18))
-    if progress > 0:
-        draw_rect(Rect2(1, h - 4, maxf(0, (w - 2) * progress), 2),
-            Color(accent, .92))
+    if shown_progress > 0:
+        var tip_x := 1.0 + (w - 2.0) * shown_progress
+        draw_rect(Rect2(1, h - 4, maxf(0, tip_x - 1), 2), Color(accent, .92))
+        draw_circle(Vector2(tip_x, h - 3), 5.0, Color(accent, .13))
+        draw_circle(Vector2(tip_x, h - 3), 2.3, Color(accent, .95))

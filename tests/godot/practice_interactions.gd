@@ -99,6 +99,13 @@ func test_three_button_stage() -> void:
         "Play/Pause occupies the central primary position")
     check(app.practice_controls.get_child(2) == app.listen_button,
         "Listen is the third primary action")
+    check(app.start_button.has_method("configure") and app.listen_button.has_method("configure"),
+        "Transport controls support animated game state")
+    check(app.practice_navigation.get_children().any(func(node):
+        return node is Button and node.text == "Exit"),
+        "Fullscreen practice must offer a visible Exit")
+    check(app.listen_volume_slider.max_value >= 12.0,
+        "Settings needs a separate Listen gain adjustment")
     check(not app.mode_choice.is_visible_in_tree() and not app.hints_toggle.is_visible_in_tree(),
         "Advanced dropdowns must not appear during playing")
     show_state("paused")
