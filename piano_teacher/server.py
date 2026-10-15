@@ -1285,9 +1285,14 @@ class PracticeEngine:
         settled=settled_assessment(phrase,p.hand,p.bpm,played,
                                   from_beat=self.play_from_beat,
                                   until_beat=now_beat,beats_per_bar=per_bar)
+        grid=phrase_grid(phrase,p.piece.bar_boundaries)
+        active_bar=max(index for index, bar_beat in enumerate(grid)
+                       if bar_beat <= now_beat + 1e-7)
+        window_start=grid[max(0, active_bar-2)]
         missed=expired_attack_misses(phrase,p.hand,p.bpm,played,
                                      from_beat=self.play_from_beat,
-                                     until_beat=now_beat)
+                                     until_beat=now_beat,
+                                     window_start_beat=window_start)
         if settled is None and missed is None:
             return []
         try:
