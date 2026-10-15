@@ -91,6 +91,21 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
                     filename = f"sample-{index+1:02d}-page-{page:02d}.png"
                     (evidence / filename).write_bytes(png)
                     files.append(filename)
+                # Exercise the actual timed transport in disconnected
+                # preview mode. The clock must enter count-in then Playing
+                # without generating any scored note or mastery.
+                mastery_before = dict(engine.plan.mastered)
+                engine.start()
+                count_in = engine.state()
+                if count_in["phase"] != "count_in" or not count_in["preview_only"]:
+                    raise AssertionError("Timed transport did not enter ungraded count-in")
+                engine.run_at = time.monotonic() - 0.01
+                playing = engine.state()
+                if playing["phase"] != "playing" or playing["clock_beat"] <= 0:
+                    raise AssertionError("Timed score playback clock did not advance")
+                engine.control("stop")
+                if engine.plan.mastered != mastery_before:
+                    raise AssertionError("Diagnostic preview incorrectly awarded mastery")
                 manifest = {
                     "measure": bar, "hand": engine.plan.hand,
                     "layout": layout, "pages": files,
@@ -102,6 +117,7 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
                     "hand": engine.plan.hand, "pages": len(files),
                     "noteheads": len(layout["notes"]),
                     "anchors": len(layout["anchors"]),
+                    "playback": "timed-preview-verified",
                     "manifest": manifest_name})
             # Navigate forward and back on the real LearningPlan and keep
             # the next selected exercise inside its source measure boundaries.
