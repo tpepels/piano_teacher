@@ -67,6 +67,55 @@ func run() -> void:
         check(float(anchor.x) >= previous_x - .00001, "no backwards sweep at a system wrap")
         previous_beat = float(anchor.beat)
         previous_x = float(anchor.x)
+    # Living cues reuse the very same Verovio attacks that were positioned
+    # onto the real strip tiles above. Test an actual grand-staff chord,
+    # single-note errors and rests without a separate simulated score.
+    var living = load("res://living_score.gd")
+    check(living != null, "Living score note selector must load")
+    var attacks: Array = []
+    for note in flat.notes:
+        if bool(note.get("is_attack", false)):
+            attacks.append(note)
+    attacks.sort_custom(func(a: Dictionary, b: Dictionary):
+        return float(a.get("source_beat", a.beat)) < float(b.get("source_beat", b.beat)))
+    check(not attacks.is_empty(), "Real engraving should expose canonical source attacks")
+    if not attacks.is_empty() and living != null:
+        var first_beat: float = float(attacks[0].get("source_beat", attacks[0].beat))
+        var chord: Array = living.next_chord(flat, first_beat - .3)
+        check(chord.size() >= 2, "A two-handed real chord needs separate notehead cues")
+        var right := false
+        var left := false
+        for cue in chord:
+            var matching := false
+            for original_note in flat.notes:
+                if str(original_note.id) == str(cue.id):
+                    matching = absf(float(original_note.x)-float(cue.x)) < .0000001
+                    matching = matching and absf(float(original_note.y)-float(cue.y)) < .0000001
+                    break
+            check(matching, "Cue lost the canonical notehead position")
+            right = right or str(cue.hand) == "right"
+            left = left or str(cue.hand) == "left"
+        check(right and left, "The next-chord display omits one physical hand")
+        var missed_id: String = str(chord[0].id)
+        var red: Array = living.next_chord(flat, first_beat, [
+            {"note_id":missed_id, "status":"missed"}])
+        check(red.size() == chord.size()-1,
+            "Marking one pitch missed must not hide correct chord neighbours")
+        for cue in red:
+            check(str(cue.id) != missed_id, "A red note must not also glow green")
+        var ended: Array = living.next_chord(flat, float(flat.beats)+100)
+        check(ended.is_empty(), "No invented cues after the last score note")
+        # Where sparse original music leaves a real rest, the cue disappears
+        # instead of falsely holding the previously played chord.
+        var subsequent := INF
+        for attack in attacks:
+            var source_beat: float = float(attack.get("source_beat", attack.beat))
+            if source_beat > first_beat+.2:
+                subsequent = source_beat
+                break
+        if is_finite(subsequent) and subsequent-first_beat > 2.0:
+            check(living.next_chord(flat, first_beat + .2).is_empty(),
+                "A long source rest must not show a premature next-chord cue")
     var terminal: Dictionary = original.anchors[-1]
     var end_mark := {"page": terminal.page, "x": terminal.x,
         "y": float(terminal.top) - .02, "beat": float(flat.beats), "status": "extra"}
