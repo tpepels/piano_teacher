@@ -87,16 +87,49 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
     found: dict[str, tuple[float, float, str]] = {}
     system_ends: dict[str, float] = {}
 
-    def walk(node: ET.Element, ancestor: Matrix, system: str):
+    def walk(node: ET.Element, ancestor: Matrix, system: str,
+             viewport: tuple[float, float]):
         transform = _mul(ancestor, _transform(node.get("transform", "")))
+        # Verovio uses an outer SVG viewport (e.g. 1056x255) containing a
+        # second <svg class="definition-scale" viewBox="0 0 22000 5310">.
+        # A nested viewBox maps its local coordinates into the parent's
+        # viewport even without a transform attribute. Ignoring that mapping
+        # produced x=3.8/y=6.9 normalized noteheads and a blank Godot screen.
+        if node is not root and node.tag.rsplit("}", 1)[-1] == "svg":
+            nested = [float(v) for v in NUMBERS.findall(node.get("viewBox", ""))]
+            if len(nested) == 4 and nested[2] > 0 and nested[3] > 0:
+                def dimension(raw: str | None, parent: float) -> float:
+                    if not raw:
+                        return parent
+                    if raw.endswith("%"):
+                        return parent * float(raw[:-1]) / 100.0
+                    return float(raw)
+                local_width = dimension(node.get("width"), viewport[0])
+                local_height = dimension(node.get("height"), viewport[1])
+                ratio_x = local_width / nested[2]
+                ratio_y = local_height / nested[3]
+                preserve = node.get("preserveAspectRatio", "xMidYMid meet")
+                if preserve.strip() == "none":
+                    sx, sy = ratio_x, ratio_y
+                    dx, dy = -sx * nested[0], -sy * nested[1]
+                else:
+                    scale = max(ratio_x, ratio_y) if "slice" in preserve else min(ratio_x, ratio_y)
+                    sx = sy = scale
+                    dx = (local_width - scale * nested[2]) / 2 - scale * nested[0]
+                    dy = (local_height - scale * nested[3]) / 2 - scale * nested[1]
+                x_offset = float(node.get("x", "0"))
+                y_offset = float(node.get("y", "0"))
+                transform = _mul(transform, (sx, 0, 0, sy,
+                                             dx + x_offset, dy + y_offset))
+                viewport = (nested[2], nested[3])
         matrix[node] = transform
         if "system" in _classes(node):
             system = node.get("id") or f"system-{len(systems)}"
         systems[node] = system
         for child in node:
-            walk(child, transform, system)
+            walk(child, transform, system, viewport)
 
-    walk(root, IDENTITY, "system-0")
+    walk(root, IDENTITY, "system-0", (width, height))
     for elem in root.iter():
         if not (_classes(elem) & {"note", "rest", "mRest", "multiRest"}):
             continue

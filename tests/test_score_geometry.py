@@ -84,3 +84,35 @@ def test_no_false_precision_when_missing_timed_glyphs():
         parse_svg_geometry('<svg xmlns="http://www.w3.org/2000/svg"/>')
     with pytest.raises(ValueError,match='duration'):
         layout_from_pages([doc],[],0)
+
+
+
+def test_nested_verovio_svg_viewbox_maps_notehead_to_outer_page():
+    # Actual Verovio pattern: CSS-sized page and a separate 22000-unit
+    # engraving coordinate system inside <svg class="definition-scale">.
+    from piano_teacher.score_geometry import parse_svg_geometry, layout_from_pages
+    xml = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1056 255">'
+        '<svg class="definition-scale" viewBox="0 0 22000 5310">'
+        '<g class="page-margin" transform="translate(500, 500)">'
+        '<g class="system" id="s">'
+        '<g class="note" id="a"><g class="notehead">'
+        '<use transform="translate(3500, 1254) scale(0.72, 0.72)"/>'
+        '</g></g>'
+        '<g class="note" id="b"><g class="notehead">'
+        '<use transform="translate(17000, 3000) scale(0.72, 0.72)"/>'
+        '</g></g>'
+        '</g></g></svg></svg>'
+    )
+    page = parse_svg_geometry(xml)
+    x, y, _ = page.elements["a"]
+    assert 0.15 < x < 0.22
+    assert 0.30 < y < 0.36
+    assert 0.0 < page.elements["b"][0] < 1.0
+    layout = layout_from_pages(
+        [xml],
+        [{"qstamp": 0.0, "on": ["a"]}, {"qstamp": 1.0, "on": ["b"]}],
+        total_beats=2.0
+    )
+    assert all(0 <= p["x"] <= 1 for p in layout["anchors"])
+    assert all(0 <= p["top"] <= p["bottom"] <= 1 for p in layout["anchors"])
