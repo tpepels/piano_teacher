@@ -1,9 +1,9 @@
 """Measure real tempo-dependent scrolling in Verovio/Godot rendered pixels.
 
 Run with: .venv/bin/python scripts/audit_scroll_velocity.py
-The primary fixture has a measured maximum join-speed budget: 1.4x the
-normal pixel velocity. A second, more complex two-handed fixture checks the
-notehead and feedback geometry without imposing a collision-blind speed limit.
+The single-hand and two-handed fixtures enforce maximum join-speed
+ratios of 1.25x and 1.20x respectively, and a minimum of 0.90x. Both use
+actual Verovio engraving, raster tiles and note/feedback geometry.
 """
 from __future__ import annotations
 
