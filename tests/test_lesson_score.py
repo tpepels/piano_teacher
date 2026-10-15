@@ -99,7 +99,7 @@ def test_early_midi_release_uses_conventional_printed_duration():
 
 
 def test_nontrivial_release_remains_precise_when_not_near_a_grid():
-    source=phrase([note(60,0,.62)])
+    source=phrase([note(60,0,.64)])
     xml=build_lesson_score(source).musicxml
     item=ET.fromstring(xml).find("./part[@id='RH']/measure/note")
-    assert int(item.findtext("duration"))==round(.62*DIVISIONS)
+    assert int(item.findtext("duration"))==round(.64*DIVISIONS)
