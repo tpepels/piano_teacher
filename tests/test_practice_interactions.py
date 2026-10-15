@@ -15,7 +15,7 @@ GODOT = shutil.which("godot") or shutil.which("godot4")
 
 @pytest.mark.skipif(GODOT is None, reason="Godot 4 is not installed")
 @pytest.mark.parametrize("scenario", [
-    "three_button_stage", "primary_transport", "secondary_stop", "focused_shortcuts", "practice_detours",
+    "three_button_stage", "short_challenge_loop", "primary_transport", "secondary_stop", "focused_shortcuts", "practice_detours",
     "settings_back_origin", "abandon_practice", "compact_feedback", "instructional_transition", "modes", "pause_choices", "focus_trap", "learner_progression", "handsfree_midi",
 ])
 def test_actual_practice_interactions(scenario, tmp_path):
