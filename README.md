@@ -67,6 +67,65 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Sampled grand piano for Listen (Phase 7.3)
+
+Listen can now use real recorded **Salamander Grand Piano V3** samples from
+a Yamaha C5 (Alexander Holm, 16 velocity layers, CC BY 3.0) rendered by
+**FluidSynth** into local 16-bit stereo WAV files. The same canonical source
+notes, rests, durations, selected BPM, and original MIDI attack velocities
+drive the audio and scrolling score. The renderer uses bounded PCM chunks,
+preserves exact phrase duration and writes its cache atomically. Different
+notes, dynamics, tempos and sample-bank versions get different cache keys.
+No streaming audio service or account is necessary.
+
+**One-time optional setup on Arch Linux:**
+
+```bash
+sudo pacman -S --needed fluidsynth
+cd ~/Projects/piano_teacher
+source .venv/bin/activate
+python scripts/install_piano_soundfont.py
+./run.sh
+```
+
+The installer explicitly downloads the FreePats **296 MiB SF2 archive**
+and extracts its bank to
+`~/.local/share/piano-teacher/soundfonts/salamander-grand-piano.sf2`.
+Allow sufficient disk space for the extracted samples. The download is
+**never** started automatically in a practice session and the SoundFont
+is not committed to Git. It includes an attribution notice for the original
+recordings and their CC BY 3.0 licence. Source:
+https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html
+
+If you already have an SF2 piano bank, no download is necessary: point
+`PIANO_TEACHER_SOUNDFONT` to its absolute file path before launching:
+
+```bash
+export PIANO_TEACHER_SOUNDFONT="$HOME/sounds/MyPiano.sf2"
+./run.sh
+```
+
+A valid SF2 file and the FluidSynth library are required for sampled
+rendering. Listen identifies the selected instrument on screen; without
+a bank it explicitly reports **Basic piano sound** and retains the old
+synthetic preview, so offline learning never fails solely because the
+optional large download hasn't been installed. A corrupt bank or missing
+FluidSynth dependency produces an actionable error instead of silently
+claiming to play recorded piano samples. Installing a bank takes effect
+on the next Listen request; the currently running app need not be rebuilt.
+
+**Verification:** `python -m pytest -q tests/test_sampled_piano.py
+tests/test_demo_audio.py tests/test_listen_perform.py`. Sampled tests
+exercise frame-accurate stereo PCM output, velocity changes, sample
+selection, cache invalidation and secure extraction. A real SF2 check runs
+when a system SF2 bank and libfluidsynth are available.
+
+Limitations: historical MusicXML sources that do not encode per-note
+dynamics use a consistent default velocity. Source sustain pedal events
+are not yet represented in the lesson engine, so the sampled renderer
+cannot reproduce them. The active Listen demonstration uses source notes
+but not the player's input; it is not an assessed performance.
+
 ## Piano-first controls (Phase 7.2)
 
 The normal practice screen now has **three primary buttons**, always in
@@ -330,7 +389,9 @@ brings the passage together in timed Practice. Your prepared ideas and trouble
 spots are saved locally.
 
 Use **Listen** to hear the active lesson's actual notes at the selected tempo.
-It plays a locally synthesized piano-like tone, including rests and held notes.
+With the optional Salamander samples installed, this is a stereo sampled
+grand piano; otherwise it explicitly identifies the basic synthesized
+fallback. Both preserve rests and held notes.
 Your input is not graded during the example. **Perform passage** and
 **Perform whole piece** continue through mistakes, then show a review and a
 button to practise the weakest section. Perform does not earn Practice credit.
@@ -501,10 +562,10 @@ validation with the student's instrument. Software desktop checks establish
 visible motion and click scheduling, not physical timing quality.
 
 General MIDI quantization, hand corrections, preserved source engraving/key
-metadata, pedal scoring, fingering hints, musical phrase inference and sampled
-acoustic piano sound remain future work. Listen currently uses simple harmonic
-synthesis, decodes the full WAV in memory and retains a disk cache without an
-eviction policy. Irregular supported durations are split into tied
+metadata, pedal scoring, fingering hints, and musical phrase inference remain
+future work. Listen supports an optional sampled acoustic piano and retains a
+basic harmonic fallback; both decode the completed WAV in Godot and currently
+keep a disk cache without an eviction policy. Irregular supported durations are split into tied
 notes/rests or explicit tuplets for engraving; original MIDI events remain the
 assessment source. Very long pieces preload cropped score textures: memory use
 grows with the piece, with additional transient raster memory.
