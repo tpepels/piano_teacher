@@ -73,7 +73,9 @@ The normal practice screen now has **three primary buttons**, always in
 the same order: **Retry**, **Play/Pause**, and **Listen**. A completed
 guided idea uses the same central button to continue; Listen switches to
 **Practice** while a demonstration is active, so leaving the demonstration
-doesn't require finding another mode menu. The mode selector, hand settings,
+doesn't require finding another mode menu. Returning from Listen waits at
+Ready for the next physical piano note or Play; score rendering never
+silently starts the new attempt. The mode selector, hand settings,
 persistent hints, passage navigation and Stop live in the **Lesson Path**
 drawer; keyboard shortcuts remain available: **Space** Play/Pause, **R**
 Retry, **L** Listen/Practice, **S** Stop, and arrow keys Previous/Next.
