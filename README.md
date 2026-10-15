@@ -67,6 +67,34 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Library Health - Phase 5
+
+Open **Browse library → Check files** to inspect your MIDI and MusicXML
+imports before choosing a piece. This check runs **in the background**;
+the normal music library stays responsive, and no instrument is required.
+
+Each personal music file receives a status after checking:
+
+- **[OK]** - the canonical source importer accepted the score.
+- **[REPAIRED]** - the source imported, but ignored recoverable anomalies
+  (for example zero-length MIDI notes or unmatched releases).
+- **[ERROR]** - the source importer rejected the file; hover over the entry
+  to read the reason.
+
+The status line shows how many files have been checked and the numbers in
+each category. **Recheck files** can be used after adding or changing music.
+Unchanged files reuse their in-process import result, while modified files are
+checked again. Changing the music folder clears previous results. Source
+files, learner progress and MIDI preferences are never modified by a check.
+The ordinary library scan remains fast because checking is opt-in.
+
+A successful import check means the source was parsed. It does **not** guarantee
+Verovio layout, playback, or physical MIDI input; those are verified later
+when an exercise is opened. The check does not count toward mastery.
+
+Regression tests: `python -m pytest -q tests/test_library_health.py`;
+`./scripts/check_godot.sh` verifies the library controls and status display.
+
 ## Post-attempt review and exact section retries (UI phase 4)
 
 After an assessed Practice or Perform attempt, the score shows a summary of
