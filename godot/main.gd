@@ -12,8 +12,12 @@ const ScoreStrip := preload("res://score_strip.gd")
 const ScoreOverlay := preload("res://score_overlay.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
 
-var current_screen := "home"
-var settings_return_screen := "home"
+var current_screen := "practice"
+var settings_return_screen := "practice"
+var overlay_root: Control
+var overlay_drawer: PanelContainer
+var overlay_backdrop: ColorRect
+var score_browse_button: Button
 var screens: Dictionary = {}
 var library_request: HTTPRequest
 var settings_request: HTTPRequest
@@ -504,22 +508,30 @@ func _card_body(panel: PanelContainer, margin: int = 28) -> MarginContainer:
     panel.add_child(body)
     return body
 
+# Music selection, lesson path and settings are drawers over the
+# persistent practice stage. Opening a drawer pauses an ongoing attempt
+# without discarding the player's place or MIDI assessment.
 func _navigate(screen: String) -> void:
+    if screen == "home":
+        screen = "practice"  # Old Home is no longer part of normal navigation.
     if screen == "settings" and current_screen != "settings":
         settings_return_screen = current_screen
-    if screen != "practice" and (current_screen == "practice" or screen in ["home", "library"]):
+    if screen != "practice" and current_screen == "practice":
         var phase: String = str(last_state.get("phase", ""))
-        var starting: bool = action_pending and last_post_path == "/control" and last_control_action in ["start", "restart", "resume", "score_ready", "learn", "learn_retry", "practice", "listen", "perform"]
-        if screen in ["settings", "lesson"]:
-            if phase in ["count_in", "playing", "guided_wait", "feedback", "recovering", "loading"] or starting:
-                _send_action({"action": "pause"})
-        elif phase in ["count_in", "playing", "guided_wait", "guided_complete", "disconnected", "paused", "feedback", "recovering", "loading"] or starting:
-            _send_action({"action": "stop"})
+        var starting: bool = (action_pending and last_post_path == "/control"
+            and last_control_action in ["start", "restart", "resume", "score_ready",
+            "learn", "learn_retry", "practice", "listen", "perform"])
+        if (phase in ["count_in", "playing", "guided_wait", "feedback",
+                      "recovering", "loading"] or starting):
+            _send_action({"action": "pause"})
     current_screen = screen
+    if overlay_root != null:
+        overlay_root.visible = screen != "practice"
     if pause_sheet != null:
         pause_sheet.present(last_state if screen == "practice" else {})
     for key in screens:
-        (screens[key] as Control).visible = str(key) == screen
+        (screens[key] as Control).visible = (str(key) == screen
+            or str(key) == "practice" and screen != "practice")
     if screen == "library":
         _request_library()
     elif screen == "settings":
@@ -528,6 +540,51 @@ func _navigate(screen: String) -> void:
         _request_devices()
     elif screen == "lesson":
         _request_lesson()
+
+
+func _mount_overlays() -> void:
+    # Reuse the existing complete library/settings/course controls, but mount
+    # them as a right-side in-context sheet instead of routing to another page.
+    overlay_root = Control.new()
+    overlay_root.name = "MusicAndSettingsDrawer"
+    overlay_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(overlay_root)
+    overlay_backdrop = ColorRect.new()
+    overlay_backdrop.color = Color(0.012, 0.035, 0.028, 0.68)
+    overlay_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
+    overlay_backdrop.gui_input.connect(func(event: InputEvent):
+        if event is InputEventMouseButton and event.pressed:
+            _navigate("practice"))
+    overlay_root.add_child(overlay_backdrop)
+    overlay_drawer = PanelContainer.new()
+    overlay_drawer.name = "ContextDrawer"
+    overlay_drawer.mouse_filter = Control.MOUSE_FILTER_STOP
+    var style := Design.surface(Design.PANEL, 12)
+    style.set_border_width_all(2)
+    style.border_color = Color(Design.TEAL, 0.5)
+    style.set_content_margin_all(3)
+    overlay_drawer.add_theme_stylebox_override("panel", style)
+    overlay_root.add_child(overlay_drawer)
+    for page in ["library", "settings", "lesson"]:
+        var content: Control = screens[page]
+        content.reparent(overlay_drawer, false)
+        content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    overlay_root.visible = false
+    _resize_overlay_drawer()
+
+
+func _resize_overlay_drawer() -> void:
+    if overlay_drawer == null:
+        return
+    var viewport: Vector2 = size
+    var drawer_width: float = viewport.x if viewport.x <= 700 else minf(
+        1000.0, maxf(500.0, viewport.x * 0.72))
+    overlay_drawer.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+    overlay_drawer.position = Vector2(viewport.x - drawer_width, 0.0)
+    overlay_drawer.size = Vector2(drawer_width, viewport.y)
+
 
 func _go_back() -> void:
     _navigate(settings_return_screen if current_screen == "settings" else "practice")
@@ -728,7 +785,7 @@ func _build_interface() -> void:
     practice_navigation.add_theme_constant_override("v_separation", 8)
     practice_navigation.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(practice_navigation)
-    practice_navigation.add_child(_button("← Library", func(): _navigate("library")))
+    practice_navigation.add_child(_button("Choose music", func(): _navigate("library")))
     mode_choice = OptionButton.new()
     mode_choice.disabled = true
     mode_choice.fit_to_longest_item = false
@@ -843,6 +900,9 @@ func _build_interface() -> void:
     score_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     score_status_label.clip_text = true
     status_content.add_child(score_status_label)
+    score_browse_button = _button("Choose music", func(): _navigate("library"), true)
+    score_browse_button.visible = true
+    status_content.add_child(score_browse_button)
     score_retry_button = _button("Retry score", _retry_score)
     score_retry_button.visible = false
     status_content.add_child(score_retry_button)
@@ -938,6 +998,7 @@ func _build_interface() -> void:
     controls.add_child(_button("Restart", _restart_practice))
     controls.add_child(_button("Next", func(): _send_action({"action": "next"})))
     _build_lesson_screen()
+    _mount_overlays()
 
     folder_dialog = FileDialog.new()
     folder_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -1010,7 +1071,7 @@ func _build_interface() -> void:
     review_sheet.retry_requested.connect(func(first_bar: int, last_bar: int):
         _send_action({"action": "review_retry",
                       "first_bar": first_bar, "last_bar": last_bar}))
-    _navigate("home")
+    _navigate("practice")
     _refresh_score_status()
 
 func _update_responsive_layout() -> void:
@@ -1033,6 +1094,7 @@ func _update_responsive_layout() -> void:
         home_cards.vertical = width < 1380
     if folder_controls != null:
         folder_controls.vertical = width < 1000
+    _resize_overlay_drawer()
     if practice_header == null:
         return
     practice_header.add_theme_constant_override("separation", 16)
@@ -1185,12 +1247,15 @@ func _refresh_score_status() -> void:
     if not score_error.is_empty():
         score_status_label.text = "Unable to display sheet music:\n" + score_error
         score_retry_button.visible = true
+        score_browse_button.visible = false
     elif bool(last_state.get("loaded", false)):
         score_status_label.text = "Preparing sheet music…"
         score_retry_button.visible = false
+        score_browse_button.visible = false
     else:
-        score_status_label.text = "Choose a piece from your library"
+        score_status_label.text = "Choose a piece to begin"
         score_retry_button.visible = false
+        score_browse_button.visible = true
 
 func _score_failed(message: String) -> void:
     if phase0_smoke_mode:
