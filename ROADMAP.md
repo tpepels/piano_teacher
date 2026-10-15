@@ -15,11 +15,13 @@
   assessed. Expressive MIDI key releases are normalized *for notation only*
   when close to a conventional rhythmic value. Source events are preserved
   for scoring. An alignment check rejects invisible/missing noteheads.
-- **1D - Complete at the software level:** deterministic curriculum through
-  levels, individual hands, both hands, neighbouring-passage connections,
-  three consecutive clean full passes at target speed, saved stage/tempo/
-  mastery, unique step identities and a machine-readable `GET /lesson`
-  overview. Explicit Stop/navigation does not inadvertently confer mastery.
+- **1D - Controller implemented; learner-facing acceptance still open:**
+  deterministic hand-specific levels, adjoining passages, three clean passes
+  at target tempo and persisted mastery are implemented. The first real
+  Merry-Go-Round-of-Life screen showed 1,209 individual lesson steps: that
+  curriculum is excessively granular for a beginner and needs a separate
+  consolidation/adaptive-skipping pass before 1D is considered finished.
+  Stop/navigation does not award mastery; `GET /lesson` exposes the steps.
 - **1E - Automated integration passed:** 146 Python tests; actual MIDI import,
   MusicXML/Verovio layout, PNG rasterization, headless Godot score and cursor,
   metronome scheduling, preview-only non-grading, and a real Godot rehearsal
@@ -85,7 +87,7 @@ backend ownership of port 8765 and readable runtime errors.
 shows a real engraved score, enters/exits a timed preview without a grey or
 blank screen; backend and headless Godot integration checks pass.
 
-### Phase 1 - Adaptive moving-lesson runtime [implemented; hardware acceptance pending]
+### Phase 1 - Adaptive moving-lesson runtime [core implemented; visual/curriculum acceptance pending]
 
 - **1A - Lesson timeline:** one signed beat clock; two moving empty bars
   before every attempt; fixed-tempo visual movement from the very first
