@@ -9,6 +9,7 @@ from fractions import Fraction
 from collections import defaultdict
 from xml.etree import ElementTree as ET
 from .music import Phrase
+from .measure_grid import phrase_grid
 
 DIVISIONS = 10080
 
@@ -133,15 +134,17 @@ def _render_measure(measure: ET.Element, segments: list[tuple[int, int, int, boo
             _append_note(measure, None, length-position, lane_idx+1)
 
 
-def build_lesson_score(phrase: Phrase) -> LessonScore:
-    if phrase.end <= phrase.start or phrase.last_bar < phrase.first_bar:
-        raise ValueError("Lesson must have positive measure duration")
-    bars = phrase.last_bar-phrase.first_bar+1
-    bar_length = (phrase.end-phrase.start)/bars
-    beats, beat_type = _signature(bar_length)
-    ticks_per_bar = _ticks(bar_length)
-    if ticks_per_bar <= 0:
-        raise ValueError("Empty measure")
+def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
+                       time_signatures: tuple[tuple[float, int, int], ...] = ()) -> LessonScore:
+    """Create notation from the source measure grid, not averaged bars."""
+    grid = phrase_grid(phrase, boundaries)
+    bars = len(grid) - 1
+    changes = sorted(time_signatures)
+
+    def meter_at(beat: float, length: float) -> tuple[int, int]:
+        active = [(n, d) for offset, n, d in changes if offset <= beat + 1e-7]
+        return active[-1] if active else _signature(length)
+
     root = ET.Element("score-partwise", version="4.0")
     work = ET.SubElement(root, "work")
     ET.SubElement(work, "work-title").text = " "
@@ -153,20 +156,30 @@ def build_lesson_score(phrase: Phrase) -> LessonScore:
     for hand, ident, sign, line in (("right", "RH", "G", "2"),
                                     ("left", "LH", "F", "4")):
         part = ET.SubElement(root, "part", id=ident)
+        last_meter = None
         for b in range(bars):
+            bar_start, bar_end = _ticks(grid[b]), _ticks(grid[b+1])
+            if bar_end <= bar_start:
+                raise ValueError("Source measure has no duration")
+            beats, beat_type = meter_at(phrase.start + grid[b], grid[b+1] - grid[b])
+            if beats <= 0 or beat_type <= 0:
+                raise ValueError("Invalid imported time signature")
             measure = ET.SubElement(part, "measure", number=str(phrase.first_bar+b))
-            if b == 0:
+            if abs((beats * 4.0 / beat_type) - (grid[b+1] - grid[b])) > 1e-5:
+                measure.set("implicit", "yes")
+            if b == 0 or (beats, beat_type) != last_meter:
                 attrs = ET.SubElement(measure, "attributes")
-                ET.SubElement(attrs, "divisions").text = str(DIVISIONS)
-                ET.SubElement(ET.SubElement(attrs, "key"), "fifths").text = "0"
+                if b == 0:
+                    ET.SubElement(attrs, "divisions").text = str(DIVISIONS)
+                    ET.SubElement(ET.SubElement(attrs, "key"), "fifths").text = "0"
                 time = ET.SubElement(attrs, "time")
                 ET.SubElement(time, "beats").text = str(beats)
                 ET.SubElement(time, "beat-type").text = str(beat_type)
-                clef = ET.SubElement(attrs, "clef")
-                ET.SubElement(clef, "sign").text = sign
-                ET.SubElement(clef, "line").text = line
-            bar_start = _ticks(b*bar_length)
-            bar_end = _ticks((b+1)*bar_length)
+                if b == 0:
+                    clef = ET.SubElement(attrs, "clef")
+                    ET.SubElement(clef, "sign").text = sign
+                    ET.SubElement(clef, "line").text = line
+            last_meter = (beats, beat_type)
             segments = []
             for note in phrase.notes:
                 if note.hand != hand:

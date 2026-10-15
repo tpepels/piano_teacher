@@ -79,7 +79,7 @@ def import_piece(path: str | Path) -> tuple[Piece, object]:
     events.sort(key=lambda e: (e.start, e.pitch, e.track))
     boundaries = _bar_boundaries(max(n.end for n in events), signatures)
     phrases = _phrases(events, boundaries, 2)
-    return Piece(path.stem, bpm, tuple(events), phrases), notation
+    return Piece(path.stem, bpm, tuple(events), phrases, bar_boundaries=tuple(boundaries), time_signatures=tuple(sorted(set(signatures)))), notation
 
 
 def _pitches_from_verovio(toolkit, events: list[dict]) -> dict[str, int]:
