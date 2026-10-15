@@ -999,6 +999,9 @@ class PracticeEngine:
                     self._begin_learn(from_beat=beat)
                 else:
                     self._prepare_practice()
+                    # This opening is user-initiated. Wait for Start after
+                    # engraving rather than auto-running on score_ready.
+                    self.awaiting_score_revision = None
                     self.feedback = f"Ready to practise from measure {selected_bar}"
                     self.next_action = "Press Start to play from the selected measure."
                 return
