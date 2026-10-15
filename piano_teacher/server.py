@@ -98,9 +98,6 @@ class PracticeEngine:
         self.midi_input_count = 0
         self.midi_input_note = None
         self.midi_input_at = None
-        # Key edges used to arm a hands-free timed attempt. Kept separate from
-        # the performance recorder and from untimed Learn-note recognition.
-        self._midi_keys_down: set[tuple[int, int]] = set()
         self.enable_midi = enable_midi
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
@@ -138,7 +135,6 @@ class PracticeEngine:
                 name, port = self.midi_device, self.midi_port
                 self.midi_device = ""
                 self.midi_port = None
-                self._midi_keys_down.clear()
                 self._stop()
                 if self.teaching is not None:
                     self.teaching.set_connected(False, now=time.monotonic())
@@ -161,7 +157,6 @@ class PracticeEngine:
             port = self.midi_port
             self.midi_port = None
             self.midi_device = ""
-            self._midi_keys_down.clear()
             self._stop()
             if port is not None:
                 try:
@@ -224,44 +219,14 @@ class PracticeEngine:
                 self._save()
             self.library.mark_opened(identifier)
 
-    def _can_start_from_piano(self) -> bool:
-        """Only a rendered, idle timed exercise may be armed by a fresh key."""
-        return (self.plan is not None and self._piano_connected()
-                and self.mode in ("practice", "perform")
-                and not self.running and not self.paused
-                and self.awaiting_score_revision is None
-                and self.pending_result is None and self.pending_rewind is None
-                and not self.next_at and self.demo is None
-                and self._layout_cache is not None
-                and self._layout_revision == self.score_revision)
-
     def _receive(self, message):
-        # Timestamp in the hardware callback, not on the rendering thread.
+        # Timestamp in the hardware input callback, not on the rendering thread.
         now = time.monotonic()
         with self.lock:
-            kind = getattr(message, "type", "")
-            if kind not in ("note_on", "note_off"):
-                return
-            channel = int(getattr(message, "channel", 0))
-            pitch = int(message.note)
-            key = (channel, pitch)
-            is_on = kind == "note_on" and message.velocity > 0
-            was_down = key in self._midi_keys_down
-            if is_on:
-                self._midi_keys_down.add(key)
+            if message.type == "note_on" and message.velocity > 0:
                 self.midi_input_count += 1
-                self.midi_input_note = pitch
+                self.midi_input_note = message.note
                 self.midi_input_at = now
-            else:
-                self._midi_keys_down.discard(key)
-            # The triggering key is never scored, and count-in notes are
-            # intentionally ignored. Release this key before the downbeat.
-            # Learn mode always keeps notes for teaching rather than starting.
-            if is_on and not was_down and channel != 9 and self._can_start_from_piano():
-                self.start(mode="perform" if self.mode == "perform" else "practice")
-                self.feedback = "Count in - release the starting key, then play"
-                self.next_action = "Release the starting key; play after the count-in."
-                return
             if self.mode == "learn":
                 if (self.teaching is not None and self._piano_connected()
                         and message.type in ("note_on", "note_off")):
@@ -1303,7 +1268,6 @@ class PracticeEngine:
                                    if self.midi_input_at is not None else None),
                 "metronome": self.library.settings["metronome"],
                 "hints_enabled": self.persistent_hints,
-                "midi_start_ready": self._can_start_from_piano(),
             }
             if not p:
                 return {**input_activity,"mode":self.mode,"teaching":None,"loaded":False,"running":False,"paused":False,"transport_id":self.transport_id,
