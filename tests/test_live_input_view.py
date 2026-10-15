@@ -100,3 +100,31 @@ def test_repeated_overlapping_same_pitch_tracks_held_counts():
                  bpm=60, from_beat=0, run_at=0, running=False, paused=False,
                  preview=False, mode="practice", transport_id=1)
     assert view.held[60] == 1
+
+
+def test_wrong_key_is_tethered_to_nearby_actual_chord_notation():
+    view = LiveInputView()
+    _send(view, 61, 10.04)
+    event = _last(view, 10.05)
+    assert event["status"] == "unexpected"
+    assert event["source_id"] == ""
+    assert event["reference_source_id"] == "attack-a"
+    assert view.used == set()  # wrong pitch cannot consume a right note
+    _send(view, 60, 10.08)
+    assert _last(view, 10.09)["source_id"] == "attack-a"
+
+
+def test_random_wrong_pitch_in_a_rest_does_not_invent_notation():
+    view = LiveInputView()
+    _send(view, 77, 11.0)  # no required attack at this musical time
+    event = _last(view, 11.01)
+    assert event["status"] == "unexpected"
+    assert event["reference_source_id"] == ""
+
+
+def test_wrong_chord_pitch_with_both_hands_uses_closest_real_reference():
+    view = LiveInputView()
+    _send(view, 49, 14.02, hand="both")
+    event = _last(view, 14.03)
+    assert event["status"] == "unexpected"
+    assert event["reference_source_id"] == "attack-left"
