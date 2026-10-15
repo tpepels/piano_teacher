@@ -47,6 +47,7 @@ class PracticeEngine:
         self.recorder: Recorder | None = None
         self.run_at = 0.0
         self.play_from_beat = 0.0
+        self.open_from_beat = 0.0  # Explicit opening measure; never an inferred clock
         self.next_boundary_beat = 0.0
         self.pending_rewind: float | None = None
         self._rewind_requires_layout = False
@@ -266,6 +267,7 @@ class PracticeEngine:
             self.course_guided = False
             self.source = str(Path(path).resolve())
             self.is_builtin_warmup = warmup
+            self.open_from_beat = 0.0
             self.fingerprint = hashlib.sha256(Path(path).read_bytes()).hexdigest()
             self.plan = LearningPlan(piece, warmup=warmup)
             self.mode = "practice"
@@ -821,12 +823,14 @@ class PracticeEngine:
                 "last_bar": p.active_phrase.last_bar,
                 "expires_at": time.monotonic() + 7.0,
             }
+        if p.identity != before[0]:
+            self.open_from_beat = 0.0
         if (p.identity, p.bpm) != before:
             self.score_revision += 1
         self._save()
         return message
 
-    def start(self, *, from_beat: float = 0.0, mode: str = "practice"):
+    def start(self, *, from_beat: float | None = None, mode: str = "practice"):
         with self.lock:
             if self.plan is None:
                 raise ValueError("Open a piece first")
@@ -842,7 +846,8 @@ class PracticeEngine:
             # connected instrument. Only actual MIDI input enables assessment.
             self.preview_only = not self._piano_connected()
             phrase=self.plan.active_phrase
-            self.play_from_beat=max(0.0,min(float(from_beat),phrase.end-phrase.start-1e-6))
+            position = self.open_from_beat if from_beat is None else from_beat
+            self.play_from_beat=max(0.0,min(float(position),phrase.end-phrase.start-1e-6))
             self.paused=False
             self.paused_at=0.0
             self.transport_id+=1
@@ -895,7 +900,8 @@ class PracticeEngine:
                         self.awaiting_score_revision = None
                         self.teaching.start(now=time.monotonic())
                     else:
-                        self.start(from_beat=self.pending_rewind or 0.0,
+                        self.start(from_beat=self.pending_rewind if self.pending_rewind is not None
+                                   else self.open_from_beat,
                                    mode="perform" if self.mode == "perform" else "practice")
                 return
             if action == "demo_ready":
@@ -950,6 +956,51 @@ class PracticeEngine:
                 previous_start = self.guided_range[0] if self.guided_range else 0.0
                 self._begin_learn(from_beat=float(kwargs.get("from_beat", previous_start if action == "learn_retry" else 0.0)),
                                   recovery=self._guided_return is not None and action == "learn_retry")
+                return
+            if action == "open_at":
+                # Select a source measure across the entire imported piece,
+                # then enter the existing learning or timed-practice flow.
+                # No score is awarded simply by changing the starting point.
+                if self.plan is None:
+                    raise ValueError("Open a piece first")
+                if self.is_builtin_warmup:
+                    raise ValueError("Warm-ups use their own hand progression")
+                bar = kwargs.get("bar")
+                last_bar = len(self.plan.piece.bar_boundaries) - 1
+                if type(bar) is not int or not 1 <= bar <= last_bar:
+                    raise ValueError(f"Choose a whole measure between 1 and {last_bar}")
+                requested_mode = kwargs.get("mode", "learn")
+                if requested_mode not in ("learn", "practice"):
+                    raise ValueError("Choose Learn Notes or Practice Rhythm")
+                plan = self.plan
+                # Find the smallest course 'learn' section containing that
+                # exact measure. If it is entirely silent, use the next
+                # playable section and report the actual measure selected.
+                candidates = [(i, ex) for i, ex in enumerate(plan.exercises)
+                              if ex.kind == "learn" and ex.phrase.first_bar <= bar <= ex.phrase.last_bar]
+                if not candidates:
+                    candidates = [(i, ex) for i, ex in enumerate(plan.exercises)
+                                  if ex.kind == "learn" and ex.phrase.first_bar > bar]
+                if not candidates:
+                    raise ValueError("No playable notes at or after that measure")
+                index, section = min(candidates, key=lambda item:
+                    (item[1].phrase.first_bar if item[1].phrase.first_bar > bar else bar,
+                     item[1].phrase.last_bar-item[1].phrase.first_bar))
+                self._stop()
+                self._reset_trouble()
+                plan.select(index)
+                self.course_guided = requested_mode == "learn"
+                selected_bar = max(bar, section.first_bar)
+                beat = plan.piece.bar_boundaries[selected_bar-1] - plan.active_phrase.start
+                if not 0 <= beat < plan.active_phrase.end - plan.active_phrase.start:
+                    raise ValueError("Selected measure falls outside the playable passage")
+                self.open_from_beat = beat
+                if requested_mode == "learn":
+                    self._begin_learn(from_beat=beat)
+                else:
+                    self._prepare_practice()
+                    self.feedback = f"Ready to practise from measure {selected_bar}"
+                    self.next_action = "Press Start to play from the selected measure."
                 return
             if action == "practice":
                 self._prepare_practice()
@@ -1029,8 +1080,10 @@ class PracticeEngine:
             self._stop()
             self._reset_trouble()
             if action == "next":
+                self.open_from_beat = 0.0
                 p.jump(1)
             elif action == "previous":
+                self.open_from_beat = 0.0
                 p.jump(-1)
             elif action == "hand":
                 requested = str(kwargs.get("hand", "both"))
@@ -1039,6 +1092,7 @@ class PracticeEngine:
                     if previous_step.key not in p.mastered:
                         raise ValueError("Complete three clean passes to unlock the next hand")
                 p.set_hand(requested)
+                self.open_from_beat = 0.0
             elif action == "tempo":
                 p.set_bpm(int(kwargs["bpm"]))
             else:
@@ -1358,6 +1412,21 @@ class PracticeEngine:
                         "clock_beat":0.0,"feedback":self.feedback,"device":self.midi_device,"revision":self.score_revision}
             ex=p.exercise
             variant=p.active_variant
+            hand_stages = []
+            if ex.kind in ("learn", "warmup"):
+                for hand in (("left", "right", "both") if self.is_builtin_warmup
+                             else ("right", "left", "both")):
+                    steps = [step for step in p.lesson_steps
+                             if step.exercise_index == p.index and step.hand == hand]
+                    if not steps:
+                        continue
+                    finished = all(step.key in p.mastered for step in steps)
+                    available = hand in p.hands
+                    locked = (self.is_builtin_warmup and hand != "left"
+                              and not all(previous["complete"] for previous in hand_stages))
+                    hand_stages.append({"hand": hand, "active": hand == p.hand,
+                                        "complete": finished, "locked": locked,
+                                        "available": available})
             now=self.paused_at if self.paused else time.monotonic()
             seconds=(ex.phrase.end-ex.phrase.start)*60/p.bpm
             elapsed=now-self.run_at
@@ -1389,6 +1458,11 @@ class PracticeEngine:
                     "lesson_level":variant.level,"lesson_level_number":p.variant_index+1,
                     "lesson_level_count":len(p.variants),"required_notes":len(variant.notes),
                     "warmup":self.is_builtin_warmup,
+                    "piece_last_bar":len(p.piece.bar_boundaries)-1,
+                    "selected_start_bar": (bar_number_at(
+                        phrase_grid(p.active_phrase, p.piece.bar_boundaries),
+                        self.open_from_beat, p.active_phrase.first_bar)),
+                    "hand_stages":hand_stages,
                     "import_warnings": list(p.piece.import_warnings),
                     "lesson_step":p.lesson_step_number,"lesson_steps":len(p.lesson_steps),
                     "lesson_steps_mastered":p.lesson_steps_mastered,
