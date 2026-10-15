@@ -152,6 +152,12 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
             "trimmed_header": trimmed_header, "trimmed_tail": trimmed_tail,
             "splice_left": splice_left, "splice_right": splice_right})
         width += float(crop.size.x - maxi(0, splice_right - splice_left))
+    # Natural engraving can leave a *short* join after safe cropping.
+    # Preserve constant temporal travel by inserting an unmarked staff
+    # extension, without stretching any existing note, accidental or barline.
+    # Imported/change-of-context scores are left completely untouched.
+    if bool(layout.get("strip_trim_repeated_headers", false)):
+        width = _pad_short_system_joins(layout, mappings)
     var size := Vector2(maxf(1.0, width), maxf(1.0, above + below))
     var tiles: Array = []
     for mapping in mappings:
@@ -171,6 +177,25 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
             stitched.blit_rect(image, Rect2i(relative_b, 0,
                 image.get_width() - relative_b, image.get_height()), Vector2i(relative_a, 0))
             image = stitched
+        var lead: int = int(mapping.get("entry_padding", 0))
+        if lead > 0:
+            var expanded := Image.create(image.get_width() + lead,
+                image.get_height(), false, image.get_format())
+            expanded.fill(Color.TRANSPARENT)
+            expanded.blit_rect(image, Rect2i(Vector2i.ZERO, image.get_size()),
+                Vector2i(lead, 0))
+            # Extend only the five real staff rules per hand. This is
+            # transparent space; no added note or simulated engraving.
+            for line in mapping.system.get("staff_lines", []):
+                var staff_y: int = int(round(float(line) * float(mapping.source_size.y)
+                    - float(mapping.crop.position.y)))
+                for x in range(lead):
+                    for offset in range(-1, 2):
+                        var y: int = staff_y + offset
+                        if y >= 0 and y < expanded.get_height():
+                            expanded.set_pixel(x, y, Color(0, 0, 0,
+                                .80 if offset == 0 else .14))
+            image = expanded
         tiles.append({"texture": ImageTexture.create_from_image(image),
             "rect": Rect2(mapping.position, Vector2(image.get_size()))})
     var flat: Dictionary = layout.duplicate(true)
@@ -206,6 +231,71 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
     flat["systems"] = flat_systems
     return {"layout": flat, "tiles": tiles, "size": size,
         "crop_origin": Vector2.ZERO, "crop_size": Vector2.ONE, "mappings": mappings}
+
+
+# Return anchors for one original system. The backend order is musical-time
+# order; the original page/system pairing is essential for multi-page scores.
+static func _source_anchors(layout: Dictionary, mapping: Dictionary) -> Array:
+    var result: Array = []
+    for item in layout.get("anchors", []):
+        if int(item.get("page", -1)) == int(mapping.source_page) \
+                and str(item.get("system", "")) == str(mapping.source_system):
+            result.append(item)
+    return result
+
+
+static func _pad_short_system_joins(layout: Dictionary, mappings: Array) -> float:
+    var groups: Array = []
+    var speeds: Array[float] = []
+    for mapping in mappings:
+        var group: Array = _source_anchors(layout, mapping)
+        groups.append(group)
+        for index in range(group.size() - 1):
+            var left: Dictionary = group[index]
+            var right: Dictionary = group[index + 1]
+            var span: float = float(right.get("beat", 0.0)) - float(left.get("beat", 0.0))
+            if span <= .000001:
+                continue
+            var native_pixels: float = _mapped_px(float(right.x), mapping) \
+                - _mapped_px(float(left.x), mapping)
+            if native_pixels > 0.0:
+                speeds.append(native_pixels / span)
+    if speeds.is_empty():
+        return 0.0
+    speeds.sort()
+    var target: float = speeds[speeds.size() / 2]
+    var running_width := 0.0
+    for index in range(mappings.size()):
+        var mapping: Dictionary = mappings[index]
+        var padding := 0
+        if index > 0 and not groups[index-1].is_empty() and not groups[index].is_empty():
+            var previous: Dictionary = mappings[index-1]
+            var end: Dictionary = groups[index-1][-1]
+            var beginning: Dictionary = groups[index][0]
+            var beat_gap: float = float(beginning.beat) - float(end.beat)
+            if beat_gap > .000001:
+                var previous_cut: float = maxf(0.0, float(
+                    int(previous.get("splice_right", -1)) - int(previous.get("splice_left", -1))))
+                var tail: float = float(previous.crop.size.x) - previous_cut \
+                    + float(previous.get("entry_padding", 0)) \
+                    - (_mapped_px(float(end.x), previous) - float(previous.position.x))
+                var head: float = _mapped_px(float(beginning.x), mapping) \
+                    - float(mapping.position.x)
+                var measured: float = tail + head
+                var gap_px: float = 16.0
+                var lines: Array = mapping.system.get("staff_lines", [])
+                if lines.size() >= 2:
+                    gap_px = absf(float(lines[1]) - float(lines[0])) * float(mapping.source_size.y)
+                var desired: float = maxf(0.0, target * beat_gap - measured)
+                # Limit long rests / unusual imported glyphs; do not try to
+                # invent several beats worth of staff where there is no ink.
+                padding = int(round(minf(desired, maxf(24.0, gap_px * 4.75))))
+        mapping["entry_padding"] = padding
+        mapping["position"] = Vector2(running_width, 0.0)
+        var cut: float = maxf(0.0, float(
+            int(mapping.get("splice_right", -1)) - int(mapping.get("splice_left", -1))))
+        running_width += float(mapping.crop.size.x) - cut + float(padding)
+    return running_width
 
 
 # A splice is allowed only where the raster contains staff lines and no
@@ -257,7 +347,8 @@ static func _mapped_px(normalized: float, mapping: Dictionary) -> float:
             absolute -= float(removed_end - removed_start)
         elif absolute > removed_start:
             absolute = float(removed_start)
-    return absolute - float(mapping.crop.position.x) + float(mapping.position.x)
+    return absolute - float(mapping.crop.position.x) + float(mapping.position.x) \
+        + float(mapping.get("entry_padding", 0))
 
 
 static func _failure(message: String) -> Dictionary:
