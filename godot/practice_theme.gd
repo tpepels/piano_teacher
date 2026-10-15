@@ -1,12 +1,12 @@
 extends RefCounted
 
-const FOREST := Color("#1E3A34")
-const PINE := Color("#2E4D46")
-const PANEL := Color("#2D3532")
-const SAGE := Color("#5B7068")
-const SLATE := Color("#B4C4BB")
-const STONE := Color("#C4CDC6")
-const TEAL := Color("#70C4AD")
+const FOREST := Color("#0E191C")
+const PINE := Color("#204840")
+const PANEL := Color("#1A2C2C")
+const SAGE := Color("#5C8F7E")
+const SLATE := Color("#ADC4B8")
+const STONE := Color("#E1EEE5")
+const TEAL := Color("#7BE8C0")
 
 static func surface(color: Color, radius: int = 8) -> StyleBoxFlat:
     var box := StyleBoxFlat.new()
@@ -50,7 +50,7 @@ render_mode unshaded;
 void fragment() {
     vec4 sample_color = texture(TEXTURE, UV);
     float ink = 1.0 - dot(sample_color.rgb, vec3(0.2126, 0.7152, 0.0722));
-    COLOR = vec4(vec3(0.769, 0.804, 0.776), sample_color.a * ink);
+    COLOR = vec4(vec3(0.883, 0.928, 0.891), sample_color.a * ink);
 }
 """
     var material := ShaderMaterial.new()
