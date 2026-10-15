@@ -25,6 +25,11 @@ def require_lesson_alignment(phrase: Phrase, layout: dict, hand: str) -> None:
     missing=missing_engraved_notes(phrase,layout,hand)
     if missing:
         example=", ".join(f"{pitch}@{beat:g}" for pitch,beat in missing[:4])
+        first_pitch=missing[0][0]
+        available=sorted(round(float(g["beat"]),3) for g in layout.get("notes", [])
+                         if g.get("pitch")==first_pitch)
         raise ValueError(
             f"Generated lesson engraving omitted {len(missing)} required note(s) "
-            f"(MIDI pitch@beat: {example}). This lesson cannot be scored accurately.")
+            f"(MIDI pitch@beat: {example}; engraved pitch {first_pitch} "
+            f"appears at beats {available[:24]}, total mapped glyphs "
+            f"{len(layout.get('notes', []))}). This lesson cannot be scored accurately.")
