@@ -26,7 +26,9 @@ def test_curriculum_lists_every_hand_and_generated_level():
     assert steps[0].level == "skeleton"
     assert any(s.hand == "left" for s in steps)
     assert any(s.hand == "both" for s in steps)
-    assert any(s.kind == "connect" for s in steps)
+    # The whole four-bar source is one manageable section; no inner bridge
+    # repeats it. Longer courses test boundary bridges separately.
+    assert not any(s.kind == "connect" for s in steps)
     assert any(s.kind == "perform" for s in steps)
     assert len({s.key for s in steps}) == len(steps)
     assert p.lesson_step_number == 1

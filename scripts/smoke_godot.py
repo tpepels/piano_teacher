@@ -47,7 +47,10 @@ def make_sparse_three_four_fixture(path: Path) -> None:
 
 
 URL = "http://127.0.0.1:8765"
-CURSOR_RE = re.compile(r"PHASE0_CURSOR_BEAT:([0-9.]+) SCREEN_X:([-0-9.]+) VISIBLE:(true|false)")
+CURSOR_RE = re.compile(
+    r"^PHASE0_CURSOR_BEAT:([0-9.]+) SCREEN_X:([-0-9.]+) "
+    r"VISIBLE:(true|false) CONTENT_X:([-0-9.]+)", re.MULTILINE
+)
 
 
 LEAD_RE = re.compile(r"PHASE0_LEAD_BEAT:([-0-9.]+) CONTENT_X:([-0-9.]+) CURSOR_X:([-0-9.]+) VISIBLE:(true|false)")
@@ -63,26 +66,26 @@ def moving_lead_in_observed(log: str) -> bool:
             and max(b for _,_,b in samples) - min(b for _,_,b in samples) <= 30)
 
 
-def cursor_samples(log: str) -> list[tuple[float, float]]:
-    """Accept actual, visible Godot beam coordinates only."""
-    return [(float(beat), float(x)) for beat, x, visible in CURSOR_RE.findall(log)
-            if visible == "true"]
-
-
-PAN_RE = re.compile(r"CONTENT_X:([-0-9.]+)")
+def cursor_samples(log: str) -> list[tuple[float, float, float]]:
+    """Keep visible playback beam and score positions from the same frame."""
+    return [(float(beat), float(beam), float(content))
+            for beat, beam, visible, content in CURSOR_RE.findall(log)
+            if visible == "true" and float(beat) > 0.0]
 
 
 def moving_cursor_observed(log: str) -> bool:
-    """Reject false passes where the UI says PLAY but the line is static."""
+    """Require leftward playback scrolling beneath a stable timing line."""
     samples = cursor_samples(log)
     if len(samples) < 3:
         return False
     if any(samples[i][0] <= samples[i - 1][0] for i in range(1, len(samples))):
         return False
-    pans = [float(value) for value in PAN_RE.findall(log)]
-    beam_motion = max(x for _, x in samples) - min(x for _, x in samples)
-    score_motion = max(pans) - min(pans) if pans else 0.0
-    return samples[-1][0] - samples[0][0] >= 0.5 and max(beam_motion, score_motion) >= 8.0
+    if any(samples[i][2] > samples[i - 1][2] + 1.0 for i in range(1, len(samples))):
+        return False
+    beam_motion = max(beam for _, beam, _ in samples) - min(beam for _, beam, _ in samples)
+    score_motion = samples[0][2] - samples[-1][2]
+    return (samples[-1][0] - samples[0][0] >= 0.5
+            and score_motion >= 8.0 and beam_motion <= 30.0)
 
 
 def api(route: str, data: dict | None = None, timeout: float = 90) -> dict:

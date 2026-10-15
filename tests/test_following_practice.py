@@ -56,7 +56,7 @@ def test_inactive_staff_dimming_preserves_note_ids():
     for hand, faded in (("right", "bottom"), ("left", "top")):
         root = ET.fromstring(_fade_inactive_staff(SVG, hand))
         staves = {e.get("id"): e for e in root.iter() if "staff" in e.get("class", "").split()}
-        assert staves[faded].get("opacity") == "0.16"
+        assert staves[faded].get("opacity") == "0.48"
         assert staves["top" if faded == "bottom" else "bottom"].get("opacity") is None
         assert {e.get("id") for e in root.iter() if "note" in e.get("class", "").split()} == {"n1", "n2"}
 

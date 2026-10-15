@@ -11,12 +11,15 @@ from piano_teacher.lesson_validation import require_lesson_alignment
 from piano_teacher.raster import rasterize_score
 
 
-def check(path: Path, output_dir: Path | None = None) -> None:
+def check(path: Path, output_dir: Path | None = None, *, complete_song: bool = False) -> None:
     piece,_=import_piece(path)
     plan=LearningPlan(piece)
+    if complete_song:
+        plan.select(len(plan.exercises) - 1)
     print(f"Song: {piece.title}; {len(piece.notes)} source notes; {len(plan.exercises)} passages")
     for i,stage in enumerate(plan.variants):
-        notation=build_lesson_score(stage.phrase)
+        notation=build_lesson_score(stage.phrase, boundaries=piece.bar_boundaries,
+                                    time_signatures=piece.time_signatures)
         engraving=render_layout(notation,stage.phrase.first_bar,stage.phrase.last_bar,
                                  plan.hand,total_beats=stage.phrase.end-stage.phrase.start)
         require_lesson_alignment(stage.phrase,engraving.layout,plan.hand)
@@ -34,9 +37,10 @@ def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("music_file",type=Path)
     parser.add_argument("--output-dir",type=Path)
+    parser.add_argument("--complete-song", action="store_true", help="Check the final original performance")
     args=parser.parse_args()
     try:
-        check(args.music_file,args.output_dir)
+        check(args.music_file,args.output_dir,complete_song=args.complete_song)
     except Exception as exc:
         print(f"GENERATED LESSON FAILED: {exc}",file=sys.stderr)
         return 1

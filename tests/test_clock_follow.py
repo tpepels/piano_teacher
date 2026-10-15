@@ -74,8 +74,9 @@ def test_frontend_has_time_driven_beam_and_prevents_start_before_notation():
     assert 'float(last_state.get("clock_beat", 0.0))' in gd
     assert 'beat += elapsed * float(last_state.get("bpm", 60.0)) / 60.0' in gd
     assert 'score_overlay.transport_active = active' in gd
-    assert 'var minimum_x: float = viewport.x * 0.08 - focus_right * displayed_width' in gd
     assert 'target_x = viewport.x * 0.42 - note_x * displayed_width' in gd
-    assert 'score_content.position.lerp(target, blend)' in gd
+    # Musical projection must not lag behind the backend clock.
+    assert 'score_content.position = target' in gd
+    assert 'score_content.position.lerp' not in gd
     assert 'start_button.disabled = false' in gd
     assert 'Preparing sheet music - wait for the notes' in gd

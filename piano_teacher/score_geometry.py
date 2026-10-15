@@ -74,6 +74,8 @@ class PageGeometry:
     elements: dict[str, tuple[float, float, str]]
     # Rightmost measured barline x for each system (if discoverable).
     system_ends: dict[str, float]
+    # Actual staff lines, deduplicated across the measures in each system.
+    staff_systems: dict[str, dict]
 
 
 def parse_svg_geometry(svg: str) -> PageGeometry:
@@ -86,6 +88,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
     systems: dict[ET.Element, str] = {}
     found: dict[str, tuple[float, float, str]] = {}
     system_ends: dict[str, float] = {}
+    staff_segments = defaultdict(list)
 
     def walk(node: ET.Element, ancestor: Matrix, system: str,
              viewport: tuple[float, float]):
@@ -130,6 +133,33 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
             walk(child, transform, system, viewport)
 
     walk(root, IDENTITY, "system-0", (width, height))
+    # Verovio puts each staff's five horizontal paths directly inside a
+    # staff group, repeated in every measure. Only inspect those children:
+    # descendants also contain note stems, beams and ledger lines.
+    for staff in root.iter():
+        if "staff" not in _classes(staff):
+            continue
+        for item in staff:
+            tag = item.tag.rsplit("}", 1)[-1]
+            segment = None
+            if tag == "path":
+                match = re.fullmatch(
+                    r"\s*M\s*(%s)[,\s]+(%s)\s*L\s*(%s)[,\s]+(%s)\s*"
+                    % ((NUMBERS.pattern,) * 4), item.get("d", ""))
+                if match:
+                    segment = tuple(float(value) for value in match.groups())
+            elif tag == "line":
+                try:
+                    segment = tuple(float(item.get(key, "0")) for key in ("x1", "y1", "x2", "y2"))
+                except ValueError:
+                    continue
+            if segment is None:
+                continue
+            x1, y1 = _apply(matrix[item], *segment[:2])
+            x2, y2 = _apply(matrix[item], *segment[2:])
+            if abs(y2 - y1) <= 1e-5 and abs(x2 - x1) > 1e-5:
+                staff_segments[systems[staff]].append(
+                    ((min(x1, x2)-bx)/width, (max(x1, x2)-bx)/width, (y1-by)/height))
     for elem in root.iter():
         if not (_classes(elem) & {"note", "rest", "mRest", "multiRest"}):
             continue
@@ -173,7 +203,23 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
         if positions:
             system = systems[elem]
             system_ends[system] = max(system_ends.get(system, -float("inf")), max(positions))
-    return PageGeometry(width, height, found, system_ends)
+    staff_systems = {}
+    for system, segments in staff_segments.items():
+        lines = sorted({round(y, 9) for _, _, y in segments})
+        gaps = [b-a for a, b in zip(lines, lines[1:]) if b-a > 1e-7]
+        gap = min(gaps) if gaps else .015
+        glyph_ys = [y for _, y, containing in found.values() if containing == system]
+        # Preserve space for stems, flags and ledger notes. Exact staff lines
+        # remain separate so the moving preparation staves can meet them.
+        top = min(lines + glyph_ys) - gap * 3
+        bottom = max(lines + glyph_ys) + gap * 3
+        staff_systems[system] = {
+            "left": min(left for left, _, _ in segments),
+            "right": max(right for _, right, _ in segments),
+            "top": max(0.0, top), "bottom": min(1.0, bottom),
+            "staff_lines": lines,
+        }
+    return PageGeometry(width, height, found, system_ends, staff_systems)
 
 
 def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
@@ -202,10 +248,12 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
         beat = float(event["qstamp"])
         if not (math.isfinite(beat) and -1e-5 <= beat <= total_beats + 1e-5):
             continue
-        for identifier in event.get("on", []) + event.get("rests", []):
+        note_ids = event.get("on", [])
+        rest_ids = event.get("restsOn", []) + event.get("rests", [])
+        for identifier in note_ids + rest_ids:
             if identifier in where:
                 page, x, y, system = where[identifier]
-                groups[(page, system, round(max(0, beat), 7))].append((x, y))
+                groups[(page, system, round(max(0, beat), 7))].append((x, y, identifier in note_ids))
                 if identifier in pitches and identifier not in seen_note_ids:
                     positioned_notes.append({"id": identifier, "beat": round(max(0, beat), 7),
                                              "pitch": pitches[identifier], "page": page,
@@ -217,7 +265,7 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
     # with two systems, the playhead never extends through the wrong one.
     system_y = defaultdict(list)
     for (page, system, _), points in groups.items():
-        system_y[(page, system)].extend(y for _, y in points)
+        system_y[(page, system)].extend(y for _, y, _ in points)
     anchors = []
     for (page, system, beat), points in groups.items():
         ys = system_y[(page, system)]
@@ -225,9 +273,15 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
         bottom = max(ys)
         top = min(ys)
         margin = max(0.025, min(0.095, (bottom - top) * 0.45))
+        staff = pages[page].staff_systems.get(system, {})
+        # A full-measure rest can be centered in the inactive hand. It must
+        # never pull a simultaneous required note away from the timing line.
+        note_points = [(x, y) for x, y, is_note in points if is_note]
+        timed_points = note_points or [(x, y) for x, y, _ in points]
         anchors.append({"beat": beat, "page": page,
-                        "system": system, "x": sum(x for x, _ in points) / len(points),
-                        "top": max(0.0, top - margin), "bottom": min(1.0, bottom + margin)})
+                        "system": system, "x": sum(x for x, _ in timed_points) / len(timed_points),
+                        "top": staff.get("top", max(0.0, top - margin)),
+                        "bottom": staff.get("bottom", min(1.0, bottom + margin))})
     anchors.sort(key=lambda a: (a["beat"], a["page"], a["system"]))
     if any(anchors[i]["beat"] < anchors[i-1]["beat"] for i in range(1,len(anchors))):
         raise AssertionError("Unsorted engraving anchors")
@@ -239,7 +293,19 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
     if (boundary is not None and last["beat"] < total_beats - 1e-7
             and boundary > last["x"] + 1e-5):
         anchors.append({**last, "beat": total_beats, "x": boundary, "terminal": True})
-    return {"pages": len(svgs), "beats": total_beats, "anchors": anchors,
+    systems = []
+    for page_index, page in enumerate(pages):
+        for identifier, bounds in page.staff_systems.items():
+            beats = [a["beat"] for a in anchors
+                     if a["page"] == page_index and a["system"] == identifier]
+            if not beats:
+                continue
+            next_beats = [a["beat"] for a in anchors if a["beat"] > max(beats)
+                          and (a["page"], a["system"]) != (page_index, identifier)]
+            systems.append({**bounds, "page": page_index, "system": identifier,
+                            "start_beat": min(beats),
+                            "end_beat": min(next_beats) if next_beats else total_beats})
+    return {"pages": len(svgs), "beats": total_beats, "anchors": anchors, "systems": systems,
             "notes": sorted(positioned_notes, key=lambda n: (n["beat"], n["pitch"], n["id"])),
             "widths": [p.width for p in pages], "heights": [p.height for p in pages]}
 

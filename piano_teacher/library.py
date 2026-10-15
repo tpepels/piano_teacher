@@ -29,7 +29,7 @@ class ScoreLibrary:
         self.config_dir = Path(config_dir) if config_dir is not None else default_config_dir()
         self.settings_path = self.config_dir / 'settings.json'
         self.settings = {'music_dir': str(default_music_dir()), 'fullscreen': True,
-                         'last_piece': '', 'midi_device': ''}
+                         'last_piece': '', 'midi_device': '', 'metronome': True}
         if self.settings_path.exists():
             try:
                 stored = json.loads(self.settings_path.read_text(encoding='utf-8'))
@@ -58,7 +58,7 @@ class ScoreLibrary:
         return path
 
     def update(self, **changes) -> dict:
-        allowed = {'music_dir', 'fullscreen', 'midi_device'}
+        allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome'}
         unknown = set(changes) - allowed
         if unknown:
             raise ValueError('Unknown preference: ' + ', '.join(sorted(unknown)))
@@ -76,6 +76,10 @@ class ScoreLibrary:
             if not isinstance(changes['midi_device'], str):
                 raise ValueError('Invalid MIDI device')
             new['midi_device'] = changes['midi_device']
+        if 'metronome' in changes:
+            if not isinstance(changes['metronome'], bool):
+                raise ValueError('Metronome must be true or false')
+            new['metronome'] = changes['metronome']
         self.settings = new
         self._folder = Path(new['music_dir'])
         self.save()

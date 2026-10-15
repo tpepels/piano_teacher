@@ -1,6 +1,10 @@
-"""Deterministic two-bar learning and overlapping four-bar connections."""
+"""A compact course with two-bar focus work for difficult musical material."""
 from __future__ import annotations
+from collections import Counter
 from dataclasses import dataclass
+import hashlib
+import json
+import math
 from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant, generate_variants
 
@@ -11,9 +15,62 @@ class Exercise:
     key: str
 
 
-def build_exercises(piece: Piece) -> tuple[Exercise, ...]:
-    """Learn A, learn B, connect A+B; learn C, connect B+C, ..."""
-    phrases = piece.phrases
+def _difficult(phrase: Phrase) -> bool:
+    """Keep dense chords and fast/irregular figures in their original short unit.
+
+    This is deliberately a bounded first-course heuristic, not a claim to
+    infer musical phrases or a player's skill from a MIDI file.
+    """
+    duration = max(1.0, phrase.end - phrase.start)
+    for hand in ("right", "left"):
+        notes = [n for n in phrase.notes if n.hand == hand]
+        onsets = sorted({round(n.start, 6) for n in notes})
+        chords = Counter(round(n.start, 6) for n in notes)
+        density = len(notes) / duration
+        irregular = sum(abs(n.start * 2 - round(n.start * 2)) > .05 for n in notes)
+        # Near-simultaneous MIDI attacks can be rolled chords, not fast
+        # separate figures. A substantial run of short intervals is harder.
+        quick = sum(.08 < b - a < .25 - 1e-6 for a, b in zip(onsets, onsets[1:]))
+        if (density > 3 or max(chords.values(), default=0) > 4 or quick >= max(3, len(onsets) * .25)
+                or (density > 1.5 and irregular > len(notes) * .5)):
+            return True
+    return False
+
+
+def _course_phrases(piece: Piece) -> tuple[Phrase, ...]:
+    groups: list[Phrase] = []
+    pending: list[Phrase] = []
+
+    def flush() -> None:
+        if pending:
+            first, last = pending[0], pending[-1]
+            groups.append(Phrase(len(groups) + 1, first.first_bar, last.last_bar,
+                                 first.start, last.end, tuple(n for p in pending for n in p.notes)))
+            pending.clear()
+
+    for phrase in piece.phrases:
+        hard = _difficult(phrase)
+        if pending:
+            previous = pending[-1]
+            crosses_meter = any(pending[0].start < beat <= phrase.start
+                                for beat, _, _ in piece.time_signatures)
+            if (hard or previous.last_bar + 1 != phrase.first_bar
+                    or abs(previous.end - phrase.start) > 1e-6
+                    or phrase.last_bar - pending[0].first_bar + 1 > 8 or crosses_meter):
+                flush()
+        pending.append(phrase)
+        if hard:
+            flush()
+    flush()
+    return tuple(groups)
+
+
+def build_exercises(piece: Piece, *, consolidate: bool = True) -> tuple[Exercise, ...]:
+    """Learn sections, bridge their boundaries, then perform the complete source.
+
+    The original two-bar sequence remains reconstructible for old progress.
+    """
+    phrases = _course_phrases(piece) if consolidate else piece.phrases
     exercises: list[Exercise] = []
     for index, phrase in enumerate(phrases):
         exercises.append(Exercise("learn", phrase, f"learn:{phrase.first_bar}-{phrase.last_bar}"))
@@ -21,13 +78,33 @@ def build_exercises(piece: Piece) -> tuple[Exercise, ...]:
             prev = phrases[index - 1]
             # Do not imply continuity if there is a silent/gapped passage.
             if prev.last_bar + 1 == phrase.first_bar:
-                joined = Phrase(0, prev.first_bar, phrase.last_bar, prev.start, phrase.end,
-                                tuple(n for n in piece.notes if prev.start <= n.start < phrase.end))
+                first_bar = max(prev.first_bar, prev.last_bar - 1) if consolidate else prev.first_bar
+                last_bar = min(phrase.last_bar, phrase.first_bar + 1) if consolidate else phrase.last_bar
+                # Use source units rather than guessed equal-duration measures.
+                source = [p for p in piece.phrases if p.first_bar >= first_bar and p.last_bar <= last_bar]
+                start, end = (source[0].start, source[-1].end) if source else (prev.start, phrase.end)
+                joined = Phrase(0, first_bar, last_bar, start, end,
+                                tuple(n for n in piece.notes if start <= n.start < end))
                 exercises.append(Exercise("connect", joined, f"connect:{joined.first_bar}-{joined.last_bar}"))
-    if len(phrases) > 1:
+    if not consolidate and len(phrases) > 1:
         combined = Phrase(0, phrases[0].first_bar, phrases[-1].last_bar,
                           phrases[0].start, phrases[-1].end,
                           tuple(n for n in piece.notes if phrases[0].start <= n.start < phrases[-1].end))
+        exercises.append(Exercise("perform", combined, "perform:all"))
+        return tuple(exercises)
+    last_release = max((n.end for n in piece.notes), default=phrases[-1].end) if phrases else 0.0
+    if phrases and (len(piece.phrases) > 1 or last_release > phrases[-1].end + 1e-6):
+        # Empty-onset measures are omitted from targeted source passages, but
+        # the complete performance includes introduction rests and held endings.
+        start = piece.bar_boundaries[0] if piece.bar_boundaries else phrases[0].start
+        end = max(phrases[-1].end, last_release, piece.bar_boundaries[-1] if piece.bar_boundaries else 0)
+        first_bar = 1 if piece.bar_boundaries else phrases[0].first_bar
+        if piece.bar_boundaries and piece.bar_boundaries[-1] >= last_release:
+            last_bar = len(piece.bar_boundaries) - 1
+        else:
+            beats_per_bar = (phrases[-1].end - phrases[-1].start) / max(1, phrases[-1].last_bar - phrases[-1].first_bar + 1)
+            last_bar = phrases[-1].last_bar + math.ceil(max(0, end - phrases[-1].end) / beats_per_bar)
+        combined = Phrase(0, first_bar, last_bar, start, end, piece.notes)
         exercises.append(Exercise("perform", combined, "perform:all"))
     return tuple(exercises)
 
@@ -63,9 +140,11 @@ class LearningPlan:
         self.mastered: dict[str, int] = {}
         self._lesson_steps_cache: tuple[LessonStep, ...] | None = None
 
+    route_version = 2
+
     @property
     def start_bpm(self) -> int:
-        return max(12, round(self.piece.bpm * 0.4))
+        return min(getattr(self, "target_bpm", self.piece.bpm), max(12, round(self.piece.bpm * 0.4)))
 
     @property
     def exercise(self) -> Exercise:
@@ -77,7 +156,7 @@ class LearningPlan:
             return ("both",)
         available = {n.hand for n in self.exercise.phrase.notes}
         individual = tuple(h for h in ("right", "left") if h in available)
-        return individual + ("both",)
+        return individual + (("both",) if len(individual) > 1 else ())
 
     @property
     def hand(self) -> str:
@@ -87,8 +166,37 @@ class LearningPlan:
     def variants(self) -> tuple[ExerciseVariant, ...]:
         key = (self.index, self.hand)
         if self._variants_cached is None or self._variants_cached[0] != key:
-            self._variants_cached = (key, generate_variants(self.exercise.phrase, self.hand))
+            self._variants_cached = (key, self._stage_variants(self.exercise, self.hand))
         return self._variants_cached[1]
+
+    @staticmethod
+    def _stage_variants(exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
+        variants = generate_variants(exercise.phrase, hand)
+        if hand == "both" or exercise.kind != "learn":
+            return variants[-1:]
+        if len(variants) == 3:
+            skeleton, outline, original = variants
+            # A nearly identical middle stage adds repetition without a
+            # substantial change in the playable note set.
+            if min(len(outline.notes) - len(skeleton.notes),
+                   len(original.notes) - len(outline.notes)) <= len(original.notes) * .15:
+                variants = (skeleton, original)
+        notes = variants[-1].notes if variants else ()
+        onsets = sorted({round(n.start, 6) for n in notes})
+        trivial = (len(onsets) == len(notes)
+                   and len(notes) <= max(1.0, exercise.phrase.end - exercise.phrase.start)
+                   and all(b - a >= .5 - 1e-6 for a, b in zip(onsets, onsets[1:]))
+                   and all(abs(n.start * 2 - round(n.start * 2)) < .05 for n in notes))
+        return variants[-1:] if trivial else variants
+
+    @classmethod
+    def _stage_key(cls, exercise: Exercise, hand: str, variant: ExerciseVariant) -> str:
+        phrase = variant.phrase
+        events = [(n.start - phrase.start, n.end - phrase.start, n.pitch, n.track, n.channel, n.hand)
+                  for n in phrase.notes]
+        signature = hashlib.sha256(json.dumps((phrase.end - phrase.start, events),
+                                             separators=(",", ":")).encode()).hexdigest()[:16]
+        return f"course:{cls.route_version}:{exercise.key}:{hand}:{variant.level}:{signature}"
 
     @property
     def lesson_steps(self) -> tuple[LessonStep, ...]:
@@ -98,13 +206,14 @@ class LearningPlan:
             for index, ex in enumerate(self.exercises):
                 if ex.kind == "learn":
                     available = {note.hand for note in ex.phrase.notes}
-                    hands = tuple(hand for hand in ("right", "left") if hand in available) + ("both",)
+                    individual = tuple(hand for hand in ("right", "left") if hand in available)
+                    hands = individual + (("both",) if len(individual) > 1 else ())
                 else:
                     hands = ("both",)
                 for hand in hands:
-                    for variant in generate_variants(ex.phrase, hand):
+                    for variant in self._stage_variants(ex, hand):
                         steps.append(LessonStep(
-                            index, hand, variant.level, f"{ex.key}:{hand}:{variant.level}",
+                            index, hand, variant.level, self._stage_key(ex, hand, variant),
                             ex.phrase.first_bar, ex.phrase.last_bar,
                             len(variant.notes), ex.kind))
             self._lesson_steps_cache = tuple(steps)
@@ -129,7 +238,22 @@ class LearningPlan:
 
     @property
     def identity(self) -> str:
-        return f"{self.exercise.key}:{self.hand}:{self.active_variant.level}"
+        return self._stage_key(self.exercise, self.hand, self.active_variant)
+
+    def restore_location(self, *, kind: str, first_bar: int, last_bar: int,
+                         hand: str, level: str) -> None:
+        """Find saved source material in this course without reusing a stale index."""
+        candidates = [(i, ex) for i, ex in enumerate(self.exercises)
+                      if ex.phrase.first_bar <= first_bar and ex.phrase.last_bar >= last_bar]
+        preferred = [(i, ex) for i, ex in candidates if ex.kind == kind]
+        if not preferred:
+            preferred = [(i, ex) for i, ex in candidates if ex.kind == "learn"]
+        if preferred or candidates:
+            self.select(min(preferred or candidates,
+                            key=lambda pair: pair[1].phrase.last_bar - pair[1].phrase.first_bar)[0])
+        if hand in self.hands:
+            self.set_hand(hand)
+        self.variant_index = next((i for i, variant in enumerate(self.variants) if variant.level == level), 0)
 
     def jump(self, amount: int) -> None:
         self.select(min(len(self.exercises) - 1, max(0, self.index + amount)))
@@ -141,7 +265,6 @@ class LearningPlan:
         self.hand_index = 0
         self.variant_index = 0
         self.bpm = self.start_bpm
-        self.target_bpm = self.piece.bpm
         self.streak = 0
         self.failures = 0
 
@@ -152,7 +275,6 @@ class LearningPlan:
         self.variant_index = 0
         self.streak = self.failures = 0
         self.bpm = self.start_bpm
-        self.target_bpm = self.piece.bpm
 
     def set_bpm(self, bpm: int) -> None:
         if bpm < 12 or bpm > 300:

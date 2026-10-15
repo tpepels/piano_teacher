@@ -4,10 +4,11 @@ from __future__ import annotations
 import copy
 from dataclasses import replace
 import json
+import math
 from pathlib import Path
 from dataclasses import dataclass
 
-from .score_geometry import layout_from_pages
+from .score_geometry import layout_from_pages, parse_svg_geometry
 from .lesson_score import LessonScore
 
 from .music import Note, Piece, _bar_boundaries, _phrases, load_midi
@@ -149,9 +150,9 @@ def _verovio_object(value, description: str):
 def _fade_inactive_staff(svg: str, hand: str) -> str:
     """De-emphasize every inactive staff element: beams, ledger lines and notes.
 
-    Verovio emits both staves as SVG groups with the ``staff`` class, ordered
-    from upper to lower in each system. We preserve IDs and geometry intact.
-    Scores not containing exactly two staves per system are left unchanged.
+    Verovio emits both staves separately in every measure, ordered from upper
+    to lower. We preserve IDs and geometry intact and leave larger ensembles
+    unchanged when the inactive piano hand cannot be inferred safely.
     """
     if hand not in ("left", "right"):
         return svg
@@ -161,13 +162,16 @@ def _fade_inactive_staff(svg: str, hand: str) -> str:
     for system in root.iter():
         if "system" not in system.get("class", "").split():
             continue
-        staves = [item for item in system.iter()
-                  if "staff" in item.get("class", "").split()]
-        if len(staves) != 2:
-            continue  # Cannot safely infer the inactive stave in larger scores.
-        inactive = staves[1] if hand == "right" else staves[0]
-        inactive.set("opacity", "0.16")
-        changed = True
+        measures = [item for item in system.iter()
+                    if "measure" in item.get("class", "").split()]
+        for measure in measures or [system]:
+            staves = [item for item in measure
+                      if "staff" in item.get("class", "").split()]
+            if len(staves) != 2:
+                continue
+            inactive = staves[1] if hand == "right" else staves[0]
+            inactive.set("opacity", "0.48")
+            changed = True
     if not changed:
         return svg
     ET.register_namespace("", "http://www.w3.org/2000/svg")
@@ -251,13 +255,25 @@ def _engrave_xml(xml: str, hand: str, total_beats: float) -> EngravedScore:
         raise RuntimeError("Verovio rejected its engraving options")
     if not toolkit.loadData(xml):
         raise ValueError("Verovio could not engrave this passage")
-    count = toolkit.getPageCount()
-    if count < 1 or count > 256:
-        raise ValueError(f"Unexpected engraving page count: {count}")
-    pages = tuple(_fade_inactive_staff(toolkit.renderToSVG(i), hand)
-                  for i in range(1, count + 1))
-    if any("<svg" not in svg for svg in pages):
-        raise ValueError("Verovio returned an invalid SVG page")
+    pages = _svg_pages(toolkit)
+    gaps = []
+    for page in pages:
+        for system in parse_svg_geometry(page).staff_systems.values():
+            lines = system["staff_lines"]
+            if len(lines) == 10 and lines[1] > lines[0]:
+                gaps.append((lines[5] - lines[0]) / (lines[1] - lines[0]))
+    if gaps and max(gaps) - min(gaps) > .0001:
+        # Automatic collision avoidance can move only the bass staff in some
+        # systems. A scrolling strip requires both five-line staves to stay
+        # level. Use the space actually required by this passage, rather than
+        # imposing a large fixed gap or stretching its raster vertically.
+        # One MEI unit is half a staff space; the upper staff itself is four.
+        spacing = math.ceil(2 * (max(gaps) - 4) - .0001)
+        if not toolkit.setOptions({"spacingStaff": spacing, "spacingBraceGroup": spacing}):
+            raise ValueError("This passage requires unsupported spacing between piano staves")
+        toolkit.redoLayout()
+        pages = _svg_pages(toolkit)
+    pages = tuple(_fade_inactive_staff(page, hand) for page in pages)
     try:
         events = _verovio_object(toolkit.renderToTimemap(
             {"includeRests": True, "includeMeasures": True}), "note timing map")
@@ -268,6 +284,16 @@ def _engrave_xml(xml: str, hand: str, total_beats: float) -> EngravedScore:
     pitches = _pitches_from_verovio(toolkit, events)
     layout = layout_from_pages(list(pages), events, total_beats, pitches=pitches)
     return EngravedScore(pages, layout)
+
+
+def _svg_pages(toolkit) -> tuple[str, ...]:
+    count = toolkit.getPageCount()
+    if count < 1 or count > 256:
+        raise ValueError(f"Unexpected engraving page count: {count}")
+    pages = tuple(toolkit.renderToSVG(i) for i in range(1, count + 1))
+    if any("<svg" not in page for page in pages):
+        raise ValueError("Verovio returned an invalid SVG page")
+    return pages
 
 
 def render_measures(notation: object, first: int, last: int, hand: str = "both") -> str:

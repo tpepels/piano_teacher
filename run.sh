@@ -60,4 +60,4 @@ if [[ "$BACKEND_READY" -ne 1 ]]; then
   echo "The Python backend did not become ready on 127.0.0.1:8765" >&2
   exit 1
 fi
-"$GODOT" --path godot
+"$GODOT" --path godot "$@"

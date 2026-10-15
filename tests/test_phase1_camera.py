@@ -9,12 +9,11 @@ def test_fit_is_based_on_actual_required_noteheads():
     assert "var width_scale: float = viewport.x * 0.83" in SOURCE
     assert "var height_scale: float = viewport.y * 0.77" in SOURCE
 
-def test_playback_keeps_music_inside_frame():
-    assert "focus_left * displayed_width" in SOURCE
-    assert "focus_right * displayed_width" in SOURCE
-    assert "target_x = clampf(target_x, minimum_x, maximum_x)" in SOURCE
+def test_playback_projects_clock_directly_under_fixed_rule():
+    assert "target_x = viewport.x * 0.42 - note_x * displayed_width" in SOURCE
+    assert "target_x = clampf" not in SOURCE
     assert "var target_y: float = (viewport.y - displayed_height) * 0.5" in SOURCE
-    assert "score_content.position = score_content.position.lerp(target, blend)" in SOURCE
+    assert "score_content.position = target" in SOURCE
 
 def test_camera_does_not_rerender_between_stop_and_start():
     assert 'var key: String = "%d/%d/%d"' in SOURCE

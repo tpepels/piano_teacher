@@ -48,7 +48,7 @@ def _pitch(parent: ET.Element, value: int) -> None:
 
 
 def _type(duration: int) -> tuple[str, bool] | None:
-    # Spell ordinary durations; retain precise integer durations for others.
+    # Spell ordinary durations. Compound values are split before emission.
     lengths = {4: "whole", 2: "half", 1: "quarter", .5: "eighth",
                .25: "16th", .125: "32nd", .0625: "64th"}
     for beats, label in lengths.items():
@@ -57,6 +57,22 @@ def _type(duration: int) -> tuple[str, bool] | None:
         if duration == round(beats * DIVISIONS * 1.5):
             return label, True
     return None
+
+
+def _duration_parts(duration: int) -> tuple[int, ...]:
+    """Spell compounds without relying on Verovio to infer missing types."""
+    ordinary = sorted({round(beats * DIVISIONS * dot)
+                       for beats in (4, 2, 1, .5, .25, .125, .0625)
+                       for dot in (1, 1.5)}, reverse=True)
+    parts = []
+    remaining = duration
+    for length in ordinary:
+        while remaining >= length:
+            parts.append(length)
+            remaining -= length
+    if remaining:
+        parts.append(remaining)  # Exact residual is represented as a tuplet.
+    return tuple(parts)
 
 
 def _append_note(measure: ET.Element, pitch: int | None, duration: int,
@@ -75,16 +91,45 @@ def _append_note(measure: ET.Element, pitch: int | None, duration: int,
         ET.SubElement(el, "type").text = spelling[0]
         if spelling[1]:
             ET.SubElement(el, "dot")
+    else:
+        # MIDI onsets can lie between ordinary note values. MusicXML duration
+        # alone is insufficient: Verovio derives its timemap from type and
+        # time-modification. Preserve the integer duration with an exact ratio.
+        ET.SubElement(el, "type").text = "64th"
+        ratio = Fraction(duration, DIVISIONS // 16)
+        modification = ET.SubElement(el, "time-modification")
+        ET.SubElement(modification, "actual-notes").text = str(ratio.denominator)
+        ET.SubElement(modification, "normal-notes").text = str(ratio.numerator)
     if pitch is not None and (begin_tie or end_tie):
         if begin_tie:
             ET.SubElement(el, "tie", type="stop")
         if end_tie:
             ET.SubElement(el, "tie", type="start")
+    if (pitch is not None and (begin_tie or end_tie)) or not spelling:
         notations = ET.SubElement(el, "notations")
+    if pitch is not None and (begin_tie or end_tie):
         if begin_tie:
             ET.SubElement(notations, "tied", type="stop")
         if end_tie:
             ET.SubElement(notations, "tied", type="start")
+    if not spelling:
+        # Verovio requires explicit tuplet notation as well as the ratio;
+        # a time-modification by itself is ignored in its quarter-beat map.
+        ET.SubElement(notations, "tuplet", type="start", number="1",
+                      bracket="no", **{"show-number": "none"})
+        ET.SubElement(notations, "tuplet", type="stop", number="1")
+
+
+def _append_event(measure: ET.Element, pitches: list[int] | list[None], duration: int,
+                  voice: int, *, begin_tie=False, end_tie=False) -> None:
+    parts = _duration_parts(duration)
+    for index, length in enumerate(parts):
+        # Emit every chord tone together in each tied segment. Splitting each
+        # pitch independently would attach chord tags to the wrong time slot.
+        for chord_index, pitch in enumerate(pitches):
+            _append_note(measure, pitch, length, voice, chord=chord_index > 0,
+                         begin_tie=begin_tie or index > 0,
+                         end_tie=end_tie or index < len(parts)-1)
 
 
 def _render_measure(measure: ET.Element, segments: list[tuple[int, int, int, bool, bool]],
@@ -125,13 +170,12 @@ def _render_measure(measure: ET.Element, segments: list[tuple[int, int, int, boo
         position = 0
         for start, end, first, last, pitches in events:
             if start > position:
-                _append_note(measure, None, start-position, lane_idx+1)
-            for n, pitch in enumerate(pitches):
-                _append_note(measure, pitch, end-start, lane_idx+1,
-                             chord=n>0, begin_tie=first, end_tie=last)
+                _append_event(measure, [None], start-position, lane_idx+1)
+            _append_event(measure, pitches, end-start, lane_idx+1,
+                          begin_tie=first, end_tie=last)
             position = end
         if position < length:
-            _append_note(measure, None, length-position, lane_idx+1)
+            _append_event(measure, [None], length-position, lane_idx+1)
 
 
 def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),

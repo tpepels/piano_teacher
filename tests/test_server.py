@@ -5,7 +5,8 @@ from piano_teacher.server import PracticeEngine
 
 
 def fixture_piece():
-    notes = (Note(0, 1, 60, 0, 0, 'right'), Note(1, 2, 62, 0, 0, 'right'))
+    notes = (Note(0, 1, 60, 0, 0, 'right'), Note(1, 2, 62, 0, 0, 'right'),
+             Note(0, 2, 48, 1, 0, 'left'))
     phrase = Phrase(1, 1, 2, 0, 8, notes)
     return Piece('Test', 100, notes, (phrase,))
 

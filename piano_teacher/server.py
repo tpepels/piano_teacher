@@ -14,7 +14,8 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
-from .learning import LearningPlan
+from .learning import LearningPlan, build_exercises
+from .exercise_generator import generate_variants
 from .practice import Recorder, evaluate
 from .score import import_piece, render_layout, EngravedScore
 from .feedback import project_assessment
@@ -62,6 +63,9 @@ class PracticeEngine:
         self.feedback_unmapped = 0
         self.midi_port = None
         self.midi_device = ""
+        self.midi_input_count = 0
+        self.midi_input_note = None
+        self.midi_input_at = None
         self.enable_midi = enable_midi
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
@@ -73,26 +77,70 @@ class PracticeEngine:
             self.db.execute("ALTER TABLE sessions ADD COLUMN target_bpm INTEGER")
         if "variant_index" not in columns:
             self.db.execute("ALTER TABLE sessions ADD COLUMN variant_index INTEGER NOT NULL DEFAULT 0")
+        for column, declaration in (("route_version", "INTEGER"), ("step_key", "TEXT"),
+                                    ("first_bar", "INTEGER"), ("last_bar", "INTEGER"),
+                                    ("level", "TEXT"), ("exercise_kind", "TEXT")):
+            if column not in columns:
+                self.db.execute(f"ALTER TABLE sessions ADD COLUMN {column} {declaration}")
         self.db.execute("CREATE TABLE IF NOT EXISTS mastery (fingerprint TEXT, exercise TEXT, bpm INTEGER, PRIMARY KEY (fingerprint, exercise))")
         self.db.commit()
 
     def ports(self) -> list[str]:
         if not self.enable_midi:
             return []
-        import mido
-        return mido.get_input_names()
+        with self.lock:
+            discovery_error = None
+            names = []
+            try:
+                import mido
+                names = mido.get_input_names()
+            except Exception as exc:
+                discovery_error = exc
+            if self.midi_device and (self.midi_port is None or getattr(self.midi_port, "closed", False)
+                                     or (discovery_error is None and self.midi_device not in names)):
+                name, port = self.midi_device, self.midi_port
+                self.midi_device = ""
+                self.midi_port = None
+                self._stop()
+                if port is not None:
+                    try:
+                        port.close()
+                    except Exception:
+                        pass  # An unplugged backend may already have released it.
+                # Keep the saved preferred name so discovery can reconnect it
+                # when it returns. An interrupted attempt cannot earn mastery.
+                self.feedback = f"MIDI piano disconnected: {name}. Reconnect it, then press Start."
+            if discovery_error is not None:
+                self.feedback = f"Cannot list MIDI input devices: {discovery_error}. Check your MIDI backend and connection."
+                raise RuntimeError(self.feedback) from discovery_error
+            return names
 
     def connect(self, name: str):
         with self.lock:
-            if self.midi_port:
-                self.midi_port.close()
-                self.midi_port = None
+            port = self.midi_port
+            self.midi_port = None
             self.midi_device = ""
-            if name:
-                import mido
-                self.midi_port = mido.open_input(name, callback=self._receive)
-                self.midi_device = name
             self._stop()
+            if port is not None:
+                try:
+                    port.close()
+                except Exception:
+                    pass  # Failure closing a lost device must not retain it.
+            if not isinstance(name, str):
+                raise ValueError("MIDI input name must be text")
+            if name:
+                if not self.enable_midi:
+                    raise ValueError("MIDI input is disabled")
+                try:
+                    import mido
+                    self.midi_port = mido.open_input(name, callback=self._receive)
+                except Exception as exc:
+                    self.feedback = f"Cannot connect to MIDI input {name}: {exc}. Check the device and try again."
+                    raise RuntimeError(self.feedback) from exc
+                self.midi_device = name
+                self.feedback = f"MIDI piano connected: {name}. Press Start when ready."
+            else:
+                self.feedback = "MIDI piano disconnected. Connect a device to enable scoring."
             self.library.update(midi_device=name)
 
     def library_listing(self) -> dict:
@@ -118,6 +166,10 @@ class PracticeEngine:
         # Timestamp in the hardware input callback, not on the rendering thread.
         now = time.monotonic()
         with self.lock:
+            if message.type == "note_on" and message.velocity > 0:
+                self.midi_input_count += 1
+                self.midi_input_note = message.note
+                self.midi_input_at = now
             if self.running and not self.paused and now >= self.run_at and self.recorder:
                 if message.type == "note_on":
                     self.recorder.add(message.note, message.velocity > 0, now - self.run_at)
@@ -143,24 +195,63 @@ class PracticeEngine:
         p = self.plan
         if p is None:
             return
-        row = self.db.execute("SELECT exercise,hand,bpm,streak,target_bpm,variant_index FROM sessions WHERE fingerprint=?",(self.fingerprint,)).fetchone()
+        row = self.db.execute("SELECT exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind FROM sessions WHERE fingerprint=?",(self.fingerprint,)).fetchone()
+        legacy_exercises = None
         if row:
-            p.select(min(max(0,int(row[0])),len(p.exercises)-1))
-            if row[1] in p.hands:
-                p.set_hand(row[1])
-            p.set_bpm(int(row[4] or p.piece.bpm))
-            p.bpm = int(row[2])
-            p.streak = int(row[3])
-            p.variant_index = min(max(0,int(row[5])),len(p.variants)-1)
+            exact = next((step for step in p.lesson_steps if step.key == row[7]), None)
+            if exact is not None:
+                p.restore_location(kind=exact.kind, first_bar=exact.first_bar, last_bar=exact.last_bar,
+                                   hand=exact.hand, level=exact.level)
+                equivalent = True
+            elif row[6] and row[8] is not None and row[9] is not None:
+                p.restore_location(kind=row[11] or "learn", first_bar=int(row[8]), last_bar=int(row[9]),
+                                   hand=row[1], level=row[10] or "original")
+                equivalent = False
+            else:
+                # Old integer positions refer to the old two-bar route. Never
+                # interpret them as positions in the new consolidated course.
+                legacy_exercises = build_exercises(p.piece, consolidate=False)
+                old = legacy_exercises[min(max(0, int(row[0])), len(legacy_exercises) - 1)]
+                hand = row[1] if row[1] in ("right", "left", "both") else "both"
+                old_variants = generate_variants(old.phrase, hand)
+                if not old_variants:
+                    hand = "both"
+                    old_variants = generate_variants(old.phrase, hand)
+                old_variant = old_variants[min(max(0, int(row[5] or 0)), len(old_variants) - 1)]
+                p.restore_location(kind=old.kind, first_bar=old.phrase.first_bar, last_bar=old.phrase.last_bar,
+                                   hand=hand, level=old_variant.level)
+                equivalent = (row[1] == hand and p.hand == hand and p.active_variant.level == old_variant.level
+                              and p.active_phrase.start == old_variant.phrase.start
+                              and p.active_phrase.end == old_variant.phrase.end
+                              and p.active_phrase.notes == old_variant.notes)
+            p.set_bpm(max(12, min(300, int(row[4] or p.piece.bpm))))
+            p.bpm = max(12, min(p.target_bpm, int(row[2])))
+            p.streak = min(2, max(0, int(row[3]))) if equivalent else 0
         for key,bpm in self.db.execute("SELECT exercise,bpm FROM mastery WHERE fingerprint=?",(self.fingerprint,)):
             p.mastered[key]=bpm
+        # Preserve legacy rows, and recognize them only when the exact same
+        # hand, level and source events still form an individual course stage.
+        legacy_mastery = [(key, bpm) for key, bpm in p.mastered.items() if not key.startswith("course:")]
+        if legacy_mastery:
+            legacy_exercises = legacy_exercises or build_exercises(p.piece, consolidate=False)
+            for old in legacy_exercises:
+                for hand in ("right", "left", "both"):
+                    for variant in generate_variants(old.phrase, hand):
+                        legacy_key = f"{old.key}:{hand}:{variant.level}"
+                        if legacy_key not in p.mastered:
+                            continue
+                        new_key = p._stage_key(old, hand, variant)
+                        if any(step.key == new_key for step in p.lesson_steps):
+                            p.mastered[new_key] = p.mastered[legacy_key]
 
     def _save(self):
         p=self.plan
         if p is None:
             return
-        self.db.execute("INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm,variant_index) VALUES (?,?,?,?,?,?,?)",
-                        (self.fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm,p.variant_index))
+        self.db.execute("INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (self.fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm,p.variant_index,
+                         p.route_version,p.identity,p.exercise.phrase.first_bar,p.exercise.phrase.last_bar,
+                         p.active_variant.level,p.exercise.kind))
         for key, bpm in p.mastered.items():
             self.db.execute("INSERT OR REPLACE INTO mastery VALUES (?,?,?)", (self.fingerprint,key,bpm))
         self.db.commit()
@@ -412,8 +503,15 @@ class PracticeEngine:
         with self.lock:
             self._update()
             p=self.plan
+            input_activity = {
+                "midi_input_count": self.midi_input_count,
+                "midi_input_note": self.midi_input_note,
+                "midi_input_age": (max(0.0, time.monotonic() - self.midi_input_at)
+                                   if self.midi_input_at is not None else None),
+                "metronome": self.library.settings["metronome"],
+            }
             if not p:
-                return {"loaded":False,"running":False,"paused":False,"transport_id":self.transport_id,
+                return {**input_activity,"loaded":False,"running":False,"paused":False,"transport_id":self.transport_id,
                         "clock_beat":0.0,"feedback":self.feedback,"device":self.midi_device,"revision":self.score_revision}
             ex=p.exercise
             variant=p.active_variant
@@ -424,7 +522,7 @@ class PracticeEngine:
             progress=min(1.0,max(0.0, exercise_beat/(ex.phrase.end-ex.phrase.start))) if self.running else 0.0
             phase=("paused" if self.paused else "count_in" if elapsed<0 else "playing") if self.running else "feedback" if self.pending_result is not None else "loading" if self.awaiting_score_revision is not None else "recovering" if self.pending_rewind is not None else "ready"
             live_marks=self._live_feedback(elapsed) if phase == "playing" else []
-            return {"loaded":True,"title":p.piece.title,"kind":ex.kind,
+            return {**input_activity,"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
                     "exercise":p.index+1,"exercise_count":len(p.exercises),
                     "lesson_level":variant.level,"lesson_level_number":p.variant_index+1,
@@ -456,7 +554,8 @@ class PracticeEngine:
             if self._layout_revision != self.score_revision or self._layout_cache is None:
                 p=self.plan
                 phrase=p.active_phrase
-                notation=build_lesson_score(phrase)
+                notation=build_lesson_score(phrase, boundaries=p.piece.bar_boundaries,
+                                            time_signatures=p.piece.time_signatures)
                 layout = render_layout(notation,phrase.first_bar,phrase.last_bar,p.hand,
                                        total_beats=phrase.end - phrase.start)
                 require_lesson_alignment(phrase, layout.layout, p.hand)
@@ -492,6 +591,7 @@ class PracticeEngine:
                 raise ValueError("Open a piece first")
             p = self.plan
             return {
+                "route_version": p.route_version,
                 "current_step": p.lesson_step_number,
                 "total_steps": len(p.lesson_steps),
                 "completed_steps": p.lesson_steps_mastered,

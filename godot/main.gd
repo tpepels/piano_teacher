@@ -2,11 +2,13 @@ extends Control
 
 # Lightweight Godot presentation. Python owns MIDI timestamps, tempo and grading.
 const URL := "http://127.0.0.1:8765"
-const INK := Color("#293B34")
-const MUTED := Color("#7F8982")
-const PAPER := Color("#F3F5EF")
-const WHITE := Color("#FFFEFA")
-const ACCENT := Color("#325A4C")
+const Design := preload("res://practice_theme.gd")
+const INK := Design.STONE
+const MUTED := Design.SLATE
+const PAPER := Design.FOREST
+const WHITE := Design.PANEL
+const ACCENT := Design.TEAL
+const ScoreStrip := preload("res://score_strip.gd")
 
 var current_screen := "home"
 var screens: Dictionary = {}
@@ -74,6 +76,10 @@ var layout_revision := -1
 var requested_layout_revision := -1
 var layout_pending := false
 var score_layout: Dictionary = {}
+var source_layout: Dictionary = {}
+var page_images: Array[Image] = []
+var score_tiles: Array[TextureRect] = []
+var strip_tiles: Array = []
 var current_page := -1
 var requested_page := -1
 var rendered_revision := -1
@@ -88,6 +94,22 @@ var phase0_smoke_mode := false
 var phase0_last_phase := ""
 var phase0_last_cursor_tick := -1
 var phase0_last_lead_tick := -999
+var lesson_request: HTTPRequest
+var lesson_pending := false
+var lesson_rows: VBoxContainer
+var lesson_summary: Label
+var lesson_description: Label
+var input_activity_label: Label
+var tempo_setting: SpinBox
+var metronome_toggle: CheckButton
+var pause_button: Button
+var lesson_info_label: Label
+var practice_progress: ProgressBar
+var practice_controls: GridContainer
+var hand_buttons: Dictionary = {}
+var device_pending := false
+var practice_layout_box: VBoxContainer
+var score_margin_box: MarginContainer
 
 class ScoreOverlay extends Control:
     var cursor: Dictionary = {}
@@ -100,6 +122,7 @@ class ScoreOverlay extends Control:
     var crop_size := Vector2.ONE
     var lead_first: Dictionary = {}
     var lead_width_px := 0.0
+    var lead_staff_lines: Array = []
 
     func _sheet_xy(x: float, y: float) -> Vector2:
         # Preserve Verovio notehead coordinates after cropping and scrolling.
@@ -118,17 +141,11 @@ class ScoreOverlay extends Control:
             # Mask any preceding source notes during a mid-piece recovery:
             # this really is an empty preparation bar, not an overlay on notes.
             draw_rect(Rect2(left, top - 16.0, lead_width_px,
-                            bottom - top + 32.0), Color("#FFFFFF"), true)
-            var ink := Color(Color("#75867C"), 0.45)
-            var staff_gap: float = maxf(5.0, (bottom - top) / 17.0)
-            for j in range(5):
-                var offset: float = float(j) * staff_gap
-                draw_line(Vector2(left, top + offset), Vector2(first_x, top + offset), ink, 1.1, true)
-                draw_line(Vector2(left, bottom - offset), Vector2(first_x, bottom - offset), ink, 1.1, true)
-            for k in range(2):
-                var bx: float = left + lead_width_px * float(k)
-                draw_line(Vector2(bx, top), Vector2(bx, top + 4.0 * staff_gap), ink, 1.25, true)
-                draw_line(Vector2(bx, bottom - 4.0 * staff_gap), Vector2(bx, bottom), ink, 1.25, true)
+                            bottom - top + 32.0), Design.PANEL, true)
+            var ink := Color(Design.SLATE, 0.52)
+            for staff_y in lead_staff_lines:
+                var sy: float = _sheet_xy(0.0, float(staff_y)).y
+                draw_line(Vector2(left, sy), Vector2(first_x, sy), ink, 1.1, true)
         # A faint green ring confirms correct notes; stronger colour markers
         # distinguish mistakes without altering the underlying engraving.
         var palette := {
@@ -149,7 +166,7 @@ class ScoreOverlay extends Control:
                 draw_arc(center, 9.0, 0.0, TAU, 20, Color(color, 0.37), 1.5, true)
             else:
                 var radius := 12.0 if status == "missed" else 10.0
-                draw_circle(center, radius, Color(1, 1, 1, 0.60))
+                draw_circle(center, radius, Color(Design.PANEL, 0.85))
                 draw_arc(center, radius, 0.0, TAU, 24, color, 2.5, true)
                 var symbol: String = str(labels.get(status, "!"))
                 var font: Font = ThemeDB.fallback_font
@@ -164,11 +181,10 @@ class ScoreOverlay extends Control:
             var end: Vector2 = _sheet_xy(x, bottom)
             # The cyan beam is the timing rule, not a progress indicator tied
             # to key presses. It travels at the clock's BPM even in silence.
-            var cyan := Color("#00ACC4") if transport_active else Color("#6BABB4")
-            draw_line(start, end, Color(cyan, 0.13), 23.0, true)
-            draw_line(start, end, Color(cyan, 0.29), 11.0, true)
-            draw_line(start, end, cyan, 3.5, true)
-            draw_circle(start, 5.0, cyan)
+            var cyan := Design.TEAL if transport_active else Design.SAGE
+            draw_line(start, end, Color(cyan, 0.09), 16.0, true)
+            draw_line(start, end, Color(cyan, 0.18), 7.0, true)
+            draw_line(start, end, cyan, 2.5, true)
 
 func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
@@ -194,6 +210,7 @@ func _ready() -> void:
     device_request = _new_request(_on_devices)
     library_request = _new_request(_on_library)
     settings_request = _new_request(_on_settings)
+    lesson_request = _new_request(_on_lesson)
     var poll := Timer.new()
     poll.wait_time = 0.15
     poll.autostart = true
@@ -209,6 +226,8 @@ func _ready() -> void:
     scan_timer.timeout.connect(func():
         if current_screen == "home" or current_screen == "library":
             _request_library()
+        if current_screen == "practice" or current_screen == "settings":
+            _request_devices()
     )
     add_child(scan_timer)
     set_process(true)
@@ -233,6 +252,8 @@ func _make_count_click(frequency: float) -> AudioStreamWAV:
 
 func _count_tick(accent: bool) -> void:
     if click_player == null:
+        return
+    if not bool(preferences.get("metronome", true)) and _transport_beat_now() >= 0.0:
         return
     click_player.stream = click_high if accent else click_low
     click_player.play()
@@ -339,34 +360,35 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     # changed to a much larger scale on Start and then panned empty page space
     # across the entire visible panel.
     var width_scale: float = viewport.x * 0.83 / (image.x * focus_span)
+    if score_layout.has("strip_size"):
+        # Long passages stay readable: never shrink an entire composition to
+        # the viewport. Tiles scroll through at a staff-based stable scale.
+        width_scale = INF
     var height_scale: float = viewport.y * 0.77 / image.y
     var scale: float = maxf(0.01, minf(width_scale, height_scale))
     var displayed_width: float = image.x * scale
     var displayed_height: float = image.y * scale
     score_content.size = Vector2(displayed_width, displayed_height)
+    for i in range(score_tiles.size()):
+        var rect: Rect2 = strip_tiles[i]["rect"]
+        score_tiles[i].position = rect.position * scale
+        score_tiles[i].size = rect.size * scale
     var midpoint_x: float = (focus_left + focus_right) * 0.5
     var target_x: float = viewport.x * 0.5 - midpoint_x * displayed_width
+    if score_layout.has("strip_size") and not score_layout.get("notes", []).is_empty():
+        target_x = viewport.x * 0.04
     if score_overlay.showing and not score_overlay.cursor.is_empty():
         var note_x: float = (float(score_overlay.cursor.get("x", 0.0))
             - score_crop_origin.x) / maxf(score_crop_size.x, 0.00001)
         target_x = viewport.x * 0.42 - note_x * displayed_width
-        if _transport_beat_now() >= 0.0:
-            # Keep at least one part of the *musical passage* in the viewport.
-            # Clamping against the PNG edges is insufficient when the raster
-            # has empty space; real notehead positions provide safe limits.
-            var minimum_x: float = viewport.x * 0.08 - focus_right * displayed_width
-            var maximum_x: float = viewport.x * 0.92 - focus_left * displayed_width
-            target_x = clampf(target_x, minimum_x, maximum_x)
     var target_y: float = (viewport.y - displayed_height) * 0.5
     # The PNG is ink-cropped; centering it vertically keeps both staves on
     # screen. Do not re-center using the approximate notehead staff bounds.
     var target := Vector2(target_x, target_y)
     var key: String = "%d/%d/%d" % [revision, current_page, int(last_state.get("transport_id", 0))]
-    if delta <= 0.0 or key != follow_system_key or _transport_beat_now() < 0.0:
-        score_content.position = target
-    else:
-        var blend: float = 1.0 - exp(-14.0 * delta)
-        score_content.position = score_content.position.lerp(target, blend)
+    # This is a musical projection, not a camera chasing a moving object.
+    # Smoothing introduces tempo-dependent lag; clamps let the rule wander.
+    score_content.position = target
     follow_system_key = key
 
 func _new_request(callback: Callable) -> HTTPRequest:
@@ -415,20 +437,26 @@ func _button(label: String, callback: Callable, primary := false) -> Button:
     # Short controls must fit their text; library rows override width.
     button.custom_minimum_size = Vector2(mini(220, maxi(96, 42 + label.length() * 9)), 45)
     var style := StyleBoxFlat.new()
-    style.bg_color = ACCENT if primary else Color("#ECEFEA")
-    style.set_corner_radius_all(11)
+    style.bg_color = Design.PINE if primary else Design.PANEL
+    style.set_corner_radius_all(8)
+    style.set_border_width_all(1)
+    style.border_color = Design.SAGE if primary else Color(Design.SAGE, .4)
     style.content_margin_left = 18
     style.content_margin_right = 18
     button.add_theme_stylebox_override("normal", style)
     var hover := style.duplicate() as StyleBoxFlat
-    hover.bg_color = Color("#426A5B") if primary else Color("#DDE8DD")
+    hover.bg_color = Design.SAGE if primary else Design.PINE
     button.add_theme_stylebox_override("hover", hover)
     button.add_theme_stylebox_override("pressed", hover)
     var disabled_style := style.duplicate() as StyleBoxFlat
-    disabled_style.bg_color = Color("#E9EBE6")
+    disabled_style.bg_color = Design.PANEL
     button.add_theme_stylebox_override("disabled", disabled_style)
-    button.add_theme_color_override("font_color", WHITE if primary else INK)
-    button.add_theme_color_override("font_hover_color", WHITE if primary else INK)
+    var focus := style.duplicate() as StyleBoxFlat
+    focus.set_border_width_all(2)
+    focus.border_color = ACCENT
+    button.add_theme_stylebox_override("focus", focus)
+    button.add_theme_color_override("font_color", INK)
+    button.add_theme_color_override("font_hover_color", INK.lightened(.15))
     button.add_theme_color_override("font_disabled_color", MUTED)
     button.add_theme_font_size_override("font_size", 15)
     button.pressed.connect(callback)
@@ -460,11 +488,9 @@ func _card() -> PanelContainer:
     var panel := PanelContainer.new()
     var style := StyleBoxFlat.new()
     style.bg_color = WHITE
-    style.set_corner_radius_all(17)
+    style.set_corner_radius_all(10)
     style.set_border_width_all(1)
-    style.border_color = Color("#DFE4DC")
-    style.shadow_color = Color(0.14, 0.2, 0.15, 0.05)
-    style.shadow_size = 6
+    style.border_color = Color(Design.SAGE, .32)
     panel.add_theme_stylebox_override("panel", style)
     return panel
 
@@ -484,10 +510,14 @@ func _navigate(screen: String) -> void:
     if screen == "library":
         _request_library()
     elif screen == "settings":
+        tempo_setting.set_value_no_signal(float(last_state.get("target_bpm", 40)))
         _request_settings()
         _request_devices()
+    elif screen == "lesson":
+        _request_lesson()
 
 func _build_interface() -> void:
+    theme = Design.create()
     var background := ColorRect.new()
     background.color = PAPER
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -507,14 +537,14 @@ func _build_interface() -> void:
     home_scroll.add_child(home_layout)
     var home_nav := HBoxContainer.new()
     home_layout.add_child(home_nav)
-    home_nav.add_child(_label("PIANO  /  TEACHER", 15, ACCENT, true))
+    home_nav.add_child(_label("Piano Teacher", 24, INK, true))
     home_nav.add_child(_space())
     home_nav.add_child(_button("Settings", func(): _navigate("settings")))
     home_nav.add_child(_button("Quit", func(): get_tree().quit()))
     var header := _stack(12)
     home_layout.add_child(header)
-    header.add_child(_label("Practice the music you love.", 44, INK, true))
-    header.add_child(_label("Short passages. Both hands. Steady progress.", 20, MUTED))
+    header.add_child(_label("Your practice", 34, INK, true))
+    header.add_child(_label("Choose your music or continue your last lesson.", 18, MUTED))
     var home_row := BoxContainer.new()
     home_cards = home_row
     home_row.add_theme_constant_override("separation", 20)
@@ -554,7 +584,7 @@ func _build_interface() -> void:
     library_layout.add_child(library_head)
     library_head.add_child(_button("← Home", func(): _navigate("home")))
     library_head.add_child(_space())
-    library_head.add_child(_button("Music folder", func(): _navigate("settings")))
+    library_head.add_child(_button("Settings", func(): _navigate("settings")))
     library_layout.add_child(_label("Your music", 39, INK, true))
     library_path_label = _label("Looking for scores…", 15, MUTED)
     library_path_label.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -597,10 +627,10 @@ func _build_interface() -> void:
     settings_scroll.add_child(settings_layout)
     var settings_head := HBoxContainer.new()
     settings_layout.add_child(settings_head)
-    settings_head.add_child(_button("← Back", func(): _navigate("home")))
+    settings_head.add_child(_button("← Back", func(): _navigate("practice" if bool(last_state.get("loaded", false)) else "home")))
     settings_head.add_child(_space())
     settings_layout.add_child(_label("Settings", 39, INK, true))
-    settings_layout.add_child(_label("Only the options you need to practice.", 16, MUTED))
+    settings_layout.add_child(_label("Your piano, music folder and practice preferences.", 16, MUTED))
     var settings_card := _card()
     settings_layout.add_child(settings_card)
     var settings_content := _stack(24)
@@ -629,6 +659,25 @@ func _build_interface() -> void:
     device_row.add_child(device_button)
     device_row.add_child(_button("Refresh devices", _request_devices))
     device_row.add_child(_space())
+    input_activity_label = _label("Connect your MIDI piano, then play a note to check input.", 15, MUTED)
+    settings_content.add_child(input_activity_label)
+    settings_content.add_child(_label("PRACTICE", 13, ACCENT, true))
+    var tempo_row := HBoxContainer.new()
+    tempo_row.add_theme_constant_override("separation", 12)
+    settings_content.add_child(tempo_row)
+    tempo_row.add_child(_label("Target tempo", 16, INK))
+    tempo_setting = SpinBox.new()
+    tempo_setting.min_value = 12
+    tempo_setting.max_value = 300
+    tempo_setting.step = 1
+    tempo_setting.suffix = " BPM"
+    tempo_setting.custom_minimum_size = Vector2(160, 44)
+    tempo_row.add_child(tempo_setting)
+    tempo_row.add_child(_button("Apply tempo", func(): _send_action({"action": "tempo", "bpm": int(tempo_setting.value)})))
+    metronome_toggle = CheckButton.new()
+    metronome_toggle.text = "Metronome during practice · count-in always audible"
+    metronome_toggle.toggled.connect(func(enabled: bool): _send_post("/settings", {"metronome": enabled}))
+    settings_content.add_child(metronome_toggle)
     settings_content.add_child(_label("DISPLAY", 13, ACCENT, true))
     fullscreen_toggle = CheckButton.new()
     fullscreen_toggle.text = "Fullscreen application  (F11 to toggle)"
@@ -644,6 +693,7 @@ func _build_interface() -> void:
     var practice_page := _screen("Practice")
     screens["practice"] = practice_page
     var practice_layout := _stack(19)
+    practice_layout_box = practice_layout
     practice_page.add_child(practice_layout)
     # Navigation and lesson metadata are separate rows. A long title or
     # small viewport must never squeeze BPM into a one-letter column.
@@ -652,6 +702,7 @@ func _build_interface() -> void:
     practice_layout.add_child(practice_navigation)
     practice_navigation.add_child(_button("← Library", func(): _navigate("library")))
     practice_navigation.add_child(_space())
+    practice_navigation.add_child(_button("Lesson path", func(): _navigate("lesson")))
     practice_settings_button = _button("Settings", func(): _navigate("settings"))
     practice_navigation.add_child(practice_settings_button)
 
@@ -682,10 +733,13 @@ func _build_interface() -> void:
     hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(hand_label)
+    lesson_info_label = _label("", 14, INK)
+    practice_layout.add_child(lesson_info_label)
     var score_panel := _card()
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(score_panel)
     var score_margin := _card_body(score_panel, 26)
+    score_margin_box = score_margin
     var score_area := Control.new()
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
     score_area.custom_minimum_size = Vector2(0, 170)
@@ -734,6 +788,15 @@ func _build_interface() -> void:
     count_in_display.offset_bottom = 52.0
     count_in_display.visible = false
     score_frame.add_child(count_in_display)
+    practice_progress = ProgressBar.new()
+    practice_progress.show_percentage = false
+    practice_progress.max_value = 1.0
+    practice_progress.custom_minimum_size = Vector2(0, 5)
+    practice_progress.add_theme_stylebox_override("background", Design.surface(Design.PANEL, 3))
+    practice_progress.add_theme_stylebox_override("fill", Design.surface(Design.SAGE, 3))
+    (practice_progress.get_theme_stylebox("background") as StyleBoxFlat).set_content_margin_all(0)
+    (practice_progress.get_theme_stylebox("fill") as StyleBoxFlat).set_content_margin_all(0)
+    practice_layout.add_child(practice_progress)
     var information := HBoxContainer.new()
     practice_layout.add_child(information)
     progress_label = _label("", 14, MUTED)
@@ -746,19 +809,23 @@ func _build_interface() -> void:
     feedback_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     information.add_child(feedback_label)
-    var controls := HBoxContainer.new()
-    controls.alignment = BoxContainer.ALIGNMENT_CENTER
-    controls.add_theme_constant_override("separation", 15)
-    practice_layout.add_child(controls)
+    var controls_center := CenterContainer.new()
+    practice_layout.add_child(controls_center)
+    var controls := GridContainer.new()
+    practice_controls = controls
+    controls.columns = 5
+    controls.add_theme_constant_override("h_separation", 12)
+    controls.add_theme_constant_override("v_separation", 8)
+    controls_center.add_child(controls)
     controls.add_child(_button("← Previous", func(): _send_action({"action": "previous"})))
     start_button = _button("Start  ·  Space", _toggle_playing, true)
     start_button.custom_minimum_size = Vector2(148, 53)
     controls.add_child(start_button)
+    pause_button = _button("Pause", _toggle_pause)
+    controls.add_child(pause_button)
+    controls.add_child(_button("Restart", _restart_practice))
     controls.add_child(_button("Next →", func(): _send_action({"action": "next"})))
-    var listen := _button("Listen", _listen)
-    listen.disabled = true
-    listen.tooltip_text = "On-demand audio demonstration is not implemented yet"
-    controls.add_child(listen)
+    _build_lesson_screen()
 
     folder_dialog = FileDialog.new()
     folder_dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -791,6 +858,96 @@ func _update_responsive_layout() -> void:
         folder_controls.vertical = width < 1000
     if practice_header != null:
         practice_header.add_theme_constant_override("separation", 12 if width < 850 else 20)
+    if practice_controls != null:
+        practice_controls.columns = 3 if width < 700 else 5
+        var compact := size.y < 720.0
+        practice_layout_box.add_theme_constant_override("separation", 9 if compact else 19)
+        score_frame.custom_minimum_size.y = 140 if compact else 170
+        for side in ["left", "right", "top", "bottom"]:
+            score_margin_box.add_theme_constant_override("margin_" + side, 10 if compact else 26)
+        for child in practice_controls.get_children():
+            if child is Button:
+                var control_width := 148 if child == start_button else 112
+                if width >= 900:
+                    control_width = 180 if child == start_button else 140
+                child.custom_minimum_size = Vector2(control_width, 38 if compact else 45)
+                child.add_theme_font_size_override("font_size", 13 if width < 900 else 15)
+        title_label.add_theme_font_size_override("font_size", 22 if width < 900 else 27)
+
+func _build_lesson_screen() -> void:
+    var page := _screen("Lesson")
+    screens["lesson"] = page
+    var content := _stack(20)
+    page.add_child(content)
+    var navigation := HBoxContainer.new()
+    content.add_child(navigation)
+    navigation.add_child(_button("← Practice", func(): _navigate("practice")))
+    navigation.add_child(_space())
+    navigation.add_child(_label("Piano Teacher", 18, INK, true))
+    content.add_child(_label("Your lesson path", 34, INK, true))
+    lesson_summary = _label("Open a piece to see its lessons.", 18, INK)
+    content.add_child(lesson_summary)
+    lesson_description = _label("", 16, MUTED)
+    content.add_child(lesson_description)
+    var hand_row := HBoxContainer.new()
+    hand_row.add_theme_constant_override("separation", 12)
+    content.add_child(hand_row)
+    for hand in ["right", "left", "both"]:
+        var button := _button(hand.capitalize() + (" hands" if hand == "both" else " hand"),
+            func():
+                _send_action({"action": "hand", "hand": hand})
+                _navigate("practice")
+        )
+        hand_buttons[hand] = button
+        hand_row.add_child(button)
+    var scroll := ScrollContainer.new()
+    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    content.add_child(scroll)
+    lesson_rows = _stack(10)
+    lesson_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.add_child(lesson_rows)
+
+func _request_lesson() -> void:
+    if lesson_request == null or lesson_pending or not bool(last_state.get("loaded", false)):
+        return
+    lesson_pending = true
+    if lesson_request.request(URL + "/lesson") != OK:
+        lesson_pending = false
+
+func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+    lesson_pending = false
+    if code != 200:
+        lesson_summary.text = _http_failure(code, body)
+        return
+    var parsed = _decode_json(body)
+    if typeof(parsed) != TYPE_DICTIONARY:
+        return
+    lesson_summary.text = "%d of %d stages completed · three clean performances at your target tempo" % [
+        int(parsed.get("completed_steps", 0)), int(parsed.get("total_steps", 0))]
+    lesson_description.text = "Learn each passage, bring the hands together, connect adjoining passages, then play the complete piece."
+    for child in lesson_rows.get_children():
+        lesson_rows.remove_child(child)
+        child.queue_free()
+    var groups: Dictionary = {}
+    for step in parsed.get("steps", []):
+        var key := str(step.get("exercise", 0))
+        if not groups.has(key):
+            groups[key] = {"first": step.get("first_bar", 0), "last": step.get("last_bar", 0),
+                "kind": str(step.get("kind", "learn")), "labels": [], "complete": true, "current": false}
+        var group: Dictionary = groups[key]
+        group["complete"] = bool(group["complete"]) and bool(step.get("completed", false))
+        group["current"] = bool(group["current"]) or int(step.get("number", 0)) == int(parsed.get("current_step", 0))
+        var detail := "%s: %s" % [str(step.get("hand", "")).capitalize(), str(step.get("level", "")).capitalize()]
+        group["labels"].append(detail)
+    for key in groups:
+        var group: Dictionary = groups[key]
+        var row := _stack(4)
+        var status := "Completed" if bool(group["complete"]) else "Current passage" if bool(group["current"]) else str(group["kind"]).capitalize()
+        row.add_child(_label("%s · Measures %d–%d" % [status, int(group["first"]), int(group["last"])], 18,
+            ACCENT if bool(group["current"]) else INK, bool(group["current"])))
+        row.add_child(_label(" → ".join(group["labels"]), 14, MUTED))
+        lesson_rows.add_child(row)
 
 func _refresh_score_status() -> void:
     if score_status_panel == null or score_view == null:
@@ -921,10 +1078,11 @@ func _on_settings(_result: int, code: int, _headers: PackedStringArray, body: Pa
     preferences = parsed
     folder_edit.text = str(preferences.get("music_dir", ""))
     fullscreen_toggle.set_pressed_no_signal(bool(preferences.get("fullscreen", true)))
+    metronome_toggle.set_pressed_no_signal(bool(preferences.get("metronome", true)))
     _apply_window_mode(bool(preferences.get("fullscreen", true)))
     var saved_device := str(preferences.get("midi_device", ""))
     if not saved_device.is_empty() and str(last_state.get("device", "")) == "" and not device_names.is_empty():
-        if device_names.has(saved_device):
+        if device_names.has(saved_device) and not saved_device.to_lower().contains("midi through"):
             _choose_device(device_names.find(saved_device))
 
 func _save_folder() -> void:
@@ -962,7 +1120,8 @@ func _process(_delta: float) -> void:
         if score_overlay.showing:
             score_overlay.showing = false
             score_overlay.queue_redraw()
-            _layout_moving_score(_delta)
+            if str(last_state.get("phase", "ready")) not in ["feedback", "recovering", "loading"]:
+                _layout_moving_score(_delta)
         return
     # Count-in uses negative beats and waits on the first note. During play,
     # position advances at BPM regardless of the user's MIDI performance.
@@ -986,9 +1145,14 @@ func _process(_delta: float) -> void:
     var initial_cursor: Dictionary = _position_at_beat(play_from)
     score_overlay.lead_first = {}
     score_overlay.lead_width_px = 0.0
+    score_overlay.lead_staff_lines = []
     if int(initial_cursor.get("page", -1)) == current_page:
         var virtual_width: float = score_frame.size.x * 0.72
         score_overlay.lead_first = initial_cursor
+        for system in score_layout.get("systems", []):
+            if int(system.get("page", -1)) == current_page and str(system.get("system", "")) == str(initial_cursor.get("system", "")):
+                score_overlay.lead_staff_lines = system.get("staff_lines", [])
+                break
         score_overlay.lead_width_px = virtual_width
         if clock < 0.0:
             var lead_beats: float = maxf(0.5, float(last_state.get("count_in_beats", 3)))
@@ -1011,7 +1175,7 @@ func _process(_delta: float) -> void:
         print("PHASE0_VISIBLE_NOTES:", _visible_score_noteheads(),
               " PANEL_WIDTH:", score_frame.size.x,
               " CONTENT_X:", score_content.position.x)
-    if phase0_smoke_mode and active:
+    if phase0_smoke_mode and active and clock >= 0.0:
         var cursor_tick: int = int(floor(beat * 4.0))
         if cursor_tick > phase0_last_cursor_tick:
             phase0_last_cursor_tick = cursor_tick
@@ -1051,6 +1215,14 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if typeof(parsed) != TYPE_DICTIONARY:
         return
     last_state = parsed
+    var input_age = parsed.get("midi_input_age")
+    if input_age != null and float(input_age) < 1.5:
+        input_activity_label.text = "Input received · MIDI note %d · %d notes received" % [
+            int(parsed.get("midi_input_note", 0)), int(parsed.get("midi_input_count", 0))]
+        input_activity_label.add_theme_color_override("font_color", ACCENT)
+    else:
+        input_activity_label.text = "Play a note to check input." if not str(parsed.get("device", "")).is_empty() else "Connect your MIDI piano, then play a note to check input."
+        input_activity_label.add_theme_color_override("font_color", MUTED)
     # The backend sampled the clock during this HTTP round trip. Estimate
     # that sample at the midpoint so music never waits for the poll interval.
     last_state_tick = int((state_request_started_ms + Time.get_ticks_msec()) / 2.0)
@@ -1067,6 +1239,19 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         int(parsed.get("lesson_level_count", 1)), int(parsed.get("required_notes", 0))]
     speed_label.text = "%d BPM" % int(parsed.get("bpm", 0))
     hand_label.text = "%s hand · %d%% speed" % [str(parsed.get("hand", "right")).capitalize(), int(round(float(parsed.get("bpm", 0)) / max(1.0, float(parsed.get("original_bpm", 1))) * 100.0))]
+    if current_screen != "settings":
+        tempo_setting.set_value_no_signal(float(parsed.get("target_bpm", parsed.get("bpm", 40))))
+    var stage: String = str(parsed.get("lesson_level", "original"))
+    var explanations := {"skeleton": "Skeleton · Find the essential melody and bass notes.",
+        "outline": "Outline · Restore the outer chord tones and rhythm.",
+        "original": "Original · Play every required note in this passage."}
+    lesson_info_label.text = str(explanations.get(stage, ""))
+    for hand in hand_buttons:
+        var button: Button = hand_buttons[hand]
+        button.disabled = not parsed.get("hands", []).has(hand) or str(parsed.get("hand", "")) == hand
+    practice_progress.value = float(parsed.get("progress", 0.0))
+    pause_button.disabled = not bool(parsed.get("running", false))
+    pause_button.text = "Resume" if bool(parsed.get("paused", false)) else "Pause"
     var phase: String = str(parsed.get("phase", "ready"))
     if phase0_smoke_mode and phase != phase0_last_phase:
         phase0_last_phase = phase
@@ -1078,7 +1263,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     elif phase == "recovering":
         feedback_label.text = str(parsed.get("feedback", "Short break before retry"))
     elif phase == "count_in":
-        feedback_label.text = "Follow the moving staff · play when notes reach the cyan line"
+        feedback_label.text = "Follow the moving staff · play at the teal line"
     elif phase == "playing":
         var midi_count: int = int(parsed.get("midi_notes", 0))
         if bool(parsed.get("preview_only", false)):
@@ -1097,13 +1282,17 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Stop  ·  Space" if bool(parsed.get("running", false)) else "Start  ·  Space"
     start_button.tooltip_text = "Space: start/stop/resume · P: pause · R: restart"
     start_button.disabled = not bool(parsed.get("running", false)) and (score_view.texture == null or layout_revision != revision)
-    score_overlay.marks = parsed.get("feedback_marks", [])
+    score_overlay.marks = []
+    for marker in parsed.get("feedback_marks", []):
+        score_overlay.marks.append(ScoreStrip.map_point(marker, score_layout) if score_layout.has("strip_size") else marker)
     score_overlay.queue_redraw()
     var new_revision := int(parsed.get("revision", 0))
     if new_revision != revision:
         revision = new_revision
         layout_revision = -1
         score_layout = {}
+        source_layout = {}
+        page_images.clear()
         current_page = -1
         score_view.texture = null
         score_error = ""
@@ -1141,15 +1330,22 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
         _score_failed("The engraving engine returned invalid note positions")
         return
     score_layout = parsed
+    source_layout = parsed
+    page_images.clear()
+    page_images.resize(int(parsed.get("pages", 0)))
     layout_revision = revision
     _request_score(0)
 
 func _request_score(page: int) -> void:
     if score_pending or layout_revision != revision:
         return
+    # The whole virtual strip is ready; original source pages must never be
+    # fetched in response to an old feedback marker during playback.
+    if rendered_revision == revision and score_layout.has("strip_size"):
+        return
     if page == current_page and rendered_revision == revision:
         return
-    if page < 0 or page >= int(score_layout.get("pages", 0)):
+    if page < 0 or page >= int(source_layout.get("pages", score_layout.get("pages", 0))):
         return
     score_pending = true
     requested_page = page
@@ -1159,8 +1355,8 @@ func _request_score(page: int) -> void:
         _score_failed("Cannot request score page from the practice engine")
 
 func _visible_engraving_bounds(picture: Image) -> Rect2i:
-    # CairoSVG produces opaque white pages. Image.get_used_rect() includes
-    # every white pixel and cannot crop their margins. Sample the actual ink.
+    # Verovio PNGs have transparent black margins; some imports are opaque
+    # white. Only visible dark pixels are engraving ink in either format.
     picture.convert(Image.FORMAT_RGBA8)
     var rgba: PackedByteArray = picture.get_data()
     var width: int = picture.get_width()
@@ -1174,6 +1370,8 @@ func _visible_engraving_bounds(picture: Image) -> Rect2i:
     for y in range(0, height, 2):
         for x in range(0, width, 2):
             var offset: int = (y * width + x) * 4
+            if rgba[offset + 3] < 8:
+                continue
             if rgba[offset] >= 240 and rgba[offset + 1] >= 240 and rgba[offset + 2] >= 240:
                 continue
             left = mini(left, x)
@@ -1202,6 +1400,15 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if picture.get_width() < 32 or picture.get_height() < 32:
         _score_failed("The engraved score image is unexpectedly small")
         return
+    if page_images.is_empty():
+        if source_layout.is_empty():
+            source_layout = score_layout
+        page_images.resize(int(source_layout.get("pages", 1)))
+    page_images[requested_page] = picture
+    for page in range(page_images.size()):
+        if page_images[page] == null:
+            _request_score(page)
+            return
     # Remove empty page margins without breaking notehead annotations.
     var original_size := Vector2(picture.get_width(), picture.get_height())
     var opaque_bounds := _visible_engraving_bounds(picture)
@@ -1217,13 +1424,38 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var bottom := mini(picture.get_height(), opaque_bounds.end.y + pad)
     crop_rect.size = Vector2i(right, bottom) - crop_rect.position
     var cropped := picture.get_region(crop_rect)
-    score_crop_origin = Vector2(crop_rect.position) / original_size
-    score_crop_size = Vector2(crop_rect.size) / original_size
+    var strip: Dictionary = ScoreStrip.build(source_layout, page_images)
+    if strip.has("error") or strip["tiles"].is_empty():
+        _score_failed(str(strip.get("error", "No staff systems were found in the engraving")))
+        return
+    for tile in score_tiles:
+        score_content.remove_child(tile)
+        tile.queue_free()
+    score_tiles.clear()
+    strip_tiles = strip["tiles"]
+    var notation_material := Design.notation_material()
+    for item in strip_tiles:
+        var tile := TextureRect.new()
+        tile.texture = item["texture"]
+        tile.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        tile.stretch_mode = TextureRect.STRETCH_SCALE
+        tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        tile.material = notation_material
+        score_content.add_child(tile)
+        score_content.move_child(tile, score_overlay.get_index())
+        score_tiles.append(tile)
+    score_layout = strip["layout"]
+    score_crop_origin = Vector2.ZERO
+    score_crop_size = Vector2.ONE
     score_view.texture = ImageTexture.create_from_image(cropped)
-    score_overlay.image_size = Vector2(cropped.get_width(), cropped.get_height())
+    score_view.visible = false
+    score_overlay.image_size = strip["size"]
+    # Cropped tile textures now own all visible imagery. Release full pages
+    # rather than retaining a second whole-song raster in CPU memory.
+    page_images.clear()
     score_overlay.crop_origin = score_crop_origin
     score_overlay.crop_size = score_crop_size
-    current_page = requested_page
+    current_page = 0
     score_overlay.active_page = current_page
     rendered_revision = revision
     score_error = ""
@@ -1294,13 +1526,15 @@ func _restart_practice() -> void:
     if score_view.texture != null and layout_revision == revision:
         _send_action({"action": "restart"})
 
-func _listen() -> void:
-    pass
-
 func _request_devices() -> void:
-    device_request.request(URL + "/devices")
+    if device_pending or device_request == null:
+        return
+    device_pending = true
+    if device_request.request(URL + "/devices") != OK:
+        device_pending = false
 
 func _on_devices(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+    device_pending = false
     if code != 200:
         return
     var parsed = _decode_json(body)
@@ -1308,15 +1542,15 @@ func _on_devices(_result: int, code: int, _headers: PackedStringArray, body: Pac
         return
     device_names = parsed.get("devices", [])
     device_menu.clear()
+    device_menu.add_item("No MIDI input · timing preview", -2)
+    device_menu.add_separator()
     for i in range(device_names.size()):
         device_menu.add_item(str(device_names[i]), i)
     device_button.text = str(last_state.get("device", "Choose USB MIDI piano")) if not str(last_state.get("device", "")).is_empty() else "Choose USB MIDI piano"
     if str(last_state.get("device", "")) == "":
         var saved: String = str(preferences.get("midi_device", ""))
-        if device_names.has(saved) and not saved.is_empty():
+        if device_names.has(saved) and not saved.is_empty() and not saved.to_lower().contains("midi through"):
             _choose_device(device_names.find(saved))
-        elif device_names.size() == 1:
-            _choose_device(0)
 
 func _show_devices() -> void:
     _request_devices()
@@ -1324,6 +1558,9 @@ func _show_devices() -> void:
     device_menu.popup()
 
 func _choose_device(id: int) -> void:
+    if id == -2:
+        _send_post("/device", {"name": ""})
+        return
     if id < 0 or id >= device_names.size():
         return
     _send_post("/device", {"name":device_names[id]})

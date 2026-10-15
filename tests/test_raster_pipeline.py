@@ -100,9 +100,10 @@ def test_godot_loads_png_with_same_notehead_coordinates():
     script = (Path(__file__).resolve().parents[1] / "godot/main.gd").read_text()
     assert '"/score.png?page=%d"' in script
     assert "picture.load_png_from_buffer(body)" in script
-    assert "score_overlay.image_size = Vector2(cropped.get_width(), cropped.get_height())" in script
-    # The PNG is opaque white, so used_rect includes the blank page.
-    # The explicit ink-bound scan must crop before remapping noteheads.
+    assert 'score_overlay.image_size = strip["size"]' in script
+    assert 'ScoreStrip.build(source_layout, page_images)' in script
+    # Both transparent and opaque margins are excluded; strip tiles preserve
+    # the real geometry and avoid a single oversized GPU texture.
     assert "var opaque_bounds := _visible_engraving_bounds(picture)" in script
     assert "score_overlay.crop_origin = score_crop_origin" in script
     assert "score_overlay.active_page = current_page" in script

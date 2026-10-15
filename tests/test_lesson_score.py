@@ -101,5 +101,8 @@ def test_early_midi_release_uses_conventional_printed_duration():
 def test_nontrivial_release_remains_precise_when_not_near_a_grid():
     source=phrase([note(60,0,.625)])
     xml=build_lesson_score(source).musicxml
-    item=ET.fromstring(xml).find("./part[@id='RH']/measure/note")
-    assert int(item.findtext("duration"))==round(.625*DIVISIONS)
+    items=ET.fromstring(xml).findall("./part[@id='RH']/measure/note")
+    sounding=[item for item in items if item.find('pitch') is not None]
+    assert sum(int(item.findtext('duration')) for item in sounding)==round(.625*DIVISIONS)
+    assert sounding[0].find("tie[@type='start']") is not None
+    assert sounding[-1].find("tie[@type='stop']") is not None
