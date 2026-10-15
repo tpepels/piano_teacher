@@ -32,6 +32,19 @@ def build_exercises(piece: Piece) -> tuple[Exercise, ...]:
     return tuple(exercises)
 
 
+@dataclass(frozen=True)
+class LessonStep:
+    """One teachable stage; three clean target-tempo passes earn mastery."""
+    exercise_index: int
+    hand: str
+    level: str
+    key: str
+    first_bar: int
+    last_bar: int
+    required_notes: int
+    kind: str
+
+
 class LearningPlan:
     """Adaptive, manually navigable practice sequence independent of the GUI."""
     def __init__(self, piece: Piece) -> None:
@@ -48,6 +61,7 @@ class LearningPlan:
         self.bpm = self.start_bpm
         self.target_bpm = piece.bpm
         self.mastered: dict[str, int] = {}
+        self._lesson_steps_cache: tuple[LessonStep, ...] | None = None
 
     @property
     def start_bpm(self) -> int:
@@ -75,6 +89,35 @@ class LearningPlan:
         if self._variants_cached is None or self._variants_cached[0] != key:
             self._variants_cached = (key, generate_variants(self.exercise.phrase, self.hand))
         return self._variants_cached[1]
+
+    @property
+    def lesson_steps(self) -> tuple[LessonStep, ...]:
+        """Build once; progress is across hands and levels, not MIDI measures."""
+        if self._lesson_steps_cache is None:
+            steps: list[LessonStep] = []
+            for index, ex in enumerate(self.exercises):
+                if ex.kind == "learn":
+                    available = {note.hand for note in ex.phrase.notes}
+                    hands = tuple(hand for hand in ("right", "left") if hand in available) + ("both",)
+                else:
+                    hands = ("both",)
+                for hand in hands:
+                    for variant in generate_variants(ex.phrase, hand):
+                        steps.append(LessonStep(
+                            index, hand, variant.level, f"{ex.key}:{hand}:{variant.level}",
+                            ex.phrase.first_bar, ex.phrase.last_bar,
+                            len(variant.notes), ex.kind))
+            self._lesson_steps_cache = tuple(steps)
+        return self._lesson_steps_cache
+
+    @property
+    def lesson_step_number(self) -> int:
+        return next((i + 1 for i, step in enumerate(self.lesson_steps)
+                     if step.key == self.identity), 1)
+
+    @property
+    def lesson_steps_mastered(self) -> int:
+        return sum(step.key in self.mastered for step in self.lesson_steps)
 
     @property
     def active_variant(self) -> ExerciseVariant:

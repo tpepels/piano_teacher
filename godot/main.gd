@@ -1028,7 +1028,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
     if unpositioned > 0:
         feedback_label.text += " · %d unpositioned note(s)" % unpositioned
-    progress_label.text = "Exercise %d/%d  ·  %d/3 clean  ·  %d mastered" % [int(parsed.get("exercise", 1)),int(parsed.get("exercise_count", 1)),int(parsed.get("streak", 0)),int(parsed.get("mastered", 0))]
+    progress_label.text = "Lesson %d/%d  ·  %d/3 clean  ·  %d completed" % [
+        int(parsed.get("lesson_step", 1)), int(parsed.get("lesson_steps", 1)),
+        int(parsed.get("streak", 0)), int(parsed.get("lesson_steps_mastered", 0))]
     start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Stop  ·  Space" if bool(parsed.get("running", false)) else "Start  ·  Space"
     start_button.tooltip_text = "Space: start/stop/resume · P: pause · R: restart"
     start_button.disabled = not bool(parsed.get("running", false)) and (score_view.texture == null or layout_revision != revision)

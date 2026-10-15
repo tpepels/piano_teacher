@@ -223,8 +223,9 @@ class PracticeEngine:
 
     def control(self, action: str, **kwargs) -> None:
         with self.lock:
-            if self.pending_result is not None:
-                self._commit_pending()
+            # Explicit navigation, Stop and Restart abandon the current
+            # attempt. Only the timed feedback lifecycle commits assessment.
+            # Otherwise Stop during feedback could accidentally earn mastery.
             if action == "score_ready":
                 revision = int(kwargs.get("revision", -1))
                 # Ignore delayed PNG acknowledgements from older passages.
@@ -392,6 +393,8 @@ class PracticeEngine:
                     "exercise":p.index+1,"exercise_count":len(p.exercises),
                     "lesson_level":variant.level,"lesson_level_number":p.variant_index+1,
                     "lesson_level_count":len(p.variants),"required_notes":len(variant.notes),
+                    "lesson_step":p.lesson_step_number,"lesson_steps":len(p.lesson_steps),
+                    "lesson_steps_mastered":p.lesson_steps_mastered,
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,"target_bpm":p.target_bpm,
                     "streak":p.streak,"mastered":len(p.mastered),"phase":phase,
                     "countdown":max(0,-elapsed) if self.running else 0,
@@ -445,6 +448,26 @@ class PracticeEngine:
     def geometry(self) -> dict:
         return self.engraving().layout
 
+    def lesson_overview(self) -> dict:
+        """Full readable curriculum, with unique per-hand/per-level progress."""
+        with self.lock:
+            if self.plan is None:
+                raise ValueError("Open a piece first")
+            p = self.plan
+            return {
+                "current_step": p.lesson_step_number,
+                "total_steps": len(p.lesson_steps),
+                "completed_steps": p.lesson_steps_mastered,
+                "steps": [
+                    {"number": i+1, "exercise": step.exercise_index+1,
+                     "hand": step.hand, "level": step.level, "key": step.key,
+                     "kind": step.kind, "first_bar": step.first_bar,
+                     "last_bar": step.last_bar, "required_notes": step.required_notes,
+                     "completed": step.key in p.mastered}
+                    for i, step in enumerate(p.lesson_steps)
+                ],
+            }
+
 
 class Handler(BaseHTTPRequestHandler):
     engine: PracticeEngine
@@ -464,6 +487,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200,self.engine.state())
             elif route=="/library":
                 self._json(200,self.engine.library_listing())
+            elif route=="/lesson":
+                self._json(200,self.engine.lesson_overview())
             elif route=="/settings":
                 self._json(200,self.engine.preferences())
             elif route=="/devices":
