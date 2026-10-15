@@ -55,9 +55,15 @@ def test_unisons_preserve_distinct_required_events():
 def test_cross_measure_note_is_tied_not_reattacked():
     xml=build_lesson_score(phrase([note(65,3,5)])).musicxml
     measures=ET.fromstring(xml).find("./part[@id='RH']").findall("measure")
-    assert measures[0].find("note/tie[@type='start']") is None
-    assert any(x.find("tie[@type='start']") is not None for x in measures[0].findall("note"))
-    assert any(x.find("tie[@type='stop']") is not None for x in measures[1].findall("note"))
+    # The sounding note starts in bar 1 and continues into bar 2.
+    # The second segment must *stop* the tie, not reattack a new note.
+    first = [x for x in measures[0].findall("note") if x.find("pitch") is not None]
+    second = [x for x in measures[1].findall("note") if x.find("pitch") is not None]
+    assert len(first) == len(second) == 1
+    assert first[0].find("tie[@type='start']") is not None
+    assert first[0].find("tie[@type='stop']") is None
+    assert second[0].find("tie[@type='stop']") is not None
+    assert second[0].find("tie[@type='start']") is None
 
 
 def test_three_four_has_correct_beat_length_and_inactive_rest():
