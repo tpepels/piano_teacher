@@ -1444,7 +1444,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             passage_label.text = "%s · %s" % [kind, bar_text]
     speed_label.text = "%d BPM · target %d" % [int(parsed.get("bpm", 0)),int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
     var recovery_notice: Variant = parsed.get("recovery_notice")
-    practice_playback_banner.visible = recovery_notice is Dictionary and str(parsed.get("mode", "")) == "practice"
+    practice_playback_banner.visible = (
+        recovery_notice is Dictionary
+        and str(parsed.get("mode", "")) == "practice"
+        and str(parsed.get("phase", "")) in ["recovering", "loading", "count_in", "feedback", "ready"])
     if practice_playback_banner.visible:
         var notice: Dictionary = recovery_notice
         if str(notice.get("kind", "")) == "speedup":
