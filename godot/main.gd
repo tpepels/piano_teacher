@@ -128,9 +128,12 @@ var pause_sheet: Control
 var skip_stage_button: Button
 var placement_button: Button
 var apply_tempo_button: Button
+var ui_scale := 1.0
+var last_seen_midi_input_count := -1
 
 func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
+    ui_scale = _readable_ui_scale()
     _build_interface()
     demo_player = preload("res://demo_player.gd").new()
     add_child(demo_player)
@@ -365,11 +368,28 @@ func _http_failure(code: int, body: PackedByteArray) -> String:
         return "Practice engine unavailable. Start Piano Teacher with ./run.sh"
     return "Practice engine request failed (HTTP %d)" % code
 
+func _readable_ui_scale() -> float:
+    # Pixel fonts stayed tiny at 2048x1280 fullscreen. Increase the interface
+    # text and touch targets with the actual window size, not the score zoom.
+    # At 800x600 use the existing compact layout instead of shrinking type.
+    return clampf(minf(size.x / 1150.0, size.y / 760.0), 1.0, 1.75)
+
+func _ui_font(base: int) -> int:
+    return maxi(12, int(round(float(base) * ui_scale)))
+
+func _resize_ui_fonts(node: Node) -> void:
+    if node is Control and node.has_meta("ui_font_base"):
+        (node as Control).add_theme_font_size_override(
+            "font_size", _ui_font(int(node.get_meta("ui_font_base"))))
+    for child in node.get_children():
+        _resize_ui_fonts(child)
+
 func _label(text: String, size: int, color: Color, bold := false) -> Label:
     var label := Label.new()
     label.text = text
     label.add_theme_color_override("font_color", color)
-    label.add_theme_font_size_override("font_size", size)
+    label.set_meta("ui_font_base", size)
+    label.add_theme_font_size_override("font_size", _ui_font(size))
     var font := SystemFont.new()
     font.font_names = PackedStringArray(["Inter", "Noto Sans", "DejaVu Sans"])
     font.font_weight = 700 if bold else 400
@@ -384,14 +404,14 @@ func _button(label: String, callback: Callable, primary := false) -> Button:
     # Long song titles must not force a container wider than the viewport.
     button.clip_text = true
     # Short controls must fit their text; library rows override width.
-    button.custom_minimum_size = Vector2(mini(220, maxi(96, 42 + label.length() * 9)), 45)
+    button.custom_minimum_size = Vector2(mini(220, maxi(96, 42 + label.length() * 9)), 45) * ui_scale
     var style := StyleBoxFlat.new()
     style.bg_color = Design.PINE if primary else Design.PANEL
     style.set_corner_radius_all(8)
     style.set_border_width_all(1)
     style.border_color = Design.SAGE if primary else Color(Design.SAGE, .4)
-    style.content_margin_left = 18
-    style.content_margin_right = 18
+    style.content_margin_left = 18 * ui_scale
+    style.content_margin_right = 18 * ui_scale
     button.add_theme_stylebox_override("normal", style)
     var hover := style.duplicate() as StyleBoxFlat
     hover.bg_color = Design.SAGE if primary else Design.PINE
@@ -407,7 +427,8 @@ func _button(label: String, callback: Callable, primary := false) -> Button:
     button.add_theme_color_override("font_color", INK)
     button.add_theme_color_override("font_hover_color", INK.lightened(.15))
     button.add_theme_color_override("font_disabled_color", MUTED)
-    button.add_theme_font_size_override("font_size", 15)
+    button.set_meta("ui_font_base", 15)
+    button.add_theme_font_size_override("font_size", _ui_font(15))
     button.pressed.connect(callback)
     return button
 
@@ -480,6 +501,7 @@ func _go_back() -> void:
 
 func _build_interface() -> void:
     theme = Design.create()
+    theme.default_font_size = _ui_font(16)
     var background := ColorRect.new()
     background.color = PAPER
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -843,15 +865,20 @@ func _build_interface() -> void:
     _refresh_score_status()
 
 func _update_responsive_layout() -> void:
+    ui_scale = _readable_ui_scale()
+    theme.default_font_size = _ui_font(16)
+    _resize_ui_fonts(self)
+    if hint_keyboard != null:
+        hint_keyboard.set_ui_scale(ui_scale)
     # Fit smaller laptops and high-DPI/scaled fullscreen windows. Fixed-size
     # cards and long labels previously forced the right edge off-screen.
     var width: float = size.x
-    var margin: int = 56 if width >= 1550 else 32 if width >= 1100 else 16
+    var margin: int = int(round(float(56 if width >= 1550 else 32 if width >= 1100 else 16) * ui_scale))
     for panel in page_margins:
         panel.add_theme_constant_override("margin_left", margin)
         panel.add_theme_constant_override("margin_right", margin)
-        panel.add_theme_constant_override("margin_top", 28 if width >= 900 else 14)
-        panel.add_theme_constant_override("margin_bottom", 28 if width >= 900 else 14)
+        panel.add_theme_constant_override("margin_top", int(round(float(28 if width >= 900 else 14) * ui_scale)))
+        panel.add_theme_constant_override("margin_bottom", int(round(float(28 if width >= 900 else 14) * ui_scale)))
     if home_cards != null:
         home_cards.vertical = width < 1380
     if folder_controls != null:
@@ -861,10 +888,10 @@ func _update_responsive_layout() -> void:
         practice_navigation.add_theme_constant_override("separation", 6 if width < 900 else 12)
         for child in practice_navigation.get_children():
             if child is Button:
-                var font_size := 13 if width < 900 else 15
+                var font_size := _ui_font(13 if width < 900 else 15)
                 child.add_theme_font_size_override("font_size", font_size)
                 if child == mode_choice:
-                    child.custom_minimum_size.x = 150
+                    child.custom_minimum_size.x = 150 * ui_scale
                 elif child is CheckButton:
                     child.custom_minimum_size.x = 75
                 else:
@@ -872,18 +899,18 @@ func _update_responsive_layout() -> void:
     if practice_controls != null:
         practice_controls.columns = 3 if width < 700 else 5
         var compact := size.y < 720.0
-        practice_layout_box.add_theme_constant_override("separation", 9 if compact else 19)
-        score_frame.custom_minimum_size.y = 140 if compact else 170
+        practice_layout_box.add_theme_constant_override("separation", int(round(float(9 if compact else 19) * ui_scale)))
+        score_frame.custom_minimum_size.y = (140 if compact else 170) * ui_scale
         for side in ["left", "right", "top", "bottom"]:
-            score_margin_box.add_theme_constant_override("margin_" + side, 10 if compact else 26)
+            score_margin_box.add_theme_constant_override("margin_" + side, int(round(float(10 if compact else 26) * ui_scale)))
         for child in practice_controls.get_children():
             if child is Button:
                 var control_width := 148 if child == start_button else 112
                 if width >= 900:
                     control_width = 180 if child == start_button else 140
-                child.custom_minimum_size = Vector2(control_width, 38 if compact else 45)
-                child.add_theme_font_size_override("font_size", 13 if width < 900 else 15)
-        title_label.add_theme_font_size_override("font_size", 22 if width < 900 else 27)
+                child.custom_minimum_size = Vector2(control_width, 38 if compact else 45) * ui_scale
+                child.add_theme_font_size_override("font_size", _ui_font(13 if width < 900 else 15))
+        title_label.add_theme_font_size_override("font_size", _ui_font(22 if width < 900 else 27))
 
 func _build_lesson_screen() -> void:
     var page := _screen("Lesson")
@@ -1083,7 +1110,7 @@ func _populate_library() -> void:
                 location if not location.is_empty() else "Music folder")
             var button := _button("%s     ·     %s     ·     %s" % [title, format_name, hint], func(): _open_library_piece(identifier))
             button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-            button.custom_minimum_size = Vector2(0, 58)
+            button.custom_minimum_size = Vector2(0, 58 * ui_scale)
             button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
             button.tooltip_text = str(entry.get("description", ""))
             library_rows.add_child(button)
@@ -1310,6 +1337,11 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
+    var old_phase: String = str(last_state.get("phase", ""))
+    var old_revision: int = int(last_state.get("revision", -1))
+    var midi_count: int = int(parsed.get("midi_input_count", 0))
+    var fresh_piano_key: bool = last_seen_midi_input_count >= 0 and midi_count > last_seen_midi_input_count
+    last_seen_midi_input_count = midi_count
     last_state = parsed
     var input_age = parsed.get("midi_input_age")
     if input_age != null and float(input_age) < 1.5:
@@ -1333,7 +1365,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     passage_label.text = "%s · Measures %d–%d" % [
         kind, int(parsed.get("first_bar", 0)), int(parsed.get("last_bar", 0))]
     speed_label.text = "%d BPM · target %d" % [int(parsed.get("bpm", 0)),int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
-    speed_label.add_theme_font_size_override("font_size", 16 if size.x < 900 else 18)
+    speed_label.add_theme_font_size_override("font_size", _ui_font(16 if size.x < 900 else 18))
     speed_label.tooltip_text = "Current practice tempo and your selected target"
     hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
     hand_label.text += " · " + ("Piano connected" if not str(parsed.get("device", "")).is_empty() else "No piano")
@@ -1418,6 +1450,11 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
     if unpositioned > 0:
         feedback_label.text += " · %d unpositioned note(s)" % unpositioned
+    if (not learning and phase in ["ready", "performance_complete"]
+            and not str(parsed.get("device", "")).is_empty()):
+        lesson_info_label.text = "Play any piano key to start the count-in. Release it, then play after the count-in."
+    elif learning and phase == "guided_complete" and not str(parsed.get("device", "")).is_empty():
+        lesson_info_label.text = "Idea complete. Play a new piano key to continue, or press Space."
     if not learning:
         progress_label.text = "Clean runs %d of 3 at %d BPM" % [int(parsed.get("streak", 0)), int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
         if str(parsed.get("mode", "")) == "perform":
@@ -1465,6 +1502,20 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         var target_page: int = int(score_overlay.marks[0].get("page", 0))
         if current_page != target_page and layout_revision == revision:
             _request_score(target_page)
+    # A physical note-on is the hands-free equivalent of Start on this
+    # screen only. Poll-based arming keeps device checks in Settings inert.
+    # A completion note in Learn must NOT instantly skip the completed idea;
+    # require a new note-on after the finished state was already displayed.
+    var current_phase: String = str(parsed.get("phase", ""))
+    if (fresh_piano_key and sample_started_ms < 0 and current_screen == "practice"
+            and not action_pending and old_revision == int(parsed.get("revision", -1))
+            and old_phase == current_phase and not str(parsed.get("device", "")).is_empty()
+            and score_view.texture != null and layout_revision == revision
+            and current_phase in ["ready", "performance_complete", "guided_complete"]):
+        if str(parsed.get("mode", "")) == "learn":
+            _toggle_playing()
+        elif str(parsed.get("mode", "")) in ["practice", "perform"]:
+            _send_action({"action": "start"})
     _refresh_score_status()
 
 func _request_layout() -> void:
@@ -1679,9 +1730,13 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     elif path == "/library/open":
         library_error = ""
         score_error = ""
+        var opened: Variant = _decode_json(body)
         _navigate("practice")
         _refresh_score_status()
-        _send_action({"action":"learn"})
+        # Warm-ups arrive as repeatable Perform sessions. Do not silently
+        # replace them with the normal imported-piece Learn curriculum.
+        if not (opened is Dictionary and str(opened.get("mode", "")) == "perform"):
+            _send_action({"action":"learn"})
     elif path == "/settings":
         settings_message.text = "Settings saved"
         _request_settings()
