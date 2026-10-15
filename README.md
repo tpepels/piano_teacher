@@ -89,6 +89,12 @@ the exact downbeat and a whole 9.6-second passage.
 
 ## Phase 7.6 - Stable scrolling through system joins
 
+A reproducible Godot/Verovio audit runs both a regular rhythmic passage
+and a two-handed exercise with chords and cross-bar ties. The regular fixture
+has a permanent maximum **1.40×** system-join velocity regression budget,
+rather than merely printing its metrics. More complex source notation retains
+its glyph-preserving safety checks without an arbitrary collision-blind limit.
+
 For generated two-hand piano lessons with **unchanged clefs, key and meter**,
 the scrolling strip discards repeated *printed-system headers* at the
 start of subsequent systems and, where Verovio exposes the true final
