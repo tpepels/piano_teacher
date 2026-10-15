@@ -11,5 +11,5 @@ else
 fi
 for geometry in 1536x960 1024x768 800x600; do
   echo "Checking Godot practice layout at ${geometry}"
-  "${GODOT}" --headless --resolution "${geometry}" --path godot --script res://ui_layout_smoke.gd
+  "${GODOT}" --headless --path godot --script res://ui_layout_smoke.gd -- "${geometry}"
 done
