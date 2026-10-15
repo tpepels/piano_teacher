@@ -408,3 +408,23 @@ def test_duplicate_ready_ack_cannot_replay_a_completed_listen(lesson):
     e.control('score_ready', revision=revision)
     assert e.state()['phase'] == 'ready' and not e.state()['running']
     assert e.recorder is None and e.pending_result is None and not e.plan.mastered
+
+
+def test_return_from_listen_waits_for_pianist_instead_of_auto_start(lesson):
+    engine, now, _ = lesson(80)
+    engine.control("listen")
+    listen = wait_audio(engine)
+    assert listen["mode"] == "listen"
+    engine.control("practice", wait_for_player=True)
+    ready = engine.state()
+    assert ready["mode"] == "practice"
+    assert ready["phase"] == "ready"
+    assert not ready["running"]
+    assert engine.awaiting_score_revision is None
+    # Even a late score-ready acknowledgement must not start the passage.
+    engine.geometry()
+    engine.control("score_ready", revision=ready["revision"])
+    assert engine.state()["phase"] == "ready"
+    assert not engine.state()["running"]
+    engine.start()
+    assert engine.state()["phase"] == "count_in"
