@@ -119,13 +119,13 @@ func _run() -> void:
     var short_buttons := 0
     for control in library_root.find_children("*", "Button", true, false):
         var button := control as Button
-        if button.text in ["← Home", "Settings", "Refresh"]:
+        if button.text in ["← Home", "Settings", "Refresh", "Check files"]:
             short_buttons += 1
             _check(not button.clip_text, "Library short control clips text: " + button.text)
             _check(_in_viewport(button, viewport), "Library short control outside window: " + button.text)
             _check(button.size.x + 1.0 >= button.get_combined_minimum_size().x,
                 "Library short control narrower than its text: " + button.text)
-    _check(short_buttons == 3, "Expected three complete library navigation actions")
+    _check(short_buttons == 4, "Expected complete library navigation and Check files actions")
     var library_items: Control = scene.get("library_rows")
     var library_status: Label = scene.get("library_message")
     _check(library_status.get_global_rect().position.y < library_items.get_global_rect().position.y,
@@ -138,6 +138,28 @@ func _run() -> void:
             _check((control as Button).tooltip_text.contains("Portrait in Jazz"),
                 "Long library title tooltip lost its complete name")
     _check(found_long_title, "Synthetic long title missing from library")
+    var health_entry := "long.mid"
+    var diagnostics := {"started":true, "running":false,
+        "checked":1, "total":1, "ok":0, "warning":1, "error":0,
+        "items":{health_entry:{"status":"warning", "notes":42, "measures":16,
+            "message":"Ignored an unmatched release"}}}
+    scene.call("_on_library_health", 0, 200, PackedStringArray(),
+        JSON.stringify(diagnostics).to_utf8_buffer())
+    await process_frame
+    var health_label: Label = scene.get("library_health_label")
+    var health_button: Button = scene.get("library_health_button")
+    _check(health_label.visible and "1 repaired" in health_label.text,
+        "Library health summary must explain repairs")
+    _check(not health_button.disabled, "Recheck should be available after scan completes")
+    var flagged := false
+    for control in library_items.get_children():
+        if control is Button and "[REPAIRED]" in control.text:
+            flagged = "unmatched release" in control.tooltip_text
+    _check(flagged, "The repaired MIDI row must explain its specific import warning")
+    diagnostics["running"] = true
+    scene.call("_on_library_health", 0, 200, PackedStringArray(),
+        JSON.stringify(diagnostics).to_utf8_buffer())
+    _check(health_button.disabled, "File check should not restart while still scanning")
     scene.call("_navigate", "practice")
     await process_frame
     await process_frame
