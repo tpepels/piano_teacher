@@ -67,6 +67,37 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Short musical challenges and clean-run progression (Phase 7.5)
+
+The practice screen now shows one short, readable challenge at a time,
+based entirely on the authoritative engine's existing **three clean
+full-pass** rule. The visible cue identifies the active hand and displays
+progress such as **LEFT HAND · 1/3 CLEAN**. An assessed clean take shows
+**CLEAN PASS · 2/3** together with the remaining automatic transition
+time; failures show **RETRY**, leaving the red note-level assessment
+available. Completing a hand displays a brief **LEFT HAND COMPLETE ·
+RIGHT HAND UNLOCKED** cue without opening another page or adding a
+button. The next hand and short exercise are selected by the backend,
+never by the presentation.
+
+Guided practice preserves the current musical idea number and note
+count instead of pretending that untimed Learn mode earns a timed
+streak. Without MIDI input the challenge is explicitly labelled
+**PREVIEW**, and no clean-pass credit is displayed. Real restarts,
+automatic recovery, slowdowns and full-passage mastery rules are
+unchanged. The interface still offers only **Retry, Play/Pause and
+Listen** during normal playing.
+
+### Settings drawer and screenshot regression
+
+Settings now uses a properly anchored contextual drawer with a
+full-width music-folder field, wrap-safe Browse/Save and piano-device
+buttons, and a wrap-safe tempo row. Long option labels are shortened,
+with their explanations still accessible as tooltips. This prevents
+controls extending off the window at 1536×960 and smaller display
+sizes. The Godot geometry test checks the actual fields and button
+rectangles rather than merely verifying the outer drawer.
+
 ## Living sheet music (Phase 7.4)
 
 The moving notation now gives a discreet **next-chord cue** directly on
