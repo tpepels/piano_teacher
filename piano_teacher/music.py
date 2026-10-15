@@ -204,6 +204,20 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
         source_end_tick = max(source_end_tick, tick)
     if not notes:
         raise ValueError("No pitched MIDI notes found (drum-only/empty file)")
+    # Discard impossible export-only meter spikes while keeping the most
+    # recent usable meter. For example, a piano export may insert 131/4
+    # for a four-beat passage; that should not redefine its measure grid.
+    # Source beats and note events are never shifted by this repair.
+    repaired_meters = []
+    valid_changes = []
+    for beat, numerator, denominator in sorted(set(changes)):
+        if numerator > 32 or denominator > 32:
+            repaired_meters.append(f"{numerator}/{denominator} at beat {beat:g}")
+            continue
+        if valid_changes and valid_changes[-1][1:] == (numerator, denominator):
+            continue
+        valid_changes.append((beat, numerator, denominator))
+    changes = valid_changes
     initial_tempo = sorted(tempos)[0][1] if tempos and min(t for t, _ in tempos) == 0 else 500000
     bpm = round(60_000_000 / initial_tempo)
     notes = sorted(_assign_hands(notes, names, split_pitch), key=lambda n: (n.start, n.pitch, n.track))
@@ -227,6 +241,8 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     if discarded_orphan_releases:
         warnings.append(
             f"Ignored {discarded_orphan_releases} unmatched MIDI note-off event(s).")
+    if repaired_meters:
+        warnings.append("Ignored implausible time signature(s): " + ", ".join(repaired_meters) + ".")
     return Piece(Path(path).stem, bpm, tuple(notes), _phrases(notes, boundaries, bars_per_phrase),
                  split_pitch, tuple(boundaries), tuple(sorted(set(changes))),
                  tuple(sorted(set(keys), key=lambda signature: (signature.beat, signature.fifths))),
