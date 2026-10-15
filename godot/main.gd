@@ -1501,7 +1501,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         elif phase == "guided_complete" and bool(teaching.get("has_more_units", false)):
             start_button.text = "Next idea · Space"
     elif str(parsed.get("mode", "")) == "listen" and not active_transport:
-        start_button.text = "Listen again"
+        start_button.text = "Back to warm-up" if bool(parsed.get("warmup", false)) else "Listen again"
     start_button.tooltip_text = "Space: start, pause or resume · R: restart · S: stop"
     start_button.disabled = not active_transport and (score_view.texture == null or layout_revision != revision)
     score_overlay.marks = []
@@ -1778,7 +1778,7 @@ func _has_active_transport() -> bool:
 
 func _toggle_playing() -> void:
     if str(last_state.get("mode", "")) == "listen" and not _has_active_transport():
-        _send_action({"action":"listen"})
+        _send_action({"action": "practice" if bool(last_state.get("warmup", false)) else "listen"})
         return
     if str(last_state.get("mode", "practice")) == "learn":
         var phase: String = str(last_state.get("phase", "ready"))
