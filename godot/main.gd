@@ -130,6 +130,8 @@ var placement_button: Button
 var apply_tempo_button: Button
 var ui_scale := 1.0
 var last_seen_midi_input_count := -1
+var last_seen_midi_visual_sequence := 0
+var state_poll_timer: Timer
 
 func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
@@ -162,11 +164,11 @@ func _ready() -> void:
     library_request = _new_request(_on_library)
     settings_request = _new_request(_on_settings)
     lesson_request = _new_request(_on_lesson)
-    var poll := Timer.new()
-    poll.wait_time = 0.15
-    poll.autostart = true
-    poll.timeout.connect(_poll)
-    add_child(poll)
+    state_poll_timer = Timer.new()
+    state_poll_timer.wait_time = 0.15
+    state_poll_timer.autostart = true
+    state_poll_timer.timeout.connect(_poll)
+    add_child(state_poll_timer)
     _poll()
     _request_devices()
     _request_settings()
@@ -1202,6 +1204,13 @@ func _poll() -> void:
             state_pending = false
 
 func _process(_delta: float) -> void:
+    # Animate short-lived hit pulses between HTTP state samples.
+    var ticks: int = Time.get_ticks_msec()
+    for index in range(score_overlay.hit_pulses.size() - 1, -1, -1):
+        if int(score_overlay.hit_pulses[index].get("until_ms", 0)) <= ticks:
+            score_overlay.hit_pulses.remove_at(index)
+    if not score_overlay.hit_pulses.is_empty():
+        score_overlay.queue_redraw()
     apply_tempo_button.disabled = action_pending
     _update_count_in()
     if str(last_state.get("mode", "practice")) == "learn":
@@ -1353,6 +1362,14 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var fresh_piano_key: bool = last_seen_midi_input_count >= 0 and total_input_attacks > last_seen_midi_input_count
     last_seen_midi_input_count = total_input_attacks
     last_state = parsed
+    # Low-latency local polling only while playing from a connected piano.
+    # The backend remains authoritative; Godot never guesses note scoring.
+    if state_poll_timer != null:
+        var live_rate := (current_screen == "practice"
+            and not str(parsed.get("device", "")).is_empty())
+        var interval := 0.05 if live_rate else 0.15
+        if absf(state_poll_timer.wait_time - interval) > 0.001:
+            state_poll_timer.wait_time = interval
     var input_age = parsed.get("midi_input_age")
     if input_age != null and float(input_age) < 1.5:
         input_activity_label.text = "Input received · MIDI note %d · %d notes received" % [
@@ -1410,7 +1427,16 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     mode_choice.disabled = false
     hints_toggle.disabled = not learning or str(parsed.get("phase", "")) == "loading"
     hints_toggle.set_pressed_no_signal(bool(parsed.get("hints_enabled", false)))
-    hint_keyboard.update_state(teaching if learning else {})
+    if learning:
+        hint_keyboard.update_state(teaching)
+    else:
+        hint_keyboard.update_live(
+            parsed.get("midi_next_pitches", []),
+            parsed.get("midi_held_pitches", []),
+            parsed.get("midi_visual_events", []),
+            not str(parsed.get("device", "")).is_empty()
+                and str(parsed.get("mode", "")) in ["practice", "perform"]
+        )
     if learning:
         var targets: int = int(teaching.get("target_count", 0))
         lesson_info_label.text = "Find the highlighted notes at your own pace."
@@ -1508,6 +1534,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     for marker in parsed.get("feedback_marks", []):
         score_overlay.marks.append(ScoreStrip.map_point(marker, score_layout) if score_layout.has("strip_size") else marker)
     score_overlay.queue_redraw()
+    _consume_live_piano_hits(parsed)
     var new_revision := int(parsed.get("revision", 0))
     if new_revision != revision:
         revision = new_revision
@@ -1521,6 +1548,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         _refresh_score_status()
         score_overlay.showing = false
         score_overlay.marks = []
+        score_overlay.hit_pulses.clear()
         _request_layout()
     if str(parsed.get("phase", "")) == "loading" and layout_revision == revision and rendered_revision == revision and score_view.texture != null:
         _send_action({"action": "score_ready", "revision": revision})
@@ -1543,6 +1571,40 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         elif str(parsed.get("mode", "")) in ["practice", "perform"]:
             _send_action({"action": "start"})
     _refresh_score_status()
+
+func _consume_live_piano_hits(state: Dictionary) -> void:
+    var events: Array = state.get("midi_visual_events", [])
+    var mapping: Dictionary = score_layout.get("attack_map", {})
+    var notes: Array = score_layout.get("notes", [])
+    for event in events:
+        if not event is Dictionary:
+            continue
+        var sequence: int = int(event.get("sequence", 0))
+        if sequence <= last_seen_midi_visual_sequence:
+            continue
+        last_seen_midi_visual_sequence = sequence
+        if str(state.get("phase", "")) != "playing" or layout_revision != revision:
+            continue
+        if int(event.get("transport_id", -1)) != int(state.get("transport_id", -2)):
+            continue
+        var status: String = str(event.get("status", ""))
+        if status not in ["on_time", "early", "late"] or float(event.get("age", 99.0)) > 0.75:
+            continue
+        var source: String = str(event.get("source_id", ""))
+        var note_id: String = str(mapping.get(source, ""))
+        if note_id.is_empty():
+            continue
+        for note in notes:
+            if str(note.get("id", "")) == note_id:
+                score_overlay.hit_pulses.append({
+                    "page": int(note.get("page", 0)),
+                    "x": float(note.get("x", 0.0)),
+                    "y": float(note.get("y", 0.0)),
+                    "status": status,
+                    "until_ms": Time.get_ticks_msec() + 700
+                })
+                break
+
 
 func _request_layout() -> void:
     if layout_pending:
