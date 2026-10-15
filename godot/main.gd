@@ -1601,7 +1601,7 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                     "x": float(note.get("x", 0.0)),
                     "y": float(note.get("y", 0.0)),
                     "status": status,
-                    "until_ms": Time.get_ticks_msec() + 700
+                    "until_ms": Time.get_ticks_msec() + maxi(1, 700 - int(float(event.get("age", 0.0)) * 1000.0))
                 })
                 break
 
