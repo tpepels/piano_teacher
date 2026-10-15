@@ -21,6 +21,8 @@ jobs:
         run: |
           .venv/bin/python -m pytest -q
           ./scripts/check_godot.sh
+      - name: Audit real score scrolling velocity
+        run: .venv/bin/python scripts/audit_scroll_velocity.py
       - name: Real rendering and HTTP integration
         run: .venv/bin/python scripts/smoke_phase0.py
       - name: Verify generated exercise engraving and PNGs
