@@ -1927,9 +1927,16 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     else:
         feedback_label.text = str(parsed.get("feedback", ""))
     if str(parsed.get("mode", "")) == "listen":
-        feedback_label.text = "Listening · follow the score" if bool(parsed.get("running", false)) else str(parsed.get("feedback", "Preparing Listen audio"))
+        var demo_info: Dictionary = parsed.get("demo", {}) if parsed.get("demo") is Dictionary else {}
+        var instrument: String = str(demo_info.get("instrument", "Preparing piano audio"))
+        feedback_label.text = ("Listening · " + instrument if bool(parsed.get("running", false))
+            else str(parsed.get("feedback", "Preparing Listen audio")))
         if bool(parsed.get("paused", false)):
-            feedback_label.text = "Listen paused · Space to resume"
+            feedback_label.text = "Listen paused · " + instrument
+        if bool(demo_info.get("audio_available", false)) and not bool(demo_info.get("sampled", false)):
+            lesson_info_label.text = "Basic piano sound · install the Salamander samples for acoustic Listen (see README)."
+        elif bool(demo_info.get("sampled", false)):
+            lesson_info_label.text = "Acoustic grand piano · " + instrument
         if demo_player != null and bool(demo_player.get("audio_error")):
             feedback_label.text = "Listen audio could not load. Choose Listen to try again."
     feedback_label.tooltip_text = feedback_label.text
