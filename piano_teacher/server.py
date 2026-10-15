@@ -22,6 +22,7 @@ from .practice import Recorder, evaluate
 from .score import import_piece, render_layout, EngravedScore
 from .feedback import project_assessment
 from .library import ScoreLibrary
+from .library_health import LibraryHealth
 from .warmups import is_warmup
 from .raster import rasterize_score
 from .recovery import check_two_bar_window
@@ -107,6 +108,7 @@ class PracticeEngine:
         self.live_input = LiveInputView()
         self.enable_midi = enable_midi
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
+        self.library_health = LibraryHealth(self.library)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
         data_dir.mkdir(parents=True, exist_ok=True)
         self._data_dir = data_dir
@@ -196,13 +198,23 @@ class PracticeEngine:
         with self.lock:
             return self.library.scan()
 
+    def library_health_status(self) -> dict:
+        return self.library_health.snapshot()
+
+    def start_library_health(self) -> dict:
+        return self.library_health.start()
+
     def preferences(self) -> dict:
         with self.lock:
             return self.library.public_settings()
 
     def set_preferences(self, **changes) -> dict:
         with self.lock:
-            return self.library.update(**changes)
+            before = self.library.settings['music_dir']
+            updated = self.library.update(**changes)
+            if before != self.library.settings['music_dir']:
+                self.library_health.reset()
+            return updated
 
     def load_library(self, identifier: str) -> None:
         with self.lock:
@@ -1727,6 +1739,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200,self.engine.state())
             elif route=="/library":
                 self._json(200,self.engine.library_listing())
+            elif route=="/library/health":
+                self._json(200,self.engine.library_health_status())
             elif route=="/lesson":
                 self._json(200,self.engine.lesson_overview())
             elif route=="/settings":
@@ -1770,6 +1784,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.engine.load(args["path"])
             elif route=="/library/open":
                 self.engine.load_library(args["id"])
+            elif route=="/library/health":
+                self._json(200, self.engine.start_library_health())
+                return
             elif route=="/settings":
                 self.engine.set_preferences(**args)
             elif route=="/device":
