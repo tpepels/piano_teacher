@@ -8,6 +8,7 @@ var transport_active := false
 var guided_active := false
 var image_size := Vector2.ZERO
 var marks: Array = []
+var next_chord: Array = []
 var wrong_ghosts: Array = []
 var hit_pulses: Array = []
 var active_page := -1
@@ -144,6 +145,19 @@ func _draw() -> void:
     }
     var labels := {"wrong":"×", "missed":"!", "extra":"+",
                    "early":"←", "late":"→", "short":"−", "long":"+"}
+    # Upcoming *source* chord: a gentle, non-scoring preview around each
+    # individual notehead. Draw beneath authoritative red and amber marks;
+    # a missed E never paints a simultaneously correct C red.
+    for note in next_chord:
+        if int(note.get("page", -1)) != active_page:
+            continue
+        var focus: Vector2 = _sheet_xy(float(note.get("x", 0.0)),
+                                       float(note.get("y", 0.0)))
+        var strength: float = clampf(float(note.get("emphasis", 0.0)), 0.0, 1.0)
+        var tone := Color("#6EDDB1")
+        draw_circle(focus, 13.0, Color(tone, .06 + .10 * strength))
+        draw_arc(focus, 12.5, 0.0, TAU, 28,
+            Color(tone, .27 + .55 * strength), 1.5 + strength, true)
     for marker in marks:
         if int(marker.get("page", -1)) != active_page:
             continue
