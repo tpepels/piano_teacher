@@ -96,6 +96,44 @@ func run() -> void:
             check(absf(float(lines[rail]) * strip.size.y - float(rail_positions[rail])) < .1,
                   "all piano staff lines stay level across systems and pages")
     check(absf(previous_right - strip.size.x) < .01, "strip width covers every tile")
+    # Quantify the musical pixel velocity the real camera must follow.
+    # This is the exact Verovio geometry mapped into Godot texture pixels,
+    # including accidentals, measure boundaries and joined print systems.
+    var velocities: Array[float] = []
+    var join_velocities: Array[float] = []
+    var unchanged_velocities: Array[float] = []
+    for i in range(flat.anchors.size() - 1):
+        var left_anchor: Dictionary = flat.anchors[i]
+        var right_anchor: Dictionary = flat.anchors[i+1]
+        var beats: float = float(right_anchor.beat) - float(left_anchor.beat)
+        if beats <= .000001:
+            continue
+        var pixels: float = (float(right_anchor.x) - float(left_anchor.x)) * strip.size.x
+        var velocity: float = pixels / beats
+        check(velocity >= -.01, "music must never pan backward as beats increase")
+        if velocity < 0:
+            continue
+        velocities.append(velocity)
+        var src_left: Dictionary = original.anchors[i]
+        var src_right: Dictionary = original.anchors[i+1]
+        if int(src_left.page) != int(src_right.page) or str(src_left.system) != str(src_right.system):
+            join_velocities.append(velocity)
+        else:
+            unchanged_velocities.append(velocity)
+    if not unchanged_velocities.is_empty() and not join_velocities.is_empty():
+        unchanged_velocities.sort()
+        join_velocities.sort()
+        var typical: float = unchanged_velocities[unchanged_velocities.size() / 2]
+        var fastest_join: float = join_velocities[-1]
+        var slowest_join: float = join_velocities[0]
+        print("SCROLL_VELOCITY_AUDIT: typical=", snappedf(typical, .01),
+            " join_min=", snappedf(slowest_join, .01),
+            " join_max=", snappedf(fastest_join, .01),
+            " join_max_ratio=", snappedf(fastest_join / maxf(1.0, typical), .001),
+            " inside=", unchanged_velocities.size(), " joins=", join_velocities.size(),
+            " trim=", bool(original.get("strip_trim_repeated_headers", false)))
+        check(is_finite(typical) and typical > 0,
+            "real music must have a positive finite pixel travel per beat")
     var previous_beat := -INF
     var previous_x := -INF
     for index in range(flat.anchors.size()):

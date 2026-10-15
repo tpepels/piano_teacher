@@ -23,7 +23,9 @@ def make_render_fixture(folder, bars=2):
     phrase = Phrase(1, 1, bars, 0, duration, notes)
     variant = generate_variants(phrase, "right")[-1]
     score = build_lesson_score(variant.phrase, boundaries=tuple(range(0, duration + 1, 3)))
-    engraved = render_layout(score, 1, bars, "right", total_beats=duration)
+    # Render at an actual lesson tempo. Without bpm the renderer does not
+    # enable the system-header trimming used during live practice.
+    engraved = render_layout(score, 1, bars, "right", total_beats=duration, bpm=68)
     engraved.layout["symbols"] = preparation_symbols()
     (folder / "layout.json").write_text(json.dumps(engraved.layout))
     (folder / "score.png").write_bytes(rasterize_score(engraved.pages[0]))
