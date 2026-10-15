@@ -125,29 +125,30 @@ func _run() -> void:
     _check(live_overlay.wrong_ghosts.is_empty() and live_overlay.hit_pulses.is_empty(),
         "Expired played-note ghosts must vanish even while the score is stationary")
 
-    # The same real HUD code used by state polling must make missing
-    # feedback readable without waiting for a physical piano.
+    # Mapped notes belong on the engraved staff, not under a large red
+    # rectangle. Reserve a small fallback warning for unmapped backend data.
     var hud: Control = scene.get("practice_note_feedback_panel")
     var hud_label: Label = scene.get("practice_note_feedback_label")
     scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "playing",
         "preview_only": false, "live_note_feedback":
         {"status": "missed", "pitch": 67, "name": "G4", "count": 1}})
-    _check(hud.visible and "MISSED" in hud_label.text and "G4" in hud_label.text,
-        "A missed note is not visible in the practice HUD")
-    _check(_in_viewport(hud, viewport), "Missing-note feedback HUD is clipped")
+    _check(not hud.visible, "Mapped missed note should not cover the engraved score")
     scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "playing",
         "preview_only": false, "live_note_feedback":
         {"status": "wrong", "pitch": 65, "name": "F4", "count": 1}})
-    _check(hud.visible and "WRONG" in hud_label.text and "F4" in hud_label.text,
-        "Wrong-note feedback is not visible in the practice HUD")
+    _check(not hud.visible, "Mapped wrong note should use a notehead outline, not the old HUD")
     scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "playing",
         "preview_only": true, "live_note_feedback": null})
-    _check(hud.visible and "SCORING OFF" in hud_label.text,
-        "Preview mode does not visibly explain why misses are unavailable")
+    _check(not hud.visible, "Ungraded preview must not cover the sheet music")
+    scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "feedback",
+        "feedback_unmapped": 2, "preview_only": false})
+    _check(hud.visible and "2 notes" in hud_label.text,
+        "Unmapped errors still need an accessible textual fallback")
+    _check(_in_viewport(hud, viewport), "Unmapped warning is clipped")
     scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "playing",
         "preview_only": false, "live_note_feedback": null})
-    _check(not hud.visible, "Old missed note remains visible after clearing feedback")
-    
+    _check(not hud.visible, "Old feedback warning remains after clearing state")
+
     # Short library actions must not truncate ('Setting', 'Refres', etc.)
     # while intentionally long MIDI titles remain scroll-safe with ellipsis.
     scene.set("library_info", {"pieces": [{
