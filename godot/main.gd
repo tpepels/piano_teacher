@@ -1581,6 +1581,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         passage_label.text = "WARM-UP %d/3 · %s · Measures %d–%d" % [
             hand_step, str(parsed.get("hand", "left")).to_upper(),
             int(parsed.get("first_bar", 1)), int(parsed.get("last_bar", 8))]
+    if not bool(parsed.get("warmup", false)):
+        var chosen_bar: int = int(parsed.get("selected_start_bar", 1))
+        if chosen_bar > int(parsed.get("first_bar", 1)):
+            passage_label.text += " · Start at measure %d" % chosen_bar
     # The live bar number comes from Python's source meter grid. Do not infer
     # measures from elapsed seconds in Godot (pickup and changing meters).
     var current_bar: int = int(parsed.get("current_bar", 0))
