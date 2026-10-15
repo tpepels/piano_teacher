@@ -1265,7 +1265,8 @@ class PracticeEngine:
         beats_per_bar=grid[1]-grid[0]
         # Defer five-error recovery until the two-bar boundary. Silent
         # previews never generate failure, assessment or mastery.
-        while self.mode == "practice" and not self.preview_only and self.next_boundary_beat and score_beat >= self.next_boundary_beat:
+        while (self.mode == "practice" and self.review_end_beat is None and not self.preview_only
+               and self.next_boundary_beat and score_beat >= self.next_boundary_beat):
             decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
                 self.recorder.presses if self.recorder else [],
                 from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
@@ -1529,10 +1530,14 @@ class PracticeEngine:
                                         "complete": finished, "locked": locked,
                                         "available": available})
             now=self.paused_at if self.paused else time.monotonic()
-            seconds=(ex.phrase.end-ex.phrase.start)*60/p.bpm
+            total_beats = ex.phrase.end-ex.phrase.start
+            practice_end = min(total_beats, self.review_end_beat) if self.review_end_beat is not None else total_beats
+            start_beat = self.play_from_beat if self.review_end_beat is not None else 0.0
+            seconds=(practice_end-start_beat)*60/p.bpm
             elapsed=now-self.run_at
             exercise_beat=self.play_from_beat+max(0.0,elapsed*p.bpm/60)
-            progress=min(1.0,max(0.0, exercise_beat/(ex.phrase.end-ex.phrase.start))) if self.running else 0.0
+            progress=min(1.0,max(0.0,
+                (exercise_beat-start_beat)/max(1e-6, practice_end-start_beat))) if self.running else 0.0
             phase=self._phase(now)
             live_marks=self._live_feedback(elapsed) if phase == "playing" else []
             # Also publish the recent error in a stable HUD field. Engraved
