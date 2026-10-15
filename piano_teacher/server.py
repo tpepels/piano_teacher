@@ -320,14 +320,15 @@ class PracticeEngine:
                 from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
                 beats_per_bar=beats_per_bar)
             if decision is not None:
+                # Capture marks at the performance tempo, not at the slower
+                # BPM selected for the next retry. Re-scaling the recorded
+                # timestamps early would move mistakes to incorrect notes.
+                self.feedback_marks=self._live_feedback((now-self.run_at))
                 self.plan.streak=0
                 self.plan.failures+=1
                 before=self.plan.bpm
                 self.plan.bpm=max(12,round(before*.9))
                 self._save()
-                # Keep settled notehead markers before ending the live take.
-                # Once running/recorder are cleared they cannot be recovered.
-                self.feedback_marks=self._live_feedback((now-self.run_at))
                 self.pending_rewind=decision.restart_beat
                 self.running=False
                 self.recorder=None
