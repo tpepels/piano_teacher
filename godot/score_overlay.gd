@@ -8,6 +8,7 @@ var transport_active := false
 var guided_active := false
 var image_size := Vector2.ZERO
 var marks: Array = []
+var wrong_ghosts: Array = []
 var hit_pulses: Array = []
 var active_page := -1
 var crop_origin := Vector2.ZERO
@@ -158,6 +159,13 @@ func _draw() -> void:
         elif status == "correct":
             draw_arc(center, 9.0, 0.0, TAU, 20, Color(color, .37), 1.5, true)
             draw_string(ThemeDB.fallback_font, center + Vector2(12, -9), "✓", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, color)
+        elif status in ["missed", "wrong"]:
+            # Never color the whole chord. Only this notehead receives a red
+            # ring and wash. A wrong physical pitch is a separate ghost below.
+            draw_circle(center, 11.0, Color("#D8514F", .26))
+            draw_arc(center, 13.0, 0.0, TAU, 30, Color("#FF665E"), 3.2, true)
+            draw_string(ThemeDB.fallback_font, center + Vector2(13, -10),
+                "×", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#FF665E"))
         else:
             var radius := 12.0 if status == "missed" else 10.0
             draw_arc(center, radius, 0.0, TAU, 24, color, 2.5, true)
@@ -166,6 +174,40 @@ func _draw() -> void:
             draw_string(font, center + Vector2(12, -9), symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, color)
             if status == "extra":
                 draw_string(font, center + Vector2(12, 5), str(marker.get("label", "")), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, color)
+    # Briefly draw the *actual physical wrong pitch* on the correct staff.
+    # The x and staff reference come from a real Verovio attack. Y is offset
+    # by diatonic steps relative to that attack; never fabricate a note at an
+    # unrelated part of the score. Expired ghosts disappear independently
+    # of permanent missed-note feedback.
+    var now_ms: int = Time.get_ticks_msec()
+    for ghost in wrong_ghosts:
+        if int(ghost.get("page", -1)) != active_page:
+            continue
+        var life: float = clampf(
+            float(int(ghost.get("until_ms", 0)) - now_ms) / 950.0, 0.0, 1.0)
+        if life <= 0.0:
+            continue
+        var center: Vector2 = _sheet_xy(float(ghost["x"]), float(ghost["y"]))
+        var color := Color("#F98A70", life)
+        # Use the five-line staff's actual spacing when additional ledger
+        # lines are required outside the written range.
+        var x_radius := 13.0
+        for y in ghost.get("ledger_lines", []):
+            var staff_y: float = _sheet_xy(0.0, float(y)).y
+            draw_line(Vector2(center.x-17, staff_y),
+                Vector2(center.x+17, staff_y), color, 2.0, true)
+        draw_circle(center, x_radius, Color("#A52E2D", life * .18))
+        draw_colored_polygon(PackedVector2Array([
+            center + Vector2(-12, 2), center + Vector2(-11, -4),
+            center + Vector2(8, -7), center + Vector2(12, -2),
+            center + Vector2(10, 5), center + Vector2(-8, 8)
+        ]), color)
+        var pitch_label: String = str(ghost.get("label", ""))
+        draw_string(ThemeDB.fallback_font, center + Vector2(19, -12),
+            pitch_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 19, color)
+        draw_string(ThemeDB.fallback_font, center + Vector2(19, 9),
+            "WRONG", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(color, life * .9))
+
     # A real physical attack produces a prominent short-lived pulse at the
     # mapped engraved notehead. These pulses are provisional and distinct from
     # the authoritative assessment marks rendered above.

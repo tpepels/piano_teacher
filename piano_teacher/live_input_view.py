@@ -44,6 +44,10 @@ class LiveInputView:
         self.held[pitch] = self.held.get(pitch, 0) + 1
         status = "heard"
         source = ""
+        # A mistyped pitch is located against a real expected staff note on
+        # this beat, not against a guessed page coordinate. The transient
+        # visual marker never consumes an expected note or awards credit.
+        reference_source = ""
         if running and not paused and mode in ("practice", "perform"):
             if now < run_at:
                 status = "count_in"
@@ -72,11 +76,26 @@ class LiveInputView:
                     status = "on_time" if abs(drift) <= 0.1 else "early" if drift < 0 else "late"
                 else:
                     status = "unexpected"
+                    # Pair only an attack close to an actual required onset.
+                    # For chords, prefer the closest pitch in the chord while
+                    # preserving the separate exact-pitch notes as unplayed.
+                    nearby = [
+                        (abs(at - (note.start - phrase.start - from_beat) * seconds_per_beat),
+                         abs(pitch - note.pitch), index, note)
+                        for index, note in enumerate(phrase.notes)
+                        if (hand == "both" or note.hand == hand)
+                        and note.start - phrase.start >= from_beat - 1e-7
+                        and abs(at - (note.start - phrase.start - from_beat) * seconds_per_beat) <= .1
+                    ]
+                    if nearby:
+                        _, _, index, reference = min(nearby, key=lambda entry: entry[:3])
+                        reference_source = source_note_id(reference, index)
 
         self.sequence += 1
         self.events.append({
             "sequence": self.sequence, "pitch": pitch, "status": status,
-            "source_id": source, "transport_id": transport_id, "received_at": now,
+            "source_id": source, "reference_source_id": reference_source,
+            "transport_id": transport_id, "received_at": now,
         })
 
     def snapshot(

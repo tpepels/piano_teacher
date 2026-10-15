@@ -25,12 +25,12 @@ from .library import ScoreLibrary
 from .warmups import is_warmup
 from .raster import rasterize_score
 from .recovery import check_two_bar_window
-from .music import Phrase, source_note_id
+from .music import Phrase, source_note_id, note_name
 from .lesson_score import build_lesson_score
 from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
-from .live_feedback import settled_assessment
+from .live_feedback import settled_assessment, expired_attack_misses
 from .live_input_view import LiveInputView
 from .instruction import next_full_attempt
 from .learner_state import LearnerStateStore, guided_units, next_guided_unit, placement_candidate
@@ -51,6 +51,7 @@ class PracticeEngine:
         self.pending_rewind: float | None = None
         self._rewind_requires_layout = False
         self.feedback_seconds = 1.5
+        self.recovery_notice: dict | None = None
         self.paused = False
         self.paused_at = 0.0
         self.pause_context: str | None = None
@@ -364,6 +365,7 @@ class PracticeEngine:
         self.pending_result=None
         self.feedback_marks=[]
         self.feedback_unmapped=0
+        self.recovery_notice = None
         self.live_input.reset_attempt()
         self.retry_range=None
         self._guided_recovery_pending=False
@@ -811,6 +813,14 @@ class PracticeEngine:
         before = (p.identity, p.bpm)
         message = p.apply_result(correct=result.correct,
                                  total=len(result.notes), extras=result.extra_notes)
+        if p.identity == before[0] and p.bpm > before[1]:
+            self.recovery_notice = {
+                "kind": "speedup", "errors": 0,
+                "from_bpm": before[1], "to_bpm": p.bpm,
+                "first_bar": p.active_phrase.first_bar,
+                "last_bar": p.active_phrase.last_bar,
+                "expires_at": time.monotonic() + 7.0,
+            }
         if (p.identity, p.bpm) != before:
             self.score_revision += 1
         self._save()
@@ -1121,11 +1131,12 @@ class PracticeEngine:
         beats_per_bar=grid[1]-grid[0]
         # Defer five-error recovery until the two-bar boundary. Silent
         # previews never generate failure, assessment or mastery.
-        while self.mode == "practice" and not self.is_builtin_warmup and not self.preview_only and self.next_boundary_beat and score_beat >= self.next_boundary_beat:
+        while self.mode == "practice" and not self.preview_only and self.next_boundary_beat and score_beat >= self.next_boundary_beat:
             decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
                 self.recorder.presses if self.recorder else [],
                 from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
                 beats_per_bar=beats_per_bar,
+                threshold=2 if self.is_builtin_warmup else 5,
                 window_start_beat=chunk_start_at_end(grid,self.next_boundary_beat))
             if decision is not None:
                 # Capture marks at the performance tempo, not at the slower
@@ -1153,6 +1164,14 @@ class PracticeEngine:
                 self._rewind_requires_layout = self.plan.bpm != before
                 self._save()
                 self.pending_rewind=decision.restart_beat
+                self.recovery_notice = {
+                    "kind": "slowdown", "errors": decision.errors,
+                    "missed": decision.missed, "wrong": decision.wrong,
+                    "from_bpm": before, "to_bpm": self.plan.bpm,
+                    "first_bar": bar_number_at(grid, decision.restart_beat, phrase.first_bar),
+                    "last_bar": bar_number_at(grid, max(decision.restart_beat, decision.end_beat-1e-6), phrase.first_bar),
+                    "expires_at": now + 9.0,
+                }
                 key = (self.plan.identity, decision.restart_beat, decision.end_beat)
                 self._trouble_count = self._trouble_count + 1 if key == self._trouble_key else 1
                 self._trouble_key = key
@@ -1246,7 +1265,12 @@ class PracticeEngine:
                 else "recovering" if self.pending_rewind is not None else "ready")
 
     def _live_feedback(self, elapsed_seconds: float) -> list[dict]:
-        """Project graded noteheads without waiting for the final attempt."""
+        """Live notehead marks: each missing chord pitch is handled separately.
+
+        Slow held notes do not delay missing-pitch feedback until their
+        release, and notes inside the allowable late-onset window are never
+        prematurely marked wrong. Assessment and playback clocks are unchanged.
+        """
         p=self.plan
         if (p is None or self.preview_only or not self.running
                 or self._layout_revision != self.score_revision or self._layout_cache is None):
@@ -1257,15 +1281,32 @@ class PracticeEngine:
             return []
         per_bar=total/max(1,phrase.last_bar-phrase.first_bar+1)
         now_beat=self.play_from_beat+elapsed_seconds*p.bpm/60
-        result=settled_assessment(phrase,p.hand,p.bpm,
-                                  self.recorder.presses if self.recorder else [],
+        played=self.recorder.presses if self.recorder else []
+        settled=settled_assessment(phrase,p.hand,p.bpm,played,
                                   from_beat=self.play_from_beat,
                                   until_beat=now_beat,beats_per_bar=per_bar)
-        if result is None:
+        grid=phrase_grid(phrase,p.piece.bar_boundaries)
+        active_bar=max(index for index, bar_beat in enumerate(grid)
+                       if bar_beat <= now_beat + 1e-7)
+        window_start=grid[max(0, active_bar-2)]
+        missed=expired_attack_misses(phrase,p.hand,p.bpm,played,
+                                     from_beat=self.play_from_beat,
+                                     until_beat=now_beat,
+                                     window_start_beat=window_start)
+        if settled is None and missed is None:
             return []
         try:
-            return project_assessment(result,phrase,p.bpm,self._layout_cache.layout,
-                                      played_from_beat=self.play_from_beat)["marks"]
+            layout=self._layout_cache.layout
+            marks=[]
+            if settled is not None:
+                marks=project_assessment(settled,phrase,p.bpm,layout,
+                                         played_from_beat=self.play_from_beat)["marks"]
+            if missed is not None:
+                existing={m.get("note_id") for m in marks}
+                new=project_assessment(missed,phrase,p.bpm,layout,
+                                       played_from_beat=self.play_from_beat)["marks"]
+                marks.extend(m for m in new if m.get("note_id") not in existing)
+            return marks
         except (ValueError, RuntimeError, KeyError):
             return []
 
@@ -1285,6 +1326,10 @@ class PracticeEngine:
                 "transition_in_seconds": (max(0.0, self.next_at-(self.paused_at if self.paused else time.monotonic()))
                     if self.next_at and (self.pending_result is not None or self.pending_rewind is not None) else None),
                 "retry_range": self.retry_range,
+                "recovery_notice": ({key: value for key, value in self.recovery_notice.items()
+                                     if key != "expires_at"}
+                                    if self.recovery_notice is not None and
+                                    time.monotonic() < self.recovery_notice["expires_at"] else None),
                 "guided_recovery": self._guided_recovery_pending or self._guided_return is not None,
                 "pause_context": self.pause_context,
                 "demo": dict(self.demo) if self.demo is not None else None,
@@ -1320,6 +1365,20 @@ class PracticeEngine:
             progress=min(1.0,max(0.0, exercise_beat/(ex.phrase.end-ex.phrase.start))) if self.running else 0.0
             phase=self._phase(now)
             live_marks=self._live_feedback(elapsed) if phase == "playing" else []
+            # Also publish the recent error in a stable HUD field. Engraved
+            # marks travel with the moving score and can leave the viewport
+            # before the student notices them.
+            live_errors = [mark for mark in live_marks
+                           if mark.get("status") in ("missed", "wrong")]
+            latest_error = max(live_errors, key=lambda mark: (mark.get("beat", -1), mark.get("pitch", -1)),
+                               default=None)
+            live_note_feedback = ({
+                "status": latest_error["status"],
+                "pitch": latest_error["pitch"],
+                "name": note_name(int(latest_error["pitch"])),
+                "count": len(live_errors),
+                "source_id": latest_error.get("source_id", ""),
+            } if latest_error is not None else None)
             result = {**input_activity,"mode":self.mode,"teaching":None,"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
                     "current_bar":bar_number_at(
@@ -1349,6 +1408,9 @@ class PracticeEngine:
                     "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
                     "device":self.midi_device,"feedback":"Paused" if self.paused else self.feedback,"revision":self.score_revision,
                     "feedback_marks":self.feedback_marks if (self.pause_context if self.paused else phase) in ("feedback", "recovering", "performance_complete") else live_marks,
+                    "live_note_feedback": live_note_feedback,
+                    "scoring_available": (not self.preview_only and self._piano_connected()
+                                          and self.mode in ("practice", "perform")),
                     "feedback_unmapped":self.feedback_unmapped if (self.pause_context if self.paused else phase) in ("feedback", "recovering", "performance_complete") else 0}
             if self.mode == "learn" and self.teaching is not None:
                 teaching = self.teaching.snapshot(now=time.monotonic())

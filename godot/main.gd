@@ -117,6 +117,8 @@ var device_pending := false
 var practice_layout_box: VBoxContainer
 var practice_score_panel: PanelContainer
 var practice_playback_banner: Label
+var practice_note_feedback_panel: PanelContainer
+var practice_note_feedback_label: Label
 var score_margin_box: MarginContainer
 var hint_keyboard: Control
 var mode_choice: OptionButton
@@ -750,6 +752,10 @@ func _build_interface() -> void:
     lesson_info_label = _label("", 17, INK)
     lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_layout.add_child(lesson_info_label)
+    practice_playback_banner = _label("", 18, Color("#F6BC70"), true)
+    practice_playback_banner.visible = false
+    practice_playback_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    practice_playback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var score_panel := _card()
     practice_score_panel = score_panel
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -807,6 +813,36 @@ func _build_interface() -> void:
     count_in_display.offset_bottom = 52.0
     count_in_display.visible = false
     score_frame.add_child(count_in_display)
+    # A visible retry notice must not consume vertical space or force the
+    # bottom transport buttons off smaller laptop screens.
+    practice_playback_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+    practice_playback_banner.offset_left = 20.0
+    practice_playback_banner.offset_right = -20.0
+    practice_playback_banner.offset_top = 54.0
+    practice_playback_banner.offset_bottom = 112.0
+    score_frame.add_child(practice_playback_banner)
+    # A stationary feedback badge stays visible even after a missed note
+    # scrolls left out of view. It never covers the playing cursor.
+    practice_note_feedback_panel = PanelContainer.new()
+    var feedback_style := Design.surface(Color("#27362F"), 9)
+    feedback_style.set_border_width_all(2)
+    feedback_style.border_color = Color("#ED665F")
+    feedback_style.set_content_margin_all(9)
+    practice_note_feedback_panel.add_theme_stylebox_override("panel", feedback_style)
+    practice_note_feedback_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    practice_note_feedback_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+    practice_note_feedback_panel.offset_left = -330.0
+    practice_note_feedback_panel.offset_right = -12.0
+    practice_note_feedback_panel.offset_top = 10.0
+    practice_note_feedback_panel.offset_bottom = 60.0
+    practice_note_feedback_panel.visible = false
+    score_frame.add_child(practice_note_feedback_panel)
+    practice_note_feedback_label = _label("", 20, Color("#FF827A"), true)
+    practice_note_feedback_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    practice_note_feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    practice_note_feedback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    practice_note_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    practice_note_feedback_panel.add_child(practice_note_feedback_label)
     hint_keyboard = HintKeyboard.new()
     score_region.add_child(hint_keyboard)
     practice_progress = ProgressBar.new()
@@ -939,6 +975,9 @@ func _update_responsive_layout() -> void:
         progress_label.add_theme_font_size_override("font_size", _ui_font(16))
         feedback_label.add_theme_font_size_override("font_size", _ui_font(17))
         lesson_info_label.add_theme_font_size_override("font_size", _ui_font(16))
+        practice_playback_banner.add_theme_font_size_override("font_size", _ui_font(17))
+        practice_note_feedback_label.add_theme_font_size_override("font_size", _ui_font(18))
+        practice_note_feedback_panel.offset_left = -minf(330.0, maxf(180.0, score_frame.size.x - 24.0))
 
 func _build_lesson_screen() -> void:
     var page := _screen("Lesson")
@@ -1225,7 +1264,10 @@ func _process(_delta: float) -> void:
     for index in range(score_overlay.hit_pulses.size() - 1, -1, -1):
         if int(score_overlay.hit_pulses[index].get("until_ms", 0)) <= ticks:
             score_overlay.hit_pulses.remove_at(index)
-    if not score_overlay.hit_pulses.is_empty():
+    for index in range(score_overlay.wrong_ghosts.size() - 1, -1, -1):
+        if int(score_overlay.wrong_ghosts[index].get("until_ms", 0)) <= ticks:
+            score_overlay.wrong_ghosts.remove_at(index)
+    if not score_overlay.hit_pulses.is_empty() or not score_overlay.wrong_ghosts.is_empty():
         score_overlay.queue_redraw()
     apply_tempo_button.disabled = action_pending
     _update_count_in()
@@ -1426,7 +1468,27 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
                 hand_step, str(parsed.get("hand", "left")).to_upper(), bar_text]
         else:
             passage_label.text = "%s · %s" % [kind, bar_text]
+    _update_note_feedback_hud(parsed)
     speed_label.text = "%d BPM · target %d" % [int(parsed.get("bpm", 0)),int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
+    var recovery_notice: Variant = parsed.get("recovery_notice")
+    practice_playback_banner.visible = (
+        recovery_notice is Dictionary
+        and str(parsed.get("mode", "")) == "practice"
+        and str(parsed.get("phase", "")) in ["recovering", "loading", "count_in", "feedback", "ready"])
+    if practice_playback_banner.visible:
+        var notice: Dictionary = recovery_notice
+        if str(notice.get("kind", "")) == "speedup":
+            practice_playback_banner.text = (
+                "Clean slower passage  ·  Tempo %d → %d BPM  ·  Keep practising"
+                % [int(notice.get("from_bpm", 0)), int(notice.get("to_bpm", 0))])
+            practice_playback_banner.add_theme_color_override("font_color", Color("#79DAAD"))
+        else:
+            practice_playback_banner.text = (
+                "%d missing/wrong pitches  ·  Tempo %d → %d BPM  ·  Retry measures %d–%d"
+                % [int(notice.get("errors", 0)), int(notice.get("from_bpm", 0)),
+                   int(notice.get("to_bpm", 0)), int(notice.get("first_bar", 1)),
+                   int(notice.get("last_bar", 1))])
+            practice_playback_banner.add_theme_color_override("font_color", Color("#F6BC70"))
     speed_label.add_theme_font_size_override("font_size", _ui_font(16 if size.x < 900 else 18))
     speed_label.tooltip_text = "Current practice tempo and your selected target"
     hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
@@ -1580,6 +1642,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         score_overlay.showing = false
         score_overlay.marks = []
         score_overlay.hit_pulses.clear()
+        score_overlay.wrong_ghosts.clear()
         _request_layout()
     if str(parsed.get("phase", "")) == "loading" and layout_revision == revision and rendered_revision == revision and score_view.texture != null:
         _send_action({"action": "score_ready", "revision": revision})
@@ -1603,6 +1666,88 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             _send_action({"action": "start"})
     _refresh_score_status()
 
+func _staff_diatonic_index(pitch: int) -> int:
+    # Equal chromatic pitches share a stave step (e.g. C and C#).
+    var letter_steps := [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]
+    return int(pitch / 12) * 7 + letter_steps[posmod(pitch, 12)]
+
+
+func _wrong_note_ghost(pitch: int, note: Dictionary) -> Dictionary:
+    # Position the wrong physical pitch using the real engraved note's
+    # pitch, hand, and local five-line staff. The source note's Verovio
+    # coordinate is authoritative; only pitch displacement is calculated.
+    var source_y: float = float(note.get("y", 0.0))
+    var source_x: float = float(note.get("x", 0.0))
+    var staff: Dictionary = {}
+    for candidate in score_layout.get("systems", []):
+        if int(candidate.get("page", -1)) != int(note.get("page", -2)):
+            continue
+        if (source_x >= float(candidate.get("left", -1.0)) - 0.001
+                and source_x <= float(candidate.get("right", 2.0)) + 0.001
+                and candidate.get("staff_lines", []).size() >= 10):
+            staff = candidate
+            break
+    if staff.is_empty():
+        return {}
+    var lines: Array = staff.get("staff_lines", [])
+    var hand: String = str(note.get("hand", "right"))
+    var index: int = 5 if hand == "left" else 0
+    var gap: float = absf(float(lines[index+1]) - float(lines[index]))
+    if gap <= 0.0:
+        return {}
+    var steps: int = _staff_diatonic_index(pitch) - _staff_diatonic_index(int(note.get("pitch", pitch)))
+    var target_y: float = source_y - float(steps) * gap * 0.5
+    var ledgers: Array = []
+    var top: float = float(lines[index])
+    var bottom: float = float(lines[index+4])
+    for n in range(1, 7):
+        if target_y <= top - float(n) * gap + gap * 0.25:
+            ledgers.append(top - float(n) * gap)
+        if target_y >= bottom + float(n) * gap - gap * 0.25:
+            ledgers.append(bottom + float(n) * gap)
+    var names := ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    return {
+        "page": int(note.get("page", -1)),
+        "x": source_x, "y": target_y,
+        "label": names[posmod(pitch, 12)] + str(int(pitch / 12) - 1),
+        "ledger_lines": ledgers,
+    }
+
+
+func _update_note_feedback_hud(parsed: Dictionary) -> void:
+    # The red HUD has its own fixed screen position. Score-head markers
+    # alone are easy to miss once the continuous score scrolls away.
+    var active_mode: String = str(parsed.get("mode", "practice"))
+    var active_phase: String = str(parsed.get("phase", "ready"))
+    var feedback: Variant = parsed.get("live_note_feedback")
+    practice_note_feedback_panel.visible = false
+    if active_mode in ["practice", "perform"]:
+        if active_phase == "playing" and feedback is Dictionary:
+            var problem: Dictionary = feedback
+            var wrong: bool = str(problem.get("status", "")) == "wrong"
+            practice_note_feedback_label.text = (
+                "WRONG  ·  %s" if wrong else "MISSED  ·  %s"
+            ) % str(problem.get("name", ""))
+            practice_note_feedback_label.add_theme_color_override("font_color", Color("#FF827A"))
+            practice_note_feedback_panel.visible = true
+        elif active_phase in ["playing", "count_in"] and bool(parsed.get("preview_only", false)):
+            practice_note_feedback_label.text = "NO MIDI PIANO · SCORING OFF"
+            practice_note_feedback_label.add_theme_color_override("font_color", Color("#F1C67D"))
+            practice_note_feedback_panel.visible = true
+        elif active_phase in ["feedback", "recovering", "performance_complete"]:
+            var missed_count := 0
+            var wrong_count := 0
+            for mark in parsed.get("feedback_marks", []):
+                if str(mark.get("status", "")) == "missed":
+                    missed_count += 1
+                elif str(mark.get("status", "")) == "wrong":
+                    wrong_count += 1
+            if missed_count + wrong_count > 0:
+                practice_note_feedback_label.text = "%d missed · %d wrong" % [missed_count, wrong_count]
+                practice_note_feedback_label.add_theme_color_override("font_color", Color("#FF827A"))
+                practice_note_feedback_panel.visible = true
+
+
 func _consume_live_piano_hits(state: Dictionary) -> void:
     var events: Array = state.get("midi_visual_events", [])
     var mapping: Dictionary = score_layout.get("attack_map", {})
@@ -1619,9 +1764,26 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
         if int(event.get("transport_id", -1)) != int(state.get("transport_id", -2)):
             continue
         var status: String = str(event.get("status", ""))
-        if status not in ["on_time", "early", "late"] or float(event.get("age", 99.0)) > 0.75:
+        var age: float = float(event.get("age", 99.0))
+        if age > 1.05:
             continue
         var source: String = str(event.get("source_id", ""))
+        if status == "unexpected":
+            var reference: String = str(event.get("reference_source_id", ""))
+            var reference_id: String = str(mapping.get(reference, ""))
+            if reference_id.is_empty():
+                continue
+            for note in notes:
+                if str(note.get("id", "")) != reference_id:
+                    continue
+                var ghost: Dictionary = _wrong_note_ghost(int(event.get("pitch", -1)), note)
+                if not ghost.is_empty():
+                    ghost["until_ms"] = Time.get_ticks_msec() + maxi(1, 1050 - int(age * 1000.0))
+                    score_overlay.wrong_ghosts.append(ghost)
+                break
+            continue
+        if status not in ["on_time", "early", "late"] or age > .75:
+            continue
         var note_id: String = str(mapping.get(source, ""))
         if note_id.is_empty():
             continue
@@ -1632,7 +1794,7 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                     "x": float(note.get("x", 0.0)),
                     "y": float(note.get("y", 0.0)),
                     "status": status,
-                    "until_ms": Time.get_ticks_msec() + maxi(1, 700 - int(float(event.get("age", 0.0)) * 1000.0))
+                    "until_ms": Time.get_ticks_msec() + maxi(1, 700 - int(age * 1000.0))
                 })
                 break
 

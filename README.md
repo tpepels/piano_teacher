@@ -67,6 +67,41 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Missing notes, wrong staff pitches, adaptive retry (UI phase 3)
+
+During a MIDI-connected practice attempt, the app distinguishes:
+
+- **Missed note:** after the last acceptable late-onset time, only the
+  missing required *notehead* turns red. In a chord where two of three
+  notes are played, the unplayed third note turns red; the other two
+  notes are not marked as missed.
+- **Wrong pitch:** when a played key is near a real expected onset, a
+  red/orange notehead showing the **pitch actually played** briefly
+  appears on the correct musical staff. It is placed using a real
+  Verovio notehead reference and the actual staff spacing, with ledger
+  lines where needed. Wrong keys during rests only appear in the
+  live keyboard, because there is no associated engraved note.
+- **Late/early and held-duration errors:** the existing assessor still
+  scores pitch, onset and release duration independently. The live
+  visualizations do not award clean-pass credit.
+
+Mistakes in a warm-up now participate in adaptive recovery: **two**
+wrong/missed required pitches in a two-bar window trigger a
+boundary-aligned restart at 90% of the previous BPM. Imported-piece
+Practice still uses five errors. The slowdown banner names the missed
+count, original/next tempo and retry measures. A clean partial retry
+must still be followed by a whole clean passage; three clean target
+speed performances are still required for advancement.
+
+For a hardware acceptance check, connect the Kawai in Settings, then
+try a left-hand chord exercise: intentionally omit one chord tone,
+press one different pitch, and then complete a full correct chord.
+Check that only omitted noteheads turn red, the incorrect pressed pitch
+appears briefly at the correct staff height, and completed notes are
+not colored red. Repeat two errors over a two-bar section to see
+10% adaptive slowdown and measure-aligned retry. Silent previews
+cannot trigger either mistakes or automatic progress.
+
 ## Practice display and pause sheet (UI phase 2)
 
 The timed practice toolbar and bottom transport controls wrap complete buttons
