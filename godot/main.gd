@@ -1207,6 +1207,7 @@ func _populate_library() -> void:
 func _open_library_piece(identifier: String) -> void:
     library_error = ""
     library_message.text = "Opening score…"
+    library_message.add_theme_color_override("font_color", MUTED)
     _send_post("/library/open", {"id": identifier})
 
 func _resume_last() -> void:
@@ -2027,6 +2028,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
             _navigate("practice")
     elif path == "/library/open":
         library_error = ""
+        _populate_library()  # clear stale error or 'Opening score' on return
         score_error = ""
         var opened: Variant = _decode_json(body)
         _navigate("practice")
