@@ -1099,6 +1099,13 @@ class PracticeEngine:
                 return
             if action == "practice":
                 self._prepare_practice()
+                if kwargs.get("wait_for_player", False):
+                    # Returning from Listen must not start a count-in simply
+                    # because the renderer completed. Wait for a fresh piano
+                    # note or the central Play action.
+                    self.awaiting_score_revision = None
+                    self.feedback = "Ready to play"
+                    self.next_action = "Play one piano key to begin, or press Play."
                 return
             if action == "hints":
                 self.persistent_hints = bool(kwargs.get("enabled", False))
