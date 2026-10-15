@@ -105,6 +105,40 @@ func _run() -> void:
         "preview_only": false, "live_note_feedback": null})
     _check(not hud.visible, "Old missed note remains visible after clearing feedback")
     
+    # Short library actions must not truncate ('Setting', 'Refres', etc.)
+    # while intentionally long MIDI titles remain scroll-safe with ellipsis.
+    scene.set("library_info", {"pieces": [{
+        "id": "long.mid", "title": "Bill Evans on Autumn Leaves From the Album Portrait in Jazz",
+        "folder": "", "format": "MIDI"}], "warmups": []})
+    scene.call("_populate_library")
+    scene.call("_navigate", "library")
+    await process_frame
+    await process_frame
+    var pages: Dictionary = scene.get("screens")
+    var library_root: Control = pages["library"]
+    var short_buttons := 0
+    for control in library_root.find_children("*", "Button", true, false):
+        var button := control as Button
+        if button.text in ["← Home", "Settings", "Refresh"]:
+            short_buttons += 1
+            _check(not button.clip_text, "Library short control clips text: " + button.text)
+            _check(_in_viewport(button, viewport), "Library short control outside window: " + button.text)
+            _check(button.size.x + 1.0 >= button.get_combined_minimum_size().x,
+                "Library short control narrower than its text: " + button.text)
+    _check(short_buttons == 3, "Expected three complete library navigation actions")
+    var library_items: Control = scene.get("library_rows")
+    var found_long_title := false
+    for control in library_items.get_children():
+        if control is Button and "Bill Evans" in str((control as Button).text):
+            found_long_title = true
+            _check((control as Button).clip_text, "Long library titles must use ellipsis")
+            _check((control as Button).tooltip_text.contains("Portrait in Jazz"),
+                "Long library title tooltip lost its complete name")
+    _check(found_long_title, "Synthetic long title missing from library")
+    scene.call("_navigate", "practice")
+    await process_frame
+    await process_frame
+
     var pause: Control = scene.get("pause_sheet")
     pause.call("present", {"paused":true, "mode":"practice", "bpm":68,
         "hand":"left", "hands":["left","right","both"],
