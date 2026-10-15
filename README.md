@@ -67,6 +67,40 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Living sheet music (Phase 7.4)
+
+The moving notation now gives a discreet **next-chord cue** directly on
+its real engraved noteheads. During a timed count-in and active playback,
+the upcoming note or all notes of an upcoming chord gain individual
+teal outlines as their onset approaches. The cue is limited to 1.25
+quarter-note beats ahead, disappears across long rests, and follows
+the same score coordinates and signed tempo clock as the timing line.
+The cue is a **visual preview**, not a second grading engine.
+
+A missed or wrong pitch retains its own **red notehead marking**, while
+the other notes of a chord remain individually correct/uncorrected.
+Authoritative assessed notes take priority over the optional teal
+upcoming outline. A genuinely incorrect physical pitch still appears
+briefly on its actual staff position with its note name; that ghost
+fades automatically, including when the music is paused. Correct
+physical attacks receive their brief teal pulse, independently of
+later duration grading.
+
+For long pieces the source-note chord groups are indexed only when a
+new score is engraved; during playback the next group is found with a
+binary search. This avoids scanning every note at every animation frame.
+Scores and note identities still come from the canonical importer and
+Verovio, not a simplified visual simulation.
+
+The existing **real Verovio-to-Godot score-strip tests** now check
+that both hands in a chord receive separate notehead cues, a red
+missed pitch does not suppress the other chord pitches, the position
+exactly matches engraved ink, and no future notes are shown past the
+end or prematurely over long rests. The Godot layout test also checks
+that animated wrong-note ghosts expire on a stationary score.
+Actual appearance and hardware response must still be checked on the
+Kawai as part of Phase 8.
+
 ## Sampled grand piano for Listen (Phase 7.3)
 
 Listen can now use real recorded **Salamander Grand Piano V3** samples from
