@@ -14,7 +14,7 @@ GODOT = shutil.which("godot") or shutil.which("godot4")
 def test_constant_bpm_projection_survives_poll_jitter_and_pause():
     result = subprocess.run(
         [GODOT, "--headless", "--path", str(ROOT / "godot"),
-         "--script", "res://../tests/godot/visual_transport_clock.gd"],
+         "--script", str(ROOT / "tests/godot/visual_transport_clock.gd")],
         cwd=ROOT, capture_output=True, text=True, timeout=40,
     )
     assert result.returncode == 0, result.stdout + result.stderr
