@@ -12,6 +12,11 @@ var _expected_label: Label
 var _heard_label: Label
 var _expected: Dictionary = {}
 var _heard: Dictionary = {}
+var _live_mode := false
+var _pressed: Dictionary = {}
+var _last_pitch := -1
+var _last_status := ""
+var _last_age := 999.0
 var _registers: Array[Dictionary] = []
 var _keys: Dictionary = {}
 var ui_scale := 1.0
@@ -55,6 +60,8 @@ func _update_compact_height() -> void:
     _layout_keys()
 
 func update_state(teaching: Dictionary) -> void:
+    _live_mode = false
+    _pressed.clear()
     _expected.clear()
     _heard.clear()
     for note in teaching.get("expected_notes", []):
@@ -97,6 +104,76 @@ func update_state(teaching: Dictionary) -> void:
         for group in groups:
             _registers.append(_context_range(group, groups.size() == 1))
     _layout_keys()
+
+func update_live(expected_pitches: Array, held_pitches: Array, events: Array, connected: bool) -> void:
+    # Physical keyboard display is active during timed practice, independently
+    # of the Learn-mode hint keyboard. No preview marker awards score credit.
+    _live_mode = true
+    _expected.clear()
+    _heard.clear()
+    _pressed.clear()
+    for raw in expected_pitches:
+        var pitch := int(raw)
+        if pitch >= 21 and pitch <= 108:
+            _expected[pitch] = _pitch_name(pitch)
+    for raw in held_pitches:
+        var pitch := int(raw)
+        if pitch >= 21 and pitch <= 108:
+            _heard[pitch] = true
+            _pressed[pitch] = "heard"
+    _last_pitch = -1
+    _last_status = ""
+    _last_age = 999.0
+    if not events.is_empty():
+        # Keep independent colors for chord notes, not just the final attack.
+        for event in events:
+            if not event is Dictionary or float(event.get("age", 999.0)) >= 0.8:
+                continue
+            var played_pitch: int = int(event.get("pitch", -1))
+            if played_pitch >= 21 and played_pitch <= 108:
+                _pressed[played_pitch] = str(event.get("status", "heard"))
+        var last: Dictionary = events[events.size() - 1]
+        _last_pitch = int(last.get("pitch", -1))
+        _last_status = str(last.get("status", "heard"))
+        _last_age = float(last.get("age", 999.0))
+    visible = connected
+    if not is_node_ready():
+        await ready
+    var pitches: Array = _expected.keys()
+    for pitch in _heard:
+        if not pitches.has(pitch):
+            pitches.append(pitch)
+    if _last_age < 0.8 and _last_pitch >= 21 and _last_pitch <= 108 and not pitches.has(_last_pitch):
+        pitches.append(_last_pitch)
+    if pitches.is_empty():
+        pitches = [48, 72]
+    pitches.sort()
+    _registers.clear()
+    var groups: Array = []
+    _split_registers(pitches, groups)
+    for group in groups:
+        _registers.append(_context_range(group, groups.size() == 1))
+    var names: PackedStringArray = []
+    for pitch in _expected:
+        names.append(_pitch_name(int(pitch)))
+    names.sort()
+    _expected_label.text = "NEXT  " + (" + ".join(names) if not names.is_empty() else "Follow the score")
+    var status_labels := {
+        "heard": "Key received", "count_in": "Wait for the first beat",
+        "on_time": "On time · keep holding", "early": "Early note",
+        "late": "Late note", "unexpected": "Unexpected note"
+    }
+    _heard_label.text = (
+        "%s  %s" % [str(status_labels.get(_last_status, "Key received")), _pitch_name(_last_pitch)]
+        if _last_age < 0.8 and _last_pitch >= 21 and _last_pitch <= 108
+        else ("%d key(s) held" % _heard.size() if not _heard.is_empty() else "Play a note")
+    )
+    _heard_label.add_theme_color_override("font_color",
+        Color("#DA8580") if _last_status == "unexpected" and _last_age < 0.8
+        else Color("#D5AD66") if _last_status in ["early", "late", "count_in"] and _last_age < 0.8
+        else Color("#66D3AA") if _last_age < 0.8 else Design.SLATE)
+    _layout_keys()
+
 
 func _pitch_name(pitch: int) -> String:
     return ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][pitch % 12] \
@@ -188,13 +265,16 @@ func _draw() -> void:
             var fill := ACCIDENTAL if black else NATURAL
             if bool(key.expected):
                 fill = Design.SAGE.darkened(.18) if black else Design.SAGE
+            if _live_mode and _pressed.has(pitch):
+                var status: String = str(_pressed[pitch])
+                fill = Color("#BB514D") if status == "unexpected" else Color("#C68D4D") if status in ["early", "late", "count_in"] else Color("#4AA989")
             draw_style_box(Design.surface(fill, 2), rect)
             if bool(key.expected):
                 draw_rect(rect.grow(-1), EXPECTED, false, 1.5)
                 var marker := Vector2(rect.get_center().x, rect.position.y + 8 if black else rect.end.y - 24)
                 draw_colored_polygon(PackedVector2Array([marker + Vector2(-4, 0), marker + Vector2(4, 0),
                     marker + Vector2(0, 5)]), EXPECTED)
-            if bool(key.heard):
+            if bool(key.heard) and not _live_mode:
                 # A round slate marker survives alongside the triangular expected marker on the same key.
                 var heard_at := Vector2(rect.end.x - 6, rect.position.y + 8 if black else rect.end.y - 14)
                 draw_circle(heard_at, 3, Design.SLATE)
@@ -202,7 +282,7 @@ func _draw() -> void:
             var label := ""
             if bool(key.expected):
                 label = str(_expected[pitch])
-            elif bool(key.heard) or int(pitch) % 12 == 0:
+            elif bool(key.heard) or (_live_mode and _pressed.has(pitch)) or int(pitch) % 12 == 0:
                 label = _pitch_name(int(pitch))
             if not label.is_empty():
                 var font_size := _ui_font(11 if black else 12)

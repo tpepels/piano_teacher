@@ -31,6 +31,7 @@ from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
 from .live_feedback import settled_assessment
+from .live_input_view import LiveInputView
 from .instruction import next_full_attempt
 from .learner_state import LearnerStateStore, guided_units, next_guided_unit, placement_candidate
 
@@ -98,6 +99,7 @@ class PracticeEngine:
         self.midi_input_count = 0
         self.midi_input_note = None
         self.midi_input_at = None
+        self.live_input = LiveInputView()
         self.enable_midi = enable_midi
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
@@ -135,6 +137,7 @@ class PracticeEngine:
                 name, port = self.midi_device, self.midi_port
                 self.midi_device = ""
                 self.midi_port = None
+                self.live_input.clear_device()
                 self._stop()
                 if self.teaching is not None:
                     self.teaching.set_connected(False, now=time.monotonic())
@@ -157,6 +160,7 @@ class PracticeEngine:
             port = self.midi_port
             self.midi_port = None
             self.midi_device = ""
+            self.live_input.clear_device()
             self._stop()
             if port is not None:
                 try:
@@ -222,6 +226,18 @@ class PracticeEngine:
                 self.midi_input_count += 1
                 self.midi_input_note = message.note
                 self.midi_input_at = now
+            if message.type in ("note_on", "note_off"):
+                is_on = message.type == "note_on" and message.velocity > 0
+                self.live_input.receive(
+                    pitch=message.note, is_on=is_on, now=now,
+                    phrase=self.plan.active_phrase if self.plan is not None else None,
+                    hand=self.plan.hand if self.plan is not None else "both",
+                    bpm=self.plan.bpm if self.plan is not None else 60.0,
+                    from_beat=self.play_from_beat, run_at=self.run_at,
+                    running=self.running, paused=self.paused,
+                    preview=self.preview_only, mode=self.mode,
+                    transport_id=self.transport_id,
+                )
             if self.mode == "learn":
                 if (self.teaching is not None and self._piano_connected()
                         and message.type in ("note_on", "note_off")):
@@ -348,6 +364,7 @@ class PracticeEngine:
         self.pending_result=None
         self.feedback_marks=[]
         self.feedback_unmapped=0
+        self.live_input.reset_attempt()
         self.retry_range=None
         self._guided_recovery_pending=False
         self._guided_return=None
@@ -819,6 +836,7 @@ class PracticeEngine:
             self.paused=False
             self.paused_at=0.0
             self.transport_id+=1
+            self.live_input.reset_attempt()
             self.running=True
             self.auto=mode == "practice" and not self.preview_only
             self.next_at=0
@@ -1278,6 +1296,18 @@ class PracticeEngine:
                 "metronome": self.library.settings["metronome"],
                 "hints_enabled": self.persistent_hints,
             }
+            visual_now = self.paused_at if self.paused else time.monotonic()
+            visual_beat = self.play_from_beat
+            if self.running and visual_now >= self.run_at and p is not None:
+                visual_beat += (visual_now - self.run_at) * p.bpm / 60.0
+            input_activity.update(self.live_input.snapshot(
+                now=time.monotonic(),
+                phrase=p.active_phrase if p is not None else None,
+                hand=p.hand if p is not None else "both",
+                beat=visual_beat,
+                playing=(p is not None and self.mode in ("practice", "perform")
+                         and (self.running or self._phase(visual_now) == "ready")),
+            ))
             if not p:
                 return {**input_activity,"mode":self.mode,"teaching":None,"loaded":False,"running":False,"paused":False,"transport_id":self.transport_id,
                         "clock_beat":0.0,"feedback":self.feedback,"device":self.midi_device,"revision":self.score_revision}
