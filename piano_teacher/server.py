@@ -72,6 +72,8 @@ class PracticeEngine:
         self._demo_thread: threading.Thread | None = None
         self._demo_score_ready = False
         self.performance_summary: dict | None = None
+        self.review_stage_identity: str | None = None
+        self.review_end_beat: float | None = None
         self.course_guided = False
         self._guided_prepared = False
         self.transport_id = 0
@@ -376,6 +378,8 @@ class PracticeEngine:
         self._demo_audio=None
         self._demo_score_ready=False
         self.performance_summary=None
+        self.review_stage_identity=None
+        self.review_end_beat=None
         self._guided_prepared=False
 
     def _learner_saved(self, stage_key: str | None = None) -> dict:
@@ -741,17 +745,54 @@ class PracticeEngine:
         self.next_action = "Keep playing through the passage. Review comes at the end."
 
     def _performance_review(self, phrase: Phrase, result) -> dict:
+        """Review real scored attacks by source measure, including chord pitches.
+
+        Every recommended retry corresponds to an existing two-bar source
+        interval. No independent note judgement or synthetic timing is used.
+        """
         grid = phrase_grid(phrase, self.plan.piece.bar_boundaries)
         weaknesses = []
+        sections = []
         for start, end in two_bar_chunks(grid):
-            errors = sum(entry.status != "correct" and phrase.start+start <= entry.note.start < phrase.start+end
-                         for entry in result.notes)
-            errors += sum(start <= note.onset*self.plan.bpm/60 < end for note in result.unmatched_played)
-            if errors:
-                first = next(i for i, beat in enumerate(grid) if abs(beat-start) < 1e-6)
-                last = next(i for i, beat in enumerate(grid) if abs(beat-end) < 1e-6)
-                weaknesses.append({"first_bar": phrase.first_bar+first, "last_bar": phrase.first_bar+last-1,
-                                   "start_beat": start, "end_beat": end, "errors": errors})
+            issues = []
+            counts = {status: 0 for status in
+                      ("missed", "wrong", "early", "late", "short", "long", "extra")}
+            for entry in result.notes:
+                local = entry.note.start - phrase.start
+                if entry.status == "correct" or not start-1e-7 <= local < end-1e-7:
+                    continue
+                counts[entry.status] += 1
+                issue = {"bar": bar_number_at(grid, local, phrase.first_bar),
+                         "status": entry.status,
+                         "pitch": entry.note.pitch,
+                         "name": note_name(entry.note.pitch),
+                         "hand": entry.note.hand,
+                         "source_id": entry.note.source_id}
+                if entry.played_pitch is not None:
+                    issue["played_pitch"] = entry.played_pitch
+                    issue["played_name"] = note_name(entry.played_pitch)
+                issues.append(issue)
+            for note in result.unmatched_played:
+                local = self.play_from_beat + note.onset * self.plan.bpm / 60
+                if start-1e-7 <= local < end-1e-7:
+                    counts["extra"] += 1
+                    issues.append({"bar": bar_number_at(grid, local, phrase.first_bar),
+                                   "status": "extra", "pitch": note.pitch,
+                                   "name": note_name(note.pitch), "hand": "unknown"})
+            errors = sum(counts.values())
+            if not errors:
+                continue
+            first = next(i for i, beat in enumerate(grid) if abs(beat-start) < 1e-6)
+            last = next(i for i, beat in enumerate(grid) if abs(beat-end) < 1e-6)
+            section = {"first_bar": phrase.first_bar+first, "last_bar": phrase.first_bar+last-1,
+                       "start_beat": start, "end_beat": end, "errors": errors,
+                       "counts": counts,
+                       "issues": sorted(issues, key=lambda issue:
+                           (issue["bar"], issue["pitch"], issue["status"]))}
+            weaknesses.append({key: section[key] for key in
+                               ("first_bar", "last_bar", "start_beat", "end_beat", "errors")})
+            sections.append(section)
+        ordering = lambda entry: (-entry["errors"], entry["first_bar"])
         timing = {status: sum(entry.status == status for entry in result.notes)
                   for status in ("early", "late", "short", "long")}
         return {"accuracy_percent": round(100*result.correct/max(1, len(result.notes)), 1),
@@ -760,16 +801,37 @@ class PracticeEngine:
                 "missed": sum(entry.status == "missed" for entry in result.notes),
                 "wrong": sum(entry.status == "wrong" for entry in result.notes),
                 "extra_notes": result.extra_notes,
-                "weakest_bars": sorted(weaknesses, key=lambda entry: (-entry["errors"], entry["first_bar"]))}
+                "sections": sorted(sections, key=ordering),
+                "weakest_bars": sorted(weaknesses, key=ordering)}
+
+    def _review_retry(self, first_bar, last_bar):
+        """Select only a scored, real source interval from the current review."""
+        if (self.plan is None or self.review_stage_identity != self.plan.identity
+                or not self.performance_summary or type(first_bar) is not int
+                or type(last_bar) is not int):
+            raise ValueError("Finish an assessed attempt before retrying a section")
+        selected = next((section for section in self.performance_summary["sections"]
+                         if section["first_bar"] == first_bar and section["last_bar"] == last_bar), None)
+        if selected is None or selected["errors"] <= 0:
+            raise ValueError("Choose a difficult section from the latest assessment")
+        self._prepare_practice()
+        self.open_from_beat = selected["start_beat"]
+        self.review_end_beat = selected["end_beat"]
+        self.retry_range = {key: selected[key] for key in
+                            ("first_bar", "last_bar", "start_beat", "end_beat")}
+        # Rendering prepares the selected score; this retry must not start
+        # automatically when Godot acknowledges that the notation is ready.
+        self.awaiting_score_revision = None
+        self.auto = False
+        self.feedback = f"Ready to repeat measures {first_bar}-{last_bar}"
+        self.next_action = "Press Start to practise this section; no mastery is awarded for a partial attempt."
 
     def _practice_weak(self):
-        if self.mode != "perform" or not self.performance_summary or not self.performance_summary["weakest_bars"]:
+        if (self.mode != "perform" or not self.performance_summary
+                or not self.performance_summary["weakest_bars"]):
             raise ValueError("Finish a performance with a difficult section first")
-        selected = dict(self.performance_summary["weakest_bars"][0])
-        self._prepare_practice()
-        self.pending_rewind = selected["start_beat"]
-        self.retry_range = {key: value for key, value in selected.items() if key != "errors"}
-        self.next_action = f"Practice bars {selected['first_bar']}-{selected['last_bar']} at {self.plan.bpm} BPM."
+        selected = self.performance_summary["weakest_bars"][0]
+        self._review_retry(selected["first_bar"], selected["last_bar"])
 
     def _seek_grid(self) -> tuple[float, ...] | None:
         if (self.plan is None or self.mode not in ("learn", "practice", "perform")
@@ -825,6 +887,8 @@ class PracticeEngine:
             }
         if p.identity != before[0]:
             self.open_from_beat = 0.0
+            self.performance_summary = None
+            self.review_stage_identity = None
         if (p.identity, p.bpm) != before:
             self.score_revision += 1
         self._save()
@@ -842,6 +906,7 @@ class PracticeEngine:
             self.guided_range = None
             self._guided_return = None
             self.performance_summary = None
+            self.review_stage_identity = None
             # A user must be able to watch the time-driven score without a
             # connected instrument. Only actual MIDI input enables assessment.
             self.preview_only = not self._piano_connected()
@@ -920,6 +985,9 @@ class PracticeEngine:
                 return
             if action == "practice_weak":
                 self._practice_weak()
+                return
+            if action == "review_retry":
+                self._review_retry(kwargs.get("first_bar"), kwargs.get("last_bar"))
                 return
             if action == "seek":
                 self._seek(kwargs.get("bar"))
@@ -1261,7 +1329,9 @@ class PracticeEngine:
             self.next_boundary_beat=next_chunk_end(grid,previous_boundary)
             if self.next_boundary_beat <= previous_boundary + 1e-7:
                 self.next_boundary_beat=0.0
-        duration=(total_beats-self.play_from_beat)*60/self.plan.bpm
+        ending = (min(total_beats, self.review_end_beat)
+                  if self.review_end_beat is not None else total_beats)
+        duration=(ending-self.play_from_beat)*60/self.plan.bpm
         if now < self.run_at+duration+0.20:
             return
         if self.preview_only:
@@ -1272,8 +1342,9 @@ class PracticeEngine:
             self.next_action = "Connect your piano to learn and receive feedback."
             return
         active_phrase=Phrase(phrase.number,phrase.first_bar,phrase.last_bar,
-            phrase.start+self.play_from_beat,phrase.end,
-            tuple(n for n in phrase.notes if n.start>=phrase.start+self.play_from_beat-1e-7))
+            phrase.start+self.play_from_beat,phrase.start+ending,
+            tuple(n for n in phrase.notes
+                  if phrase.start+self.play_from_beat-1e-7 <= n.start < phrase.start+ending-1e-7))
         result=evaluate(active_phrase,self.plan.hand,self.plan.bpm,self.recorder.presses if self.recorder else [])
         # Keep the just-played score visible for feedback. Curriculum changes
         # are applied only after the display interval, never mid-feedback.
@@ -1290,8 +1361,9 @@ class PracticeEngine:
             self.feedback = result.summary
         self.running=False
         self.recorder=None
+        self.performance_summary = self._performance_review(phrase, result)
+        self.review_stage_identity = self.plan.identity
         if self.mode == "perform":
-            self.performance_summary = self._performance_review(phrase, result)
             if self.fingerprint:
                 if result.clean:
                     self.learner_store.resolve_trouble(self.fingerprint, self.plan.identity)
@@ -1306,6 +1378,18 @@ class PracticeEngine:
                 "Clean performance. Choose Practice to build your clean-run streak.")
             self.auto = False
             return
+        if self.review_end_beat is not None:
+            # Section reviews are deliberate, bounded practice. Stop at the
+            # selected boundary, preserve detailed feedback, and never
+            # auto-advance to a different passage.
+            self.auto = False
+            self.review_end_beat = None
+            self.pending_rewind = None
+            self.retry_range = None
+            self.open_from_beat = 0.0
+            self.feedback = "Section review finished · " + result.summary
+            self.next_action = "Review the notes or press Start for the whole passage."
+            return
         if self.play_from_beat>1e-6:
             # A clean *partial* recovery cannot confer full passage mastery.
             self.pending_rewind=0.0
@@ -1315,6 +1399,8 @@ class PracticeEngine:
             self.next_at=now+self.feedback_seconds
             return
         self.pending_result=result
+        if not result.clean:
+            self.auto = False  # Keep the review visible until the learner chooses what to do.
         self.next_action=next_full_attempt(self.plan, result)
         self.next_at=now+self.feedback_seconds if self.auto else 0
 
@@ -1327,6 +1413,8 @@ class PracticeEngine:
             return "count_in" if now < self.run_at else "playing"
         if self.mode == "perform" and self.performance_summary is not None:
             return "performance_complete"
+        if self.mode == "practice" and self.performance_summary is not None and self.pending_result is None:
+            return "review"
         return ("feedback" if self.pending_result is not None else "loading" if self.awaiting_score_revision is not None
                 else "recovering" if self.pending_rewind is not None else "ready")
 
@@ -1400,6 +1488,7 @@ class PracticeEngine:
                 "pause_context": self.pause_context,
                 "demo": dict(self.demo) if self.demo is not None else None,
                 "performance_summary": self.performance_summary,
+                "review_range": self.retry_range if self.review_end_beat is not None else None,
                 "midi_input_count": self.midi_input_count,
                 "midi_input_note": self.midi_input_note,
                 "midi_input_age": (max(0.0, time.monotonic() - self.midi_input_at)
@@ -1494,7 +1583,7 @@ class PracticeEngine:
                     "progress":progress,"duration":seconds,"beat":exercise_beat if self.running else 0.0,
                     "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
                     "device":self.midi_device,"feedback":"Paused" if self.paused else self.feedback,"revision":self.score_revision,
-                    "feedback_marks":self.feedback_marks if (self.pause_context if self.paused else phase) in ("feedback", "recovering", "performance_complete") else live_marks,
+                    "feedback_marks":self.feedback_marks if (self.pause_context if self.paused else phase) in ("feedback", "recovering", "performance_complete", "review") else live_marks,
                     "live_note_feedback": live_note_feedback,
                     "scoring_available": (not self.preview_only and self._piano_connected()
                                           and self.mode in ("practice", "perform")),
