@@ -354,10 +354,9 @@ func _layout_moving_score(delta: float = 0.0) -> void:
             # Keep at least one part of the *musical passage* in the viewport.
             # Clamping against the PNG edges is insufficient when the raster
             # has empty space; real notehead positions provide safe limits.
-            var left_limit: float = viewport.x * 0.08 - focus_left * displayed_width
-            var right_limit: float = viewport.x * 0.92 - focus_right * displayed_width
-            if left_limit >= right_limit:
-                target_x = clampf(target_x, right_limit, left_limit)
+            var minimum_x: float = viewport.x * 0.08 - focus_right * displayed_width
+            var maximum_x: float = viewport.x * 0.92 - focus_left * displayed_width
+            target_x = clampf(target_x, minimum_x, maximum_x)
     var target_y: float = (viewport.y - displayed_height) * 0.5
     # The PNG is ink-cropped; centering it vertically keeps both staves on
     # screen. Do not re-center using the approximate notehead staff bounds.
