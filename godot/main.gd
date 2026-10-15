@@ -753,7 +753,7 @@ func _build_interface() -> void:
     practice_playback_banner = _label("", 18, Color("#F6BC70"), true)
     practice_playback_banner.visible = false
     practice_playback_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    practice_layout.add_child(practice_playback_banner)
+    practice_playback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var score_panel := _card()
     practice_score_panel = score_panel
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -811,6 +811,14 @@ func _build_interface() -> void:
     count_in_display.offset_bottom = 52.0
     count_in_display.visible = false
     score_frame.add_child(count_in_display)
+    # A visible retry notice must not consume vertical space or force the
+    # bottom transport buttons off smaller laptop screens.
+    practice_playback_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+    practice_playback_banner.offset_left = 20.0
+    practice_playback_banner.offset_right = -20.0
+    practice_playback_banner.offset_top = 54.0
+    practice_playback_banner.offset_bottom = 112.0
+    score_frame.add_child(practice_playback_banner)
     hint_keyboard = HintKeyboard.new()
     score_region.add_child(hint_keyboard)
     practice_progress = ProgressBar.new()
