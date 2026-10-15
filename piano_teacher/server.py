@@ -901,9 +901,13 @@ class PracticeEngine:
                     self._begin_course_stage()
                 return
             if action == "skip_stage":
+                if self.is_builtin_warmup:
+                    raise ValueError("Warm-up stages unlock after three clean runs, not skips")
                 self._skip_stage(kwargs.get("reason"))
                 return
             if action == "place_original":
+                if self.is_builtin_warmup:
+                    raise ValueError("Warm-up stages unlock after three clean runs")
                 self._place_original()
                 return
             if action == "revisit_trouble":
@@ -1254,8 +1258,8 @@ class PracticeEngine:
             seek_grid = self._seek_grid()
             input_activity = {
                 "learner": self._learner_snapshot() if p is not None else None,
-                "placement_available": placement_candidate(p) is not None if p is not None else False,
-                "skip_available": p.lesson_step_number < len(p.lesson_steps) if p is not None else False,
+                "placement_available": (not self.is_builtin_warmup and placement_candidate(p) is not None) if p is not None else False,
+                "skip_available": (not self.is_builtin_warmup and p.lesson_step_number < len(p.lesson_steps)) if p is not None else False,
                 "seek_available": self.paused and seek_grid is not None,
                 "seek_range": ({"first_bar": p.active_phrase.first_bar, "last_bar": p.active_phrase.last_bar}
                                if seek_grid is not None else None),
