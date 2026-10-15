@@ -74,7 +74,7 @@ outline. Correct MIDI attacks briefly create an expanding, fading response
 *behind* the Verovio note raster. Incorrect or missed notes use precise red
 outlines on the affected engraved notes, instead of filled circles, labels,
 checkmarks, or a separately drawn wrong-pitch note. Timing deviations are
-amber. The large in-score warning is now reserved for unmappable feedback.
+amber. Unmappable feedback stays in the status line below the score rather than a clipping in-score panel.
 Disconnected preview information remains in the ordinary status line.
 
 The genuine notehead coordinates and source-attack IDs still determine

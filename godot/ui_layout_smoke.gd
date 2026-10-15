@@ -142,9 +142,7 @@ func _run() -> void:
     _check(not hud.visible, "Ungraded preview must not cover the sheet music")
     scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "feedback",
         "feedback_unmapped": 2, "preview_only": false})
-    _check(hud.visible and "2 notes" in hud_label.text,
-        "Unmapped errors still need an accessible textual fallback")
-    _check(_in_viewport(hud, viewport), "Unmapped warning is clipped")
+    _check(not hud.visible, "Unmapped feedback must stay in the status line, not clip the score")
     scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "playing",
         "preview_only": false, "live_note_feedback": null})
     _check(not hud.visible, "Old feedback warning remains after clearing state")

@@ -2302,15 +2302,9 @@ func _update_note_feedback_hud(parsed: Dictionary) -> void:
     var active_phase: String = str(parsed.get("phase", "ready"))
     var feedback: Variant = parsed.get("live_note_feedback")
     practice_note_feedback_panel.visible = false
-    if active_mode in ["practice", "perform"]:
-        # Correctly mapped mistakes now have small red outlines on their
-        # actual noteheads. Avoid a second large warning covering the staff.
-        # Keep an explicit fallback only for events lacking note geometry.
-        var unmapped: int = int(parsed.get("feedback_unmapped", 0))
-        if active_phase in ["feedback", "recovering", "performance_complete"] and unmapped > 0:
-            practice_note_feedback_label.text = "%d notes could not be positioned" % unmapped
-            practice_note_feedback_label.add_theme_color_override("font_color", Color("#F1C67D"))
-            practice_note_feedback_panel.visible = true
+    # All mapped mistakes appear directly on the engraved notes.
+    # The status line below the score already reports feedback_unmapped;
+    # do not overlay another (potentially clipped) notification on the music.
 
 
 func _consume_live_piano_hits(state: Dictionary) -> void:
