@@ -75,7 +75,8 @@ func test_pending_start_or_resume(action: String, destination: String) -> void:
         expected.append({"action": wanted})
     check(app.wire_commands == expected,
         action + " immediately followed by " + destination + " preserves the user's " + wanted + " intent: " + str(app.wire_commands))
-    check(app.action_pending, "The current transport request is still being acknowledged")
+    check(app.action_pending == not wanted.is_empty(),
+        "Only a real pending overlay pause should remain after acknowledgement")
 
 func test_quick_music_selection_survives_pending_pause() -> void:
     show_state("playing")
