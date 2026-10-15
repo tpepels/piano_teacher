@@ -28,6 +28,19 @@ URL = "http://127.0.0.1:8765"
 CURSOR_RE = re.compile(r"PHASE0_CURSOR_BEAT:([0-9.]+) SCREEN_X:([-0-9.]+) VISIBLE:(true|false)")
 
 
+LEAD_RE = re.compile(r"PHASE0_LEAD_BEAT:([-0-9.]+) CONTENT_X:([-0-9.]+) CURSOR_X:([-0-9.]+) VISIBLE:(true|false)")
+
+
+def moving_lead_in_observed(log: str) -> bool:
+    samples = [(float(beat),float(x),float(beam))
+               for beat,x,beam,show in LEAD_RE.findall(log) if show == "true"]
+    if len(samples) < 3 or samples[-1][0] - samples[0][0] < .5:
+        return False
+    return (all(samples[i][0] > samples[i-1][0] for i in range(1,len(samples)))
+            and max(x for _,x,_ in samples) - min(x for _,x,_ in samples) >= 20
+            and max(b for _,_,b in samples) - min(b for _,_,b in samples) <= 30)
+
+
 def cursor_samples(log: str) -> list[tuple[float, float]]:
     """Accept actual, visible Godot beam coordinates only."""
     return [(float(beat), float(x)) for beat, x, visible in CURSOR_RE.findall(log)
@@ -149,6 +162,9 @@ def run(file: Path | None = None) -> int:
                     godot_process, ui_log, timeout=max(10, lead_seconds + 8),
                     description="Godot timed playing state")
                 print("PASS Godot observed count-in and playing phases", flush=True)
+                await_condition(moving_lead_in_observed,godot_process,ui_log,
+                                timeout=6,description="count-in musical movement")
+                print("PASS count-in score moves under a stable timing line", flush=True)
                 await_condition(lambda log: log.count("PHASE0_CLICK:count_in") >= 2,
                                 godot_process, ui_log, timeout=6,
                                 description="count-in click scheduling")

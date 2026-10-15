@@ -29,3 +29,9 @@ def test_smoke_requires_moving_visible_cursor_and_scheduled_count_in_clicks():
     assert "PHASE0_CURSOR_BEAT:" in SCENE
     assert 'log.count("PHASE0_CLICK:count_in") >= 2' in SMOKE
     assert "PHASE0_CLICK:" in SCENE
+
+
+def test_score_motion_during_lead_is_an_acceptance_gate():
+    assert "await_condition(moving_lead_in_observed" in SMOKE
+    assert "PHASE0_LEAD_BEAT:" in SCENE
+    assert "target_x = target_reading_x - note_x * displayed_width" in SCENE
