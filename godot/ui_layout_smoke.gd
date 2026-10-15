@@ -86,6 +86,16 @@ func _run() -> void:
     var brand: Label = scene.get("game_brand")
     _check(brand.visible == (viewport.x >= 1120.0),
         "Decorative game brand must collapse before it crowds piano controls")
+    var count_in: Control = scene.get("game_count_in")
+    count_in.present(-2.5, 3, true, false)
+    _check(count_in.visible and int(count_in.get("count")) == 3,
+        "Rhythmic prepare lights should use the piece's real meter")
+    _check(_in_viewport(count_in, viewport),
+        "Preparation lights must not leave the notation area")
+    count_in.present(-2.0, 3, true, true)
+    _check(not count_in.visible, "Preparation lights must freeze/disappear when paused")
+    count_in.present(1.0, 3, true, false)
+    _check(not count_in.visible, "No fake countdown once musical playing begins")
 
     # Check wrong physical pitches use the real staff's pitch spacing and
     # do not move a correct chord note or invent a separate score location.
