@@ -138,7 +138,10 @@ def run() -> None:
                 last_attempt_id = engine.transport_id
                 # One course step: 3 full, clean, target-speed attempts.
                 for attempt in range(1,4):
-                    engine.start()
+                    if attempt == 1:
+                        engine.start()
+                    # Subsequent attempts are started by the teacher's
+                    # automatic feedback/count-in loop, not by this script.
                     ident, required = inject_full_performance(engine)
                     assert ident > last_attempt_id and required >= 5
                     last_attempt_id = ident

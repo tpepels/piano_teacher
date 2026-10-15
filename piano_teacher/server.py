@@ -24,6 +24,7 @@ from .recovery import check_two_bar_window
 from .music import Phrase
 from .lesson_score import build_lesson_score
 from .lesson_validation import require_lesson_alignment
+from .live_feedback import settled_assessment
 
 
 class PracticeEngine:
@@ -328,6 +329,9 @@ class PracticeEngine:
                 self.running=False
                 self.recorder=None
                 self.next_at=now+self.feedback_seconds
+                # The same live notehead markers remain visible during the
+                # feedback pause, even though this is not a full graded run.
+                self.feedback_marks=self._live_feedback((now-self.run_at))
                 self.feedback=(f"{decision.errors} wrong or missed notes - retrying from "
                                f"measure {phrase.first_bar + int(decision.restart_beat/beats_per_bar)} "
                                f"at {self.plan.bpm} BPM")
@@ -373,6 +377,30 @@ class PracticeEngine:
         self.pending_result=result
         self.next_at=now+self.feedback_seconds if self.auto else 0
 
+    def _live_feedback(self, elapsed_seconds: float) -> list[dict]:
+        """Project graded noteheads without waiting for the final attempt."""
+        p=self.plan
+        if (p is None or self.preview_only or not self.running
+                or self._layout_revision != self.score_revision or self._layout_cache is None):
+            return []
+        phrase=p.active_phrase
+        total=phrase.end-phrase.start
+        if total<=0 or elapsed_seconds<0:
+            return []
+        per_bar=total/max(1,phrase.last_bar-phrase.first_bar+1)
+        now_beat=self.play_from_beat+elapsed_seconds*p.bpm/60
+        result=settled_assessment(phrase,p.hand,p.bpm,
+                                  self.recorder.presses if self.recorder else [],
+                                  from_beat=self.play_from_beat,
+                                  until_beat=now_beat,beats_per_bar=per_bar)
+        if result is None:
+            return []
+        try:
+            return project_assessment(result,phrase,p.bpm,self._layout_cache.layout,
+                                      played_from_beat=self.play_from_beat)["marks"]
+        except (ValueError, RuntimeError, KeyError):
+            return []
+
     def state(self) -> dict:
         with self.lock:
             self._update()
@@ -388,6 +416,7 @@ class PracticeEngine:
             exercise_beat=self.play_from_beat+max(0.0,elapsed*p.bpm/60)
             progress=min(1.0,max(0.0, exercise_beat/(ex.phrase.end-ex.phrase.start))) if self.running else 0.0
             phase=("paused" if self.paused else "count_in" if elapsed<0 else "playing") if self.running else "feedback" if self.pending_result is not None else "loading" if self.awaiting_score_revision is not None else "recovering" if self.pending_rewind is not None else "ready"
+            live_marks=self._live_feedback(elapsed) if phase == "playing" else []
             return {"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
                     "exercise":p.index+1,"exercise_count":len(p.exercises),
@@ -409,7 +438,7 @@ class PracticeEngine:
                     "progress":progress,"duration":seconds,"beat":exercise_beat if self.running else 0.0,
                     "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
                     "device":self.midi_device,"feedback":self.feedback,"revision":self.score_revision,
-                    "feedback_marks":self.feedback_marks if phase in ("feedback", "recovering") else [],
+                    "feedback_marks":self.feedback_marks if phase in ("feedback", "recovering") else live_marks,
                     "feedback_unmapped":self.feedback_unmapped if phase in ("feedback", "recovering") else 0}
 
     def engraving(self) -> EngravedScore:
