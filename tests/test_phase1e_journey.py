@@ -42,7 +42,7 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
         assert len(e.plan.active_phrase.notes)==8
         e.start()
         assert e.state()["phase"]=="count_in"
-        assert e.state()["count_in_beats"]==8
+        assert e.state()["count_in_beats"]==4
         # Five missing required pitches: wait until the two-bar boundary,
         # then enter recovery instead of interrupting the current measure.
         t[0]=e.run_at+7*60/80
@@ -55,7 +55,7 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
         assert failed["mastered"]==0 and failed["streak"]==0
         t[0]=e.next_at+.01
         assert e.state()["phase"]=="count_in"
-        assert e.state()["count_in_beats"]==8
+        assert e.state()["count_in_beats"]==4
         # Two clean performances restore the selected 80 BPM target,
         # without counting towards three target-speed clean repeats.
         for expected_bpm in (79,80,80,80,80):
