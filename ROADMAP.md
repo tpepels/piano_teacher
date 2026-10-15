@@ -1,32 +1,39 @@
 # Piano Teacher - adaptive MIDI-to-exercise piano tutor
 
-## Current implementation status
+## Current implementation status - 2026-10-15
 
-- **1A (implemented, visual/audio acceptance pending):** two empty moving
-  lead-in bars, one signed beat clock, automatic repeated attempts and
-  deliberate feedback intervals.
-- **1B (implemented at two-bar checkpoints, refinement pending):** five
-  wrong/missing required notes trigger boundary-aligned rewind and 10%
-  slowdown; clean attempts restore the selected target speed, and three
-  clean *full* target-speed attempts are required for mastery. A future
-  increment will improve rolling error detection between checkpoints.
-- **1C (integrated; graphical acceptance pending):** skeleton, chord-outline
-  and original-note variants are rendered as purpose-built lesson MusicXML
-  and graded from the same required notes. Per-level progress is persisted.
-  The app rejects missing noteheads rather than grading invisible pitches.
-  Real Verovio/Godot acceptance is pending: scripts/check_generated_lesson.py.
-- **1D (partially implemented):** stages, three-clean mastery, hand practice,
-  connected passages, and saved stage/tempo work at the backend level;
-  advanced mistake isolation and musical segmentation remain.
-- **1E (pending):** verified Godot lesson rendering, USB MIDI feedback,
-  synchronized audio, and extended real-piano practice trial.
-- **Phase 0 hardware acceptance (pending):** physical speakers, USB piano,
-  and real fullscreen score following cannot be certified from unit tests.
+- **1A - Implemented and headless-Godot tested:** one signed beat clock,
+  two moving blank lead-in bars, audible click scheduling, feedback breaks,
+  automatic repetition, pause/resume and restart.
+- **1B - Implemented and regression tested:** check distinct wrong/missed
+  notes at each two-measure boundary. After five, finish the section,
+  rewind to it, begin another two-bar count-in, and slow by 10%. Clean
+  attempts restore the student's target BPM. Partial recovery is never
+  credited as a full mastered performance.
+- **1C - Implemented and real-Verovio tested:** source-traceable skeleton,
+  chord-outline and original variants rendered from the very notes being
+  assessed. Expressive MIDI key releases are normalized *for notation only*
+  when close to a conventional rhythmic value. Source events are preserved
+  for scoring. An alignment check rejects invisible/missing noteheads.
+- **1D - Complete at the software level:** deterministic curriculum through
+  levels, individual hands, both hands, neighbouring-passage connections,
+  three consecutive clean full passes at target speed, saved stage/tempo/
+  mastery, unique step identities and a machine-readable `GET /lesson`
+  overview. Explicit Stop/navigation does not inadvertently confer mastery.
+- **1E - Automated integration passed:** 146 Python tests; actual MIDI import,
+  MusicXML/Verovio layout, PNG rasterization, headless Godot score and cursor,
+  metronome scheduling, preview-only non-grading, and a real Godot rehearsal
+  of three clean synthetic MIDI performances followed by skeleton-to-outline
+  transition and score-ready acknowledgement. The complete Arch workflow
+  passed on commit `5516692d8`.
+- **Physical acceptance pending:** speaker audibility/latency, the connected
+  USB MIDI keyboard, fullscreen legibility and the real player's experience
+  remain unverified on the target machine. This does not invalidate the
+  automated checks; it is the remaining on-device acceptance gate.
 
-Local automated regression suite: 130 passed, one Godot-dependent test
-skipped in the development environment (Phase 1C development checkout). Godot visuals and timing on Arch
-still require verification.
-
+Additional curriculum intelligence (musical segmentation beyond fixed bars,
+more sophisticated rhythmic quantization and long-term mistake modelling)
+belongs to Phases 2 and 4, not a reason to silently postpone 1D/1E.
 
 ## Product definition (confirmed 2026-10-14)
 
@@ -78,7 +85,7 @@ backend ownership of port 8765 and readable runtime errors.
 shows a real engraved score, enters/exits a timed preview without a grey or
 blank screen; backend and headless Godot integration checks pass.
 
-### Phase 1 - Adaptive moving-lesson runtime [begin implementation now]
+### Phase 1 - Adaptive moving-lesson runtime [implemented; hardware acceptance pending]
 
 - **1A - Lesson timeline:** one signed beat clock; two moving empty bars
   before every attempt; fixed-tempo visual movement from the very first

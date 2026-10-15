@@ -1,4 +1,4 @@
-name: Phase 0 smoke
+name: Piano Teacher integration
 on:
   push:
     branches: [main]

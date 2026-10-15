@@ -1,3 +1,45 @@
+## Phases 1D/1E - Curriculum and end-to-end practice
+
+The adaptive teaching loop has now passed a complete real-Godot, headless
+integration rehearsal in an Arch Linux container. The checked sequence is:
+import a song; generate separate lesson notation from its MIDI; display the
+skeleton exercise in Godot; count in with two moving blank bars; grade **three
+clean full performances**; persist mastery of that step; advance to the
+chord-outline exercise; load the *new* engraved PNG and timing map; then
+begin the next count-in only after Godot acknowledges that score is ready.
+
+The complete curriculum includes right/left/both hands, connected passages,
+three clean target-speed repetitions per stage, checkpoint-based five-error
+retries, 10% slowdown, automatic tempo restoration, live delayed notehead
+feedback, user-selected target BPM and persisted progress. `GET /lesson`
+returns the full step sequence and completion status.
+
+Automated verification (requires the Arch dependencies and Godot):
+
+```bash
+python -m pytest -q
+./scripts/check_godot.sh
+python scripts/smoke_phase0.py
+python scripts/smoke_godot.py
+python scripts/smoke_adaptive_godot.py
+```
+
+The Arch workflow passed **146 tests** and all real integration smoke stages
+on [commit 5516692](https://github.com/tpepels/piano_teacher/actions/runs/38661804051).
+The final small recovery-marker timestamp correction was applied afterward.
+
+**Hardware acceptance remains pending.** When available, start the real
+application and verify speakers/metronome timing, moving count-in, MIDI input,
+and visual reading comfort on the Kawai. A no-device timing preview cannot
+award mastery. Do not claim that headless tests establish physical latency
+or audio output quality.
+
+This is a deliberately readable teaching-score representation rather than
+a raw MIDI transcription. Some irregular expressive durations are snapped
+to nearby 16th-note boundaries for *display only*. The original MIDI note
+times remain unchanged for assessment. General quantization, mixed meter,
+proper key/clef detection and advanced phrase finding remain Phase 2 work.
+
 ### Phase 1C: lesson generation is integrated
 
 The app generates a skeleton, an optional chord outline, and the full original
