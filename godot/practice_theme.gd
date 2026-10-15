@@ -4,7 +4,7 @@ const FOREST := Color("#1E3A34")
 const PINE := Color("#2E4D46")
 const PANEL := Color("#2D3532")
 const SAGE := Color("#5B7068")
-const SLATE := Color("#8B9A92")
+const SLATE := Color("#B4C4BB")
 const STONE := Color("#C4CDC6")
 const TEAL := Color("#70C4AD")
 

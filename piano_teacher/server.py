@@ -198,24 +198,19 @@ class PracticeEngine:
     def load_library(self, identifier: str) -> None:
         with self.lock:
             path = self.library.resolve(identifier)
-        self.load(str(path))  # Parse before recording success.
+        # Preserve the ordinary loader path for imported music and its callers.
+        if is_warmup(identifier):
+            self.load(str(path), warmup=True)
+        else:
+            self.load(str(path))  # Parse before recording success.
         with self.lock:
             if is_warmup(identifier):
-                # Warm-ups are repeatable full performances, not long adaptive
-                # courses that automatically advance after enough repetitions.
-                p = self.plan
-                final = next((i for i in range(len(p.exercises) - 1, -1, -1)
-                              if p.exercises[i].kind == 'perform'), None)
-                if final is None:
-                    raise ValueError('Warm-up has no complete performance')
-                p.select(final)
-                p.bpm = p.target_bpm
-                self.mode = 'perform'
-                self.is_builtin_warmup = True
+                # Restore this hand and its clean streak, starting at left
+                # when the student has no prior progress on the warm-up.
+                self.mode = 'practice'
                 self.course_guided = False
-                self.feedback = 'Warm-up ready - press Start to play'
-                self.next_action = 'Play the warm-up, review, then press Start to repeat.'
-                self.score_revision += 1
+                self.feedback = 'Warm-up ready - left, right, then both hands'
+                self.next_action = 'Three clean passes unlock the next hand.'
                 self._save()
             self.library.mark_opened(identifier)
 
@@ -246,16 +241,16 @@ class PracticeEngine:
     def _piano_connected(self) -> bool:
         return self.midi_port is not None and not getattr(self.midi_port, "closed", False)
 
-    def load(self, path: str):
+    def load(self, path: str, *, warmup: bool = False):
         piece, score = import_piece(path)
         with self.lock:
             self._stop()
             self._reset_trouble()
             self.course_guided = False
             self.source = str(Path(path).resolve())
-            self.is_builtin_warmup = False
+            self.is_builtin_warmup = warmup
             self.fingerprint = hashlib.sha256(Path(path).read_bytes()).hexdigest()
-            self.plan = LearningPlan(piece)
+            self.plan = LearningPlan(piece, warmup=warmup)
             self.mode = "practice"
             self.teaching = None
             self.guided_range = None
@@ -627,9 +622,14 @@ class PracticeEngine:
         self.teaching = None
         self.guided_range = None
         self.score_revision += 1
-        self.awaiting_score_revision = self.score_revision
-        self.feedback = "Preparing rhythm practice"
-        self.next_action = "Get ready to retry the rhythm." if return_context else "Get ready to play in time."
+        # Warm-ups must return from Listen to an idle, rendered exercise.
+        # The student starts when ready with a fresh piano key, not because
+        # a score download completed.
+        self.awaiting_score_revision = None if self.is_builtin_warmup else self.score_revision
+        self.feedback = "Warm-up ready" if self.is_builtin_warmup else "Preparing rhythm practice"
+        self.next_action = ("Play a piano key to start the count-in."
+                            if self.is_builtin_warmup else
+                            "Get ready to retry the rhythm." if return_context else "Get ready to play in time.")
 
     def _prepare_listen(self):
         if self.plan is None:
@@ -901,9 +901,13 @@ class PracticeEngine:
                     self._begin_course_stage()
                 return
             if action == "skip_stage":
+                if self.is_builtin_warmup:
+                    raise ValueError("Warm-up stages unlock after three clean runs, not skips")
                 self._skip_stage(kwargs.get("reason"))
                 return
             if action == "place_original":
+                if self.is_builtin_warmup:
+                    raise ValueError("Warm-up stages unlock after three clean runs")
                 self._place_original()
                 return
             if action == "revisit_trouble":
@@ -1001,7 +1005,12 @@ class PracticeEngine:
             elif action == "previous":
                 p.jump(-1)
             elif action == "hand":
-                p.set_hand(str(kwargs.get("hand", "both")))
+                requested = str(kwargs.get("hand", "both"))
+                if self.is_builtin_warmup and requested in p.hands and p.hands.index(requested) > p.hand_index:
+                    previous_step = p.lesson_steps[p.hands.index(requested) - 1]
+                    if previous_step.key not in p.mastered:
+                        raise ValueError("Complete three clean passes to unlock the next hand")
+                p.set_hand(requested)
             elif action == "tempo":
                 p.set_bpm(int(kwargs["bpm"]))
             else:
@@ -1094,7 +1103,7 @@ class PracticeEngine:
         beats_per_bar=grid[1]-grid[0]
         # Defer five-error recovery until the two-bar boundary. Silent
         # previews never generate failure, assessment or mastery.
-        while self.mode == "practice" and not self.preview_only and self.next_boundary_beat and score_beat >= self.next_boundary_beat:
+        while self.mode == "practice" and not self.is_builtin_warmup and not self.preview_only and self.next_boundary_beat and score_beat >= self.next_boundary_beat:
             decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
                 self.recorder.presses if self.recorder else [],
                 from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
@@ -1249,8 +1258,8 @@ class PracticeEngine:
             seek_grid = self._seek_grid()
             input_activity = {
                 "learner": self._learner_snapshot() if p is not None else None,
-                "placement_available": placement_candidate(p) is not None if p is not None else False,
-                "skip_available": p.lesson_step_number < len(p.lesson_steps) if p is not None else False,
+                "placement_available": (not self.is_builtin_warmup and placement_candidate(p) is not None) if p is not None else False,
+                "skip_available": (not self.is_builtin_warmup and p.lesson_step_number < len(p.lesson_steps)) if p is not None else False,
                 "seek_available": self.paused and seek_grid is not None,
                 "seek_range": ({"first_bar": p.active_phrase.first_bar, "last_bar": p.active_phrase.last_bar}
                                if seek_grid is not None else None),
@@ -1286,6 +1295,7 @@ class PracticeEngine:
                     "exercise":p.index+1,"exercise_count":len(p.exercises),
                     "lesson_level":variant.level,"lesson_level_number":p.variant_index+1,
                     "lesson_level_count":len(p.variants),"required_notes":len(variant.notes),
+                    "warmup":self.is_builtin_warmup,
                     "lesson_step":p.lesson_step_number,"lesson_steps":len(p.lesson_steps),
                     "lesson_steps_mastered":p.lesson_steps_mastered,
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,"target_bpm":p.target_bpm,

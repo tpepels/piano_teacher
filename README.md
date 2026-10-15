@@ -35,26 +35,37 @@ verify actual input activity. A saved available device reconnects automatically.
 
 ## Built-in warm-ups
 
-**Browse library → Built-in warm-ups** includes six original, repeatable,
-eight-bar MIDI studies. They are available even with an empty personal music
-folder. Selecting one generates its MIDI in Piano Teacher's configuration cache,
-not your music folder. The built-ins are not downloaded songs.
+**Browse library → Built-in warm-ups** includes six original beginner studies.
+No downloads or personal-music files are required. All studies now use **half
+notes (two beats)** instead of difficult irregular ties; the 3/4 classical
+study also uses one quarter note per measure. The Hanon-inspired and jazz
+patterns start with deliberately uncomplicated rhythms.
 
-They open directly in **Perform** mode at the indicated tempo. Press **Start**,
-play the complete warm-up and review your MIDI feedback, then press **Start**
-again to repeat. A disconnected piano gives an ungraded timing preview. The
-**Listen** button can demonstrate the notes; Settings adjusts target BPM.
+Each warm-up is a three-step course:
+
+1. **Left hand**, three consecutive clean full-study performances.
+2. **Right hand**, three consecutive clean performances.
+3. **Both hands**, three consecutive clean performances.
+
+An incorrect performance resets the clean streak; it never advances to a
+harder hand. The student's current hand, streak and unlocked stages are saved
+locally. During the beginner studies there is no automatic two-measure
+rewind/slowdown. The count-in, moving notation, Listen demonstration, manual
+Restart and hands-free MIDI start still work. Without a piano, a timing preview
+cannot earn mastery.
 
 | Warm-up | Tempo | Focus |
 |---|---:|---|
-| Chord Changes | 68 BPM | C-G-Am-F triads and alternating left-hand roots/fifths |
-| Five-Finger Ladders | 76 BPM | Original Hanon-inspired parallel-hand coordination |
-| Classical Melody | 64 BPM, 3/4 | Original G-major melody and Alberti bass |
-| Pop Accompaniment | 88 BPM | Offbeat chord rhythm and root/fifth bass |
-| Jazz Chord Voicings | 66 BPM | Dm9-G13-Cmaj9-Am9 and extensions |
-| Jazz Phrasing | 72 BPM | Swung eighths, rests and melodic timing |
+| Chord Changes | 68 BPM | C-G-Am-F beginner triads and alternate bass |
+| Five-Finger Ladders | 70 BPM | Slow parallel finger motion |
+| Classical Melody | 64 BPM, 3/4 | Original G-major phrase, half and quarter notes |
+| Pop Accompaniment | 72 BPM | Steady pop chord changes without syncopation |
+| Jazz Chord Voicings | 60 BPM | Gentle Dm9-G13-Cmaj9-Am9 harmony |
+| Jazz Phrasing | 66 BPM | Long, easy two-note jazz-influenced phrases |
 
-The normal imported-song adaptive course and saved progress are unchanged.
+These are new original exercises, not downloaded song MIDIs. Imported song
+curricula remain unchanged.
+
 
 ## Learn and practise
 
