@@ -1400,7 +1400,14 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     mode_choice.select(0 if learning else 2 if str(parsed.get("mode", "")) == "perform" else 1)
     if str(parsed.get("mode", "")) == "listen":
         mode_choice.text = "Listen"
-    mode_choice.disabled = bool(parsed.get("warmup", false))
+    var is_warmup: bool = bool(parsed.get("warmup", false))
+    mode_choice.set_item_text(1, "Warm-up practice" if is_warmup else "Practice rhythm")
+    mode_choice.set_item_disabled(0, is_warmup)
+    mode_choice.set_item_disabled(2, is_warmup)
+    mode_choice.set_item_disabled(3, is_warmup)
+    # Keep Practice selectable after Listen, or the learner would get stuck
+    # in demonstration mode until reopening the warm-up from the library.
+    mode_choice.disabled = false
     hints_toggle.disabled = not learning or str(parsed.get("phase", "")) == "loading"
     hints_toggle.set_pressed_no_signal(bool(parsed.get("hints_enabled", false)))
     hint_keyboard.update_state(teaching if learning else {})
