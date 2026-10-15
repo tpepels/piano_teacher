@@ -75,7 +75,23 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
         var trimmed_tail := false
         if bool(layout.get("strip_trim_repeated_headers", false)) \
                 and source_systems.find(system) < source_systems.size() - 1:
-            var barline_x: float = float(system.get("last_barline_x", -1.0))
+            # A tie crossing the upcoming system boundary may extend past
+            # this barline. Keep its full original trailing region.
+            var following: Dictionary = source_systems[source_systems.find(system) + 1]
+            var first_next_beat := INF
+            for item in layout.get("notes", []):
+                if int(item.get("page", -1)) == int(following.get("page", -1)) \
+                        and str(item.get("system", "")) == str(following.get("system", "")):
+                    first_next_beat = minf(first_next_beat, float(item.get("beat", INF)))
+            var boundary_tie := false
+            for item in layout.get("notes", []):
+                if int(item.get("page", -1)) == int(following.get("page", -1)) \
+                        and str(item.get("system", "")) == str(following.get("system", "")) \
+                        and absf(float(item.get("beat", INF)) - first_next_beat) < .000001 \
+                        and item.has("is_attack") and not bool(item["is_attack"]):
+                    boundary_tie = true
+                    break
+            var barline_x: float = -1.0 if boundary_tie else float(system.get("last_barline_x", -1.0))
             var staff_lines_for_tail: Array = system.get("staff_lines", [])
             if barline_x >= 0.0 and staff_lines_for_tail.size() >= 2:
                 var gap_for_tail: float = absf(float(staff_lines_for_tail[1]) -
