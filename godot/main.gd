@@ -1536,6 +1536,11 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
+    # A long MIDI should not engrave its default first passage while the
+    # learner is still choosing a source measure in the library. Wait for
+    # open_at to select the real passage before requesting any score pages.
+    if current_screen == "library" and open_picker != null and open_picker.visible:
+        return
     var old_phase: String = str(last_state.get("phase", ""))
     var old_revision: int = int(last_state.get("revision", -1))
     var total_input_attacks: int = int(parsed.get("midi_input_count", 0))
