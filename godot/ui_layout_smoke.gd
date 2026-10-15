@@ -43,6 +43,9 @@ func _run() -> void:
     var toolbar: Control = scene.get("practice_navigation")
     var transport: Control = scene.get("practice_controls")
     var score: Control = scene.get("score_frame")
+    print("PHASE2_LAYOUT_DIAGNOSTIC: window=", viewport, " scene=", scene.size,
+        " toolbar=", toolbar.get_global_rect(), " transport=", transport.get_global_rect(),
+        " score=", score.get_global_rect())
     _check_actions(toolbar, viewport, "Toolbar")
     _check_actions(transport, viewport, "Transport")
     _check(score.size.y >= 135.0, "Notation area became unusably small")
@@ -57,6 +60,8 @@ func _run() -> void:
     await process_frame
     var panel: Control = pause.get("modal_panel")
     var resume: Control = pause.get("resume_button")
+    print("PHASE2_PAUSE_DIAGNOSTIC: window=", viewport, " panel=", panel.get_global_rect(),
+        " resume=", resume.get_global_rect())
     _check(_in_viewport(panel, viewport), "Pause panel extends outside window")
     _check(_in_viewport(resume, viewport), "Resume button not visible")
     _check(resume.size.y >= 50.0, "Pause resume button too small")
