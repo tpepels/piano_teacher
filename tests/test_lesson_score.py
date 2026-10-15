@@ -106,3 +106,18 @@ def test_nontrivial_release_remains_precise_when_not_near_a_grid():
     assert sum(int(item.findtext('duration')) for item in sounding)==round(.625*DIVISIONS)
     assert sounding[0].find("tie[@type='start']") is not None
     assert sounding[-1].find("tie[@type='stop']") is not None
+
+
+def test_practice_score_omits_redundant_large_hand_names():
+    xml = build_lesson_score(phrase([
+        note(72, 0, 1), note(48, 0, 1, "left")
+    ])).musicxml
+    root = ET.fromstring(xml)
+    parts = root.findall("./part-list/score-part")
+    assert [part.get("id") for part in parts] == ["RH", "LH"]
+    # Verovio still receives both piano parts and clefs, but the HUD already
+    # labels which hand is active and should not duplicate this at stave scale.
+    assert all(not (part.findtext("part-name") or "").strip() for part in parts)
+    assert all(not (part.findtext("part-abbreviation") or "").strip() for part in parts)
+    assert root.find("./part[@id='RH']/measure/attributes/clef") is not None
+    assert root.find("./part[@id='LH']/measure/attributes/clef") is not None
