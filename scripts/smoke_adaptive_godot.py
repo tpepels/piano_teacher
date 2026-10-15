@@ -189,7 +189,9 @@ def run() -> None:
                 assert overview["steps"][0]["completed"]
                 assert overview["current_step"] == 2
                 assert engine.state()["required_notes"] > required
-                assert engine.state()["count_in_beats"] == 8
+                # The next level starts at 40% of the MIDI's 120 BPM:
+                # a 3-beat pickup at 48 BPM, not the former eight beats.
+                assert engine.state()["count_in_beats"] == 3.0
                 if any(token in log_path.read_text(errors="replace")
                        for token in ("SCRIPT ERROR", "Parse Error:", "Failed to load script")):
                     raise RuntimeError(log_path.read_text(errors="replace"))
