@@ -36,6 +36,8 @@ class Piece:
     notes: tuple[Note, ...]
     phrases: tuple[Phrase, ...]
     split_pitch: int = 60
+    bar_boundaries: tuple[float, ...] = ()
+    time_signatures: tuple[tuple[float, int, int], ...] = ()
 
 
 def note_name(pitch: int) -> str:
@@ -143,5 +145,6 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     notes = sorted(_assign_hands(notes, names, split_pitch), key=lambda n: (n.start, n.pitch, n.track))
     end = max(n.end for n in notes)
     boundaries = _bar_boundaries(end, changes)
-    return Piece(Path(path).stem, bpm, tuple(notes), _phrases(notes, boundaries, bars_per_phrase), split_pitch)
+    return Piece(Path(path).stem, bpm, tuple(notes), _phrases(notes, boundaries, bars_per_phrase),
+                 split_pitch, tuple(boundaries), tuple(sorted(set(changes))))
 
