@@ -688,6 +688,7 @@ class PracticeEngine:
         audio_end = max(variant.phrase.end, max((note.end for note in variant.notes), default=variant.phrase.end))
         token = uuid.uuid4().hex
         self.demo = {"token": token, "url": "", "audio_available": False,
+                     "instrument": "Preparing piano audio",
                      "duration_seconds": (audio_end-variant.phrase.start)*60/bpm, "ready": False,
                      "stage_key": self.plan.identity,
                      "source_ids": [f"{self.plan.identity}:{index}"
@@ -701,11 +702,11 @@ class PracticeEngine:
         def render():
             try:
                 audio = cache.render(variant, bpm)
-            except Exception:
+            except Exception as exc:
                 with self.lock:
                     if self.demo is not None and self.demo["token"] == token and self.score_revision == revision:
                         self.awaiting_score_revision = None
-                        self.feedback = "The audio example could not be prepared. Try Listen again."
+                        self.feedback = f"Listen audio unavailable: {exc}"
                         self.next_action = self.feedback
                         self.demo["error"] = self.feedback
                 return
@@ -713,7 +714,9 @@ class PracticeEngine:
                 if self.demo is not None and self.demo["token"] == token and self.score_revision == revision:
                     self._demo_audio = audio
                     self.demo.update(url=f"/demo.wav?token={token}", audio_available=True,
-                                     duration_seconds=audio.duration_seconds)
+                                     duration_seconds=audio.duration_seconds,
+                                     instrument=audio.instrument,
+                                     sampled=audio.instrument != "Basic synthesized piano")
         self._demo_thread = threading.Thread(target=render, name="piano-demo-render", daemon=True)
         self._demo_thread.start()
 
