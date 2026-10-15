@@ -135,6 +135,7 @@ var listen_button: Button
 var performance_review: VBoxContainer
 var performance_text: Label
 var weak_button: Button
+var review_sheet: AcceptDialog
 var pause_sheet: Control
 var skip_stage_button: Button
 var placement_button: Button
@@ -892,9 +893,11 @@ func _build_interface() -> void:
     performance_review = VBoxContainer.new()
     performance_review.visible = false
     information.add_child(performance_review)
-    performance_text = _label("", 14, INK)
+    performance_text = _label("", 17, INK)
     performance_review.add_child(performance_text)
-    weak_button = _button("Practice weakest section", func(): _send_action({"action":"practice_weak"}))
+    weak_button = _button("Review notes and repeat a section", func():
+        if review_sheet != null:
+            review_sheet.call("open_review", last_state.get("performance_summary", {})))
     performance_review.add_child(weak_button)
     # Flow containers wrap whole readable buttons instead of clipping labels
     # when the practice window is narrow or the user uses larger UI fonts.
@@ -983,6 +986,11 @@ func _build_interface() -> void:
             _navigate("library")
         else:
             _send_action(command))
+    review_sheet = preload("res://review_sheet.gd").new()
+    add_child(review_sheet)
+    review_sheet.retry_requested.connect(func(first_bar: int, last_bar: int):
+        _send_action({"action": "review_retry",
+                      "first_bar": first_bar, "last_bar": last_bar}))
     _navigate("home")
     _refresh_score_status()
 
@@ -1691,9 +1699,21 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     performance_review.visible = not summary.is_empty()
     if not summary.is_empty():
         var weakest: Array = summary.get("weakest_bars", [])
-        var bars: String = "%d–%d" % [int(weakest[0].get("first_bar", 1)),int(weakest[0].get("last_bar", 1))] if not weakest.is_empty() else "—"
-        performance_text.text = "%.0f%% correct · %d early · %d late · %d missed pitches · %d extra\nWeakest measures %s · Review only; Practice earns clean runs." % [float(summary.get("accuracy_percent", 0)),int(summary.get("early", 0)),int(summary.get("late", 0)),summary.get("missed_pitches", []).size(),int(summary.get("extra_notes", 0)),bars]
+        performance_text.text = "%.0f%% correct · %d/%d notes · %d missed · %d wrong · %d timing/duration · %d extra" % [
+            float(summary.get("accuracy_percent", 0)), int(summary.get("correct", 0)),
+            int(summary.get("total", 0)), int(summary.get("missed", 0)),
+            int(summary.get("wrong", 0)),
+            int(summary.get("early", 0)) + int(summary.get("late", 0))
+                + int(summary.get("short", 0)) + int(summary.get("long", 0)),
+            int(summary.get("extra_notes", 0))]
+        weak_button.visible = not weakest.is_empty()
         weak_button.disabled = weakest.is_empty()
+    var selected_retry: Variant = parsed.get("review_range")
+    if selected_retry is Dictionary:
+        passage_label.text = "Repeating measures %d–%d · %s" % [
+            int(selected_retry.get("first_bar", 1)),
+            int(selected_retry.get("last_bar", 1)),
+            "No full-passage mastery"]
     var active_transport: bool = _has_active_transport()
     if not learning:
         stop_button.disabled = not active_transport
