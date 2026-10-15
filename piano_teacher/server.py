@@ -1310,7 +1310,7 @@ class PracticeEngine:
             # A clean *partial* recovery cannot confer full passage mastery.
             self.pending_rewind=0.0
             self.feedback = "Selected section finished · " + result.summary
-            self.next_action = "Next: play the complete passage from its beginning to earn mastery."
+            self.next_action = "Next: play the whole passage from its beginning to earn mastery."
             self.retry_range = None
             self.next_at=now+self.feedback_seconds
             return
