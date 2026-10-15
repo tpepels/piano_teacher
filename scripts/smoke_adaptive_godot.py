@@ -120,6 +120,14 @@ def run() -> None:
             assert engine.plan is not None
             assert engine.plan.active_variant.level == "skeleton"
             engine.plan.set_bpm(240)
+            # Expose real Verovio/CairoSVG failures *before* starting Godot.
+            # Otherwise a missing notehead can look like a silent GUI timeout.
+            layout = engine.geometry()
+            image = engine.engraved_png(0)
+            assert len(layout["anchors"]) >= 2 and image.startswith(b"\x89PNG"), (
+                "The initial generated skeleton failed engraving/raster validation")
+            print(f"PASS preflight generated skeleton: {len(layout['notes'])} mapped notes, "
+                  f"{len(image)} PNG bytes", flush=True)
             engine.midi_port = object()  # Isolated harness; no production mock MIDI.
             http = ThreadingHTTPServer(("127.0.0.1",8765),Handler)
             Handler.engine = engine
