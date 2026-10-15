@@ -999,7 +999,7 @@ class PracticeEngine:
                 self._reset_trouble()
                 plan.select(index)
                 self.course_guided = requested_mode == "learn"
-                selected_bar = max(bar, section.first_bar)
+                selected_bar = max(bar, section.phrase.first_bar)
                 beat = plan.piece.bar_boundaries[selected_bar-1] - plan.active_phrase.start
                 if not 0 <= beat < plan.active_phrase.end - plan.active_phrase.start:
                     raise ValueError("Selected measure falls outside the playable passage")
