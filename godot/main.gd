@@ -117,6 +117,8 @@ var device_pending := false
 var practice_layout_box: VBoxContainer
 var practice_score_panel: PanelContainer
 var practice_playback_banner: Label
+var practice_note_feedback_panel: PanelContainer
+var practice_note_feedback_label: Label
 var score_margin_box: MarginContainer
 var hint_keyboard: Control
 var mode_choice: OptionButton
@@ -819,6 +821,28 @@ func _build_interface() -> void:
     practice_playback_banner.offset_top = 54.0
     practice_playback_banner.offset_bottom = 112.0
     score_frame.add_child(practice_playback_banner)
+    # A stationary feedback badge stays visible even after a missed note
+    # scrolls left out of view. It never covers the playing cursor.
+    practice_note_feedback_panel = PanelContainer.new()
+    var feedback_style := Design.surface(Color("#27362F"), 9)
+    feedback_style.set_border_width_all(2)
+    feedback_style.border_color = Color("#ED665F")
+    feedback_style.set_content_margin_all(9)
+    practice_note_feedback_panel.add_theme_stylebox_override("panel", feedback_style)
+    practice_note_feedback_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    practice_note_feedback_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+    practice_note_feedback_panel.offset_left = -330.0
+    practice_note_feedback_panel.offset_right = -12.0
+    practice_note_feedback_panel.offset_top = 10.0
+    practice_note_feedback_panel.offset_bottom = 60.0
+    practice_note_feedback_panel.visible = false
+    score_frame.add_child(practice_note_feedback_panel)
+    practice_note_feedback_label = _label("", 20, Color("#FF827A"), true)
+    practice_note_feedback_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    practice_note_feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    practice_note_feedback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    practice_note_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    practice_note_feedback_panel.add_child(practice_note_feedback_label)
     hint_keyboard = HintKeyboard.new()
     score_region.add_child(hint_keyboard)
     practice_progress = ProgressBar.new()
@@ -952,6 +976,8 @@ func _update_responsive_layout() -> void:
         feedback_label.add_theme_font_size_override("font_size", _ui_font(17))
         lesson_info_label.add_theme_font_size_override("font_size", _ui_font(16))
         practice_playback_banner.add_theme_font_size_override("font_size", _ui_font(17))
+        practice_note_feedback_label.add_theme_font_size_override("font_size", _ui_font(18))
+        practice_note_feedback_panel.offset_left = -minf(330.0, maxf(180.0, score_frame.size.x - 24.0))
 
 func _build_lesson_screen() -> void:
     var page := _screen("Lesson")
@@ -1442,6 +1468,37 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
                 hand_step, str(parsed.get("hand", "left")).to_upper(), bar_text]
         else:
             passage_label.text = "%s · %s" % [kind, bar_text]
+    # The red HUD has its own fixed screen position. Score-head markers
+    # alone are easy to miss once the continuous score scrolls away.
+    var active_mode: String = str(parsed.get("mode", "practice"))
+    var active_phase: String = str(parsed.get("phase", "ready"))
+    var feedback: Variant = parsed.get("live_note_feedback")
+    practice_note_feedback_panel.visible = false
+    if active_mode in ["practice", "perform"]:
+        if active_phase == "playing" and feedback is Dictionary:
+            var problem: Dictionary = feedback
+            var wrong: bool = str(problem.get("status", "")) == "wrong"
+            practice_note_feedback_label.text = (
+                "WRONG  ·  %s" if wrong else "MISSED  ·  %s"
+            ) % str(problem.get("name", ""))
+            practice_note_feedback_label.add_theme_color_override("font_color", Color("#FF827A"))
+            practice_note_feedback_panel.visible = true
+        elif active_phase in ["playing", "count_in"] and bool(parsed.get("preview_only", false)):
+            practice_note_feedback_label.text = "NO MIDI PIANO · SCORING OFF"
+            practice_note_feedback_label.add_theme_color_override("font_color", Color("#F1C67D"))
+            practice_note_feedback_panel.visible = true
+        elif active_phase in ["feedback", "recovering", "performance_complete"]:
+            var missed_count := 0
+            var wrong_count := 0
+            for mark in parsed.get("feedback_marks", []):
+                if str(mark.get("status", "")) == "missed":
+                    missed_count += 1
+                elif str(mark.get("status", "")) == "wrong":
+                    wrong_count += 1
+            if missed_count + wrong_count > 0:
+                practice_note_feedback_label.text = "%d missed · %d wrong" % [missed_count, wrong_count]
+                practice_note_feedback_label.add_theme_color_override("font_color", Color("#FF827A"))
+                practice_note_feedback_panel.visible = true
     speed_label.text = "%d BPM · target %d" % [int(parsed.get("bpm", 0)),int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
     var recovery_notice: Variant = parsed.get("recovery_notice")
     practice_playback_banner.visible = (
