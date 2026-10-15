@@ -1339,9 +1339,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         return
     var old_phase: String = str(last_state.get("phase", ""))
     var old_revision: int = int(last_state.get("revision", -1))
-    var midi_count: int = int(parsed.get("midi_input_count", 0))
-    var fresh_piano_key: bool = last_seen_midi_input_count >= 0 and midi_count > last_seen_midi_input_count
-    last_seen_midi_input_count = midi_count
+    var total_input_attacks: int = int(parsed.get("midi_input_count", 0))
+    var fresh_piano_key: bool = last_seen_midi_input_count >= 0 and total_input_attacks > last_seen_midi_input_count
+    last_seen_midi_input_count = total_input_attacks
     last_state = parsed
     var input_age = parsed.get("midi_input_age")
     if input_age != null and float(input_age) < 1.5:
