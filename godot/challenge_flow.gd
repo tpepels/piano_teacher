@@ -66,3 +66,32 @@ static func present(state: Dictionary) -> Dictionary:
         detail = "Preparing the next short challenge"
     return {"visible":true, "label":label,
             "detail":detail, "kind":"progress", "streak":raw_streak}
+
+
+static func newly_unlocked(previous: Dictionary, current: Dictionary) -> String:
+    # Only respond to a real backend transition; restoring already-complete
+    # stages or switching to another piece never replays a celebration.
+    if not bool(previous.get("loaded", false)) or not bool(current.get("loaded", false)):
+        return ""
+    if str(previous.get("title", "")) != str(current.get("title", "")):
+        return ""
+    var old_stages: Dictionary = {}
+    for stage in previous.get("hand_stages", []):
+        old_stages[str(stage.get("hand", ""))] = bool(stage.get("complete", false))
+    if old_stages.is_empty():
+        return ""
+    for stage in current.get("hand_stages", []):
+        var hand: String = str(stage.get("hand", ""))
+        if not old_stages.has(hand) or bool(old_stages[hand]) or not bool(stage.get("complete", false)):
+            continue
+        var next_hand := ""
+        for following in current.get("hand_stages", []):
+            if bool(following.get("active", false)) and not bool(following.get("complete", false)):
+                next_hand = str(following.get("hand", ""))
+                break
+        var completed_name: String = "BOTH HANDS" if hand == "both" else hand.to_upper() + " HAND"
+        if next_hand.is_empty():
+            return "✓ %s COMPLETE" % completed_name
+        var upcoming: String = "BOTH HANDS" if next_hand == "both" else next_hand.to_upper() + " HAND"
+        return "✓ %s COMPLETE · %s UNLOCKED" % [completed_name, upcoming]
+    return ""
