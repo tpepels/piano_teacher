@@ -18,6 +18,11 @@ var screens: Dictionary = {}
 var library_request: HTTPRequest
 var settings_request: HTTPRequest
 var library_pending := false
+var library_health_request: HTTPRequest
+var library_health_pending := false
+var library_health_info: Dictionary = {}
+var library_health_button: Button
+var library_health_label: Label
 var settings_pending := false
 var library_info: Dictionary = {}
 var preferences: Dictionary = {}
@@ -174,6 +179,7 @@ func _ready() -> void:
     action_request.timeout = 90.0
     device_request = _new_request(_on_devices)
     library_request = _new_request(_on_library)
+    library_health_request = _new_request(_on_library_health)
     settings_request = _new_request(_on_settings)
     lesson_request = _new_request(_on_lesson)
     state_poll_timer = Timer.new()
@@ -195,6 +201,13 @@ func _ready() -> void:
             _request_devices()
     )
     add_child(scan_timer)
+    var health_timer := Timer.new()
+    health_timer.wait_time = 1.2
+    health_timer.autostart = true
+    health_timer.timeout.connect(func():
+        if current_screen == "library" and bool(library_health_info.get("running", false)):
+            _request_library_health())
+    add_child(health_timer)
     set_process(true)
 
 func _make_count_click(frequency: float) -> AudioStreamWAV:
@@ -605,11 +618,17 @@ func _build_interface() -> void:
     library_search.text_changed.connect(func(_text: String): _populate_library())
     library_controls.add_child(library_search)
     library_controls.add_child(_button("Refresh", _request_library))
+    library_health_button = _button("Check files", func(): _start_library_health())
+    library_controls.add_child(library_health_button)
     # Import problems must appear next to the action, not at the very
     # bottom of a full-screen library where they are easy to miss.
     library_message = _label("", 18, MUTED, true)
     library_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     library_layout.add_child(library_message)
+    library_health_label = _label("", 16, MUTED)
+    library_health_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    library_health_label.visible = false
+    library_layout.add_child(library_health_label)
     var library_panel := _card()
     library_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     library_layout.add_child(library_panel)
@@ -1213,6 +1232,7 @@ func _on_library(_result: int, code: int, _headers: PackedStringArray, body: Pac
     home_count_label.text = "%d scores · %d built-in warm-ups" % [int(parsed.get("count", 0)), parsed.get("warmups", []).size()]
     library_path_label.text = str(parsed.get("folder", ""))
     _populate_library()
+    _request_library_health()
     var recent: String = str(parsed.get("last_piece", ""))
     home_resume_button.disabled = recent.is_empty()
     var exists_in_library := false
@@ -1227,6 +1247,51 @@ func _on_library(_result: int, code: int, _headers: PackedStringArray, body: Pac
             recent_title = str(entry.get("title", recent_title))
             break
     home_recent_label.text = recent_title if not recent.is_empty() else "No recent piece"
+
+func _request_library_health() -> void:
+    if library_health_request == null or library_health_pending:
+        return
+    library_health_pending = true
+    if library_health_request.request(URL + "/library/health") != OK:
+        library_health_pending = false
+
+
+func _start_library_health() -> void:
+    if action_pending or bool(library_health_info.get("running", false)):
+        return
+    library_health_label.visible = true
+    library_health_label.text = "Starting music file check…"
+    _send_post("/library/health", {})
+
+
+func _on_library_health(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+    library_health_pending = false
+    if code != 200:
+        library_health_label.visible = true
+        library_health_label.text = "Cannot check music files: " + _http_failure(code, body)
+        return
+    var parsed: Variant = _decode_json(body)
+    if not parsed is Dictionary:
+        return
+    var previous_checked: int = int(library_health_info.get("checked", -1))
+    var previous_started: bool = bool(library_health_info.get("started", false))
+    library_health_info = parsed
+    var active: bool = bool(parsed.get("running", false))
+    var started: bool = bool(parsed.get("started", false))
+    library_health_button.disabled = active
+    library_health_button.text = "Checking…" if active else "Recheck files"
+    library_health_label.visible = started
+    if started:
+        library_health_label.text = (
+            "Checking %d of %d files · %d OK · %d repaired · %d errors" if active
+            else "File check complete: %d of %d · %d OK · %d repaired · %d errors"
+        ) % [int(parsed.get("checked", 0)), int(parsed.get("total", 0)),
+             int(parsed.get("ok", 0)), int(parsed.get("warning", 0)), int(parsed.get("error", 0))]
+        if not str(parsed.get("message", "")).is_empty():
+            library_health_label.text += "\n" + str(parsed["message"])
+    if previous_checked != int(parsed.get("checked", -1)) or previous_started != started:
+        _populate_library()
+
 
 func _populate_library() -> void:
     if library_rows == null:
@@ -1255,7 +1320,15 @@ func _populate_library() -> void:
             var hint: String = ("%d BPM · %s" % [int(entry.get("bpm", 0)), focus]
                 if not focus.is_empty() else
                 location if not location.is_empty() else "Music folder")
-            var button := _button("%s     ·     %s     ·     %s" % [title, format_name, hint], func(): _open_library_piece(identifier))
+            var diagnosis: Dictionary = library_health_info.get("items", {}).get(identifier, {})
+            var status: String = str(diagnosis.get("status", ""))
+            var prefix := "[OK] " if status == "ok" else "[REPAIRED] " if status == "warning" else "[ERROR] " if status == "error" else ""
+            var button := _button("%s%s     ·     %s     ·     %s" % [prefix, title, format_name, hint],
+                func(): _open_library_piece(identifier))
+            if status == "error":
+                button.add_theme_color_override("font_color", Color("#FF8B82"))
+            elif status == "warning":
+                button.add_theme_color_override("font_color", Color("#F1C67D"))
             button.alignment = HORIZONTAL_ALIGNMENT_LEFT
             button.custom_minimum_size = Vector2(0, 58 * ui_scale)
             button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1263,6 +1336,11 @@ func _populate_library() -> void:
             button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
             button.tooltip_text = title + " · " + format_name + " · " + hint + (
                 "\n" + str(entry["description"]) if entry.has("description") else "")
+            if not diagnosis.is_empty():
+                button.tooltip_text += "\nImport check: " + str(diagnosis.get("message", ""))
+                if status != "error":
+                    button.tooltip_text += " · %d notes · %d measures" % [
+                        int(diagnosis.get("notes", 0)), int(diagnosis.get("measures", 0))]
             library_rows.add_child(button)
             visible += 1
     var issue: String = str(library_info.get("error", ""))
@@ -2167,6 +2245,8 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         _on_state(_result, code, _headers, body, action_request_started_ms)
         if completed_action in ["skip_stage", "place_original", "revisit_trouble"]:
             _navigate("practice")
+    elif path == "/library/health":
+        _request_library_health()
     elif path == "/library/open":
         library_error = ""
         _populate_library()
