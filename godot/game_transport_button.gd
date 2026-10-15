@@ -1,28 +1,40 @@
 extends Button
 
-# Tactile piano-console transport control. Backend state alone decides whether
-# the lesson is playing, paused or mastered.
-const TEAL := Color("#91F4CC")
-const AMBER := Color("#FFC68A")
-const DIM := Color("#4B7168")
+# Physical transport key with independently laid-out icon and label.
+# Input goes through Button.pressed; this script never advances the lesson.
+const TEAL := Color("#96EFCB")
+const AMBER := Color("#ECC18C")
+const DIM := Color("#64847A")
 
 var action_kind := "play"
 var live := false
-var highlighted := false
-var depressed := false
-var hover_amount := 0.0
-var press_amount := 0.0
+var pointer_inside := false
+var down := false
+var hover_phase := 0.0
+var press_phase := 0.0
+var release_flash := 0.0
 var activity_time := 0.0
 
+func _init() -> void:
+    # Godot's default centred Button label would overlap our icon. Keep text
+    # for accessibility and automation, but paint it in an independent region.
+    for state in ["font_color", "font_hover_color", "font_pressed_color",
+            "font_hover_pressed_color", "font_focus_color", "font_disabled_color"]:
+        add_theme_color_override(state, Color.TRANSPARENT)
+    focus_mode = Control.FOCUS_ALL
+
 func _ready() -> void:
-    mouse_entered.connect(func(): highlighted = true)
-    mouse_exited.connect(func(): highlighted = false)
-    button_down.connect(func(): depressed = true)
-    button_up.connect(func(): depressed = false)
-    focus_entered.connect(func(): highlighted = true)
-    focus_exited.connect(func(): highlighted = false)
-    resized.connect(func(): pivot_offset = size * 0.5)
-    pivot_offset = size * 0.5
+    mouse_entered.connect(func(): pointer_inside = true)
+    mouse_exited.connect(func(): pointer_inside = false)
+    button_down.connect(func(): down = true)
+    button_up.connect(func():
+        down = false
+        release_flash = 1.0)
+    pressed.connect(func(): release_flash = 1.0)
+    focus_entered.connect(queue_redraw)
+    focus_exited.connect(queue_redraw)
+    resized.connect(func(): pivot_offset = size * .5)
+    pivot_offset = size * .5
 
 func configure(kind: String, playing: bool = false) -> void:
     if action_kind != kind or live != playing:
@@ -34,55 +46,75 @@ func configure(kind: String, playing: bool = false) -> void:
 func _process(delta: float) -> void:
     if not is_visible_in_tree():
         return
-    var hover_target := 1.0 if highlighted and not disabled else 0.0
-    var press_target := 1.0 if depressed and not disabled else 0.0
-    var next_hover := move_toward(hover_amount, hover_target, delta * 8.0)
-    var next_press := move_toward(press_amount, press_target, delta * 15.0)
-    var changing := absf(next_hover - hover_amount) > 0.0001 or absf(next_press - press_amount) > 0.0001
-    hover_amount = next_hover
-    press_amount = next_press
+    var want_hover := 1.0 if (pointer_inside or has_focus()) and not disabled else 0.0
+    var want_press := 1.0 if down and not disabled else 0.0
+    var h := move_toward(hover_phase, want_hover, delta * 8.0)
+    var p := move_toward(press_phase, want_press, delta * 14.0)
+    var animating := absf(h - hover_phase) > .0001 or absf(p - press_phase) > .0001
+    hover_phase = h
+    press_phase = p
+    if release_flash > 0:
+        release_flash = maxf(0.0, release_flash - delta * 4.8)
+        animating = true
     if live and not disabled:
         activity_time += delta
-    if changing or (live and not disabled):
-        var factor := 1.0 + hover_amount * 0.028 - press_amount * 0.055
-        scale = Vector2(factor, factor)
+        animating = true
+    if animating:
+        # The button's layout slot and its keyboard focus remain unchanged.
+        var scale_factor := 1.0 + .013 * hover_phase - .033 * press_phase + .008 * release_flash
+        scale = Vector2.ONE * scale_factor
         queue_redraw()
 
 func _draw() -> void:
-    if size.x < 12.0 or size.y < 12.0:
+    if size.x < 100 or size.y < 35:
         return
-    var accent := AMBER if action_kind == "retry" else TEAL
-    var light := hover_amount * 0.26 + press_amount * 0.17
-    if live and not disabled:
-        light += 0.13 + 0.09 * (0.5 + 0.5 * sin(activity_time * 4.5))
+    var color := AMBER if action_kind == "retry" else TEAL
     if disabled:
-        light *= 0.2
-        accent = DIM
-    # Accent well, recessed icon, and contact-light along the lower lip.
-    draw_rect(Rect2(7, 8, 3, size.y - 16), Color(accent, 0.36 + light))
-    draw_line(Vector2(16, size.y - 5), Vector2(size.x - 16, size.y - 5),
-        Color(accent, 0.2 + light), 2.0)
-    var center := Vector2(29, size.y * 0.5)
-    draw_circle(center, 16.0 + hover_amount * 1.5, Color(accent, 0.06 + light * 0.27))
-    draw_arc(center, 13, -PI * 0.7, PI * 0.7, 30, Color(accent, 0.35 + light), 1.7, true)
+        color = DIM
+    var glow := .13 * hover_phase + .11 * release_flash
+    if live and not disabled:
+        glow += .08 + .055 * (1.0 + sin(activity_time * 3.3))
+    var mid := Vector2(35.0, size.y * .5)
+    # Subtle inset above and raised lower lip. The StyleBox owns shadows,
+    # border, hover, and depressed depth; this overlay contains no fake UI.
+    draw_line(Vector2(15, 7), Vector2(size.x - 15, 7),
+        Color("#FFFFFF", .06 + .075 * hover_phase), 1.0, true)
+    draw_line(Vector2(15, size.y - 6), Vector2(size.x - 15, size.y - 6),
+        Color(color, .16 + glow), 2.0, true)
+    draw_circle(mid, 23.0, Color(color, .045 + glow * .13))
+    draw_circle(mid, 17.0, Color(color, .065 + glow * .20))
+    draw_line(Vector2(66, 16), Vector2(66, size.y - 16),
+        Color(color, .17 + glow * .25), 1.0, true)
     match action_kind:
         "pause":
-            draw_rect(Rect2(center.x - 6, center.y - 7, 4, 14), accent)
-            draw_rect(Rect2(center.x + 2, center.y - 7, 4, 14), accent)
+            draw_rect(Rect2(mid.x - 6, mid.y - 9, 4.2, 18), color)
+            draw_rect(Rect2(mid.x + 2, mid.y - 9, 4.2, 18), color)
         "retry":
-            draw_arc(center, 7.5, -2.6, 2.4, 28, accent, 2.5, true)
+            draw_arc(mid, 9, -.5 * PI, 1.23 * PI, 40, color, 2.6, true)
             draw_colored_polygon(PackedVector2Array([
-                center + Vector2(-10, -4), center + Vector2(-9, 4),
-                center + Vector2(-2, -2)]), accent)
+                mid + Vector2(-11, -9), mid + Vector2(-10, 1),
+                mid + Vector2(-1, -6)]), color)
         "listen":
-            draw_circle(center + Vector2(-6, 0), 3, accent)
-            draw_arc(center + Vector2(-4, 0), 6.0, -PI * .4, PI * .4, 20, accent, 2, true)
-            draw_arc(center + Vector2(-4, 0), 10.5, -PI * .4, PI * .4, 20, accent, 2, true)
+            draw_circle(mid + Vector2(-7, 0), 3.2, color)
+            draw_arc(mid + Vector2(-6, 0), 7.3, -.37 * PI, .37 * PI, 28, color, 2.2, true)
+            draw_arc(mid + Vector2(-6, 0), 12.0, -.37 * PI, .37 * PI, 28, color, 2.2, true)
         "practice":
-            draw_line(center + Vector2(-7, 0), center + Vector2(7, 0), accent, 2.5, true)
-            draw_line(center + Vector2(-7, 0), center + Vector2(-1, -6), accent, 2.5, true)
-            draw_line(center + Vector2(-7, 0), center + Vector2(-1, 6), accent, 2.5, true)
+            draw_line(mid + Vector2(-9, 0), mid + Vector2(9, 0), color, 2.5, true)
+            draw_line(mid + Vector2(-9, 0), mid + Vector2(-1, -7), color, 2.5, true)
+            draw_line(mid + Vector2(-9, 0), mid + Vector2(-1, 7), color, 2.5, true)
         _:
             draw_colored_polygon(PackedVector2Array([
-                center + Vector2(-4, -7), center + Vector2(8, 0),
-                center + Vector2(-4, 7)]), accent)
+                mid + Vector2(-5, -9), mid + Vector2(10, 0),
+                mid + Vector2(-5, 9)]), color)
+    var font: Font = get_theme_font("font")
+    var font_size: int = get_theme_font_size("font_size")
+    var available: float = maxf(32.0, size.x - 86.0)
+    while font_size > 12 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT,
+            -1, font_size).x > available:
+        font_size -= 1
+    var ink := Color("#FAFFFC") if not disabled else Color("#879D94")
+    var label_width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+    var label_x := 76.0 + maxf(0.0, (available - label_width) * .5)
+    var baseline := (size.y + font.get_ascent(font_size) - font.get_descent(font_size)) * .5
+    draw_string(font, Vector2(label_x, baseline), text,
+        HORIZONTAL_ALIGNMENT_LEFT, available, font_size, ink)

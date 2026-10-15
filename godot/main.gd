@@ -381,6 +381,17 @@ func _layout_moving_score(delta: float = 0.0) -> void:
         width_scale = INF
     var height_scale: float = viewport.y * 0.77 / image.y
     var scale: float = maxf(0.01, minf(width_scale, height_scale))
+    # A two-note warm-up otherwise gets magnified until the score looks
+    # like a blown-up PDF. Limit staff-line spacing, *not* the note timing.
+    # All notes, clefs, stems and overlays continue using the same scale.
+    var systems: Array = score_layout.get("systems", [])
+    if not systems.is_empty():
+        var rails: Array = systems[0].get("staff_lines", [])
+        if rails.size() >= 2:
+            var native_gap: float = absf(float(rails[1]) - float(rails[0])) * image.y
+            if native_gap > .001:
+                var desired_gap: float = clampf(viewport.y * .034, 13.0, 21.0)
+                scale = minf(scale, desired_gap / native_gap)
     var displayed_width: float = image.x * scale
     var displayed_height: float = image.y * scale
     score_content.size = Vector2(displayed_width, displayed_height)
@@ -538,12 +549,36 @@ func _game_button(button: Button, central := false) -> void:
     focus.set_border_width_all(2)
     focus.shadow_size = 0
     button.add_theme_stylebox_override("focus", focus)
-    button.add_theme_color_override("font_color", Color("#F4FFF9") if central else Color("#D6E7DD"))
-    button.add_theme_color_override("font_hover_color", Color.WHITE)
-    button.add_theme_color_override("font_pressed_color", Color.WHITE)
-    button.add_theme_color_override("font_disabled_color", Color("#748B82"))
+    if not button is GameTransportButton:
+        button.add_theme_color_override("font_color", Color("#F4FFF9") if central else Color("#D6E7DD"))
+        button.add_theme_color_override("font_hover_color", Color.WHITE)
+        button.add_theme_color_override("font_pressed_color", Color.WHITE)
+        button.add_theme_color_override("font_disabled_color", Color("#748B82"))
     button.clip_text = false
 
+
+func _utility_button(button: Button, destructive := false) -> void:
+    # Navigation is deliberately quieter than the three transport keys.
+    var face := StyleBoxFlat.new()
+    face.bg_color = Color.TRANSPARENT
+    face.set_corner_radius_all(8)
+    face.set_content_margin_all(8)
+    face.set_border_width_all(1)
+    face.border_color = Color("#759F92", .14)
+    button.add_theme_stylebox_override("normal", face)
+    var hover := face.duplicate() as StyleBoxFlat
+    hover.bg_color = Color("#29413D", .83)
+    hover.border_color = Color("#88C9B3", .48)
+    button.add_theme_stylebox_override("hover", hover)
+    button.add_theme_stylebox_override("pressed", hover)
+    var focus := face.duplicate() as StyleBoxFlat
+    focus.set_border_width_all(2)
+    focus.border_color = Color("#A6EFD0")
+    button.add_theme_stylebox_override("focus", focus)
+    var ink := Color("#DD9F9B") if destructive else Color("#A8C9BA")
+    button.add_theme_color_override("font_color", ink)
+    button.add_theme_color_override("font_hover_color", Color("#F6FCF8"))
+    button.add_theme_color_override("font_pressed_color", Color("#F6FCF8"))
 
 func _transport_button(label: String, callback: Callable, kind: String, central := false) -> Button:
     var button := GameTransportButton.new()
@@ -552,7 +587,7 @@ func _transport_button(label: String, callback: Callable, kind: String, central 
     button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     button.pressed.connect(callback)
     button.configure(kind)
-    button.custom_minimum_size = Vector2(198 if central else 158, 66 if central else 60)
+    button.custom_minimum_size = Vector2(250 if central else 205, 76 if central else 70)
     _game_button(button, central)
     return button
 
@@ -915,15 +950,15 @@ func _build_interface() -> void:
     practice_navigation.add_theme_constant_override("v_separation", 8)
     practice_navigation.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(practice_navigation)
-    game_brand = _label("PIANO  /  STUDIO", 13, Color("#75CEAF"), true)
-    game_brand.custom_minimum_size = Vector2(210, 42)
+    game_brand = _label("PIANO TEACHER", 13, Color("#75CEAF"), true)
+    game_brand.custom_minimum_size = Vector2(168, 32)
     game_brand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     game_brand.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     practice_navigation.add_child(game_brand)
     practice_music_button = _button("Music", func(): _navigate("library"))
     practice_music_button.tooltip_text = "Choose a piece · Escape"
     practice_navigation.add_child(practice_music_button)
-    _game_button(practice_music_button)
+    _utility_button(practice_music_button)
     mode_choice = OptionButton.new()
     mode_choice.disabled = true
     mode_choice.fit_to_longest_item = false
@@ -946,13 +981,14 @@ func _build_interface() -> void:
     var path_button := _button("Path", func(): _navigate("lesson"))
     path_button.tooltip_text = "Learning stages and advanced practice"
     practice_navigation.add_child(path_button)
-    _game_button(path_button)
+    _utility_button(path_button)
     practice_settings_button = _button("Settings", func(): _navigate("settings"))
     practice_navigation.add_child(practice_settings_button)
-    _game_button(practice_settings_button)
+    _utility_button(practice_settings_button)
     var exit_button := _button("Exit", _exit_app)
     exit_button.tooltip_text = "Close Piano Teacher · Ctrl+Q"
     practice_navigation.add_child(exit_button)
+    _utility_button(exit_button, true)
 
     practice_header = HBoxContainer.new()
     practice_header.add_theme_constant_override("separation", 20)
@@ -1005,17 +1041,16 @@ func _build_interface() -> void:
     # One continuous performance stage, not another grey website card.
     var stage_shell := StyleBoxFlat.new()
     stage_shell.bg_color = Color("#101B1C")
-    stage_shell.set_corner_radius_all(18)
+    stage_shell.set_corner_radius_all(12)
     stage_shell.set_border_width_all(1)
-    stage_shell.border_color = Color("#609687", .6)
-    stage_shell.shadow_color = Color("#000E0D", .55)
-    stage_shell.shadow_size = 9
-    stage_shell.shadow_offset = Vector2(0, 3)
+    stage_shell.border_color = Color("#527B70", .27)
+    stage_shell.shadow_color = Color.BLACK
+    stage_shell.shadow_size = 0
     score_panel.add_theme_stylebox_override("panel", stage_shell)
     practice_score_panel = score_panel
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(score_panel)
-    var score_margin := _card_body(score_panel, 26)
+    var score_margin := _card_body(score_panel, 10)
     score_margin_box = score_margin
     var score_region := VBoxContainer.new()
     score_region.add_theme_constant_override("separation", 8)
@@ -1126,6 +1161,9 @@ func _build_interface() -> void:
     (practice_progress.get_theme_stylebox("background") as StyleBoxFlat).set_content_margin_all(0)
     (practice_progress.get_theme_stylebox("fill") as StyleBoxFlat).set_content_margin_all(0)
     practice_layout.add_child(practice_progress)
+    # Progress already appears as a single thin rail *inside* GameStage.
+    # A second full-width bar below the notation made this a dashboard.
+    practice_progress.visible = false
     var information := VBoxContainer.new()
     information.add_theme_constant_override("separation", 4)
     practice_layout.add_child(information)
@@ -1159,8 +1197,8 @@ func _build_interface() -> void:
     practice_controls = controls
     controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     controls.alignment = FlowContainer.ALIGNMENT_CENTER
-    controls.add_theme_constant_override("h_separation", 12)
-    controls.add_theme_constant_override("v_separation", 9)
+    controls.add_theme_constant_override("h_separation", 16)
+    controls.add_theme_constant_override("v_separation", 8)
     practice_layout.add_child(controls)
     practice_retry_button = _transport_button("Retry", _restart_practice, "retry")
     practice_retry_button.tooltip_text = "Repeat the current passage · R"
@@ -1274,9 +1312,9 @@ func _update_responsive_layout() -> void:
     if practice_header == null:
         return
     practice_header.add_theme_constant_override("separation", 16)
-    game_brand.visible = width >= 1120.0
-    practice_navigation.add_theme_constant_override("h_separation", 10 if width >= 1000.0 else 7)
-    practice_navigation.add_theme_constant_override("v_separation", 7)
+    game_brand.visible = width >= 1280.0
+    practice_navigation.add_theme_constant_override("h_separation", 8 if width >= 1000.0 else 5)
+    practice_navigation.add_theme_constant_override("v_separation", 4)
     if mode_choice != null:
         mode_choice.add_theme_font_size_override("font_size", _ui_font(15))
         mode_choice.custom_minimum_size = Vector2(minf(235.0, maxf(170.0, width * 0.22)), 50.0)
@@ -1285,34 +1323,39 @@ func _update_responsive_layout() -> void:
     for child in practice_navigation.get_children():
         if child is Button and child != mode_choice and child != hints_toggle:
             var button := child as Button
-            var font_size := _ui_font(15)
+            var font_size := _ui_font(12)
             button.add_theme_font_size_override("font_size", font_size)
             var measured: float = button.get_theme_font("font").get_string_size(
                 button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-            button.custom_minimum_size = Vector2(maxf(90.0, measured + 30.0), 42.0 if compact else 45.0)
+            button.custom_minimum_size = Vector2(maxf(65.0, measured + 19.0), 34.0 if compact else 36.0)
             button.clip_text = false
     if practice_controls != null:
-        practice_layout_box.add_theme_constant_override("separation", 8 if compact else 12)
-        score_frame.custom_minimum_size.y = 180 if compact else 240
+        practice_layout_box.add_theme_constant_override("separation", 6 if compact else 9)
+        score_frame.custom_minimum_size.y = 170 if compact else 245
         for side in ["left", "right", "top", "bottom"]:
-            score_margin_box.add_theme_constant_override("margin_" + side, 8 if compact else 16)
+            score_margin_box.add_theme_constant_override("margin_" + side, 5 if compact else 10)
         for child in practice_controls.get_children():
             if child is Button:
                 var button := child as Button
                 var central: bool = button == start_button
-                var font_size := _ui_font(19 if central else 17)
+                var font_size := _ui_font(20 if central else 18)
                 button.add_theme_font_size_override("font_size", font_size)
                 var measured: float = button.get_theme_font("font").get_string_size(
                     button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+                var available: float = maxf(0.0, width - float(margin * 2) - 56.0)
+                var ideal: float = maxf(246.0 if central else 198.0, measured + 108.0)
+                # At 800px all three keys must fit on one row, without
+                # shrinking their active hit areas to website-sized chips.
+                var per_button: float = maxf(155.0, (available - 48.0) / 3.0)
                 button.custom_minimum_size = Vector2(
-                    maxf(170.0 if central else 150.0, measured + 66.0),
-                    58.0 if compact else 68.0 if central else 62.0)
+                    minf(ideal * (1.13 if width >= 1600.0 else 1.0), per_button * (1.18 if central else .91)),
+                    58.0 if compact else 80.0 if central else 73.0)
                 button.clip_text = false
         title_label.add_theme_font_size_override("font_size", _ui_font(25))
         passage_label.add_theme_font_size_override("font_size", _ui_font(15))
         speed_label.add_theme_font_size_override("font_size", _ui_font(19))
         hand_label.add_theme_font_size_override("font_size", _ui_font(15))
-        progress_label.add_theme_font_size_override("font_size", _ui_font(16))
+        progress_label.add_theme_font_size_override("font_size", _ui_font(15))
         game_streak.custom_minimum_size = Vector2(130 if width < 950 else 155, 30)
         feedback_label.add_theme_font_size_override("font_size", _ui_font(17))
         lesson_info_label.add_theme_font_size_override("font_size", _ui_font(16))

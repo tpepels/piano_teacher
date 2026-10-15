@@ -67,6 +67,21 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Phase 7.6c - instrument controls and minimal practice stage
+
+The transport buttons are large piano-console keys with a separate icon well,
+centred text region and physical hover/press/release response. Godot's ordinary
+centred Button text is hidden *only on these keys*, so it never overlaps
+the icons. The controls still expose their actual accessible text and use
+native button pressed/focus signals. Narrow windows keep all three controls.
+
+Music, Path, Settings and Exit use quiet small navigation links rather than
+competing action cards. The stage drops decorative grids, corner brackets
+and its duplicate progress bar; an understated musical progress rail remains.
+The existing musical note mapping is unchanged, while an upper limit on
+rendered staff spacing prevents the two-note warm-ups from magnifying beyond
+a readable notation scale.
+
 ## Phase 7.6b - engraved-note feedback, first pass
 
 The next source note or chord receives a slim, tilted notehead-shaped teal

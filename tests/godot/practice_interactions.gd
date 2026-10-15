@@ -101,6 +101,10 @@ func test_three_button_stage() -> void:
         "Listen is the third primary action")
     check(app.start_button.has_method("configure") and app.listen_button.has_method("configure"),
         "Transport controls support animated game state")
+    check(app.start_button.focus_mode == Control.FOCUS_ALL,
+        "Piano transport keys must retain keyboard focus")
+    check(app.start_button.get_theme_color("font_color").a < .01,
+        "Default Godot button label must not overlap the custom game icon")
     check(app.practice_navigation.get_children().any(func(node):
         return node is Button and node.text == "Exit"),
         "Fullscreen practice must offer a visible Exit")

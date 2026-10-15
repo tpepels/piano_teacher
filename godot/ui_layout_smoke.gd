@@ -83,8 +83,17 @@ func _run() -> void:
         "The game must have only Retry, Play/Pause and Listen as transport controls")
     _check((scene.get("start_button") as Button).get_theme_stylebox("normal") is StyleBoxFlat,
         "Primary piano control must have a tactile custom skin")
+    var retry: Button = scene.get("practice_retry_button")
+    var primary: Button = scene.get("start_button")
+    var listen: Button = scene.get("listen_button")
+    _check(primary.size.y >= retry.size.y and primary.size.y >= listen.size.y,
+        "Play is visually dominant, not another website-sized button")
+    _check(retry.size.x >= 145.0 and listen.size.x >= 145.0,
+        "Secondary game keys need real hit targets")
+    _check(not (scene.get("practice_progress") as ProgressBar).visible,
+        "A duplicate progress bar below the score must not compete with the stage rail")
     var brand: Label = scene.get("game_brand")
-    _check(brand.visible == (viewport.x >= 1120.0),
+    _check(brand.visible == (viewport.x >= 1280.0),
         "Decorative game brand must collapse before it crowds piano controls")
     var count_in: Control = scene.get("game_count_in")
     count_in.present(-2.5, 3, true, false)
