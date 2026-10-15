@@ -68,10 +68,12 @@ func test_pending_start_or_resume(action: String, destination: String) -> void:
     check(app.wire_commands == [{"action": action}],
         "Navigation waits for the in-flight " + action + " request before sending another request")
     acknowledge("playing" if action == "resume" else "count_in")
-    var wanted := "pause" if destination in ["settings", "lesson"] else "stop"
-    check(app.wire_commands == [{"action": action}, {"action": wanted}],
+    var wanted := "pause" if destination != "home" else ""
+    var expected: Array[Dictionary] = ([{"action": action}, {"action": wanted}]
+        if not wanted.is_empty() else [{"action": action}])
+    check(app.wire_commands == expected,
         action + " immediately followed by " + destination + " preserves the user's " + wanted + " intent: " + str(app.wire_commands))
-    check(app.action_pending, "The queued navigation request is now awaiting its own acknowledgement")
+    check(app.action_pending, "The current transport request is still being acknowledged")
 
 func test_response_before_poll() -> void:
     show_state("ready")
@@ -94,8 +96,8 @@ func test_stop_overrides_pending_pause() -> void:
     check(app.wire_commands == [{"action": "pause"}], "Opening Settings first requests a pause")
     app._navigate("library")
     acknowledge("paused")
-    check(app.wire_commands == [{"action": "pause"}, {"action": "stop"}],
-        "Leaving for Library while pause is pending still stops the attempt: " + str(app.wire_commands))
+    check(app.wire_commands == [{"action": "pause"}],
+        "Opening music while pause is pending preserves the same attempt: " + str(app.wire_commands))
 
 func test_failed_request_flushes_intent() -> void:
     show_state("ready")
