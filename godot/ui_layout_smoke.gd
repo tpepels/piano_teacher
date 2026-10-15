@@ -62,6 +62,26 @@ func _run() -> void:
     _check(score.size.y >= 135.0, "Notation area became unusably small")
     _check(_in_viewport(score, viewport), "Notation panel extends outside window")
 
+    # Check wrong physical pitches use the real staff's pitch spacing and
+    # do not move a correct chord note or invent a separate score location.
+    scene.set("score_layout", {"systems": [{
+        "page": 0, "left": 0.05, "right": 0.95,
+        "staff_lines": [0.10, 0.12, 0.14, 0.16, 0.18,
+                        0.30, 0.32, 0.34, 0.36, 0.38]
+    }]})
+    var ghost: Dictionary = scene.call("_wrong_note_ghost", 62,
+        {"id": "real-attack", "pitch": 60, "page": 0,
+         "x": 0.3, "y": 0.14, "hand": "right"})
+    _check(not ghost.is_empty(), "An adjacent wrong pitch was not positioned on the staff")
+    if not ghost.is_empty():
+        _check(absf(float(ghost["y"]) - 0.13) < 0.0001,
+            "Wrong pitch should be exactly one diatonic step above C")
+        _check(str(ghost["label"]) == "D4", "Wrong staff note label incorrect")
+    var outside: Dictionary = scene.call("_wrong_note_ghost", 75,
+        {"id": "real-attack", "pitch": 60, "page": 1,
+         "x": 0.3, "y": 0.14, "hand": "right"})
+    _check(outside.is_empty(), "Wrong note must not fabricate a missing source staff")
+
     var pause: Control = scene.get("pause_sheet")
     pause.call("present", {"paused":true, "mode":"practice", "bpm":68,
         "hand":"left", "hands":["left","right","both"],
