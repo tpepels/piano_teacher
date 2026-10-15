@@ -198,7 +198,11 @@ class PracticeEngine:
     def load_library(self, identifier: str) -> None:
         with self.lock:
             path = self.library.resolve(identifier)
-        self.load(str(path), warmup=is_warmup(identifier))  # Parse before recording success.
+        # Preserve the ordinary loader path for imported music and its callers.
+        if is_warmup(identifier):
+            self.load(str(path), warmup=True)
+        else:
+            self.load(str(path))  # Parse before recording success.
         with self.lock:
             if is_warmup(identifier):
                 # Restore this hand and its clean streak, starting at left
