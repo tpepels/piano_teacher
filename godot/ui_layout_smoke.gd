@@ -51,6 +51,13 @@ func _run() -> void:
     await process_frame
     await process_frame
     var viewport: Vector2 = root.size
+    _check(str(scene.get("current_screen")) == "practice",
+        "Phase 7.1 must open directly on the practice stage")
+    _check(not (scene.get("overlay_root") as Control).visible,
+        "No drawer is open at startup")
+    var browse_button: Button = scene.get("score_browse_button")
+    _check(browse_button.visible,
+        "Empty practice stage must have a prominent Choose music action")
     var toolbar: Control = scene.get("practice_navigation")
     var transport: Control = scene.get("practice_controls")
     var score: Control = scene.get("score_frame")
@@ -116,6 +123,19 @@ func _run() -> void:
     await process_frame
     var pages: Dictionary = scene.get("screens")
     var library_root: Control = pages["library"]
+    var overlay: Control = scene.get("overlay_root")
+    var drawer: Control = scene.get("overlay_drawer")
+    _check(overlay.visible, "Browse library must be a visible in-context drawer")
+    _check(pages["practice"].visible,
+        "Music library must not replace or blank the sheet music")
+    _check(drawer.get_global_rect().end.x <= viewport.x + 2.0,
+        "Music drawer escapes right edge of the window")
+    _check(drawer.get_global_rect().position.x >= -2.0,
+        "Music drawer escapes left edge of the window")
+    _check(drawer.size.x <= viewport.x + 2.0,
+        "Music drawer cannot exceed available window width")
+    _check(library_root.is_ancestor_of(scene.get("library_search")),
+        "Music search remains inside the library drawer")
     var short_buttons := 0
     for control in library_root.find_children("*", "Button", true, false):
         var button := control as Button
