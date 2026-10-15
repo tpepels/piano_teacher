@@ -90,6 +90,9 @@ func expect_command(action: String, description: String) -> void:
     app.commands.clear()
 
 func test_three_button_stage() -> void:
+    app.game_phase_cue.present({"loaded":false, "phase":"ready"})
+    check(app.game_phase_cue.message.is_empty(),
+        "Empty library must not invite the pianist to start an absent score")
     show_state()
     check(app.practice_controls.get_child_count() == 3,
         "Practice surface must have exactly Play, Retry and Listen")
