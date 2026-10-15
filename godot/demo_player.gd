@@ -12,14 +12,28 @@ var acknowledged := false
 var started := false
 var downloading := false
 var audio_error := false
+# Independent local gain for the recorded piano; no MIDI output changes.
+var listen_volume_db := 6.0
 
 func _ready() -> void:
     player = AudioStreamPlayer.new()
+    var config := ConfigFile.new()
+    if config.load("user://audio.cfg") == OK:
+        listen_volume_db = clampf(float(config.get_value("audio", "listen_volume_db", 6.0)), -12.0, 12.0)
+    player.volume_db = listen_volume_db
     add_child(player)
     request = HTTPRequest.new()
     request.timeout = 120.0
     request.request_completed.connect(_downloaded)
     add_child(request)
+
+func set_listen_volume_db(value: float) -> void:
+    listen_volume_db = clampf(value, -12.0, 12.0)
+    if player != null:
+        player.volume_db = listen_volume_db
+    var config := ConfigFile.new()
+    config.set_value("audio", "listen_volume_db", listen_volume_db)
+    config.save("user://audio.cfg")
 
 func synchronize(state: Dictionary) -> void:
     if str(state.get("mode", "")) != "listen" or not state.get("demo") is Dictionary:

@@ -67,6 +67,13 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Phase 7.6 polish - Exit and Listen audio
+Exit is visible in the practice header; Ctrl+Q also closes the app
+from fullscreen or a drawer. Settings → Listen Audio has a separate
+demonstration gain (-12 to +12 dB), default +6 dB and saved locally.
+It does not change the MIDI piano or metronome. Reduce loud chords
+if they distort.
+
 ## Game interface overhaul (Phase 7.6)
 
 The practice surface is an **instrument-focused game HUD**, not a set of

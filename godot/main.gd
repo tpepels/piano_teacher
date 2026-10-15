@@ -157,6 +157,8 @@ var mode_choice: OptionButton
 var hints_toggle: CheckButton
 var demo_player: Node
 var listen_button: Button
+var listen_volume_slider: HSlider
+var listen_volume_label: Label
 var performance_review: VBoxContainer
 var performance_text: Label
 var weak_button: Button
@@ -177,6 +179,8 @@ func _ready() -> void:
     _build_interface()
     demo_player = preload("res://demo_player.gd").new()
     add_child(demo_player)
+    listen_volume_slider.set_value_no_signal(float(demo_player.get("listen_volume_db")))
+    _show_listen_volume(float(demo_player.get("listen_volume_db")))
     demo_player.prepared.connect(func(token: String, ready_revision: int):
         _send_action({"action":"demo_ready", "token":token, "revision":ready_revision}))
     demo_player.failed.connect(func(message: String): feedback_label.text = message)
@@ -534,6 +538,18 @@ func _game_button(button: Button, central := false) -> void:
     button.clip_text = false
 
 
+func _show_listen_volume(db: float) -> void:
+    if listen_volume_label != null:
+        listen_volume_label.text = "%+d dB" % int(round(db))
+
+func _on_listen_volume_changed(db: float) -> void:
+    _show_listen_volume(db)
+    if demo_player != null:
+        demo_player.call("set_listen_volume_db", db)
+
+func _exit_app() -> void:
+    get_tree().quit()
+
 func _screen(name: String) -> MarginContainer:
     var panel := MarginContainer.new()
     panel.name = name
@@ -837,6 +853,26 @@ func _build_interface() -> void:
     metronome_toggle.tooltip_text = "Count-in is always audible, even when metronome is off"
     metronome_toggle.toggled.connect(func(enabled: bool): _send_post("/settings", {"metronome": enabled}))
     settings_content.add_child(metronome_toggle)
+    settings_content.add_child(_label("LISTEN AUDIO", 13, ACCENT, true))
+    var audio_row := HFlowContainer.new()
+    audio_row.add_theme_constant_override("h_separation", 16)
+    audio_row.add_theme_constant_override("v_separation", 8)
+    settings_content.add_child(audio_row)
+    audio_row.add_child(_label("Piano volume", 16, INK))
+    listen_volume_slider = HSlider.new()
+    listen_volume_slider.min_value = -12.0
+    listen_volume_slider.max_value = 12.0
+    listen_volume_slider.step = 1.0
+    listen_volume_slider.value = 6.0
+    listen_volume_slider.custom_minimum_size = Vector2(200, 40)
+    listen_volume_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    listen_volume_slider.tooltip_text = "Listen only. Saved locally; does not change MIDI or metronome."
+    audio_row.add_child(listen_volume_slider)
+    listen_volume_label = _label("+6 dB", 16, INK, true)
+    listen_volume_label.custom_minimum_size.x = 70
+    audio_row.add_child(listen_volume_label)
+    listen_volume_slider.value_changed.connect(_on_listen_volume_changed)
+    settings_content.add_child(_label("Increase if Listen is quiet; lower if loud chords distort.", 14, MUTED))
     settings_content.add_child(_label("DISPLAY", 13, ACCENT, true))
     fullscreen_toggle = CheckButton.new()
     fullscreen_toggle.text = "Fullscreen application  (F11 to toggle)"
@@ -896,6 +932,9 @@ func _build_interface() -> void:
     practice_settings_button = _button("Settings", func(): _navigate("settings"))
     practice_navigation.add_child(practice_settings_button)
     _game_button(practice_settings_button)
+    var exit_button := _button("Exit", _exit_app)
+    exit_button.tooltip_text = "Close Piano Teacher · Ctrl+Q"
+    practice_navigation.add_child(exit_button)
 
     practice_header = HBoxContainer.new()
     practice_header.add_theme_constant_override("separation", 20)
@@ -2650,7 +2689,7 @@ func _input(event: InputEvent) -> void:
         return
     if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,KEY_TAB]:
         return
-    if get_viewport().gui_get_focus_owner() is LineEdit and event.keycode not in [KEY_F11, KEY_ESCAPE]:
+    if get_viewport().gui_get_focus_owner() is LineEdit and event.keycode not in [KEY_F11, KEY_ESCAPE] and not (event.ctrl_pressed and event.keycode == KEY_Q):
         return
     var practice_shortcut: bool = current_screen == "practice" and event.keycode in [
         KEY_ESCAPE, KEY_SPACE, KEY_P, KEY_R, KEY_S, KEY_L, KEY_LEFT, KEY_RIGHT]
@@ -2658,7 +2697,7 @@ func _input(event: InputEvent) -> void:
         _unhandled_key_input(event)
         get_viewport().set_input_as_handled()
         return
-    if event.keycode == KEY_F11 or practice_shortcut:
+    if event.keycode == KEY_F11 or (event.ctrl_pressed and event.keycode == KEY_Q) or practice_shortcut:
         # Consume press and release before focused buttons see ui_accept.
         # Handling only the press can also activate Next/Stop on release.
         _unhandled_key_input(event)
@@ -2668,7 +2707,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
         if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,KEY_TAB]:
             return
-        if get_viewport().gui_get_focus_owner() is LineEdit and event.keycode not in [KEY_F11, KEY_ESCAPE]:
+        if get_viewport().gui_get_focus_owner() is LineEdit and event.keycode not in [KEY_F11, KEY_ESCAPE] and not (event.ctrl_pressed and event.keycode == KEY_Q):
+            return
+        if event.ctrl_pressed and event.keycode == KEY_Q:
+            _exit_app()
+            get_viewport().set_input_as_handled()
             return
         if event.keycode == KEY_F11:
             _toggle_fullscreen()
