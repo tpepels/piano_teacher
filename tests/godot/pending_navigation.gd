@@ -75,6 +75,21 @@ func test_pending_start_or_resume(action: String, destination: String) -> void:
         action + " immediately followed by " + destination + " preserves the user's " + wanted + " intent: " + str(app.wire_commands))
     check(app.action_pending, "The current transport request is still being acknowledged")
 
+func test_quick_music_selection_survives_pending_pause() -> void:
+    show_state("playing")
+    app._navigate("library")
+    check(app.action_pending, "Opening the music drawer requests a pause")
+    app._open_library_piece("selected.mid")
+    check(app.pending_library_piece == "selected.mid",
+        "A quick music click is held while Pause is still in flight")
+    acknowledge("paused")
+    await process_frame
+    check(app.wire_commands == [{"action": "pause"}, {"id": "selected.mid"}],
+        "The selected file must open after Pause finishes: " + str(app.wire_commands))
+    check(app.pending_library_piece.is_empty(),
+        "Successful queue draining must not reopen a song twice")
+
+
 func test_response_before_poll() -> void:
     show_state("ready")
     app._send_action({"action": "start"})
@@ -130,6 +145,7 @@ func run() -> void:
         "start_home": test_pending_start_or_resume("start", "home")
         "response_before_poll": test_response_before_poll()
         "stop_overrides_pause": test_stop_overrides_pending_pause()
+        "quick_music_click": await test_quick_music_selection_survives_pending_pause()
         "failure_flushes_intent": test_failed_request_flushes_intent()
         _: check(false, "Unknown scenario: " + scenario)
     print("PENDING_NAVIGATION_FAILURES:", failures.size())
