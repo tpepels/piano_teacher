@@ -35,53 +35,27 @@ def import_piece(path: str | Path) -> tuple[Piece, object]:
     if path.suffix.lower() not in {".mid", ".midi", ".musicxml", ".xml", ".mxl"}:
         raise ValueError("Supported files: .mid, .midi, .musicxml, .xml, .mxl")
     converter, chord, note, stream, tempo, meter, clef, key = _music21()
-    notation = converter.parse(str(path))
+    is_midi = path.suffix.lower() in {".mid", ".midi"}
+    if is_midi:
+        piece = load_midi(path)
+    else:
+        from .xml_import import load_musicxml
+        piece = load_musicxml(path, bpm=120)
+    try:
+        notation = converter.parse(str(path))
+    except Exception as exc:
+        raise ValueError(f"Cannot convert the source notation: {exc}") from exc
     if not isinstance(notation, stream.Score):
         wrapped = stream.Score()
         wrapped.insert(0, notation)
         notation = wrapped
-    if path.suffix.lower() in {".mid", ".midi"}:
-        piece = load_midi(path)
+    if is_midi:
         return piece, notation
-    parts = list(notation.parts)
-    if not parts:
-        parts = [notation]
-    ranking = []
-    for part in parts:
-        pitches = [p.midi for item in part.flatten().notes for p in (item.pitches if isinstance(item, chord.Chord) else [item.pitch])]
-        ranking.append(sum(pitches) / len(pitches) if pitches else 60)
-    low_part = min(range(len(parts)), key=lambda i: ranking[i]) if len(parts) > 1 else -1
-    events: list[Note] = []
-    tied: dict[tuple[int, int], int] = {}
-    for index, part in enumerate(parts):
-        hand = "left" if index == low_part else "right"
-        for item in part.recurse().notes:
-            start = float(item.getOffsetInHierarchy(notation))
-            length = float(item.duration.quarterLength)
-            members = item.notes if isinstance(item, chord.Chord) else [item]
-            for member in members:
-                pitch = member.pitch.midi
-                identifier = (index, pitch)
-                tie_type = member.tie.type if member.tie is not None else None
-                if tie_type in ("continue", "stop") and identifier in tied:
-                    previous = tied[identifier]
-                    events[previous] = replace(events[previous], end=start + length)
-                else:
-                    events.append(Note(start, start + length, pitch, index, 0, hand))
-                if tie_type in ("start", "continue"):
-                    tied[identifier] = len(events) - 1 if tie_type == "start" or identifier not in tied else tied[identifier]
-                else:
-                    tied.pop(identifier, None)
-    if not events:
-        raise ValueError("The score has no playable notes")
-    signatures = [(float(t.getOffsetInHierarchy(notation)), t.numerator, t.denominator)
-                  for t in notation.recurse().getElementsByClass(meter.TimeSignature)]
     first_tempo = next(iter(notation.recurse().getElementsByClass(tempo.MetronomeMark)), None)
-    bpm = round(first_tempo.getQuarterBPM()) if first_tempo else 120
-    events.sort(key=lambda e: (e.start, e.pitch, e.track))
-    boundaries = _bar_boundaries(max(n.end for n in events), signatures)
-    phrases = _phrases(events, boundaries, 2)
-    return Piece(path.stem, bpm, tuple(events), phrases, bar_boundaries=tuple(boundaries), time_signatures=tuple(sorted(set(signatures)))), notation
+    bpm = first_tempo.getQuarterBPM() if first_tempo else 120
+    if bpm is None or not math.isfinite(bpm) or bpm <= 0:
+        raise ValueError("MusicXML tempo needs a positive numeric quarter-note BPM")
+    return replace(piece, bpm=round(bpm)), notation
 
 
 def _pitches_from_verovio(toolkit, events: list[dict]) -> dict[str, int]:
@@ -201,7 +175,8 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     except ImportError as exc:
         raise RuntimeError("Engraving requires verovio and music21: pip install -e '.[godot]'") from exc
     if isinstance(notation, LessonScore):
-        return _engrave_xml(notation.musicxml, hand, total_beats, bpm=bpm)
+        return _engrave_xml(notation.musicxml, hand, total_beats, bpm=bpm,
+                            note_bindings=notation.note_bindings, staff_clefs=notation.staff_clefs)
     sc = copy.deepcopy(notation)
     if not list(sc.recurse().getElementsByClass(stream.Measure)):
         sc.makeMeasures(inPlace=True)
@@ -244,8 +219,24 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
 
 
 def _engrave_xml(xml: str, hand: str, total_beats: float,
-                 *, bpm: float | None = None) -> EngravedScore:
+                 *, bpm: float | None = None, note_bindings: dict | None = None,
+                 staff_clefs: dict | None = None) -> EngravedScore:
     import verovio
+    if note_bindings is not None:
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(xml)
+        identities = []
+        for part in root.findall('part'):
+            for note in part.findall('.//note'):
+                if note.find('pitch') is None:
+                    continue
+                identifier = note.get('id')
+                binding = note_bindings.get(identifier)
+                if binding is None or binding['hand'] != {'RH':'right','LH':'left'}.get(part.get('id')):
+                    raise ValueError('Source-note identity/hand mapping does not match emitted notation')
+                identities.append(identifier)
+        if len(set(identities)) != len(identities) or set(identities) != set(note_bindings):
+            raise ValueError('Source-note identity mapping is missing or duplicated')
     toolkit = _create_verovio_toolkit(verovio)
     # Use one common layout for the SVGs and timing map. Timemap qstamps are
     # quarter-note units and remain correct when the practice tempo changes.
@@ -302,7 +293,10 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
     if not isinstance(events, list):
         raise ValueError("Verovio produced no note timing map")
     pitches = _pitches_from_verovio(toolkit, events)
-    layout = layout_from_pages(list(pages), events, total_beats, pitches=pitches)
+    layout = layout_from_pages(list(pages), events, total_beats, pitches=pitches,
+                               note_bindings=note_bindings)
+    if staff_clefs is not None:
+        layout['staff_clefs'] = staff_clefs
     # Geometry consumes the native event bounds; diagnostic rectangles never
     # enter the returned score or its raster/GPU textures.
     import xml.etree.ElementTree as ET

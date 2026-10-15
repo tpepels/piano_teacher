@@ -55,6 +55,7 @@ class TeachingController:
                     "beat": local - fragment_start, "source_beat": note.start,
                     "end_beat": note.end - variant.phrase.start - fragment_start,
                     "hand": note.hand,
+                    **({"source_id": note.source_id} if note.source_id else {}),
                 })
         self._targets = [attacks[beat] for beat in sorted(attacks)]
         self._target_index = 0

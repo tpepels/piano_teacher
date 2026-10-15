@@ -50,6 +50,15 @@ func run() -> void:
     var initial_size: Vector2 = app.score_content.size
     var note: Dictionary = app.score_layout["notes"][0]
     check(app.score_overlay._symbols.size() == 4, "count-in loads the score's actual clefs and rests")
+    var original_clefs: Dictionary = app.score_layout.get("staff_clefs", {})
+    var changed_clefs := {"right":{"sign":"F","line":4,"octave_change":0},
+        "left":{"sign":"G","line":2,"octave_change":0}}
+    app.score_layout["staff_clefs"] = changed_clefs
+    app._layout_moving_score()
+    check(app.score_overlay.preparation_clefs == changed_clefs,
+          "active score clefs reach the count-in through the actual UI layout")
+    app.score_layout["staff_clefs"] = original_clefs
+    app._layout_moving_score()
     var results: Array = []
     for bpm in [30, 40, 80, 120]:
         var lead: float = minf(3.0, floor(4.0 * bpm / 60.0 * 2.0) / 2.0)

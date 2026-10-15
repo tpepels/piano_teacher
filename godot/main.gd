@@ -296,6 +296,7 @@ func _visible_score_noteheads() -> int:
 func _layout_moving_score(delta: float = 0.0) -> void:
     if score_view.texture == null or score_frame == null or score_content == null:
         return
+    score_overlay.preparation_clefs = score_layout.get("staff_clefs", {})
     var viewport: Vector2 = score_frame.size
     var image: Vector2 = score_overlay.image_size
     if viewport.x < 10.0 or viewport.y < 10.0 or image.x <= 0.0 or image.y <= 0.0:

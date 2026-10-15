@@ -16,6 +16,7 @@ var lead_width_px := 0.0
 var lead_staff_lines: Array = []
 var lead_beats := 0.0
 var lead_meter: Array = [4, 4]
+var preparation_clefs: Dictionary = {}
 var _symbols: Dictionary = {}
 
 
@@ -100,8 +101,8 @@ func _draw_preparation() -> void:
         draw_line(Vector2(margin_left, sy), Vector2(first_x, sy), ink, 1.1, true)
     if lines.size() < 10:
         return
-    _draw_symbol("treble", Vector2(left - gap * 7.0, lines[3]), gap)
-    _draw_symbol("bass", Vector2(left - gap * 7.0, lines[6]), gap)
+    _draw_preparation_clef("right", left - gap * 7.0, lines, 0, gap)
+    _draw_preparation_clef("left", left - gap * 7.0, lines, 5, gap)
     _draw_meter(left - gap * 2.7, lines[0], gap)
     _draw_meter(left - gap * 2.7, lines[5], gap)
     if lead_beats <= 0.0:
@@ -113,6 +114,18 @@ func _draw_preparation() -> void:
         var x: float = first_x + (-lead_beats + float(index)) * beat_width
         _draw_symbol(name, Vector2(x, lines[2]), gap)
         _draw_symbol(name, Vector2(x, lines[7]), gap)
+
+
+func _draw_preparation_clef(hand: String, x: float, lines: Array[float], first_line: int, gap: float) -> void:
+    var fallback := {"sign":"G", "line":2} if hand == "right" else {"sign":"F", "line":4}
+    var clef: Dictionary = preparation_clefs.get(hand, fallback)
+    var sign: String = str(clef.get("sign", fallback["sign"]))
+    var line: int = clampi(int(clef.get("line", fallback["line"])), 1, 5)
+    _draw_symbol("bass" if sign == "F" else "treble", Vector2(x, lines[first_line + 5 - line]), gap)
+    var octaves: int = int(clef.get("octave_change", 0))
+    if octaves != 0:
+        var y: float = lines[first_line] - gap * 1.1 if octaves > 0 else lines[first_line + 4] + gap * 2.1
+        draw_string(ThemeDB.fallback_font, Vector2(x + gap * .35, y), "8" if absi(octaves) == 1 else "15", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(gap * 1.4)), Design.STONE)
 
 
 func _draw() -> void:

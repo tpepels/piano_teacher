@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from collections import defaultdict, deque
+from collections import defaultdict
 from statistics import median
 import re
 import mido
@@ -17,6 +17,31 @@ class Note:
     track: int
     channel: int
     hand: str = "right"
+    source_id: str = ""
+    voice: str = ""
+    spelling: tuple[str, int, int] | None = None
+
+
+def source_note_id(note: Note, index: int) -> str:
+    """Canonical imported attack identity; explicit local legacy fallback."""
+    return note.source_id or f"legacy-note-{index}"
+
+
+@dataclass(frozen=True)
+class KeySignature:
+    beat: float
+    fifths: int
+    hand: str = "both"
+    mode: str | None = None
+
+
+@dataclass(frozen=True)
+class ClefChange:
+    beat: float
+    sign: str
+    line: int
+    octave_change: int = 0
+    hand: str = "both"
 
 
 @dataclass(frozen=True)
@@ -38,10 +63,20 @@ class Piece:
     split_pitch: int = 60
     bar_boundaries: tuple[float, ...] = ()
     time_signatures: tuple[tuple[float, int, int], ...] = ()
+    key_signatures: tuple[KeySignature, ...] = ()
+    clef_changes: tuple[ClefChange, ...] = ()
 
 
 def note_name(pitch: int) -> str:
     return f"{'C C# D D# E F F# G G# A A# B'.split()[pitch % 12]}{pitch // 12 - 1}"
+
+
+def _named_hand(name: str) -> str | None:
+    if re.search(r"(^|\W)(left|lh|mano sinistra)(\W|$)", name, re.I):
+        return "left"
+    if re.search(r"(^|\W)(right|rh|mano destra)(\W|$)", name, re.I):
+        return "right"
+    return None
 
 
 def _assign_hands(notes: list[Note], names: dict[int, str], split: int) -> list[Note]:
@@ -51,10 +86,9 @@ def _assign_hands(notes: list[Note], names: dict[int, str], split: int) -> list[
     ranked = sorted(groups, key=lambda t: median(groups[t]))
     track_hands: dict[int, str] = {}
     for track, name in names.items():
-        if re.search(r"(^|\W)(left|lh|mano sinistra)(\W|$)", name, re.I):
-            track_hands[track] = "left"
-        elif re.search(r"(^|\W)(right|rh|mano destra)(\W|$)", name, re.I):
-            track_hands[track] = "right"
+        hand = _named_hand(name)
+        if hand is not None:
+            track_hands[track] = hand
     # Two piano tracks are usually left/right, even when each crosses middle C.
     if len(ranked) == 2:
         track_hands.setdefault(ranked[0], "left")
@@ -107,6 +141,8 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     if bars_per_phrase < 1:
         raise ValueError("bars_per_phrase must be >= 1")
     midi = mido.MidiFile(str(path))
+    if midi.type == 2:
+        raise ValueError("Asynchronous MIDI type 2 has no single musical timeline")
     if midi.ticks_per_beat <= 0:
         raise ValueError("SMPTE/timecode MIDI files are not supported")
     ticks = midi.ticks_per_beat
@@ -114,10 +150,12 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     names: dict[int, str] = {}
     changes: list[tuple[float, int, int]] = []
     tempos: list[tuple[int, int]] = []
+    keys: list[KeySignature] = []
+    source_end_tick = 0
     for track_idx, track in enumerate(midi.tracks):
         tick = 0
-        open_notes: dict[tuple[int, int], deque[int]] = defaultdict(deque)
-        for msg in track:
+        open_notes: dict[tuple[int, int], tuple[int, int]] = {}
+        for ordinal, msg in enumerate(track):
             tick += msg.time
             if msg.type == "track_name":
                 names[track_idx] = msg.name
@@ -125,26 +163,51 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
                 changes.append((tick / ticks, msg.numerator, msg.denominator))
             if msg.type == "set_tempo":
                 tempos.append((tick, msg.tempo))
+            if msg.type == "key_signature":
+                minor = msg.key.endswith("m")
+                key_names = ("Abm Ebm Bbm Fm Cm Gm Dm Am Em Bm F#m C#m G#m D#m A#m" if minor
+                         else "Cb Gb Db Ab Eb Bb F C G D A E B F# C#").split()
+                keys.append(KeySignature(tick / ticks, key_names.index(msg.key)-7,
+                                         mode="minor" if minor else "major"))
             if msg.type not in ("note_on", "note_off") or msg.channel == 9:
                 continue  # percussion is not piano practice material
             key = (msg.channel, msg.note)
             if msg.type == "note_on" and msg.velocity > 0:
-                open_notes[key].append(tick)
-            elif open_notes[key]:
-                start_tick = open_notes[key].popleft()
-                if tick > start_tick:
-                    notes.append(Note(start_tick / ticks, tick / ticks, msg.note, track_idx, msg.channel))
-        for (channel, pitch), starts in open_notes.items():
-            for start_tick in starts:
-                if tick > start_tick:
-                    notes.append(Note(start_tick / ticks, tick / ticks, pitch, track_idx, channel))
+                if key in open_notes:
+                    raise ValueError(f"overlapping MIDI note on track {track_idx}, channel {msg.channel}, pitch {msg.note}; use separate voices/channels")
+                open_notes[key] = tick, ordinal
+            elif key in open_notes:
+                start_tick, attack = open_notes.pop(key)
+                if tick <= start_tick:
+                    raise ValueError(f"non-positive MIDI note duration on track {track_idx}, pitch {msg.note}")
+                notes.append(Note(start_tick / ticks, tick / ticks, msg.note, track_idx, msg.channel,
+                                  source_id=f"midi-t{track_idx}-e{attack}",
+                                  voice=f"midi-t{track_idx}-c{msg.channel}"))
+            else:
+                raise ValueError(f"orphan MIDI note release on track {track_idx}, channel {msg.channel}, pitch {msg.note}")
+        if open_notes:
+            channel, pitch = next(iter(open_notes))
+            raise ValueError(f"unterminated MIDI note on track {track_idx}, channel {channel}, pitch {pitch}")
+        source_end_tick = max(source_end_tick, tick)
     if not notes:
         raise ValueError("No pitched MIDI notes found (drum-only/empty file)")
     initial_tempo = sorted(tempos)[0][1] if tempos and min(t for t, _ in tempos) == 0 else 500000
     bpm = round(60_000_000 / initial_tempo)
     notes = sorted(_assign_hands(notes, names, split_pitch), key=lambda n: (n.start, n.pitch, n.track))
-    end = max(n.end for n in notes)
+    signatures = {}
+    for beat, numerator, denominator in changes:
+        if beat in signatures and signatures[beat] != (numerator, denominator):
+            raise ValueError(f"conflicting MIDI time signatures at quarter beat {beat}")
+        signatures[beat] = numerator, denominator
+    key_contexts = {}
+    for signature in keys:
+        context = signature.fifths, signature.mode
+        if signature.beat in key_contexts and key_contexts[signature.beat] != context:
+            raise ValueError(f"conflicting MIDI key signatures at quarter beat {signature.beat}")
+        key_contexts[signature.beat] = context
+    end = max(max(n.end for n in notes), source_end_tick / ticks)
     boundaries = _bar_boundaries(end, changes)
     return Piece(Path(path).stem, bpm, tuple(notes), _phrases(notes, boundaries, bars_per_phrase),
-                 split_pitch, tuple(boundaries), tuple(sorted(set(changes))))
+                 split_pitch, tuple(boundaries), tuple(sorted(set(changes))),
+                 tuple(sorted(set(keys), key=lambda signature: (signature.beat, signature.fifths))))
 

@@ -262,7 +262,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
 
 
 def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
-                      pitches: dict[str, int] | None = None) -> dict:
+                      pitches: dict[str, int] | None = None, *, note_bindings: dict | None = None) -> dict:
     """Return exact note/rest-onset anchors for synchronized, multi-system playback.
 
     A system is selected by the *next onset* at a wrap. Between onsets in one
@@ -281,6 +281,7 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
     positioned_notes = []
     seen_note_ids = set()
     pitches = pitches or {}
+    attack_map, continuation_map = {}, defaultdict(list)
     for event in timemap:
         if "qstamp" not in event:
             continue
@@ -292,13 +293,32 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
         for identifier in note_ids + rest_ids:
             if identifier in where:
                 page, x, y, system = where[identifier]
-                groups[(page, system, round(max(0, beat), 7))].append(
+                binding = note_bindings.get(identifier) if note_bindings is not None else None
+                if note_bindings is not None and identifier in note_ids:
+                    if binding is None or pitches.get(identifier) != binding['pitch']:
+                        raise ValueError(f'Engraved note identity/pitch mapping failed: {identifier}')
+                    if abs(beat-binding['display_beat']) > 1/10080+1e-7:
+                        raise ValueError(f'Engraved source identity has an incorrect display onset: {identifier}')
+                clock_beat = binding['source_beat'] if binding and binding['is_attack'] else round(max(0,beat),7)
+                groups[(page, system, clock_beat)].append(
                     (x, y, identifier in note_ids, pages[page].ink_left[identifier]))
                 if identifier in pitches and identifier not in seen_note_ids:
-                    positioned_notes.append({"id": identifier, "beat": round(max(0, beat), 7),
-                                             "pitch": pitches[identifier], "page": page,
-                                             "x": x, "y": y, "system": system})
+                    glyph = {"id": identifier, "beat": round(max(0, beat), 7),
+                             "pitch": pitches[identifier], "page": page,
+                             "x": x, "y": y, "system": system}
+                    if binding is not None:
+                        glyph.update({key: binding[key] for key in ('source_id','is_attack','segment_index','source_beat','hand')})
+                        if binding['is_attack']:
+                            if binding['source_id'] in attack_map:
+                                raise ValueError('Duplicate mapped attack for a required source identity')
+                            attack_map[binding['source_id']] = identifier
+                        else:
+                            continuation_map[binding['source_id']].append(identifier)
+                    positioned_notes.append(glyph)
                     seen_note_ids.add(identifier)
+    if note_bindings is not None and set(note_bindings) != seen_note_ids:
+        missing = sorted(set(note_bindings)-seen_note_ids)
+        raise ValueError(f'Engraving omitted bound source-note identities: {missing[:4]}')
     if not groups:
         raise ValueError("Verovio supplied no engraved/timed note matches; cannot align playhead")
     # Each staff system is bounded by its own note positions. Even on a page
@@ -346,9 +366,13 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
             systems.append({**bounds, "page": page_index, "system": identifier,
                             "start_beat": min(beats),
                             "end_beat": min(next_beats) if next_beats else total_beats})
-    return {"pages": len(svgs), "beats": total_beats, "anchors": anchors, "systems": systems,
+    result = {"pages": len(svgs), "beats": total_beats, "anchors": anchors, "systems": systems,
             "notes": sorted(positioned_notes, key=lambda n: (n["beat"], n["pitch"], n["id"])),
             "widths": [p.width for p in pages], "heights": [p.height for p in pages]}
+    if note_bindings is not None:
+        result.update(mapping_schema='source-note-v1', attack_map=attack_map,
+                      continuation_map=dict(continuation_map))
+    return result
 
 
 def locate_beat(layout: dict, beat: float) -> dict:

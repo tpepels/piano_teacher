@@ -5,7 +5,7 @@ notes remain in the textual assessment and are reported separately.
 """
 from __future__ import annotations
 
-from .music import Phrase, note_name
+from .music import Phrase, note_name, source_note_id
 from .practice import Assessment
 from .score_geometry import locate_beat
 
@@ -13,11 +13,18 @@ from .score_geometry import locate_beat
 def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layout: dict, *, played_from_beat: float = 0.0) -> dict:
     """Return positioned note errors and leftover played notes for one attempt.
 
-    Engraving matches require both pitch and onset, with a bounded tolerance
-    for MIDI-to-notation quantization. Each glyph can be used only once, so
-    repeated notes and unisons never get attached to the same notehead.
+    Production exercises map canonical source IDs directly to their attack
+    glyphs. Anonymous hand-built legacy layouts retain a limited pitch/onset
+    compatibility path; imported notes cannot enter that fallback.
     """
     glyphs = list(layout.get("notes", []))
+    strict = layout.get('mapping_schema') == 'source-note-v1'
+    if strict:
+        from .lesson_validation import require_lesson_alignment
+        require_lesson_alignment(phrase,layout,'both')
+    elif any(entry.note.source_id for entry in assessment.notes):
+        raise ValueError('Canonical source feedback requires explicit engraved identity mapping')
+    by_id = {glyph.get('id'): glyph for glyph in glyphs}
     unused = set(range(len(glyphs)))
     result = []
     unmapped = 0
@@ -29,12 +36,22 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
             if glyphs[i].get("pitch") == entry.note.pitch
             and abs(float(glyphs[i]["beat"]) - beat) <= 0.125
         ]
-        if not options:
+        if strict:
+            index = next((i for i,note in enumerate(phrase.notes) if note is entry.note),None)
+            if index is None:
+                index = next((i for i,note in enumerate(phrase.notes) if note == entry.note),None)
+            source = source_note_id(entry.note,index) if index is not None else entry.note.source_id
+            glyph = by_id.get(layout['attack_map'].get(source))
+            if glyph is None:
+                unmapped += 1
+                continue
+        elif not options:
             unmapped += 1
             continue
-        _, index = min(options)
-        unused.remove(index)
-        glyph = glyphs[index]
+        else:
+            _, index = min(options)
+            unused.remove(index)
+            glyph = glyphs[index]
         result.append({
             "status": entry.status,
             "page": int(glyph["page"]),
@@ -42,6 +59,7 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
             "y": float(glyph["y"]),
             "pitch": entry.note.pitch,
             "note_id": glyph["id"],
+            **({'source_id':glyph['source_id']} if strict else {}),
             "beat": beat,
         })
     # The extra note has no notated notehead. Use the real beat-time x
