@@ -181,14 +181,19 @@ def test_perform_callback_summary_points_to_later_chunk_then_practice_weak_is_a_
     assert any(mark['status'] == 'wrong' for mark in review['feedback_marks'])
     e.control('practice_weak')
     waiting = e.state()
-    assert waiting['mode'] == 'practice' and waiting['phase'] == 'loading'
+    assert waiting['mode'] == 'practice' and waiting['phase'] == 'ready'
     assert waiting['retry_range']['start_beat'] == 8
-    started = acknowledge(e)
+    assert e.review_end_beat == 16
+    e.start()  # A deliberate retry waits for the pianist, not score-ready.
+    started = e.state()
     assert started['phase'] == 'count_in' and started['play_from_beat'] == 8
     assert started['bpm'] == started['target_bpm'] == 80
-    assert finish_take(e, now, 16)['phase'] == 'recovering'
+    now[0] = e.run_at + (16-8)*60/80 + .21
+    reviewed = e.state()
+    assert reviewed['phase'] == 'review' and not reviewed['running']
+    assert reviewed['performance_summary']['missed'] > 0
     assert not e.plan.mastered and e.plan.streak == 0
-    assert after_break(e, now)['play_from_beat'] == 0
+    assert e.next_at == 0  # Never silently continue beyond a selected retry.
 
 
 def test_clean_perform_does_not_fill_practice_clean_streak_or_master_stage(lesson):
