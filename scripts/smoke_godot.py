@@ -174,6 +174,22 @@ def run(file: Path | None = None) -> int:
                 geom = api("/score/layout")
                 print("REAL SCORE NOTE GEOMETRY:", json.dumps(geom.get("notes", [])[:4]), flush=True)
                 print("REAL SCORE CURSOR ANCHORS:", json.dumps(geom.get("anchors", [])[:4]), flush=True)
+                from xml.etree import ElementTree as ET
+                with urlopen(URL + "/score.svg?page=0", timeout=15) as response:
+                    root = ET.fromstring(response.read())
+                print("REAL SVG ROOT:", json.dumps(root.attrib), flush=True)
+                parent_map = {child: parent for parent in root.iter() for child in parent}
+                first_note = next((e for e in root.iter()
+                                   if "note" in e.get("class", "").split()), None)
+                if first_note is not None:
+                    glyph = next((e for e in first_note.iter()
+                                  if e.tag.rsplit("}", 1)[-1] == "use"), first_note)
+                    chain = []
+                    node = glyph
+                    while node is not None:
+                        chain.append({"tag": node.tag.rsplit("}", 1)[-1], **node.attrib})
+                        node = parent_map.get(node)
+                    print("REAL SVG NOTE TRANSFORMS:", json.dumps(chain[:12]), flush=True)
                 started = api("/control", {"action": "start"})
                 if started.get("phase") != "count_in" or not started.get("preview_only"):
                     raise RuntimeError(f"Preview did not enter count-in: {started}")
