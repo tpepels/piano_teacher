@@ -173,6 +173,15 @@ def build_lesson_score(phrase: Phrase) -> LessonScore:
                     continue
                 start = _ticks(note.start-phrase.start)
                 end = _ticks(min(note.end, phrase.end)-phrase.start)
+                # MIDI key-off timings commonly stop slightly before a beat
+                # (e.g. 0.90 beats). That is expressive release timing, not
+                # necessarily a notated 0.10-beat rest. Snap *only* a nearby
+                # note ending to a 16th-note boundary for readable MusicXML.
+                # The original Note retains its exact timestamp for scoring.
+                grid = DIVISIONS // 4
+                rounded_end = round(end/grid)*grid
+                if 0 < rounded_end - start and abs(rounded_end-end) <= _ticks(.12):
+                    end = min(rounded_end, _ticks(phrase.end-phrase.start))
                 if start >= bar_end or end <= bar_start:
                     continue
                 segment_start=max(start,bar_start)

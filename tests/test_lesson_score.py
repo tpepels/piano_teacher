@@ -79,3 +79,27 @@ def test_three_four_has_correct_beat_length_and_inactive_rest():
 def test_malformed_pitch_raises_instead_of_silent_corruption():
     with pytest.raises(ValueError,match="Invalid MIDI pitch"):
         build_lesson_score(phrase([note(300,0,1)]))
+
+
+def test_early_midi_release_uses_conventional_printed_duration():
+    # Typical piano tutorial MIDI: each key is released 0.1 quarter early.
+    # Notation must be a normal quarter, not an exotic 0.9-beat duration
+    # followed by an unengraveable 0.1-beat rest.
+    source=phrase([note(67,float(i),float(i)+.9) for i in range(8)])
+    xml=build_lesson_score(source).musicxml
+    measures=ET.fromstring(xml).find("./part[@id='RH']").findall("measure")
+    assert len(measures)==2
+    for measure in measures:
+        sounding=[n for n in measure.findall("note") if n.find("pitch") is not None]
+        assert len(sounding)==4
+        assert all(int(n.findtext("duration"))==DIVISIONS for n in sounding)
+        assert not any(n.find("rest") is not None for n in measure.findall("note"))
+    # Lesson source remains precise; the evaluator uses these unchanged notes.
+    assert source.notes[0].end == .9
+
+
+def test_nontrivial_release_remains_precise_when_not_near_a_grid():
+    source=phrase([note(60,0,.62)])
+    xml=build_lesson_score(source).musicxml
+    item=ET.fromstring(xml).find("./part[@id='RH']/measure/note")
+    assert int(item.findtext("duration"))==round(.62*DIVISIONS)
