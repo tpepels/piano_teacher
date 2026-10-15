@@ -14,6 +14,7 @@ var _expected: Dictionary = {}
 var _heard: Dictionary = {}
 var _registers: Array[Dictionary] = []
 var _keys: Dictionary = {}
+var ui_scale := 1.0
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -34,13 +35,23 @@ func _label(color: Color) -> Label:
     var label := Label.new()
     label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     label.add_theme_color_override("font_color", color)
-    label.add_theme_font_size_override("font_size", 12)
+    label.add_theme_font_size_override("font_size", _ui_font(13))
     label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     add_child(label)
     return label
 
+func _ui_font(base: int) -> int:
+    return maxi(12, int(round(float(base) * ui_scale)))
+
+func set_ui_scale(value: float) -> void:
+    ui_scale = value
+    if is_instance_valid(_expected_label):
+        _expected_label.add_theme_font_size_override("font_size", _ui_font(13))
+        _heard_label.add_theme_font_size_override("font_size", _ui_font(13))
+    _update_compact_height()
+
 func _update_compact_height() -> void:
-    custom_minimum_size.y = 88 if get_viewport_rect().size.y < 720 else 100
+    custom_minimum_size.y = (88 if get_viewport_rect().size.y < 720 else 100) * ui_scale
     _layout_keys()
 
 func update_state(teaching: Dictionary) -> void:
@@ -128,9 +139,9 @@ func _layout_keys() -> void:
     if not is_instance_valid(_expected_label):
         return
     _expected_label.position = Vector2.ZERO
-    _expected_label.size = Vector2(maxf(0, size.x * .58 - 8), 20)
+    _expected_label.size = Vector2(maxf(0, size.x * .58 - 8), 20 * ui_scale)
     _heard_label.position = Vector2(size.x * .58, 0)
-    _heard_label.size = Vector2(maxf(0, size.x * .42), 20)
+    _heard_label.size = Vector2(maxf(0, size.x * .42), 20 * ui_scale)
     var white_total := 0
     for register in _registers:
         var white_count := 0
@@ -144,8 +155,8 @@ func _layout_keys() -> void:
         return
     var width := maxf(1, (size.x - REGISTER_GAP * (_registers.size() - 1)) / white_total)
     var x := 0.0
-    var top := 24.0
-    var height := maxf(1, size.y - top - 2)
+    var top := 28.0 * ui_scale
+    var height := maxf(1, size.y - top - 2 * ui_scale)
     for register in _registers:
         var begin := x
         for pitch in range(int(register.low), int(register.high) + 1):
@@ -194,7 +205,7 @@ func _draw() -> void:
             elif bool(key.heard) or int(pitch) % 12 == 0:
                 label = _pitch_name(int(pitch))
             if not label.is_empty():
-                var font_size := 11 if black else 12
+                var font_size := _ui_font(11 if black else 12)
                 var text_width := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
                 var position := Vector2(rect.get_center().x - text_width / 2, rect.end.y - 4)
                 draw_string(font, position, label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size,
