@@ -50,7 +50,18 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
                 elif absf(at_beat - first_beat) <= .000001:
                     first_ink = minf(first_ink, float(anchor.get("ink_left", anchor.get("x", 0.0))))
             var staff_lines: Array = system.get("staff_lines", [])
-            if is_finite(first_ink) and staff_lines.size() >= 2:
+            var tied_into_system := false
+            for note in layout.get("notes", []):
+                if int(note.get("page", -1)) != page or str(note.get("system", "")) != str(system.get("system", "")):
+                    continue
+                if absf(float(note.get("beat", INF)) - first_beat) <= .000001 \
+                        and note.has("is_attack") and not bool(note["is_attack"]):
+                    # A continuation tie can start to the left of the
+                    # notehead; the glyph's ink_left does not encompass that
+                    # entire curve. Retain this header rather than clip music.
+                    tied_into_system = true
+                    break
+            if not tied_into_system and is_finite(first_ink) and staff_lines.size() >= 2:
                 var gap_px: float = absf(float(staff_lines[1]) - float(staff_lines[0])) * source_size.y
                 var ink_px: float = first_ink * source_size.x
                 var guard_px: float = maxf(10.0, gap_px * 1.7)
