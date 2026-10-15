@@ -29,6 +29,9 @@ class FixtureApp extends "res://main.gd":
     func _request_layout() -> void:
         pass
 
+    func _poll() -> void:
+        pass
+
 var failures: Array[String] = []
 var app: FixtureApp
 
@@ -372,6 +375,78 @@ func test_learner_progression() -> void:
             found = true
     check(found, "Saved trouble has a visible functioning revisit action")
 
+func test_handsfree_midi_start_and_readability() -> void:
+    var ready := state("ready")
+    ready["mode"] = "perform"
+    ready["device"] = "Kawai CA-49"
+    ready["midi_input_count"] = 0
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    app.commands.clear()
+    ready["midi_input_count"] = 1
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    expect_command("start", "Fresh piano note starts ready Perform mode")
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    check(app.commands.is_empty(), "Duplicate MIDI snapshots cannot start twice")
+    app._navigate("settings")
+    ready["midi_input_count"] = 2
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    check(app.commands.is_empty(), "Checking MIDI in Settings never starts practice")
+    app._navigate("practice")
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    check(app.commands.is_empty(), "Returning from Settings does not replay an old key")
+    ready["midi_input_count"] = 3
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    expect_command("start", "New note after returning starts Perform")
+    var playing := ready.duplicate(true)
+    playing["phase"] = "playing"
+    playing["running"] = true
+    playing["midi_input_count"] = 4
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(playing).to_utf8_buffer())
+    check(app.commands.is_empty(), "Playing notes do not restart the transport")
+    var learning := state("guided_wait")
+    learning["mode"] = "learn"
+    learning["device"] = "Kawai CA-49"
+    learning["midi_input_count"] = 5
+    learning["teaching"] = {"completed":false, "target_index":0,"target_count":1}
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(learning).to_utf8_buffer())
+    check(app.commands.is_empty(), "Learn mode still uses piano notes for teaching")
+    learning["phase"] = "guided_complete"
+    learning["teaching"] = {"completed":true,"target_index":1,"target_count":1,"has_more_units":true}
+    learning["midi_input_count"] = 6
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(learning).to_utf8_buffer())
+    check(app.commands.is_empty(), "Note that completes the idea cannot immediately skip it")
+    learning["midi_input_count"] = 7
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(learning).to_utf8_buffer())
+    expect_command("learn_next", "Fresh note after an idea advances hands-free")
+    var finished := state("performance_complete")
+    finished["mode"] = "perform"
+    finished["device"] = "Kawai CA-49"
+    finished["midi_input_count"] = 8
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(finished).to_utf8_buffer())
+    check(app.commands.is_empty(), "Phase transition cannot reuse a previous key")
+    finished["midi_input_count"] = 9
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(finished).to_utf8_buffer())
+    expect_command("start", "Fresh note repeats a completed warm-up")
+    # There is no mode change when a warm-up is opened from the library.
+    app.last_post_path = "/library/open"
+    app.action_pending = true
+    app._on_action(0, 200, PackedStringArray(), JSON.stringify(ready).to_utf8_buffer())
+    check(app.commands.is_empty(), "Opening an existing Perform warm-up must not force Learn")
+
+    root.size = Vector2i(2048, 1280)
+    await process_frame
+    await process_frame
+    app._update_responsive_layout()
+    check(app.ui_scale >= 1.5, "Fullscreen UI uses readable scale")
+    check(app.progress_label.get_theme_font_size("font_size") >= 22,
+        "Progress labels are readable at high resolution")
+    check(app.start_button.get_theme_font_size("font_size") >= 22,
+        "Start button remains readable at high resolution")
+    check(app.hint_keyboard.custom_minimum_size.y >= 145,
+        "Piano hint diagram scales with text instead of staying microscopic")
+    check(app.practice_controls.get_global_rect().end.x <= root.size.x + 1,
+        "Scaled controls remain inside the full-size window")
+
 func run() -> void:
     root.mode = Window.MODE_WINDOWED
     root.size = Vector2i(800, 600)
@@ -401,6 +476,7 @@ func run() -> void:
         "pause_choices": test_pause_choices()
         "focus_trap": await test_focus_trap()
         "learner_progression": test_learner_progression()
+        "handsfree_midi": await test_handsfree_midi_start_and_readability()
         _: check(false, "Unknown interaction scenario: " + scenario)
     print("PRACTICE_INTERACTION_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)
