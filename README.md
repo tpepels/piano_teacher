@@ -84,8 +84,9 @@ python scripts/verify_library_pipeline.py \
 It checks the first, middle, and last **playable** source measure of each
 file. Each test uses the production `PracticeEngine`, real Verovio glyph
 and timing data, actual PNG raster pages, and the real Godot score-strip
-assembler. It also checks next/previous exercise navigation, without starting
-timed playing or awarding mastery. A failure does not stop subsequent files.
+assembler. It checks count-in, the advancing timed-preview clock and
+next/previous exercise navigation, without recording piano input or awarding
+mastery. A failure does not stop subsequent files.
 
 The result is `/tmp/piano-phase6-report/report.json`. For each numbered
 file, the output directory contains a worker log, source-measure manifests,
