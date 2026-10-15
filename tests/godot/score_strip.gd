@@ -138,6 +138,9 @@ func run() -> void:
                     first_ink_offset = float(src_right.x) * float(destination.source_size.x) - float(destination.crop.position.x)
                 if int(destination.source_page) == int(src_left.page) and str(destination.source_system) == str(src_left.system):
                     previous_tail = float(destination.crop.end.x) - float(src_left.x) * float(destination.source_size.x)
+                    if int(destination.get("splice_left", -1)) >= 0:
+                        previous_tail -= float(int(destination.get("splice_right", -1)) -
+                            int(destination.get("splice_left", -1)))
                     var final_barline: float = float(destination.system.get("last_barline_x", -1.0))
                     if final_barline >= 0.0:
                         trailing_after_barline = float(destination.crop.end.x) - final_barline * float(destination.source_size.x)
