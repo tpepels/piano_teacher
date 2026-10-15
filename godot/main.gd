@@ -566,6 +566,7 @@ func _mount_overlays() -> void:
     overlay_root.add_child(overlay_backdrop)
     overlay_drawer = PanelContainer.new()
     overlay_drawer.name = "ContextDrawer"
+    overlay_drawer.clip_contents = true
     overlay_drawer.mouse_filter = Control.MOUSE_FILTER_STOP
     var style := Design.surface(Design.PANEL, 12)
     style.set_border_width_all(2)
@@ -587,9 +588,17 @@ func _resize_overlay_drawer() -> void:
     var viewport: Vector2 = size
     var drawer_width: float = viewport.x if viewport.x <= 700 else minf(
         1000.0, maxf(500.0, viewport.x * 0.72))
-    overlay_drawer.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-    overlay_drawer.position = Vector2(viewport.x - drawer_width, 0.0)
-    overlay_drawer.size = Vector2(drawer_width, viewport.y)
+    # Right-anchored offsets must be relative to the RIGHT edge. Setting
+    # both global position and size after PRESET_TOP_RIGHT can shrink the
+    # panel to its minimum width on resize (real 1536×960 screenshot).
+    overlay_drawer.anchor_left = 1.0
+    overlay_drawer.anchor_right = 1.0
+    overlay_drawer.anchor_top = 0.0
+    overlay_drawer.anchor_bottom = 1.0
+    overlay_drawer.offset_left = -drawer_width
+    overlay_drawer.offset_right = 0.0
+    overlay_drawer.offset_top = 0.0
+    overlay_drawer.offset_bottom = 0.0
 
 
 func _go_back() -> void:
@@ -725,7 +734,7 @@ func _build_interface() -> void:
     _card_body(settings_card, 32).add_child(settings_content)
     settings_content.add_child(_label("MUSIC LIBRARY", 13, ACCENT, true))
     settings_content.add_child(_label("Piano Teacher scans this folder and its subfolders automatically.", 15, MUTED))
-    var folder_row := BoxContainer.new()
+    var folder_row := VBoxContainer.new()
     folder_controls = folder_row
     folder_row.add_theme_constant_override("separation", 12)
     settings_content.add_child(folder_row)
@@ -737,20 +746,23 @@ func _build_interface() -> void:
     folder_edit.add_theme_color_override("font_placeholder_color", MUTED)
     folder_edit.text_submitted.connect(func(_text: String): _save_folder())
     folder_row.add_child(folder_edit)
-    folder_row.add_child(_button("Browse…", _browse_folder))
-    folder_row.add_child(_button("Save folder", _save_folder, true))
+    var folder_actions := HFlowContainer.new()
+    folder_actions.add_theme_constant_override("h_separation", 12)
+    folder_actions.add_theme_constant_override("v_separation", 8)
+    folder_row.add_child(folder_actions)
+    folder_actions.add_child(_button("Browse…", _browse_folder))
+    folder_actions.add_child(_button("Save folder", _save_folder, true))
     settings_content.add_child(_label("PIANO INPUT", 13, ACCENT, true))
-    var device_row := HBoxContainer.new()
+    var device_row := HFlowContainer.new()
     device_row.add_theme_constant_override("separation", 12)
     settings_content.add_child(device_row)
     device_button = _button("Choose USB MIDI piano", _show_devices)
     device_row.add_child(device_button)
     device_row.add_child(_button("Refresh devices", _request_devices))
-    device_row.add_child(_space())
     input_activity_label = _label("Connect your MIDI piano, then play a note to check input.", 15, MUTED)
     settings_content.add_child(input_activity_label)
     settings_content.add_child(_label("PRACTICE", 13, ACCENT, true))
-    var tempo_row := HBoxContainer.new()
+    var tempo_row := HFlowContainer.new()
     tempo_row.add_theme_constant_override("separation", 12)
     settings_content.add_child(tempo_row)
     tempo_row.add_child(_label("Target tempo", 16, INK))
@@ -764,7 +776,8 @@ func _build_interface() -> void:
     apply_tempo_button = _button("Apply tempo", func(): _send_action({"action": "tempo", "bpm": int(tempo_setting.value)}))
     tempo_row.add_child(apply_tempo_button)
     metronome_toggle = CheckButton.new()
-    metronome_toggle.text = "Metronome during practice · count-in always audible"
+    metronome_toggle.text = "Metronome during practice"
+    metronome_toggle.tooltip_text = "Count-in is always audible, even when metronome is off"
     metronome_toggle.toggled.connect(func(enabled: bool): _send_post("/settings", {"metronome": enabled}))
     settings_content.add_child(metronome_toggle)
     settings_content.add_child(_label("DISPLAY", 13, ACCENT, true))
@@ -1105,8 +1118,6 @@ func _update_responsive_layout() -> void:
         panel.add_theme_constant_override("margin_bottom", 14 if compact else 19)
     if home_cards != null:
         home_cards.vertical = width < 1380
-    if folder_controls != null:
-        folder_controls.vertical = width < 1000
     _resize_overlay_drawer()
     if practice_header == null:
         return
