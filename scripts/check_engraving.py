@@ -11,15 +11,22 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from piano_teacher.score import import_piece, render_layout
 from piano_teacher.raster import rasterize_score
+from piano_teacher.lesson_score import build_lesson_score
+from piano_teacher.lesson_validation import require_lesson_alignment
 
 
 def check(path: Path, output: Path | None = None) -> dict:
-    piece, notation = import_piece(path)
+    piece, _ = import_piece(path)
     if not piece.phrases:
         raise ValueError("There are no practice passages in this file")
     passage = piece.phrases[0]
+    notation = build_lesson_score(passage, boundaries=piece.bar_boundaries,
+                                 time_signatures=piece.time_signatures,
+                                 key_signatures=piece.key_signatures,
+                                 clef_changes=piece.clef_changes)
     score = render_layout(notation, passage.first_bar, passage.last_bar, "both",
                           total_beats=passage.end - passage.start)
+    require_lesson_alignment(passage, score.layout, "both")
     png = rasterize_score(score.pages[0])
     if output is not None:
         output.write_bytes(png)

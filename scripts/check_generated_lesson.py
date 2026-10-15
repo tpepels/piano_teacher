@@ -19,7 +19,9 @@ def check(path: Path, output_dir: Path | None = None, *, complete_song: bool = F
     print(f"Song: {piece.title}; {len(piece.notes)} source notes; {len(plan.exercises)} passages")
     for i,stage in enumerate(plan.variants):
         notation=build_lesson_score(stage.phrase, boundaries=piece.bar_boundaries,
-                                    time_signatures=piece.time_signatures)
+                                    time_signatures=piece.time_signatures,
+                                    key_signatures=piece.key_signatures,
+                                    clef_changes=piece.clef_changes)
         engraving=render_layout(notation,stage.phrase.first_bar,stage.phrase.last_bar,
                                  plan.hand,total_beats=stage.phrase.end-stage.phrase.start,
                                  bpm=plan.bpm)

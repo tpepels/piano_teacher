@@ -24,7 +24,7 @@ from .feedback import project_assessment
 from .library import ScoreLibrary
 from .raster import rasterize_score
 from .recovery import check_two_bar_window
-from .music import Phrase
+from .music import Phrase, source_note_id
 from .lesson_score import build_lesson_score
 from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats
@@ -570,6 +570,9 @@ class PracticeEngine:
         source = {f"{self.plan.identity}:{index}": note for index, note in
                   zip(self.plan.active_variant.source_indices, self.plan.active_variant.notes)}
         phrase = self.display_phrase()
+        layout = self._layout_cache.layout
+        glyphs = {glyph["id"]: glyph for glyph in layout.get("notes", [])}
+        local_indices = {id(note): index for index, note in enumerate(phrase.notes)}
         settled = {entry["id"]: entry for entry in snapshot.get("note_feedback", [])}
         for entry in snapshot.get("expected_notes", []):
             if settled.get(entry["id"], {}).get("status") != "wrong":
@@ -579,11 +582,14 @@ class PracticeEngine:
             note = source.get(identifier)
             if note is None:
                 continue
-            candidates = [g for g in self._layout_cache.layout.get("notes", [])
-                if g.get("pitch") == note.pitch and abs(g["beat"]-(note.start-phrase.start)) < .125]
-            if candidates:
-                glyph = min(candidates, key=lambda g: abs(g["beat"]-(note.start-phrase.start)))
-                marks.append({**glyph, "source_id": identifier, "status": entry["status"],
+            local_index = local_indices.get(id(note))
+            if local_index is None:
+                continue
+            canonical_id = source_note_id(note, local_index)
+            glyph = glyphs.get(layout.get("attack_map", {}).get(canonical_id))
+            if (glyph is not None and glyph.get("is_attack")
+                    and glyph.get("pitch") == note.pitch and glyph.get("hand") == note.hand):
+                marks.append({**glyph, "target_id": identifier, "status": entry["status"],
                               "hint_used": bool(entry.get("hint_used", False))})
         return marks
 
@@ -626,7 +632,9 @@ class PracticeEngine:
                      "duration_seconds": (audio_end-variant.phrase.start)*60/bpm, "ready": False,
                      "stage_key": self.plan.identity,
                      "source_ids": [f"{self.plan.identity}:{index}"
-                                    for index in variant.source_indices]}
+                                    for index in variant.source_indices],
+                     "canonical_source_ids": [source_note_id(note, index)
+                                              for index, note in enumerate(variant.notes)]}
         revision, cache = self.score_revision, self._demo_cache
         # Waveform synthesis never holds the transport/MIDI lock. Immutable
         # inputs and the token+revision guard make Stop/navigation authoritative
@@ -1329,7 +1337,9 @@ class PracticeEngine:
                     or self._layout_bpm != p.bpm):
                 phrase=self.display_phrase()
                 notation=build_lesson_score(phrase, boundaries=p.piece.bar_boundaries,
-                                            time_signatures=p.piece.time_signatures)
+                                            time_signatures=p.piece.time_signatures,
+                                            key_signatures=p.piece.key_signatures,
+                                            clef_changes=p.piece.clef_changes)
                 layout = render_layout(notation,phrase.first_bar,phrase.last_bar,p.hand,
                                        total_beats=phrase.end - phrase.start, bpm=p.bpm)
                 require_lesson_alignment(phrase, layout.layout, p.hand)

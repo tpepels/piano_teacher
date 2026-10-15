@@ -4,11 +4,13 @@ The same ExerciseVariant.phrase is used for grading, recovery and engraving.
 No notes from the imported score can leak into a simplified lesson.
 """
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from collections import defaultdict
+import hashlib
+import math
 from xml.etree import ElementTree as ET
-from .music import Phrase
+from .music import Phrase, source_note_id
 from .measure_grid import phrase_grid
 
 DIVISIONS = 10080
@@ -18,6 +20,8 @@ DIVISIONS = 10080
 class LessonScore:
     musicxml: str
     phrase: Phrase
+    note_bindings: dict = field(default_factory=dict)
+    staff_clefs: dict = field(default_factory=dict)
 
 
 def _ticks(beat: float) -> int:
@@ -25,7 +29,7 @@ def _ticks(beat: float) -> int:
 
 
 def _signature(beats: float) -> tuple[int, int]:
-    # Imported time signature preservation beyond bar length is Phase 2.
+    # Only a fallback when the source supplies no explicit meter context.
     fraction = Fraction(beats).limit_denominator(16)
     if abs(float(fraction) - beats) > .005:
         raise ValueError(f"Cannot express exercise bar duration: {beats}")
@@ -34,17 +38,22 @@ def _signature(beats: float) -> tuple[int, int]:
     return fraction.numerator, 4 * fraction.denominator
 
 
-def _pitch(parent: ET.Element, value: int) -> None:
+def _pitch(parent: ET.Element, value: int, spelling=None) -> None:
     chromatic = ("C", "C", "D", "D", "E", "F", "F", "G", "G", "A", "A", "B")
     alterations = (0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0)
-    if not 0 <= value <= 127:
+    if not isinstance(value, int) or isinstance(value, bool) or not 0 <= value <= 127:
         raise ValueError(f"Invalid MIDI pitch {value}")
     p = ET.SubElement(parent, "pitch")
     index = value % 12
-    ET.SubElement(p, "step").text = chromatic[index]
-    if alterations[index]:
-        ET.SubElement(p, "alter").text = "1"
-    ET.SubElement(p, "octave").text = str(value // 12 - 1)
+    step, alter, octave = spelling or (chromatic[index], alterations[index], value // 12 - 1)
+    if (step not in 'CDEFGAB' or len(step) != 1 or not isinstance(alter, int)
+            or not isinstance(octave, int)
+            or (octave+1)*12+dict(C=0,D=2,E=4,F=5,G=7,A=9,B=11)[step]+alter != value):
+        raise ValueError(f"Pitch spelling {spelling} does not represent MIDI pitch {value}")
+    ET.SubElement(p, "step").text = step
+    if alter:
+        ET.SubElement(p, "alter").text = str(alter)
+    ET.SubElement(p, "octave").text = str(octave)
 
 
 def _type(duration: int) -> tuple[str, bool] | None:
@@ -61,6 +70,8 @@ def _type(duration: int) -> tuple[str, bool] | None:
 
 def _duration_parts(duration: int) -> tuple[int, ...]:
     """Spell compounds without relying on Verovio to infer missing types."""
+    if _tuplet_type(duration) is not None:
+        return (duration,)
     ordinary = sorted({round(beats * DIVISIONS * dot)
                        for beats in (4, 2, 1, .5, .25, .125, .0625)
                        for dot in (1, 1.5)}, reverse=True)
@@ -75,15 +86,27 @@ def _duration_parts(duration: int) -> tuple[int, ...]:
     return tuple(parts)
 
 
+def _tuplet_type(duration: int):
+    for beats,label in ((4,'whole'),(2,'half'),(1,'quarter'),(.5,'eighth'),(.25,'16th'),(.125,'32nd'),(.0625,'64th')):
+        for actual,normal in ((3,2),(5,4),(7,4),(9,8)):
+            ticks = beats*DIVISIONS*normal/actual
+            if abs(ticks-round(ticks)) < 1e-8 and duration == round(ticks):
+                return label,actual,normal
+    return None
+
+
 def _append_note(measure: ET.Element, pitch: int | None, duration: int,
-                 voice: int, *, chord=False, begin_tie=False, end_tie=False) -> None:
+                 voice: int, *, chord=False, begin_tie=False, end_tie=False,
+                 spelling=None, identifier: str | None = None) -> None:
     el = ET.SubElement(measure, "note")
+    if identifier is not None:
+        el.set('id', identifier)
     if chord:
         ET.SubElement(el, "chord")
     if pitch is None:
         ET.SubElement(el, "rest")
     else:
-        _pitch(el, pitch)
+        _pitch(el, pitch, spelling)
     ET.SubElement(el, "duration").text = str(duration)
     ET.SubElement(el, "voice").text = str(voice)
     spelling = _type(duration)
@@ -95,8 +118,9 @@ def _append_note(measure: ET.Element, pitch: int | None, duration: int,
         # MIDI onsets can lie between ordinary note values. MusicXML duration
         # alone is insufficient: Verovio derives its timemap from type and
         # time-modification. Preserve the integer duration with an exact ratio.
-        ET.SubElement(el, "type").text = "64th"
-        ratio = Fraction(duration, DIVISIONS // 16)
+        tuplet = _tuplet_type(duration)
+        ET.SubElement(el, "type").text = tuplet[0] if tuplet else "64th"
+        ratio = Fraction(tuplet[2],tuplet[1]) if tuplet else Fraction(duration, DIVISIONS // 16)
         modification = ET.SubElement(el, "time-modification")
         ET.SubElement(modification, "actual-notes").text = str(ratio.denominator)
         ET.SubElement(modification, "normal-notes").text = str(ratio.numerator)
@@ -120,66 +144,107 @@ def _append_note(measure: ET.Element, pitch: int | None, duration: int,
         ET.SubElement(notations, "tuplet", type="stop", number="1")
 
 
-def _append_event(measure: ET.Element, pitches: list[int] | list[None], duration: int,
-                  voice: int, *, begin_tie=False, end_tie=False) -> None:
+def _append_event(measure: ET.Element, tones: list, duration: int,
+                  voice: int, *, begin_tie=False, end_tie=False, display_start=0,
+                  bindings=None, counts=None) -> None:
     parts = _duration_parts(duration)
+    position = display_start
     for index, length in enumerate(parts):
         # Emit every chord tone together in each tied segment. Splitting each
         # pitch independently would attach chord tags to the wrong time slot.
-        for chord_index, pitch in enumerate(pitches):
+        for chord_index, tone in enumerate(tones):
+            pitch = tone['pitch'] if tone is not None else None
+            identifier = None
+            if tone is not None:
+                source = tone['source_id']
+                segment = counts.get(source, 0)
+                identifier = 'pt' + hashlib.sha256(source.encode()).hexdigest()[:32] + 's' + str(segment)
+                if identifier in bindings:
+                    raise ValueError('Duplicate emitted source-note identity')
+                bindings[identifier] = {key: tone[key] for key in ('source_id','source_beat','pitch','hand')}
+                bindings[identifier].update(is_attack=segment == 0, segment_index=segment,
+                                             display_beat=position/DIVISIONS)
+                counts[source] = segment+1
             _append_note(measure, pitch, length, voice, chord=chord_index > 0,
                          begin_tie=begin_tie or index > 0,
-                         end_tie=end_tie or index < len(parts)-1)
+                         end_tie=end_tie or index < len(parts)-1,
+                         spelling=tone.get('spelling') if tone else None, identifier=identifier)
+        position += length
 
 
-def _render_measure(measure: ET.Element, segments: list[tuple[int, int, int, bool, bool]],
-                    length: int) -> None:
-    # Merge simultaneous equal-length notes into chords, assign overlapping
-    # notes to independent voices, fill gaps with rests.
-    chords = defaultdict(list)
-    for start, end, pitch, begin_tie, end_tie in segments:
-        chords[start, end, begin_tie, end_tie].append(pitch)
-    events = []
-    for (start, end, first, last), pitches in chords.items():
-        # Same-pitch unisons from different source tracks are separate
-        # assessable events; retain one in each independent voice.
-        remaining = sorted(pitches)
-        while remaining:
-            layer = sorted(set(remaining))
-            events.append((start, end, first, last, layer))
-            for pitch in layer:
-                remaining.remove(pitch)
-    events.sort()
-    lanes: list[list[tuple]] = []
-    endings: list[int] = []
-    for event in events:
-        start, end, *_ = event
-        lane = next((i for i, finished in enumerate(endings) if finished <= start), None)
-        if lane is None:
-            lane = len(lanes)
-            lanes.append([])
-            endings.append(0)
-        lanes[lane].append(event)
-        endings[lane] = end
-    if not lanes:
-        lanes = [[]]
-    for lane_idx, events in enumerate(lanes):
+def _render_measure(measure: ET.Element, lanes: list[list[tuple]], length: int,
+                    bar_start: int, bindings: dict, counts: dict) -> None:
+    for lane_idx, events in enumerate(lanes or [[]]):
         if lane_idx:
             backup = ET.SubElement(measure, "backup")
             ET.SubElement(backup, "duration").text = str(length)
         position = 0
-        for start, end, first, last, pitches in events:
+        for start, end, tones in events:
+            if start >= bar_start+length or end <= bar_start:
+                continue
+            first, last = start < bar_start, end > bar_start+length
+            start, end = max(start, bar_start)-bar_start, min(end, bar_start+length)-bar_start
             if start > position:
                 _append_event(measure, [None], start-position, lane_idx+1)
-            _append_event(measure, pitches, end-start, lane_idx+1,
-                          begin_tie=first, end_tie=last)
+            _append_event(measure, tones, end-start, lane_idx+1,
+                          begin_tie=first, end_tie=last, display_start=bar_start+start,
+                          bindings=bindings, counts=counts)
             position = end
         if position < length:
             _append_event(measure, [None], length-position, lane_idx+1)
 
 
-def _write_accidentals(measure: ET.Element) -> None:
-    """Spell visible C-major alterations in onset order across all voices.
+def _key_alters(fifths: int) -> dict:
+    result = defaultdict(int)
+    for index in range(abs(fifths)):
+        result[('FCGDAEB' if fifths > 0 else 'BEADGCF')[index % 7]] += 1 if fifths > 0 else -1
+    return result
+
+
+def _write_tuplet_groups(measure):
+    """Give consecutive conventional tuplets one visible, honest group number."""
+    voices = defaultdict(list)
+    position = previous = 0
+    for element in measure:
+        duration = int(element.findtext('duration','0'))
+        if element.tag == 'backup':
+            position -= duration
+        elif element.tag == 'note':
+            chord = element.find('chord') is not None
+            onset = previous if chord else position
+            if not chord:
+                previous = position; position += duration
+            spec = _tuplet_type(duration) if element.find('time-modification') is not None else None
+            if chord and spec:
+                for notation in element.findall('./notations/tuplet'):
+                    element.find('notations').remove(notation)
+            if not chord:
+                voices[element.findtext('voice')].append((element,onset,duration,spec))
+    for events in voices.values():
+        index = 0
+        while index < len(events):
+            _,_,_,spec = events[index]
+            if spec is None:
+                index += 1
+                continue
+            group = [events[index]]
+            while (len(group) < spec[1] and index+len(group) < len(events)
+                   and events[index+len(group)][3] == spec
+                   and events[index+len(group)][1] == group[-1][1]+group[-1][2]):
+                group.append(events[index+len(group)])
+            for element,*_ in group:
+                for notation in element.findall('./notations/tuplet'):
+                    element.find('notations').remove(notation)
+            for element,kind in ((group[0][0],'start'),(group[-1][0],'stop')):
+                notations = element.find('notations')
+                if notations is None:
+                    notations = ET.SubElement(element,'notations')
+                ET.SubElement(notations,'tuplet',type=kind,number='1',bracket='yes',**{'show-number':'actual'})
+            index += len(group)
+
+
+def _write_accidentals(measure: ET.Element, fifths: int = 0) -> None:
+    """Spell visible alterations against source key context across all voices.
 
     MusicXML's pitch alter affects playback, but Verovio needs an accidental
     element to print its sharp or its later natural cancellation.
@@ -200,6 +265,7 @@ def _write_accidentals(measure: ET.Element) -> None:
                 previous_onset = position
                 position += duration
     context = {}
+    signature = _key_alters(fifths)
     for _, _, note in sorted(events):
         pitch = note.find("pitch")
         key = (pitch.findtext("step"), pitch.findtext("octave"))
@@ -208,18 +274,108 @@ def _write_accidentals(measure: ET.Element) -> None:
         # It does not establish a new accidental after a barline.
         if any(tie.get("type") == "stop" for tie in note.findall("tie")):
             continue
-        if alteration != context.get(key, 0):
+        if alteration != context.get(key, signature[key[0]]):
             accidental = ET.Element("accidental")
-            accidental.text = "sharp" if alteration == 1 else "natural"
+            accidental.text = {-2:'flat-flat',-1:'flat',0:'natural',1:'sharp',2:'double-sharp'}.get(alteration)
+            if accidental.text is None:
+                raise ValueError(f'Unsupported accidental alteration {alteration}')
             after = max((index for index, child in enumerate(note)
                          if child.tag in ("type", "dot")), default=len(note)-1)
             note.insert(after + 1, accidental)
         context[key] = alteration
 
 
+def _readable_clef(notes, explicit, hand):
+    pitches = [note.pitch for note in notes]
+    def cost(sign, octave=0):
+        low, high = (64,77) if sign == 'G' else (43,57)
+        return sum(max(0, low-(pitch-12*octave), (pitch-12*octave)-high) for pitch in pitches)/max(1,len(pitches))
+    best = min(('G','F'), key=lambda sign: (cost(sign), sign != ('G' if hand == 'right' else 'F')))
+    if not pitches:
+        best = 'G' if hand == 'right' else 'F'
+    if explicit is not None:
+        if explicit.sign not in ('G','F','C'):
+            raise ValueError(f'Unsupported source clef {explicit.sign}')
+        if explicit.sign in ('G','F') and explicit.line == (2 if explicit.sign == 'G' else 4):
+            if explicit.octave_change not in (-1,0,1):
+                raise ValueError('Unsupported clef octave change')
+            if not pitches or cost(explicit.sign, explicit.octave_change) <= cost(best)+12:
+                return {'sign':explicit.sign,'line':explicit.line,'octave_change':explicit.octave_change}
+    return {'sign':best,'line':2 if best == 'G' else 4,'octave_change':0}
+
+
+def _spelling(note, fifths):
+    if note.spelling is not None:
+        return note.spelling
+    alters = _key_alters(fifths)
+    for step, natural in dict(C=0,D=2,E=4,F=5,G=7,A=9,B=11).items():
+        if (natural+alters[step]) % 12 == note.pitch % 12:
+            octave = (note.pitch-natural-alters[step])//12-1
+            return step, alters[step], octave
+    if fifths < 0:
+        names = [('C',0),('D',-1),('D',0),('E',-1),('E',0),('F',0),('G',-1),('G',0),('A',-1),('A',0),('B',-1),('B',0)]
+        step, alter = names[note.pitch % 12]
+        return step, alter, note.pitch//12-1
+    return None
+
+
+def _phrase_lanes(phrase, hand):
+    groups = defaultdict(list)
+    attacks = {}
+    identities = set()
+    for index, note in enumerate(phrase.notes):
+        if note.hand != hand:
+            continue
+        source = source_note_id(note,index)
+        if source in identities:
+            raise ValueError('Duplicate required source-note identity')
+        identities.add(source)
+        if not all(math.isfinite(value) for value in (note.start,note.end)) or not phrase.start <= note.start < min(note.end,phrase.end):
+            raise ValueError('Source note attack/duration is outside the active phrase')
+        start, end = _ticks(note.start-phrase.start), _ticks(min(note.end,phrase.end)-phrase.start)
+        if end <= start:
+            raise ValueError('Source note duration cannot be represented at notation resolution')
+        key = (note.track,note.voice,start)
+        if key in attacks and abs(attacks[key]-(note.start-phrase.start)) > 1e-12:
+            raise ValueError('Distinct source attacks collide at notation quantization resolution')
+        attacks[key] = note.start-phrase.start
+        groups[note.track,note.voice,start,end].append({'source_id':source,'source_beat':note.start-phrase.start,
+                                                      'pitch':note.pitch,'hand':hand,'note':note})
+    events = []
+    for (track, voice, start, end), tones in groups.items():
+        remaining = sorted(tones,key=lambda tone:(tone['pitch'],tone['source_id']))
+        while remaining:
+            layer, pitches = [], set()
+            for tone in remaining:
+                if tone['pitch'] not in pitches:
+                    layer.append(tone); pitches.add(tone['pitch'])
+            remaining = [tone for tone in remaining if tone not in layer]
+            events.append((start,end,(track,voice),layer))
+    events.sort(key=lambda event:(event[0],event[1],event[2],tuple(tone['source_id'] for tone in event[3])))
+    lanes, endings, owners = [], [], []
+    for start,end,owner,tones in events:
+        lane = next((i for i,last in enumerate(endings) if last <= start and owners[i] == owner),None)
+        if lane is None:
+            lane = len(lanes); lanes.append([]); endings.append(0); owners.append(owner)
+        lanes[lane].append((start,end,tones)); endings[lane] = end
+    # Release quantization changes display duration only. Never extend a note
+    # over the following source attack in its stable lane.
+    for lane in lanes:
+        for i,(start,end,tones) in enumerate(lane):
+            rounded = round(end/(DIVISIONS//4))*(DIVISIONS//4)
+            if _tuplet_type(end-start) is None and rounded > start and abs(rounded-end) <= _ticks(.12):
+                end = min(rounded,_ticks(phrase.end-phrase.start),lane[i+1][0] if i+1 < len(lane) else _ticks(phrase.end-phrase.start))
+            lane[i] = (start,end,tones)
+    return lanes
+
+
 def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
-                       time_signatures: tuple[tuple[float, int, int], ...] = ()) -> LessonScore:
+                       time_signatures: tuple[tuple[float, int, int], ...] = (),
+                       key_signatures=(), clef_changes=()) -> LessonScore:
     """Create notation from the source measure grid, not averaged bars."""
+    identities = [source_note_id(note,index) for index,note in enumerate(phrase.notes)]
+    if len(set(identities)) != len(identities):
+        raise ValueError('Duplicate required source-note identity')
     grid = phrase_grid(phrase, boundaries)
     bars = len(grid) - 1
     changes = sorted(time_signatures)
@@ -236,10 +392,22 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
         scorepart = ET.SubElement(partlist, "score-part", id=ident)
         ET.SubElement(scorepart, "part-name").text = name
         ET.SubElement(scorepart, "part-abbreviation").text = "R.H." if ident == "RH" else "L.H."
-    for hand, ident, sign, line in (("right", "RH", "G", "2"),
-                                    ("left", "LH", "F", "4")):
+    bindings, counts, staff_clefs = {}, {}, {}
+    for hand, ident in (("right", "RH"), ("left", "LH")):
         part = ET.SubElement(root, "part", id=ident)
         last_meter = None
+        last_key = last_clef = None
+        lanes = _phrase_lanes(phrase, hand)
+        keys = sorted((key for key in key_signatures if key.hand in (hand,'both')),key=lambda item:item.beat)
+        clefs = sorted((clef for clef in clef_changes if clef.hand in (hand,'both')),key=lambda item:item.beat)
+        for lane in lanes:
+            for _,_,tones in lane:
+                for tone in tones:
+                    attack_key = next((key for key in reversed(keys) if key.beat <= tone['note'].start+1e-7),None)
+                    tone['spelling'] = _spelling(tone['note'],attack_key.fifths if attack_key else 0)
+        for change in (*keys,*clefs):
+            if phrase.start < change.beat < phrase.end and not any(abs(change.beat-phrase.start-beat)<1e-7 for beat in grid):
+                raise ValueError('Mid-measure source key/clef changes are not supported in generated lessons')
         for b in range(bars):
             bar_start, bar_end = _ticks(grid[b]), _ticks(grid[b+1])
             if bar_end <= bar_start:
@@ -250,41 +418,35 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             measure = ET.SubElement(part, "measure", number=str(phrase.first_bar+b))
             if abs((beats * 4.0 / beat_type) - (grid[b+1] - grid[b])) > 1e-5:
                 measure.set("implicit", "yes")
-            if b == 0 or (beats, beat_type) != last_meter:
+            source_beat = phrase.start+grid[b]
+            active_key = next((key for key in reversed(keys) if key.beat <= source_beat+1e-7),None)
+            active_clef = next((clef for clef in reversed(clefs) if clef.beat <= source_beat+1e-7),None)
+            key_value = (active_key.fifths,active_key.mode) if active_key else None
+            chosen_clef = _readable_clef([note for note in phrase.notes if note.hand == hand], active_clef, hand)
+            if b == 0:
+                staff_clefs[hand] = chosen_clef
+            if b == 0 or (beats, beat_type) != last_meter or key_value != last_key or chosen_clef != last_clef:
                 attrs = ET.SubElement(measure, "attributes")
                 if b == 0:
                     ET.SubElement(attrs, "divisions").text = str(DIVISIONS)
-                    ET.SubElement(ET.SubElement(attrs, "key"), "fifths").text = "0"
-                time = ET.SubElement(attrs, "time")
-                ET.SubElement(time, "beats").text = str(beats)
-                ET.SubElement(time, "beat-type").text = str(beat_type)
-                if b == 0:
+                if active_key is not None and (b == 0 or key_value != last_key):
+                    key = ET.SubElement(attrs,'key')
+                    ET.SubElement(key,'fifths').text = str(active_key.fifths)
+                    if active_key.mode:
+                        ET.SubElement(key,'mode').text = active_key.mode
+                if b == 0 or (beats,beat_type) != last_meter:
+                    time = ET.SubElement(attrs, "time")
+                    ET.SubElement(time, "beats").text = str(beats)
+                    ET.SubElement(time, "beat-type").text = str(beat_type)
+                if b == 0 or chosen_clef != last_clef:
                     clef = ET.SubElement(attrs, "clef")
-                    ET.SubElement(clef, "sign").text = sign
-                    ET.SubElement(clef, "line").text = line
+                    ET.SubElement(clef, "sign").text = chosen_clef['sign']
+                    ET.SubElement(clef, "line").text = str(chosen_clef['line'])
+                    if chosen_clef['octave_change']:
+                        ET.SubElement(clef,'clef-octave-change').text = str(chosen_clef['octave_change'])
             last_meter = (beats, beat_type)
-            segments = []
-            for note in phrase.notes:
-                if note.hand != hand:
-                    continue
-                start = _ticks(note.start-phrase.start)
-                end = _ticks(min(note.end, phrase.end)-phrase.start)
-                # MIDI key-off timings commonly stop slightly before a beat
-                # (e.g. 0.90 beats). That is expressive release timing, not
-                # necessarily a notated 0.10-beat rest. Snap *only* a nearby
-                # note ending to a 16th-note boundary for readable MusicXML.
-                # The original Note retains its exact timestamp for scoring.
-                duration_grid = DIVISIONS // 4
-                rounded_end = round(end / duration_grid) * duration_grid
-                if 0 < rounded_end - start and abs(rounded_end-end) <= _ticks(.12):
-                    end = min(rounded_end, _ticks(phrase.end-phrase.start))
-                if start >= bar_end or end <= bar_start:
-                    continue
-                segment_start=max(start,bar_start)
-                segment_end=min(end,bar_end)
-                if segment_end > segment_start:
-                    segments.append((segment_start-bar_start, segment_end-bar_start,
-                                     note.pitch, start < bar_start, end > bar_end))
-            _render_measure(measure,segments,bar_end-bar_start)
-            _write_accidentals(measure)
-    return LessonScore(ET.tostring(root, encoding="unicode"), phrase)
+            last_key, last_clef = key_value, chosen_clef
+            _render_measure(measure,lanes,bar_end-bar_start,bar_start,bindings,counts)
+            _write_accidentals(measure,active_key.fifths if active_key else 0)
+            _write_tuplet_groups(measure)
+    return LessonScore(ET.tostring(root, encoding="unicode"), phrase, bindings, staff_clefs)
