@@ -508,6 +508,22 @@ func test_handsfree_midi_start_and_readability() -> void:
     finished["midi_input_count"] = 9
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(finished).to_utf8_buffer())
     expect_command("start", "Fresh note repeats a completed warm-up")
+    # A new physical key after the feedback is visible can retry a failed
+    # scored passage. The same key at the phase transition cannot skip it.
+    var failed := state("feedback")
+    failed["mode"] = "practice"
+    failed["device"] = "Kawai CA-49"
+    failed["midi_input_count"] = 10
+    failed["auto"] = false
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(failed).to_utf8_buffer())
+    check(app.commands.is_empty(), "The key that ended a take cannot dismiss feedback")
+    failed["midi_input_count"] = 11
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(failed).to_utf8_buffer())
+    expect_command("restart", "Fresh piano key explicitly retries a failed passage")
+    failed["auto"] = true
+    failed["midi_input_count"] = 12
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(failed).to_utf8_buffer())
+    check(app.commands.is_empty(), "Piano key cannot override an automatic recovery")
     # There is no mode change when a warm-up is opened from the library.
     app.last_post_path = "/library/open"
     app.action_pending = true
