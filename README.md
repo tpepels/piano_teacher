@@ -67,6 +67,15 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Phase 7.6 - Playhead onset cue
+
+When the fixed playhead crosses an engraved source onset, its vertical strike
+line briefly strengthens (135 ms). This is the timing cue at the playing line,
+not a guessed notehead graphic; the notehead's confirmation ring remains
+reserved exclusively for graded physical MIDI input. The trigger searches a
+cached index and fires once per source chord, not once per note or HTTP poll.
+Pausing, restarting or seeking clears any stale cue.
+
 ## Phase 7.6 - Stable timebase under noisy MIDI/HTTP timing
 
 The visible musical clock filters *phase error*, not the moving sheet music.

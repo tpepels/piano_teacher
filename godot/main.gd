@@ -129,6 +129,8 @@ var last_state: Dictionary = {}
 var hand_unlock_message := ""
 var hand_unlock_until_ms := 0
 var last_state_tick := 0
+var last_playhead_strike_beat := -INF
+var last_playhead_strike_transport := -1
 var visual_transport_clock = VisualTransportClock.new()
 var state_request_started_ms := 0
 var last_audio_transport_id := -1
@@ -1791,6 +1793,8 @@ func _process(_delta: float) -> void:
         return
     score_overlay.guided_active = false
     if last_state.is_empty() or not bool(last_state.get("running", false)) or layout_revision != revision:
+        last_playhead_strike_transport = -1
+        score_overlay.onset_until_ms = 0
         # The very first expected attack must be visible before the pianist
         # starts. A ready practice passage should not show an empty score
         # until Play is pressed or the first physical key is struck.
@@ -1815,6 +1819,18 @@ func _process(_delta: float) -> void:
     var play_from: float = float(last_state.get("play_from_beat", 0.0))
     var beat: float = clampf(play_from + maxf(0.0, clock), 0.0, float(last_state.get("duration_beats", 1.0)))
     var active: bool = not bool(last_state.get("paused", false))
+    var musical_clock: float = play_from + clock
+    var strike_transport: int = int(last_state.get("transport_id", 0))
+    if not active or last_playhead_strike_transport != strike_transport \
+            or musical_clock < last_playhead_strike_beat - .001:
+        last_playhead_strike_transport = strike_transport
+        last_playhead_strike_beat = musical_clock
+        score_overlay.onset_until_ms = 0
+    else:
+        if musical_clock - last_playhead_strike_beat <= .5 and LivingScore.crosses_onset(
+                living_chords, last_playhead_strike_beat, musical_clock):
+            score_overlay.onset_until_ms = Time.get_ticks_msec() + 135
+        last_playhead_strike_beat = musical_clock
     # The note cue is a musical preview on the exact score, not an evaluator.
     # During count-in show the first chord. It disappears during rests longer
     # than 1.25 beats, and correct/missed/wrong pitch marks always take priority.

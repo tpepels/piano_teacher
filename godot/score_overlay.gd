@@ -6,6 +6,7 @@ const Ink := preload("res://notehead_ink.gd")
 var cursor: Dictionary = {}
 var showing := false
 var transport_active := false
+var onset_until_ms := 0
 var guided_active := false
 var image_size := Vector2.ZERO
 var marks: Array = []
@@ -209,8 +210,12 @@ func _draw() -> void:
         # the note arrival legible without painting a glow over the pitches.
         # The note itself only reacts to the physical MIDI attack.
         var cyan := Design.TEAL if transport_active else Design.SAGE
-        draw_line(start, end, Color(cyan, .15), 5.0, true)
-        draw_line(start, end, Color(cyan, .93), 1.7, true)
+        # The timing line reacts at the *musical onset*, not the notehead.
+        # Actual notehead illumination remains MIDI-triggered only.
+        var onset: float = clampf(float(onset_until_ms - Time.get_ticks_msec()) / 135.0, 0.0, 1.0)
+        draw_line(start, end, Color(cyan, .15 + onset * .17),
+            5.0 + onset * 4.0, true)
+        draw_line(start, end, Color(cyan, .93), 1.7 + onset * .55, true)
         var marker := 7.0
         draw_colored_polygon(PackedVector2Array([
             start + Vector2(-marker, -marker * .6),

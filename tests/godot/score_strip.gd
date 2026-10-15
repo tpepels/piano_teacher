@@ -163,6 +163,13 @@ func run() -> void:
     check(not attacks.is_empty(), "Real engraving should expose canonical source attacks")
     if not attacks.is_empty() and living != null:
         var first_beat: float = float(attacks[0].get("source_beat", attacks[0].beat))
+        var onset_index: Array = living.prepare(flat)
+        check(living.crosses_onset(onset_index, first_beat - .12, first_beat + .01),
+            "Playhead should react at the engraved note's real timing")
+        check(not living.crosses_onset(onset_index, first_beat + .01, first_beat + .09),
+            "One arrival must not replay a pulse during subsequent frames")
+        check(not living.crosses_onset(onset_index, first_beat, first_beat),
+            "A stopped or paused playhead must not emit a timing pulse")
         var chord: Array = living.next_chord(flat, first_beat - .3)
         var indexed: Array = living.prepare(flat)
         check(living.cue(indexed, first_beat - .3) == chord,

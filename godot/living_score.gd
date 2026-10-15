@@ -72,6 +72,24 @@ static func cue(groups: Array, beat: float, assessed: Array = [],
     return pending
 
 
+# A crossing tick is only a playhead response. The notes themselves react
+# exclusively to incoming assessed MIDI events, never to this clock event.
+# Binary search works in full-score Perform without scanning the entire piece.
+static func crosses_onset(groups: Array, previous: float, current: float) -> bool:
+    if groups.is_empty() or not is_finite(previous) or not is_finite(current) \
+            or current <= previous:
+        return false
+    var low := 0
+    var high := groups.size()
+    while low < high:
+        var mid: int = (low + high) / 2
+        if float(groups[mid]["beat"]) <= previous + .000001:
+            low = mid + 1
+        else:
+            high = mid
+    return low < groups.size() and float(groups[low]["beat"]) <= current + .000001
+
+
 # Convenient pure function for diagnostics and UI layout tests. Production
 # animation uses cached groups via cue() above, not prepare() every frame.
 static func next_chord(layout: Dictionary, beat: float, assessed: Array = [],
