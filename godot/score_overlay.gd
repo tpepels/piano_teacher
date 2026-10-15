@@ -205,8 +205,18 @@ func _draw() -> void:
         var bottom: float = float(cursor.get("bottom", 1.0))
         var start: Vector2 = _sheet_xy(x, top)
         var end: Vector2 = _sheet_xy(x, bottom)
-        # The timing rule follows the clock's BPM, including silent beats.
+        # A stable vertical strike line and two compact edge pointers make
+        # the note arrival legible without painting a glow over the pitches.
+        # The note itself only reacts to the physical MIDI attack.
         var cyan := Design.TEAL if transport_active else Design.SAGE
-        draw_line(start, end, Color(cyan, .09), 16.0, true)
-        draw_line(start, end, Color(cyan, .18), 7.0, true)
-        draw_line(start, end, cyan, 2.5, true)
+        draw_line(start, end, Color(cyan, .15), 5.0, true)
+        draw_line(start, end, Color(cyan, .93), 1.7, true)
+        var marker := 7.0
+        draw_colored_polygon(PackedVector2Array([
+            start + Vector2(-marker, -marker * .6),
+            start + Vector2(marker, -marker * .6),
+            start + Vector2(0, marker * .55)]), Color(cyan, .93))
+        draw_colored_polygon(PackedVector2Array([
+            end + Vector2(-marker, marker * .6),
+            end + Vector2(marker, marker * .6),
+            end + Vector2(0, -marker * .55)]), Color(cyan, .93))
