@@ -2426,6 +2426,10 @@ func _input(event: InputEvent) -> void:
         return
     var practice_shortcut: bool = current_screen == "practice" and event.keycode in [
         KEY_ESCAPE, KEY_SPACE, KEY_P, KEY_R, KEY_S, KEY_LEFT, KEY_RIGHT]
+    if event.keycode == KEY_ESCAPE and current_screen in ["library", "settings", "lesson"]:
+        _unhandled_key_input(event)
+        get_viewport().set_input_as_handled()
+        return
     if event.keycode == KEY_F11 or practice_shortcut:
         # Consume press and release before focused buttons see ui_accept.
         # Handling only the press can also activate Next/Stop on release.
@@ -2442,8 +2446,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
             _toggle_fullscreen()
             get_viewport().set_input_as_handled()
             return
-        if event.keycode == KEY_ESCAPE and current_screen == "practice":
-            _navigate("library")
+        if event.keycode == KEY_ESCAPE:
+            _navigate("library" if current_screen == "practice" else "practice")
             get_viewport().set_input_as_handled()
             return
         if current_screen != "practice":
