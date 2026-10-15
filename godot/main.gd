@@ -113,6 +113,8 @@ var requested_page := -1
 var rendered_revision := -1
 var action_pending := false
 var last_state: Dictionary = {}
+var hand_unlock_message := ""
+var hand_unlock_until_ms := 0
 var last_state_tick := 0
 var state_request_started_ms := 0
 var last_audio_transport_id := -1
@@ -1761,6 +1763,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var total_input_attacks: int = int(parsed.get("midi_input_count", 0))
     var fresh_piano_key: bool = last_seen_midi_input_count >= 0 and total_input_attacks > last_seen_midi_input_count
     last_seen_midi_input_count = total_input_attacks
+    var unlocked: String = ChallengeFlow.newly_unlocked(last_state, parsed)
+    if not unlocked.is_empty():
+        hand_unlock_message = unlocked
+        hand_unlock_until_ms = Time.get_ticks_msec() + 2600
     last_state = parsed
     # Low-latency local polling only while playing from a connected piano.
     # The backend remains authoritative; Godot never guesses note scoring.
@@ -2006,6 +2012,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             Color("#F0B971") if challenge_kind in ["retry", "recovering"] else INK)
         if challenge_kind == "success":
             lesson_info_label.text = str(challenge.get("detail", ""))
+        if Time.get_ticks_msec() < hand_unlock_until_ms:
+            progress_label.text = hand_unlock_message
+            progress_label.add_theme_color_override("font_color", Color("#78DBAD"))
+            progress_label.tooltip_text = hand_unlock_message
     start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Pause  ·  Space" if active_transport else "Start  ·  Space"
     if learning:
         start_button.text = "Resume  ·  Space" if phase == "paused" else "Try rhythm · Space" if phase in ["guided_complete", "disconnected"] else "Pause  ·  Space" if phase in ["guided_wait", "loading"] else "Learn · Space"
