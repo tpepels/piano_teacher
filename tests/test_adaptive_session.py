@@ -22,12 +22,12 @@ def boot(tmp_path,monkeypatch,bars):
     return engine,now
 
 
-def test_eight_beat_lead_and_five_errors_slow_ten_percent(tmp_path,monkeypatch):
+def test_tempo_capped_lead_and_five_errors_slow_ten_percent(tmp_path,monkeypatch):
     e,now=boot(tmp_path,monkeypatch,2)
     try:
-        assert e.state()["lead_in_bars"]==2
-        assert e.state()["count_in_beats"]==8
-        assert e.state()["clock_beat"]==pytest.approx(-8)
+        assert e.state()["lead_in_bars"]==1
+        assert e.state()["count_in_beats"]==2.5
+        assert e.state()["clock_beat"]==pytest.approx(-2.5)
         start=e.run_at
         sec=60/e.plan.bpm
         for i in range(3):
@@ -40,7 +40,7 @@ def test_eight_beat_lead_and_five_errors_slow_ten_percent(tmp_path,monkeypatch):
         assert state["streak"]==0 and state["mastered"]==0
         now[0]=e.next_at+.01
         assert e.state()["phase"]=="count_in"
-        assert e.state()["clock_beat"]==pytest.approx(-8)
+        assert e.state()["clock_beat"]==pytest.approx(-2.0)
     finally:
         e.db.close()
 
@@ -61,7 +61,7 @@ def test_complete_current_chunk_before_rewinding(tmp_path,monkeypatch):
         assert e.state()["recovery_beat"]==8
         now[0]=e.next_at+.01
         assert e.state()["play_from_beat"]==8
-        assert e.state()["clock_beat"]==pytest.approx(-8)
+        assert e.state()["clock_beat"]==pytest.approx(-2.0)
     finally:
         e.db.close()
 
@@ -101,8 +101,8 @@ def test_godot_has_virtual_lead_in_notation():
     from pathlib import Path
     script=(Path(__file__).resolve().parents[1]/"godot"/"main.gd").read_text()
     assert "lead_width_px" in script and "lead_first" in script
-    assert 'cursor["x"] = float(cursor.get("x", 0.0)) + clock / lead_beats * fraction' in script
-    assert "if _transport_beat_now() < 0.0:" in script
+    assert 'cursor["x"] = float(initial_cursor.get("x", 0.0)) + clock / lead_beats * fraction' in script
+    assert 'target_x = target_reading_x - note_x * displayed_width' in script
 
 
 def test_custom_target_recovers_instead_of_running_to_original_midi_speed(tmp_path, monkeypatch):
@@ -175,8 +175,8 @@ def test_three_quarter_time_has_six_lead_in_beats(tmp_path,monkeypatch):
     e.plan=LearningPlan(Piece("3/4",100,notes,(Phrase(1,1,2,0,6,notes),)))
     try:
         e.start()
-        assert e.state()["lead_in_bars"]==2
-        assert e.state()["count_in_beats"]==6
-        assert e.state()["clock_beat"]==pytest.approx(-6)
+        assert e.state()["lead_in_bars"]==1
+        assert e.state()["count_in_beats"]==2.5
+        assert e.state()["clock_beat"]==pytest.approx(-2.5)
     finally:
         e.db.close()

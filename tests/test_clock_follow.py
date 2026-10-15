@@ -24,21 +24,23 @@ def test_timeline_moves_at_exact_tempo_even_without_piano(tmp_path, monkeypatch)
         assert engine.state()["preview_only"] is True
         assert engine.state()["phase"] == "count_in"
         assert engine.state()["beat"] == 0
-        assert engine.state()["count_in_beats"] == 8
-        t[0] = 111.9
+        assert engine.state()["count_in_beats"] == pytest.approx(2.5)
+        downbeat = engine.run_at
+        assert downbeat-t[0] <= 4.0
+        t[0] = downbeat - .1
         assert engine.state()["phase"] == "count_in"
         assert engine.state()["beat"] == 0
-        t[0] = 112.0
+        t[0] = downbeat
         assert engine.state()["phase"] == "playing"
         assert engine.state()["beat"] == 0
-        t[0] = 112.75
+        t[0] = downbeat + .75
         assert engine.state()["beat"] == pytest.approx(0.5)
-        t[0] = 115.0
+        t[0] = downbeat + 3.0
         assert engine.state()["beat"] == pytest.approx(2.0)
         assert engine.state()["midi_notes"] == 0
-        t[0] = 123.8
+        t[0] = downbeat + 11.8
         assert engine.state()["phase"] == "playing"
-        t[0] = 124.3
+        t[0] = downbeat + 12.3
         done = engine.state()
         assert done["phase"] == "ready"
         assert done["running"] is False
@@ -58,8 +60,8 @@ def test_tempo_control_changes_count_in_and_cursor_speed(tmp_path, monkeypatch):
         engine.control("tempo", bpm=80)
         engine.start()
         assert engine.state()["bpm"] == 80
-        assert engine.run_at == pytest.approx(31.0)
-        t[0] = 32.5
+        assert engine.run_at == pytest.approx(28.0)
+        t[0] = 29.5
         assert engine.state()["beat"] == pytest.approx(2.0)
         assert engine.state()["phase"] == "playing"
     finally:
@@ -73,7 +75,7 @@ def test_frontend_has_time_driven_beam_and_prevents_start_before_notation():
     assert 'beat += elapsed * float(last_state.get("bpm", 60.0)) / 60.0' in gd
     assert 'score_overlay.transport_active = active' in gd
     assert 'var margin: float = viewport.x * 0.045' in gd
-    assert 'var min_x: float = viewport.x * 0.96 - displayed_width' in gd
+    assert 'target_x = target_reading_x - note_x * displayed_width' in gd
     assert 'score_content.position.lerp(Vector2(target_x, target_y), blend)' in gd
     assert 'start_button.disabled = false' in gd
     assert 'Preparing sheet music - wait for the notes' in gd

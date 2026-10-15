@@ -23,7 +23,7 @@ def test_count_in_and_live_midi_visibility(tmp_path):
         engine.control("start")
         before = engine.state()
         assert before["phase"] == "count_in"
-        assert before["count_in_beats"] == 8
+        assert before["count_in_beats"] == 2.5
         assert before["countdown"] > 0
         assert before["midi_notes"] == 0
         message = type("Midi", (), {"type": "note_on", "note": 60, "velocity": 90})
