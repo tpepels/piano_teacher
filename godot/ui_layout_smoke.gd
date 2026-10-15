@@ -33,6 +33,17 @@ func _check_actions(container: Control, viewport: Vector2, label: String) -> voi
 
 
 func _run() -> void:
+    # Godot --headless --script creates a 64x64 root Window even when
+    # --resolution is supplied. Explicitly size it before loading the UI.
+    var dimensions: PackedStringArray = OS.get_cmdline_user_args()
+    var requested: PackedStringArray = (
+        dimensions[0].split("x") if not dimensions.is_empty()
+        else PackedStringArray(["1536", "960"]))
+    if requested.size() != 2:
+        push_error("Pass the viewport size as 1536x960")
+        quit(2)
+        return
+    root.size = Vector2i(int(requested[0]), int(requested[1]))
     var scene = load("res://main.tscn").instantiate()
     root.add_child(scene)
     await process_frame
