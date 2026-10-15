@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import tempfile
 
+from .warmups import catalog as built_in_warmups, is_warmup, materialize
+
 FORMATS = {'.mid', '.midi', '.musicxml', '.xml', '.mxl'}
 MAX_FILES = 5000
 
@@ -65,7 +67,7 @@ class ScoreLibrary:
         new = self.settings.copy()
         if 'music_dir' in changes:
             folder = self._normalize_folder(changes['music_dir'])
-            if folder != self._folder:
+            if folder != self._folder and not is_warmup(str(new['last_piece'])):
                 new['last_piece'] = ''
             new['music_dir'] = str(folder)
         if 'fullscreen' in changes:
@@ -104,7 +106,7 @@ class ScoreLibrary:
         root = self._folder
         items: list[dict] = []
         if not root.is_dir():
-            return {'folder': str(root), 'pieces': [], 'count': 0,
+            return {'folder': str(root), 'pieces': [], 'warmups': built_in_warmups(), 'count': 0,
                     'error': 'Music folder is unavailable. Choose a folder in Settings.',
                     'last_piece': self.settings['last_piece']}
         try:
@@ -132,12 +134,16 @@ class ScoreLibrary:
             return {'folder': str(root), 'pieces': [], 'count': 0,
                     'error': str(exc), 'last_piece': self.settings['last_piece']}
         items.sort(key=lambda x: (x['title'].casefold(), x['id'].casefold()))
-        return {'folder': str(root), 'pieces': items, 'count': len(items),
+        return {'folder': str(root), 'pieces': items, 'warmups': built_in_warmups(), 'count': len(items),
                 'truncated': len(items) == MAX_FILES, 'last_piece': self.settings['last_piece']}
 
     def resolve(self, identifier: str) -> Path:
         if not isinstance(identifier, str) or not identifier or '\x00' in identifier:
             raise ValueError('Invalid library entry')
+        # Known built-ins bypass the personal music folder, but never accept
+        # user-supplied paths or unknown warm-up identifiers.
+        if identifier.startswith('warmup:'):
+            return materialize(identifier, self.config_dir / 'warmups')
         candidate = Path(identifier)
         if candidate.is_absolute() or '..' in candidate.parts:
             raise ValueError('Library entry must stay inside the music folder')

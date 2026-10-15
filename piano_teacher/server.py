@@ -22,6 +22,7 @@ from .practice import Recorder, evaluate
 from .score import import_piece, render_layout, EngravedScore
 from .feedback import project_assessment
 from .library import ScoreLibrary
+from .warmups import is_warmup
 from .raster import rasterize_score
 from .recovery import check_two_bar_window
 from .music import Phrase
@@ -40,6 +41,7 @@ class PracticeEngine:
         self.plan: LearningPlan | None = None
         self.score = None
         self.source = None
+        self.is_builtin_warmup = False
         self.fingerprint = ""
         self.recorder: Recorder | None = None
         self.run_at = 0.0
@@ -198,6 +200,23 @@ class PracticeEngine:
             path = self.library.resolve(identifier)
         self.load(str(path))  # Parse before recording success.
         with self.lock:
+            if is_warmup(identifier):
+                # Warm-ups are repeatable full performances, not long adaptive
+                # courses that automatically advance after enough repetitions.
+                p = self.plan
+                final = next((i for i in range(len(p.exercises) - 1, -1, -1)
+                              if p.exercises[i].kind == 'perform'), None)
+                if final is None:
+                    raise ValueError('Warm-up has no complete performance')
+                p.select(final)
+                p.bpm = p.target_bpm
+                self.mode = 'perform'
+                self.is_builtin_warmup = True
+                self.course_guided = False
+                self.feedback = 'Warm-up ready - press Start to play'
+                self.next_action = 'Play the warm-up, review, then press Start to repeat.'
+                self.score_revision += 1
+                self._save()
             self.library.mark_opened(identifier)
 
     def _receive(self, message):
@@ -234,6 +253,7 @@ class PracticeEngine:
             self._reset_trouble()
             self.course_guided = False
             self.source = str(Path(path).resolve())
+            self.is_builtin_warmup = False
             self.fingerprint = hashlib.sha256(Path(path).read_bytes()).hexdigest()
             self.plan = LearningPlan(piece)
             self.mode = "practice"
@@ -1159,8 +1179,11 @@ class PracticeEngine:
                     for unit in self.performance_summary["weakest_bars"]:
                         self._record_saved_trouble(phrase, result, start=unit["start_beat"],
                                                   end=unit["end_beat"], errors=unit["errors"])
-            self.next_action = ("Review your performance, then Practice the weakest section."
-                if self.performance_summary["weakest_bars"] else "Clean performance. Choose Practice to build your clean-run streak.")
+            self.next_action = ("Review your performance, then press Start to repeat this warm-up."
+                if self.is_builtin_warmup else
+                "Review your performance, then Practice the weakest section."
+                if self.performance_summary["weakest_bars"] else
+                "Clean performance. Choose Practice to build your clean-run streak.")
             self.auto = False
             return
         if self.play_from_beat>1e-6:

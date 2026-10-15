@@ -1035,18 +1035,23 @@ func _on_library(_result: int, code: int, _headers: PackedStringArray, body: Pac
     if typeof(parsed) != TYPE_DICTIONARY:
         return
     library_info = parsed
-    home_count_label.text = "%d scores available" % int(parsed.get("count", 0))
+    home_count_label.text = "%d scores · %d built-in warm-ups" % [int(parsed.get("count", 0)), parsed.get("warmups", []).size()]
     library_path_label.text = str(parsed.get("folder", ""))
     _populate_library()
     var recent: String = str(parsed.get("last_piece", ""))
     home_resume_button.disabled = recent.is_empty()
     var exists_in_library := false
-    for entry in parsed.get("pieces", []):
+    for entry in parsed.get("warmups", []) + parsed.get("pieces", []):
         if str(entry.get("id", "")) == recent:
             exists_in_library = true
             break
     home_resume_button.disabled = not exists_in_library
-    home_recent_label.text = recent.get_file().get_basename().replace("_", " ") if not recent.is_empty() else "No recent piece"
+    var recent_title := recent.get_file().get_basename().replace("_", " ")
+    for entry in parsed.get("warmups", []):
+        if str(entry.get("id", "")) == recent:
+            recent_title = str(entry.get("title", recent_title))
+            break
+    home_recent_label.text = recent_title if not recent.is_empty() else "No recent piece"
 
 func _populate_library() -> void:
     if library_rows == null:
@@ -1055,33 +1060,44 @@ func _populate_library() -> void:
         library_rows.remove_child(child)
         child.queue_free()
     var pieces: Array = library_info.get("pieces", [])
+    var warmups: Array = library_info.get("warmups", [])
     var query := library_search.text.strip_edges().to_lower()
     var visible := 0
-    for entry in pieces:
-        var title: String = str(entry.get("title", "Untitled"))
-        var location: String = str(entry.get("folder", ""))
-        if not query.is_empty() and not (title + " " + location).to_lower().contains(query):
-            continue
-        var identifier: String = str(entry.get("id", ""))
-        var format_name: String = str(entry.get("format", ""))
-        var hint: String = location if not location.is_empty() else "Music folder"
-        var button := _button("%s     ·     %s     ·     %s" % [title, format_name, hint], func(): _open_library_piece(identifier))
-        button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-        button.custom_minimum_size = Vector2(0, 58)
-        button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        library_rows.add_child(button)
-        visible += 1
+    for section in [{"title": "BUILT-IN WARM-UPS", "entries": warmups},
+                    {"title": "YOUR MUSIC", "entries": pieces}]:
+        var section_added := false
+        for entry in section.entries:
+            var title: String = str(entry.get("title", "Untitled"))
+            var location: String = str(entry.get("folder", ""))
+            var focus: String = str(entry.get("focus", ""))
+            if not query.is_empty() and not (title + " " + location + " " + focus).to_lower().contains(query):
+                continue
+            if not section_added:
+                library_rows.add_child(_label(str(section.title), 13, ACCENT, true))
+                section_added = true
+            var identifier: String = str(entry.get("id", ""))
+            var format_name: String = str(entry.get("format", ""))
+            var hint: String = ("%d BPM · %s" % [int(entry.get("bpm", 0)), focus]
+                if not focus.is_empty() else
+                location if not location.is_empty() else "Music folder")
+            var button := _button("%s     ·     %s     ·     %s" % [title, format_name, hint], func(): _open_library_piece(identifier))
+            button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+            button.custom_minimum_size = Vector2(0, 58)
+            button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            button.tooltip_text = str(entry.get("description", ""))
+            library_rows.add_child(button)
+            visible += 1
     var issue: String = str(library_info.get("error", ""))
     if not library_error.is_empty():
         library_message.text = library_error
     elif not issue.is_empty():
         library_message.text = issue
-    elif pieces.is_empty():
+    elif pieces.is_empty() and warmups.is_empty():
         library_message.text = "No scores yet. Add .mid, .midi or MusicXML files to this folder."
     elif visible == 0:
         library_message.text = "No matching scores."
     else:
-        library_message.text = "%d files  ·  %d shown  ·  Automatically refreshed" % [pieces.size(), visible]
+        library_message.text = "%d personal files  ·  %d built-in warm-ups  ·  %d shown" % [pieces.size(), warmups.size(), visible]
 
 func _open_library_piece(identifier: String) -> void:
     library_error = ""
