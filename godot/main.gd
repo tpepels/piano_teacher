@@ -763,6 +763,8 @@ func _refresh_score_status() -> void:
         score_retry_button.visible = false
 
 func _score_failed(message: String) -> void:
+    if phase0_smoke_mode:
+        print("PHASE0_SCORE_ERROR:", message)
     score_error = message
     feedback_label.text = message
     _refresh_score_status()

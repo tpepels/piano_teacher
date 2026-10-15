@@ -67,7 +67,7 @@ def until(predicate, *, timeout: float, label: str, godot: subprocess.Popen,
         if godot.poll() is not None:
             raise RuntimeError(f"{label}: Godot exited early\n{transcript.read_text(errors='replace')}")
         log = transcript.read_text(errors="replace")
-        if any(token in log for token in ("SCRIPT ERROR", "Parse Error:", "Failed to load script")):
+        if any(token in log for token in ("SCRIPT ERROR", "Parse Error:", "Failed to load script", "PHASE0_SCORE_ERROR:")):
             raise RuntimeError(f"{label}: Godot script error\n{log}")
         result = predicate(log)
         if result:

@@ -70,7 +70,7 @@ def await_condition(check, process, log: Path, *, timeout: float, description: s
         if check(transcript):
             return transcript
         if any(problem in transcript for problem in
-               ("SCRIPT ERROR", "Parse Error:", "Failed to load script")):
+               ("SCRIPT ERROR", "Parse Error:", "Failed to load script", "PHASE0_SCORE_ERROR:")):
             raise RuntimeError(f"{description}: GDScript failure\n{transcript}")
         time.sleep(.1)
     raise RuntimeError(
