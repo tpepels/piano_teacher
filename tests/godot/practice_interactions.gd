@@ -190,7 +190,7 @@ func test_practice_detours() -> void:
         check(app.commands.is_empty(), "An already paused attempt is not stopped when opening " + destination)
 
 func test_settings_back_origin() -> void:
-    for origin in ["home", "library"]:
+    for origin in ["practice", "library"]:
         app._navigate(origin)
         show_state() # A score can remain loaded while browsing the library.
         app.commands.clear()
@@ -202,13 +202,27 @@ func test_settings_back_origin() -> void:
             check(app.commands.is_empty(), "Browsing Settings does not alter the stopped passage")
 
 func test_abandon_practice() -> void:
-    for destination in ["home", "library"]:
-        for phase in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]:
-            app._navigate("practice")
-            show_state(phase)
-            app.commands.clear()
-            app._navigate(destination)
-            expect_command("stop", "Leaving practice for " + destination + " abandons " + phase)
+    # Browsing music is now an overlay over the SAME practice state.
+    # Active transport pauses, rather than being thrown away.
+    for phase in ["count_in", "playing", "feedback", "recovering", "loading"]:
+        app._navigate("practice")
+        show_state(phase)
+        app.commands.clear()
+        app._navigate("library")
+        expect_command("pause", "Opening music preserves " + phase + " through Pause")
+        check(app.screens["practice"].visible, "Practice stays rendered behind music drawer")
+        check(app.overlay_root.visible and app.overlay_drawer.visible,
+            "Music selection is an in-context overlay, not a new screen")
+    app._navigate("practice")
+    show_state("paused")
+    app.commands.clear()
+    app._navigate("library")
+    check(app.commands.is_empty(), "Browsing an already paused attempt does not restart or stop it")
+    check(app.screens["practice"].visible, "The sheet music remains rendered while browsing")
+    app._navigate("practice")
+    check(not app.overlay_root.visible, "Closing music returns to the existing practice stage")
+    app._navigate("home")
+    check(app.current_screen == "practice", "The old Home route redirects to the single practice view")
 
 func test_compact_feedback() -> void:
     show_state()
@@ -293,7 +307,7 @@ func test_modes() -> void:
         app.last_control_action = pending_mode
         app.commands.clear()
         app._navigate("library")
-        check(app.commands.back().get("action") == "stop", "Leaving during mode preparation preserves Stop intent")
+        check(app.commands.back().get("action") == "pause", "Opening music during preparation preserves the attempt")
         app.action_pending = false
 
 func test_pause_choices() -> void:
@@ -317,7 +331,7 @@ func test_pause_choices() -> void:
     check(app.speed_label.text.contains("target"), "Current and target tempos remain visible")
     app.pause_sheet.exit_button.pressed.emit()
     check(app.current_screen == "library", "Sheet Exit returns to the music library")
-    expect_command("stop", "Exit abandons the paused attempt")
+    check(app.commands.is_empty(), "Music drawer preserves an already paused attempt")
 
 func test_focus_trap() -> void:
     var paused := state("paused")
