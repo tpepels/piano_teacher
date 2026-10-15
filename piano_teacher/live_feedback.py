@@ -6,7 +6,7 @@ No video-frame clock or Godot interaction is involved.
 """
 from __future__ import annotations
 from .music import Phrase
-from .practice import Assessment, PlayedNote, evaluate
+from .practice import Assessment, NoteAssessment, PlayedNote, evaluate
 
 
 def settled_assessment(phrase: Phrase, hand: str, bpm: float,
@@ -38,3 +38,42 @@ def settled_assessment(phrase: Phrase, hand: str, bpm: float,
     # marked at their corresponding noteheads; extra-note labels are shown
     # in the final assessment to avoid a misleading moving marker.
     return Assessment(result.notes, 0, ())
+
+
+def expired_attack_misses(phrase: Phrase, hand: str, bpm: float,
+                          played: list[PlayedNote], *, from_beat: float,
+                          until_beat: float) -> Assessment | None:
+    """Mark only individual missing pitches after their allowable onset window.
+
+    A two-beat held chord must not wait for release before its unplayed
+    pitches become red. Use exactly the same pitch/onset matching window as
+    evaluate(), so a valid late note cannot first flash as missing.
+    This is a display-only assessment: it never increments failure counts.
+    """
+    if bpm <= 0:
+        raise ValueError("Tempo must be positive")
+    seconds_per_beat = 60.0 / bpm
+    search_window = max(.35, .65 * seconds_per_beat)
+    elapsed = (until_beat - from_beat) * seconds_per_beat
+    required = [
+        note for note in phrase.notes
+        if (hand == "both" or note.hand == hand)
+        and note.start - phrase.start >= from_beat - 1e-7
+        and ((note.start - phrase.start - from_beat) * seconds_per_beat
+             + search_window <= elapsed + 1e-7)
+    ]
+    unused = set(range(len(played)))
+    misses = []
+    for note in required:
+        onset = (note.start - phrase.start - from_beat) * seconds_per_beat
+        candidates = [
+            (abs(played[index].onset - onset), index)
+            for index in unused
+            if played[index].pitch == note.pitch
+            and abs(played[index].onset - onset) <= search_window
+        ]
+        if candidates:
+            unused.remove(min(candidates)[1])
+        else:
+            misses.append(NoteAssessment(note, "missed"))
+    return Assessment(tuple(misses), 0, ()) if misses else None
