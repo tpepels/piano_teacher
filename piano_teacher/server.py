@@ -706,7 +706,7 @@ class PracticeEngine:
                 with self.lock:
                     if self.demo is not None and self.demo["token"] == token and self.score_revision == revision:
                         self.awaiting_score_revision = None
-                        self.feedback = f"Listen audio unavailable: {exc}"
+                        self.feedback = f"Listen audio could not be prepared: {exc}"
                         self.next_action = self.feedback
                         self.demo["error"] = self.feedback
                 return
