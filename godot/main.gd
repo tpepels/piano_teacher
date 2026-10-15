@@ -42,6 +42,7 @@ var score_status_label: Label
 var score_retry_button: Button
 var score_error := ""
 var library_error := ""
+var pending_library_piece := ""
 var home_recent_label: Label
 var home_resume_button: Button
 var library_search: LineEdit
@@ -656,7 +657,7 @@ func _build_interface() -> void:
     library_page.add_child(library_layout)
     var library_head := HBoxContainer.new()
     library_layout.add_child(library_head)
-    library_head.add_child(_button("← Home", func(): _navigate("home")))
+    library_head.add_child(_button("Close", func(): _navigate("practice")))
     library_head.add_child(_space())
     library_head.add_child(_button("Settings", func(): _navigate("settings")))
     library_layout.add_child(_label("Your music", 39, INK, true))
@@ -1467,6 +1468,13 @@ func _update_hand_stages(state: Dictionary) -> void:
 
 
 func _open_library_piece(identifier: String) -> void:
+    # Pause requests are asynchronous. Store a quick selection and open it
+    # once the transport has acknowledged the pause, rather than dropping
+    # the click while action_pending is true.
+    if action_pending:
+        pending_library_piece = identifier
+        library_message.text = "Preparing your selected music…"
+        return
     library_error = ""
     library_message.text = "Opening score…"
     library_message.add_theme_color_override("font_color", MUTED)
@@ -2330,6 +2338,10 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         _request_settings()
     _flush_transport_action()
     _poll()
+    if not pending_library_piece.is_empty():
+        var queued: String = pending_library_piece
+        pending_library_piece = ""
+        call_deferred("_open_library_piece", queued)
 
 func _has_active_transport() -> bool:
     return bool(last_state.get("running", false)) or str(last_state.get("phase", "")) in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]
