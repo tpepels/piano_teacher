@@ -325,13 +325,13 @@ class PracticeEngine:
                 before=self.plan.bpm
                 self.plan.bpm=max(12,round(before*.9))
                 self._save()
+                # Keep settled notehead markers before ending the live take.
+                # Once running/recorder are cleared they cannot be recovered.
+                self.feedback_marks=self._live_feedback((now-self.run_at))
                 self.pending_rewind=decision.restart_beat
                 self.running=False
                 self.recorder=None
                 self.next_at=now+self.feedback_seconds
-                # The same live notehead markers remain visible during the
-                # feedback pause, even though this is not a full graded run.
-                self.feedback_marks=self._live_feedback((now-self.run_at))
                 self.feedback=(f"{decision.errors} wrong or missed notes - retrying from "
                                f"measure {phrase.first_bar + int(decision.restart_beat/beats_per_bar)} "
                                f"at {self.plan.bpm} BPM")

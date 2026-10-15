@@ -28,4 +28,13 @@ def settled_assessment(phrase: Phrase, hand: str, bpm: float,
     # Keeping that origin avoids drift at restarts and recovery sub-passages.
     passage = Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
                      phrase.start+from_beat, phrase.end, required)
-    return evaluate(passage, hand, bpm, list(played))
+    # Do not classify notes that occur later in the take as "extras" yet.
+    # This also makes deterministic prerecorded performance fixtures valid.
+    upto = (until_beat-from_beat)*60/bpm+.12
+    since = max(0.0,(earliest-from_beat)*60/bpm-.15)
+    eligible = [n for n in played if since <= n.onset <= upto]
+    result = evaluate(passage, hand, bpm, eligible)
+    # Project only required settled notes here. Early/key mistakes remain
+    # marked at their corresponding noteheads; extra-note labels are shown
+    # in the final assessment to avoid a misleading moving marker.
+    return Assessment(result.notes, 0, ())
