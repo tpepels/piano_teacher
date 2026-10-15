@@ -25,7 +25,7 @@ from .library import ScoreLibrary
 from .warmups import is_warmup
 from .raster import rasterize_score
 from .recovery import check_two_bar_window
-from .music import Phrase, source_note_id
+from .music import Phrase, source_note_id, note_name
 from .lesson_score import build_lesson_score
 from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats
