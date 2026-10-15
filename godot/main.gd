@@ -149,6 +149,7 @@ var performance_text: Label
 var weak_button: Button
 var review_sheet: AcceptDialog
 var pause_sheet: Control
+var advanced_pause_open := false
 var skip_stage_button: Button
 var placement_button: Button
 var apply_tempo_button: Button
@@ -531,7 +532,7 @@ func _navigate(screen: String) -> void:
     if overlay_root != null:
         overlay_root.visible = screen != "practice"
     if pause_sheet != null:
-        pause_sheet.present(last_state if screen == "practice" else {})
+        pause_sheet.present(last_state if screen == "practice" and advanced_pause_open else {})
     for key in screens:
         (screens[key] as Control).visible = (str(key) == screen
             or str(key) == "practice" and screen != "practice")
@@ -1205,6 +1206,7 @@ func _build_lesson_screen() -> void:
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     content.add_child(scroll)
+    content.add_child(_button("Advanced practice controls", _open_advanced_pause))
     lesson_rows = _stack(10)
     lesson_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.add_child(lesson_rows)
@@ -1867,8 +1869,13 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     practice_progress.value = float(parsed.get("progress", 0.0))
     stop_button.disabled = not bool(parsed.get("running", false))
     var phase: String = str(parsed.get("phase", "ready"))
-    pause_sheet.present(parsed if current_screen == "practice" else {})
-    start_button.visible = phase != "paused"
+    if not bool(parsed.get("paused", false)):
+        advanced_pause_open = false
+    pause_sheet.present(parsed if current_screen == "practice" and advanced_pause_open else {})
+    start_button.visible = true
+    # Play/Resume stays on the score even when paused. The old modal is
+    # optional instead of interrupting every brief pause.
+    start_button.visible = true
     if demo_player != null:
         demo_player.synchronize(parsed)
     listen_button.disabled = not bool(parsed.get("loaded", false))
@@ -2412,6 +2419,19 @@ func _toggle_playing() -> void:
         return
     _send_action({"action": "pause" if bool(last_state.get("running", false)) else "start"})
 
+func _open_advanced_pause() -> void:
+    _navigate("practice")
+    advanced_pause_open = true
+    if bool(last_state.get("paused", false)):
+        pause_sheet.present(last_state)
+    elif _has_active_transport():
+        _send_action({"action":"pause"})
+    else:
+        # Advanced options require a live paused attempt; use Path controls
+        # directly when nothing is playing.
+        advanced_pause_open = false
+
+
 func _toggle_pause() -> void:
     if _has_active_transport() or (str(last_state.get("mode", "practice")) == "learn" and str(last_state.get("phase", "")) in ["guided_wait", "paused"]):
         _send_action({"action": "resume" if bool(last_state.get("paused", false)) else "pause"})
@@ -2494,6 +2514,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
             get_viewport().set_input_as_handled()
             return
         if current_screen != "practice":
+            return
+        if event.keycode == KEY_P and event.shift_pressed:
+            _open_advanced_pause()
+            get_viewport().set_input_as_handled()
             return
         match event.keycode:
             KEY_SPACE:
