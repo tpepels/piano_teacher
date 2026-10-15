@@ -67,6 +67,28 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Live physical-key feedback (UI phase 1)
+
+When a USB MIDI piano is connected, timed Practice and Perform show a keyboard
+beneath the score. The next expected chord is highlighted, held physical keys
+light up, and even brief released taps are visible for about 0.8 seconds.
+The response distinguishes a received key, an expected pitch played near its
+onset, an early/late attack, and an unexpected pitch. Matched attacks also
+produce a short pulse around their exact engraved notehead. A key struck during
+the count-in is shown as an input, not as a successful attack.
+
+These immediate highlights are **provisional**. They do not grade release
+length, pedal, or mastery. Final note classifications and clean-pass progress
+still come from the regular authoritative assessor. The practice screen uses
+50 ms local HTTP polling while a piano is connected; actual instrument-to-screen
+latency remains to be measured on the Kawai.
+
+To verify on the instrument: open Chord Changes, select the Kawai MIDI input,
+play one key to start the count-in, release it, then play the left-hand notes.
+Check that key presses illuminate immediately, matched score notes pulse, wrong
+notes show a contrasting color, chords light multiple keys, and release removes
+held-key highlighting. Repeat with an imported piece to see score pulses.
+
 ## Learn and practise
 
 Opening a piece starts **Learn notes**. Find the highlighted note or chord on
