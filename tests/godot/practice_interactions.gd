@@ -89,6 +89,39 @@ func expect_command(action: String, description: String) -> void:
     check(app.commands == [{"action": action}], description + ": " + str(app.commands))
     app.commands.clear()
 
+func test_three_button_stage() -> void:
+    show_state()
+    check(app.practice_controls.get_child_count() == 3,
+        "Practice surface must have exactly Play, Retry and Listen")
+    check(app.practice_controls.get_child(0) == app.practice_retry_button,
+        "Retry is the first primary action")
+    check(app.practice_controls.get_child(1) == app.start_button,
+        "Play/Pause occupies the central primary position")
+    check(app.practice_controls.get_child(2) == app.listen_button,
+        "Listen is the third primary action")
+    check(not app.mode_choice.is_visible_in_tree() and not app.hints_toggle.is_visible_in_tree(),
+        "Advanced dropdowns must not appear during playing")
+    show_state("paused")
+    check(app.start_button.visible and app.start_button.text.begins_with("Resume"),
+        "Paused score retains its Resume control")
+    check(not app.pause_sheet.visible,
+        "Pausing must not force a modal menu over the music")
+    show_state("ready")
+    app.commands.clear()
+    app.listen_button.pressed.emit()
+    expect_command("listen", "One tap enters Listen")
+    var listening: Dictionary = state("ready")
+    listening["mode"] = "listen"
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(listening).to_utf8_buffer())
+    check(app.listen_button.text == "Practice", "Listen becomes a one-tap return")
+    app.listen_button.pressed.emit()
+    expect_command("practice", "One tap returns from Listen to practice")
+    app._navigate("lesson")
+    check(app.mode_choice.is_visible_in_tree() and app.hints_toggle.is_visible_in_tree(),
+        "Advanced teaching options remain reachable in Lesson Path")
+    app._navigate("practice")
+
+
 func test_primary_transport() -> void:
     show_state()
     app.start_button.pressed.emit()
@@ -110,19 +143,27 @@ func test_primary_transport() -> void:
     check(visible_buttons("Resume").size() == 1, "Paused practice offers exactly one Resume control")
 
 func test_secondary_stop() -> void:
+    # Advanced Stop remains functional from Lesson Path or the S shortcut.
+    # It is not a fourth/fifth routine button on the score.
     show_state()
-    var ready_stops := visible_buttons("Stop")
-    check(ready_stops.is_empty() or ready_stops[0].disabled, "Stop is unavailable before an attempt starts")
+    check(visible_buttons("Stop").is_empty(),
+        "Normal practice shows no Stop button competing with three actions")
     for phase in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]:
         show_state(phase)
         app.commands.clear()
-        var stops := visible_buttons("Stop")
-        check(stops.size() == 1, "An active attempt has one explicit secondary Stop control: " + phase)
-        if stops.size() == 1:
-            check(stops[0] != app.start_button, "Stop never replaces the primary Pause/Resume control")
-            check(not stops[0].disabled, "Stop remains available during " + phase)
-            stops[0].pressed.emit()
-            expect_command("stop", "Secondary Stop abandons " + phase)
+        key(KEY_S)
+        expect_command("stop", "S ends an attempt during " + phase)
+        check(visible_buttons("Stop").is_empty(),
+            "Stop must remain out of the normal practice flow")
+    show_state("playing")
+    app._navigate("lesson")
+    check(app.stop_button.is_visible_in_tree() and not app.stop_button.disabled,
+        "Advanced Stop stays accessible in Lesson Path")
+    app.commands.clear()
+    app.stop_button.pressed.emit()
+    expect_command("stop", "Advanced Stop retains its actual transport action")
+    app._navigate("practice")
+
 
 func routed_key(code: Key, unicode_value: int = 0, shifted: bool = false) -> void:
     # Send both halves through the whole window: a focused Button can activate
@@ -153,10 +194,10 @@ func test_focused_shortcuts() -> void:
     # native text input rather than invoking practice shortcuts.
     show_state()
     for control in app.practice_controls.get_children():
-        if control is Button and control.text == "Next →":
+        if control is Button and control.text == "Retry":
             control.grab_focus()
     await routed_key(KEY_ENTER)
-    expect_command("next", "Enter activates the focused button")
+    expect_command("restart", "Enter activates the focused Retry button")
     app._navigate("settings")
     app.folder_edit.text = ""
     app.folder_edit.grab_focus()
@@ -315,7 +356,9 @@ func test_pause_choices() -> void:
     paused["seek_available"] = true
     paused["seek_range"] = {"first_bar":1,"last_bar":6}
     app._on_state(0,200,PackedStringArray(),JSON.stringify(paused).to_utf8_buffer())
-    check(app.pause_sheet.visible, "Pause opens a focused sheet")
+    check(not app.pause_sheet.visible, "Ordinary Pause never opens a menu over the score")
+    app._open_advanced_pause()
+    check(app.pause_sheet.visible, "Explicit advanced controls open a focused sheet")
     app.commands.clear()
     app.pause_sheet.resume_button.pressed.emit()
     expect_command("resume", "Sheet Resume continues the same attempt")
@@ -338,6 +381,7 @@ func test_focus_trap() -> void:
     paused["seek_available"] = true
     paused["seek_range"] = {"first_bar":1,"last_bar":6}
     app._on_state(0,200,PackedStringArray(),JSON.stringify(paused).to_utf8_buffer())
+    app._open_advanced_pause()
     await process_frame
     app.commands.clear()
     check(root.gui_get_focus_owner() == app.pause_sheet.resume_button,
@@ -501,6 +545,7 @@ func run() -> void:
     app.score_view.texture = ImageTexture.create_from_image(image)
     var scenario := OS.get_cmdline_user_args()[0]
     match scenario:
+        "three_button_stage": test_three_button_stage()
         "primary_transport": test_primary_transport()
         "secondary_stop": test_secondary_stop()
         "focused_shortcuts": await test_focused_shortcuts()
