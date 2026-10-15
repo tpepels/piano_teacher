@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Install dependencies
-        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango
+        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid
       - uses: actions/checkout@v4
       - name: Install application
         run: |
