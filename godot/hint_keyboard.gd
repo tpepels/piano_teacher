@@ -125,12 +125,17 @@ func update_live(expected_pitches: Array, held_pitches: Array, events: Array, co
     _last_status = ""
     _last_age = 999.0
     if not events.is_empty():
+        # Keep independent colors for chord notes, not just the final attack.
+        for event in events:
+            if not event is Dictionary or float(event.get("age", 999.0)) >= 0.8:
+                continue
+            var played_pitch: int = int(event.get("pitch", -1))
+            if played_pitch >= 21 and played_pitch <= 108:
+                _pressed[played_pitch] = str(event.get("status", "heard"))
         var last: Dictionary = events[events.size() - 1]
         _last_pitch = int(last.get("pitch", -1))
         _last_status = str(last.get("status", "heard"))
         _last_age = float(last.get("age", 999.0))
-        if _last_pitch >= 21 and _last_pitch <= 108 and _last_age < 0.8:
-            _pressed[_last_pitch] = _last_status
     visible = connected
     if not is_node_ready():
         await ready
