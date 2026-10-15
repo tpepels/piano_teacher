@@ -136,12 +136,12 @@ def test_unsupported_xml_attacks_raise_meaningful_errors(tmp_path, body, message
 
 @pytest.mark.parametrize('events, message', [
     ([mido.Message('note_on', note=60, velocity=80), mido.MetaMessage('end_of_track', time=997)], 'unterminated MIDI note'),
-    ([mido.Message('note_off', note=60, time=997)], 'orphan MIDI note'),
-    ([mido.Message('note_on', note=60, velocity=80), mido.Message('note_off', note=60)], 'non-positive MIDI note'),
+    ([mido.Message('note_off', note=60, time=997)], 'No pitched MIDI notes found'),
+    ([mido.Message('note_on', note=60, velocity=80), mido.Message('note_off', note=60)], 'No pitched MIDI notes found'),
     ([mido.Message('note_on', note=60, velocity=80), mido.Message('note_on', note=60, velocity=80, time=10),
       mido.Message('note_off', note=60, time=100), mido.Message('note_off', note=60, time=100)], 'overlapping MIDI note'),
 ])
-def test_unsupported_midi_pairing_never_fabricates_or_discards_required_attacks(tmp_path, events, message):
+def test_midi_with_no_sounding_notes_or_unrepairable_pairings_still_fails(tmp_path, events, message):
     path = write_midi(tmp_path/'unsupported.mid', [events])
     with pytest.raises(ValueError, match=message):
         music.load_midi(path)
