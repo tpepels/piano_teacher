@@ -24,4 +24,3 @@ def test_adaptive_smoke_exercises_real_godot_and_three_clean_repeats():
 def test_godot_reports_actual_loaded_lesson():
     assert 'print("PHASE0_LESSON_READY: REVISION:"' in GODOT
     assert 'int(last_state.get("required_notes", 0))' in GODOT
-    assert '"Stage %d of %d' in GODOT

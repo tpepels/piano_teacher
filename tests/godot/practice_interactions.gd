@@ -121,7 +121,7 @@ func test_secondary_stop() -> void:
             stops[0].pressed.emit()
             expect_command("stop", "Secondary Stop abandons " + phase)
 
-func routed_key(code: Key, unicode_value: int = 0) -> void:
+func routed_key(code: Key, unicode_value: int = 0, shifted: bool = false) -> void:
     # Send both halves through the whole window: a focused Button can activate
     # on release after a shortcut has already handled the press.
     for pressed in [true, false]:
@@ -129,6 +129,7 @@ func routed_key(code: Key, unicode_value: int = 0) -> void:
         event.keycode = code
         event.unicode = unicode_value
         event.pressed = pressed
+        event.shift_pressed = shifted
         Input.parse_input_event(event)
         await process_frame
 
@@ -269,6 +270,73 @@ func test_modes() -> void:
         check(app.commands.back().get("action") == "stop", "Leaving during mode preparation preserves Stop intent")
         app.action_pending = false
 
+func test_pause_choices() -> void:
+    var paused := state("paused")
+    paused["seek_available"] = true
+    paused["seek_range"] = {"first_bar":1,"last_bar":6}
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(paused).to_utf8_buffer())
+    check(app.pause_sheet.visible, "Pause opens a focused sheet")
+    app.commands.clear()
+    app.pause_sheet.resume_button.pressed.emit()
+    expect_command("resume", "Sheet Resume continues the same attempt")
+    app.pause_sheet.retry_button.pressed.emit()
+    expect_command("restart", "Sheet Retry starts a fresh attempt")
+    app.pause_sheet.listen_button.pressed.emit()
+    expect_command("listen", "Sheet Listen starts real example audio")
+    app.pause_sheet.bar_choice.value = 3
+    app.pause_sheet.seek_button.pressed.emit()
+    check(app.commands == [{"action":"seek", "bar":3}], "Bar selection sends a real source bar")
+    app.commands.clear()
+    check(not app.progress_label.text.contains("Stage"), "Foreground explains clean runs rather than numeric curriculum counts")
+    check(app.speed_label.text.contains("target"), "Current and target tempos remain visible")
+    app.pause_sheet.exit_button.pressed.emit()
+    check(app.current_screen == "library", "Sheet Exit returns to the music library")
+    expect_command("stop", "Exit abandons the paused attempt")
+
+func test_focus_trap() -> void:
+    var paused := state("paused")
+    paused["seek_available"] = true
+    paused["seek_range"] = {"first_bar":1,"last_bar":6}
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(paused).to_utf8_buffer())
+    await process_frame
+    app.commands.clear()
+    check(root.gui_get_focus_owner() == app.pause_sheet.resume_button,
+        "Opening the pause sheet focuses its Resume action")
+    for shifted in [false,true]:
+        for index in range(20):
+            await routed_key(KEY_TAB,0,shifted)
+            var owner: Control = root.gui_get_focus_owner()
+            check(owner != null and app.pause_sheet.is_ancestor_of(owner),
+                "Tab stays inside the pause sheet, reverse=" + str(shifted) + " step=" + str(index))
+    for code in [KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN]:
+        app.pause_sheet.resume_button.grab_focus()
+        for index in range(12):
+            # OptionButton up/down intentionally opens its native popup;
+            # test the sheet's own directional focus loop from a button.
+            if root.gui_get_focus_owner() is OptionButton:
+                app.pause_sheet.exit_button.grab_focus()
+            await routed_key(code)
+            var owner: Control = root.gui_get_focus_owner()
+            check(owner != null and app.pause_sheet.is_ancestor_of(owner),
+                "Arrow focus stays inside the pause sheet: key=" + str(code) + " step=" + str(index)
+                + " owner=" + str(owner.get_path() if owner != null else "none"))
+    for code in [KEY_LEFT,KEY_RIGHT]:
+        app.pause_sheet.hand_choice.grab_focus()
+        await routed_key(code)
+    check(app.commands.is_empty(), "Modal focus navigation never activates hidden course navigation")
+    var field: LineEdit = app.pause_sheet.bar_choice.get_line_edit()
+    field.grab_focus()
+    await routed_key(KEY_RIGHT)
+    await routed_key(KEY_LEFT)
+    check(app.commands.is_empty(), "Editing the measure field never navigates the course")
+    paused["mode"] = "listen"
+    paused["seek_available"] = false
+    paused["seek_range"] = null
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(paused).to_utf8_buffer())
+    check(app.pause_sheet.visible and app.pause_sheet.seek_button.disabled,
+        "Paused Listen accepts a null seek range and offers no seek action")
+    check(not app.pause_sheet.bar_choice.editable, "Unavailable Listen seek cannot be edited")
+
 func run() -> void:
     root.mode = Window.MODE_WINDOWED
     root.size = Vector2i(800, 600)
@@ -295,6 +363,8 @@ func run() -> void:
         "compact_feedback": await test_compact_feedback()
         "instructional_transition": test_instructional_transition()
         "modes": test_modes()
+        "pause_choices": test_pause_choices()
+        "focus_trap": await test_focus_trap()
         _: check(false, "Unknown interaction scenario: " + scenario)
     print("PRACTICE_INTERACTION_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

@@ -124,6 +124,7 @@ var listen_button: Button
 var performance_review: VBoxContainer
 var performance_text: Label
 var weak_button: Button
+var pause_sheet: Control
 
 func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
@@ -457,6 +458,8 @@ func _navigate(screen: String) -> void:
         elif phase in ["count_in", "playing", "guided_wait", "guided_complete", "disconnected", "paused", "feedback", "recovering", "loading"] or starting:
             _send_action({"action": "stop"})
     current_screen = screen
+    if pause_sheet != null:
+        pause_sheet.present(last_state if screen == "practice" else {})
     for key in screens:
         (screens[key] as Control).visible = str(key) == screen
     if screen == "library":
@@ -824,6 +827,13 @@ func _build_interface() -> void:
     device_menu = PopupMenu.new()
     device_menu.id_pressed.connect(_choose_device)
     add_child(device_menu)
+    pause_sheet = preload("res://pause_sheet.gd").new()
+    add_child(pause_sheet)
+    pause_sheet.chosen.connect(func(command: Dictionary):
+        if command.get("action") == "exit":
+            _navigate("library")
+        else:
+            _send_action(command))
     _navigate("home")
     _refresh_score_status()
 
@@ -1280,14 +1290,18 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var kind := str(parsed.get("kind", "learn")).capitalize()
     passage_label.text = "%s · Measures %d–%d" % [
         kind, int(parsed.get("first_bar", 0)), int(parsed.get("last_bar", 0))]
-    speed_label.text = "%d BPM" % int(parsed.get("bpm", 0))
+    speed_label.text = "%d BPM · target %d" % [int(parsed.get("bpm", 0)),int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
+    speed_label.add_theme_font_size_override("font_size", 16 if size.x < 900 else 18)
+    speed_label.tooltip_text = "Current practice tempo and your selected target"
     hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
+    hand_label.text += " · " + ("Piano connected" if not str(parsed.get("device", "")).is_empty() else "No piano")
+    hand_label.tooltip_text = str(parsed.get("device", "Connect your USB MIDI piano in Settings"))
     if current_screen != "settings":
         tempo_setting.set_value_no_signal(float(parsed.get("target_bpm", parsed.get("bpm", 40))))
     var stage: String = str(parsed.get("lesson_level", "original"))
-    var explanations := {"skeleton": "Skeleton · Find the essential melody and bass notes.",
-        "outline": "Outline · Restore the outer chord tones and rhythm.",
-        "original": "Original · Play every required note in this passage."}
+    var explanations := {"skeleton": "Find the main notes first.",
+        "outline": "Add the chord notes while keeping the pulse.",
+        "original": "Bring every note together."}
     lesson_info_label.text = str(explanations.get(stage, ""))
     var learning: bool = str(parsed.get("mode", "practice")) == "learn"
     var teaching: Dictionary = parsed.get("teaching", {}) if parsed.get("teaching") is Dictionary else {}
@@ -1300,7 +1314,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     hint_keyboard.update_state(teaching if learning else {})
     if learning:
         var targets: int = int(teaching.get("target_count", 0))
-        lesson_info_label.text = "%s · Find the highlighted notes at your own pace." % hand_label.text
+        lesson_info_label.text = "Find the highlighted notes at your own pace."
         progress_label.text = "Notes found %d of %d · No rhythm scoring yet" % [int(teaching.get("target_index", 0)), targets]
     for hand in hand_buttons:
         var button: Button = hand_buttons[hand]
@@ -1308,6 +1322,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     practice_progress.value = float(parsed.get("progress", 0.0))
     stop_button.disabled = not bool(parsed.get("running", false))
     var phase: String = str(parsed.get("phase", "ready"))
+    pause_sheet.present(parsed if current_screen == "practice" else {})
+    start_button.visible = phase != "paused"
     if demo_player != null:
         demo_player.synchronize(parsed)
     listen_button.disabled = not bool(parsed.get("loaded", false))
@@ -1354,9 +1370,11 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if unpositioned > 0:
         feedback_label.text += " · %d unpositioned note(s)" % unpositioned
     if not learning:
-        progress_label.text = "Stage %d of %d  ·  Clean runs %d of 3" % [
-            int(parsed.get("lesson_step", 1)), int(parsed.get("lesson_steps", 1)),
-            int(parsed.get("streak", 0))]
+        progress_label.text = "Clean runs %d of 3 at %d BPM" % [int(parsed.get("streak", 0)), int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
+        if str(parsed.get("mode", "")) == "perform":
+            progress_label.text = "Perform · keep going to the end; review follows"
+        elif str(parsed.get("mode", "")) == "listen":
+            progress_label.text = "Listen · example audio; your playing is not graded"
     var next_action: String = str(parsed.get("next_action", ""))
     if not next_action.is_empty() and (phase in ["feedback", "recovering", "loading", "paused"] or bool(parsed.get("guided_recovery", false))):
         lesson_info_label.text = next_action
@@ -1692,6 +1710,10 @@ func _choose_device(id: int) -> void:
 func _input(event: InputEvent) -> void:
     if not event is InputEventKey:
         return
+    if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,KEY_TAB]:
+        return
+    if get_viewport().gui_get_focus_owner() is LineEdit and event.keycode not in [KEY_F11, KEY_ESCAPE]:
+        return
     var practice_shortcut: bool = current_screen == "practice" and event.keycode in [
         KEY_ESCAPE, KEY_SPACE, KEY_P, KEY_R, KEY_S, KEY_LEFT, KEY_RIGHT]
     if event.keycode == KEY_F11 or practice_shortcut:
@@ -1702,6 +1724,10 @@ func _input(event: InputEvent) -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:
+        if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,KEY_TAB]:
+            return
+        if get_viewport().gui_get_focus_owner() is LineEdit and event.keycode not in [KEY_F11, KEY_ESCAPE]:
+            return
         if event.keycode == KEY_F11:
             _toggle_fullscreen()
             get_viewport().set_input_as_handled()

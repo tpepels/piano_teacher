@@ -73,10 +73,10 @@ Interfaces: demonstration consumes the active generated note set and selected BP
 
 Files: focused Godot controls/views and interaction/capture tests; avoid gratuitous main.gd restructuring.
 
-- [ ] Write failing learner-control tests for mode clarity, pause sheet Resume/Retry/Listen/tempo/hand/Exit, keyboard focus and responsive hint visibility.
-- [ ] Replace prominent numeric stage metadata with instruction/next transition, clear current/target BPM and connection status; use color plus text/shape indicators.
-- [ ] Implement reliable paused bar selection only if it can preserve source boundaries, revision safety and no partial mastery.
-- [ ] Verify every control at fullscreen, 1536×960, 1024×768 and 800×600 with Godot-produced frames; run full suite and commit P4.
+- [x] Write failing learner-control tests for mode clarity, pause sheet Resume/Retry/Listen/tempo/hand/Exit, keyboard focus and responsive hint visibility.
+- [x] Replace prominent numeric stage metadata with instruction/next transition, clear current/target BPM and connection status; use color plus text/shape indicators.
+- [x] Implement reliable paused bar selection only if it can preserve source boundaries, revision safety and no partial mastery.
+- [x] Verify every control at fullscreen, 1536×960, 1024×768 and 800×600 with Godot-produced frames; run full suite and commit P4.
 
 ## P5 — Natural progression and saved learner state
 
@@ -101,3 +101,5 @@ Files: focused learner-progress module/SQLite migration, `learning.py` and serve
 - P2 complete: 321 tests passed in 105.86 seconds, Godot parser and independent review pass. Actual 28-frame learner journey covers two failures, guided return, tempo restoration and three full clean target passes. Report `docs/teaching-p2-verification.md`.
 
 - P2 committed: `65379b2`. P3 complete: 378 P0–P3 tests passed in 124.25 seconds, parser and independent review pass, 20 real desktop frames and PCM playback verified. Report `docs/teaching-p3-verification.md`.
+
+- P3 committed: `3a5e463`. P4 complete: 18 actual UI frames at three exact sizes/fullscreen, all pause controls, modal focus and source seek verified. Full run396passes/two outdated assertions corrected, 29 focused checks and affected28-frame learner journey pass; see `docs/teaching-p4-verification.md`.

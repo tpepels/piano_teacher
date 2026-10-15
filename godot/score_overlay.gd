@@ -143,9 +143,9 @@ func _draw() -> void:
             draw_string(ThemeDB.fallback_font, center + Vector2(12, -9), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color)
         elif status == "correct":
             draw_arc(center, 9.0, 0.0, TAU, 20, Color(color, .37), 1.5, true)
+            draw_string(ThemeDB.fallback_font, center + Vector2(12, -9), "✓", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, color)
         else:
             var radius := 12.0 if status == "missed" else 10.0
-            draw_circle(center, radius, Color(Design.PANEL, .85))
             draw_arc(center, radius, 0.0, TAU, 24, color, 2.5, true)
             var symbol: String = str(labels.get(status, "!"))
             var font: Font = ThemeDB.fallback_font

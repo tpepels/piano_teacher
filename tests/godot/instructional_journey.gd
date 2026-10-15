@@ -77,6 +77,8 @@ func capture(label: String, beat: float = -999) -> Dictionary:
     var picture := root.get_texture().get_image()
     var scale := Vector2(picture.get_size()) / root.get_visible_rect().size
     var panel: Rect2 = app.score_frame.get_global_rect()
+    var pause_modal: Control = app.get("pause_sheet")
+    var obscured := pause_modal != null and pause_modal.is_visible_in_tree()
     var selected: Dictionary = {}
     if beat > -998:
         track(beat)
@@ -90,15 +92,22 @@ func capture(label: String, beat: float = -999) -> Dictionary:
             if panel.grow(-10).has_point(point) and ink(picture, point*scale) >= 8:
                 selected = note
                 break
-    check(not selected.is_empty(), "Visible engraved note survives " + label)
+    if obscured:
+        var viewport := root.get_visible_rect()
+        for control in [pause_modal.resume_button,pause_modal.retry_button,pause_modal.exit_button]:
+            check(control.is_visible_in_tree() and viewport.encloses(control.get_global_rect()),
+                "Actual pause choice fits the viewport in " + label)
+    else:
+        check(not selected.is_empty(), "Visible engraved note survives " + label)
     var entry := {"frame":label+".png", "phase":phase(), "mode":app.last_state.get("mode", ""),
         "beat":app._transport_beat_now(), "bpm":app.last_state.get("bpm", 0),
         "target_bpm":app.last_state.get("target_bpm", 0),
         "streak":app.last_state.get("streak", -1), "mastered":app.last_state.get("mastered", -1),
         "next_action":app.last_state.get("next_action", ""),
         "transition":app.last_state.get("transition_in_seconds"),
-        "retry_range":app.last_state.get("retry_range"), "score_height":app.score_frame.size.y}
-    if not selected.is_empty():
+        "retry_range":app.last_state.get("retry_range"), "score_height":app.score_frame.size.y,
+        "notation_occluded_by_pause":obscured}
+    if not selected.is_empty() and not obscured:
         var point := position(selected)*scale
         entry["note_id"] = str(selected.id)
         entry["note_x"] = point.x
@@ -114,10 +123,11 @@ func capture(label: String, beat: float = -999) -> Dictionary:
         check(absf(line.x-(panel.position.x+panel.size.x*.42)) < 2,
             "Timing line remains fixed in " + label)
     check(picture.save_png(folder+"/"+label+".png") == OK, "Save actual rendered " + label)
-    check(app.start_button.is_visible_in_tree() and app.stop_button.is_visible_in_tree(),
-        "Primary and Stop stay visible in " + label)
-    check(root.get_visible_rect().encloses(app.start_button.get_global_rect()),
-        "Primary control fits desktop during " + label)
+    if not obscured:
+        check(app.start_button.is_visible_in_tree() and app.stop_button.is_visible_in_tree(),
+            "Primary and Stop stay visible in " + label)
+        check(root.get_visible_rect().encloses(app.start_button.get_global_rect()),
+            "Primary control fits desktop during " + label)
     if phase() in ["recovering", "feedback", "paused"]:
         check(visible_instruction(), "The next musical action is actually displayed in " + label)
     frames.append(entry)
@@ -207,7 +217,7 @@ func run() -> void:
         "Paused break cannot start another attempt")
     check(absf(float(app.last_state.transition_in_seconds)-remaining) < .05,
         "Paused feedback countdown remains frozen")
-    app.start_button.pressed.emit()
+    app.pause_sheet.resume_button.pressed.emit()
     await wait_running(216,8)
     await capture("09-exact-chunk-retry-count-in")
     await wait_for(func(): return phase() == "recovering" and bool(app.last_state.get("guided_recovery", false)),

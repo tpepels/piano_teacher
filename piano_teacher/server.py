@@ -554,6 +554,35 @@ class PracticeEngine:
         self.retry_range = {key: value for key, value in selected.items() if key != "errors"}
         self.next_action = f"Practice bars {selected['first_bar']}-{selected['last_bar']} at {self.plan.bpm} BPM."
 
+    def _seek_grid(self) -> tuple[float, ...] | None:
+        if (self.plan is None or self.mode not in ("learn", "practice", "perform")
+                or not self.plan.piece.bar_boundaries):
+            return None
+        try:
+            return phrase_grid(self.plan.active_phrase, self.plan.piece.bar_boundaries)
+        except ValueError:
+            return None
+
+    def _seek(self, bar):
+        # Validate before cancelling any paused clock, feedback, or score ack.
+        if not self.paused:
+            raise ValueError("Pause before choosing a source bar")
+        grid = self._seek_grid()
+        if grid is None:
+            raise ValueError("Seeking needs a source measure grid in Learn, Practice, or Perform")
+        phrase = self.plan.active_phrase
+        if type(bar) is not int or not phrase.first_bar <= bar <= phrase.last_bar:
+            raise ValueError("Choose a whole bar number inside the active passage")
+        start = grid[bar-phrase.first_bar]
+        if self.mode == "learn":
+            self._begin_learn(from_beat=start)
+        else:
+            self._prepare_practice()
+            self.pending_rewind = start
+            self.retry_range = {"first_bar": bar, "last_bar": phrase.last_bar,
+                                "start_beat": start, "end_beat": grid[-1]}
+            self.next_action = f"Get ready to play from bar {bar} at {self.plan.bpm} BPM."
+
     def _commit_pending(self) -> str:
         """Apply a completed attempt after feedback has been shown on its own score."""
         if self.pending_result is None or self.plan is None:
@@ -659,6 +688,9 @@ class PracticeEngine:
                 return
             if action == "practice_weak":
                 self._practice_weak()
+                return
+            if action == "seek":
+                self._seek(kwargs.get("bar"))
                 return
             if action in ("learn", "learn_retry"):
                 previous_start = self.guided_range[0] if self.guided_range else 0.0
@@ -952,7 +984,11 @@ class PracticeEngine:
         with self.lock:
             self._update()
             p=self.plan
+            seek_grid = self._seek_grid()
             input_activity = {
+                "seek_available": self.paused and seek_grid is not None,
+                "seek_range": ({"first_bar": p.active_phrase.first_bar, "last_bar": p.active_phrase.last_bar}
+                               if seek_grid is not None else None),
                 "next_action": self.next_action,
                 "transition_in_seconds": (max(0.0, self.next_at-(self.paused_at if self.paused else time.monotonic()))
                     if self.next_at and (self.pending_result is not None or self.pending_rewind is not None) else None),
