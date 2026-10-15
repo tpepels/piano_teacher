@@ -68,6 +68,24 @@ func _run() -> void:
     _check_actions(transport, viewport, "Transport")
     _check(score.size.y >= 135.0, "Notation area became unusably small")
     _check(_in_viewport(score, viewport), "Notation panel extends outside window")
+    var illuminated: Control = scene.get("game_stage")
+    var streak_meter: Control = scene.get("game_streak")
+    _check(illuminated != null and illuminated.get_parent() == score,
+        "The musical stage must be behind the real score, not a separate game simulation")
+    _check(streak_meter != null and streak_meter.custom_minimum_size.x >= 120,
+        "Three clean-pass indicators need a readable dedicated space")
+    _check(streak_meter.size.y >= 20.0,
+        "Clean-run indicators collapsed to an invisible line")
+    _check(_in_viewport(streak_meter, viewport),
+        "Game clean-run indicators leave the visible window")
+    var three: Control = scene.get("practice_controls")
+    _check(three.get_child_count() == 3,
+        "The game must have only Retry, Play/Pause and Listen as transport controls")
+    _check((scene.get("start_button") as Button).get_theme_stylebox("normal") is StyleBoxFlat,
+        "Primary piano control must have a tactile custom skin")
+    var brand: Label = scene.get("game_brand")
+    _check(brand.visible == (viewport.x >= 1120.0),
+        "Decorative game brand must collapse before it crowds piano controls")
 
     # Check wrong physical pitches use the real staff's pitch spacing and
     # do not move a correct chord note or invent a separate score location.
