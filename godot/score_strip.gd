@@ -69,6 +69,30 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
                 if candidate < right - 16 and candidate > left:
                     left = candidate
                     trimmed_header = true
+        # Verovio may extend staff lines well beyond the final printed
+        # barline. Trim only that redundant trailing run, not a note's
+        # native spacing or any written barline/tie/accidental glyph.
+        var trimmed_tail := false
+        if bool(layout.get("strip_trim_repeated_headers", false)) \
+                and source_systems.find(system) < source_systems.size() - 1:
+            var barline_x: float = float(system.get("last_barline_x", -1.0))
+            var staff_lines_for_tail: Array = system.get("staff_lines", [])
+            if barline_x >= 0.0 and staff_lines_for_tail.size() >= 2:
+                var gap_for_tail: float = absf(float(staff_lines_for_tail[1]) -
+                    float(staff_lines_for_tail[0])) * source_size.y
+                var final_note_x := -INF
+                for item in layout.get("notes", []):
+                    if int(item.get("page", -1)) == page and str(item.get("system", "")) == str(system.get("system", "")):
+                        final_note_x = maxf(final_note_x, float(item.get("x", -INF)) * source_size.x)
+                var last_barline_pixel: float = barline_x * source_size.x
+                # Don't trust an unrecognized barline or remove the right
+                # portion of a note placed unusually close to that barline.
+                if last_barline_pixel >= final_note_x + gap_for_tail * .5:
+                    var proposed_right: int = int(ceil(last_barline_pixel +
+                        maxf(9.0, gap_for_tail * 1.25)))
+                    if proposed_right < right - 8 and proposed_right > left + 16:
+                        right = proposed_right
+                        trimmed_tail = true
         var top: int = maxi(0, int(floor(float(system.top) * source_size.y)))
         var bottom: int = mini(image.get_height(), int(ceil(float(system.bottom) * source_size.y)))
         if right <= left or bottom <= top:
@@ -82,7 +106,8 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
         mappings.append({"source_page": page, "source_system": str(system.get("system", "")),
             "source_size": source_size, "crop": Rect2(crop), "position": Vector2(width, 0),
             "staff_offset": offset, "system": system,
-            "trimmed_header": trimmed_header})
+            "trimmed_header": trimmed_header,
+            "trimmed_tail": trimmed_tail})
         width += float(crop.size.x)
     var size := Vector2(maxf(1.0, width), maxf(1.0, above + below))
     var tiles: Array = []

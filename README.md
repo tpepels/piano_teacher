@@ -90,9 +90,11 @@ the exact downbeat and a whole 9.6-second passage.
 ## Phase 7.6 - Stable scrolling through system joins
 
 For generated two-hand piano lessons with **unchanged clefs, key and meter**,
-the scrolling strip now discards repeated *printed-system headers* at the
-start of subsequent systems. Reprinted clefs and their large left gutters
-previously made the fixed playhead race across blank space at every join.
+the scrolling strip discards repeated *printed-system headers* at the
+start of subsequent systems and, where Verovio exposes the true final
+barline, trims only unused staff extension after that barline. Reprinted
+clefs and excess blank staff are not musical time yet used to make the
+fixed playhead race across empty space at every join.
 The original starting clefs, staff, barlines, musical glyphs and Verovio
 attack coordinates remain intact; no notehead or tie is stretched. Imported
 MusicXML and passages with notation changes retain their original headers,

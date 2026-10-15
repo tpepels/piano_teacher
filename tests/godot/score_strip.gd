@@ -44,8 +44,13 @@ func run() -> void:
             var before: Dictionary = baseline.mappings[i]
             check(after.crop.position.x >= before.crop.position.x,
                 "repeated header removal cannot reveal extra unused page margin")
-            check(after.crop.end.x == before.crop.end.x,
-                "header cropping must not modify right side or final barline")
+            check(after.crop.end.x <= before.crop.end.x,
+                "trimming cannot add unnecessary trailing page width")
+            if bool(after.get("trimmed_tail", false)):
+                var original_barline: float = float(after.system.get("last_barline_x", -1.0))
+                check(original_barline >= 0.0 and float(after.crop.end.x) >
+                    original_barline * float(after.source_size.x) + 3.0,
+                    "the actual final barline must remain visible after tail trimming")
             if bool(after.get("trimmed_header", false)):
                 shortened += 1
                 check(after.crop.size.x < before.crop.size.x,
