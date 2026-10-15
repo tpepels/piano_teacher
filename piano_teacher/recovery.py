@@ -21,7 +21,8 @@ class RecoveryDecision:
 def check_two_bar_window(phrase: Phrase, hand: str, bpm: int,
                          played: list[PlayedNote], *,
                          from_beat: float, end_beat: float,
-                         beats_per_bar: float, threshold: int = 5) -> RecoveryDecision | None:
+                         beats_per_bar: float, threshold: int = 5,
+                         window_start_beat: float | None = None) -> RecoveryDecision | None:
     """Return a rewind after five wrong/missed notes, or None.
 
     played timestamps begin at from_beat within the excerpt. The window
@@ -31,7 +32,10 @@ def check_two_bar_window(phrase: Phrase, hand: str, bpm: int,
     if threshold <= 0 or beats_per_bar <= 0:
         raise ValueError("A positive error threshold and bar duration are required")
     end_beat = min(end_beat, phrase.end - phrase.start)
-    start_beat = max(from_beat, end_beat - 2 * beats_per_bar)
+    # The source MIDI's bar grid is authoritative for changing meters.
+    # The old fixed-length fallback remains for legacy synthetic fixtures.
+    start_beat = max(from_beat, window_start_beat if window_start_beat is not None
+                     else end_beat - 2 * beats_per_bar)
     if end_beat <= start_beat:
         return None
     selected = tuple(n for n in phrase.notes

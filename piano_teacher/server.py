@@ -24,6 +24,8 @@ from .recovery import check_two_bar_window
 from .music import Phrase
 from .lesson_score import build_lesson_score
 from .lesson_validation import require_lesson_alignment
+from .lesson_timing import lead_in_beats
+from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at
 from .live_feedback import settled_assessment
 
 
@@ -214,11 +216,11 @@ class PracticeEngine:
             self.feedback_marks=[]
             self.feedback_unmapped=0
             self.recorder=Recorder()
-            measures=max(1, phrase.last_bar - phrase.first_bar+1)
-            beats_per_bar=(phrase.end-phrase.start)/measures
-            self.count_in_beats=max(1,round(2*beats_per_bar))
-            self.next_boundary_beat = min(phrase.end-phrase.start,
-                (int(self.play_from_beat/(2*beats_per_bar))+1)*2*beats_per_bar)
+            grid=phrase_grid(phrase,self.plan.piece.bar_boundaries)
+            active_bar = max(0, min(len(grid)-2,
+                next((i for i in range(len(grid)-1) if grid[i] <= self.play_from_beat < grid[i+1]), len(grid)-2)))
+            self.count_in_beats=lead_in_beats(grid[active_bar+1]-grid[active_bar],self.plan.bpm)
+            self.next_boundary_beat=next_chunk_end(grid,self.play_from_beat)
             self.run_at=time.monotonic()+self.count_in_beats*60/self.plan.bpm
             self.feedback="Count in, then play"
 
@@ -311,14 +313,16 @@ class PracticeEngine:
         total_beats=phrase.end-phrase.start
         elapsed_beats=max(0.0,(now-self.run_at)*self.plan.bpm/60)
         score_beat=self.play_from_beat+elapsed_beats
-        beats_per_bar=total_beats/max(1,phrase.last_bar-phrase.first_bar+1)
+        grid=phrase_grid(phrase,self.plan.piece.bar_boundaries)
+        beats_per_bar=grid[1]-grid[0]
         # Defer five-error recovery until the two-bar boundary. Silent
         # previews never generate failure, assessment or mastery.
         while not self.preview_only and self.next_boundary_beat and score_beat >= self.next_boundary_beat:
             decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
                 self.recorder.presses if self.recorder else [],
                 from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
-                beats_per_bar=beats_per_bar)
+                beats_per_bar=beats_per_bar,
+                window_start_beat=chunk_start_at_end(grid,self.next_boundary_beat))
             if decision is not None:
                 # Capture marks at the performance tempo, not at the slower
                 # BPM selected for the next retry. Re-scaling the recorded
@@ -334,11 +338,11 @@ class PracticeEngine:
                 self.recorder=None
                 self.next_at=now+self.feedback_seconds
                 self.feedback=(f"{decision.errors} wrong or missed notes - retrying from "
-                               f"measure {phrase.first_bar + int(decision.restart_beat/beats_per_bar)} "
+                               f"measure {bar_number_at(grid,decision.restart_beat,phrase.first_bar)} "
                                f"at {self.plan.bpm} BPM")
                 return
             previous_boundary=self.next_boundary_beat
-            self.next_boundary_beat=min(total_beats,self.next_boundary_beat+2*beats_per_bar)
+            self.next_boundary_beat=next_chunk_end(grid,previous_boundary)
             if self.next_boundary_beat <= previous_boundary + 1e-7:
                 self.next_boundary_beat=0.0
         duration=(total_beats-self.play_from_beat)*60/self.plan.bpm
@@ -428,7 +432,7 @@ class PracticeEngine:
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,"target_bpm":p.target_bpm,
                     "streak":p.streak,"mastered":len(p.mastered),"phase":phase,
                     "countdown":max(0,-elapsed) if self.running else 0,
-                    "lead_in_bars":2,"play_from_beat":self.play_from_beat,
+                    "lead_in_bars":1,"play_from_beat":self.play_from_beat,
                     "recovery_beat":self.pending_rewind,
                     "clock_beat":elapsed*p.bpm/60 if self.running else 0.0,
                     "paused":self.paused,"transport_id":self.transport_id,
