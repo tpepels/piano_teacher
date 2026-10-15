@@ -16,6 +16,7 @@ const HintKeyboard := preload("res://hint_keyboard.gd")
 const GameBackdrop := preload("res://game_backdrop.gd")
 const GameStage := preload("res://game_stage.gd")
 const GameStreak := preload("res://game_streak.gd")
+const GameCountIn := preload("res://game_countin.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -45,6 +46,7 @@ var practice_header: HBoxContainer
 var game_brand: Label
 var game_stage: Control
 var game_streak: Control
+var game_count_in: Control
 var score_status_panel: CenterContainer
 var score_status_label: Label
 var score_retry_button: Button
@@ -270,12 +272,16 @@ func _transport_beat_now() -> float:
 
 func _update_count_in() -> void:
     if last_state.is_empty() or not bool(last_state.get("running", false)):
+        game_count_in.present(0.0, 4, false, false)
         count_tick_index = -999
         play_tick_index = -1
         count_in_display.visible = false
         return
     var beat: float = _transport_beat_now()
     var paused: bool = bool(last_state.get("paused", false))
+    game_count_in.present(beat,
+        maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4))))),
+        true, paused)
     var attempt: int = int(last_state.get("transport_id", 0))
     if attempt != last_audio_transport_id:
         count_tick_index = -999
@@ -1005,12 +1011,18 @@ func _build_interface() -> void:
     count_in_display.vertical_alignment = VERTICAL_ALIGNMENT_TOP
     count_in_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
     count_in_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-    count_in_display.offset_left = 22.0
-    count_in_display.offset_right = -22.0
+    count_in_display.offset_left = 180.0
+    count_in_display.offset_right = -18.0
     count_in_display.offset_top = 12.0
     count_in_display.offset_bottom = 52.0
     count_in_display.visible = false
     score_frame.add_child(count_in_display)
+    game_count_in = GameCountIn.new()
+    game_count_in.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+    game_count_in.position = Vector2(22, 12)
+    game_count_in.size = Vector2(142, 38)
+    game_count_in.visible = false
+    score_frame.add_child(game_count_in)
     # A visible retry notice must not consume vertical space or force the
     # bottom transport buttons off smaller laptop screens.
     practice_playback_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
