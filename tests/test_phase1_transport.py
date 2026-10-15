@@ -126,3 +126,19 @@ def test_godot_uses_one_clock_and_freezes_on_pause():
                    'func _toggle_pause() -> void:',
                    'func _restart_practice() -> void:']:
         assert source in script
+
+
+def test_three_four_count_in_retains_meter_for_click_accents(harness):
+    e, _ = harness
+    # Original length and preparation duration are different at slow speeds.
+    notes = (Note(0, 1, 60, 0, 0, 'right'),)
+    e.plan = LearningPlan(Piece(
+        'Three quarter count', 100, notes,
+        (Phrase(1, 1, 2, 0, 6, notes),)
+    ))
+    e.start()
+    assert e.state()['count_in_bar_beats'] == pytest.approx(3)
+    assert e.state()['count_in_beats'] < 3
+    source = (Path(__file__).resolve().parents[1] / 'godot' / 'main.gd').read_text()
+    assert 'posmod(tick, bar_beats) + 1' in source
+    assert 'last_state.get("count_in_bar_beats", 4)' in source

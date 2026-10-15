@@ -272,12 +272,13 @@ func _update_count_in() -> void:
     var tick: int = int(floor(beat + 0.00001))
     if tick != count_tick_index:
         count_tick_index = tick
-        var bar_beats: int = maxi(1, int(last_state.get("count_in_beats", 4)))
+        # The pickup may be shorter than a whole bar. Accents still follow
+        # the original musical meter, not its abbreviated preparation length.
+        var bar_beats: int = maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4)))))
         _count_tick(posmod(tick, bar_beats) == 0)
     if beat < 0.0:
-        var lead: float = maxf(0.5, float(last_state.get("count_in_beats", 3.0)))
-        var step: int = mini(ceili(lead), int(floor(beat + lead)) + 1)
-        count_in_display.text = "GET READY  ·  %d / %d" % [maxi(1, step), ceili(lead)]
+        var bar_beats: int = maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4)))))
+        count_in_display.text = "COUNT IN  ·  %d / %d" % [posmod(tick, bar_beats) + 1, bar_beats]
         count_in_display.visible = true
     else:
         count_in_display.visible = false

@@ -49,6 +49,7 @@ class PracticeEngine:
         self.auto = False
         self.preview_only = False
         self.count_in_beats = 0
+        self.count_in_bar_beats = 4.0
         self.feedback = "Open a MIDI or MusicXML file"
         self.score_revision = 0
         self._layout_cache: EngravedScore | None = None
@@ -219,7 +220,8 @@ class PracticeEngine:
             grid=phrase_grid(phrase,self.plan.piece.bar_boundaries)
             active_bar = max(0, min(len(grid)-2,
                 next((i for i in range(len(grid)-1) if grid[i] <= self.play_from_beat < grid[i+1]), len(grid)-2)))
-            self.count_in_beats=lead_in_beats(grid[active_bar+1]-grid[active_bar],self.plan.bpm)
+            self.count_in_bar_beats = grid[active_bar + 1] - grid[active_bar]
+            self.count_in_beats = lead_in_beats(self.count_in_bar_beats, self.plan.bpm)
             self.next_boundary_beat=next_chunk_end(grid,self.play_from_beat)
             self.run_at=time.monotonic()+self.count_in_beats*60/self.plan.bpm
             self.feedback="Count in, then play"
@@ -438,6 +440,7 @@ class PracticeEngine:
                     "paused":self.paused,"transport_id":self.transport_id,
                     "awaiting_score_revision":self.awaiting_score_revision,
                     "count_in_beats":self.count_in_beats if self.running else 0,
+                    "count_in_bar_beats":self.count_in_bar_beats,
                     "midi_notes":len(self.recorder.presses) if self.recorder is not None else 0,
                     "preview_only":self.preview_only,
                     "progress":progress,"duration":seconds,"beat":exercise_beat if self.running else 0.0,
