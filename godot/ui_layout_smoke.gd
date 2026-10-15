@@ -139,13 +139,13 @@ func _run() -> void:
     var short_buttons := 0
     for control in library_root.find_children("*", "Button", true, false):
         var button := control as Button
-        if button.text in ["← Home", "Settings", "Refresh", "Check files"]:
+        if button.text in ["Close", "Settings", "Refresh", "Check files"]:
             short_buttons += 1
             _check(not button.clip_text, "Library short control clips text: " + button.text)
             _check(_in_viewport(button, viewport), "Library short control outside window: " + button.text)
             _check(button.size.x + 1.0 >= button.get_combined_minimum_size().x,
                 "Library short control narrower than its text: " + button.text)
-    _check(short_buttons == 4, "Expected complete library navigation and Check files actions")
+    _check(short_buttons == 4, "Expected Close, Settings, Refresh and Check files actions")
     var library_items: Control = scene.get("library_rows")
     var library_status: Label = scene.get("library_message")
     _check(library_status.get_global_rect().position.y < library_items.get_global_rect().position.y,
