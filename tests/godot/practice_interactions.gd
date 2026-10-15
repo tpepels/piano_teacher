@@ -256,12 +256,35 @@ func test_modes() -> void:
     check(app.commands.back().get("action") == "listen", "Listen requests real active-variant audio")
     var review := state("performance_complete")
     review["mode"] = "perform"
-    review["performance_summary"] = {"accuracy_percent":25.0,"correct":1,"total":4,"early":1,"late":1,"missed_pitches":[64],"extra_notes":1,"weakest_bars":[{"first_bar":3,"last_bar":4,"errors":3}]}
+    review["performance_summary"] = {
+        "accuracy_percent":25.0, "correct":1, "total":4,
+        "early":1, "late":1, "missed":1, "wrong":1,
+        "short":0, "long":0, "extra_notes":1,
+        "weakest_bars":[{"first_bar":3, "last_bar":4, "errors":3}],
+        "sections":[{
+            "first_bar":3, "last_bar":4, "errors":3,
+            "start_beat":8, "end_beat":16,
+            "issues":[
+                {"bar":3,"status":"missed","pitch":64,"name":"E4"},
+                {"bar":4,"status":"wrong","pitch":60,"name":"C4","played_name":"D4"}
+            ]
+        }]
+    }
     app._on_state(0,200,PackedStringArray(),JSON.stringify(review).to_utf8_buffer())
     check(app.performance_review.visible, "Finished Perform shows a persistent review")
-    check(app.performance_text.text.contains("25") and app.performance_text.text.contains("3–4"), "Review names accuracy and weakest measures")
+    check(app.performance_text.text.contains("25") and app.performance_text.text.contains("missed"),
+        "Review summarizes accuracy and specific error categories")
+    app.commands.clear()
     app.weak_button.pressed.emit()
-    check(app.commands.back().get("action") == "practice_weak", "Weakest section starts real practice")
+    check(app.review_sheet.visible, "Review opens a readable detailed dialog")
+    check("Expected C4, played D4" in app.review_sheet.call("_issue_text",
+        review["performance_summary"]["sections"][0]["issues"][1]),
+        "Review reports physical wrong keys, not only expected pitches")
+    app.review_sheet.call("_repeat_section", 3, 4)
+    check(app.commands.back().get("action") == "review_retry"
+        and app.commands.back().get("first_bar") == 3
+        and app.commands.back().get("last_bar") == 4,
+        "Review retries exactly the chosen source measures")
     for pending_mode in ["listen", "perform"]:
         app._navigate("practice")
         show_state("ready")
