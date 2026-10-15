@@ -39,6 +39,13 @@ var library_search: LineEdit
 var library_path_label: Label
 var library_rows: VBoxContainer
 var library_message: Label
+var open_picker: ConfirmationDialog
+var open_measure: SpinBox
+var open_measure_slider: HSlider
+var open_mode: OptionButton
+var open_title: Label
+var practice_stage_bar: HFlowContainer
+var practice_stage_labels: Dictionary = {}
 var folder_edit: LineEdit
 var folder_dialog: FileDialog
 var fullscreen_toggle: CheckButton
@@ -756,6 +763,20 @@ func _build_interface() -> void:
     lesson_info_label = _label("", 17, INK)
     lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_layout.add_child(lesson_info_label)
+    practice_stage_bar = HFlowContainer.new()
+    practice_stage_bar.add_theme_constant_override("h_separation", 10)
+    practice_stage_bar.add_theme_constant_override("v_separation", 6)
+    practice_stage_bar.visible = false
+    practice_layout.add_child(practice_stage_bar)
+    for hand in ["left", "right", "both"]:
+        var stage_label := _label("", 15, MUTED, true)
+        stage_label.custom_minimum_size = Vector2(168, 38)
+        stage_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        var stage_style := Design.surface(Design.PANEL, 6)
+        stage_style.set_content_margin_all(8)
+        stage_label.add_theme_stylebox_override("normal", stage_style)
+        practice_stage_bar.add_child(stage_label)
+        practice_stage_labels[hand] = stage_label
     practice_playback_banner = _label("", 18, Color("#F6BC70"), true)
     practice_playback_banner.visible = false
     practice_playback_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -905,6 +926,53 @@ func _build_interface() -> void:
         _save_folder()
     )
     add_child(folder_dialog)
+    # MIDI files can be long. Choose the exact source measure before opening
+    # a course stage, rather than forcing the user to skip through passages.
+    open_picker = ConfirmationDialog.new()
+    open_picker.title = "Choose a starting point"
+    open_picker.ok_button_text = "Open at this measure"
+    open_picker.min_size = Vector2i(540, 300)
+    add_child(open_picker)
+    var start_content := VBoxContainer.new()
+    start_content.add_theme_constant_override("separation", 12)
+    open_picker.add_child(start_content)
+    open_title = _label("", 20, INK, true)
+    open_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    start_content.add_child(open_title)
+    start_content.add_child(_label("START AT SOURCE MEASURE", 15, MUTED, true))
+    open_measure = SpinBox.new()
+    open_measure.min_value = 1
+    open_measure.max_value = 1
+    open_measure.step = 1
+    open_measure.custom_minimum_size = Vector2(0, 52)
+    open_measure.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    open_measure.add_theme_font_size_override("font_size", _ui_font(18))
+    start_content.add_child(open_measure)
+    open_measure_slider = HSlider.new()
+    open_measure_slider.min_value = 1
+    open_measure_slider.max_value = 1
+    open_measure_slider.step = 1
+    open_measure_slider.custom_minimum_size.y = 32
+    start_content.add_child(open_measure_slider)
+    open_measure.value_changed.connect(func(value: float):
+        open_measure_slider.set_value_no_signal(value))
+    open_measure_slider.value_changed.connect(func(value: float):
+        open_measure.set_value_no_signal(value))
+    start_content.add_child(_label("BEGIN WITH", 15, MUTED, true))
+    open_mode = OptionButton.new()
+    open_mode.add_item("Learn notes (without timing)")
+    open_mode.add_item("Practice rhythm")
+    open_mode.custom_minimum_size.y = 52
+    open_mode.add_theme_font_size_override("font_size", _ui_font(16))
+    start_content.add_child(open_mode)
+    var start_note := _label(
+        "Practice begins at the exact measure. Short guided lessons start there too.", 14, MUTED)
+    start_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    start_content.add_child(start_note)
+    open_picker.confirmed.connect(func():
+        _navigate("practice")
+        _send_action({"action":"open_at", "bar":int(open_measure.value),
+            "mode":"practice" if open_mode.selected == 1 else "learn"}))
     device_menu = PopupMenu.new()
     device_menu.id_pressed.connect(_choose_device)
     add_child(device_menu)
@@ -1204,6 +1272,49 @@ func _populate_library() -> void:
     if library_error.is_empty():
         library_message.add_theme_color_override("font_color", MUTED)
 
+func _show_open_picker(state: Dictionary) -> void:
+    # Opening metadata is source-based and does not require Verovio rendering
+    # or a connected MIDI piano. Do not start the first guided lesson yet.
+    var last_bar: int = maxi(1, int(state.get("piece_last_bar", 1)))
+    open_title.text = str(state.get("title", "Untitled piece"))
+    open_measure.max_value = last_bar
+    open_measure.min_value = 1
+    open_measure.value = clampi(int(state.get("selected_start_bar", 1)), 1, last_bar)
+    open_measure.suffix = " / %d" % last_bar
+    open_measure_slider.max_value = last_bar
+    open_measure_slider.min_value = 1
+    open_measure_slider.set_value_no_signal(open_measure.value)
+    open_mode.select(0)
+    open_picker.popup_centered(Vector2i(540, 330))
+
+
+func _update_hand_stages(state: Dictionary) -> void:
+    var stages: Array = state.get("hand_stages", [])
+    practice_stage_bar.visible = not stages.is_empty()
+    var by_hand: Dictionary = {}
+    for stage in stages:
+        by_hand[str(stage.get("hand", ""))] = stage
+    for hand in practice_stage_labels:
+        var label: Label = practice_stage_labels[hand]
+        label.visible = by_hand.has(hand)
+        if not label.visible:
+            continue
+        var stage: Dictionary = by_hand[hand]
+        var active: bool = bool(stage.get("active", false))
+        var complete: bool = bool(stage.get("complete", false))
+        var locked: bool = bool(stage.get("locked", false))
+        var word: String = "BOTH HANDS" if hand == "both" else str(hand).to_upper() + " HAND"
+        label.text = ("✓ " if complete else "▶ " if active else "○ ") + word + (
+            " · DONE" if complete else " · NOW" if active else " · LOCKED" if locked else " · NEXT")
+        label.add_theme_color_override("font_color",
+            Color("#79DAAD") if complete else INK if active else MUTED)
+        var style := Design.surface(Design.PINE if active else Design.PANEL, 6)
+        style.set_content_margin_all(8)
+        style.set_border_width_all(2 if active else 1)
+        style.border_color = ACCENT if active else Color(Design.SLATE, .35)
+        label.add_theme_stylebox_override("normal", style)
+
+
 func _open_library_piece(identifier: String) -> void:
     library_error = ""
     library_message.text = "Opening score…"
@@ -1425,6 +1536,11 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
+    # A long MIDI should not engrave its default first passage while the
+    # learner is still choosing a source measure in the library. Wait for
+    # open_at to select the real passage before requesting any score pages.
+    if current_screen == "library" and open_picker != null and open_picker.visible:
+        return
     var old_phase: String = str(last_state.get("phase", ""))
     var old_revision: int = int(last_state.get("revision", -1))
     var total_input_attacks: int = int(parsed.get("midi_input_count", 0))
@@ -1465,6 +1581,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         passage_label.text = "WARM-UP %d/3 · %s · Measures %d–%d" % [
             hand_step, str(parsed.get("hand", "left")).to_upper(),
             int(parsed.get("first_bar", 1)), int(parsed.get("last_bar", 8))]
+    if not bool(parsed.get("warmup", false)):
+        var chosen_bar: int = int(parsed.get("selected_start_bar", 1))
+        if chosen_bar > int(parsed.get("first_bar", 1)):
+            passage_label.text += " · Start at measure %d" % chosen_bar
     # The live bar number comes from Python's source meter grid. Do not infer
     # measures from elapsed seconds in Godot (pickup and changing meters).
     var current_bar: int = int(parsed.get("current_bar", 0))
@@ -1537,6 +1657,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     hints_toggle.visible = learning
     hints_toggle.disabled = not learning or str(parsed.get("phase", "")) == "loading"
     hints_toggle.set_pressed_no_signal(bool(parsed.get("hints_enabled", false)))
+    _update_hand_stages(parsed)
     if learning:
         hint_keyboard.update_state(teaching)
     else:
@@ -2028,16 +2149,14 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
             _navigate("practice")
     elif path == "/library/open":
         library_error = ""
-        _populate_library()  # clear stale error or 'Opening score' on return
+        _populate_library()
         score_error = ""
         var opened: Variant = _decode_json(body)
-        _navigate("practice")
-        _refresh_score_status()
-        # Warm-ups arrive as repeatable Perform sessions. Do not silently
-        # replace them with the normal imported-piece Learn curriculum.
-        if not (opened is Dictionary and (bool(opened.get("warmup", false))
-                or str(opened.get("mode", "")) == "perform")):
-            _send_action({"action":"learn"})
+        if opened is Dictionary and bool(opened.get("warmup", false)):
+            _navigate("practice")
+            _refresh_score_status()
+        elif opened is Dictionary:
+            _show_open_picker(opened)
     elif path == "/settings":
         settings_message.text = "Settings saved"
         _request_settings()

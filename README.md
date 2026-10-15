@@ -67,6 +67,28 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Starting at any measure and hand progression (UI phase 4)
+
+When you select a personal MIDI file in the library, a **starting-point
+dialog** now opens before any guided lesson starts. Enter the exact source
+measure or drag the measure slider, then select **Learn notes** (no rhythm
+scoring) or **Practice rhythm**. For Learn notes, the short guided unit begins
+at that measure. For Practice rhythm, the selected source measure is kept as
+the timed start position, and playback waits until you press Start. If the
+selected measure contains no attacks, the picker advances to the next
+playable source measure. It uses imported time-signature/bar boundaries,
+including changes of meter. The selection does not award clean runs, and
+partial timed attempts cannot confer full-passage mastery.
+
+Built-in warm-ups still open directly and use their existing Left → Right →
+Together unlock sequence. Above the score a compact progression strip
+distinguishes the current hand, completed stages and locked stages. Imported
+teaching passages show their available hands using the same strip.
+
+Regression checks: `python -m pytest -q tests/test_open_at_measure.py`
+and `bash scripts/check_phase2_ui.sh`. The latter verifies the actual
+modal and hand progression in the Godot interface at three window sizes.
+
 ## Missing notes, wrong staff pitches, adaptive retry (UI phase 3)
 
 During a MIDI-connected practice attempt, the app distinguishes:
