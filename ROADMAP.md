@@ -3,11 +3,11 @@
 ## Current implementation status - 2026-10-15
 
 - **1A - Implemented and headless-Godot tested:** one signed beat clock,
-  two moving blank lead-in bars, audible click scheduling, feedback breaks,
+  short moving preparation bar, audible click scheduling, feedback breaks,
   automatic repetition, pause/resume and restart.
 - **1B - Implemented and regression tested:** check distinct wrong/missed
   notes at each two-measure boundary. After five, finish the section,
-  rewind to it, begin another two-bar count-in, and slow by 10%. Clean
+  rewind to it, begin another short moving count-in, and slow by 10%. Clean
   attempts restore the student's target BPM. Partial recovery is never
   credited as a full mastered performance.
 - **1C - Implemented and real-Verovio tested:** source-traceable skeleton,
@@ -52,14 +52,14 @@ Non-negotiable teaching behaviour:
    lighten accompaniment, simplify hard rhythmic figures without shifting the
    overall musical time grid), then deliberately restored in later exercises.
    Original note positions remain traceable and the full original is revisited.
-2. **Two empty moving bars precede every attempt**. The score/lead-in moves
+2. **A tempo-capped preparation interval precedes every attempt**. The score/lead-in moves
    from the first audible count-in beat; the first playable note arrives at the
-   timing marker exactly two bars later. Count-in and notation use one musical
+   timing marker after the moving lead-in. Count-in and notation use one musical
    clock. Rests and empty bars are genuinely time-bearing.
 3. **Five distinct wrong or missed required notes** within a rolling
    two-measure window trigger recovery. Continue through the *end* of the
    current two-measure chunk, then rewind to an appropriate boundary about two
-   bars earlier. Every retry begins with the same two moving lead-in bars.
+   bars earlier. Every retry begins with a fresh short moving lead-in.
    Do not double count one wrong pitch as both missed and extra.
 4. On threshold failure slow by **10%** (minimum 12 BPM). Following a clean
    pass increase in increments, bounded by the exercise's target BPM. Neither
@@ -89,14 +89,14 @@ blank screen; backend and headless Godot integration checks pass.
 
 ### Phase 1 - Adaptive moving-lesson runtime [core implemented; visual/curriculum acceptance pending]
 
-- **1A - Lesson timeline:** one signed beat clock; two moving empty bars
+- **1A - Lesson timeline:** one signed beat clock; one moving preparation bar
   before every attempt; fixed-tempo visual movement from the very first
   count-in beat; continuous note timing after lead-in; pauses/stops/restarts;
   next-attempt scheduling with short visible feedback intervals.
 - **1B - Error recovery:** identify distinct wrong/missed required notes on
   the active exercise; detect five within a rolling two-bar window; do not
   interrupt mid-chunk; rewind to a safe preceding boundary; slow by 10%;
-  retry with the two moving lead-in bars; recover speed incrementally after
+  retry with a short moving lead-in; recover speed incrementally after
   a clean pass without granting premature mastery.
 - **1C - MIDI-to-exercise generation:** infer track/hand roles, measure
   structure and phrase boundaries; generate simpler musical variants then

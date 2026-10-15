@@ -1,9 +1,16 @@
+## Current count-in behaviour
+
+The score starts moving immediately with the audible count-in. Preparation is
+at most one bar and is shortened at slow BPM to roughly four seconds.
+The cyan playhead stays fixed while the notation scrolls underneath; a
+small progress cue replaces the former large countdown numerals.
+
 ## Phases 1D/1E - Curriculum and end-to-end practice
 
 The adaptive teaching loop has now passed a complete real-Godot, headless
 integration rehearsal in an Arch Linux container. The checked sequence is:
 import a song; generate separate lesson notation from its MIDI; display the
-skeleton exercise in Godot; count in with two moving blank bars; grade **three
+skeleton exercise in Godot; count in with a short moving lead-in; grade **three
 clean full performances**; persist mastery of that step; advance to the
 chord-outline exercise; load the *new* engraved PNG and timing map; then
 begin the next count-in only after Godot acknowledges that score is ready.
@@ -111,7 +118,7 @@ engrave the *generated exercises*, not just crop the source notation.
 
 Implemented in the current increment:
 
-- Each attempt has **two empty moving bars**. The Godot canvas draws blank
+- Each attempt has **one moving preparation bar, shortened at slow tempos**. The Godot canvas draws blank
   staves before the original score and scrolls them immediately using the
   same signed beat clock as the audible metronome. No piano is required to
   watch a timing preview.
