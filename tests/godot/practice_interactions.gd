@@ -115,7 +115,9 @@ func test_three_button_stage() -> void:
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(listening).to_utf8_buffer())
     check(app.listen_button.text == "Practice", "Listen becomes a one-tap return")
     app.listen_button.pressed.emit()
-    expect_command("practice", "One tap returns from Listen to practice")
+    check(app.commands == [{"action":"practice", "wait_for_player":true}],
+        "Returning from Listen prepares a manual piano-first start: " + str(app.commands))
+    app.commands.clear()
     app._navigate("lesson")
     check(app.mode_choice.is_visible_in_tree()
         and app.hints_toggle.get_parent() == app.mode_choice.get_parent(),
