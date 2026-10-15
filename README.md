@@ -67,6 +67,37 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Piano-first controls (Phase 7.2)
+
+The normal practice screen now has **three primary buttons**, always in
+the same order: **Retry**, **Play/Pause**, and **Listen**. A completed
+guided idea uses the same central button to continue; Listen switches to
+**Practice** while a demonstration is active, so leaving the demonstration
+doesn't require finding another mode menu. The mode selector, hand settings,
+persistent hints, passage navigation and Stop live in the **Lesson Path**
+drawer; keyboard shortcuts remain available: **Space** Play/Pause, **R**
+Retry, **L** Listen/Practice, **S** Stop, and arrow keys Previous/Next.
+
+An ordinary Pause leaves the notes, feedback and Resume control visible
+instead of replacing the score with a large modal. Advanced pause controls
+(for tempo, seek and hand change) are explicitly available from Lesson
+Path or with **Shift+P**. This does not change source-note assessment or
+MIDI timing.
+
+With an actual MIDI piano connected, playing a **fresh key after the ready
+state is visible** starts a count-in. A fresh key after a completed guided
+idea continues it. After failed Practice feedback has appeared, a *new*
+key retries that passage; an input that coincides with the transition
+cannot instantly dismiss feedback. Automatic recoveries cannot be
+overridden by this shortcut. During playing or in other drawers, ordinary
+performance notes never trigger an unrelated transport action.
+
+The existing Godot interaction regressions exercise the live transport,
+optional pause sheet, three-button layout, reversible Listen action, and
+fresh-key-only retry logic. Hardware-specific latency remains for Phase 8.
+The acoustic grand-piano samples for Listen are planned for Phase 7.3;
+the existing synthetic audio is not yet replaced.
+
 ## Game-like interface: Phase 7.1 (practice-first navigation)
 
 The application starts directly on the practice stage, rather than
