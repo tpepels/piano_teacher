@@ -191,8 +191,8 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                 # necessarily a notated 0.10-beat rest. Snap *only* a nearby
                 # note ending to a 16th-note boundary for readable MusicXML.
                 # The original Note retains its exact timestamp for scoring.
-                grid = DIVISIONS // 4
-                rounded_end = round(end/grid)*grid
+                duration_grid = DIVISIONS // 4
+                rounded_end = round(end / duration_grid) * duration_grid
                 if 0 < rounded_end - start and abs(rounded_end-end) <= _ticks(.12):
                     end = min(rounded_end, _ticks(phrase.end-phrase.start))
                 if start >= bar_end or end <= bar_start:
