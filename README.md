@@ -67,6 +67,38 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Game interface overhaul (Phase 7.6)
+
+The practice surface is an **instrument-focused game HUD**, not a set of
+website cards. The music is drawn on a dedicated dark, illuminated stage
+with unobtrusive corner guides, a source-clock progress rail and brighter
+engraved notation. A three-light meter shows the backend's actual clean
+full-pass streak. It briefly pulses when the engine confirms a clean
+take; red assessment, missed chord pitches and wrong-note ghosts retain
+priority over this decorative presentation.
+
+The primary controls are large, tactile **Retry / Play-Pause / Listen**
+buttons. They show short verbs instead of shortcut explanations and
+retain keyboard focus and hover/pressed states. Music, Path and Settings
+are secondary compact actions. During playing, the extra explanation
+is hidden to give more vertical space to the moving notation; it
+returns when learning, waiting or reviewing a mistake.
+
+The count-in has quiet metered preparation LEDs, driven by the same
+authoritative transport beat used by the metronome. It does not start
+another clock, play a separate jingle, grade a note or replace the score.
+The overall palette, note contrast, rounded score surround, stage
+progression chips and pause/error cues share the same visual language.
+Decorative surfaces ignore mouse input, so they cannot block physical
+piano or UI interaction.
+
+The visual checks use actual Godot container layouts at
+**1536×960, 1024×768, and 800×600**; they assert usable score
+dimensions, three primary transport controls, unobscured Settings,
+count-in meter behavior and the non-interactive stage. Physical input
+latency and perceived appearance on the real desktop still need
+acceptance testing during Phase 8.
+
 ## Short musical challenges and clean-run progression (Phase 7.5)
 
 The practice screen now shows one short, readable challenge at a time,
