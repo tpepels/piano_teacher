@@ -114,7 +114,13 @@ def test_godot_loads_png_with_same_notehead_coordinates():
 
 def test_practice_navigation_no_vertical_letter_wrapping():
     script = (Path(__file__).resolve().parents[1] / "godot/main.gd").read_text()
-    assert "practice_navigation = HBoxContainer.new()" in script
+    # Flow navigation preserves full labels by wrapping actions to a new row.
+    # The old fixed HBox became unreadable when buttons were squeezed.
+    assert "practice_navigation = HFlowContainer.new()" in script
+    assert "practice_navigation.add_theme_constant_override(\"v_separation\"" in script
+    assert "practice_controls = controls" in script
+    assert "controls := HFlowContainer.new()" in script
+    assert "button.clip_text = false" in script
     assert "practice_header = HBoxContainer.new()" in script
     assert "tempo.custom_minimum_size = Vector2(190, 0)" in script
     assert "speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF" in script
