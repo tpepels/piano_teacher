@@ -64,7 +64,11 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
             if not tied_into_system and is_finite(first_ink) and staff_lines.size() >= 2:
                 var gap_px: float = absf(float(staff_lines[1]) - float(staff_lines[0])) * source_size.y
                 var ink_px: float = first_ink * source_size.x
-                var guard_px: float = maxf(10.0, gap_px * 1.7)
+                # One full staff space before the *measured leftmost ink*
+                # is enough to protect an accidental or ledger extension.
+                # The old 1.7-space gutter was redundant after the header
+                # was intentionally removed and still caused acceleration.
+                var guard_px: float = maxf(10.0, gap_px * 1.0)
                 var candidate: int = maxi(left, int(floor(ink_px - guard_px)))
                 if candidate < right - 16 and candidate > left:
                     left = candidate
