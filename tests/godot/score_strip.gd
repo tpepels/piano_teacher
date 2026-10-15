@@ -120,16 +120,21 @@ func run() -> void:
             join_velocities.append(velocity)
             var first_ink_offset := -1.0
             var previous_tail := -1.0
+            var trailing_after_barline := -1.0
             for i_mapping in range(strip.mappings.size()):
                 var destination: Dictionary = strip.mappings[i_mapping]
                 if int(destination.source_page) == int(src_right.page) and str(destination.source_system) == str(src_right.system):
                     first_ink_offset = float(src_right.x) * float(destination.source_size.x) - float(destination.crop.position.x)
                 if int(destination.source_page) == int(src_left.page) and str(destination.source_system) == str(src_left.system):
                     previous_tail = float(destination.crop.end.x) - float(src_left.x) * float(destination.source_size.x)
+                    var final_barline: float = float(destination.system.get("last_barline_x", -1.0))
+                    if final_barline >= 0.0:
+                        trailing_after_barline = float(destination.crop.end.x) - final_barline * float(destination.source_size.x)
             print("SCROLL_JOIN_DETAIL: beat=", float(src_right.beat),
                 " duration=", beats, " pixels=", snappedf(pixels, .1),
                 " from_end=", snappedf(previous_tail, .1),
-                " to_first=", snappedf(first_ink_offset, .1))
+                " to_first=", snappedf(first_ink_offset, .1),
+                " after_barline=", snappedf(trailing_after_barline, .1))
         else:
             unchanged_velocities.append(velocity)
     if not unchanged_velocities.is_empty() and not join_velocities.is_empty():

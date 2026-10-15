@@ -365,7 +365,11 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
                           and (a["page"], a["system"]) != (page_index, identifier)]
             systems.append({**bounds, "page": page_index, "system": identifier,
                             "start_beat": min(beats),
-                            "end_beat": min(next_beats) if next_beats else total_beats})
+                            "end_beat": min(next_beats) if next_beats else total_beats,
+                            # The actual final barline, distinct from the staff
+                            # path's right edge (which may extend into blank
+                            # trailing page width). Needed for safe join audits.
+                            "last_barline_x": page.system_ends.get(identifier, -1.0)})
     result = {"pages": len(svgs), "beats": total_beats, "anchors": anchors, "systems": systems,
             "notes": sorted(positioned_notes, key=lambda n: (n["beat"], n["pitch"], n["id"])),
             "widths": [p.width for p in pages], "heights": [p.height for p in pages]}
