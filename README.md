@@ -67,6 +67,41 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## End-to-end library verification (Phase 6)
+
+The **Check files** button performs a quick *source import* audit. To verify
+that each file actually opens, engraves, renders, maps notes to the moving
+score, and navigates to later measures, run the full local diagnostic:
+
+```bash
+source .venv/bin/activate
+python scripts/verify_library_pipeline.py \
+  --music-dir "$HOME/Music/Piano Teacher" \
+  --output /tmp/piano-phase6-report \
+  --godot
+```
+
+It checks the first, middle, and last **playable** source measure of each
+file. Each test uses the production `PracticeEngine`, real Verovio glyph
+and timing data, actual PNG raster pages, and the real Godot score-strip
+assembler. It also checks next/previous exercise navigation, without starting
+timed playing or awarding mastery. A failure does not stop subsequent files.
+
+The result is `/tmp/piano-phase6-report/report.json`. For each numbered
+file, the output directory contains a worker log, source-measure manifests,
+PNG raster evidence, and a Godot log when enabled. Failures also include
+a traceback. The command returns a nonzero exit code if any file fails or
+times out. Its per-file deadline defaults to 180 seconds (`--timeout 300`
+for particularly large arrangements). For a quick initial sample, use
+`--limit 5`. The script reads your music and writes only to the chosen
+output directory and temporary isolated application data.
+
+This is a **headless rendering and geometry test**. A pixel-accurate check
+of a visible desktop window and the USB piano's physical timing remain
+separate tasks. The CI exercises this pipeline with a real source fixture
+and Godot. The exact files in your personal collection can only be
+verified when you run the command on that collection.
+
 ## Library Health - Phase 5
 
 Open **Browse library → Check files** to inspect your MIDI and MusicXML
