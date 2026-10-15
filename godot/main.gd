@@ -410,11 +410,13 @@ func _label(text: String, size: int, color: Color, bold := false) -> Label:
 func _button(label: String, callback: Callable, primary := false) -> Button:
     var button := Button.new()
     button.text = label
-    # Long song titles must not force a container wider than the viewport.
-    button.clip_text = true
-    # Short controls must fit their text; library rows override width.
-    var text_width: float = theme.default_font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, _ui_font(15)).x
-    button.custom_minimum_size = Vector2(clampf(text_width + 34 * ui_scale, 110, 380), 50 * ui_scale)
+    # Navigation/control text must never be clipped. Only long personal
+    # song rows opt into ellipsis to avoid forcing a wider library panel.
+    button.clip_text = false
+    var text_width: float = theme.default_font.get_string_size(
+        label, HORIZONTAL_ALIGNMENT_LEFT, -1, _ui_font(15)).x
+    button.custom_minimum_size = Vector2(
+        maxf(118.0, text_width + 58.0 * ui_scale), 50.0 * ui_scale)
     var style := StyleBoxFlat.new()
     style.bg_color = Design.PINE if primary else Design.PANEL
     style.set_corner_radius_all(8)
@@ -1179,7 +1181,10 @@ func _populate_library() -> void:
             button.alignment = HORIZONTAL_ALIGNMENT_LEFT
             button.custom_minimum_size = Vector2(0, 58 * ui_scale)
             button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-            button.tooltip_text = str(entry.get("description", ""))
+            button.clip_text = true
+            button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+            button.tooltip_text = title + " · " + format_name + " · " + hint + (
+                "\n" + str(entry["description"]) if entry.has("description") else "")
             library_rows.add_child(button)
             visible += 1
     var issue: String = str(library_info.get("error", ""))
@@ -1501,6 +1506,12 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         "outline": "Add the chord notes while keeping the pulse.",
         "original": "Bring every note together."}
     lesson_info_label.text = str(explanations.get(stage, ""))
+    var import_warnings: Array = parsed.get("import_warnings", [])
+    if not import_warnings.is_empty() and str(parsed.get("phase", "")) in ["ready", "feedback", "performance_complete"]:
+        lesson_info_label.text = "MIDI imported with repairs: " + "  ".join(import_warnings)
+        lesson_info_label.add_theme_color_override("font_color", Color("#F1C67D"))
+    else:
+        lesson_info_label.add_theme_color_override("font_color", INK)
     var learning: bool = str(parsed.get("mode", "practice")) == "learn"
     var teaching: Dictionary = parsed.get("teaching", {}) if parsed.get("teaching") is Dictionary else {}
     var learner: Dictionary = parsed.get("learner", {}) if parsed.get("learner") is Dictionary else {}
