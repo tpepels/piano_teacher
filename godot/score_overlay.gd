@@ -5,6 +5,7 @@ const Design := preload("res://practice_theme.gd")
 var cursor: Dictionary = {}
 var showing := false
 var transport_active := false
+var guided_active := false
 var image_size := Vector2.ZERO
 var marks: Array = []
 var active_page := -1
@@ -121,7 +122,7 @@ func _draw() -> void:
     # A faint green ring confirms correct notes; stronger colour markers
     # distinguish mistakes without altering the underlying engraving.
     var palette := {
-        "correct": Color("#4A987B"), "wrong": Color("#BB4A4A"),
+        "correct": Color("#4A987B"), "assisted": Color("#C8AC7C"), "expected": Design.TEAL, "wrong": Color("#BB4A4A"),
         "missed": Color("#BB4A4A"), "extra": Color("#BB4A4A"),
         "early": Color("#BA852B"), "late": Color("#BA852B"),
         "short": Color("#8660AF"), "long": Color("#8660AF")
@@ -134,7 +135,13 @@ func _draw() -> void:
         var status: String = str(marker.get("status", ""))
         var color: Color = palette.get(status, Color("#BB4A4A"))
         var center: Vector2 = _sheet_xy(float(marker.get("x", 0.0)), float(marker.get("y", 0.0)))
-        if status == "correct":
+        if status == "expected":
+            draw_arc(center, 12.0, 0.0, TAU, 24, color, 2.5, true)
+            draw_circle(center + Vector2(0, -18), 3.0, color)
+        elif status == "assisted":
+            draw_arc(center, 10.0, 0.0, TAU, 24, color, 2.0, true)
+            draw_string(ThemeDB.fallback_font, center + Vector2(12, -9), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color)
+        elif status == "correct":
             draw_arc(center, 9.0, 0.0, TAU, 20, Color(color, .37), 1.5, true)
         else:
             var radius := 12.0 if status == "missed" else 10.0
@@ -145,7 +152,7 @@ func _draw() -> void:
             draw_string(font, center + Vector2(12, -9), symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, color)
             if status == "extra":
                 draw_string(font, center + Vector2(12, 5), str(marker.get("label", "")), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, color)
-    if showing and not cursor.is_empty() and int(cursor.get("page", -1)) == active_page:
+    if showing and not guided_active and not cursor.is_empty() and int(cursor.get("page", -1)) == active_page:
         var x: float = float(cursor.get("x", 0.0))
         var top: float = float(cursor.get("top", 0.0))
         var bottom: float = float(cursor.get("bottom", 1.0))

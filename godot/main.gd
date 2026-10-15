@@ -10,6 +10,7 @@ const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
 const ScoreStrip := preload("res://score_strip.gd")
 const ScoreOverlay := preload("res://score_overlay.gd")
+const HintKeyboard := preload("res://hint_keyboard.gd")
 
 var current_screen := "home"
 var settings_return_screen := "home"
@@ -115,6 +116,9 @@ var hand_buttons: Dictionary = {}
 var device_pending := false
 var practice_layout_box: VBoxContainer
 var score_margin_box: MarginContainer
+var hint_keyboard: Control
+var mode_choice: OptionButton
+var hints_toggle: CheckButton
 
 func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
@@ -436,13 +440,13 @@ func _navigate(screen: String) -> void:
         settings_return_screen = current_screen
     if screen != "practice" and (current_screen == "practice" or screen in ["home", "library"]):
         var phase: String = str(last_state.get("phase", ""))
-        var starting: bool = action_pending and last_post_path == "/control" and last_control_action in ["start", "restart", "resume", "score_ready"]
+        var starting: bool = action_pending and last_post_path == "/control" and last_control_action in ["start", "restart", "resume", "score_ready", "learn", "learn_retry", "practice"]
         if screen in ["settings", "lesson"]:
-            if phase in ["count_in", "playing"] or starting:
+            if phase in ["count_in", "playing", "guided_wait"] or starting:
                 _send_action({"action": "pause"})
             elif phase in ["feedback", "recovering", "loading"]:
                 _send_action({"action": "stop"})
-        elif phase in ["count_in", "playing", "paused", "feedback", "recovering", "loading"] or starting:
+        elif phase in ["count_in", "playing", "guided_wait", "guided_complete", "disconnected", "paused", "feedback", "recovering", "loading"] or starting:
             _send_action({"action": "stop"})
     current_screen = screen
     for key in screens:
@@ -644,6 +648,19 @@ func _build_interface() -> void:
     practice_navigation.add_theme_constant_override("separation", 12)
     practice_layout.add_child(practice_navigation)
     practice_navigation.add_child(_button("← Library", func(): _navigate("library")))
+    mode_choice = OptionButton.new()
+    mode_choice.disabled = true
+    mode_choice.add_item("Learn notes")
+    mode_choice.add_item("Practice rhythm")
+    mode_choice.custom_minimum_size = Vector2(150, 38)
+    mode_choice.item_selected.connect(func(index: int):
+        _send_action({"action": "learn" if index == 0 else "practice"}))
+    practice_navigation.add_child(mode_choice)
+    hints_toggle = CheckButton.new()
+    hints_toggle.text = "Hints"
+    hints_toggle.tooltip_text = "Keep key hints visible while learning notes"
+    hints_toggle.toggled.connect(func(enabled: bool): _send_action({"action":"hints", "enabled":enabled}))
+    practice_navigation.add_child(hints_toggle)
     practice_navigation.add_child(_space())
     practice_navigation.add_child(_button("Lesson path", func(): _navigate("lesson")))
     practice_settings_button = _button("Settings", func(): _navigate("settings"))
@@ -683,10 +700,13 @@ func _build_interface() -> void:
     practice_layout.add_child(score_panel)
     var score_margin := _card_body(score_panel, 26)
     score_margin_box = score_margin
+    var score_region := VBoxContainer.new()
+    score_region.add_theme_constant_override("separation", 8)
+    score_margin.add_child(score_region)
     var score_area := Control.new()
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
     score_area.custom_minimum_size = Vector2(0, 170)
-    score_margin.add_child(score_area)
+    score_region.add_child(score_area)
     score_frame = score_area
     score_frame.clip_contents = true
     score_frame.resized.connect(_layout_moving_score)
@@ -731,6 +751,8 @@ func _build_interface() -> void:
     count_in_display.offset_bottom = 52.0
     count_in_display.visible = false
     score_frame.add_child(count_in_display)
+    hint_keyboard = HintKeyboard.new()
+    score_region.add_child(hint_keyboard)
     practice_progress = ProgressBar.new()
     practice_progress.show_percentage = false
     practice_progress.max_value = 1.0
@@ -1062,6 +1084,10 @@ func _poll() -> void:
 
 func _process(_delta: float) -> void:
     _update_count_in()
+    if str(last_state.get("mode", "practice")) == "learn":
+        _layout_guided_score()
+        return
+    score_overlay.guided_active = false
     if last_state.is_empty() or not bool(last_state.get("running", false)) or layout_revision != revision:
         if score_overlay.showing:
             score_overlay.showing = false
@@ -1132,6 +1158,27 @@ func _process(_delta: float) -> void:
                   " VISIBLE:", score_overlay.showing, " CONTENT_X:", score_content.position.x)
     score_overlay.queue_redraw()
 
+func _layout_guided_score() -> void:
+    score_overlay.guided_active = true
+    score_overlay.lead_first = {}
+    score_overlay.lead_width_px = 0.0
+    score_overlay.showing = false
+    if layout_revision != revision or rendered_revision != revision or score_view.texture == null:
+        score_overlay.queue_redraw()
+        return
+    var teaching: Dictionary = last_state.get("teaching", {}) if last_state.get("teaching") is Dictionary else {}
+    var expected: Array = teaching.get("expected_notes", [])
+    if not expected.is_empty():
+        var cursor: Dictionary = _position_at_beat(float(expected[0].get("beat", 0.0)))
+        if not cursor.is_empty():
+            score_overlay.cursor = cursor
+            score_overlay.showing = true
+    elif str(last_state.get("phase", "")) == "guided_complete":
+        score_overlay.queue_redraw()
+        return # Keep the finished idea still while the student chooses rhythm.
+    _layout_moving_score()
+    score_overlay.queue_redraw()
+
 func _beat_width_at(beat: float) -> float:
     var points: Array = score_layout.get("anchors", [])
     for index in range(points.size() - 1):
@@ -1192,6 +1239,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var started_ms: int = state_request_started_ms if sample_started_ms < 0 else sample_started_ms
     last_state_tick = int((started_ms + Time.get_ticks_msec()) / 2.0)
     if not bool(parsed.get("loaded", false)):
+        mode_choice.disabled = true
         feedback_label.text = str(parsed.get("feedback", "Open a score"))
         _refresh_score_status()
         return
@@ -1208,6 +1256,17 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         "outline": "Outline · Restore the outer chord tones and rhythm.",
         "original": "Original · Play every required note in this passage."}
     lesson_info_label.text = str(explanations.get(stage, ""))
+    var learning: bool = str(parsed.get("mode", "practice")) == "learn"
+    var teaching: Dictionary = parsed.get("teaching", {}) if parsed.get("teaching") is Dictionary else {}
+    mode_choice.select(0 if learning else 1)
+    mode_choice.disabled = false
+    hints_toggle.disabled = not learning or str(parsed.get("phase", "")) == "loading"
+    hints_toggle.set_pressed_no_signal(bool(parsed.get("hints_enabled", false)))
+    hint_keyboard.update_state(teaching if learning else {})
+    if learning:
+        var targets: int = int(teaching.get("target_count", 0))
+        lesson_info_label.text = "%s · Find the highlighted notes at your own pace." % hand_label.text
+        progress_label.text = "Notes found %d of %d · No rhythm scoring yet" % [int(teaching.get("target_index", 0)), targets]
     for hand in hand_buttons:
         var button: Button = hand_buttons[hand]
         button.disabled = not parsed.get("hands", []).has(hand) or str(parsed.get("hand", "")) == hand
@@ -1217,7 +1276,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if phase0_smoke_mode and phase != phase0_last_phase:
         phase0_last_phase = phase
         print("PHASE0_PHASE:", phase)
-    if phase == "paused":
+    if learning:
+        feedback_label.text = str(parsed.get("feedback", "Find the highlighted notes at your own pace."))
+        stop_button.disabled = phase in ["ready", "guided_complete", "disconnected"]
+    elif phase == "paused":
         feedback_label.text = "Paused · Space to resume · R to restart"
     elif phase == "loading":
         feedback_label.text = "Preparing next passage · count-in waits for score"
@@ -1237,10 +1299,13 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
     if unpositioned > 0:
         feedback_label.text += " · %d unpositioned note(s)" % unpositioned
-    progress_label.text = "Stage %d of %d  ·  Clean runs %d of 3" % [
-        int(parsed.get("lesson_step", 1)), int(parsed.get("lesson_steps", 1)),
-        int(parsed.get("streak", 0))]
+    if not learning:
+        progress_label.text = "Stage %d of %d  ·  Clean runs %d of 3" % [
+            int(parsed.get("lesson_step", 1)), int(parsed.get("lesson_steps", 1)),
+            int(parsed.get("streak", 0))]
     start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Pause  ·  Space" if bool(parsed.get("running", false)) else "Start  ·  Space"
+    if learning:
+        start_button.text = "Resume  ·  Space" if phase == "paused" else "Try rhythm · Space" if phase in ["guided_complete", "disconnected"] else "Pause  ·  Space" if phase == "guided_wait" else "Learn · Space"
     start_button.tooltip_text = "Space: start, pause or resume · R: restart · S: stop"
     start_button.disabled = not bool(parsed.get("running", false)) and (score_view.texture == null or layout_revision != revision)
     score_overlay.marks = []
@@ -1480,6 +1545,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         score_error = ""
         _navigate("practice")
         _refresh_score_status()
+        _send_action({"action":"learn"})
     elif path == "/settings":
         settings_message.text = "Settings saved"
         _request_settings()
@@ -1490,6 +1556,10 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     _poll()
 
 func _toggle_playing() -> void:
+    if str(last_state.get("mode", "practice")) == "learn":
+        var phase: String = str(last_state.get("phase", "ready"))
+        _send_action({"action": "resume" if phase == "paused" else "practice" if phase in ["guided_complete", "disconnected"] else "pause" if phase == "guided_wait" else "learn_retry"})
+        return
     if bool(last_state.get("paused", false)):
         _send_action({"action": "resume"})
         return
@@ -1499,12 +1569,12 @@ func _toggle_playing() -> void:
     _send_action({"action": "pause" if bool(last_state.get("running", false)) else "start"})
 
 func _toggle_pause() -> void:
-    if bool(last_state.get("running", false)):
+    if bool(last_state.get("running", false)) or (str(last_state.get("mode", "practice")) == "learn" and str(last_state.get("phase", "")) in ["guided_wait", "paused"]):
         _send_action({"action": "resume" if bool(last_state.get("paused", false)) else "pause"})
 
 func _restart_practice() -> void:
     if score_view.texture != null and layout_revision == revision:
-        _send_action({"action": "restart"})
+        _send_action({"action": "learn_retry" if str(last_state.get("mode", "practice")) == "learn" else "restart"})
 
 func _request_devices() -> void:
     if device_pending or device_request == null:

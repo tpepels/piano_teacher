@@ -41,12 +41,12 @@ Files: new `piano_teacher/teaching.py`, `godot/hint_keyboard.gd`; integrate `ser
 
 Interfaces: `TeachingConfig(chord_window_seconds=.25, stall_seconds=3.0, persistent_hints=False)` and `TeachingController.bind(stage_key, revision, variant, fragment_start, fragment_end, now, connected)`, `start/receive/tick/pause/resume/stop/set_connected/snapshot`. Input times come from the MIDI callback. Stable IDs combine stage identity and active-variant source index. Snapshot includes phase, revision, expected notes, heard pitches, hint visibility, target progress, correct/assisted/wrong feedback and `mastery_eligible=False`.
 
-- [ ] Write failing recognition tests for order, chords/window expiry/early release, repetition/held notes, noise, pause, device loss, wrong-then-correct, stall/persistent hints and no mastery.
-- [ ] Implement the pure controller, verify its tests and review its contract.
-- [ ] Write failing backend tests feeding actual Mido messages through `_receive`; add explicit `learn`, `learn_retry`, `practice` and hint actions while preserving legacy timed `start()` semantics.
-- [ ] Use a source-measure-based one/two-bar display fragment from the active variant; bind score geometry and target feedback to its current revision. A stale score ack cannot start a different guided session.
-- [ ] Implement a static expected-note score path and contextual piano keyboard showing expected/heard keys with pitch names; dark UI, no advancing wall clock in Learn.
-- [ ] Add real Godot learner tests for automatic Learn after UI import, wrong note → hint → correction → next target → guided completion → timed Practice. Check 800×600 and larger windows, run full suite and commit P1.
+- [x] Write failing recognition tests for order, chords/window expiry/early release, repetition/held notes, noise, pause, device loss, wrong-then-correct, stall/persistent hints and no mastery.
+- [x] Implement the pure controller, verify its tests and review its contract.
+- [x] Write failing backend tests feeding actual Mido messages through `_receive`; add explicit `learn`, `learn_retry`, `practice` and hint actions while preserving legacy timed `start()` semantics.
+- [x] Use a source-measure-based one/two-bar display fragment from the active variant; bind score geometry and target feedback to its current revision. A stale score ack cannot start a different guided session.
+- [x] Implement a static expected-note score path and contextual piano keyboard showing expected/heard keys with pitch names; dark UI, no advancing wall clock in Learn.
+- [x] Add real Godot learner tests for automatic Learn after UI import, wrong note → hint → correction → next target → guided completion → timed Practice. Check 800×600 and larger windows, run full suite and commit P1.
 
 ## P2 — Instructional timed practice and recovery
 
@@ -95,3 +95,5 @@ Files: focused learner-progress module/SQLite migration, `learning.py` and serve
 - Ruling: preserve direct legacy timed API calls; UI-import completion explicitly enters Learn. This avoids silently changing existing transport integrations while making the student path guided by default.
 
 - P0 complete: 244 tests, parser, three smoke scripts, source alignment and 58 actual desktop frames pass; report `docs/teaching-p0-baseline.md`. Hardware gate remains open.
+
+- P1 complete: 292 tests, parser, independent review and real normal/compact learner journeys pass. Source-stable guided recognition and contextual keyboard implemented; retries and loading preserve physical key state. Report `docs/teaching-p1-verification.md`.
