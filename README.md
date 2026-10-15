@@ -67,6 +67,36 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Practice display and pause sheet (UI phase 2)
+
+The timed practice toolbar and bottom transport controls wrap complete buttons
+instead of shrinking text into clipped labels. The current **source measure**
+appears beside the active warm-up stage/hand while the score moves. Practice
+feedback, tempo, progress, and stage text have larger typography, and the
+notation takes the remaining screen area. The Hints toggle only appears during
+untimed Learn mode.
+
+The pause sheet now has large buttons and visible groups for Resume, Retry,
+Listen, tempo adjustment, hand selection, starting measure, and Exit. A more
+transparent backdrop keeps the score recognizable while paused. The dialog
+scrolls if there is insufficient vertical space; keyboard navigation and Space
+to resume still work. The actual piano requires selection in Settings to enable
+live note feedback - a screenshot saying **No piano** is an ungraded preview.
+
+Verify the real Godot layout, including a simulated paused screen, at three
+window sizes:
+
+```bash
+./scripts/check_godot.sh  # includes the UI geometry checks
+# Or only the layout checks:
+bash scripts/check_phase2_ui.sh
+```
+
+Then open `./run.sh`, test Practice, Pause and Resume at your screen resolution,
+and verify the same actions at 1024x768 using `./run.sh --windowed`.
+This layout test checks actual controls and dimensions, not pixels or piano
+hardware; an instrument session and screenshot review are still required.
+
 ## Live physical-key feedback (UI phase 1)
 
 When a USB MIDI piano is connected, timed Practice and Perform show a keyboard
