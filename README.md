@@ -67,6 +67,30 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Post-attempt review and exact section retries (UI phase 4)
+
+After an assessed Practice or Perform attempt, the score shows a summary of
+correct notes, missed/wrong pitches, timing/release problems, and extra keys.
+Choose **Review notes and repeat a section** to see problem measures grouped
+into original two-bar source intervals. The review lists each required note's
+pitch and error category; when an incorrect key was played instead, it shows
+both the expected pitch and the actually played pitch. Extra unmatched
+physical keys are listed separately. Results come from the existing
+authoritative note assessor, not from a second approximation.
+
+Each problem section has a **Repeat measures X–Y** control. It prepares a
+bounded Practice attempt that begins and ends at those exact source measure
+boundaries; it waits for the player to press Start. Repeating part of a
+passage never grants whole-passage mastery. Failed full Practice attempts
+remain on the review rather than auto-advancing before the player can inspect
+the mistakes.
+
+For a hardware-independent regression, run
+`python -m pytest -q tests/test_attempt_review.py` and
+`bash scripts/check_phase2_ui.sh`. The Godot smoke also checks a real review
+popup with wrong-pitch details and a retry button. A connected MIDI piano
+is still required for *actual* player assessment.
+
 ## Starting at any measure and hand progression (UI phase 4)
 
 When you select a personal MIDI file in the library, a **starting-point
