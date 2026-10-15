@@ -1439,11 +1439,18 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     practice_playback_banner.visible = recovery_notice is Dictionary and str(parsed.get("mode", "")) == "practice"
     if practice_playback_banner.visible:
         var notice: Dictionary = recovery_notice
-        practice_playback_banner.text = (
-            "%d missed/wrong notes  ·  Slowing %d → %d BPM  ·  Retry measures %d–%d"
-            % [int(notice.get("errors", 0)), int(notice.get("from_bpm", 0)),
-               int(notice.get("to_bpm", 0)), int(notice.get("first_bar", 1)),
-               int(notice.get("last_bar", 1))])
+        if str(notice.get("kind", "")) == "speedup":
+            practice_playback_banner.text = (
+                "Clean slower passage  ·  Tempo %d → %d BPM  ·  Keep practising"
+                % [int(notice.get("from_bpm", 0)), int(notice.get("to_bpm", 0))])
+            practice_playback_banner.add_theme_color_override("font_color", Color("#79DAAD"))
+        else:
+            practice_playback_banner.text = (
+                "%d missing/wrong pitches  ·  Tempo %d → %d BPM  ·  Retry measures %d–%d"
+                % [int(notice.get("errors", 0)), int(notice.get("from_bpm", 0)),
+                   int(notice.get("to_bpm", 0)), int(notice.get("first_bar", 1)),
+                   int(notice.get("last_bar", 1))])
+            practice_playback_banner.add_theme_color_override("font_color", Color("#F6BC70"))
     speed_label.add_theme_font_size_override("font_size", _ui_font(16 if size.x < 900 else 18))
     speed_label.tooltip_text = "Current practice tempo and your selected target"
     hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
