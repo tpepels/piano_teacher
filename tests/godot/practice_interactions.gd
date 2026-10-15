@@ -114,6 +114,16 @@ func test_three_button_stage() -> void:
     listening["mode"] = "listen"
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(listening).to_utf8_buffer())
     check(app.listen_button.text == "Practice", "Listen becomes a one-tap return")
+    listening["demo"] = {"token":"sound-test", "instrument":"Salamander Grand Piano (sampled)",
+        "sampled":true, "audio_available":true, "url":""}
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(listening).to_utf8_buffer())
+    check(app.lesson_info_label.text.contains("Acoustic grand piano"),
+        "Listen must identify sampled acoustic audio rather than synthetic tones")
+    listening["demo"] = {"token":"basic-test", "instrument":"Basic synthesized piano",
+        "sampled":false, "audio_available":true, "url":""}
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(listening).to_utf8_buffer())
+    check(app.lesson_info_label.text.contains("Basic piano sound"),
+        "Missing optional samples must be identified instead of claimed acoustic")
     app.listen_button.pressed.emit()
     check(app.commands == [{"action":"practice", "wait_for_player":true}],
         "Returning from Listen prepares a manual piano-first start: " + str(app.commands))
