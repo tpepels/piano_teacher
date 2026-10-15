@@ -67,6 +67,20 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Phase 7.6b - engraved-note feedback, first pass
+
+The next source note or chord receives a slim, tilted notehead-shaped teal
+outline. Correct MIDI attacks briefly create an expanding, fading response
+*behind* the Verovio note raster. Incorrect or missed notes use precise red
+outlines on the affected engraved notes, instead of filled circles, labels,
+checkmarks, or a separately drawn wrong-pitch note. Timing deviations are
+amber. The large in-score warning is now reserved for unmappable feedback.
+Disconnected preview information remains in the ordinary status line.
+
+The genuine notehead coordinates and source-attack IDs still determine
+visual positions. The teaching engine alone owns grading. The sound preview
+remains ungraded.
+
 ## Phase 7.6a - phase-locked score motion (first pass)
 
 The scrolling camera still places the actual engraved beat under a fixed rule

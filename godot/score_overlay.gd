@@ -1,6 +1,7 @@
 extends Control
 
 const Design := preload("res://practice_theme.gd")
+const Ink := preload("res://notehead_ink.gd")
 
 var cursor: Dictionary = {}
 var showing := false
@@ -11,6 +12,7 @@ var marks: Array = []
 var next_chord: Array = []
 var wrong_ghosts: Array = []
 var hit_pulses: Array = []
+var staff_gap_fraction := 0.02
 var active_page := -1
 var crop_origin := Vector2.ZERO
 var crop_size := Vector2.ONE
@@ -135,109 +137,68 @@ func _draw() -> void:
     if image_size.x <= 0.0 or image_size.y <= 0.0:
         return
     _draw_preparation()
-    # A faint green ring confirms correct notes; stronger colour markers
-    # distinguish mistakes without altering the underlying engraving.
-    var palette := {
-        "correct": Color("#4A987B"), "assisted": Color("#C8AC7C"), "expected": Design.TEAL, "wrong": Color("#BB4A4A"),
-        "missed": Color("#BB4A4A"), "extra": Color("#BB4A4A"),
-        "early": Color("#BA852B"), "late": Color("#BA852B"),
-        "short": Color("#8660AF"), "long": Color("#8660AF")
-    }
-    var labels := {"wrong":"×", "missed":"!", "extra":"+",
-                   "early":"←", "late":"→", "short":"−", "long":"+"}
-    # Upcoming *source* chord: a gentle, non-scoring preview around each
-    # individual notehead. Draw beneath authoritative red and amber marks;
-    # a missed E never paints a simultaneously correct C red.
+    # Noteheads are genuine Verovio positions. Use thin ellipses shaped to
+    # the engraved glyph, never opaque blobs, checkmarks or floating labels.
+    var gap: float = maxf(5.0, staff_gap_fraction * size.y)
+    var radii: Vector2 = Ink.radii(gap)
+    var judged: Dictionary = {}
+    for marker in marks:
+        if not marker is Dictionary:
+            continue
+        var note_id: String = str(marker.get("note_id", marker.get("id", "")))
+        var source_id: String = str(marker.get("source_id", ""))
+        if not note_id.is_empty():
+            judged[note_id] = true
+        if not source_id.is_empty():
+            judged[source_id] = true
+
+    # Indicate only the next unassessed note/chord. The halo does not flare
+    # merely because the clock arrived at the note; that is MIDI-triggered.
     for note in next_chord:
         if int(note.get("page", -1)) != active_page:
             continue
-        var focus: Vector2 = _sheet_xy(float(note.get("x", 0.0)),
-                                       float(note.get("y", 0.0)))
+        if judged.has(str(note.get("id", ""))) or judged.has(str(note.get("source_id", ""))):
+            continue
+        var focus: Vector2 = _sheet_xy(float(note.get("x", 0.0)), float(note.get("y", 0.0)))
         var strength: float = clampf(float(note.get("emphasis", 0.0)), 0.0, 1.0)
-        var tone := Color("#6EDDB1")
-        draw_circle(focus, 13.0, Color(tone, .06 + .10 * strength))
-        draw_arc(focus, 12.5, 0.0, TAU, 28,
-            Color(tone, .27 + .55 * strength), 1.5 + strength, true)
+        var extent: Vector2 = radii * 1.14
+        draw_polyline(Ink.ellipse(focus, extent.x, extent.y),
+            Color("#91E9CA", 0.37 + 0.38 * strength), 1.45, true)
+
     for marker in marks:
         if int(marker.get("page", -1)) != active_page:
             continue
         var status: String = str(marker.get("status", ""))
-        var color: Color = palette.get(status, Color("#BB4A4A"))
-        var center: Vector2 = _sheet_xy(float(marker.get("x", 0.0)), float(marker.get("y", 0.0)))
-        if status == "expected":
-            draw_arc(center, 12.0, 0.0, TAU, 24, color, 2.5, true)
-            draw_circle(center + Vector2(0, -18), 3.0, color)
-        elif status == "assisted":
-            draw_arc(center, 10.0, 0.0, TAU, 24, color, 2.0, true)
-            draw_string(ThemeDB.fallback_font, center + Vector2(12, -9), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color)
-        elif status == "correct":
-            draw_arc(center, 9.0, 0.0, TAU, 20, Color(color, .37), 1.5, true)
-            draw_string(ThemeDB.fallback_font, center + Vector2(12, -9), "✓", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, color)
-        elif status in ["missed", "wrong"]:
-            # Never color the whole chord. Only this notehead receives a red
-            # ring and wash. A wrong physical pitch is a separate ghost below.
-            draw_circle(center, 11.0, Color("#D8514F", .26))
-            draw_arc(center, 13.0, 0.0, TAU, 30, Color("#FF665E"), 3.2, true)
-            draw_string(ThemeDB.fallback_font, center + Vector2(13, -10),
-                "×", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#FF665E"))
-        else:
-            var radius := 12.0 if status == "missed" else 10.0
-            draw_arc(center, radius, 0.0, TAU, 24, color, 2.5, true)
-            var symbol: String = str(labels.get(status, "!"))
-            var font: Font = ThemeDB.fallback_font
-            draw_string(font, center + Vector2(12, -9), symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, color)
-            if status == "extra":
-                draw_string(font, center + Vector2(12, 5), str(marker.get("label", "")), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, color)
-    # Briefly draw the *actual physical wrong pitch* on the correct staff.
-    # The x and staff reference come from a real Verovio attack. Y is offset
-    # by diatonic steps relative to that attack; never fabricate a note at an
-    # unrelated part of the score. Expired ghosts disappear independently
-    # of permanent missed-note feedback.
+        # Correct timing is shown as a transient pulse behind the noteheads,
+        # not a permanent checkmark drawn over the engraved score.
+        if status in ["correct", "on_time"]:
+            continue
+        var tone: Color = Color("#F0807A") if status in ["wrong", "missed", "extra"] else (
+            Color("#E7B776") if status in ["early", "late", "short", "long", "assisted"] else
+            Color("#91E9CA"))
+        var focus: Vector2 = _sheet_xy(float(marker.get("x", 0.0)), float(marker.get("y", 0.0)))
+        var extent: Vector2 = radii * (1.17 if status in ["wrong", "missed", "extra"] else 1.12)
+        draw_polyline(Ink.ellipse(focus, extent.x, extent.y),
+            tone, 1.7 if status in ["wrong", "missed"] else 1.4, true)
+
+    # An unexpected physical note briefly outlines the associated expected
+    # notehead. Do not draw another simulated note or the word WRONG on staff.
     var now_ms: int = Time.get_ticks_msec()
-    for ghost in wrong_ghosts:
-        if int(ghost.get("page", -1)) != active_page:
+    for event in wrong_ghosts:
+        if int(event.get("page", -1)) != active_page:
             continue
-        var life: float = clampf(
-            float(int(ghost.get("until_ms", 0)) - now_ms) / 950.0, 0.0, 1.0)
-        if life <= 0.0:
+        var remaining: float = clampf(
+            float(int(event.get("until_ms", 0)) - now_ms) /
+                float(maxi(1, int(event.get("duration_ms", 420)))), 0.0, 1.0)
+        if remaining <= 0.0:
             continue
-        var center: Vector2 = _sheet_xy(float(ghost["x"]), float(ghost["y"]))
-        var color := Color("#F98A70", life)
-        # Use the five-line staff's actual spacing when additional ledger
-        # lines are required outside the written range.
-        var x_radius := 13.0
-        for y in ghost.get("ledger_lines", []):
-            var staff_y: float = _sheet_xy(0.0, float(y)).y
-            draw_line(Vector2(center.x-17, staff_y),
-                Vector2(center.x+17, staff_y), color, 2.0, true)
-        draw_circle(center, x_radius, Color("#A52E2D", life * .18))
-        draw_colored_polygon(PackedVector2Array([
-            center + Vector2(-12, 2), center + Vector2(-11, -4),
-            center + Vector2(8, -7), center + Vector2(12, -2),
-            center + Vector2(10, 5), center + Vector2(-8, 8)
-        ]), color)
-        var pitch_label: String = str(ghost.get("label", ""))
-        draw_string(ThemeDB.fallback_font, center + Vector2(19, -12),
-            pitch_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 19, color)
-        draw_string(ThemeDB.fallback_font, center + Vector2(19, 9),
-            "WRONG", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(color, life * .9))
+        var center: Vector2 = _sheet_xy(float(event.get("x", 0.0)), float(event.get("y", 0.0)))
+        var extent: Vector2 = radii * 1.19
+        draw_polyline(Ink.ellipse(center, extent.x, extent.y),
+            Color("#F0807A", remaining * .92), 1.8, true)
 
-    # A real physical attack produces a prominent short-lived pulse at the
-    # mapped engraved notehead. These pulses are provisional and distinct from
-    # the authoritative assessment marks rendered above.
-    var ticks: int = Time.get_ticks_msec()
-    for pulse in hit_pulses:
-        if int(pulse.get("page", -1)) != active_page:
-            continue
-        var alpha: float = clampf(float(int(pulse.get("until_ms", 0)) - ticks) / 700.0, 0.0, 1.0)
-        if alpha <= 0.0:
-            continue
-        var status: String = str(pulse.get("status", "heard"))
-        var color: Color = Color("#63D9AE") if status == "on_time" else Color("#D6AC61")
-        var center := _sheet_xy(float(pulse.get("x", 0.0)), float(pulse.get("y", 0.0)))
-        draw_circle(center, 15.0, Color(color, alpha * .17))
-        draw_arc(center, 14.0 + (1.0-alpha) * 12.0, 0.0, TAU, 32, Color(color, alpha), 4.0, true)
-
+    # The acoustic attack ring is drawn by NoteReactions *behind* the actual
+    # raster tiles. Nothing here paints over correct notes.
     if showing and not guided_active and not cursor.is_empty() and int(cursor.get("page", -1)) == active_page:
         var x: float = float(cursor.get("x", 0.0))
         var top: float = float(cursor.get("top", 0.0))

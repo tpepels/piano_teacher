@@ -10,6 +10,7 @@ const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
 const ScoreStrip := preload("res://score_strip.gd")
 const ScoreOverlay := preload("res://score_overlay.gd")
+const NoteReactions := preload("res://note_reactions.gd")
 const ChallengeFlow := preload("res://challenge_flow.gd")
 const LivingScore := preload("res://living_score.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
@@ -93,6 +94,7 @@ var device_button: Button
 var start_button: Button
 var score_view: TextureRect
 var score_overlay: ScoreOverlay
+var note_reactions: Control
 var score_frame: Control
 var score_content: Control
 var score_crop_origin := Vector2.ZERO
@@ -1031,6 +1033,10 @@ func _build_interface() -> void:
     score_content = Control.new()
     score_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_frame.add_child(score_content)
+    # The positive MIDI feedback halo is behind the actual engraved ink.
+    note_reactions = NoteReactions.new()
+    note_reactions.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    score_content.add_child(note_reactions)
     score_view = TextureRect.new()
     score_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1041,6 +1047,7 @@ func _build_interface() -> void:
     score_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_content.add_child(score_overlay)
+    note_reactions.hit_pulses = score_overlay.hit_pulses
     # Score status must live inside the score panel: feedback_label is replaced
     # by regular state polling and cannot hold engraving errors reliably.
     score_status_panel = CenterContainer.new()
@@ -1744,6 +1751,7 @@ func _process(_delta: float) -> void:
     # the final faded wrong pitch until another transport update arrives.
     if effects_were_visible:
         score_overlay.queue_redraw()
+        note_reactions.queue_redraw()
     apply_tempo_button.disabled = action_pending
     _update_count_in()
     if str(last_state.get("mode", "practice")) == "learn":
@@ -2211,6 +2219,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         score_overlay.next_chord.clear()
         score_overlay.hit_pulses.clear()
         score_overlay.wrong_ghosts.clear()
+        note_reactions.queue_redraw()
         _request_layout()
     if str(parsed.get("phase", "")) == "loading" and layout_revision == revision and rendered_revision == revision and score_view.texture != null:
         _send_action({"action": "score_ready", "revision": revision})
@@ -2294,30 +2303,14 @@ func _update_note_feedback_hud(parsed: Dictionary) -> void:
     var feedback: Variant = parsed.get("live_note_feedback")
     practice_note_feedback_panel.visible = false
     if active_mode in ["practice", "perform"]:
-        if active_phase == "playing" and feedback is Dictionary:
-            var problem: Dictionary = feedback
-            var wrong: bool = str(problem.get("status", "")) == "wrong"
-            practice_note_feedback_label.text = (
-                "WRONG  ·  %s" if wrong else "MISSED  ·  %s"
-            ) % str(problem.get("name", ""))
-            practice_note_feedback_label.add_theme_color_override("font_color", Color("#FF827A"))
-            practice_note_feedback_panel.visible = true
-        elif active_phase in ["playing", "count_in"] and bool(parsed.get("preview_only", false)):
-            practice_note_feedback_label.text = "NO MIDI PIANO · SCORING OFF"
+        # Correctly mapped mistakes now have small red outlines on their
+        # actual noteheads. Avoid a second large warning covering the staff.
+        # Keep an explicit fallback only for events lacking note geometry.
+        var unmapped: int = int(parsed.get("feedback_unmapped", 0))
+        if active_phase in ["feedback", "recovering", "performance_complete"] and unmapped > 0:
+            practice_note_feedback_label.text = "%d notes could not be positioned" % unmapped
             practice_note_feedback_label.add_theme_color_override("font_color", Color("#F1C67D"))
             practice_note_feedback_panel.visible = true
-        elif active_phase in ["feedback", "recovering", "performance_complete"]:
-            var missed_count := 0
-            var wrong_count := 0
-            for mark in parsed.get("feedback_marks", []):
-                if str(mark.get("status", "")) == "missed":
-                    missed_count += 1
-                elif str(mark.get("status", "")) == "wrong":
-                    wrong_count += 1
-            if missed_count + wrong_count > 0:
-                practice_note_feedback_label.text = "%d missed · %d wrong" % [missed_count, wrong_count]
-                practice_note_feedback_label.add_theme_color_override("font_color", Color("#FF827A"))
-                practice_note_feedback_panel.visible = true
 
 
 func _consume_live_piano_hits(state: Dictionary) -> void:
@@ -2348,13 +2341,17 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
             for note in notes:
                 if str(note.get("id", "")) != reference_id:
                     continue
-                var ghost: Dictionary = _wrong_note_ghost(int(event.get("pitch", -1)), note)
-                if not ghost.is_empty():
-                    ghost["until_ms"] = Time.get_ticks_msec() + maxi(1, 1050 - int(age * 1000.0))
-                    score_overlay.wrong_ghosts.append(ghost)
+                var remaining: int = maxi(1, 420 - int(age * 1000.0))
+                score_overlay.wrong_ghosts.append({
+                    "page": int(note.get("page", 0)),
+                    "x": float(note.get("x", 0.0)),
+                    "y": float(note.get("y", 0.0)),
+                    "duration_ms": 420,
+                    "until_ms": Time.get_ticks_msec() + remaining
+                })
                 break
             continue
-        if status not in ["on_time", "early", "late"] or age > .75:
+        if status not in ["on_time", "early", "late"] or age > .28:
             continue
         var note_id: String = str(mapping.get(source, ""))
         if note_id.is_empty():
@@ -2366,8 +2363,10 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                     "x": float(note.get("x", 0.0)),
                     "y": float(note.get("y", 0.0)),
                     "status": status,
-                    "until_ms": Time.get_ticks_msec() + maxi(1, 700 - int(age * 1000.0))
+                    "duration_ms": 260,
+                    "until_ms": Time.get_ticks_msec() + maxi(1, 260 - int(age * 1000.0))
                 })
+                note_reactions.queue_redraw()
                 break
 
 
@@ -2514,6 +2513,18 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     score_view.texture = ImageTexture.create_from_image(cropped)
     score_view.visible = false
     score_overlay.image_size = strip["size"]
+    note_reactions.active_page = 0
+    note_reactions.crop_origin = Vector2.ZERO
+    note_reactions.crop_size = Vector2.ONE
+    # Pixel-accurate relative staff gap follows the same strip scaling as
+    # every real glyph, even at unusual screen sizes and dense chord voicing.
+    var systems: Array = score_layout.get("systems", [])
+    if not systems.is_empty():
+        var staff_lines: Array = systems[0].get("staff_lines", [])
+        if staff_lines.size() >= 2:
+            var gap_ratio: float = absf(float(staff_lines[1]) - float(staff_lines[0]))
+            score_overlay.staff_gap_fraction = gap_ratio
+            note_reactions.staff_gap_fraction = gap_ratio
     score_overlay.load_symbols(source_layout.get("symbols", {}))
     # Cropped tile textures now own all visible imagery. Release full pages
     # rather than retaining a second whole-song raster in CPU memory.
