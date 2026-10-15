@@ -67,6 +67,29 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Game-like interface: Phase 7.1 (practice-first navigation)
+
+The application starts directly on the practice stage, rather than
+showing a separate Home menu. Until a piece is loaded, the score area
+offers a large **Choose music** action. While a piece is open,
+**Choose music**, **Lesson path** and **Settings** appear as an
+in-context drawer over the existing sheet music. Clicking outside the
+drawer, Close/Back, or returning to practice dismisses it.
+
+Opening a drawer during playback requests **Pause**, not Stop. The
+existing transport ID, score and progress remain intact; returning to
+the stage does not silently restart it. A quick library selection made
+during the asynchronous pause is queued rather than discarded.
+Selecting a different imported piece still presents the existing
+starting-measure selector. The legacy Home page is no longer in the
+normal navigation route.
+
+This subphase establishes the persistent playing surface. The reduced
+transport and piano-key-first flow are Phase 7.2; sampled grand piano
+audio for Listen is Phase 7.3. Existing scoring rules and MIDI input
+timing remain unchanged. Verify the drawer at multiple window sizes via
+`./scripts/check_godot.sh` and the actual interaction regression suite.
+
 ## End-to-end library verification (Phase 6)
 
 The **Check files** button performs a quick *source import* audit. To verify
