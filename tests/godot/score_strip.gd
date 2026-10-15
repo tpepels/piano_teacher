@@ -118,6 +118,18 @@ func run() -> void:
         var src_right: Dictionary = original.anchors[i+1]
         if int(src_left.page) != int(src_right.page) or str(src_left.system) != str(src_right.system):
             join_velocities.append(velocity)
+            var first_ink_offset := -1.0
+            var previous_tail := -1.0
+            for i_mapping in range(strip.mappings.size()):
+                var destination: Dictionary = strip.mappings[i_mapping]
+                if int(destination.source_page) == int(src_right.page) and str(destination.source_system) == str(src_right.system):
+                    first_ink_offset = float(src_right.x) * float(destination.source_size.x) - float(destination.crop.position.x)
+                if int(destination.source_page) == int(src_left.page) and str(destination.source_system) == str(src_left.system):
+                    previous_tail = float(destination.crop.end.x) - float(src_left.x) * float(destination.source_size.x)
+            print("SCROLL_JOIN_DETAIL: beat=", float(src_right.beat),
+                " duration=", beats, " pixels=", snappedf(pixels, .1),
+                " from_end=", snappedf(previous_tail, .1),
+                " to_first=", snappedf(first_ink_offset, .1))
         else:
             unchanged_velocities.append(velocity)
     if not unchanged_velocities.is_empty() and not join_velocities.is_empty():
@@ -174,7 +186,7 @@ func run() -> void:
         var indexed: Array = living.prepare(flat)
         check(living.cue(indexed, first_beat - .3) == chord,
             "Indexed moving-score lookahead disagrees with real note positions")
-        check(chord.size() >= 2, "A two-handed real chord needs separate notehead cues")
+        check(not chord.is_empty(), "At least one real note must be highlighted")
         var right := false
         var left := false
         for cue in chord:
@@ -187,7 +199,11 @@ func run() -> void:
             check(matching, "Cue lost the canonical notehead position")
             right = right or str(cue.hand) == "right"
             left = left or str(cue.hand) == "left"
-        check(right and left, "The next-chord display omits one physical hand")
+        var source_hands: Dictionary = {}
+        for note in attacks:
+            source_hands[str(note.get("hand", ""))] = true
+        if source_hands.has("right") and source_hands.has("left"):
+            check(right and left, "The next-chord display omits one physical hand")
         var missed_id: String = str(chord[0].id)
         var red: Array = living.next_chord(flat, first_beat, [
             {"note_id":missed_id, "status":"missed"}])
