@@ -56,6 +56,8 @@ var open_mode: OptionButton
 var open_title: Label
 var practice_stage_bar: HFlowContainer
 var practice_stage_labels: Dictionary = {}
+var practice_retry_button: Button
+var practice_music_button: Button
 var folder_edit: LineEdit
 var folder_dialog: FileDialog
 var fullscreen_toggle: CheckButton
@@ -786,7 +788,9 @@ func _build_interface() -> void:
     practice_navigation.add_theme_constant_override("v_separation", 8)
     practice_navigation.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(practice_navigation)
-    practice_navigation.add_child(_button("Choose music", func(): _navigate("library")))
+    practice_music_button = _button("Music", func(): _navigate("library"))
+    practice_music_button.tooltip_text = "Choose a piece · Escape"
+    practice_navigation.add_child(practice_music_button)
     mode_choice = OptionButton.new()
     mode_choice.disabled = true
     mode_choice.fit_to_longest_item = false
@@ -798,15 +802,14 @@ func _build_interface() -> void:
     mode_choice.add_theme_font_size_override("font_size", _ui_font(15))
     mode_choice.item_selected.connect(func(index: int):
         _send_action({"action": "learn" if index == 0 else "practice" if index == 1 else "perform", "scope":"whole" if index == 3 else "current"}))
-    practice_navigation.add_child(mode_choice)
-    listen_button = _button("Listen", func(): _send_action({"action":"listen"}))
-    practice_navigation.add_child(listen_button)
+    # Advanced mode and hint choices live in Lesson Path, not the stage.
+    # Listen is a main transport choice, not a navigation option.
     hints_toggle = CheckButton.new()
     hints_toggle.text = "Hints"
     hints_toggle.add_theme_font_size_override("font_size", _ui_font(15))
     hints_toggle.tooltip_text = "Keep key hints visible while learning notes"
     hints_toggle.toggled.connect(func(enabled: bool): _send_action({"action":"hints", "enabled":enabled}))
-    practice_navigation.add_child(hints_toggle)
+    # Teaching hints are controlled in Lesson Path.
     practice_navigation.add_child(_button("Lesson path", func(): _navigate("lesson")))
     practice_settings_button = _button("Settings", func(): _navigate("settings"))
     practice_navigation.add_child(practice_settings_button)
@@ -988,16 +991,22 @@ func _build_interface() -> void:
     controls.add_theme_constant_override("h_separation", 12)
     controls.add_theme_constant_override("v_separation", 9)
     practice_layout.add_child(controls)
-    controls.add_child(_button("Previous", func(): _send_action({"action": "previous"})))
-    start_button = _button("Start  ·  Space", _toggle_playing, true)
-    start_button.custom_minimum_size = Vector2(174 * ui_scale, 56 * ui_scale)
+    practice_retry_button = _button("Retry", _restart_practice)
+    practice_retry_button.tooltip_text = "Repeat the current passage · R"
+    practice_retry_button.custom_minimum_size = Vector2(140 * ui_scale, 58 * ui_scale)
+    controls.add_child(practice_retry_button)
+    start_button = _button("Play", _toggle_playing, true)
+    start_button.custom_minimum_size = Vector2(184 * ui_scale, 62 * ui_scale)
     controls.add_child(start_button)
-    stop_button = _button("Stop", func(): _send_action({"action": "stop"}))
-    stop_button.tooltip_text = "End this attempt · S"
+    listen_button = _button("Listen", _listen_or_return_to_practice)
+    listen_button.tooltip_text = "Hear this passage, or return to practice · L"
+    listen_button.custom_minimum_size = Vector2(140 * ui_scale, 58 * ui_scale)
+    controls.add_child(listen_button)
+    # Keyboard and Lesson Path retain Stop, passage navigation and mode
+    # choices, without competing with the three routine controls.
+    stop_button = _button("Stop attempt", func(): _send_action({"action": "stop"}))
+    stop_button.tooltip_text = "End the attempt · S"
     stop_button.disabled = true
-    controls.add_child(stop_button)
-    controls.add_child(_button("Restart", _restart_practice))
-    controls.add_child(_button("Next", func(): _send_action({"action": "next"})))
     _build_lesson_screen()
     _mount_overlays()
 
@@ -1156,6 +1165,23 @@ func _build_lesson_screen() -> void:
     content.add_child(lesson_summary)
     lesson_description = _label("", 16, MUTED)
     content.add_child(lesson_description)
+    var activity := HFlowContainer.new()
+    activity.add_theme_constant_override("h_separation", 12)
+    activity.add_theme_constant_override("v_separation", 8)
+    content.add_child(activity)
+    activity.add_child(_label("Activity", 17, MUTED))
+    activity.add_child(mode_choice)
+    activity.add_child(hints_toggle)
+    var passage_nav := HFlowContainer.new()
+    passage_nav.add_theme_constant_override("h_separation", 10)
+    content.add_child(passage_nav)
+    passage_nav.add_child(_button("Previous passage", func():
+        _send_action({"action":"previous"})
+        _navigate("practice")))
+    passage_nav.add_child(_button("Next passage", func():
+        _send_action({"action":"next"})
+        _navigate("practice")))
+    passage_nav.add_child(stop_button)
     var hand_row := HBoxContainer.new()
     hand_row.add_theme_constant_override("separation", 12)
     content.add_child(hand_row)
@@ -1846,6 +1872,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if demo_player != null:
         demo_player.synchronize(parsed)
     listen_button.disabled = not bool(parsed.get("loaded", false))
+    listen_button.text = "Practice" if str(parsed.get("mode", "")) == "listen" else "Listen"
+    practice_retry_button.disabled = (not bool(parsed.get("loaded", false))
+        or score_view.texture == null or layout_revision != revision)
     var summary: Dictionary = parsed.get("performance_summary", {}) if parsed.get("performance_summary") is Dictionary else {}
     performance_review.visible = not summary.is_empty()
     if not summary.is_empty():
@@ -1875,7 +1904,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         feedback_label.text = str(parsed.get("feedback", "Find the highlighted notes at your own pace."))
         stop_button.disabled = phase in ["ready", "guided_complete", "disconnected"]
     elif phase == "paused":
-        feedback_label.text = "Paused · Space to resume · R to restart"
+        feedback_label.text = "Paused · press Play to resume"
     elif phase == "loading":
         feedback_label.text = "Preparing next passage · count-in waits for score"
     elif phase == "recovering":
@@ -1904,7 +1933,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             and not str(parsed.get("device", "")).is_empty()):
         lesson_info_label.text = "Play any piano key to start the count-in. Release it, then play after the count-in."
     elif learning and phase == "guided_complete" and not str(parsed.get("device", "")).is_empty():
-        lesson_info_label.text = "Idea complete. Play a new piano key to continue, or press Space."
+        lesson_info_label.text = "Idea complete · play one new piano key to continue."
+    elif phase == "feedback" and not bool(parsed.get("auto", false)) and not str(parsed.get("device", "")).is_empty():
+        lesson_info_label.text = "Review the red notes · play a new piano key to retry."
     if not learning:
         progress_label.text = "Clean runs %d of 3 at %d BPM" % [int(parsed.get("streak", 0)), int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
         if bool(parsed.get("warmup", false)):
@@ -1930,7 +1961,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             start_button.text = "Next idea · Space"
     elif str(parsed.get("mode", "")) == "listen" and not active_transport:
         start_button.text = "Back to warm-up" if bool(parsed.get("warmup", false)) else "Listen again"
-    start_button.tooltip_text = "Space: start, pause or resume · R: restart · S: stop"
+    start_button.tooltip_text = "Play, pause or resume · Space · Play any piano key when ready"
     start_button.disabled = not active_transport and (score_view.texture == null or layout_revision != revision)
     score_overlay.marks = []
     for marker in parsed.get("feedback_marks", []):
@@ -1968,9 +1999,13 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             and not action_pending and old_revision == int(parsed.get("revision", -1))
             and old_phase == current_phase and not str(parsed.get("device", "")).is_empty()
             and score_view.texture != null and layout_revision == revision
-            and current_phase in ["ready", "performance_complete", "guided_complete"]):
+            and (current_phase in ["ready", "performance_complete", "guided_complete"]
+                or (current_phase == "feedback" and str(parsed.get("mode", "")) == "practice"
+                    and not bool(parsed.get("auto", false))))):
         if str(parsed.get("mode", "")) == "learn":
             _toggle_playing()
+        elif current_phase == "feedback":
+            _send_action({"action": "restart"})
         elif str(parsed.get("mode", "")) in ["practice", "perform"]:
             _send_action({"action": "start"})
     _refresh_score_status()
@@ -2346,6 +2381,14 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
 func _has_active_transport() -> bool:
     return bool(last_state.get("running", false)) or str(last_state.get("phase", "")) in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]
 
+func _listen_or_return_to_practice() -> void:
+    # Listen is a one-tap reversible action, never a scored take.
+    if str(last_state.get("mode", "")) == "listen":
+        _send_action({"action": "practice"})
+    else:
+        _send_action({"action": "listen"})
+
+
 func _toggle_playing() -> void:
     if str(last_state.get("mode", "")) == "listen" and not _has_active_transport():
         _send_action({"action": "practice" if bool(last_state.get("warmup", false)) else "listen"})
@@ -2425,7 +2468,7 @@ func _input(event: InputEvent) -> void:
     if get_viewport().gui_get_focus_owner() is LineEdit and event.keycode not in [KEY_F11, KEY_ESCAPE]:
         return
     var practice_shortcut: bool = current_screen == "practice" and event.keycode in [
-        KEY_ESCAPE, KEY_SPACE, KEY_P, KEY_R, KEY_S, KEY_LEFT, KEY_RIGHT]
+        KEY_ESCAPE, KEY_SPACE, KEY_P, KEY_R, KEY_S, KEY_L, KEY_LEFT, KEY_RIGHT]
     if event.keycode == KEY_ESCAPE and current_screen in ["library", "settings", "lesson"]:
         _unhandled_key_input(event)
         get_viewport().set_input_as_handled()
@@ -2461,6 +2504,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
                 get_viewport().set_input_as_handled()
             KEY_R:
                 _restart_practice()
+                get_viewport().set_input_as_handled()
+            KEY_L:
+                _listen_or_return_to_practice()
                 get_viewport().set_input_as_handled()
             KEY_S:
                 _send_action({"action":"stop"})
