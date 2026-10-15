@@ -65,6 +65,7 @@ class Piece:
     time_signatures: tuple[tuple[float, int, int], ...] = ()
     key_signatures: tuple[KeySignature, ...] = ()
     clef_changes: tuple[ClefChange, ...] = ()
+    import_warnings: tuple[str, ...] = ()
 
 
 def note_name(pitch: int) -> str:
@@ -152,6 +153,8 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     tempos: list[tuple[int, int]] = []
     keys: list[KeySignature] = []
     source_end_tick = 0
+    discarded_zero_duration = 0
+    discarded_orphan_releases = 0
     for track_idx, track in enumerate(midi.tracks):
         tick = 0
         open_notes: dict[tuple[int, int], tuple[int, int]] = {}
@@ -178,13 +181,23 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
                 open_notes[key] = tick, ordinal
             elif key in open_notes:
                 start_tick, attack = open_notes.pop(key)
-                if tick <= start_tick:
-                    raise ValueError(f"non-positive MIDI note duration on track {track_idx}, pitch {msg.note}")
+                if tick == start_tick:
+                    # Some piano MIDI exports contain instantaneous placeholder
+                    # note pairs. They have no sounding duration and cannot be
+                    # assessed as played notes; dropping only this pair preserves
+                    # the real notes and their canonical source identities.
+                    discarded_zero_duration += 1
+                    continue
+                if tick < start_tick:
+                    raise ValueError(f"Invalid MIDI event ordering on track {track_idx}, pitch {msg.note}")
                 notes.append(Note(start_tick / ticks, tick / ticks, msg.note, track_idx, msg.channel,
                                   source_id=f"midi-t{track_idx}-e{attack}",
                                   voice=f"midi-t{track_idx}-c{msg.channel}"))
             else:
-                raise ValueError(f"orphan MIDI note release on track {track_idx}, channel {msg.channel}, pitch {msg.note}")
+                # Many MIDI performance exports include unmatched channel
+                # releases from pedal/voice processing. With no corresponding
+                # attack they cannot sound or affect a practice exercise.
+                discarded_orphan_releases += 1
         if open_notes:
             channel, pitch = next(iter(open_notes))
             raise ValueError(f"unterminated MIDI note on track {track_idx}, channel {channel}, pitch {pitch}")
@@ -207,7 +220,15 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
         key_contexts[signature.beat] = context
     end = max(max(n.end for n in notes), source_end_tick / ticks)
     boundaries = _bar_boundaries(end, changes)
+    warnings = []
+    if discarded_zero_duration:
+        warnings.append(
+            f"Skipped {discarded_zero_duration} zero-duration MIDI note(s) with no audible length.")
+    if discarded_orphan_releases:
+        warnings.append(
+            f"Ignored {discarded_orphan_releases} unmatched MIDI note-off event(s).")
     return Piece(Path(path).stem, bpm, tuple(notes), _phrases(notes, boundaries, bars_per_phrase),
                  split_pitch, tuple(boundaries), tuple(sorted(set(changes))),
-                 tuple(sorted(set(keys), key=lambda signature: (signature.beat, signature.fifths))))
+                 tuple(sorted(set(keys), key=lambda signature: (signature.beat, signature.fifths))),
+                 import_warnings=tuple(warnings))
 
