@@ -82,6 +82,9 @@ func run() -> void:
     if not attacks.is_empty() and living != null:
         var first_beat: float = float(attacks[0].get("source_beat", attacks[0].beat))
         var chord: Array = living.next_chord(flat, first_beat - .3)
+        var indexed: Array = living.prepare(flat)
+        check(living.cue(indexed, first_beat - .3) == chord,
+            "Indexed moving-score lookahead disagrees with real note positions")
         check(chord.size() >= 2, "A two-handed real chord needs separate notehead cues")
         var right := false
         var left := false
