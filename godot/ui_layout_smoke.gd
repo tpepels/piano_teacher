@@ -181,6 +181,36 @@ func _run() -> void:
     scene.call("_update_hand_stages", {"hand_stages": []})
     _check(not ribbon.visible, "Hand ribbon should disappear when no hand course exists")
 
+    # Review both missed chord pitches and the *played* wrong note.
+    # Test actual dialog controls and section retry widgets, not a static label.
+    var report: Dictionary = {
+        "accuracy_percent": 50.0, "correct": 2, "total": 4,
+        "missed": 1, "wrong": 1, "extra_notes": 1,
+        "early": 0, "late": 0, "short": 1, "long": 0,
+        "sections": [{
+            "first_bar": 3, "last_bar": 4, "start_beat": 8.0, "end_beat": 16.0,
+            "errors": 3, "issues": [
+                {"bar": 3, "status": "missed", "pitch": 60, "name": "C4"},
+                {"bar": 3, "status": "wrong", "pitch": 64, "name": "E4",
+                 "played_pitch": 66, "played_name": "F#4"},
+                {"bar": 4, "status": "short", "pitch": 67, "name": "G4"}
+            ]}]}
+    var review: AcceptDialog = scene.get("review_sheet")
+    review.call("open_review", report)
+    await process_frame
+    var review_summary: Label = review.get("summary_label")
+    var review_rows: VBoxContainer = review.get("section_list")
+    _check(review.visible and "50%" in review_summary.text,
+        "Review dialog did not show assessed accuracy")
+    _check(review_rows.get_child_count() == 1,
+        "Review dialog did not show a source-measure section")
+    _check("Expected E4, played F#4" in review.call("_issue_text", report["sections"][0]["issues"][1]),
+        "Review omits the actual incorrect piano key")
+    var review_buttons := review_rows.find_children("*", "Button", true, false)
+    _check(review_buttons.size() == 1 and "3" in review_buttons[0].text,
+        "Review lacks a direct retry button for the assessed section")
+    review.hide()
+
     var pause: Control = scene.get("pause_sheet")
     pause.call("present", {"paused":true, "mode":"practice", "bpm":68,
         "hand":"left", "hands":["left","right","both"],
