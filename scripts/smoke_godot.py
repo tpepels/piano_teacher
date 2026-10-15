@@ -162,6 +162,14 @@ def run(file: Path | None = None) -> int:
                     godot_process, ui_log, timeout=max(10, lead_seconds + 8),
                     description="Godot timed playing state")
                 print("PASS Godot observed count-in and playing phases", flush=True)
+                # Moving cursor logs can pass with every printed note offscreen.
+                # Demand that Godot's actual cropped-PNG-to-panel transform
+                # leaves an engraved required notehead inside the viewport.
+                await_condition(
+                    lambda log: re.search(r"PHASE0_VISIBLE_NOTES:([1-9][0-9]*)", log) is not None,
+                    godot_process, ui_log, timeout=5,
+                    description="engraved noteheads actually visible while playing")
+                print("PASS played notes remain visible in the Godot panel", flush=True)
                 await_condition(moving_lead_in_observed,godot_process,ui_log,
                                 timeout=6,description="count-in musical movement")
                 print("PASS count-in score moves under a stable timing line", flush=True)

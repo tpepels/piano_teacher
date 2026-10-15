@@ -283,6 +283,47 @@ func _update_count_in() -> void:
     else:
         count_in_display.visible = false
 
+func _score_note_bounds(page: int) -> Dictionary:
+    # Derive framing from actual engraved required notes, not the white area
+    # around the page or a cursor's approximated staff bounds.
+    var left: float = INF
+    var right: float = -INF
+    for item in score_layout.get("notes", []):
+        if int(item.get("page", -1)) != page:
+            continue
+        var px: float = (float(item.get("x", 0.0)) - score_crop_origin.x) / maxf(score_crop_size.x, 0.00001)
+        left = minf(left, px)
+        right = maxf(right, px)
+    if not is_finite(left) or not is_finite(right):
+        for item in score_layout.get("anchors", []):
+            if int(item.get("page", -1)) != page:
+                continue
+            var ax: float = (float(item.get("x", 0.0)) - score_crop_origin.x) / maxf(score_crop_size.x, 0.00001)
+            left = minf(left, ax)
+            right = maxf(right, ax)
+    if not is_finite(left) or not is_finite(right):
+        return {"left": 0.0, "right": 1.0}
+    return {"left": clampf(left - 0.04, 0.0, 1.0),
+            "right": clampf(right + 0.04, 0.0, 1.0)}
+
+
+func _visible_score_noteheads() -> int:
+    # Validate where real noteheads appear after the actual Godot canvas
+    # transform. Cursor movement alone previously passed with a blank panel.
+    if score_frame == null or score_content == null:
+        return 0
+    var visible := 0
+    for item in score_layout.get("notes", []):
+        if int(item.get("page", -1)) != current_page:
+            continue
+        var normalized: Vector2 = (Vector2(float(item.get("x", 0.0)), float(item.get("y", 0.0)))
+            - score_crop_origin) / score_crop_size
+        var xy: Vector2 = score_content.position + normalized * score_content.size
+        if xy.x >= 0.0 and xy.x <= score_frame.size.x and xy.y >= 0.0 and xy.y <= score_frame.size.y:
+            visible += 1
+    return visible
+
+
 func _layout_moving_score(delta: float = 0.0) -> void:
     if score_view.texture == null or score_frame == null or score_content == null:
         return
@@ -290,50 +331,43 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     var image: Vector2 = score_overlay.image_size
     if viewport.x < 10.0 or viewport.y < 10.0 or image.x <= 0.0 or image.y <= 0.0:
         return
-    # Frame the active grand-staff system instead of every system on a page.
-    # These bounds are measured from Verovio noteheads.
-    # Fit the entire exercise when stopped. The old max() enlarged the page
-    # past the frame, hiding the clef and most notes before any music played.
-    var base_scale: float = minf(viewport.y * 0.82 / image.y, viewport.x * 0.95 / image.x)
-    var scale: float = base_scale
-    var midpoint: float = 0.5
-    var key := ""
-    if score_overlay.showing and not score_overlay.cursor.is_empty():
-        var cursor: Dictionary = score_overlay.cursor
-        var top: float = (float(cursor.get("top", 0.0)) - score_crop_origin.y) / score_crop_size.y
-        var bottom: float = (float(cursor.get("bottom", 1.0)) - score_crop_origin.y) / score_crop_size.y
-        var system_span: float = clampf(bottom - top, 0.20, 1.0)
-        # A modest practice zoom keeps both staves readable without turning a
-        # short two-measure lesson into a mostly clipped, empty staff.
-        scale = maxf(base_scale, minf(viewport.x * 1.20 / image.x,
-                                     viewport.y * 0.65 / (image.y * system_span)))
-        midpoint = (top + bottom) * 0.5
-        key = "%d/%d/%s/%d" % [revision, int(cursor.get("page", 0)),
-               str(cursor.get("system", "")), int(last_state.get("transport_id", 0))]
+    var bounds: Dictionary = _score_note_bounds(current_page)
+    var focus_left: float = float(bounds["left"])
+    var focus_right: float = float(bounds["right"])
+    var focus_span: float = maxf(0.18, focus_right - focus_left)
+    # Use one stable zoom for stopped, count-in and playing. Earlier versions
+    # changed to a much larger scale on Start and then panned empty page space
+    # across the entire visible panel.
+    var width_scale: float = viewport.x * 0.83 / (image.x * focus_span)
+    var height_scale: float = viewport.y * 0.77 / image.y
+    var scale: float = maxf(0.01, minf(width_scale, height_scale))
     var displayed_width: float = image.x * scale
     var displayed_height: float = image.y * scale
     score_content.size = Vector2(displayed_width, displayed_height)
-    var target_x: float = (viewport.x - displayed_width) * 0.5
+    var midpoint_x: float = (focus_left + focus_right) * 0.5
+    var target_x: float = viewport.x * 0.5 - midpoint_x * displayed_width
     if score_overlay.showing and not score_overlay.cursor.is_empty():
-        var note_x: float = (float(score_overlay.cursor.get("x", 0.0)) - score_crop_origin.x) / score_crop_size.x
-        var target_reading_x: float = viewport.x * 0.42
-        var margin: float = viewport.x * 0.045
-        # Keep the cyan rule fixed at 42% of the viewport while the entire
-        # exercise passes beneath it. Centering/clamping short scores makes
-        # the notation appear completely stationary; never do that in play.
-        target_x = target_reading_x - note_x * displayed_width
+        var note_x: float = (float(score_overlay.cursor.get("x", 0.0))
+            - score_crop_origin.x) / maxf(score_crop_size.x, 0.00001)
+        target_x = viewport.x * 0.42 - note_x * displayed_width
+        if _transport_beat_now() >= 0.0:
+            # Keep at least one part of the *musical passage* in the viewport.
+            # Clamping against the PNG edges is insufficient when the raster
+            # has empty space; real notehead positions provide safe limits.
+            var left_limit: float = viewport.x * 0.08 - focus_left * displayed_width
+            var right_limit: float = viewport.x * 0.92 - focus_right * displayed_width
+            if left_limit >= right_limit:
+                target_x = clampf(target_x, right_limit, left_limit)
     var target_y: float = (viewport.y - displayed_height) * 0.5
-    if displayed_height > viewport.y:
-        target_y = clampf(viewport.y * 0.5 - midpoint * displayed_height,
-                          viewport.y * 0.96 - displayed_height, viewport.y * 0.04)
-    # The PNG and feedback overlay share a parent, and therefore stay aligned
-    # during panning. Smoothing is independent of frame rate.
-    # Snap on staff/page changes rather than drifting over another system.
+    # The PNG is ink-cropped; centering it vertically keeps both staves on
+    # screen. Do not re-center using the approximate notehead staff bounds.
+    var target := Vector2(target_x, target_y)
+    var key: String = "%d/%d/%d" % [revision, current_page, int(last_state.get("transport_id", 0))]
     if delta <= 0.0 or key != follow_system_key or _transport_beat_now() < 0.0:
-        score_content.position = Vector2(target_x, target_y)
+        score_content.position = target
     else:
         var blend: float = 1.0 - exp(-14.0 * delta)
-        score_content.position = score_content.position.lerp(Vector2(target_x, target_y), blend)
+        score_content.position = score_content.position.lerp(target, blend)
     follow_system_key = key
 
 func _new_request(callback: Callable) -> HTTPRequest:
@@ -974,6 +1008,10 @@ func _process(_delta: float) -> void:
                 / score_crop_size.x * score_content.size.x)
             print("PHASE0_LEAD_BEAT:", clock, " CONTENT_X:", score_content.position.x,
                   " CURSOR_X:", cursor_screen_x, " VISIBLE:", score_overlay.showing)
+    if phase0_smoke_mode and active and clock >= 0.0:
+        print("PHASE0_VISIBLE_NOTES:", _visible_score_noteheads(),
+              " PANEL_WIDTH:", score_frame.size.x,
+              " CONTENT_X:", score_content.position.x)
     if phase0_smoke_mode and active:
         var cursor_tick: int = int(floor(beat * 4.0))
         if cursor_tick > phase0_last_cursor_tick:

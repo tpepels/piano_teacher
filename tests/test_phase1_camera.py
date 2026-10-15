@@ -1,28 +1,32 @@
-"""Source-level checks pending runtime Godot visual acceptance."""
+"""Godot camera regressions, backed by a real runtime visibility smoke test."""
 from pathlib import Path
-SOURCE = (Path(__file__).resolve().parents[1] / 'godot' / 'main.gd').read_text()
 
-def test_camera_tracks_active_system():
-    assert 'system_span: float = clampf(bottom - top, 0.20, 1.0)' in SOURCE
-    assert 'score_crop_origin.y' in SOURCE
-    assert 'target_y = clampf(' in SOURCE
+SOURCE = (Path(__file__).resolve().parents[1] / "godot" / "main.gd").read_text()
 
-def test_camera_smooths_without_detaching_cursor():
-    assert 'func _layout_moving_score(delta: float = 0.0)' in SOURCE
-    assert 'var blend: float = 1.0 - exp(-14.0 * delta)' in SOURCE
-    assert 'score_content.position.lerp(Vector2(target_x, target_y), blend)' in SOURCE
-    assert '_layout_moving_score(_delta)' in SOURCE
+def test_fit_is_based_on_actual_required_noteheads():
+    assert "func _score_note_bounds(page: int)" in SOURCE
+    assert 'score_layout.get("notes", [])' in SOURCE
+    assert "var width_scale: float = viewport.x * 0.83" in SOURCE
+    assert "var height_scale: float = viewport.y * 0.77" in SOURCE
 
-def test_system_wrap_snaps_correctly():
-    assert 'key != follow_system_key' in SOURCE
-    assert 'str(cursor.get("system", ""))' in SOURCE
-    assert 'score_overlay.cursor = cursor' in SOURCE
+def test_playback_keeps_music_inside_frame():
+    assert "focus_left * displayed_width" in SOURCE
+    assert "focus_right * displayed_width" in SOURCE
+    assert "target_x = clampf(target_x, right_limit, left_limit)" in SOURCE
+    assert "var target_y: float = (viewport.y - displayed_height) * 0.5" in SOURCE
+    assert "score_content.position = score_content.position.lerp(target, blend)" in SOURCE
 
+def test_camera_does_not_rerender_between_stop_and_start():
+    assert 'var key: String = "%d/%d/%d"' in SOURCE
+    assert "_layout_moving_score(_delta)" in SOURCE
+    assert "score_overlay.cursor = cursor" in SOURCE
 
-def test_opaque_white_margins_are_cropped_before_fitting_score():
-    # A source check guards the UI path; rendered acceptance remains on Godot.
-    assert 'func _visible_engraving_bounds(picture: Image)' in SOURCE
-    assert 'var opaque_bounds := _visible_engraving_bounds(picture)' in SOURCE
-    assert 'picture.get_used_rect()' not in SOURCE.split('func _on_score(')[1]
-    assert 'var base_scale: float = minf(' in SOURCE
-    assert 'viewport.x * 1.20 / image.x' in SOURCE
+def test_runtime_visibility_trace_counts_actual_notehead_projection():
+    assert "func _visible_score_noteheads() -> int:" in SOURCE
+    assert 'PHASE0_VISIBLE_NOTES:' in SOURCE
+    assert "score_content.position + normalized * score_content.size" in SOURCE
+
+def test_opaque_page_margins_are_cropped():
+    assert "func _visible_engraving_bounds(picture: Image)" in SOURCE
+    assert "var opaque_bounds := _visible_engraving_bounds(picture)" in SOURCE
+    assert "picture.get_used_rect()" not in SOURCE.split("func _on_score(")[1]
