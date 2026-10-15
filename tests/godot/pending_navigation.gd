@@ -69,8 +69,10 @@ func test_pending_start_or_resume(action: String, destination: String) -> void:
         "Navigation waits for the in-flight " + action + " request before sending another request")
     acknowledge("playing" if action == "resume" else "count_in")
     var wanted := "pause" if destination != "home" else ""
-    var expected: Array[Dictionary] = ([{"action": action}, {"action": wanted}]
-        if not wanted.is_empty() else [{"action": action}])
+    var expected: Array[Dictionary] = []
+    expected.append({"action": action})
+    if not wanted.is_empty():
+        expected.append({"action": wanted})
     check(app.wire_commands == expected,
         action + " immediately followed by " + destination + " preserves the user's " + wanted + " intent: " + str(app.wire_commands))
     check(app.action_pending, "The current transport request is still being acknowledged")
