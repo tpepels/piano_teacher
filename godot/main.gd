@@ -13,6 +13,9 @@ const ScoreOverlay := preload("res://score_overlay.gd")
 const ChallengeFlow := preload("res://challenge_flow.gd")
 const LivingScore := preload("res://living_score.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
+const GameBackdrop := preload("res://game_backdrop.gd")
+const GameStage := preload("res://game_stage.gd")
+const GameStreak := preload("res://game_streak.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -39,6 +42,9 @@ var folder_controls: BoxContainer
 var practice_settings_button: Button
 var practice_navigation: HFlowContainer
 var practice_header: HBoxContainer
+var game_brand: Label
+var game_stage: Control
+var game_streak: Control
 var score_status_panel: CenterContainer
 var score_status_label: Label
 var score_retry_button: Button
@@ -475,8 +481,52 @@ func _button(label: String, callback: Callable, primary := false) -> Button:
     button.add_theme_color_override("font_disabled_color", MUTED)
     button.set_meta("ui_font_base", 15)
     button.add_theme_font_size_override("font_size", _ui_font(15))
+    button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
     button.pressed.connect(callback)
     return button
+
+
+func _game_button(button: Button, central := false) -> void:
+    # Buttons on the piano stage are instrument controls rather than
+    # generic form submissions. Keep a fixed tactile vocabulary.
+    button.add_theme_font_size_override("font_size", _ui_font(17 if central else 15))
+    var normal := StyleBoxFlat.new()
+    normal.bg_color = Color("#286E60") if central else Color("#192B2C")
+    normal.set_corner_radius_all(15 if central else 12)
+    normal.set_content_margin_all(12)
+    normal.set_border_width_all(2 if central else 1)
+    normal.border_color = Color("#8CF4D0", .90) if central else Color("#668C82", .55)
+    normal.shadow_color = Color("#3ABF9D", .22) if central else Color.BLACK
+    normal.shadow_size = 7 if central else 2
+    normal.shadow_offset = Vector2(0, 3)
+    button.add_theme_stylebox_override("normal", normal)
+    var hover := normal.duplicate() as StyleBoxFlat
+    hover.bg_color = Color("#378F76") if central else Color("#244340")
+    hover.border_color = Color("#B5FFE0")
+    hover.shadow_size = 12 if central else 4
+    button.add_theme_stylebox_override("hover", hover)
+    var pressed := normal.duplicate() as StyleBoxFlat
+    pressed.bg_color = Color("#205D53") if central else Color("#203733")
+    pressed.shadow_size = 0
+    pressed.shadow_offset = Vector2.ZERO
+    button.add_theme_stylebox_override("pressed", pressed)
+    var disabled := normal.duplicate() as StyleBoxFlat
+    disabled.bg_color = Color("#172324")
+    disabled.border_color = Color("#456059", .3)
+    disabled.shadow_size = 0
+    button.add_theme_stylebox_override("disabled", disabled)
+    var focus := normal.duplicate() as StyleBoxFlat
+    focus.bg_color = Color.TRANSPARENT
+    focus.border_color = Color("#D6FFE8")
+    focus.set_border_width_all(2)
+    focus.shadow_size = 0
+    button.add_theme_stylebox_override("focus", focus)
+    button.add_theme_color_override("font_color", Color("#F4FFF9") if central else Color("#D6E7DD"))
+    button.add_theme_color_override("font_hover_color", Color.WHITE)
+    button.add_theme_color_override("font_pressed_color", Color.WHITE)
+    button.add_theme_color_override("font_disabled_color", Color("#748B82"))
+    button.clip_text = false
+
 
 func _screen(name: String) -> MarginContainer:
     var panel := MarginContainer.new()
@@ -610,10 +660,8 @@ func _go_back() -> void:
 func _build_interface() -> void:
     theme = Design.create()
     theme.default_font_size = _ui_font(16)
-    var background := ColorRect.new()
-    background.color = PAPER
+    var background := GameBackdrop.new()
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    background.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(background)
 
     # Home: a title, one recent piece and two decisions, with ample whitespace.
@@ -797,7 +845,7 @@ func _build_interface() -> void:
     # Practice: standard engraving remains the central and dominant element.
     var practice_page := _screen("Practice")
     screens["practice"] = practice_page
-    var practice_layout := _stack(19)
+    var practice_layout := _stack(12)
     practice_layout_box = practice_layout
     practice_page.add_child(practice_layout)
     # Navigation and lesson metadata are separate rows. A long title or
@@ -807,9 +855,15 @@ func _build_interface() -> void:
     practice_navigation.add_theme_constant_override("v_separation", 8)
     practice_navigation.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(practice_navigation)
+    game_brand = _label("PIANO  /  STUDIO", 13, Color("#75CEAF"), true)
+    game_brand.custom_minimum_size = Vector2(210, 42)
+    game_brand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    game_brand.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    practice_navigation.add_child(game_brand)
     practice_music_button = _button("Music", func(): _navigate("library"))
     practice_music_button.tooltip_text = "Choose a piece · Escape"
     practice_navigation.add_child(practice_music_button)
+    _game_button(practice_music_button)
     mode_choice = OptionButton.new()
     mode_choice.disabled = true
     mode_choice.fit_to_longest_item = false
@@ -829,9 +883,13 @@ func _build_interface() -> void:
     hints_toggle.tooltip_text = "Keep key hints visible while learning notes"
     hints_toggle.toggled.connect(func(enabled: bool): _send_action({"action":"hints", "enabled":enabled}))
     # Teaching hints are controlled in Lesson Path.
-    practice_navigation.add_child(_button("Lesson path", func(): _navigate("lesson")))
+    var path_button := _button("Path", func(): _navigate("lesson"))
+    path_button.tooltip_text = "Learning stages and advanced practice"
+    practice_navigation.add_child(path_button)
+    _game_button(path_button)
     practice_settings_button = _button("Settings", func(): _navigate("settings"))
     practice_navigation.add_child(practice_settings_button)
+    _game_button(practice_settings_button)
 
     practice_header = HBoxContainer.new()
     practice_header.add_theme_constant_override("separation", 20)
@@ -839,7 +897,7 @@ func _build_interface() -> void:
     var heading := _stack(2)
     heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     practice_header.add_child(heading)
-    title_label = _label("Piano Teacher", 27, INK, true)
+    title_label = _label("Piano Teacher", 27, Color("#F3F7EF"), true)
     title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     title_label.clip_text = true
     title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -852,7 +910,7 @@ func _build_interface() -> void:
     tempo.custom_minimum_size = Vector2(190, 0)
     tempo.size_flags_horizontal = Control.SIZE_SHRINK_END
     practice_header.add_child(tempo)
-    speed_label = _label("-- BPM", 20, INK)
+    speed_label = _label("-- BPM", 20, Color("#90E9C6"), true)
     speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(speed_label)
@@ -860,9 +918,8 @@ func _build_interface() -> void:
     hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(hand_label)
-    lesson_info_label = _label("", 17, INK)
+    lesson_info_label = _label("", 16, Color("#A9C2B7"))
     lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    practice_layout.add_child(lesson_info_label)
     practice_stage_bar = HFlowContainer.new()
     practice_stage_bar.add_theme_constant_override("h_separation", 10)
     practice_stage_bar.add_theme_constant_override("v_separation", 6)
@@ -882,6 +939,16 @@ func _build_interface() -> void:
     practice_playback_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_playback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var score_panel := _card()
+    # One continuous performance stage, not another grey website card.
+    var stage_shell := StyleBoxFlat.new()
+    stage_shell.bg_color = Color("#101B1C")
+    stage_shell.set_corner_radius_all(18)
+    stage_shell.set_border_width_all(1)
+    stage_shell.border_color = Color("#609687", .6)
+    stage_shell.shadow_color = Color("#000E0D", .55)
+    stage_shell.shadow_size = 9
+    stage_shell.shadow_offset = Vector2(0, 3)
+    score_panel.add_theme_stylebox_override("panel", stage_shell)
     practice_score_panel = score_panel
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(score_panel)
@@ -897,6 +964,9 @@ func _build_interface() -> void:
     score_frame = score_area
     score_frame.clip_contents = true
     score_frame.resized.connect(_layout_moving_score)
+    game_stage = GameStage.new()
+    game_stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    score_frame.add_child(game_stage)
     score_content = Control.new()
     score_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_frame.add_child(score_content)
@@ -976,22 +1046,30 @@ func _build_interface() -> void:
     practice_progress = ProgressBar.new()
     practice_progress.show_percentage = false
     practice_progress.max_value = 1.0
-    practice_progress.custom_minimum_size = Vector2(0, 9)
-    practice_progress.add_theme_stylebox_override("background", Design.surface(Design.PANEL, 3))
-    practice_progress.add_theme_stylebox_override("fill", Design.surface(Design.SAGE, 3))
+    practice_progress.custom_minimum_size = Vector2(0, 4)
+    practice_progress.add_theme_stylebox_override("background", Design.surface(Color("#25443E"), 3))
+    practice_progress.add_theme_stylebox_override("fill", Design.surface(Color("#70E5BF"), 3))
     (practice_progress.get_theme_stylebox("background") as StyleBoxFlat).set_content_margin_all(0)
     (practice_progress.get_theme_stylebox("fill") as StyleBoxFlat).set_content_margin_all(0)
     practice_layout.add_child(practice_progress)
     var information := VBoxContainer.new()
     information.add_theme_constant_override("separation", 4)
     practice_layout.add_child(information)
-    progress_label = _label("", 17, INK)
+    var challenge_bar := HBoxContainer.new()
+    challenge_bar.add_theme_constant_override("separation", 18)
+    information.add_child(challenge_bar)
+    progress_label = _label("", 17, Color("#CDECDD"), true)
     progress_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-    information.add_child(progress_label)
-    feedback_label = _label("Ready", 17, MUTED)
+    progress_label.clip_text = true
+    progress_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    challenge_bar.add_child(progress_label)
+    game_streak = GameStreak.new()
+    challenge_bar.add_child(game_streak)
+    feedback_label = _label("Ready", 16, Color("#A1BAAF"))
     feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     information.add_child(feedback_label)
+    information.add_child(lesson_info_label)
     performance_review = VBoxContainer.new()
     performance_review.visible = false
     information.add_child(performance_review)
@@ -1014,13 +1092,16 @@ func _build_interface() -> void:
     practice_retry_button.tooltip_text = "Repeat the current passage · R"
     practice_retry_button.custom_minimum_size = Vector2(140 * ui_scale, 58 * ui_scale)
     controls.add_child(practice_retry_button)
+    _game_button(practice_retry_button)
     start_button = _button("Play", _toggle_playing, true)
     start_button.custom_minimum_size = Vector2(184 * ui_scale, 62 * ui_scale)
     controls.add_child(start_button)
+    _game_button(start_button, true)
     listen_button = _button("Listen", _listen_or_return_to_practice)
     listen_button.tooltip_text = "Hear this passage, or return to practice · L"
     listen_button.custom_minimum_size = Vector2(140 * ui_scale, 58 * ui_scale)
     controls.add_child(listen_button)
+    _game_button(listen_button)
     # Keyboard and Lesson Path retain Stop, passage navigation and mode
     # choices, without competing with the three routine controls.
     stop_button = _button("Stop attempt", func(): _send_action({"action": "stop"}))
@@ -1125,6 +1206,7 @@ func _update_responsive_layout() -> void:
     if practice_header == null:
         return
     practice_header.add_theme_constant_override("separation", 16)
+    game_brand.visible = width >= 1120.0
     practice_navigation.add_theme_constant_override("h_separation", 10 if width >= 1000.0 else 7)
     practice_navigation.add_theme_constant_override("v_separation", 7)
     if mode_choice != null:
@@ -1139,13 +1221,13 @@ func _update_responsive_layout() -> void:
             button.add_theme_font_size_override("font_size", font_size)
             var measured: float = button.get_theme_font("font").get_string_size(
                 button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-            button.custom_minimum_size = Vector2(maxf(110.0, measured + 36.0), 50.0)
+            button.custom_minimum_size = Vector2(maxf(90.0, measured + 30.0), 42.0 if compact else 45.0)
             button.clip_text = false
     if practice_controls != null:
-        practice_layout_box.add_theme_constant_override("separation", 10 if compact else 14)
-        score_frame.custom_minimum_size.y = 170 if compact else 220
+        practice_layout_box.add_theme_constant_override("separation", 8 if compact else 12)
+        score_frame.custom_minimum_size.y = 180 if compact else 240
         for side in ["left", "right", "top", "bottom"]:
-            score_margin_box.add_theme_constant_override("margin_" + side, 12 if compact else 20)
+            score_margin_box.add_theme_constant_override("margin_" + side, 8 if compact else 16)
         for child in practice_controls.get_children():
             if child is Button:
                 var button := child as Button
@@ -1161,6 +1243,7 @@ func _update_responsive_layout() -> void:
         speed_label.add_theme_font_size_override("font_size", _ui_font(19))
         hand_label.add_theme_font_size_override("font_size", _ui_font(15))
         progress_label.add_theme_font_size_override("font_size", _ui_font(16))
+        game_streak.custom_minimum_size = Vector2(130 if width < 950 else 155, 30)
         feedback_label.add_theme_font_size_override("font_size", _ui_font(17))
         lesson_info_label.add_theme_font_size_override("font_size", _ui_font(16))
         practice_playback_banner.add_theme_font_size_override("font_size", _ui_font(17))
@@ -1504,10 +1587,10 @@ func _update_hand_stages(state: Dictionary) -> void:
             " · DONE" if complete else " · NOW" if active else " · LOCKED" if locked else " · NEXT")
         label.add_theme_color_override("font_color",
             Color("#79DAAD") if complete else INK if active else MUTED)
-        var style := Design.surface(Design.PINE if active else Design.PANEL, 6)
+        var style := Design.surface(Color("#1C4940") if active else Color("#162725"), 10)
         style.set_content_margin_all(8)
         style.set_border_width_all(2 if active else 1)
-        style.border_color = ACCENT if active else Color(Design.SLATE, .35)
+        style.border_color = Color("#8DE9C9") if active else Color("#385850", .72)
         label.add_theme_stylebox_override("normal", style)
 
 
@@ -1789,6 +1872,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var started_ms: int = state_request_started_ms if sample_started_ms < 0 else sample_started_ms
     last_state_tick = int((started_ms + Time.get_ticks_msec()) / 2.0)
     if not bool(parsed.get("loaded", false)):
+        game_stage.present(parsed)
+        game_streak.present({})
         mode_choice.disabled = true
         feedback_label.text = str(parsed.get("feedback", "Open a score"))
         _refresh_score_status()
@@ -1901,6 +1986,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         var button: Button = hand_buttons[hand]
         button.disabled = not parsed.get("hands", []).has(hand) or str(parsed.get("hand", "")) == hand
     practice_progress.value = float(parsed.get("progress", 0.0))
+    game_stage.present(parsed)
     stop_button.disabled = not bool(parsed.get("running", false))
     var phase: String = str(parsed.get("phase", "ready"))
     if not bool(parsed.get("paused", false)):
@@ -2003,6 +2089,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     # The backend's judged take and persisted streak are the ONLY sources
     # for this three-clean-pass challenge. No UI-side scoring or timers.
     var challenge: Dictionary = ChallengeFlow.present(parsed)
+    game_streak.present(challenge)
     if bool(challenge.get("visible", false)):
         progress_label.text = str(challenge.get("label", ""))
         progress_label.tooltip_text = str(challenge.get("detail", ""))
@@ -2016,6 +2103,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             progress_label.text = hand_unlock_message
             progress_label.add_theme_color_override("font_color", Color("#78DBAD"))
             progress_label.tooltip_text = hand_unlock_message
+    # Contextual information appears when learning, waiting or reviewing;
+    # a running performance gives the stave as much space as possible.
+    lesson_info_label.visible = (learning or phase not in ["playing", "count_in"]
+        or bool(parsed.get("guided_recovery", false)))
     start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Pause  ·  Space" if active_transport else "Start  ·  Space"
     if learning:
         start_button.text = "Resume  ·  Space" if phase == "paused" else "Try rhythm · Space" if phase in ["guided_complete", "disconnected"] else "Pause  ·  Space" if phase in ["guided_wait", "loading"] else "Learn · Space"
