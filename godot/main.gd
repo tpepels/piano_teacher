@@ -18,6 +18,7 @@ const GameBackdrop := preload("res://game_backdrop.gd")
 const GameStage := preload("res://game_stage.gd")
 const GameStreak := preload("res://game_streak.gd")
 const GameCountIn := preload("res://game_countin.gd")
+const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameTransportButton := preload("res://game_transport_button.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
 
@@ -101,7 +102,7 @@ var score_crop_origin := Vector2.ZERO
 var score_crop_size := Vector2.ONE
 var count_tick_index := -1
 var play_tick_index := -1
-var count_in_display: Label
+var game_phase_cue: Control
 var click_player: AudioStreamPlayer
 var click_high: AudioStreamWAV
 var click_low: AudioStreamWAV
@@ -286,7 +287,6 @@ func _update_count_in() -> void:
         game_count_in.present(0.0, 4, false, false)
         count_tick_index = -999
         play_tick_index = -1
-        count_in_display.visible = false
         return
     var beat: float = _transport_beat_now()
     var paused: bool = bool(last_state.get("paused", false))
@@ -301,8 +301,6 @@ func _update_count_in() -> void:
     if paused:
         # A paused count-in and a paused score both freeze on their last beat.
         count_tick_index = int(floor(beat + 0.00001))
-        count_in_display.text = "PAUSED"
-        count_in_display.visible = true
         return
     var tick: int = int(floor(beat + 0.00001))
     if tick != count_tick_index:
@@ -311,12 +309,6 @@ func _update_count_in() -> void:
         # the original musical meter, not its abbreviated preparation length.
         var bar_beats: int = maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4)))))
         _count_tick(posmod(tick, bar_beats) == 0)
-    if beat < 0.0:
-        var bar_beats: int = maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4)))))
-        count_in_display.text = "COUNT IN  ·  %d / %d" % [posmod(tick, bar_beats) + 1, bar_beats]
-        count_in_display.visible = true
-    else:
-        count_in_display.visible = false
 
 func _score_note_bounds(page: int) -> Dictionary:
     # Derive framing from actual engraved required notes, not the white area
@@ -1103,17 +1095,13 @@ func _build_interface() -> void:
     score_retry_button.visible = false
     status_content.add_child(score_retry_button)
     # A compact, unobtrusive cue. A huge centred numeral hid the movement.
-    count_in_display = _label("GET READY", 18, ACCENT, true)
-    count_in_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-    count_in_display.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-    count_in_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    count_in_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-    count_in_display.offset_left = 180.0
-    count_in_display.offset_right = -18.0
-    count_in_display.offset_top = 12.0
-    count_in_display.offset_bottom = 52.0
-    count_in_display.visible = false
-    score_frame.add_child(count_in_display)
+    game_phase_cue = GamePhaseCue.new()
+    game_phase_cue.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+    game_phase_cue.offset_left = 178.0
+    game_phase_cue.offset_right = -12.0
+    game_phase_cue.offset_top = 9.0
+    game_phase_cue.offset_bottom = 46.0
+    score_frame.add_child(game_phase_cue)
     game_count_in = GameCountIn.new()
     game_count_in.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
     game_count_in.position = Vector2(22, 12)
@@ -1972,6 +1960,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         hand_unlock_message = unlocked
         hand_unlock_until_ms = Time.get_ticks_msec() + 2600
     last_state = parsed
+    game_phase_cue.present(parsed)
     # Low-latency local polling only while playing from a connected piano.
     # The backend remains authoritative; Godot never guesses note scoring.
     if state_poll_timer != null:
@@ -2031,10 +2020,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     _update_note_feedback_hud(parsed)
     speed_label.text = "%d BPM · target %d" % [int(parsed.get("bpm", 0)),int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
     var recovery_notice: Variant = parsed.get("recovery_notice")
-    practice_playback_banner.visible = (
-        recovery_notice is Dictionary
-        and str(parsed.get("mode", "")) == "practice"
-        and str(parsed.get("phase", "")) in ["recovering", "loading", "count_in", "feedback", "ready"])
+    # Recovery actions are already written below the score. Do not cover
+    # the playable stave with a second, oversized overlay.
+    practice_playback_banner.visible = false
     if practice_playback_banner.visible:
         var notice: Dictionary = recovery_notice
         if str(notice.get("kind", "")) == "speedup":
@@ -2087,6 +2075,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     hints_toggle.disabled = not learning or str(parsed.get("phase", "")) == "loading"
     hints_toggle.set_pressed_no_signal(bool(parsed.get("hints_enabled", false)))
     _update_hand_stages(parsed)
+    # While notes are moving, the fixed HUD already identifies the hand.
+    # Restore the three-hand roadmap at Ready, Pause and Feedback.
+    if str(parsed.get("phase", "")) in ["playing", "count_in"]:
+        practice_stage_bar.visible = false
     if learning:
         hint_keyboard.update_state(teaching)
     else:
@@ -2226,9 +2218,13 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             progress_label.text = hand_unlock_message
             progress_label.add_theme_color_override("font_color", Color("#78DBAD"))
             progress_label.tooltip_text = hand_unlock_message
-    # Contextual information appears when learning, waiting or reviewing;
-    # a running performance gives the stave as much space as possible.
-    lesson_info_label.visible = (learning or phase not in ["playing", "count_in"]
+    # During graded playback, notation and MIDI note reactions provide the
+    # information. Preserve warnings for ungraded previews and audio errors.
+    var busy_music: bool = phase in ["playing", "count_in"] and not learning
+    var audio_problem: bool = demo_player != null and bool(demo_player.get("audio_error"))
+    feedback_label.visible = not busy_music or bool(parsed.get("preview_only", false)) \
+        or audio_problem or unpositioned > 0
+    lesson_info_label.visible = (learning or not busy_music
         or bool(parsed.get("guided_recovery", false)))
     # One short verb belongs on the central game control. Shortcuts and
     # explanations live in the tooltip instead of making every button a menu.

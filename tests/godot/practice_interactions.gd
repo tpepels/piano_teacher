@@ -110,6 +110,8 @@ func test_three_button_stage() -> void:
         "Fullscreen practice must offer a visible Exit")
     check(app.listen_volume_slider.max_value >= 12.0,
         "Settings needs a separate Listen gain adjustment")
+    check(app.game_phase_cue.get_parent() == app.score_frame,
+        "Compact phase cue remains on the music stage")
     check(not app.mode_choice.is_visible_in_tree() and not app.hints_toggle.is_visible_in_tree(),
         "Advanced dropdowns must not appear during playing")
     show_state("paused")
@@ -165,6 +167,27 @@ func test_short_challenge_loop() -> void:
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
     check("LEFT HAND" in app.progress_label.text and "1/3 CLEAN" in app.progress_label.text,
         "Practice should show the short musical challenge and committed clean streak")
+    run["phase"] = "count_in"
+    run["running"] = true
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
+    check(app.game_phase_cue.message == "GET READY",
+        "Count-in uses one compact cue alongside beat lights")
+    check(not app.feedback_label.visible and not app.practice_stage_bar.visible,
+        "Count-in hides repeated status text and large hand cards")
+    run["phase"] = "playing"
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
+    check(app.game_phase_cue.message.is_empty() and not app.feedback_label.visible,
+        "Graded playing leaves the sheet music as the main feedback")
+    run["preview_only"] = true
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
+    check(app.feedback_label.visible,
+        "An ungraded preview is still clearly identified")
+    run["preview_only"] = false
+    run["phase"] = "ready"
+    run["running"] = false
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
+    check(app.game_phase_cue.message == "READY FOR PREVIEW",
+        "Ready is explicit before any piano input")
     var pending := run.duplicate(true)
     pending["phase"] = "feedback"
     pending["take_result"] = {"clean":true,"correct":3,"total":3}
@@ -173,6 +196,8 @@ func test_short_challenge_loop() -> void:
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
     check("CLEAN PASS" in app.progress_label.text and "2/3" in app.progress_label.text,
         "Success must show the engine-confirmed clean pass before the next automatic take")
+    check(app.game_phase_cue.message == "CLEAN PASS",
+        "A clean cue must correspond to the backend result")
     check("1.2" in app.lesson_info_label.text,
         "Next automatic attempt should be visible without a menu")
     pending["take_result"] = {"clean":false,"correct":1,"total":3}
@@ -181,6 +206,8 @@ func test_short_challenge_loop() -> void:
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
     check("RETRY" in app.progress_label.text and "CLEAN PASS" not in app.progress_label.text,
         "Failed take must never appear as a clean completion")
+    check(app.game_phase_cue.message == "RETRY",
+        "A failed take must not appear to be a success")
     pending["preview_only"] = true
     pending["phase"] = "playing"
     pending["take_result"] = null

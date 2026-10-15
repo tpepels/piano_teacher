@@ -67,6 +67,10 @@ func _run() -> void:
     _check_actions(toolbar, viewport, "Toolbar")
     _check_actions(transport, viewport, "Transport")
     _check(score.size.y >= 135.0, "Notation area became unusably small")
+    var cue: Control = scene.get("game_phase_cue")
+    _check(cue != null and cue.get_parent() == score,
+        "Transitions belong to a single small on-stage cue")
+    _check(_in_viewport(cue, viewport), "Transition cue clips outside the stage")
     _check(_in_viewport(score, viewport), "Notation panel extends outside window")
     var illuminated: Control = scene.get("game_stage")
     var streak_meter: Control = scene.get("game_streak")
