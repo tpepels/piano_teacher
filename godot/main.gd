@@ -10,6 +10,7 @@ const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
 const ScoreStrip := preload("res://score_strip.gd")
 const ScoreOverlay := preload("res://score_overlay.gd")
+const LivingScore := preload("res://living_score.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
 
 var current_screen := "practice"
@@ -1581,10 +1582,14 @@ func _process(_delta: float) -> void:
     apply_tempo_button.disabled = action_pending
     _update_count_in()
     if str(last_state.get("mode", "practice")) == "learn":
+        score_overlay.next_chord.clear()
         _layout_guided_score()
         return
     score_overlay.guided_active = false
     if last_state.is_empty() or not bool(last_state.get("running", false)) or layout_revision != revision:
+        if not score_overlay.next_chord.is_empty():
+            score_overlay.next_chord.clear()
+            score_overlay.queue_redraw()
         if score_overlay.showing:
             score_overlay.showing = false
             score_overlay.queue_redraw()
@@ -1599,6 +1604,11 @@ func _process(_delta: float) -> void:
     var play_from: float = float(last_state.get("play_from_beat", 0.0))
     var beat: float = clampf(play_from + maxf(0.0, clock), 0.0, float(last_state.get("duration_beats", 1.0)))
     var active: bool = not bool(last_state.get("paused", false))
+    # The note cue is a musical preview on the exact score, not an evaluator.
+    # During count-in show the first chord. It disappears during rests longer
+    # than 1.25 beats, and correct/missed/wrong pitch marks always take priority.
+    score_overlay.next_chord = LivingScore.next_chord(
+        score_layout, beat, score_overlay.marks)
     var cursor: Dictionary = _position_at_beat(beat)
     if cursor.is_empty():
         score_overlay.showing = false
@@ -1658,6 +1668,7 @@ func _process(_delta: float) -> void:
 
 func _layout_guided_score() -> void:
     score_overlay.guided_active = true
+    score_overlay.next_chord.clear()
     score_overlay.lead_first = {}
     score_overlay.lead_width_px = 0.0
     score_overlay.showing = false
@@ -1995,6 +2006,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         _refresh_score_status()
         score_overlay.showing = false
         score_overlay.marks = []
+        score_overlay.next_chord.clear()
         score_overlay.hit_pulses.clear()
         score_overlay.wrong_ghosts.clear()
         _request_layout()
