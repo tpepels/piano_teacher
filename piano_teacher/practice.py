@@ -18,6 +18,7 @@ class PlayedNote:
 class NoteAssessment:
     note: Note
     status: Literal["correct", "early", "late", "short", "long", "missed", "wrong"]
+    played_pitch: int | None = None  # Actual incorrect key, only for wrong-pitch matches
 
 
 @dataclass(frozen=True)
@@ -102,7 +103,7 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote]) ->
         if candidates:
             _, index = min(candidates)
             unused.remove(index)
-            assessments[i] = NoteAssessment(entry.note, "wrong")
+            assessments[i] = NoteAssessment(entry.note, "wrong", played[index].pitch)
     leftovers = tuple(played[i] for i in sorted(unused))
     return Assessment(tuple(assessments), len(leftovers), leftovers)
 
