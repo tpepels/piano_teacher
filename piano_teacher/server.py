@@ -1590,6 +1590,7 @@ class PracticeEngine:
                     "lesson_steps_mastered":p.lesson_steps_mastered,
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,"target_bpm":p.target_bpm,
                     "streak":p.streak,"mastered":len(p.mastered),"phase":phase,
+                    "auto":self.auto,
                     "countdown":max(0,-elapsed) if self.running else 0,
                     "lead_in_bars":1,"play_from_beat":self.play_from_beat,
                     "recovery_beat":self.pending_rewind,
