@@ -171,6 +171,9 @@ def run(file: Path | None = None) -> int:
                     godot_process, ui_log, timeout=100,
                     description="Godot PNG notation display")
                 print("PASS Godot scene displayed an engraved PNG score", flush=True)
+                geom = api("/score/layout")
+                print("REAL SCORE NOTE GEOMETRY:", json.dumps(geom.get("notes", [])[:4]), flush=True)
+                print("REAL SCORE CURSOR ANCHORS:", json.dumps(geom.get("anchors", [])[:4]), flush=True)
                 started = api("/control", {"action": "start"})
                 if started.get("phase") != "count_in" or not started.get("preview_only"):
                     raise RuntimeError(f"Preview did not enter count-in: {started}")
