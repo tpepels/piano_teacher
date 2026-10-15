@@ -55,6 +55,9 @@ func present(state: Dictionary) -> void:
             next_accent = AMBER
     if mode == "listen" and phase in ["ready", "feedback", "performance_complete"]:
         next_message = "LISTEN"
+    # An empty library is not a playable Ready state.
+    if not bool(state.get("loaded", false)):
+        next_message = ""
     var key: String = "%s|%s|%s|%s" % [phase, mode, next_message,
         str(state.get("transport_id", -1))]
     if key != last_key:
