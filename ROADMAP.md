@@ -1,41 +1,32 @@
-# Piano Teacher - adaptive MIDI-to-exercise piano tutor
+# Piano Teacher — adaptive MIDI-to-exercise piano tutor
 
-## Current implementation status - 2026-10-15
+## Current implementation status — 2026-10-15
 
-- **1A - Implemented and headless-Godot tested:** one signed beat clock,
-  short moving preparation bar, audible click scheduling, feedback breaks,
-  automatic repetition, pause/resume and restart.
-- **1B - Implemented and regression tested:** check distinct wrong/missed
-  notes at each two-measure boundary. After five, finish the section,
-  rewind to it, begin another short moving count-in, and slow by 10%. Clean
-  attempts restore the student's target BPM. Partial recovery is never
-  credited as a full mastered performance.
-- **1C - Implemented and real-Verovio tested:** source-traceable skeleton,
-  chord-outline and original variants rendered from the very notes being
-  assessed. Expressive MIDI key releases are normalized *for notation only*
-  when close to a conventional rhythmic value. Source events are preserved
-  for scoring. An alignment check rejects invisible/missing noteheads.
-- **1D - Controller implemented; learner-facing acceptance still open:**
-  deterministic hand-specific levels, adjoining passages, three clean passes
-  at target tempo and persisted mastery are implemented. The first real
-  Merry-Go-Round-of-Life screen showed 1,209 individual lesson steps: that
-  curriculum is excessively granular for a beginner and needs a separate
-  consolidation/adaptive-skipping pass before 1D is considered finished.
-  Stop/navigation does not award mastery; `GET /lesson` exposes the steps.
-- **1E - Automated integration passed:** 146 Python tests; actual MIDI import,
-  MusicXML/Verovio layout, PNG rasterization, headless Godot score and cursor,
-  metronome scheduling, preview-only non-grading, and a real Godot rehearsal
-  of three clean synthetic MIDI performances followed by skeleton-to-outline
-  transition and score-ready acknowledgement. The complete Arch workflow
-  passed on commit `5516692d8`.
-- **Physical acceptance pending:** speaker audibility/latency, the connected
-  USB MIDI keyboard, fullscreen legibility and the real player's experience
-  remain unverified on the target machine. This does not invalidate the
-  automated checks; it is the remaining on-device acceptance gate.
+- **Visible software playback verified:** actual desktop/HTTP frames at 30, 40,
+  80 and 120 BPM track the same rendered note moving left under a stable timing
+  line. Count-in, pause/resume, restart, rests and multi-page/system projection
+  are covered. Python remains the sole clock; no-input previews cannot master.
+- **Dark UI implemented and desktop inspected:** library, practice, lesson path
+  and settings use the approved forest/charcoal/stone palette. The normal launcher
+  was exercised with a real MIDI at desktop and 1024×768/800×600 window sizes.
+- **Curriculum consolidated:** the supplied 2,346-note piece now has 45 learning
+  sections, 44 boundary connections and one complete original performance: 301
+  stages instead of 1,209. Difficult two-bar work remains. Existing progress is
+  migrated additively by musical identity; target tempo survives navigation.
+- **Notation corrected:** real rest events and measured staff lines participate
+  in geometry; transparent margins crop correctly. Compound rests and tied
+  durations preserve onset alignment. The complete source passes required-note
+  alignment and contains the held ending through beat 712/bar 237.
+- **Adaptive engine retained:** five-error boundary recovery, 10% slowdown,
+  target restoration, automatic repetition, three clean target-speed full takes,
+  score-ready handoff and saved mastery remain regression/integration tested.
+- **Physical acceptance remains open:** real USB MIDI input, disconnect/reconnect
+  behavior on the target instrument, speaker audibility and latency must be
+  checked with the user. Software captures do not replace this gate.
 
-Additional curriculum intelligence (musical segmentation beyond fixed bars,
-more sophisticated rhythmic quantization and long-term mistake modelling)
-belongs to Phases 2 and 4, not a reason to silently postpone 1D/1E.
+See `docs/verification-2026-10-15.md` for exact local evidence and limitations.
+The remaining roadmap below describes product direction and hardware acceptance;
+older CI notes at the end are historical evidence, not the current test count.
 
 ## Product definition (confirmed 2026-10-14)
 
@@ -77,7 +68,7 @@ Listen/demonstration is a separate audio mode; silent previews never grade.
 We develop the core experience in short testable increments. A Python-only
 test pass never constitutes Godot/hardware acceptance.
 
-### Phase 0 - Stable launch and import-to-screen vertical slice [in progress]
+### Phase 0 - Stable launch and import-to-screen vertical slice [software verified; physical acceptance open]
 
 Reliable executable launcher, Verovio fonts and CairoSVG assets, Python API,
 Godot scene parsing and actual startup, real score PNG geometry, isolated
@@ -87,7 +78,7 @@ backend ownership of port 8765 and readable runtime errors.
 shows a real engraved score, enters/exits a timed preview without a grey or
 blank screen; backend and headless Godot integration checks pass.
 
-### Phase 1 - Adaptive moving-lesson runtime [core implemented; visual/curriculum acceptance pending]
+### Phase 1 - Adaptive moving-lesson runtime [software verified; learner/hardware acceptance open]
 
 - **1A - Lesson timeline:** one signed beat clock; one moving preparation bar
   before every attempt; fixed-tempo visual movement from the very first
