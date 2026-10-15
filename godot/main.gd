@@ -597,6 +597,11 @@ func _build_interface() -> void:
     library_search.text_changed.connect(func(_text: String): _populate_library())
     library_controls.add_child(library_search)
     library_controls.add_child(_button("Refresh", _request_library))
+    # Import problems must appear next to the action, not at the very
+    # bottom of a full-screen library where they are easy to miss.
+    library_message = _label("", 18, MUTED, true)
+    library_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    library_layout.add_child(library_message)
     var library_panel := _card()
     library_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     library_layout.add_child(library_panel)
@@ -607,9 +612,6 @@ func _build_interface() -> void:
     library_rows = _stack(6)
     library_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.add_child(library_rows)
-    library_message = _label("", 14, MUTED)
-    library_layout.add_child(library_message)
-
     # Settings are explicit, and keep the practice screen free from controls.
     var settings_page := _screen("Settings")
     screens["settings"] = settings_page
@@ -1190,6 +1192,7 @@ func _populate_library() -> void:
     var issue: String = str(library_info.get("error", ""))
     if not library_error.is_empty():
         library_message.text = library_error
+        library_message.add_theme_color_override("font_color", Color("#FF8B82"))
     elif not issue.is_empty():
         library_message.text = issue
     elif pieces.is_empty() and warmups.is_empty():
@@ -1198,6 +1201,8 @@ func _populate_library() -> void:
         library_message.text = "No matching scores."
     else:
         library_message.text = "%d personal files  ·  %d built-in warm-ups  ·  %d shown" % [pieces.size(), warmups.size(), visible]
+    if library_error.is_empty():
+        library_message.add_theme_color_override("font_color", MUTED)
 
 func _open_library_piece(identifier: String) -> void:
     library_error = ""
@@ -2009,6 +2014,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         var message := _http_failure(code, body)
         if path == "/library/open":
             library_error = "Cannot open score: " + message
+            library_message.add_theme_color_override("font_color", Color("#FF8B82"))
         feedback_label.text = message
         settings_message.text = message
         library_message.text = message
