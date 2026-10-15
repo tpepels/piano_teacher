@@ -52,3 +52,59 @@ def test_invalid_music_clock_parameters():
     with pytest.raises(ValueError):
         settled_assessment(phrase(),"both",0,[],from_beat=0,
                            until_beat=2,beats_per_bar=4)
+
+
+def test_long_chord_only_marks_missing_pitch_before_expected_releases():
+    from piano_teacher.live_feedback import expired_attack_misses
+    chord = Phrase(1, 1, 2, 0, 8, (
+        Note(0, 2, 60, 0, 0, "right", "c"),
+        Note(0, 2, 64, 0, 0, "right", "e"),
+        Note(0, 2, 67, 0, 0, "right", "g"),
+    ))
+    played = [PlayedNote(60, 0, None), PlayedNote(64, .03, None)]
+    assert expired_attack_misses(chord, "right", 60, played,
+                                from_beat=0, until_beat=.60) is None
+    missing = expired_attack_misses(chord, "right", 60, played,
+                                    from_beat=0, until_beat=.72)
+    assert [(m.note.pitch, m.status) for m in missing.notes] == [(67, "missed")]
+
+
+def test_wrong_pitch_does_not_hide_missing_chord_note():
+    from piano_teacher.live_feedback import expired_attack_misses
+    chord = Phrase(1, 1, 2, 0, 8, (
+        Note(0, 1.8, 60, 0, 0, "right", "c"),
+        Note(0, 1.8, 64, 0, 0, "right", "e"),
+    ))
+    played = [PlayedNote(60, .02, .5), PlayedNote(63, .03, .4)]
+    missing = expired_attack_misses(chord, "right", 60, played,
+                                    from_beat=0, until_beat=.72)
+    assert [(m.note.pitch, m.status) for m in missing.notes] == [(64, "missed")]
+
+
+def test_repeated_same_pitch_does_not_let_one_keypress_clear_two_misses():
+    from piano_teacher.live_feedback import expired_attack_misses
+    notes = (Note(0, .4, 60, 0, 0, "right"),
+             Note(.5, 1, 60, 0, 0, "right"))
+    phrase = Phrase(1, 1, 2, 0, 4, notes)
+    missed = expired_attack_misses(phrase, "right", 120,
+                                  [PlayedNote(60, 0, .4)],
+                                  from_beat=0, until_beat=2)
+    assert [(n.note.start, n.status) for n in missed.notes] == [(.5, "missed")]
+
+
+def test_wrong_or_missing_notes_can_trigger_warmup_boundary_recovery():
+    from piano_teacher.recovery import check_two_bar_window
+    chord = Phrase(1, 1, 2, 0, 8, (
+        Note(0, 2, 60, 0, 0, "left"),
+        Note(0, 2, 64, 0, 0, "left"),
+        Note(0, 2, 67, 0, 0, "left"),
+    ))
+    played = [PlayedNote(60, 0, 2)]
+    assert check_two_bar_window(chord, "left", 60, played,
+                                from_beat=0, end_beat=4, beats_per_bar=2,
+                                threshold=5) is None
+    decision = check_two_bar_window(chord, "left", 60, played,
+                                    from_beat=0, end_beat=4, beats_per_bar=2,
+                                    threshold=2)
+    assert decision is not None
+    assert (decision.missed, decision.wrong) == (2, 0)
