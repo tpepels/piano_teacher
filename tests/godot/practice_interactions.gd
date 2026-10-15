@@ -137,6 +137,61 @@ func test_three_button_stage() -> void:
     app._navigate("practice")
 
 
+func test_short_challenge_loop() -> void:
+    # Use the real backend-shaped state and actual stage labels. The UI may
+    # celebrate a clean take but must NEVER award mastery by itself.
+    var run := state("ready")
+    run["preview_only"] = false
+    run["warmup"] = true
+    run["hand"] = "left"
+    run["streak"] = 1
+    run["mode"] = "practice"
+    run["take_result"] = null
+    run["hand_stages"] = [
+        {"hand":"left","active":true,"complete":false,"locked":false},
+        {"hand":"right","active":false,"complete":false,"locked":true},
+        {"hand":"both","active":false,"complete":false,"locked":true}]
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
+    check("LEFT HAND" in app.progress_label.text and "1/3 CLEAN" in app.progress_label.text,
+        "Practice should show the short musical challenge and committed clean streak")
+    var pending := run.duplicate(true)
+    pending["phase"] = "feedback"
+    pending["take_result"] = {"clean":true,"correct":3,"total":3}
+    pending["auto"] = true
+    pending["transition_in_seconds"] = 1.2
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
+    check("CLEAN PASS" in app.progress_label.text and "2/3" in app.progress_label.text,
+        "Success must show the engine-confirmed clean pass before the next automatic take")
+    check("1.2" in app.lesson_info_label.text,
+        "Next automatic attempt should be visible without a menu")
+    pending["take_result"] = {"clean":false,"correct":1,"total":3}
+    pending["auto"] = false
+    pending["transition_in_seconds"] = null
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
+    check("RETRY" in app.progress_label.text and "CLEAN PASS" not in app.progress_label.text,
+        "Failed take must never appear as a clean completion")
+    pending["preview_only"] = true
+    pending["phase"] = "playing"
+    pending["take_result"] = null
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
+    check("PREVIEW" in app.progress_label.text,
+        "Disconnected preview must not pretend the user is earning mastery")
+    pending["preview_only"] = false
+    pending["phase"] = "ready"
+    pending["hand"] = "right"
+    pending["streak"] = 0
+    pending["hand_stages"][0]["complete"] = true
+    pending["hand_stages"][0]["active"] = false
+    pending["hand_stages"][1]["locked"] = false
+    pending["hand_stages"][1]["active"] = true
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
+    var labels: Dictionary = app.practice_stage_labels
+    check("DONE" in labels["left"].text and "NOW" in labels["right"].text,
+        "Backend hand completion must unlock the next real stage")
+    check(app.practice_controls.get_child_count() == 3,
+        "Game-like challenge flow must not add another transport button")
+
+
 func test_primary_transport() -> void:
     show_state()
     app.start_button.pressed.emit()
@@ -577,6 +632,7 @@ func run() -> void:
     var scenario := OS.get_cmdline_user_args()[0]
     match scenario:
         "three_button_stage": test_three_button_stage()
+        "short_challenge_loop": test_short_challenge_loop()
         "primary_transport": test_primary_transport()
         "secondary_stop": test_secondary_stop()
         "focused_shortcuts": await test_focused_shortcuts()
