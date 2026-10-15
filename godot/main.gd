@@ -2391,7 +2391,7 @@ func _has_active_transport() -> bool:
 func _listen_or_return_to_practice() -> void:
     # Listen is a one-tap reversible action, never a scored take.
     if str(last_state.get("mode", "")) == "listen":
-        _send_action({"action": "practice"})
+        _send_action({"action": "practice", "wait_for_player": true})
     else:
         _send_action({"action": "listen"})
 
