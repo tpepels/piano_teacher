@@ -82,6 +82,7 @@ def test_slower_tempos_spread_time_consistently_across_pages_without_stretching_
     for bpm in (30, 40, 80, 120):
         score = render_layout(lesson, 1, 16, total_beats=64, bpm=bpm)
         require_lesson_alignment(phrase, score.layout, "both")
+        assert score.layout["strip_trim_repeated_headers"] is True
         assert len(score.pages) >= 2
         assert max(Counter(system["page"] for system in score.layout["systems"]).values()) <= 2
         assert all(len(system["staff_lines"]) == 10 for system in score.layout["systems"])

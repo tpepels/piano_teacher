@@ -67,6 +67,23 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Phase 7.6 - Stable scrolling through system joins
+
+For generated two-hand piano lessons with **unchanged clefs, key and meter**,
+the scrolling strip now discards repeated *printed-system headers* at the
+start of subsequent systems. Reprinted clefs and their large left gutters
+previously made the fixed playhead race across blank space at every join.
+The original starting clefs, staff, barlines, musical glyphs and Verovio
+attack coordinates remain intact; no notehead or tie is stretched. Imported
+MusicXML and passages with notation changes retain their original headers,
+rather than risk hiding musical instructions.
+
+Regression tests compare the exact same raster pages with and without
+the safe crop, check every notehead still hits real image ink, and confirm
+system joins cannot become longer after header removal. This reduces
+one source of velocity peaks, but does not guarantee absolute constant
+pixels per beat when native engraving needs collision clearance.
+
 ## Phase 7.6d - focused practice transitions
 
 A small phase cue presents Ready, Get Ready, Pause, Clean Pass, Retry,

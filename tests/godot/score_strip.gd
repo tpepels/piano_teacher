@@ -29,6 +29,50 @@ func run() -> void:
     var strip: Dictionary = helper.build(original, pages)
     var flat: Dictionary = strip.layout
     check(strip.tiles.size() == original.systems.size(), "every system becomes a tile")
+    # Compare identical real SVG tiles with and without the safe repeated
+    # header removal. The score must not stretch or re-synthesize any note.
+    if bool(original.get("strip_trim_repeated_headers", false)) and original.systems.size() > 1:
+        var with_headers: Dictionary = original.duplicate(true)
+        with_headers["strip_trim_repeated_headers"] = false
+        var baseline: Dictionary = helper.build(with_headers, pages)
+        check(not baseline.has("error"), "untrimmed control strip must render")
+        check(baseline.tiles.size() == strip.tiles.size(),
+            "trimming cannot drop a musical system")
+        var shortened := 0
+        for i in range(1, strip.mappings.size()):
+            var after: Dictionary = strip.mappings[i]
+            var before: Dictionary = baseline.mappings[i]
+            check(after.crop.position.x >= before.crop.position.x,
+                "repeated header removal cannot reveal extra unused page margin")
+            check(after.crop.end.x == before.crop.end.x,
+                "header cropping must not modify right side or final barline")
+            if bool(after.get("trimmed_header", false)):
+                shortened += 1
+                check(after.crop.size.x < before.crop.size.x,
+                    "repeated header must actually shorten this system")
+                var earliest_ink := INF
+                for source in original.anchors:
+                    if int(source.page) == int(after.source_page) and str(source.system) == str(after.source_system):
+                        earliest_ink = minf(earliest_ink, float(source.ink_left))
+                check(after.crop.position.x + 8 < earliest_ink * float(after.source_size.x),
+                    "cropping must leave the earliest engraved accidental and note ink untouched")
+        check(shortened > 0, "real generated multi-system lesson should have repeated header clearance")
+        check(strip.size.x < baseline.size.x,
+            "removing repeated headers must reduce the excessive scrolling distance")
+        for a in range(flat.anchors.size() - 1):
+            var source_left: Dictionary = original.anchors[a]
+            var source_right: Dictionary = original.anchors[a+1]
+            if str(source_left.system) == str(source_right.system) and source_left.page == source_right.page:
+                continue
+            var gap: float = float(source_right.beat) - float(source_left.beat)
+            if gap > .00001:
+                var before_gap: float = (float(baseline.layout.anchors[a+1].x) -
+                    float(baseline.layout.anchors[a].x)) * float(baseline.size.x)
+                var after_gap: float = (float(flat.anchors[a+1].x) -
+                    float(flat.anchors[a].x)) * float(strip.size.x)
+                check(after_gap <= before_gap + .01,
+                    "removing a repeat header cannot increase camera velocity at a system join")
+    
     check(flat.notes.size() == original.notes.size(), "all original noteheads survive")
     check(flat.pages == 1, "flattened score has one virtual page")
     var previous_right := 0.0

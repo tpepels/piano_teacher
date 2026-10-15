@@ -30,6 +30,34 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
         # systems keep their own clefs while moving through the timing line.
         var left: int = maxi(0, int(floor(minf(.02, float(system.left)) * source_size.x)))
         var right: int = mini(image.get_width(), int(ceil((float(system.right) + .02) * source_size.x)))
+        var trimmed_header := false
+        if not mappings.is_empty() and bool(layout.get("strip_trim_repeated_headers", false)):
+            # The backend has verified this generated two-hand lesson has no
+            # subsequent clef, meter, key or navigation changes. Discard the
+            # *reprinted* system header, which otherwise becomes a huge
+            # artificial beat gap every time two printed lines are joined.
+            # Crop a little before the exact leftmost note/rest ink; preserve
+            # noteheads, accidentals, ledger lines and all glyph sizes.
+            var first_beat: float = INF
+            var first_ink: float = INF
+            for anchor in layout.get("anchors", []):
+                if int(anchor.get("page", -1)) != page or str(anchor.get("system", "")) != str(system.get("system", "")):
+                    continue
+                var at_beat: float = float(anchor.get("beat", INF))
+                if at_beat < first_beat - .000001:
+                    first_beat = at_beat
+                    first_ink = float(anchor.get("ink_left", anchor.get("x", 0.0)))
+                elif absf(at_beat - first_beat) <= .000001:
+                    first_ink = minf(first_ink, float(anchor.get("ink_left", anchor.get("x", 0.0))))
+            var staff_lines: Array = system.get("staff_lines", [])
+            if is_finite(first_ink) and staff_lines.size() >= 2:
+                var gap_px: float = absf(float(staff_lines[1]) - float(staff_lines[0])) * source_size.y
+                var ink_px: float = first_ink * source_size.x
+                var guard_px: float = maxf(10.0, gap_px * 1.7)
+                var candidate: int = maxi(left, int(floor(ink_px - guard_px)))
+                if candidate < right - 16 and candidate > left:
+                    left = candidate
+                    trimmed_header = true
         var top: int = maxi(0, int(floor(float(system.top) * source_size.y)))
         var bottom: int = mini(image.get_height(), int(ceil(float(system.bottom) * source_size.y)))
         if right <= left or bottom <= top:
@@ -42,7 +70,8 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
         below = maxf(below, float(crop.size.y) - offset)
         mappings.append({"source_page": page, "source_system": str(system.get("system", "")),
             "source_size": source_size, "crop": Rect2(crop), "position": Vector2(width, 0),
-            "staff_offset": offset, "system": system})
+            "staff_offset": offset, "system": system,
+            "trimmed_header": trimmed_header})
         width += float(crop.size.x)
     var size := Vector2(maxf(1.0, width), maxf(1.0, above + below))
     var tiles: Array = []

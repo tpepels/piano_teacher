@@ -218,6 +218,40 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     return _engrave_xml(xml, hand, total_beats, bpm=bpm)
 
 
+def _can_remove_repeated_system_headers(xml: str, note_bindings: dict | None) -> bool:
+    """Only flatten generated piano parts when all subsequent headers are repeats.
+
+    Verovio reprints clefs/key/meter at each system start. In the scrolling
+    strip that is a large, unscored gap between adjacent beats. A generated
+    lesson with unchanged notation context can omit those *repeat* headers
+    at the system joins while retaining the original first clefs, all notes,
+    accidental ink, barlines, ties and source IDs. Never do this to imported
+    notation or a lesson containing mid-passage notation changes.
+    """
+    if note_bindings is None:
+        return False
+    import xml.etree.ElementTree as ET
+    root = ET.fromstring(xml)
+    parts = root.findall("part")
+    if [part.get("id") for part in parts] != ["RH", "LH"]:
+        return False
+    for part in parts:
+        measures = part.findall("measure")
+        if not measures:
+            return False
+        for measure in measures[1:]:
+            for attrs in measure.findall("attributes"):
+                if any(attrs.find(name) is not None for name in (
+                        "clef", "key", "time", "transpose", "staff-details")):
+                    return False
+            # Repeats, segnos and written navigation marks must never be lost
+            # from the first measure of a fresh printed system.
+            for tag in ("direction", "harmony", "barline"):
+                if measure.find(tag) is not None:
+                    return False
+    return True
+
+
 def _engrave_xml(xml: str, hand: str, total_beats: float,
                  *, bpm: float | None = None, note_bindings: dict | None = None,
                  staff_clefs: dict | None = None) -> EngravedScore:
@@ -295,6 +329,8 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
     pitches = _pitches_from_verovio(toolkit, events)
     layout = layout_from_pages(list(pages), events, total_beats, pitches=pitches,
                                note_bindings=note_bindings)
+    layout["strip_trim_repeated_headers"] = _can_remove_repeated_system_headers(
+        xml, note_bindings)
     if staff_clefs is not None:
         layout['staff_clefs'] = staff_clefs
     # Geometry consumes the native event bounds; diagnostic rectangles never
