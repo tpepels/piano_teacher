@@ -813,6 +813,14 @@ class PracticeEngine:
         before = (p.identity, p.bpm)
         message = p.apply_result(correct=result.correct,
                                  total=len(result.notes), extras=result.extra_notes)
+        if p.identity == before[0] and p.bpm > before[1]:
+            self.recovery_notice = {
+                "kind": "speedup", "errors": 0,
+                "from_bpm": before[1], "to_bpm": p.bpm,
+                "first_bar": p.active_phrase.first_bar,
+                "last_bar": p.active_phrase.last_bar,
+                "expires_at": time.monotonic() + 7.0,
+            }
         if (p.identity, p.bpm) != before:
             self.score_revision += 1
         self._save()
