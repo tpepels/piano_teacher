@@ -33,9 +33,17 @@ def test_score_feedback_waits_until_displayed_before_curriculum_advance(tmp_path
     assert e.plan.failures==0
     e.next_at=time.monotonic()-0.1
     second=e.state()
-    assert second['phase']=='count_in'
-    assert second['feedback_marks']==[]
-    assert e.plan.failures==1
+    # Failed attempts remain readable until the player decides to retry.
+    # Merely passing the old auto-advance deadline must not change mastery.
+    assert second['phase']=='feedback'
+    assert second['feedback_marks'][0]['status']=='missed'
+    assert second['performance_summary']['missed']==1
+    assert e.plan.failures==0
+    e.control('restart')
+    restarted=e.state()
+    assert restarted['phase']=='count_in'
+    assert restarted['feedback_marks']==[]
+    assert e.plan.failures==0  # Cancelled feedback never awards or penalizes.
     e.db.close()
 
 
