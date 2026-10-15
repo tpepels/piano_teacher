@@ -117,8 +117,11 @@ func test_three_button_stage() -> void:
     app.listen_button.pressed.emit()
     expect_command("practice", "One tap returns from Listen to practice")
     app._navigate("lesson")
-    check(app.mode_choice.is_visible_in_tree() and app.hints_toggle.is_visible_in_tree(),
-        "Advanced teaching options remain reachable in Lesson Path")
+    check(app.mode_choice.is_visible_in_tree()
+        and app.hints_toggle.get_parent() == app.mode_choice.get_parent(),
+        "Activity and hint options belong to Lesson Path, not the practice screen")
+    check(not app.hints_toggle.visible,
+        "Hints stay hidden in Listen mode instead of showing irrelevant controls")
     app._navigate("practice")
 
 
