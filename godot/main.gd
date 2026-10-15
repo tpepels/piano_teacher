@@ -1138,6 +1138,9 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     score_error = ""
     if phase0_smoke_mode:
         print("PHASE0_SCORE_READY:", picture.get_width(), "x", picture.get_height())
+        print("PHASE0_LESSON_READY: REVISION:", revision, " LEVEL:",
+              str(last_state.get("lesson_level", "")), " REQUIRED:",
+              int(last_state.get("required_notes", 0)))
     start_button.disabled = false
     score_overlay.queue_redraw()
     _layout_moving_score()

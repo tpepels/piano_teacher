@@ -35,3 +35,5 @@ jobs:
           .venv/bin/python scripts/check_generated_lesson.py /tmp/piano-generated-fixture.mid
       - name: Boot Godot UI against a real local backend
         run: .venv/bin/python scripts/smoke_godot.py
+      - name: Generated lesson end-to-end Godot rehearsal
+        run: .venv/bin/python scripts/smoke_adaptive_godot.py
