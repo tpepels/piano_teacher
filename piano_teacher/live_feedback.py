@@ -42,7 +42,8 @@ def settled_assessment(phrase: Phrase, hand: str, bpm: float,
 
 def expired_attack_misses(phrase: Phrase, hand: str, bpm: float,
                           played: list[PlayedNote], *, from_beat: float,
-                          until_beat: float) -> Assessment | None:
+                          until_beat: float,
+                          window_start_beat: float | None = None) -> Assessment | None:
     """Mark only individual missing pitches after their allowable onset window.
 
     A two-beat held chord must not wait for release before its unplayed
@@ -55,10 +56,11 @@ def expired_attack_misses(phrase: Phrase, hand: str, bpm: float,
     seconds_per_beat = 60.0 / bpm
     search_window = max(.35, .65 * seconds_per_beat)
     elapsed = (until_beat - from_beat) * seconds_per_beat
+    start = max(from_beat, window_start_beat if window_start_beat is not None else from_beat)
     required = [
         note for note in phrase.notes
         if (hand == "both" or note.hand == hand)
-        and note.start - phrase.start >= from_beat - 1e-7
+        and note.start - phrase.start >= start - 1e-7
         and ((note.start - phrase.start - from_beat) * seconds_per_beat
              + search_window <= elapsed + 1e-7)
     ]
