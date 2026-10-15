@@ -1760,8 +1760,15 @@ func _process(_delta: float) -> void:
         return
     score_overlay.guided_active = false
     if last_state.is_empty() or not bool(last_state.get("running", false)) or layout_revision != revision:
-        if not score_overlay.next_chord.is_empty():
-            score_overlay.next_chord.clear()
+        # The very first expected attack must be visible before the pianist
+        # starts. A ready practice passage should not show an empty score
+        # until Play is pressed or the first physical key is struck.
+        var ready_preview: Array = []
+        if layout_revision == revision and str(last_state.get("phase", "")) in ["ready", "disconnected"]:
+            ready_preview = LivingScore.cue(living_chords,
+                float(last_state.get("play_from_beat", 0.0)), score_overlay.marks)
+        if ready_preview != score_overlay.next_chord:
+            score_overlay.next_chord = ready_preview
             score_overlay.queue_redraw()
         if score_overlay.showing:
             score_overlay.showing = false
