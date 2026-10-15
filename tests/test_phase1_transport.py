@@ -140,5 +140,8 @@ def test_three_four_count_in_retains_meter_for_click_accents(harness):
     assert e.state()['count_in_bar_beats'] == pytest.approx(3)
     assert e.state()['count_in_beats'] < 3
     source = (Path(__file__).resolve().parents[1] / 'godot' / 'main.gd').read_text()
-    assert 'posmod(tick, bar_beats) + 1' in source
+    # Metronome accents still follow the source meter. Numeric labels were
+    # deliberately removed in Phase 7.6d; the beat lights use that meter.
+    assert 'posmod(tick, bar_beats) == 0' in source
     assert 'last_state.get("count_in_bar_beats", 4)' in source
+    assert 'game_count_in.present(beat,' in source
