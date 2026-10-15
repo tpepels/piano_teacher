@@ -82,6 +82,29 @@ func _run() -> void:
          "x": 0.3, "y": 0.14, "hand": "right"})
     _check(outside.is_empty(), "Wrong note must not fabricate a missing source staff")
 
+    # The same real HUD code used by state polling must make missing
+    # feedback readable without waiting for a physical piano.
+    var hud: Control = scene.get("practice_note_feedback_panel")
+    var hud_label: Label = scene.get("practice_note_feedback_label")
+    scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "playing",
+        "preview_only": false, "live_note_feedback":
+        {"status": "missed", "pitch": 67, "name": "G4", "count": 1}})
+    _check(hud.visible and "MISSED" in hud_label.text and "G4" in hud_label.text,
+        "A missed note is not visible in the practice HUD")
+    _check(_in_viewport(hud, viewport), "Missing-note feedback HUD is clipped")
+    scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "playing",
+        "preview_only": false, "live_note_feedback":
+        {"status": "wrong", "pitch": 65, "name": "F4", "count": 1}})
+    _check(hud.visible and "WRONG" in hud_label.text and "F4" in hud_label.text,
+        "Wrong-note feedback is not visible in the practice HUD")
+    scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "playing",
+        "preview_only": true, "live_note_feedback": null})
+    _check(hud.visible and "SCORING OFF" in hud_label.text,
+        "Preview mode does not visibly explain why misses are unavailable")
+    scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "playing",
+        "preview_only": false, "live_note_feedback": null})
+    _check(not hud.visible, "Old missed note remains visible after clearing feedback")
+    
     var pause: Control = scene.get("pause_sheet")
     pause.call("present", {"paused":true, "mode":"practice", "bpm":68,
         "hand":"left", "hands":["left","right","both"],
