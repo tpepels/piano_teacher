@@ -127,6 +127,9 @@ func _run() -> void:
                 "Library short control narrower than its text: " + button.text)
     _check(short_buttons == 3, "Expected three complete library navigation actions")
     var library_items: Control = scene.get("library_rows")
+    var library_status: Label = scene.get("library_message")
+    _check(library_status.get_global_rect().position.y < library_items.get_global_rect().position.y,
+        "Library import failures must appear above the score rows, not below a full screen")
     var found_long_title := false
     for control in library_items.get_children():
         if control is Button and "Bill Evans" in str((control as Button).text):
