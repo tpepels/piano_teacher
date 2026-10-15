@@ -29,6 +29,7 @@ class DemoAudio:
     frame_count: int
     sample_rate: int
     cache_key: str
+    instrument: str = "Basic synthesized piano"
 
 
 @dataclass(frozen=True)
@@ -145,28 +146,41 @@ class DemoAudioCache:
         """Return a reproducible WAV for this exact source variant and BPM."""
         duration, frames, voices = _prepare(variant, bpm, self.sample_rate, self.chunk_frames)
         phrase = variant.phrase
+        from .sample_piano import find_soundfont, available, render_wav
+        soundfont = find_soundfont()
+        if soundfont is not None and not available():
+            raise RuntimeError("The sampled piano is installed, but libfluidsynth is missing. Install fluidsynth.")
         content = {
-            "synth": 1, "sample_rate": self.sample_rate, "bpm": float(bpm),
+            "synth": 2 if soundfont is not None else 1,
+            "bank": soundfont.identity if soundfont else None,
+            "sample_rate": self.sample_rate, "bpm": float(bpm),
             "level": variant.level, "range": [phrase.start, phrase.end],
             "source_indices": variant.source_indices,
-            "notes": [(n.start, n.end, n.pitch, n.track, n.channel, n.hand) for n in variant.notes],
+            "notes": [(n.start, n.end, n.pitch, n.track, n.channel, n.hand,
+                       getattr(n, "velocity", 85)) for n in variant.notes],
         }
         key = hashlib.sha256(json.dumps(content, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
         path = self.cache_dir/f'{key}.wav'
-        result = DemoAudio(path, duration, frames, self.sample_rate, key)
+        result = DemoAudio(path, duration, frames, self.sample_rate, key,
+                           soundfont.label if soundfont else "Basic synthesized piano")
         if path.is_file():
             return result
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         handle, temporary = tempfile.mkstemp(prefix=f'.{key}.', suffix='.tmp', dir=self.cache_dir)
         try:
             with os.fdopen(handle, 'wb') as output:
-                with wave.open(output, 'wb') as wav:
-                    wav.setnchannels(1)
-                    wav.setsampwidth(2)
-                    wav.setframerate(self.sample_rate)
-                    wav.setnframes(frames)
-                    for chunk in _pcm_chunks(voices, frames, self.sample_rate, self.chunk_frames):
-                        wav.writeframesraw(chunk)
+                if soundfont is None:
+                    with wave.open(output, 'wb') as wav:
+                        wav.setnchannels(1)
+                        wav.setsampwidth(2)
+                        wav.setframerate(self.sample_rate)
+                        wav.setnframes(frames)
+                        for chunk in _pcm_chunks(voices, frames, self.sample_rate, self.chunk_frames):
+                            wav.writeframesraw(chunk)
+            if soundfont is not None:
+                render_wav(Path(temporary), variant, bpm=float(bpm), frames=frames,
+                           sample_rate=self.sample_rate, chunk_frames=self.chunk_frames,
+                           soundfont=soundfont)
             os.replace(temporary, path)
         finally:
             if os.path.exists(temporary):
