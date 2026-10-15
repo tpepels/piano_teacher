@@ -107,13 +107,16 @@ func open_review(report: Dictionary) -> void:
         repeat_button.text = "Repeat " + measure_text
         repeat_button.custom_minimum_size.y = 50
         repeat_button.add_theme_font_size_override("font_size", 17)
-        repeat_button.pressed.connect(func():
-            retry_requested.emit(first, last)
-            hide())
+        repeat_button.pressed.connect(_repeat_section.bind(first, last))
         content.add_child(repeat_button)
     if sections.size() > 15:
         section_list.add_child(_line("%d additional sections not shown here." % (sections.size()-15), 16, true))
-    var viewport: Vector2 = get_viewport_rect().size
+    var viewport: Vector2 = get_tree().root.size
     popup_centered(Vector2i(
         int(maxf(300.0, minf(720.0, viewport.x - 32.0))),
         int(maxf(300.0, minf(650.0, viewport.y - 32.0)))))
+
+
+func _repeat_section(first_bar: int, last_bar: int) -> void:
+    hide()
+    retry_requested.emit(first_bar, last_bar)
