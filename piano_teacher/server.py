@@ -1601,6 +1601,11 @@ class PracticeEngine:
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,"target_bpm":p.target_bpm,
                     "streak":p.streak,"mastered":len(p.mastered),"phase":phase,
                     "auto":self.auto,
+                    "take_result": ({"clean": bool(self.pending_result.clean),
+                                     "correct": self.pending_result.correct,
+                                     "total": len(self.pending_result.notes)}
+                                    if self.mode == "practice" and self.pending_result is not None
+                                    else None),
                     "countdown":max(0,-elapsed) if self.running else 0,
                     "lead_in_bars":1,"play_from_beat":self.play_from_beat,
                     "recovery_beat":self.pending_rewind,
