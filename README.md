@@ -33,6 +33,29 @@ Select your actual piano in **Settings → Piano input**. A virtual MIDI Through
 port is not automatically treated as a connected instrument. Play a note to
 verify actual input activity. A saved available device reconnects automatically.
 
+## Built-in warm-ups
+
+**Browse library → Built-in warm-ups** includes six original, repeatable,
+eight-bar MIDI studies. They are available even with an empty personal music
+folder. Selecting one generates its MIDI in Piano Teacher's configuration cache,
+not your music folder. The built-ins are not downloaded songs.
+
+They open directly in **Perform** mode at the indicated tempo. Press **Start**,
+play the complete warm-up and review your MIDI feedback, then press **Start**
+again to repeat. A disconnected piano gives an ungraded timing preview. The
+**Listen** button can demonstrate the notes; Settings adjusts target BPM.
+
+| Warm-up | Tempo | Focus |
+|---|---:|---|
+| Chord Changes | 68 BPM | C-G-Am-F triads and alternating left-hand roots/fifths |
+| Five-Finger Ladders | 76 BPM | Original Hanon-inspired parallel-hand coordination |
+| Classical Melody | 64 BPM, 3/4 | Original G-major melody and Alberti bass |
+| Pop Accompaniment | 88 BPM | Offbeat chord rhythm and root/fifth bass |
+| Jazz Chord Voicings | 66 BPM | Dm9-G13-Cmaj9-Am9 and extensions |
+| Jazz Phrasing | 72 BPM | Swung eighths, rests and melodic timing |
+
+The normal imported-song adaptive course and saved progress are unchanged.
+
 ## Learn and practise
 
 Opening a piece starts **Learn notes**. Find the highlighted note or chord on
