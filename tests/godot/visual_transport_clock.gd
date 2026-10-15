@@ -33,11 +33,33 @@ func run() -> void:
         var current: float = clock.now(now_ms)
         var observed_rate: float = (current - previous) / .016
         check(current >= previous, "Rendered music jumped backwards at frame %d" % tick)
-        check(observed_rate >= beat_rate * 0.939 and observed_rate <= beat_rate * 1.061,
-            "Rendered score accelerated outside bounded rate at frame %d" % tick)
+        check(observed_rate >= beat_rate * 0.979 and observed_rate <= beat_rate * 1.021,
+            "Rendered score accelerated outside 2% rate bound at frame %d" % tick)
         previous = current
     check(absf(previous - (-3.0 + 4.8 * beat_rate)) < .025,
         "A clean 68 BPM source clock should not noticeably drift")
+
+    # Simulate *measurement* jitter as well as network latency. The previous
+    # clock chased noisy readings at up to 6% different speeds. Musical
+    # movement should not pump even when the observed timestamp is uncertain.
+    var jitter_clock = load("res://visual_transport_clock.gd").new()
+    jitter_clock.accept(state, base_ms, base_ms)
+    var last_beat: float = jitter_clock.now(base_ms)
+    for tick in range(1, 601):
+        var at: int = base_ms + tick * 16
+        if tick % 5 == 0:
+            var measurement_ms: int = at - 24
+            var noise_ms: int = (65 if tick % 15 == 0 else -50 if tick % 10 == 0 else 0)
+            state["clock_beat"] = -3.0 + float(measurement_ms - base_ms + noise_ms) * beat_rate / 1000.0
+            jitter_clock.accept(state, measurement_ms, at)
+        var current: float = jitter_clock.now(at)
+        var observed_rate: float = (current - last_beat) / .016
+        check(observed_rate >= beat_rate * .979 and observed_rate <= beat_rate * 1.021,
+            "Timestamp jitter changed the tempo beyond 2% at frame %d" % tick)
+        check(current >= last_beat, "Timestamp jitter moved the score backwards")
+        last_beat = current
+    check(absf(last_beat - (-3.0 + 9.6 * beat_rate)) < .06,
+        "Filtered jitter must still track real musical time within 60ms")
 
     # The downbeat has no special animation and cannot change tempo.
     var near_zero: float = clock.now(now_ms)

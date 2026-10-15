@@ -67,6 +67,17 @@ These are new original exercises, not downloaded song MIDIs. Imported song
 curricula remain unchanged.
 
 
+## Phase 7.6 - Stable timebase under noisy MIDI/HTTP timing
+
+The visible musical clock filters *phase error*, not the moving sheet music.
+Normal polling jitter has a 0.025-beat deadband and low-pass filter so the
+camera moves at the requested BPM rather than accelerating/decelerating on
+each response. Persistent phase differences are corrected gradually with
+a 2% maximum tempo adjustment (down from 6%). Retry, pause, resume, score
+changes and actual seeks still reset synchronously. The regression checks
+both alternating network delays and independent timestamp jitter, including
+the exact downbeat and a whole 9.6-second passage.
+
 ## Phase 7.6 - Stable scrolling through system joins
 
 For generated two-hand piano lessons with **unchanged clefs, key and meter**,
