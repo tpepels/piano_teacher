@@ -74,8 +74,8 @@ def test_sampled_renderer_writes_exact_stereo_sample_frames_and_midi_events(tmp_
         assert wav.getframerate() == 8000 and wav.getnframes() == 32000
         frames = wav.readframes(wav.getnframes())
         assert len(frames) == 32000 * 4
-    assert emitted == [("on", 60, 42), ("off", 60, 85),
-                       ("on", 64, 109), ("off", 64, 85), ("closed",)]
+    assert emitted == [("on", 60, 42), ("off", 60, 0),
+                       ("on", 64, 109), ("off", 64, 0), ("closed",)]
     before = render.path.stat().st_mtime_ns
     assert cache.render(value, 60).path.stat().st_mtime_ns == before
     assert emitted.count(("closed",)) == 1
