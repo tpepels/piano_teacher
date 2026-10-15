@@ -121,15 +121,17 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
                                 and str(event.get("system", "")) == str(system.get("system", "")) \
                                 and not bool(event.get("terminal", false)):
                             last_event_x = maxf(last_event_x, float(event.get("x", -INF)) * source_size.x)
-                    var cut_start: int = int(ceil(last_event_x + maxf(12.0, gap_for_tail * 1.5)))
-                    var cut_end: int = int(floor(last_barline_pixel - maxf(9.0, gap_for_tail)))
+                    var cut_start: int = int(ceil(last_event_x + maxf(5.0, gap_for_tail * .45)))
+                    var cut_end: int = int(floor(last_barline_pixel - maxf(5.0, gap_for_tail * .45)))
                     var scan_top: int = maxi(0, int(floor(float(system.top) * source_size.y)))
                     var scan_bottom: int = mini(image.get_height(), int(ceil(float(system.bottom) * source_size.y)))
-                    if cut_end - cut_start >= 12 and cut_start > left + 10 and cut_end < right - 5 \
-                            and _staff_only_gap(image, cut_start, cut_end,
-                                scan_top, scan_bottom, staff_lines_for_tail, source_size.y):
-                        splice_left = cut_start
-                        splice_right = cut_end
+                    if cut_end - cut_start >= 12 and cut_start > left + 8 and cut_end < right - 4:
+                        var safe_run: Vector2i = _longest_staff_only_run(image,
+                            cut_start, cut_end, scan_top, scan_bottom,
+                            staff_lines_for_tail, source_size.y)
+                        if safe_run.y - safe_run.x >= 12:
+                            splice_left = safe_run.x
+                            splice_right = safe_run.y
         var top: int = maxi(0, int(floor(float(system.top) * source_size.y)))
         var bottom: int = mini(image.get_height(), int(ceil(float(system.bottom) * source_size.y)))
         if right <= left or bottom <= top:
@@ -220,6 +222,26 @@ static func _staff_only_gap(image: Image, x0: int, x1: int, y0: int, y1: int,
             if not on_staff:
                 return false
     return true
+
+
+static func _longest_staff_only_run(image: Image, x0: int, x1: int,
+        y0: int, y1: int, lines: Array, source_height: float) -> Vector2i:
+    # Start just after the final event and stop before the known barline.
+    # Select the longest uninterrupted run of genuine staff-only columns.
+    # A stem, slur or note fragment anywhere in the middle splits the run,
+    # instead of making us discard all potential safe whitespace.
+    var best := Vector2i(-1, -1)
+    var current := -1
+    for x in range(x0, x1 + 1):
+        var safe: bool = x < x1 and _staff_only_gap(
+            image, x, x + 1, y0, y1, lines, source_height)
+        if safe and current < 0:
+            current = x
+        if not safe and current >= 0:
+            if x - current > best.y - best.x:
+                best = Vector2i(current, x)
+            current = -1
+    return best
 
 
 static func _mapped_px(normalized: float, mapping: Dictionary) -> float:
