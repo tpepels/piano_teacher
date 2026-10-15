@@ -1322,6 +1322,10 @@ class PracticeEngine:
             live_marks=self._live_feedback(elapsed) if phase == "playing" else []
             result = {**input_activity,"mode":self.mode,"teaching":None,"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
+                    "current_bar":bar_number_at(
+                        phrase_grid(p.active_phrase, p.piece.bar_boundaries),
+                        exercise_beat if self.running else self.play_from_beat,
+                        ex.phrase.first_bar),
                     "exercise":p.index+1,"exercise_count":len(p.exercises),
                     "lesson_level":variant.level,"lesson_level_number":p.variant_index+1,
                     "lesson_level_count":len(p.variants),"required_notes":len(variant.notes),
