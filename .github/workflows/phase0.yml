@@ -33,6 +33,19 @@ jobs:
           make_fixture(Path('/tmp/piano-generated-fixture.mid'))
           PY
           .venv/bin/python scripts/check_generated_lesson.py /tmp/piano-generated-fixture.mid
+      - name: Phase 6 real library pipeline through Godot
+        run: |
+          .venv/bin/python scripts/verify_library_pipeline.py \
+            --music-dir tests/fixtures/musical_fidelity \
+            --limit 1 --timeout 180 --godot \
+            --output /tmp/piano-phase6-diagnostic
+      - name: Upload Phase 6 failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-library-diagnostic
+          path: /tmp/piano-phase6-diagnostic
+          if-no-files-found: ignore
       - name: Boot Godot UI against a real local backend
         run: .venv/bin/python scripts/smoke_godot.py
       - name: Generated lesson end-to-end Godot rehearsal
