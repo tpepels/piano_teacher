@@ -132,10 +132,18 @@ func run() -> void:
     await create_timer(0.05).timeout
     app._process(1.0 / 60.0)
     check(app.score_content.position == paused_position, "pause freezes actual notation")
+    app.last_state = {"running": false, "phase": "paused", "pause_context": "feedback"}
+    app._process(1.0 / 60.0)
+    check(app.score_content.position == paused_position,
+          "pausing an automatic break holds the performed score for reading")
     app.last_state = {"running": false, "phase": "feedback"}
     app._process(1.0 / 60.0)
     check(app.score_content.position == paused_position,
           "feedback keeps the completed passage still for review")
+    app.last_state = {"running": false, "phase": "ready"}
+    app._process(1.0 / 60.0)
+    check(absf(app.score_content.position.x - app.score_frame.size.x * .04) < 1.0,
+          "Stop during feedback returns the score to its ready position")
     var output := FileAccess.open(folder + "/samples.json", FileAccess.WRITE)
     output.store_string(JSON.stringify(results, "  "))
     print("SCORE_MOTION_FAILURES:", failures.size())

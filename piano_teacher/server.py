@@ -29,6 +29,7 @@ from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at
 from .live_feedback import settled_assessment
+from .instruction import next_full_attempt
 
 
 class PracticeEngine:
@@ -44,9 +45,20 @@ class PracticeEngine:
         self.next_boundary_beat = 0.0
         self.pending_rewind: float | None = None
         self._rewind_requires_layout = False
-        self.feedback_seconds = 2.5
+        self.feedback_seconds = 1.5
         self.paused = False
         self.paused_at = 0.0
+        self.pause_context: str | None = None
+        self._deferred_score_ack: int | None = None
+        self.next_action = "Open a MIDI or MusicXML file."
+        self.retry_range: dict | None = None
+        # Persistent trouble means two boundary failures in consecutive takes
+        # at the same stage and source two-bar chunk. Only a clean full take
+        # or explicit stage navigation resets the history.
+        self._trouble_key: tuple | None = None
+        self._trouble_count = 0
+        self._guided_recovery_pending = False
+        self._guided_return: tuple[str, float] | None = None
         self.transport_id = 0
         self.mode = "practice"
         self.teaching = None
@@ -120,6 +132,7 @@ class PracticeEngine:
                 # Keep the saved preferred name so discovery can reconnect it
                 # when it returns. An interrupted attempt cannot earn mastery.
                 self.feedback = f"MIDI piano disconnected: {name}. Reconnect it, then press Start."
+                self.next_action = "Reconnect your piano, then press Start."
             if discovery_error is not None:
                 self.feedback = f"Cannot list MIDI input devices: {discovery_error}. Check your MIDI backend and connection."
                 raise RuntimeError(self.feedback) from discovery_error
@@ -153,6 +166,7 @@ class PracticeEngine:
                 self.feedback = "MIDI piano disconnected. Connect a device to enable scoring."
             if self.teaching is not None:
                 self.teaching.set_connected(self.midi_port is not None, now=time.monotonic())
+            self.next_action = "Press Start when you are ready." if name else "Connect your piano for feedback."
             self.library.update(midi_device=name)
 
     def library_listing(self) -> dict:
@@ -202,6 +216,7 @@ class PracticeEngine:
         piece, score = import_piece(path)
         with self.lock:
             self._stop()
+            self._reset_trouble()
             self.source = str(Path(path).resolve())
             self.fingerprint = hashlib.sha256(Path(path).read_bytes()).hexdigest()
             self.plan = LearningPlan(piece)
@@ -211,6 +226,7 @@ class PracticeEngine:
             self.score = score
             self._restore()
             self.feedback = "Press Start to practice"
+            self.next_action = "Press Start to practice."
             self.score_revision += 1
             self.pending_result = None
             self.feedback_marks = []
@@ -286,6 +302,8 @@ class PracticeEngine:
             self.teaching.stop()
         self.paused=False
         self.paused_at=0.0
+        self.pause_context=None
+        self._deferred_score_ack=None
         self.running=False
         self.auto=False
         self.preview_only=False
@@ -299,6 +317,13 @@ class PracticeEngine:
         self.pending_result=None
         self.feedback_marks=[]
         self.feedback_unmapped=0
+        self.retry_range=None
+        self._guided_recovery_pending=False
+        self._guided_return=None
+
+    def _reset_trouble(self):
+        self._trouble_key = None
+        self._trouble_count = 0
 
     def display_phrase(self) -> Phrase:
         """One source-derived fragment in Learn; the exact full variant in time."""
@@ -316,7 +341,8 @@ class PracticeEngine:
                       absolute_start, absolute_end,
                       tuple(n for n in phrase.notes if absolute_start-1e-7 <= n.start < absolute_end-1e-7))
 
-    def _begin_learn(self, *, from_beat: float = 0.0, bump_revision: bool = True):
+    def _begin_learn(self, *, from_beat: float = 0.0, bump_revision: bool = True,
+                     recovery: bool = False):
         from .teaching import TeachingConfig, TeachingController
         if self.plan is None:
             raise ValueError("Open a piece first")
@@ -335,7 +361,11 @@ class PracticeEngine:
             first = end_index
         if first >= len(grid)-1:
             raise ValueError("No note attacks in the selected fragment")
+        retry_range = self.retry_range if recovery else None
         self._stop()
+        if recovery:
+            self.retry_range = retry_range
+            self._guided_return = (self.plan.identity, grid[first])
         self.mode = "learn"
         self.guided_range = (grid[first], grid[end_index])
         if bump_revision:
@@ -348,6 +378,8 @@ class PracticeEngine:
             now=time.monotonic(), connected=self._piano_connected())
         self.awaiting_score_revision = self.score_revision
         self.feedback = "Preparing a short idea to learn"
+        self.next_action = (f"Learn bars {self.display_phrase().first_bar}-{self.display_phrase().last_bar} "
+                            "at your own pace, then retry the rhythm.")
 
     def _guided_marks(self, snapshot: dict) -> list[dict]:
         if (self.plan is None or self._layout_revision != self.score_revision
@@ -376,13 +408,20 @@ class PracticeEngine:
     def _prepare_practice(self):
         if self.plan is None:
             raise ValueError("Open a piece first")
+        return_context = self._guided_return
+        retry_range = self.retry_range
         self._stop()
+        if return_context is not None and return_context[0] == self.plan.identity:
+            self.pending_rewind = return_context[1]
+            self.retry_range = retry_range
+            self._guided_return = return_context
         self.mode = "practice"
         self.teaching = None
         self.guided_range = None
         self.score_revision += 1
         self.awaiting_score_revision = self.score_revision
         self.feedback = "Preparing rhythm practice"
+        self.next_action = "Get ready to retry the rhythm." if return_context else "Get ready to play in time."
 
     def _commit_pending(self) -> str:
         """Apply a completed attempt after feedback has been shown on its own score."""
@@ -391,6 +430,9 @@ class PracticeEngine:
         p = self.plan
         result = self.pending_result
         self.pending_result = None
+        if result.correct == len(result.notes) and result.extra_notes == 0:
+            self._reset_trouble()
+        self.retry_range = None
         before = (p.identity, p.bpm)
         message = p.apply_result(correct=result.correct,
                                  total=len(result.notes), extras=result.extra_notes)
@@ -409,6 +451,7 @@ class PracticeEngine:
             self.mode = "practice"
             self.teaching = None
             self.guided_range = None
+            self._guided_return = None
             # A user must be able to watch the time-driven score without a
             # connected instrument. Only actual MIDI input enables assessment.
             self.preview_only = not self._piano_connected()
@@ -443,6 +486,8 @@ class PracticeEngine:
             self.next_boundary_beat=next_chunk_end(grid,self.play_from_beat)
             self.run_at=time.monotonic()+self.count_in_beats*60/self.plan.bpm
             self.feedback="Count in, then play"
+            self.next_action = ("Watch the moving score; connect a piano for feedback." if self.preview_only
+                else f"Play from bar {bar_number_at(grid,self.play_from_beat,phrase.first_bar)} at {self.plan.bpm} BPM.")
 
     def control(self, action: str, **kwargs) -> None:
         with self.lock:
@@ -453,6 +498,9 @@ class PracticeEngine:
                 revision = int(kwargs.get("revision", -1))
                 # Ignore delayed PNG acknowledgements from older passages.
                 if self.awaiting_score_revision == revision and revision == self.score_revision:
+                    if self.paused:
+                        self._deferred_score_ack = revision
+                        return
                     if self.mode == "learn" and self.teaching is not None:
                         self.awaiting_score_revision = None
                         self.teaching.start(now=time.monotonic())
@@ -461,7 +509,8 @@ class PracticeEngine:
                 return
             if action in ("learn", "learn_retry"):
                 previous_start = self.guided_range[0] if self.guided_range else 0.0
-                self._begin_learn(from_beat=float(kwargs.get("from_beat", previous_start if action == "learn_retry" else 0.0)))
+                self._begin_learn(from_beat=float(kwargs.get("from_beat", previous_start if action == "learn_retry" else 0.0)),
+                                  recovery=self._guided_return is not None and action == "learn_retry")
                 return
             if action == "practice":
                 self._prepare_practice()
@@ -474,6 +523,7 @@ class PracticeEngine:
             if action == "stop":
                 self._stop()
                 self.feedback="Stopped"
+                self.next_action="Start when you are ready."
                 return
             if action in ("start", "restart"):
                 if self.mode == "learn":
@@ -491,35 +541,47 @@ class PracticeEngine:
                 self.start()  # Fresh count-in; previous MIDI notes cannot carry over.
                 return
             if action == "pause":
+                if self.paused:
+                    raise ValueError("Cannot pause an exercise that is already paused")
+                context = self._phase(time.monotonic())
+                if context not in ("playing", "count_in", "feedback", "recovering", "loading", "guided_wait"):
+                    raise ValueError("Cannot pause unless an exercise is playing or preparing")
+                self.pause_context = context
+                self.paused_at = time.monotonic()
                 if self.mode == "learn" and self.teaching is not None:
                     self.teaching.pause(now=time.monotonic())
                     self.paused = True
                     return
-                if not self.running or self.paused:
-                    raise ValueError("Cannot pause unless an exercise is playing")
-                self.paused_at = time.monotonic()
                 self.paused = True
-                self.feedback = "Paused"
                 return
             if action == "resume":
+                if not self.paused:
+                    raise ValueError("Cannot resume unless an exercise is paused")
+                duration = time.monotonic() - self.paused_at
                 if self.mode == "learn" and self.teaching is not None:
                     self.teaching.resume(now=time.monotonic())
                     self.paused = False
-                    return
-                if not self.running or not self.paused:
-                    raise ValueError("Cannot resume unless an exercise is paused")
-                # Shift time-zero by the exact suspended duration, preserving
-                # both the count-in and all note timestamps on the same clock.
-                self.run_at += time.monotonic() - self.paused_at
+                elif self.running:
+                    # MIDI timestamps and the visual clock share this origin.
+                    self.run_at += duration
+                if self.next_at:
+                    self.next_at += duration
                 self.paused_at = 0.0
                 self.paused = False
-                self.feedback = "Count in" if time.monotonic() < self.run_at else "Playing"
+                self.pause_context = None
+                if self.running:
+                    self.feedback = "Count in" if time.monotonic() < self.run_at else "Playing"
+                if self._deferred_score_ack is not None:
+                    revision = self._deferred_score_ack
+                    self._deferred_score_ack = None
+                    self.control("score_ready", revision=revision)
                 return
             p=self.plan
             if not p:
                 raise ValueError("Open a piece first")
             was_guided = self.mode == "learn"
             self._stop()
+            self._reset_trouble()
             if action == "next":
                 p.jump(1)
             elif action == "previous":
@@ -532,6 +594,7 @@ class PracticeEngine:
                 raise ValueError(f"Unsupported action: {action}")
             self.score_revision+=1
             self.feedback="Ready"
+            self.next_action="Start when you are ready."
             if was_guided:
                 self._begin_learn(bump_revision=False)
             self._save()
@@ -542,12 +605,15 @@ class PracticeEngine:
             self.midi_device = ""
             self._stop()
             self.feedback = "MIDI piano disconnected. Reconnect it before starting again."
+            self.next_action = "Reconnect your piano, then press Start."
         if not self.plan:
             return
         now=time.monotonic()
         if self.mode == "learn" and self.teaching is not None:
             self.teaching.set_connected(self._piano_connected(), now=now)
             self.teaching.tick(now=now)
+            return
+        if self.paused:
             return
         if self.pending_result is not None:
             if self.next_at and now >= self.next_at:
@@ -574,7 +640,9 @@ class PracticeEngine:
             return
         if self.pending_rewind is not None:
             if now >= self.next_at:
-                if self._rewind_requires_layout:
+                if self._guided_recovery_pending:
+                    self._begin_learn(from_beat=self.pending_rewind, recovery=True)
+                elif self._rewind_requires_layout:
                     self.score_revision += 1
                     self.awaiting_score_revision = self.score_revision
                     self._rewind_requires_layout = False
@@ -611,12 +679,24 @@ class PracticeEngine:
                 self._rewind_requires_layout = self.plan.bpm != before
                 self._save()
                 self.pending_rewind=decision.restart_beat
+                key = (self.plan.identity, decision.restart_beat, decision.end_beat)
+                self._trouble_count = self._trouble_count + 1 if key == self._trouble_key else 1
+                self._trouble_key = key
+                self._guided_recovery_pending = self._trouble_count >= 2
+                self.retry_range = {
+                    "first_bar": bar_number_at(grid, decision.restart_beat, phrase.first_bar),
+                    "last_bar": phrase.first_bar + next(i for i, beat in enumerate(grid)
+                        if abs(beat-decision.end_beat) < 1e-6)-1,
+                    "start_beat": decision.restart_beat, "end_beat": decision.end_beat}
                 self.running=False
                 self.recorder=None
                 self.next_at=now+self.feedback_seconds
                 self.feedback=(f"{decision.errors} wrong or missed notes - retrying from "
                                f"measure {bar_number_at(grid,decision.restart_beat,phrase.first_bar)} "
                                f"at {self.plan.bpm} BPM")
+                bars = f"{self.retry_range['first_bar']}-{self.retry_range['last_bar']}"
+                self.next_action = (f"Learn bars {bars} slowly, then retry the rhythm." if self._guided_recovery_pending
+                    else f"Retry bars {bars} at {self.plan.bpm} BPM.")
                 return
             previous_boundary=self.next_boundary_beat
             self.next_boundary_beat=next_chunk_end(grid,previous_boundary)
@@ -630,6 +710,7 @@ class PracticeEngine:
             # because the user's piano has not been connected yet.
             self._stop()
             self.feedback = "Timing preview complete - connect a USB MIDI piano for scoring"
+            self.next_action = "Connect your piano to learn and receive feedback."
             return
         active_phrase=Phrase(phrase.number,phrase.first_bar,phrase.last_bar,
             phrase.start+self.play_from_beat,phrase.end,
@@ -654,10 +735,23 @@ class PracticeEngine:
             # A clean *partial* recovery cannot confer full passage mastery.
             self.pending_rewind=0.0
             self.feedback="Retry complete - now play the whole passage"
+            self.next_action="Retry complete — now play the whole passage."
+            self.retry_range = None
             self.next_at=now+self.feedback_seconds
             return
         self.pending_result=result
+        self.next_action=next_full_attempt(self.plan, result)
         self.next_at=now+self.feedback_seconds if self.auto else 0
+
+    def _phase(self, now: float) -> str:
+        if self.paused:
+            return "paused"
+        if self.mode == "learn" and self.teaching is not None:
+            return "loading" if self.awaiting_score_revision is not None else self.teaching.snapshot(now=now)["phase"]
+        if self.running:
+            return "count_in" if now < self.run_at else "playing"
+        return ("feedback" if self.pending_result is not None else "loading" if self.awaiting_score_revision is not None
+                else "recovering" if self.pending_rewind is not None else "ready")
 
     def _live_feedback(self, elapsed_seconds: float) -> list[dict]:
         """Project graded noteheads without waiting for the final attempt."""
@@ -688,6 +782,12 @@ class PracticeEngine:
             self._update()
             p=self.plan
             input_activity = {
+                "next_action": self.next_action,
+                "transition_in_seconds": (max(0.0, self.next_at-(self.paused_at if self.paused else time.monotonic()))
+                    if self.next_at and (self.pending_result is not None or self.pending_rewind is not None) else None),
+                "retry_range": self.retry_range,
+                "guided_recovery": self._guided_recovery_pending or self._guided_return is not None,
+                "pause_context": self.pause_context,
                 "midi_input_count": self.midi_input_count,
                 "midi_input_note": self.midi_input_note,
                 "midi_input_age": (max(0.0, time.monotonic() - self.midi_input_at)
@@ -705,7 +805,7 @@ class PracticeEngine:
             elapsed=now-self.run_at
             exercise_beat=self.play_from_beat+max(0.0,elapsed*p.bpm/60)
             progress=min(1.0,max(0.0, exercise_beat/(ex.phrase.end-ex.phrase.start))) if self.running else 0.0
-            phase=("paused" if self.paused else "count_in" if elapsed<0 else "playing") if self.running else "feedback" if self.pending_result is not None else "loading" if self.awaiting_score_revision is not None else "recovering" if self.pending_rewind is not None else "ready"
+            phase=self._phase(now)
             live_marks=self._live_feedback(elapsed) if phase == "playing" else []
             result = {**input_activity,"mode":self.mode,"teaching":None,"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
@@ -729,23 +829,25 @@ class PracticeEngine:
                     "preview_only":self.preview_only,
                     "progress":progress,"duration":seconds,"beat":exercise_beat if self.running else 0.0,
                     "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
-                    "device":self.midi_device,"feedback":self.feedback,"revision":self.score_revision,
-                    "feedback_marks":self.feedback_marks if phase in ("feedback", "recovering") else live_marks,
-                    "feedback_unmapped":self.feedback_unmapped if phase in ("feedback", "recovering") else 0}
+                    "device":self.midi_device,"feedback":"Paused" if self.paused else self.feedback,"revision":self.score_revision,
+                    "feedback_marks":self.feedback_marks if (self.pause_context if self.paused else phase) in ("feedback", "recovering") else live_marks,
+                    "feedback_unmapped":self.feedback_unmapped if (self.pause_context if self.paused else phase) in ("feedback", "recovering") else 0}
             if self.mode == "learn" and self.teaching is not None:
                 teaching = self.teaching.snapshot(now=time.monotonic())
                 phrase = self.display_phrase()
                 teaching["fragment"] = {"first_bar": phrase.first_bar, "last_bar": phrase.last_bar,
                     "start_beat": self.guided_range[0], "end_beat": self.guided_range[1]}
                 teaching["session_id"] = self.transport_id
-                phase = "loading" if self.awaiting_score_revision is not None else teaching["phase"]
+                phase = self._phase(now)
                 feedback = str(teaching.get("feedback", "Find the highlighted notes at your own pace."))
                 if phase == "loading":
                     feedback = "Preparing a short idea to learn"
                 elif phase == "disconnected":
                     feedback = "No piano connected — timed preview only. Connect your piano in Settings to learn notes."
+                    result["next_action"] = "Connect your piano in Settings to learn notes."
                 elif phase == "guided_complete":
                     feedback = "You found every note. Ready to add rhythm?"
+                    result["next_action"] = "Retry rhythm from these bars." if self._guided_return else "Ready to add rhythm? Choose Practice."
                 elif phase == "paused":
                     feedback = "Paused — resume when you are ready."
                 elif phase == "guided_wait":

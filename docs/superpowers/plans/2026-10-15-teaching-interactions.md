@@ -54,9 +54,9 @@ Files: `server.py`, teaching integration/presentation, focused recovery tests an
 
 Interfaces: existing transport/assessment/recovery remain authoritative; add explicit mode, concise `next_action`, retry range, recurring-trouble state and a bounded guided-remediation return context.
 
-- [ ] Write failing whole-learner tests for five mistakes → completed boundary → correct range/10% slowdown → optional repeated-pitch guidance → unchanged timed clock → clean partial recovery → full target-speed mastery.
-- [ ] Implement instructional transitions and repeated-trouble routing; no assisted/partial false mastery.
-- [ ] Verify jitter/grace at 30/40/80/120 BPM, mixed meters, rests and multiple systems; inspect actual moving frames; run full suite and commit P2.
+- [x] Write failing whole-learner tests for five mistakes → completed boundary → correct range/10% slowdown → optional repeated-pitch guidance → unchanged timed clock → clean partial recovery → full target-speed mastery.
+- [x] Implement instructional transitions and repeated-trouble routing; no assisted/partial false mastery.
+- [x] Verify jitter/grace at 30/40/80/120 BPM, mixed meters, rests and multiple systems; inspect actual moving frames; run full suite and commit P2.
 
 ## P3 — Audible Listen and uninterrupted Perform
 
@@ -97,3 +97,5 @@ Files: focused learner-progress module/SQLite migration, `learning.py` and serve
 - P0 complete: 244 tests, parser, three smoke scripts, source alignment and 58 actual desktop frames pass; report `docs/teaching-p0-baseline.md`. Hardware gate remains open.
 
 - P1 complete: 292 tests, parser, independent review and real normal/compact learner journeys pass. Source-stable guided recognition and contextual keyboard implemented; retries and loading preserve physical key state. Report `docs/teaching-p1-verification.md`.
+
+- P2 complete: 321 tests passed in 105.86 seconds, Godot parser and independent review pass. Actual 28-frame learner journey covers two failures, guided return, tempo restoration and three full clean target passes. Report `docs/teaching-p2-verification.md`.

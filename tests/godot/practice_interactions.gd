@@ -90,8 +90,9 @@ func test_primary_transport() -> void:
     show_state()
     app.start_button.pressed.emit()
     expect_command("start", "Primary button starts a ready passage")
-    for phase in ["count_in", "playing"]:
+    for phase in ["count_in", "playing", "feedback", "recovering", "loading"]:
         show_state(phase)
+        app.commands.clear() # Ignore the ordinary loading score-ready acknowledgement.
         key(KEY_SPACE)
         expect_command("pause", "Space pauses " + phase + " without abandoning the attempt")
         check(app.start_button.text.begins_with("Pause"), "Primary control offers Pause during " + phase)
@@ -109,8 +110,9 @@ func test_secondary_stop() -> void:
     show_state()
     var ready_stops := visible_buttons("Stop")
     check(ready_stops.is_empty() or ready_stops[0].disabled, "Stop is unavailable before an attempt starts")
-    for phase in ["count_in", "playing", "paused"]:
+    for phase in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]:
         show_state(phase)
+        app.commands.clear()
         var stops := visible_buttons("Stop")
         check(stops.size() == 1, "An active attempt has one explicit secondary Stop control: " + phase)
         if stops.size() == 1:
@@ -161,7 +163,7 @@ func test_focused_shortcuts() -> void:
 
 func test_practice_detours() -> void:
     for destination in ["settings", "lesson"]:
-        for phase in ["count_in", "playing"]:
+        for phase in ["count_in", "playing", "feedback", "recovering", "loading"]:
             app._navigate("practice")
             show_state(phase)
             app.commands.clear()
@@ -217,6 +219,30 @@ func test_compact_feedback() -> void:
     for control in [app.feedback_label, app.progress_label, app.practice_controls, app.speed_label]:
         check(viewport.encloses(control.get_global_rect()), "Compact practice control remains inside the viewport: " + str(control))
 
+func test_instructional_transition() -> void:
+    var retry: Dictionary = state("recovering")
+    retry["next_action"] = "Retry measures 3–4 at 72 BPM"
+    retry["transition_in_seconds"] = 1.5
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(retry).to_utf8_buffer())
+    check(app.lesson_info_label.text.contains("Retry measures 3–4 at 72 BPM"),
+        "The teaching instruction says exactly what will happen next")
+    check(app.lesson_info_label.text.contains("1.5"), "The brief automatic break has a visible countdown")
+    retry["phase"] = "paused"
+    retry["paused"] = true
+    retry["pause_context"] = "recovering"
+    app.score_view.texture = null # Pausing loading must not disable Resume.
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(retry).to_utf8_buffer())
+    check(not app.start_button.disabled, "Resume remains available while the next score is loading")
+    check(not app.stop_button.disabled, "Stop remains available during an automatic break")
+    retry["mode"] = "learn"
+    retry["phase"] = "loading"
+    retry["paused"] = false
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(retry).to_utf8_buffer())
+    app.commands.clear()
+    app._toggle_playing()
+    check(app.start_button.text.contains("Pause"), "Guided preparation offers Pause")
+    check(app.commands.back().get("action") == "pause", "Primary transport pauses guided preparation")
+
 func run() -> void:
     root.mode = Window.MODE_WINDOWED
     root.size = Vector2i(800, 600)
@@ -241,6 +267,7 @@ func run() -> void:
         "settings_back_origin": test_settings_back_origin()
         "abandon_practice": test_abandon_practice()
         "compact_feedback": await test_compact_feedback()
+        "instructional_transition": test_instructional_transition()
         _: check(false, "Unknown interaction scenario: " + scenario)
     print("PRACTICE_INTERACTION_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

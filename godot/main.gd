@@ -442,10 +442,8 @@ func _navigate(screen: String) -> void:
         var phase: String = str(last_state.get("phase", ""))
         var starting: bool = action_pending and last_post_path == "/control" and last_control_action in ["start", "restart", "resume", "score_ready", "learn", "learn_retry", "practice"]
         if screen in ["settings", "lesson"]:
-            if phase in ["count_in", "playing", "guided_wait"] or starting:
+            if phase in ["count_in", "playing", "guided_wait", "feedback", "recovering", "loading"] or starting:
                 _send_action({"action": "pause"})
-            elif phase in ["feedback", "recovering", "loading"]:
-                _send_action({"action": "stop"})
         elif phase in ["count_in", "playing", "guided_wait", "guided_complete", "disconnected", "paused", "feedback", "recovering", "loading"] or starting:
             _send_action({"action": "stop"})
     current_screen = screen
@@ -1092,8 +1090,10 @@ func _process(_delta: float) -> void:
         if score_overlay.showing:
             score_overlay.showing = false
             score_overlay.queue_redraw()
-            if str(last_state.get("phase", "ready")) not in ["feedback", "recovering", "loading"]:
+            if str(last_state.get("phase", "ready")) not in ["feedback", "recovering", "loading", "paused"]:
                 _layout_moving_score(_delta)
+        elif str(last_state.get("phase", "ready")) in ["ready", "disconnected"]:
+            _layout_moving_score(_delta)
         return
     # Count-in uses negative beats on the same spacing as the opening notes.
     # position advances at BPM regardless of the user's MIDI performance.
@@ -1273,6 +1273,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     practice_progress.value = float(parsed.get("progress", 0.0))
     stop_button.disabled = not bool(parsed.get("running", false))
     var phase: String = str(parsed.get("phase", "ready"))
+    var active_transport: bool = _has_active_transport()
+    if not learning:
+        stop_button.disabled = not active_transport
     if phase0_smoke_mode and phase != phase0_last_phase:
         phase0_last_phase = phase
         print("PHASE0_PHASE:", phase)
@@ -1303,11 +1306,19 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         progress_label.text = "Stage %d of %d  ·  Clean runs %d of 3" % [
             int(parsed.get("lesson_step", 1)), int(parsed.get("lesson_steps", 1)),
             int(parsed.get("streak", 0))]
-    start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Pause  ·  Space" if bool(parsed.get("running", false)) else "Start  ·  Space"
+    var next_action: String = str(parsed.get("next_action", ""))
+    if not next_action.is_empty() and (phase in ["feedback", "recovering", "loading", "paused"] or bool(parsed.get("guided_recovery", false))):
+        lesson_info_label.text = next_action
+        var remaining = parsed.get("transition_in_seconds")
+        if remaining != null:
+            lesson_info_label.text = ("After resume · " if phase == "paused" else "Next in %.1f s · " % maxf(0.0, float(remaining))) + next_action
+    start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Pause  ·  Space" if active_transport else "Start  ·  Space"
     if learning:
-        start_button.text = "Resume  ·  Space" if phase == "paused" else "Try rhythm · Space" if phase in ["guided_complete", "disconnected"] else "Pause  ·  Space" if phase == "guided_wait" else "Learn · Space"
+        start_button.text = "Resume  ·  Space" if phase == "paused" else "Try rhythm · Space" if phase in ["guided_complete", "disconnected"] else "Pause  ·  Space" if phase in ["guided_wait", "loading"] else "Learn · Space"
+        if phase == "guided_complete" and bool(parsed.get("guided_recovery", false)):
+            start_button.text = "Retry rhythm"
     start_button.tooltip_text = "Space: start, pause or resume · R: restart · S: stop"
-    start_button.disabled = not bool(parsed.get("running", false)) and (score_view.texture == null or layout_revision != revision)
+    start_button.disabled = not active_transport and (score_view.texture == null or layout_revision != revision)
     score_overlay.marks = []
     for marker in parsed.get("feedback_marks", []):
         score_overlay.marks.append(ScoreStrip.map_point(marker, score_layout) if score_layout.has("strip_size") else marker)
@@ -1555,13 +1566,19 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     _flush_transport_action()
     _poll()
 
+func _has_active_transport() -> bool:
+    return bool(last_state.get("running", false)) or str(last_state.get("phase", "")) in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]
+
 func _toggle_playing() -> void:
     if str(last_state.get("mode", "practice")) == "learn":
         var phase: String = str(last_state.get("phase", "ready"))
-        _send_action({"action": "resume" if phase == "paused" else "practice" if phase in ["guided_complete", "disconnected"] else "pause" if phase == "guided_wait" else "learn_retry"})
+        _send_action({"action": "resume" if phase == "paused" else "practice" if phase in ["guided_complete", "disconnected"] else "pause" if phase in ["guided_wait", "loading"] else "learn_retry"})
         return
     if bool(last_state.get("paused", false)):
         _send_action({"action": "resume"})
+        return
+    if _has_active_transport():
+        _send_action({"action": "pause"})
         return
     if not bool(last_state.get("running", false)) and (score_view.texture == null or layout_revision != revision):
         feedback_label.text = "Preparing sheet music - wait for the notes before starting"
@@ -1569,7 +1586,7 @@ func _toggle_playing() -> void:
     _send_action({"action": "pause" if bool(last_state.get("running", false)) else "start"})
 
 func _toggle_pause() -> void:
-    if bool(last_state.get("running", false)) or (str(last_state.get("mode", "practice")) == "learn" and str(last_state.get("phase", "")) in ["guided_wait", "paused"]):
+    if _has_active_transport() or (str(last_state.get("mode", "practice")) == "learn" and str(last_state.get("phase", "")) in ["guided_wait", "paused"]):
         _send_action({"action": "resume" if bool(last_state.get("paused", false)) else "pause"})
 
 func _restart_practice() -> void:
