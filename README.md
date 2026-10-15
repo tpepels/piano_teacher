@@ -91,9 +91,10 @@ the exact downbeat and a whole 9.6-second passage.
 
 A reproducible Godot/Verovio audit runs both a regular rhythmic passage
 and a two-handed exercise with chords and cross-bar ties. The regular fixture
-has a permanent maximum **1.40×** system-join velocity regression budget,
-rather than merely printing its metrics. More complex source notation retains
-its glyph-preserving safety checks without an arbitrary collision-blind limit.
+has a permanent maximum **1.25×** system-join velocity budget.
+The chord-and-tie passage has its own **1.20×** maximum, and both fixtures
+must retain at least **0.90×** normal speed at joins. The additional measured
+padding is empty staff space only; no engraved glyph is stretched.
 
 For generated two-hand piano lessons with **unchanged clefs, key and meter**,
 the scrolling strip discards repeated *printed-system headers* at the

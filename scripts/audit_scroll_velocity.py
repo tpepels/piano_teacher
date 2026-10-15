@@ -19,8 +19,13 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tests"))
 from test_score_motion_render import make_render_fixture
 
-MAX_STANDARD_JOIN_RATIO = 1.40
-RATIO_PATTERN = re.compile(r"join_max_ratio=(\d+(?:\.\d+)?)")
+MAX_STANDARD_JOIN_RATIO = 1.25
+MAX_TWO_HAND_JOIN_RATIO = 1.20
+MIN_JOIN_RATIO = 0.90
+VELOCITY_PATTERN = re.compile(
+    r"typical=(\d+(?:\.\d+)?).*?join_min=(\d+(?:\.\d+)?).*?"
+    r"join_max_ratio=(\d+(?:\.\d+)?)"
+)
 
 
 def make_two_hand_fixture(folder: Path, bars: int = 12) -> None:
@@ -71,14 +76,22 @@ def run_fixture(godot: str, folder: Path, label: str,
     if result.returncode or "SCORE_STRIP_FAILURES:0" not in output:
         print(output[-5000:], file=sys.stderr)
         return False
-    ratios = [float(x) for x in RATIO_PATTERN.findall(output)]
-    if not ratios:
+    readings = [tuple(map(float, triple))
+                for triple in VELOCITY_PATTERN.findall(output)]
+    if not readings:
         print(f"{label}: expected real-layout velocity measurements were not produced.",
               file=sys.stderr)
         return False
-    ratio = max(ratios)
+    ratio = max(maximum for _, _, maximum in readings)
+    minimum = min(slowest / nominal for nominal, slowest, _ in readings)
+    print(f"SCROLL_SPEED_BOUNDS: {label}: min={minimum:.3f}x, max={ratio:.3f}x",
+          flush=True)
+    if minimum < MIN_JOIN_RATIO:
+        print(f"{label}: system joins slowed to {minimum:.3f}x, below "
+              f"{MIN_JOIN_RATIO:.2f}x budget.", file=sys.stderr)
+        return False
     if max_join_ratio is not None and ratio > max_join_ratio:
-        print(f"{label}: system join speed {ratio:.3f}x exceeds established "
+        print(f"{label}: system joins accelerate to {ratio:.3f}x, above "
               f"{max_join_ratio:.2f}x budget.", file=sys.stderr)
         return False
     return True
@@ -100,7 +113,8 @@ def main() -> int:
             return 1
         two_hand = folder / "two-hand"
         make_two_hand_fixture(two_hand, bars=12)
-        if not run_fixture(godot, two_hand, "two hands / chords / crossing ties"):
+        if not run_fixture(godot, two_hand, "two hands / chords / crossing ties",
+                           MAX_TWO_HAND_JOIN_RATIO):
             return 1
     return 0
 
