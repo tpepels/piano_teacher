@@ -1279,7 +1279,7 @@ func _on_library_health(_result: int, code: int, _headers: PackedStringArray, bo
     var active: bool = bool(parsed.get("running", false))
     var started: bool = bool(parsed.get("started", false))
     library_health_button.disabled = active
-    library_health_button.text = "Checking…" if active else "Recheck files"
+    library_health_button.text = "Checking…" if active else "Recheck files" if started else "Check files"
     library_health_label.visible = started
     if started:
         library_health_label.text = (
