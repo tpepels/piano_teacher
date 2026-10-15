@@ -32,4 +32,5 @@ def test_godot_scrolling_is_unconditional_during_transport():
     assert "if displayed_width > viewport.x * 0.91:" not in gd
     assert "var initial_cursor: Dictionary = _position_at_beat(play_from)" in gd
     assert "PHASE0_LEAD_BEAT:" in gd
-    assert 'count_in_display = _label("GET READY", 18, ACCENT, true)' in gd
+    assert 'game_phase_cue = GamePhaseCue.new()' in gd
+    assert 'game_count_in.present(beat,' in gd
