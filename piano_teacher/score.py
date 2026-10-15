@@ -26,21 +26,23 @@ def _music21():
 def import_piece(path: str | Path) -> tuple[Piece, object]:
     """Return matching scored note sequence and score for engraving.
 
-    MIDI performance events come from Mido; music21 is used for notation.
-    MusicXML events are read from the notation directly.
+    MIDI performance events come from Mido and are engraved later from the
+    canonical Piece. MusicXML events and original notation come from music21.
     """
     path = Path(path).expanduser().resolve()
     if not path.is_file():
         raise ValueError(f"No file found: {path}")
     if path.suffix.lower() not in {".mid", ".midi", ".musicxml", ".xml", ".mxl"}:
         raise ValueError("Supported files: .mid, .midi, .musicxml, .xml, .mxl")
+    # All MIDI lessons are engraved from the canonical imported Piece via
+    # build_lesson_score, not from music21's loose MIDI transcription. Parsing
+    # the raw MIDI a second time used to reject perfectly usable performances
+    # with stray note-offs, grace placeholders or odd meter metadata.
+    if path.suffix.lower() in {".mid", ".midi"}:
+        return load_midi(path), None
     converter, chord, note, stream, tempo, meter, clef, key = _music21()
-    is_midi = path.suffix.lower() in {".mid", ".midi"}
-    if is_midi:
-        piece = load_midi(path)
-    else:
-        from .xml_import import load_musicxml
-        piece = load_musicxml(path, bpm=120)
+    from .xml_import import load_musicxml
+    piece = load_musicxml(path, bpm=120)
     try:
         notation = converter.parse(str(path))
     except Exception as exc:
@@ -49,8 +51,6 @@ def import_piece(path: str | Path) -> tuple[Piece, object]:
         wrapped = stream.Score()
         wrapped.insert(0, notation)
         notation = wrapped
-    if is_midi:
-        return piece, notation
     first_tempo = next(iter(notation.recurse().getElementsByClass(tempo.MetronomeMark)), None)
     bpm = first_tempo.getQuarterBPM() if first_tempo else 120
     if bpm is None or not math.isfinite(bpm) or bpm <= 0:

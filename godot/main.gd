@@ -410,11 +410,13 @@ func _label(text: String, size: int, color: Color, bold := false) -> Label:
 func _button(label: String, callback: Callable, primary := false) -> Button:
     var button := Button.new()
     button.text = label
-    # Long song titles must not force a container wider than the viewport.
-    button.clip_text = true
-    # Short controls must fit their text; library rows override width.
-    var text_width: float = theme.default_font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, _ui_font(15)).x
-    button.custom_minimum_size = Vector2(clampf(text_width + 34 * ui_scale, 110, 380), 50 * ui_scale)
+    # Navigation/control text must never be clipped. Only long personal
+    # song rows opt into ellipsis to avoid forcing a wider library panel.
+    button.clip_text = false
+    var text_width: float = theme.default_font.get_string_size(
+        label, HORIZONTAL_ALIGNMENT_LEFT, -1, _ui_font(15)).x
+    button.custom_minimum_size = Vector2(
+        maxf(118.0, text_width + 58.0 * ui_scale), 50.0 * ui_scale)
     var style := StyleBoxFlat.new()
     style.bg_color = Design.PINE if primary else Design.PANEL
     style.set_corner_radius_all(8)
@@ -595,6 +597,11 @@ func _build_interface() -> void:
     library_search.text_changed.connect(func(_text: String): _populate_library())
     library_controls.add_child(library_search)
     library_controls.add_child(_button("Refresh", _request_library))
+    # Import problems must appear next to the action, not at the very
+    # bottom of a full-screen library where they are easy to miss.
+    library_message = _label("", 18, MUTED, true)
+    library_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    library_layout.add_child(library_message)
     var library_panel := _card()
     library_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     library_layout.add_child(library_panel)
@@ -605,9 +612,6 @@ func _build_interface() -> void:
     library_rows = _stack(6)
     library_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.add_child(library_rows)
-    library_message = _label("", 14, MUTED)
-    library_layout.add_child(library_message)
-
     # Settings are explicit, and keep the practice screen free from controls.
     var settings_page := _screen("Settings")
     screens["settings"] = settings_page
@@ -1179,12 +1183,16 @@ func _populate_library() -> void:
             button.alignment = HORIZONTAL_ALIGNMENT_LEFT
             button.custom_minimum_size = Vector2(0, 58 * ui_scale)
             button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-            button.tooltip_text = str(entry.get("description", ""))
+            button.clip_text = true
+            button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+            button.tooltip_text = title + " · " + format_name + " · " + hint + (
+                "\n" + str(entry["description"]) if entry.has("description") else "")
             library_rows.add_child(button)
             visible += 1
     var issue: String = str(library_info.get("error", ""))
     if not library_error.is_empty():
         library_message.text = library_error
+        library_message.add_theme_color_override("font_color", Color("#FF8B82"))
     elif not issue.is_empty():
         library_message.text = issue
     elif pieces.is_empty() and warmups.is_empty():
@@ -1193,10 +1201,13 @@ func _populate_library() -> void:
         library_message.text = "No matching scores."
     else:
         library_message.text = "%d personal files  ·  %d built-in warm-ups  ·  %d shown" % [pieces.size(), warmups.size(), visible]
+    if library_error.is_empty():
+        library_message.add_theme_color_override("font_color", MUTED)
 
 func _open_library_piece(identifier: String) -> void:
     library_error = ""
     library_message.text = "Opening score…"
+    library_message.add_theme_color_override("font_color", MUTED)
     _send_post("/library/open", {"id": identifier})
 
 func _resume_last() -> void:
@@ -1501,6 +1512,12 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         "outline": "Add the chord notes while keeping the pulse.",
         "original": "Bring every note together."}
     lesson_info_label.text = str(explanations.get(stage, ""))
+    var import_warnings: Array = parsed.get("import_warnings", [])
+    if not import_warnings.is_empty() and str(parsed.get("phase", "")) in ["ready", "feedback", "performance_complete"]:
+        lesson_info_label.text = "MIDI imported with repairs: " + "  ".join(import_warnings)
+        lesson_info_label.add_theme_color_override("font_color", Color("#F1C67D"))
+    else:
+        lesson_info_label.add_theme_color_override("font_color", INK)
     var learning: bool = str(parsed.get("mode", "practice")) == "learn"
     var teaching: Dictionary = parsed.get("teaching", {}) if parsed.get("teaching") is Dictionary else {}
     var learner: Dictionary = parsed.get("learner", {}) if parsed.get("learner") is Dictionary else {}
@@ -1998,6 +2015,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         var message := _http_failure(code, body)
         if path == "/library/open":
             library_error = "Cannot open score: " + message
+            library_message.add_theme_color_override("font_color", Color("#FF8B82"))
         feedback_label.text = message
         settings_message.text = message
         library_message.text = message
@@ -2010,6 +2028,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
             _navigate("practice")
     elif path == "/library/open":
         library_error = ""
+        _populate_library()  # clear stale error or 'Opening score' on return
         score_error = ""
         var opened: Variant = _decode_json(body)
         _navigate("practice")

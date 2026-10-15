@@ -1389,6 +1389,7 @@ class PracticeEngine:
                     "lesson_level":variant.level,"lesson_level_number":p.variant_index+1,
                     "lesson_level_count":len(p.variants),"required_notes":len(variant.notes),
                     "warmup":self.is_builtin_warmup,
+                    "import_warnings": list(p.piece.import_warnings),
                     "lesson_step":p.lesson_step_number,"lesson_steps":len(p.lesson_steps),
                     "lesson_steps_mastered":p.lesson_steps_mastered,
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,"target_bpm":p.target_bpm,
