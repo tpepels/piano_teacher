@@ -126,7 +126,8 @@ def test_velocity_preserved_in_real_midi_import(tmp_path):
 
 def test_real_fluidsynth_sampled_audio_if_system_soundfont_is_available(tmp_path, monkeypatch):
     system = next((p for p in (Path("/usr/share/sounds/sf2/TimGM6mb.sf2"),
-                               Path("/usr/share/sounds/sf2/FluidR3_GM.sf2"))
+                               Path("/usr/share/sounds/sf2/FluidR3_GM.sf2"),
+                               Path("/usr/share/soundfonts/FluidR3_GM.sf2"))
                    if p.is_file()), None)
     if not sample_piano.available() or system is None:
         pytest.skip("A real system SF2 and libfluidsynth are not installed")
