@@ -973,9 +973,18 @@ class PracticeEngine:
                 if requested_mode not in ("learn", "practice"):
                     raise ValueError("Choose Learn Notes or Practice Rhythm")
                 plan = self.plan
+                # A requested measure can be silent even inside a consolidated
+                # course section. Start at the next source measure with a real
+                # attack, rather than opening an empty teaching fragment.
+                next_attacks = [note.start for note in plan.piece.notes
+                                if note.start >= plan.piece.bar_boundaries[bar-1]-1e-7]
+                if not next_attacks:
+                    raise ValueError("No playable notes at or after that measure")
+                playable_bar = bar_number_at(plan.piece.bar_boundaries,
+                                             min(next_attacks), 1)
+                bar = max(bar, playable_bar)
                 # Find the smallest course 'learn' section containing that
-                # exact measure. If it is entirely silent, use the next
-                # playable section and report the actual measure selected.
+                # measure; the original source grid controls all positions.
                 candidates = [(i, ex) for i, ex in enumerate(plan.exercises)
                               if ex.kind == "learn" and ex.phrase.first_bar <= bar <= ex.phrase.last_bar]
                 if not candidates:
