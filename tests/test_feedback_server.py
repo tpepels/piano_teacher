@@ -30,6 +30,8 @@ def test_score_feedback_waits_until_displayed_before_curriculum_advance(tmp_path
     assert first['revision']==0
     assert first['feedback_marks'][0]['status']=='missed'
     assert e.pending_result is not None
+    assert first["take_result"]["clean"] is False
+    assert first["take_result"]["total"] == 1
     assert e.plan.failures==0
     e.next_at=time.monotonic()-0.1
     second=e.state()
@@ -43,6 +45,7 @@ def test_score_feedback_waits_until_displayed_before_curriculum_advance(tmp_path
     restarted=e.state()
     assert restarted['phase']=='count_in'
     assert restarted['feedback_marks']==[]
+    assert restarted['take_result'] is None
     assert e.plan.failures==0  # Cancelled feedback never awards or penalizes.
     e.db.close()
 
