@@ -17,8 +17,13 @@ static func present(state: Dictionary) -> Dictionary:
         var teaching: Dictionary = state.get("teaching", {}) if state.get("teaching") is Dictionary else {}
         var done: int = maxi(0, int(teaching.get("target_index", 0)))
         var total: int = maxi(0, int(teaching.get("target_count", 0)))
+        var learner: Dictionary = state.get("learner", {}) if state.get("learner") is Dictionary else {}
+        var idea: int = int(learner.get("unit_number", 0))
+        var units: int = int(learner.get("total_units", 0))
+        var context: String = ("Idea %d/%d" % [idea, maxi(idea, units)]
+            if idea > 0 else hand + " · FIND NOTES")
         return {"visible":true,
-            "label":"%s · FIND NOTES" % hand,
+            "label":context + " · " + hand,
             "detail":"%d of %d notes found · timing comes later" % [done, total],
             "kind":"learn", "streak":raw_streak}
     if bool(state.get("preview_only", false)):
