@@ -1,0 +1,4206 @@
+{
+  "passed": 30,
+  "failed": 0,
+  "results": [
+    {
+      "file": "midi_four_four.mid",
+      "source_attacks": 4,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 1.0,
+          "end": 2.0,
+          "pitch": 62,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e5",
+          "start": 2.0,
+          "end": 3.0,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e7",
+          "start": 3.0,
+          "end": 4.0,
+          "pitch": 65,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_three_four.mid",
+      "source_attacks": 4,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 1.0,
+          "end": 2.0,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e5",
+          "start": 2.0,
+          "end": 3.0,
+          "pitch": 67,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e7",
+          "start": 3.0,
+          "end": 6.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_six_eight.mid",
+      "source_attacks": 4,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "skeleton",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "skeleton",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 0.5,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 0.5,
+          "end": 1.0,
+          "pitch": 62,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e5",
+          "start": 1.0,
+          "end": 1.5,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e7",
+          "start": 1.5,
+          "end": 3.0,
+          "pitch": 67,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_mixed_meter.mid",
+      "source_attacks": 3,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 3,
+          "glyphs": 3,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 3,
+          "glyphs": 3,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0"
+          }
+        }
+      ],
+      "pngs": [
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/midi_mixed_meter-1.png",
+          "width": 2000,
+          "height": 483,
+          "dark_pixels": 19927
+        }
+      ],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 3.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 3.0,
+          "end": 7.0,
+          "pitch": 62,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e5",
+          "start": 7.0,
+          "end": 11.0,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_repeated_attacks.mid",
+      "source_attacks": 5,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "skeleton",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e9": "pt52edd82b70d214254d2955e2f0b7fa41s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 5,
+          "glyphs": 5,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0",
+            "midi-t1-e9": "pt52edd82b70d214254d2955e2f0b7fa41s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "skeleton",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e9": "pt52edd82b70d214254d2955e2f0b7fa41s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 5,
+          "glyphs": 5,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0",
+            "midi-t1-e9": "pt52edd82b70d214254d2955e2f0b7fa41s0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 1.0,
+          "end": 2.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e5",
+          "start": 2.0,
+          "end": 2.5,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e7",
+          "start": 2.5,
+          "end": 3.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e9",
+          "start": 3.0,
+          "end": 4.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_chords.mid",
+      "source_attacks": 6,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "skeleton",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e9": "pt52edd82b70d214254d2955e2f0b7fa41s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "outline",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0",
+            "midi-t1-e9": "pt52edd82b70d214254d2955e2f0b7fa41s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 6,
+          "glyphs": 6,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e2": "pt6118963ca740d6eae743a58c91d82759s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0",
+            "midi-t1-e8": "ptae12d340024fb868829434941c4f0eaas0",
+            "midi-t1-e9": "pt52edd82b70d214254d2955e2f0b7fa41s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "skeleton",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e9": "pt52edd82b70d214254d2955e2f0b7fa41s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "outline",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0",
+            "midi-t1-e9": "pt52edd82b70d214254d2955e2f0b7fa41s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 6,
+          "glyphs": 6,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e2": "pt6118963ca740d6eae743a58c91d82759s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0",
+            "midi-t1-e8": "ptae12d340024fb868829434941c4f0eaas0",
+            "midi-t1-e9": "pt52edd82b70d214254d2955e2f0b7fa41s0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 2.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e2",
+          "start": 0.0,
+          "end": 2.0,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 0.0,
+          "end": 2.0,
+          "pitch": 67,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e7",
+          "start": 2.0,
+          "end": 4.0,
+          "pitch": 62,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e8",
+          "start": 2.0,
+          "end": 4.0,
+          "pitch": 65,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e9",
+          "start": 2.0,
+          "end": 4.0,
+          "pitch": 69,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_parallel_unisons.mid",
+      "source_attacks": 3,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "skeleton",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t2-e3": "pt490864ce8c45fb7dd5b1fc74d1ab2389s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 3,
+          "glyphs": 3,
+          "pages": 1,
+          "attack_map": {
+            "midi-t2-e1": "ptbc8fe2d6255789383271a131525bcca3s0",
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t2-e3": "pt490864ce8c45fb7dd5b1fc74d1ab2389s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "skeleton",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t2-e3": "pt490864ce8c45fb7dd5b1fc74d1ab2389s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 3,
+          "glyphs": 3,
+          "pages": 1,
+          "attack_map": {
+            "midi-t2-e1": "ptbc8fe2d6255789383271a131525bcca3s0",
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t2-e3": "pt490864ce8c45fb7dd5b1fc74d1ab2389s0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 2.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t2-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t2-c0"
+        },
+        {
+          "source_id": "midi-t2-e3",
+          "start": 1.0,
+          "end": 2.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t2-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_cross_hand_unisons.mid",
+      "source_attacks": 4,
+      "variants": [
+        {
+          "hand": "left",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t2-e1": "ptbc8fe2d6255789383271a131525bcca3s0",
+            "midi-t2-e3": "pt490864ce8c45fb7dd5b1fc74d1ab2389s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t2-e1": "ptbc8fe2d6255789383271a131525bcca3s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t2-e3": "pt490864ce8c45fb7dd5b1fc74d1ab2389s0"
+          }
+        }
+      ],
+      "pngs": [
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/midi_cross_hand_unisons-1.png",
+          "width": 2000,
+          "height": 483,
+          "dark_pixels": 11747
+        }
+      ],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t2-e1",
+          "start": 0.0,
+          "end": 2.0,
+          "pitch": 60,
+          "hand": "left",
+          "voice": "midi-t2-c0"
+        },
+        {
+          "source_id": "midi-t2-e3",
+          "start": 2.0,
+          "end": 4.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "midi-t2-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 2.0,
+          "end": 4.0,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_held_crossbar.mid",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 3,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 3,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 6.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 6.0,
+          "end": 8.0,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_sparse_rests.mid",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 2.0,
+          "end": 3.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 6.0,
+          "end": 7.0,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_explicit_gb_key.mid",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 66,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 1.0,
+          "end": 2.0,
+          "pitch": 70,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_unknown_key.mid",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 61,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 1.0,
+          "end": 2.0,
+          "pitch": 66,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_high_left.mid",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "left",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        }
+      ],
+      "pngs": [
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/midi_high_left-1.png",
+          "width": 2000,
+          "height": 483,
+          "dark_pixels": 12231
+        }
+      ],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 84,
+          "hand": "left",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 1.0,
+          "end": 2.0,
+          "pitch": 88,
+          "hand": "left",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_low_right.mid",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 36,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 1.0,
+          "end": 2.0,
+          "pitch": 40,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_raw_ppq997.mid",
+      "source_attacks": 3,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "skeleton",
+          "attacks": 1,
+          "glyphs": 1,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 3,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "skeleton",
+          "attacks": 1,
+          "glyphs": 1,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 3,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0"
+          }
+        }
+      ],
+      "pngs": [
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/midi_raw_ppq997-1.png",
+          "width": 2000,
+          "height": 483,
+          "dark_pixels": 19622
+        }
+      ],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0010030090270812437,
+          "end": 0.01805416248746239,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 0.031093279839518557,
+          "end": 0.04714142427281846,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e5",
+          "start": 0.5005015045135406,
+          "end": 0.7021063189568706,
+          "pitch": 67,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "midi_triplets.mid",
+      "source_attacks": 4,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "skeleton",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "skeleton",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 4,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "midi-t1-e1": "pta70b2542b014b675e221eb401a696e88s0",
+            "midi-t1-e3": "ptaaabffcb5be576e990f27691bd0ab21cs0",
+            "midi-t1-e5": "pt52504afbaec6cbdccb6e6235ef97c519s0",
+            "midi-t1-e7": "pt7833826ccfd76ea08f6611a7ffe73c12s0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "midi-t1-e1",
+          "start": 0.0,
+          "end": 0.3333333333333333,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e3",
+          "start": 0.3333333333333333,
+          "end": 0.6666666666666666,
+          "pitch": 62,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e5",
+          "start": 0.6666666666666666,
+          "end": 1.0,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        },
+        {
+          "source_id": "midi-t1-e7",
+          "start": 1.0,
+          "end": 2.0,
+          "pitch": 67,
+          "hand": "right",
+          "voice": "midi-t1-c0"
+        }
+      ]
+    },
+    {
+      "file": "xml_pickup.musicxml",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m1-e0": "pt6503711642bbd33d3bb0eca8d3dd3235s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m1-e0": "pt6503711642bbd33d3bb0eca8d3dd3235s0"
+          }
+        }
+      ],
+      "pngs": [
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/xml_pickup-1.png",
+          "width": 2000,
+          "height": 483,
+          "dark_pixels": 12718
+        }
+      ],
+      "source_notes": [
+        {
+          "source_id": "xml-p0-m0-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m1-e0",
+          "start": 1.0,
+          "end": 5.0,
+          "pitch": 62,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        }
+      ]
+    },
+    {
+      "file": "xml_mixed_meter.musicxml",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m1-e1": "pt8bf58de27b1ed51b0332d64899034d63s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m1-e1": "pt8bf58de27b1ed51b0332d64899034d63s0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "xml-p0-m0-e1",
+          "start": 0.0,
+          "end": 3.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m1-e1",
+          "start": 3.0,
+          "end": 7.0,
+          "pitch": 62,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        }
+      ]
+    },
+    {
+      "file": "xml_parallel_tied_voices.musicxml",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m0-e4": "pt27ba5a16d76f0dc1206839788ce83d99s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m0-e4": "pt27ba5a16d76f0dc1206839788ce83d99s0"
+          }
+        }
+      ],
+      "pngs": [
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/xml_parallel_tied_voices-1.png",
+          "width": 2000,
+          "height": 483,
+          "dark_pixels": 17243
+        }
+      ],
+      "source_notes": [
+        {
+          "source_id": "xml-p0-m0-e1",
+          "start": 0.0,
+          "end": 6.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m0-e4",
+          "start": 2.0,
+          "end": 5.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "xml-p0-s1-v2"
+        }
+      ]
+    },
+    {
+      "file": "xml_chord_ties.musicxml",
+      "source_attacks": 3,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "skeleton",
+          "attacks": 1,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "outline",
+          "attacks": 2,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 3,
+          "glyphs": 6,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m0-e2": "pt47f2097da0e7562addd767bf9f9210b1s0",
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "skeleton",
+          "attacks": 1,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "outline",
+          "attacks": 2,
+          "glyphs": 4,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 3,
+          "glyphs": 6,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m0-e2": "pt47f2097da0e7562addd767bf9f9210b1s0",
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "xml-p0-m0-e1",
+          "start": 0.0,
+          "end": 6.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m0-e2",
+          "start": 0.0,
+          "end": 6.0,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m0-e3",
+          "start": 0.0,
+          "end": 6.0,
+          "pitch": 67,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        }
+      ]
+    },
+    {
+      "file": "xml_keys_spelling.musicxml",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m1-e1": "pt8bf58de27b1ed51b0332d64899034d63s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m1-e1": "pt8bf58de27b1ed51b0332d64899034d63s0"
+          }
+        }
+      ],
+      "pngs": [
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/xml_keys_spelling-1.png",
+          "width": 2000,
+          "height": 483,
+          "dark_pixels": 18503
+        }
+      ],
+      "source_notes": [
+        {
+          "source_id": "xml-p0-m0-e1",
+          "start": 0.0,
+          "end": 4.0,
+          "pitch": 61,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m1-e1",
+          "start": 4.0,
+          "end": 8.0,
+          "pitch": 68,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        }
+      ]
+    },
+    {
+      "file": "xml_crossed_named_hands.musicxml",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "left",
+          "level": "original",
+          "attacks": 1,
+          "glyphs": 1,
+          "pages": 1,
+          "attack_map": {
+            "xml-p1-m0-e1": "pt3810319e0a551af6ebc436f8508f0f9bs0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 1,
+          "glyphs": 1,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p1-m0-e1": "pt3810319e0a551af6ebc436f8508f0f9bs0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "xml-p0-m0-e1",
+          "start": 0.0,
+          "end": 4.0,
+          "pitch": 48,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m0-e1",
+          "start": 0.0,
+          "end": 4.0,
+          "pitch": 72,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        }
+      ]
+    },
+    {
+      "file": "xml_grandstaff_voices.musicxml",
+      "source_attacks": 2,
+      "variants": [
+        {
+          "hand": "left",
+          "level": "original",
+          "attacks": 1,
+          "glyphs": 1,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 1,
+          "glyphs": 1,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 2,
+          "glyphs": 2,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "xml-p0-m0-e3",
+          "start": 0.0,
+          "end": 4.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p0-s2-v2"
+        },
+        {
+          "source_id": "xml-p0-m0-e1",
+          "start": 0.0,
+          "end": 4.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        }
+      ]
+    },
+    {
+      "file": "xml_trailing_rests.musicxml",
+      "source_attacks": 1,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 1,
+          "glyphs": 1,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 1,
+          "glyphs": 1,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0"
+          }
+        }
+      ],
+      "pngs": [
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/xml_trailing_rests-1.png",
+          "width": 2000,
+          "height": 483,
+          "dark_pixels": 18752
+        }
+      ],
+      "source_notes": [
+        {
+          "source_id": "xml-p0-m0-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        }
+      ]
+    },
+    {
+      "file": "xml_quintuplets.musicxml",
+      "source_attacks": 5,
+      "variants": [
+        {
+          "hand": "right",
+          "level": "skeleton",
+          "attacks": 1,
+          "glyphs": 1,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 5,
+          "glyphs": 5,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m0-e2": "pt47f2097da0e7562addd767bf9f9210b1s0",
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0",
+            "xml-p0-m0-e4": "pt27ba5a16d76f0dc1206839788ce83d99s0",
+            "xml-p0-m0-e5": "ptdb7ec3e551f5ad1edacd04bc752e31cds0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "skeleton",
+          "attacks": 1,
+          "glyphs": 1,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 5,
+          "glyphs": 5,
+          "pages": 1,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m0-e2": "pt47f2097da0e7562addd767bf9f9210b1s0",
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0",
+            "xml-p0-m0-e4": "pt27ba5a16d76f0dc1206839788ce83d99s0",
+            "xml-p0-m0-e5": "ptdb7ec3e551f5ad1edacd04bc752e31cds0"
+          }
+        }
+      ],
+      "pngs": [],
+      "source_notes": [
+        {
+          "source_id": "xml-p0-m0-e1",
+          "start": 0.0,
+          "end": 0.2,
+          "pitch": 60,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m0-e2",
+          "start": 0.2,
+          "end": 0.4,
+          "pitch": 62,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m0-e3",
+          "start": 0.4,
+          "end": 0.6,
+          "pitch": 64,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m0-e4",
+          "start": 0.6,
+          "end": 0.8,
+          "pitch": 65,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m0-e5",
+          "start": 0.8,
+          "end": 1.0,
+          "pitch": 67,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        }
+      ]
+    },
+    {
+      "file": "xml_long_multipage.musicxml",
+      "source_attacks": 240,
+      "variants": [
+        {
+          "hand": "left",
+          "level": "original",
+          "attacks": 48,
+          "glyphs": 48,
+          "pages": 6,
+          "attack_map": {
+            "xml-p1-m0-e1": "pt3810319e0a551af6ebc436f8508f0f9bs0",
+            "xml-p1-m1-e0": "pt1c0b1449324d027006bb4c9b408ff099s0",
+            "xml-p1-m2-e0": "ptadedc4a61268dc02f4297a3aef32ee9as0",
+            "xml-p1-m3-e0": "pta84d0723b750efc0cadc7e3c29f42b0cs0",
+            "xml-p1-m4-e0": "pt85cc4d9b5ccacb6be651f102631fc82bs0",
+            "xml-p1-m5-e0": "ptcd2ae7be5dd847ab80d4998bb26ec6f0s0",
+            "xml-p1-m6-e0": "ptdb9e2c9b2d0e027080c0b7a826603af8s0",
+            "xml-p1-m7-e0": "pt39926f362c5bb538b68f5d21d03c5150s0",
+            "xml-p1-m8-e0": "pt5068041f3be45f634f82bf4d5840686as0",
+            "xml-p1-m9-e0": "pt79dfa1c829918dd7dd8c01b1bce43819s0",
+            "xml-p1-m10-e0": "pt3f253f394a24a8896cfb98146036dd54s0",
+            "xml-p1-m11-e0": "pt7d4b5dc904c9d0efaa6659541dfc8134s0",
+            "xml-p1-m12-e0": "pt481707b4850ddef9aade867842d1fbe8s0",
+            "xml-p1-m13-e0": "pt2a4a97912b1fbb6fd008adcfe4d87a8ds0",
+            "xml-p1-m14-e0": "pt3c139cc09379ac8b931d408b6497b275s0",
+            "xml-p1-m15-e0": "pt3a0e28c5807401e7774c0c4a3b4e8427s0",
+            "xml-p1-m16-e0": "pt7f0a2b4220e2c3cc61970cc4320a59e6s0",
+            "xml-p1-m17-e0": "pte2701de3580b4520f8a3e27b10473749s0",
+            "xml-p1-m18-e0": "ptf92a187be3c604a455561efcdbacf5d5s0",
+            "xml-p1-m19-e0": "ptb706206a74e90cd3f9b8c89fe2389089s0",
+            "xml-p1-m20-e0": "pt9daab4d8458e913a4efb75bcc1c4e5d3s0",
+            "xml-p1-m21-e0": "ptacb0d753e055854fbca2684c066774b4s0",
+            "xml-p1-m22-e0": "pt923aa5ca201a50fbf1f93ef1a570f6fes0",
+            "xml-p1-m23-e0": "pt324db0099aebedb88a16ece86db236b3s0",
+            "xml-p1-m24-e0": "pt0af4a01da2cb9ab8c951ff0cb3e590eds0",
+            "xml-p1-m25-e0": "ptee0accaf8295ed6f7bcca3c3cee384c1s0",
+            "xml-p1-m26-e0": "pte70c7c2118801651dfbbff579e1037cas0",
+            "xml-p1-m27-e0": "pt46e23a554411d8ecfef064b78e2308abs0",
+            "xml-p1-m28-e0": "pt82507974b43e29fe68f76987c3ee42e4s0",
+            "xml-p1-m29-e0": "pta0d65df6d961044d4d11910805c61517s0",
+            "xml-p1-m30-e0": "ptfa087b4240e00eb04866523eb2eda291s0",
+            "xml-p1-m31-e0": "ptee72939a5ac8a870e5a9f72b3a88b586s0",
+            "xml-p1-m32-e0": "ptd082c20a394e85641a2b50f5439ab27as0",
+            "xml-p1-m33-e0": "ptf5b88f5b4fd53a4516e8cd201a475c72s0",
+            "xml-p1-m34-e0": "ptadec05b148781224fbe0bdeb910142aes0",
+            "xml-p1-m35-e0": "ptc65d8b284f2d2d481f7e6f0ff14c0dc8s0",
+            "xml-p1-m36-e0": "pte82256aac76153be6334d3ddb4de8034s0",
+            "xml-p1-m37-e0": "pt0cf122c005341f722208ecc6c3fba21ds0",
+            "xml-p1-m38-e0": "pt1828e1fb286acb9d2e98ea1a3f66162bs0",
+            "xml-p1-m39-e0": "pt99b61e7ce29a99662750b907e239716bs0",
+            "xml-p1-m40-e0": "pt411d51b7c394184c8fd4139cb1c61c0es0",
+            "xml-p1-m41-e0": "pta120886c93d103a27044d3bb38524644s0",
+            "xml-p1-m42-e0": "ptd5df3e95c5b091aa7cf9ce900fe989cas0",
+            "xml-p1-m43-e0": "pt99e44d143830b6e24de4339852982b63s0",
+            "xml-p1-m44-e0": "pt0e4b0f5ba9d21120cd66bb54f09dd8cas0",
+            "xml-p1-m45-e0": "pt931747366a00e70df284029031833277s0",
+            "xml-p1-m46-e0": "pt0fc4de7a1093d4926b7e6af3bb42348ds0",
+            "xml-p1-m47-e0": "ptdf02d200d7eefbb1a5cce5756ac15564s0"
+          }
+        },
+        {
+          "hand": "right",
+          "level": "original",
+          "attacks": 192,
+          "glyphs": 192,
+          "pages": 6,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p0-m0-e2": "pt47f2097da0e7562addd767bf9f9210b1s0",
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0",
+            "xml-p0-m0-e4": "pt27ba5a16d76f0dc1206839788ce83d99s0",
+            "xml-p0-m1-e0": "pt6503711642bbd33d3bb0eca8d3dd3235s0",
+            "xml-p0-m1-e1": "pt8bf58de27b1ed51b0332d64899034d63s0",
+            "xml-p0-m1-e2": "ptc07beffea2a7e2abb4a59e966b9c2db4s0",
+            "xml-p0-m1-e3": "pt005b67b0281ee1e003b75227cf8503cfs0",
+            "xml-p0-m2-e0": "pt8587bcfba02fcc30f4e7d484c9e0d81cs0",
+            "xml-p0-m2-e1": "pt0c63daec47a76760483fc3eaf8b15f15s0",
+            "xml-p0-m2-e2": "pt804fb7af6a3c0fe99b3d173de08df51fs0",
+            "xml-p0-m2-e3": "ptfe8a3d2da52cdb178380dda82f006e0bs0",
+            "xml-p0-m3-e0": "ptcf6694775fd3b394f32b47aadd002419s0",
+            "xml-p0-m3-e1": "ptf0b97316bc4b4376330c0156cbc20c5bs0",
+            "xml-p0-m3-e2": "pt898c201ab15b7527eec9d2dd73f431bbs0",
+            "xml-p0-m3-e3": "pt07070067e446f5ef421710dad01fbe13s0",
+            "xml-p0-m4-e0": "pt8b542acfe445a0cd9480474af04c7674s0",
+            "xml-p0-m4-e1": "pted2a739aacd85dfb2b7654b38e463bb6s0",
+            "xml-p0-m4-e2": "ptb4479589e201c0d01ea846739f8cf8a1s0",
+            "xml-p0-m4-e3": "pt83d473a5eeff1a7e42140e23c085eeb9s0",
+            "xml-p0-m5-e0": "pt448a3d637d5a06dfcbf8e0467153159ds0",
+            "xml-p0-m5-e1": "pt473217f843e498de06702d061d1ff855s0",
+            "xml-p0-m5-e2": "pt36a7ca5cbb60a4bff5e4b75d5f620384s0",
+            "xml-p0-m5-e3": "pt6b2910b75341fb2f3e381660012223d7s0",
+            "xml-p0-m6-e0": "pt9a2e25aed1e7af8ccaeea9e26f3b1c5es0",
+            "xml-p0-m6-e1": "pt1efbaa15884e35f50b4536f46f1efc63s0",
+            "xml-p0-m6-e2": "pt1ae9cf9db93daf8cfff2aa9614730e58s0",
+            "xml-p0-m6-e3": "pt0dcee2405479efa0cceabd546928cd9fs0",
+            "xml-p0-m7-e0": "pt80c7a49229c525badebe930f5ed017b4s0",
+            "xml-p0-m7-e1": "pt546d16b02addbbf2450359ccc56f7410s0",
+            "xml-p0-m7-e2": "pt8413377abb7798392d8d36e46aced245s0",
+            "xml-p0-m7-e3": "ptaee1442f6e5c5b6c5a379f337f5a9b8as0",
+            "xml-p0-m8-e0": "ptd0558fe2ec6b64624d9aa456e2df3ae0s0",
+            "xml-p0-m8-e1": "pt83f036788eb17ebd33269fe4c7fd8885s0",
+            "xml-p0-m8-e2": "pt55425b69d531bdf8036e4349230da6e9s0",
+            "xml-p0-m8-e3": "ptc21ed1a8ecd9cdac0fca6a89b8364e18s0",
+            "xml-p0-m9-e0": "ptb2a48bca39084fd1517f095cd00e398es0",
+            "xml-p0-m9-e1": "pt9a39b7074e11f7a04d86d2d5d28b195fs0",
+            "xml-p0-m9-e2": "pte0de58b73a2b9b8a7db5291d875a60bfs0",
+            "xml-p0-m9-e3": "ptb64acc91367491a4acafdcdcfde851c9s0",
+            "xml-p0-m10-e0": "pt26437d2b20ef15e3bc071ac57c27fed7s0",
+            "xml-p0-m10-e1": "ptd3d65bfe96391a78cad340213a110007s0",
+            "xml-p0-m10-e2": "pt776bc9fb8f89f3eeebb3c642e7e8bf27s0",
+            "xml-p0-m10-e3": "ptfe194c9feb808ba3c38390889b2f0eacs0",
+            "xml-p0-m11-e0": "ptd51b2fdade97218f250e3e5a14cfbbaes0",
+            "xml-p0-m11-e1": "pt4d6c4da0847153c9e6e99469901b1f57s0",
+            "xml-p0-m11-e2": "ptb206a4a0e1fedb09fe79b0747a07b2d5s0",
+            "xml-p0-m11-e3": "pt7ec0030e7631f814c0edd217117afd8es0",
+            "xml-p0-m12-e0": "pt9253abb7c5dc35c121167741de97bf2cs0",
+            "xml-p0-m12-e1": "pt5b98c40b81639121223dcb8c65edcd41s0",
+            "xml-p0-m12-e2": "pt774b8e2e93549e7f9f28dc51625e9f7ds0",
+            "xml-p0-m12-e3": "pt5f9c1e59a7d8ba6a78e6b305029e21c0s0",
+            "xml-p0-m13-e0": "pt81b9ed122879176a7655f784d3186ee4s0",
+            "xml-p0-m13-e1": "pt510be9eda931462dfeb4163fd58b1552s0",
+            "xml-p0-m13-e2": "pte2123b3e5b7b38d2f5466489c992bf3es0",
+            "xml-p0-m13-e3": "ptefeb4b323154be060f01af90f8e851cds0",
+            "xml-p0-m14-e0": "pt329daf5ebe0fc01764176580a669cdd5s0",
+            "xml-p0-m14-e1": "pt4a7014c08b2e1521e9f3af470d428531s0",
+            "xml-p0-m14-e2": "pt6e959131fd0adb6076da28bb7cd69075s0",
+            "xml-p0-m14-e3": "pt976142236b398ddd7eb7e24d9dd9f628s0",
+            "xml-p0-m15-e0": "ptd8d7e3fe858fcfdbe95236215d6833aas0",
+            "xml-p0-m15-e1": "pta53713eda2e5f49272880b67ed497832s0",
+            "xml-p0-m15-e2": "ptd52e7654126837d52fa8a3fa54a8dc4fs0",
+            "xml-p0-m15-e3": "pt15d51c7eed8fd8c9405c4edfaf273806s0",
+            "xml-p0-m16-e0": "pt45ddf9546cfedde7edd787e5da71e7f5s0",
+            "xml-p0-m16-e1": "pt6591be2b7eb4ab83bc626500bcfe5b51s0",
+            "xml-p0-m16-e2": "pt87f16a9c98f664e6767f0e699f8e1fces0",
+            "xml-p0-m16-e3": "ptfc339a44f8e94451aaf6d50a0b258501s0",
+            "xml-p0-m17-e0": "ptee3f45bc433429b09b93e8f6da0092f9s0",
+            "xml-p0-m17-e1": "pt157a4fa07dbd8a715bd27ffb16cea0cds0",
+            "xml-p0-m17-e2": "pt861fbf180b472a1c30fe94bc91b635a3s0",
+            "xml-p0-m17-e3": "pt56b78eff29e8d5b91c5e8a37fe3c27d4s0",
+            "xml-p0-m18-e0": "ptf9b57057bb879e5645bfc3d62da33147s0",
+            "xml-p0-m18-e1": "pt35b384db303e91af129b6c279d76750cs0",
+            "xml-p0-m18-e2": "pt94cc152797dba648b9558691ed030dc8s0",
+            "xml-p0-m18-e3": "pt76b7fd6e17f93fe15678c61909f6216as0",
+            "xml-p0-m19-e0": "pt68a530a09ab71c02e222bf4ed7fe5697s0",
+            "xml-p0-m19-e1": "pt979e5b4fb6fd379094a32564c9dc4526s0",
+            "xml-p0-m19-e2": "pt392733c119cbcafe5743db1365a92fc7s0",
+            "xml-p0-m19-e3": "pt41bc0681570e193ff55a56801aaaed02s0",
+            "xml-p0-m20-e0": "pt4ee46dddb83422e7654303db7147525bs0",
+            "xml-p0-m20-e1": "pt5da3c43846026841e9581cf517b2d25ds0",
+            "xml-p0-m20-e2": "pt11a1f6972e6b5ff67748b2af6e932efes0",
+            "xml-p0-m20-e3": "pt68101b4e58ff45e02ba856b57c44691es0",
+            "xml-p0-m21-e0": "pte649d770c5bd90455913d0c540667c6bs0",
+            "xml-p0-m21-e1": "ptf3446c08f3328aec1f4d00243cd8ddb0s0",
+            "xml-p0-m21-e2": "pt9ffb1977a92cb1f6d4f7e94ad190be70s0",
+            "xml-p0-m21-e3": "pt2e6a3f0c1fcc9c77738031492014cfb6s0",
+            "xml-p0-m22-e0": "pt1a65fd17788ed9a8242227f2334cd6a1s0",
+            "xml-p0-m22-e1": "pt216e13e272ea166c68a35474bfbca951s0",
+            "xml-p0-m22-e2": "ptd0db854ab19b387aa4de51f223c7143fs0",
+            "xml-p0-m22-e3": "pte27f394e41929c5e96fd295791932b92s0",
+            "xml-p0-m23-e0": "pt67b0d576d73e97eef8c90a87b8dfeedds0",
+            "xml-p0-m23-e1": "pte6c71363054e8089d924dfa592f929des0",
+            "xml-p0-m23-e2": "pt020b713794fa733ca6eb4df4366c7467s0",
+            "xml-p0-m23-e3": "ptba5aabf7db76e7c7eb6c4c835819c252s0",
+            "xml-p0-m24-e0": "pt59971735beda1d24b191c0670e13bea8s0",
+            "xml-p0-m24-e1": "pt26c093e640f4ae3bc255999615f772afs0",
+            "xml-p0-m24-e2": "pt97f81c410c425bf86d0312c49a456543s0",
+            "xml-p0-m24-e3": "pt4d7b67b7a47f247af9d0f6f8fe05cad4s0",
+            "xml-p0-m25-e0": "ptc566bf9e24e5f41d6a889178cdf5321as0",
+            "xml-p0-m25-e1": "pta257643328079f28c695e63198d55446s0",
+            "xml-p0-m25-e2": "pte1c82461f0a0d76366bebf72a4204c45s0",
+            "xml-p0-m25-e3": "ptcad958a787aa6a73b544c52cfa57b541s0",
+            "xml-p0-m26-e0": "pt5c8eb97f9659d9ddd2026ec87b04f938s0",
+            "xml-p0-m26-e1": "pt567c47830218a0665e266d97deb3a45ds0",
+            "xml-p0-m26-e2": "ptff2ceb84ed7074d2d46f2ff904c4f9f1s0",
+            "xml-p0-m26-e3": "ptd1c89479292dffdb63d5877dfb3c74dds0",
+            "xml-p0-m27-e0": "ptfd149c3151528454b66d33a995289c89s0",
+            "xml-p0-m27-e1": "pt59b5da40bf5110a89c8fc3608c4c4cccs0",
+            "xml-p0-m27-e2": "pt888951c277ee8abd7c3ef6c8d545bedas0",
+            "xml-p0-m27-e3": "ptb99c6e11d573306872df86ba4260e56cs0",
+            "xml-p0-m28-e0": "pt198308000c8d624710e580eaa8374779s0",
+            "xml-p0-m28-e1": "pta073c3681f6b09299270895dcb02d8ebs0",
+            "xml-p0-m28-e2": "ptf976446a8d871baab9b96306f49a9851s0",
+            "xml-p0-m28-e3": "ptadb23a14460b0c801a11c511ac8230e8s0",
+            "xml-p0-m29-e0": "pt3b11e26cc544997c76fd2788ec797f0as0",
+            "xml-p0-m29-e1": "pte1bb4742a44c22c129b14c5e29e3279es0",
+            "xml-p0-m29-e2": "pt774c4d53501e41e314ec9052065e9dccs0",
+            "xml-p0-m29-e3": "pt02ff6e66bffa97d64d166d5a2276f6a6s0",
+            "xml-p0-m30-e0": "pt301392c644af7c2e262c991eed0bc852s0",
+            "xml-p0-m30-e1": "pt0a893835c2539d1f6ecee2b54a127bf2s0",
+            "xml-p0-m30-e2": "ptfa49bd79562eadcbcfb162354877ea19s0",
+            "xml-p0-m30-e3": "pte4a89b129fce57bc35892f86bbeda70ds0",
+            "xml-p0-m31-e0": "ptf1d78beb307e307e514063bb8821d6f4s0",
+            "xml-p0-m31-e1": "pt7b29b5d7ae0f0a8d298e184fc38ef5f5s0",
+            "xml-p0-m31-e2": "pt5b71134d3c021bded5ad5a16c5d98dads0",
+            "xml-p0-m31-e3": "pt6c162aaf79b889b2616352e5478814f0s0",
+            "xml-p0-m32-e0": "ptd44a89142d803cdea95855cb758f23f1s0",
+            "xml-p0-m32-e1": "pt49df574ac9122e65f44665127673386es0",
+            "xml-p0-m32-e2": "ptd640cb009425c69425672205170a2681s0",
+            "xml-p0-m32-e3": "pt8a372cf98263e28dfa783d0e1d02ac44s0",
+            "xml-p0-m33-e0": "pt96560ea1634ae5e3a44830655c9b819bs0",
+            "xml-p0-m33-e1": "pt227dc2888492794163631b5021630a04s0",
+            "xml-p0-m33-e2": "ptd2f222bb0f94fd38028a2198bd8a49e4s0",
+            "xml-p0-m33-e3": "ptf13c3aaf4a4d174c85d2a83e9e6d3070s0",
+            "xml-p0-m34-e0": "pt4f4322e3f83d01526161df4f099ea806s0",
+            "xml-p0-m34-e1": "ptcaa995ceade686a3816c7d85122fc156s0",
+            "xml-p0-m34-e2": "pt48c8ff25544df6a4172193265958590cs0",
+            "xml-p0-m34-e3": "pt703f15b5434c948c223e787dea4d6c69s0",
+            "xml-p0-m35-e0": "ptf16ede40c69445454ae8a021058b1693s0",
+            "xml-p0-m35-e1": "pt00cd0594190f9c00d4c7b6c1abcf86b9s0",
+            "xml-p0-m35-e2": "pt6a225b6924a544063557589070dd9c9ds0",
+            "xml-p0-m35-e3": "pt0baa48cdeb5db11c00ec5692adb2ca3cs0",
+            "xml-p0-m36-e0": "pt08af329f1f304f4a4c6acf73436383bds0",
+            "xml-p0-m36-e1": "pt8f20a3afaad60c92bb65de19b2812054s0",
+            "xml-p0-m36-e2": "pt8b2bb42e6552f61a8eaea0a986caef26s0",
+            "xml-p0-m36-e3": "pt4ccccd40f36d5c7d05e8d9a7d8202dccs0",
+            "xml-p0-m37-e0": "pt24a92c100346e64abe13b47d017dc18cs0",
+            "xml-p0-m37-e1": "pt725f64a7cc4e376fb0586b7869bd1878s0",
+            "xml-p0-m37-e2": "pt22dd873817285e3eb8509e524849cf19s0",
+            "xml-p0-m37-e3": "pt6dd96366c285f5bd6dea0f3540a0871ds0",
+            "xml-p0-m38-e0": "pt6236164356b46feadbfec645263caaads0",
+            "xml-p0-m38-e1": "ptfe5b519ca33819b5cf2d50a3e6736c5bs0",
+            "xml-p0-m38-e2": "pt71485353624c730f8c1ddd0363a2b99bs0",
+            "xml-p0-m38-e3": "pt7b8eb5f8dbb05508d3efe4756113f6cas0",
+            "xml-p0-m39-e0": "pt7a85121e5b6c166521201feb5599d1f7s0",
+            "xml-p0-m39-e1": "ptbd42efd4802bf6cb3c2b4e04602a5c76s0",
+            "xml-p0-m39-e2": "pt51ff1c99db15c82f2ebcd092ff109201s0",
+            "xml-p0-m39-e3": "pt2490ad8e1d73c81979612bc97d5445dcs0",
+            "xml-p0-m40-e0": "pt7fe11b52a19b693105bec7048daadc6as0",
+            "xml-p0-m40-e1": "ptfae63336701ad293f86f0c677b2e5725s0",
+            "xml-p0-m40-e2": "pt55965a4af9fff1fce6d03828f85b940bs0",
+            "xml-p0-m40-e3": "ptce57b1b5190467cb315c2ad21f53a478s0",
+            "xml-p0-m41-e0": "ptfe729802069a8ced32a825dc6dc6cc81s0",
+            "xml-p0-m41-e1": "ptfa2543a7b04d44aa5ec10bab45902c5ds0",
+            "xml-p0-m41-e2": "pta0e0b7017d09e36be36ff8aeff404b37s0",
+            "xml-p0-m41-e3": "pt937bed9e59b48b036c6fe797c1c90584s0",
+            "xml-p0-m42-e0": "pt6b222aed32bf45503372f0616b08ca02s0",
+            "xml-p0-m42-e1": "pt82a6eeb4976a1cbacac78b8429ec4ccas0",
+            "xml-p0-m42-e2": "pt725eea4a43a0ae28e3ae5297880c6becs0",
+            "xml-p0-m42-e3": "pt3838840d045850578ceec66569db22eas0",
+            "xml-p0-m43-e0": "pte9892022853680fd1dddcd03514946d2s0",
+            "xml-p0-m43-e1": "pt5fcdfdecef8006188a7149158ddfe5a5s0",
+            "xml-p0-m43-e2": "pta8ea42dbd8396b3cd7087465c8ab932as0",
+            "xml-p0-m43-e3": "pt80ad9795a18fa9d55b1bbbe5125279d4s0",
+            "xml-p0-m44-e0": "pta4a33850356e85c4428ff72b926668ees0",
+            "xml-p0-m44-e1": "pt54de8c55e3bb1c81621c771445723383s0",
+            "xml-p0-m44-e2": "pt1f647a877d49174542a22873e8b67e06s0",
+            "xml-p0-m44-e3": "ptf16972b732d55f5f743e352761be7e52s0",
+            "xml-p0-m45-e0": "pt9ac1ba248785351b5a4bda0bd34c0bb4s0",
+            "xml-p0-m45-e1": "pt31972c937481a9bc1ad72bada99e4d50s0",
+            "xml-p0-m45-e2": "pt5751392dd233ba6e1ec0561d205d3ad4s0",
+            "xml-p0-m45-e3": "pt601acd37669801d74937cb6958a3930bs0",
+            "xml-p0-m46-e0": "pt72f1f0d32aa0cba8f219405381bbca72s0",
+            "xml-p0-m46-e1": "pt1c3e1315b4ea9f498144116898b3d644s0",
+            "xml-p0-m46-e2": "pta5495918801b96a2ba650da10d93ccd1s0",
+            "xml-p0-m46-e3": "pt5c6027020a854c3b763c00af7c2db68bs0",
+            "xml-p0-m47-e0": "ptbed51997a1859c5627cea09cdb612979s0",
+            "xml-p0-m47-e1": "pt58ad6ef39f2af5a7c3ce24c292a8e3ees0",
+            "xml-p0-m47-e2": "pt7477e826a1ee876a43c348662c5a2b6es0",
+            "xml-p0-m47-e3": "ptc555458a2fbbda086f90655937b9af38s0"
+          }
+        },
+        {
+          "hand": "both",
+          "level": "original",
+          "attacks": 240,
+          "glyphs": 240,
+          "pages": 6,
+          "attack_map": {
+            "xml-p0-m0-e1": "pt5bf5e5491713546d75540ba27f62e53as0",
+            "xml-p1-m0-e1": "pt3810319e0a551af6ebc436f8508f0f9bs0",
+            "xml-p0-m0-e2": "pt47f2097da0e7562addd767bf9f9210b1s0",
+            "xml-p0-m0-e3": "pt56c2f571f013669afa83523aa7b3a2e3s0",
+            "xml-p0-m0-e4": "pt27ba5a16d76f0dc1206839788ce83d99s0",
+            "xml-p0-m1-e0": "pt6503711642bbd33d3bb0eca8d3dd3235s0",
+            "xml-p1-m1-e0": "pt1c0b1449324d027006bb4c9b408ff099s0",
+            "xml-p0-m1-e1": "pt8bf58de27b1ed51b0332d64899034d63s0",
+            "xml-p0-m1-e2": "ptc07beffea2a7e2abb4a59e966b9c2db4s0",
+            "xml-p0-m1-e3": "pt005b67b0281ee1e003b75227cf8503cfs0",
+            "xml-p0-m2-e0": "pt8587bcfba02fcc30f4e7d484c9e0d81cs0",
+            "xml-p1-m2-e0": "ptadedc4a61268dc02f4297a3aef32ee9as0",
+            "xml-p0-m2-e1": "pt0c63daec47a76760483fc3eaf8b15f15s0",
+            "xml-p0-m2-e2": "pt804fb7af6a3c0fe99b3d173de08df51fs0",
+            "xml-p0-m2-e3": "ptfe8a3d2da52cdb178380dda82f006e0bs0",
+            "xml-p0-m3-e0": "ptcf6694775fd3b394f32b47aadd002419s0",
+            "xml-p1-m3-e0": "pta84d0723b750efc0cadc7e3c29f42b0cs0",
+            "xml-p0-m3-e1": "ptf0b97316bc4b4376330c0156cbc20c5bs0",
+            "xml-p0-m3-e2": "pt898c201ab15b7527eec9d2dd73f431bbs0",
+            "xml-p0-m3-e3": "pt07070067e446f5ef421710dad01fbe13s0",
+            "xml-p0-m4-e0": "pt8b542acfe445a0cd9480474af04c7674s0",
+            "xml-p1-m4-e0": "pt85cc4d9b5ccacb6be651f102631fc82bs0",
+            "xml-p0-m4-e1": "pted2a739aacd85dfb2b7654b38e463bb6s0",
+            "xml-p0-m4-e2": "ptb4479589e201c0d01ea846739f8cf8a1s0",
+            "xml-p0-m4-e3": "pt83d473a5eeff1a7e42140e23c085eeb9s0",
+            "xml-p0-m5-e0": "pt448a3d637d5a06dfcbf8e0467153159ds0",
+            "xml-p1-m5-e0": "ptcd2ae7be5dd847ab80d4998bb26ec6f0s0",
+            "xml-p0-m5-e1": "pt473217f843e498de06702d061d1ff855s0",
+            "xml-p0-m5-e2": "pt36a7ca5cbb60a4bff5e4b75d5f620384s0",
+            "xml-p0-m5-e3": "pt6b2910b75341fb2f3e381660012223d7s0",
+            "xml-p0-m6-e0": "pt9a2e25aed1e7af8ccaeea9e26f3b1c5es0",
+            "xml-p1-m6-e0": "ptdb9e2c9b2d0e027080c0b7a826603af8s0",
+            "xml-p0-m6-e1": "pt1efbaa15884e35f50b4536f46f1efc63s0",
+            "xml-p0-m6-e2": "pt1ae9cf9db93daf8cfff2aa9614730e58s0",
+            "xml-p0-m6-e3": "pt0dcee2405479efa0cceabd546928cd9fs0",
+            "xml-p0-m7-e0": "pt80c7a49229c525badebe930f5ed017b4s0",
+            "xml-p1-m7-e0": "pt39926f362c5bb538b68f5d21d03c5150s0",
+            "xml-p0-m7-e1": "pt546d16b02addbbf2450359ccc56f7410s0",
+            "xml-p0-m7-e2": "pt8413377abb7798392d8d36e46aced245s0",
+            "xml-p0-m7-e3": "ptaee1442f6e5c5b6c5a379f337f5a9b8as0",
+            "xml-p0-m8-e0": "ptd0558fe2ec6b64624d9aa456e2df3ae0s0",
+            "xml-p1-m8-e0": "pt5068041f3be45f634f82bf4d5840686as0",
+            "xml-p0-m8-e1": "pt83f036788eb17ebd33269fe4c7fd8885s0",
+            "xml-p0-m8-e2": "pt55425b69d531bdf8036e4349230da6e9s0",
+            "xml-p0-m8-e3": "ptc21ed1a8ecd9cdac0fca6a89b8364e18s0",
+            "xml-p0-m9-e0": "ptb2a48bca39084fd1517f095cd00e398es0",
+            "xml-p1-m9-e0": "pt79dfa1c829918dd7dd8c01b1bce43819s0",
+            "xml-p0-m9-e1": "pt9a39b7074e11f7a04d86d2d5d28b195fs0",
+            "xml-p0-m9-e2": "pte0de58b73a2b9b8a7db5291d875a60bfs0",
+            "xml-p0-m9-e3": "ptb64acc91367491a4acafdcdcfde851c9s0",
+            "xml-p0-m10-e0": "pt26437d2b20ef15e3bc071ac57c27fed7s0",
+            "xml-p1-m10-e0": "pt3f253f394a24a8896cfb98146036dd54s0",
+            "xml-p0-m10-e1": "ptd3d65bfe96391a78cad340213a110007s0",
+            "xml-p0-m10-e2": "pt776bc9fb8f89f3eeebb3c642e7e8bf27s0",
+            "xml-p0-m10-e3": "ptfe194c9feb808ba3c38390889b2f0eacs0",
+            "xml-p0-m11-e0": "ptd51b2fdade97218f250e3e5a14cfbbaes0",
+            "xml-p1-m11-e0": "pt7d4b5dc904c9d0efaa6659541dfc8134s0",
+            "xml-p0-m11-e1": "pt4d6c4da0847153c9e6e99469901b1f57s0",
+            "xml-p0-m11-e2": "ptb206a4a0e1fedb09fe79b0747a07b2d5s0",
+            "xml-p0-m11-e3": "pt7ec0030e7631f814c0edd217117afd8es0",
+            "xml-p0-m12-e0": "pt9253abb7c5dc35c121167741de97bf2cs0",
+            "xml-p1-m12-e0": "pt481707b4850ddef9aade867842d1fbe8s0",
+            "xml-p0-m12-e1": "pt5b98c40b81639121223dcb8c65edcd41s0",
+            "xml-p0-m12-e2": "pt774b8e2e93549e7f9f28dc51625e9f7ds0",
+            "xml-p0-m12-e3": "pt5f9c1e59a7d8ba6a78e6b305029e21c0s0",
+            "xml-p0-m13-e0": "pt81b9ed122879176a7655f784d3186ee4s0",
+            "xml-p1-m13-e0": "pt2a4a97912b1fbb6fd008adcfe4d87a8ds0",
+            "xml-p0-m13-e1": "pt510be9eda931462dfeb4163fd58b1552s0",
+            "xml-p0-m13-e2": "pte2123b3e5b7b38d2f5466489c992bf3es0",
+            "xml-p0-m13-e3": "ptefeb4b323154be060f01af90f8e851cds0",
+            "xml-p0-m14-e0": "pt329daf5ebe0fc01764176580a669cdd5s0",
+            "xml-p1-m14-e0": "pt3c139cc09379ac8b931d408b6497b275s0",
+            "xml-p0-m14-e1": "pt4a7014c08b2e1521e9f3af470d428531s0",
+            "xml-p0-m14-e2": "pt6e959131fd0adb6076da28bb7cd69075s0",
+            "xml-p0-m14-e3": "pt976142236b398ddd7eb7e24d9dd9f628s0",
+            "xml-p0-m15-e0": "ptd8d7e3fe858fcfdbe95236215d6833aas0",
+            "xml-p1-m15-e0": "pt3a0e28c5807401e7774c0c4a3b4e8427s0",
+            "xml-p0-m15-e1": "pta53713eda2e5f49272880b67ed497832s0",
+            "xml-p0-m15-e2": "ptd52e7654126837d52fa8a3fa54a8dc4fs0",
+            "xml-p0-m15-e3": "pt15d51c7eed8fd8c9405c4edfaf273806s0",
+            "xml-p0-m16-e0": "pt45ddf9546cfedde7edd787e5da71e7f5s0",
+            "xml-p1-m16-e0": "pt7f0a2b4220e2c3cc61970cc4320a59e6s0",
+            "xml-p0-m16-e1": "pt6591be2b7eb4ab83bc626500bcfe5b51s0",
+            "xml-p0-m16-e2": "pt87f16a9c98f664e6767f0e699f8e1fces0",
+            "xml-p0-m16-e3": "ptfc339a44f8e94451aaf6d50a0b258501s0",
+            "xml-p0-m17-e0": "ptee3f45bc433429b09b93e8f6da0092f9s0",
+            "xml-p1-m17-e0": "pte2701de3580b4520f8a3e27b10473749s0",
+            "xml-p0-m17-e1": "pt157a4fa07dbd8a715bd27ffb16cea0cds0",
+            "xml-p0-m17-e2": "pt861fbf180b472a1c30fe94bc91b635a3s0",
+            "xml-p0-m17-e3": "pt56b78eff29e8d5b91c5e8a37fe3c27d4s0",
+            "xml-p0-m18-e0": "ptf9b57057bb879e5645bfc3d62da33147s0",
+            "xml-p1-m18-e0": "ptf92a187be3c604a455561efcdbacf5d5s0",
+            "xml-p0-m18-e1": "pt35b384db303e91af129b6c279d76750cs0",
+            "xml-p0-m18-e2": "pt94cc152797dba648b9558691ed030dc8s0",
+            "xml-p0-m18-e3": "pt76b7fd6e17f93fe15678c61909f6216as0",
+            "xml-p0-m19-e0": "pt68a530a09ab71c02e222bf4ed7fe5697s0",
+            "xml-p1-m19-e0": "ptb706206a74e90cd3f9b8c89fe2389089s0",
+            "xml-p0-m19-e1": "pt979e5b4fb6fd379094a32564c9dc4526s0",
+            "xml-p0-m19-e2": "pt392733c119cbcafe5743db1365a92fc7s0",
+            "xml-p0-m19-e3": "pt41bc0681570e193ff55a56801aaaed02s0",
+            "xml-p0-m20-e0": "pt4ee46dddb83422e7654303db7147525bs0",
+            "xml-p1-m20-e0": "pt9daab4d8458e913a4efb75bcc1c4e5d3s0",
+            "xml-p0-m20-e1": "pt5da3c43846026841e9581cf517b2d25ds0",
+            "xml-p0-m20-e2": "pt11a1f6972e6b5ff67748b2af6e932efes0",
+            "xml-p0-m20-e3": "pt68101b4e58ff45e02ba856b57c44691es0",
+            "xml-p0-m21-e0": "pte649d770c5bd90455913d0c540667c6bs0",
+            "xml-p1-m21-e0": "ptacb0d753e055854fbca2684c066774b4s0",
+            "xml-p0-m21-e1": "ptf3446c08f3328aec1f4d00243cd8ddb0s0",
+            "xml-p0-m21-e2": "pt9ffb1977a92cb1f6d4f7e94ad190be70s0",
+            "xml-p0-m21-e3": "pt2e6a3f0c1fcc9c77738031492014cfb6s0",
+            "xml-p0-m22-e0": "pt1a65fd17788ed9a8242227f2334cd6a1s0",
+            "xml-p1-m22-e0": "pt923aa5ca201a50fbf1f93ef1a570f6fes0",
+            "xml-p0-m22-e1": "pt216e13e272ea166c68a35474bfbca951s0",
+            "xml-p0-m22-e2": "ptd0db854ab19b387aa4de51f223c7143fs0",
+            "xml-p0-m22-e3": "pte27f394e41929c5e96fd295791932b92s0",
+            "xml-p0-m23-e0": "pt67b0d576d73e97eef8c90a87b8dfeedds0",
+            "xml-p1-m23-e0": "pt324db0099aebedb88a16ece86db236b3s0",
+            "xml-p0-m23-e1": "pte6c71363054e8089d924dfa592f929des0",
+            "xml-p0-m23-e2": "pt020b713794fa733ca6eb4df4366c7467s0",
+            "xml-p0-m23-e3": "ptba5aabf7db76e7c7eb6c4c835819c252s0",
+            "xml-p0-m24-e0": "pt59971735beda1d24b191c0670e13bea8s0",
+            "xml-p1-m24-e0": "pt0af4a01da2cb9ab8c951ff0cb3e590eds0",
+            "xml-p0-m24-e1": "pt26c093e640f4ae3bc255999615f772afs0",
+            "xml-p0-m24-e2": "pt97f81c410c425bf86d0312c49a456543s0",
+            "xml-p0-m24-e3": "pt4d7b67b7a47f247af9d0f6f8fe05cad4s0",
+            "xml-p0-m25-e0": "ptc566bf9e24e5f41d6a889178cdf5321as0",
+            "xml-p1-m25-e0": "ptee0accaf8295ed6f7bcca3c3cee384c1s0",
+            "xml-p0-m25-e1": "pta257643328079f28c695e63198d55446s0",
+            "xml-p0-m25-e2": "pte1c82461f0a0d76366bebf72a4204c45s0",
+            "xml-p0-m25-e3": "ptcad958a787aa6a73b544c52cfa57b541s0",
+            "xml-p0-m26-e0": "pt5c8eb97f9659d9ddd2026ec87b04f938s0",
+            "xml-p1-m26-e0": "pte70c7c2118801651dfbbff579e1037cas0",
+            "xml-p0-m26-e1": "pt567c47830218a0665e266d97deb3a45ds0",
+            "xml-p0-m26-e2": "ptff2ceb84ed7074d2d46f2ff904c4f9f1s0",
+            "xml-p0-m26-e3": "ptd1c89479292dffdb63d5877dfb3c74dds0",
+            "xml-p0-m27-e0": "ptfd149c3151528454b66d33a995289c89s0",
+            "xml-p1-m27-e0": "pt46e23a554411d8ecfef064b78e2308abs0",
+            "xml-p0-m27-e1": "pt59b5da40bf5110a89c8fc3608c4c4cccs0",
+            "xml-p0-m27-e2": "pt888951c277ee8abd7c3ef6c8d545bedas0",
+            "xml-p0-m27-e3": "ptb99c6e11d573306872df86ba4260e56cs0",
+            "xml-p0-m28-e0": "pt198308000c8d624710e580eaa8374779s0",
+            "xml-p1-m28-e0": "pt82507974b43e29fe68f76987c3ee42e4s0",
+            "xml-p0-m28-e1": "pta073c3681f6b09299270895dcb02d8ebs0",
+            "xml-p0-m28-e2": "ptf976446a8d871baab9b96306f49a9851s0",
+            "xml-p0-m28-e3": "ptadb23a14460b0c801a11c511ac8230e8s0",
+            "xml-p0-m29-e0": "pt3b11e26cc544997c76fd2788ec797f0as0",
+            "xml-p1-m29-e0": "pta0d65df6d961044d4d11910805c61517s0",
+            "xml-p0-m29-e1": "pte1bb4742a44c22c129b14c5e29e3279es0",
+            "xml-p0-m29-e2": "pt774c4d53501e41e314ec9052065e9dccs0",
+            "xml-p0-m29-e3": "pt02ff6e66bffa97d64d166d5a2276f6a6s0",
+            "xml-p0-m30-e0": "pt301392c644af7c2e262c991eed0bc852s0",
+            "xml-p1-m30-e0": "ptfa087b4240e00eb04866523eb2eda291s0",
+            "xml-p0-m30-e1": "pt0a893835c2539d1f6ecee2b54a127bf2s0",
+            "xml-p0-m30-e2": "ptfa49bd79562eadcbcfb162354877ea19s0",
+            "xml-p0-m30-e3": "pte4a89b129fce57bc35892f86bbeda70ds0",
+            "xml-p0-m31-e0": "ptf1d78beb307e307e514063bb8821d6f4s0",
+            "xml-p1-m31-e0": "ptee72939a5ac8a870e5a9f72b3a88b586s0",
+            "xml-p0-m31-e1": "pt7b29b5d7ae0f0a8d298e184fc38ef5f5s0",
+            "xml-p0-m31-e2": "pt5b71134d3c021bded5ad5a16c5d98dads0",
+            "xml-p0-m31-e3": "pt6c162aaf79b889b2616352e5478814f0s0",
+            "xml-p0-m32-e0": "ptd44a89142d803cdea95855cb758f23f1s0",
+            "xml-p1-m32-e0": "ptd082c20a394e85641a2b50f5439ab27as0",
+            "xml-p0-m32-e1": "pt49df574ac9122e65f44665127673386es0",
+            "xml-p0-m32-e2": "ptd640cb009425c69425672205170a2681s0",
+            "xml-p0-m32-e3": "pt8a372cf98263e28dfa783d0e1d02ac44s0",
+            "xml-p0-m33-e0": "pt96560ea1634ae5e3a44830655c9b819bs0",
+            "xml-p1-m33-e0": "ptf5b88f5b4fd53a4516e8cd201a475c72s0",
+            "xml-p0-m33-e1": "pt227dc2888492794163631b5021630a04s0",
+            "xml-p0-m33-e2": "ptd2f222bb0f94fd38028a2198bd8a49e4s0",
+            "xml-p0-m33-e3": "ptf13c3aaf4a4d174c85d2a83e9e6d3070s0",
+            "xml-p0-m34-e0": "pt4f4322e3f83d01526161df4f099ea806s0",
+            "xml-p1-m34-e0": "ptadec05b148781224fbe0bdeb910142aes0",
+            "xml-p0-m34-e1": "ptcaa995ceade686a3816c7d85122fc156s0",
+            "xml-p0-m34-e2": "pt48c8ff25544df6a4172193265958590cs0",
+            "xml-p0-m34-e3": "pt703f15b5434c948c223e787dea4d6c69s0",
+            "xml-p0-m35-e0": "ptf16ede40c69445454ae8a021058b1693s0",
+            "xml-p1-m35-e0": "ptc65d8b284f2d2d481f7e6f0ff14c0dc8s0",
+            "xml-p0-m35-e1": "pt00cd0594190f9c00d4c7b6c1abcf86b9s0",
+            "xml-p0-m35-e2": "pt6a225b6924a544063557589070dd9c9ds0",
+            "xml-p0-m35-e3": "pt0baa48cdeb5db11c00ec5692adb2ca3cs0",
+            "xml-p0-m36-e0": "pt08af329f1f304f4a4c6acf73436383bds0",
+            "xml-p1-m36-e0": "pte82256aac76153be6334d3ddb4de8034s0",
+            "xml-p0-m36-e1": "pt8f20a3afaad60c92bb65de19b2812054s0",
+            "xml-p0-m36-e2": "pt8b2bb42e6552f61a8eaea0a986caef26s0",
+            "xml-p0-m36-e3": "pt4ccccd40f36d5c7d05e8d9a7d8202dccs0",
+            "xml-p0-m37-e0": "pt24a92c100346e64abe13b47d017dc18cs0",
+            "xml-p1-m37-e0": "pt0cf122c005341f722208ecc6c3fba21ds0",
+            "xml-p0-m37-e1": "pt725f64a7cc4e376fb0586b7869bd1878s0",
+            "xml-p0-m37-e2": "pt22dd873817285e3eb8509e524849cf19s0",
+            "xml-p0-m37-e3": "pt6dd96366c285f5bd6dea0f3540a0871ds0",
+            "xml-p0-m38-e0": "pt6236164356b46feadbfec645263caaads0",
+            "xml-p1-m38-e0": "pt1828e1fb286acb9d2e98ea1a3f66162bs0",
+            "xml-p0-m38-e1": "ptfe5b519ca33819b5cf2d50a3e6736c5bs0",
+            "xml-p0-m38-e2": "pt71485353624c730f8c1ddd0363a2b99bs0",
+            "xml-p0-m38-e3": "pt7b8eb5f8dbb05508d3efe4756113f6cas0",
+            "xml-p0-m39-e0": "pt7a85121e5b6c166521201feb5599d1f7s0",
+            "xml-p1-m39-e0": "pt99b61e7ce29a99662750b907e239716bs0",
+            "xml-p0-m39-e1": "ptbd42efd4802bf6cb3c2b4e04602a5c76s0",
+            "xml-p0-m39-e2": "pt51ff1c99db15c82f2ebcd092ff109201s0",
+            "xml-p0-m39-e3": "pt2490ad8e1d73c81979612bc97d5445dcs0",
+            "xml-p0-m40-e0": "pt7fe11b52a19b693105bec7048daadc6as0",
+            "xml-p1-m40-e0": "pt411d51b7c394184c8fd4139cb1c61c0es0",
+            "xml-p0-m40-e1": "ptfae63336701ad293f86f0c677b2e5725s0",
+            "xml-p0-m40-e2": "pt55965a4af9fff1fce6d03828f85b940bs0",
+            "xml-p0-m40-e3": "ptce57b1b5190467cb315c2ad21f53a478s0",
+            "xml-p0-m41-e0": "ptfe729802069a8ced32a825dc6dc6cc81s0",
+            "xml-p1-m41-e0": "pta120886c93d103a27044d3bb38524644s0",
+            "xml-p0-m41-e1": "ptfa2543a7b04d44aa5ec10bab45902c5ds0",
+            "xml-p0-m41-e2": "pta0e0b7017d09e36be36ff8aeff404b37s0",
+            "xml-p0-m41-e3": "pt937bed9e59b48b036c6fe797c1c90584s0",
+            "xml-p0-m42-e0": "pt6b222aed32bf45503372f0616b08ca02s0",
+            "xml-p1-m42-e0": "ptd5df3e95c5b091aa7cf9ce900fe989cas0",
+            "xml-p0-m42-e1": "pt82a6eeb4976a1cbacac78b8429ec4ccas0",
+            "xml-p0-m42-e2": "pt725eea4a43a0ae28e3ae5297880c6becs0",
+            "xml-p0-m42-e3": "pt3838840d045850578ceec66569db22eas0",
+            "xml-p0-m43-e0": "pte9892022853680fd1dddcd03514946d2s0",
+            "xml-p1-m43-e0": "pt99e44d143830b6e24de4339852982b63s0",
+            "xml-p0-m43-e1": "pt5fcdfdecef8006188a7149158ddfe5a5s0",
+            "xml-p0-m43-e2": "pta8ea42dbd8396b3cd7087465c8ab932as0",
+            "xml-p0-m43-e3": "pt80ad9795a18fa9d55b1bbbe5125279d4s0",
+            "xml-p0-m44-e0": "pta4a33850356e85c4428ff72b926668ees0",
+            "xml-p1-m44-e0": "pt0e4b0f5ba9d21120cd66bb54f09dd8cas0",
+            "xml-p0-m44-e1": "pt54de8c55e3bb1c81621c771445723383s0",
+            "xml-p0-m44-e2": "pt1f647a877d49174542a22873e8b67e06s0",
+            "xml-p0-m44-e3": "ptf16972b732d55f5f743e352761be7e52s0",
+            "xml-p0-m45-e0": "pt9ac1ba248785351b5a4bda0bd34c0bb4s0",
+            "xml-p1-m45-e0": "pt931747366a00e70df284029031833277s0",
+            "xml-p0-m45-e1": "pt31972c937481a9bc1ad72bada99e4d50s0",
+            "xml-p0-m45-e2": "pt5751392dd233ba6e1ec0561d205d3ad4s0",
+            "xml-p0-m45-e3": "pt601acd37669801d74937cb6958a3930bs0",
+            "xml-p0-m46-e0": "pt72f1f0d32aa0cba8f219405381bbca72s0",
+            "xml-p1-m46-e0": "pt0fc4de7a1093d4926b7e6af3bb42348ds0",
+            "xml-p0-m46-e1": "pt1c3e1315b4ea9f498144116898b3d644s0",
+            "xml-p0-m46-e2": "pta5495918801b96a2ba650da10d93ccd1s0",
+            "xml-p0-m46-e3": "pt5c6027020a854c3b763c00af7c2db68bs0",
+            "xml-p0-m47-e0": "ptbed51997a1859c5627cea09cdb612979s0",
+            "xml-p1-m47-e0": "ptdf02d200d7eefbb1a5cce5756ac15564s0",
+            "xml-p0-m47-e1": "pt58ad6ef39f2af5a7c3ce24c292a8e3ees0",
+            "xml-p0-m47-e2": "pt7477e826a1ee876a43c348662c5a2b6es0",
+            "xml-p0-m47-e3": "ptc555458a2fbbda086f90655937b9af38s0"
+          }
+        }
+      ],
+      "pngs": [
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/xml_long_multipage-1.png",
+          "width": 2000,
+          "height": 843,
+          "dark_pixels": 51036
+        },
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/xml_long_multipage-2.png",
+          "width": 2000,
+          "height": 820,
+          "dark_pixels": 48318
+        },
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/xml_long_multipage-3.png",
+          "width": 2000,
+          "height": 822,
+          "dark_pixels": 48274
+        },
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/xml_long_multipage-4.png",
+          "width": 2000,
+          "height": 820,
+          "dark_pixels": 48407
+        },
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/xml_long_multipage-5.png",
+          "width": 2000,
+          "height": 822,
+          "dark_pixels": 48359
+        },
+        {
+          "file": "/tmp/piano-phase2a-corpus-final/xml_long_multipage-6.png",
+          "width": 2000,
+          "height": 822,
+          "dark_pixels": 43138
+        }
+      ],
+      "source_notes": [
+        {
+          "source_id": "xml-p1-m0-e1",
+          "start": 0.0,
+          "end": 4.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m0-e1",
+          "start": 0.0,
+          "end": 1.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m0-e2",
+          "start": 1.0,
+          "end": 2.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m0-e3",
+          "start": 2.0,
+          "end": 3.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m0-e4",
+          "start": 3.0,
+          "end": 4.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m1-e0",
+          "start": 4.0,
+          "end": 8.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m1-e0",
+          "start": 4.0,
+          "end": 5.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m1-e1",
+          "start": 5.0,
+          "end": 6.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m1-e2",
+          "start": 6.0,
+          "end": 7.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m1-e3",
+          "start": 7.0,
+          "end": 8.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m2-e0",
+          "start": 8.0,
+          "end": 12.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m2-e0",
+          "start": 8.0,
+          "end": 9.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m2-e1",
+          "start": 9.0,
+          "end": 10.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m2-e2",
+          "start": 10.0,
+          "end": 11.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m2-e3",
+          "start": 11.0,
+          "end": 12.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m3-e0",
+          "start": 12.0,
+          "end": 16.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m3-e0",
+          "start": 12.0,
+          "end": 13.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m3-e1",
+          "start": 13.0,
+          "end": 14.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m3-e2",
+          "start": 14.0,
+          "end": 15.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m3-e3",
+          "start": 15.0,
+          "end": 16.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m4-e0",
+          "start": 16.0,
+          "end": 20.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m4-e0",
+          "start": 16.0,
+          "end": 17.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m4-e1",
+          "start": 17.0,
+          "end": 18.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m4-e2",
+          "start": 18.0,
+          "end": 19.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m4-e3",
+          "start": 19.0,
+          "end": 20.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m5-e0",
+          "start": 20.0,
+          "end": 24.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m5-e0",
+          "start": 20.0,
+          "end": 21.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m5-e1",
+          "start": 21.0,
+          "end": 22.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m5-e2",
+          "start": 22.0,
+          "end": 23.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m5-e3",
+          "start": 23.0,
+          "end": 24.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m6-e0",
+          "start": 24.0,
+          "end": 28.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m6-e0",
+          "start": 24.0,
+          "end": 25.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m6-e1",
+          "start": 25.0,
+          "end": 26.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m6-e2",
+          "start": 26.0,
+          "end": 27.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m6-e3",
+          "start": 27.0,
+          "end": 28.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m7-e0",
+          "start": 28.0,
+          "end": 32.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m7-e0",
+          "start": 28.0,
+          "end": 29.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m7-e1",
+          "start": 29.0,
+          "end": 30.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m7-e2",
+          "start": 30.0,
+          "end": 31.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m7-e3",
+          "start": 31.0,
+          "end": 32.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m8-e0",
+          "start": 32.0,
+          "end": 36.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m8-e0",
+          "start": 32.0,
+          "end": 33.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m8-e1",
+          "start": 33.0,
+          "end": 34.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m8-e2",
+          "start": 34.0,
+          "end": 35.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m8-e3",
+          "start": 35.0,
+          "end": 36.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m9-e0",
+          "start": 36.0,
+          "end": 40.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m9-e0",
+          "start": 36.0,
+          "end": 37.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m9-e1",
+          "start": 37.0,
+          "end": 38.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m9-e2",
+          "start": 38.0,
+          "end": 39.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m9-e3",
+          "start": 39.0,
+          "end": 40.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m10-e0",
+          "start": 40.0,
+          "end": 44.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m10-e0",
+          "start": 40.0,
+          "end": 41.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m10-e1",
+          "start": 41.0,
+          "end": 42.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m10-e2",
+          "start": 42.0,
+          "end": 43.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m10-e3",
+          "start": 43.0,
+          "end": 44.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m11-e0",
+          "start": 44.0,
+          "end": 48.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m11-e0",
+          "start": 44.0,
+          "end": 45.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m11-e1",
+          "start": 45.0,
+          "end": 46.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m11-e2",
+          "start": 46.0,
+          "end": 47.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m11-e3",
+          "start": 47.0,
+          "end": 48.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m12-e0",
+          "start": 48.0,
+          "end": 52.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m12-e0",
+          "start": 48.0,
+          "end": 49.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m12-e1",
+          "start": 49.0,
+          "end": 50.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m12-e2",
+          "start": 50.0,
+          "end": 51.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m12-e3",
+          "start": 51.0,
+          "end": 52.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m13-e0",
+          "start": 52.0,
+          "end": 56.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m13-e0",
+          "start": 52.0,
+          "end": 53.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m13-e1",
+          "start": 53.0,
+          "end": 54.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m13-e2",
+          "start": 54.0,
+          "end": 55.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m13-e3",
+          "start": 55.0,
+          "end": 56.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m14-e0",
+          "start": 56.0,
+          "end": 60.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m14-e0",
+          "start": 56.0,
+          "end": 57.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m14-e1",
+          "start": 57.0,
+          "end": 58.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m14-e2",
+          "start": 58.0,
+          "end": 59.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m14-e3",
+          "start": 59.0,
+          "end": 60.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m15-e0",
+          "start": 60.0,
+          "end": 64.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m15-e0",
+          "start": 60.0,
+          "end": 61.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m15-e1",
+          "start": 61.0,
+          "end": 62.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m15-e2",
+          "start": 62.0,
+          "end": 63.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m15-e3",
+          "start": 63.0,
+          "end": 64.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m16-e0",
+          "start": 64.0,
+          "end": 68.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m16-e0",
+          "start": 64.0,
+          "end": 65.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m16-e1",
+          "start": 65.0,
+          "end": 66.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m16-e2",
+          "start": 66.0,
+          "end": 67.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m16-e3",
+          "start": 67.0,
+          "end": 68.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m17-e0",
+          "start": 68.0,
+          "end": 72.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m17-e0",
+          "start": 68.0,
+          "end": 69.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m17-e1",
+          "start": 69.0,
+          "end": 70.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m17-e2",
+          "start": 70.0,
+          "end": 71.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m17-e3",
+          "start": 71.0,
+          "end": 72.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m18-e0",
+          "start": 72.0,
+          "end": 76.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m18-e0",
+          "start": 72.0,
+          "end": 73.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m18-e1",
+          "start": 73.0,
+          "end": 74.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m18-e2",
+          "start": 74.0,
+          "end": 75.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m18-e3",
+          "start": 75.0,
+          "end": 76.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m19-e0",
+          "start": 76.0,
+          "end": 80.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m19-e0",
+          "start": 76.0,
+          "end": 77.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m19-e1",
+          "start": 77.0,
+          "end": 78.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m19-e2",
+          "start": 78.0,
+          "end": 79.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m19-e3",
+          "start": 79.0,
+          "end": 80.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m20-e0",
+          "start": 80.0,
+          "end": 84.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m20-e0",
+          "start": 80.0,
+          "end": 81.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m20-e1",
+          "start": 81.0,
+          "end": 82.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m20-e2",
+          "start": 82.0,
+          "end": 83.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m20-e3",
+          "start": 83.0,
+          "end": 84.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m21-e0",
+          "start": 84.0,
+          "end": 88.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m21-e0",
+          "start": 84.0,
+          "end": 85.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m21-e1",
+          "start": 85.0,
+          "end": 86.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m21-e2",
+          "start": 86.0,
+          "end": 87.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m21-e3",
+          "start": 87.0,
+          "end": 88.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m22-e0",
+          "start": 88.0,
+          "end": 92.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m22-e0",
+          "start": 88.0,
+          "end": 89.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m22-e1",
+          "start": 89.0,
+          "end": 90.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m22-e2",
+          "start": 90.0,
+          "end": 91.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m22-e3",
+          "start": 91.0,
+          "end": 92.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m23-e0",
+          "start": 92.0,
+          "end": 96.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m23-e0",
+          "start": 92.0,
+          "end": 93.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m23-e1",
+          "start": 93.0,
+          "end": 94.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m23-e2",
+          "start": 94.0,
+          "end": 95.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m23-e3",
+          "start": 95.0,
+          "end": 96.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m24-e0",
+          "start": 96.0,
+          "end": 100.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m24-e0",
+          "start": 96.0,
+          "end": 97.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m24-e1",
+          "start": 97.0,
+          "end": 98.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m24-e2",
+          "start": 98.0,
+          "end": 99.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m24-e3",
+          "start": 99.0,
+          "end": 100.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m25-e0",
+          "start": 100.0,
+          "end": 104.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m25-e0",
+          "start": 100.0,
+          "end": 101.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m25-e1",
+          "start": 101.0,
+          "end": 102.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m25-e2",
+          "start": 102.0,
+          "end": 103.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m25-e3",
+          "start": 103.0,
+          "end": 104.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m26-e0",
+          "start": 104.0,
+          "end": 108.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m26-e0",
+          "start": 104.0,
+          "end": 105.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m26-e1",
+          "start": 105.0,
+          "end": 106.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m26-e2",
+          "start": 106.0,
+          "end": 107.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m26-e3",
+          "start": 107.0,
+          "end": 108.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m27-e0",
+          "start": 108.0,
+          "end": 112.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m27-e0",
+          "start": 108.0,
+          "end": 109.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m27-e1",
+          "start": 109.0,
+          "end": 110.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m27-e2",
+          "start": 110.0,
+          "end": 111.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m27-e3",
+          "start": 111.0,
+          "end": 112.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m28-e0",
+          "start": 112.0,
+          "end": 116.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m28-e0",
+          "start": 112.0,
+          "end": 113.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m28-e1",
+          "start": 113.0,
+          "end": 114.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m28-e2",
+          "start": 114.0,
+          "end": 115.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m28-e3",
+          "start": 115.0,
+          "end": 116.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m29-e0",
+          "start": 116.0,
+          "end": 120.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m29-e0",
+          "start": 116.0,
+          "end": 117.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m29-e1",
+          "start": 117.0,
+          "end": 118.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m29-e2",
+          "start": 118.0,
+          "end": 119.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m29-e3",
+          "start": 119.0,
+          "end": 120.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m30-e0",
+          "start": 120.0,
+          "end": 124.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m30-e0",
+          "start": 120.0,
+          "end": 121.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m30-e1",
+          "start": 121.0,
+          "end": 122.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m30-e2",
+          "start": 122.0,
+          "end": 123.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m30-e3",
+          "start": 123.0,
+          "end": 124.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m31-e0",
+          "start": 124.0,
+          "end": 128.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m31-e0",
+          "start": 124.0,
+          "end": 125.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m31-e1",
+          "start": 125.0,
+          "end": 126.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m31-e2",
+          "start": 126.0,
+          "end": 127.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m31-e3",
+          "start": 127.0,
+          "end": 128.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m32-e0",
+          "start": 128.0,
+          "end": 132.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m32-e0",
+          "start": 128.0,
+          "end": 129.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m32-e1",
+          "start": 129.0,
+          "end": 130.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m32-e2",
+          "start": 130.0,
+          "end": 131.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m32-e3",
+          "start": 131.0,
+          "end": 132.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m33-e0",
+          "start": 132.0,
+          "end": 136.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m33-e0",
+          "start": 132.0,
+          "end": 133.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m33-e1",
+          "start": 133.0,
+          "end": 134.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m33-e2",
+          "start": 134.0,
+          "end": 135.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m33-e3",
+          "start": 135.0,
+          "end": 136.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m34-e0",
+          "start": 136.0,
+          "end": 140.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m34-e0",
+          "start": 136.0,
+          "end": 137.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m34-e1",
+          "start": 137.0,
+          "end": 138.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m34-e2",
+          "start": 138.0,
+          "end": 139.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m34-e3",
+          "start": 139.0,
+          "end": 140.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m35-e0",
+          "start": 140.0,
+          "end": 144.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m35-e0",
+          "start": 140.0,
+          "end": 141.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m35-e1",
+          "start": 141.0,
+          "end": 142.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m35-e2",
+          "start": 142.0,
+          "end": 143.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m35-e3",
+          "start": 143.0,
+          "end": 144.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m36-e0",
+          "start": 144.0,
+          "end": 148.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m36-e0",
+          "start": 144.0,
+          "end": 145.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m36-e1",
+          "start": 145.0,
+          "end": 146.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m36-e2",
+          "start": 146.0,
+          "end": 147.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m36-e3",
+          "start": 147.0,
+          "end": 148.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m37-e0",
+          "start": 148.0,
+          "end": 152.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m37-e0",
+          "start": 148.0,
+          "end": 149.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m37-e1",
+          "start": 149.0,
+          "end": 150.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m37-e2",
+          "start": 150.0,
+          "end": 151.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m37-e3",
+          "start": 151.0,
+          "end": 152.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m38-e0",
+          "start": 152.0,
+          "end": 156.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m38-e0",
+          "start": 152.0,
+          "end": 153.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m38-e1",
+          "start": 153.0,
+          "end": 154.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m38-e2",
+          "start": 154.0,
+          "end": 155.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m38-e3",
+          "start": 155.0,
+          "end": 156.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m39-e0",
+          "start": 156.0,
+          "end": 160.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m39-e0",
+          "start": 156.0,
+          "end": 157.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m39-e1",
+          "start": 157.0,
+          "end": 158.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m39-e2",
+          "start": 158.0,
+          "end": 159.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m39-e3",
+          "start": 159.0,
+          "end": 160.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m40-e0",
+          "start": 160.0,
+          "end": 164.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m40-e0",
+          "start": 160.0,
+          "end": 161.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m40-e1",
+          "start": 161.0,
+          "end": 162.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m40-e2",
+          "start": 162.0,
+          "end": 163.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m40-e3",
+          "start": 163.0,
+          "end": 164.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m41-e0",
+          "start": 164.0,
+          "end": 168.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m41-e0",
+          "start": 164.0,
+          "end": 165.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m41-e1",
+          "start": 165.0,
+          "end": 166.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m41-e2",
+          "start": 166.0,
+          "end": 167.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m41-e3",
+          "start": 167.0,
+          "end": 168.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m42-e0",
+          "start": 168.0,
+          "end": 172.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m42-e0",
+          "start": 168.0,
+          "end": 169.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m42-e1",
+          "start": 169.0,
+          "end": 170.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m42-e2",
+          "start": 170.0,
+          "end": 171.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m42-e3",
+          "start": 171.0,
+          "end": 172.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m43-e0",
+          "start": 172.0,
+          "end": 176.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m43-e0",
+          "start": 172.0,
+          "end": 173.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m43-e1",
+          "start": 173.0,
+          "end": 174.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m43-e2",
+          "start": 174.0,
+          "end": 175.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m43-e3",
+          "start": 175.0,
+          "end": 176.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m44-e0",
+          "start": 176.0,
+          "end": 180.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m44-e0",
+          "start": 176.0,
+          "end": 177.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m44-e1",
+          "start": 177.0,
+          "end": 178.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m44-e2",
+          "start": 178.0,
+          "end": 179.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m44-e3",
+          "start": 179.0,
+          "end": 180.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m45-e0",
+          "start": 180.0,
+          "end": 184.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m45-e0",
+          "start": 180.0,
+          "end": 181.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m45-e1",
+          "start": 181.0,
+          "end": 182.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m45-e2",
+          "start": 182.0,
+          "end": 183.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m45-e3",
+          "start": 183.0,
+          "end": 184.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m46-e0",
+          "start": 184.0,
+          "end": 188.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m46-e0",
+          "start": 184.0,
+          "end": 185.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m46-e1",
+          "start": 185.0,
+          "end": 186.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m46-e2",
+          "start": 186.0,
+          "end": 187.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m46-e3",
+          "start": 187.0,
+          "end": 188.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p1-m47-e0",
+          "start": 188.0,
+          "end": 192.0,
+          "pitch": 48,
+          "hand": "left",
+          "voice": "xml-p1-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m47-e0",
+          "start": 188.0,
+          "end": 189.0,
+          "pitch": 72,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m47-e1",
+          "start": 189.0,
+          "end": 190.0,
+          "pitch": 74,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m47-e2",
+          "start": 190.0,
+          "end": 191.0,
+          "pitch": 76,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        },
+        {
+          "source_id": "xml-p0-m47-e3",
+          "start": 191.0,
+          "end": 192.0,
+          "pitch": 79,
+          "hand": "right",
+          "voice": "xml-p0-s1-v1"
+        }
+      ]
+    },
+    {
+      "file": "unsupported_orphan_tie.musicxml",
+      "rejected": "orphan tie"
+    },
+    {
+      "file": "unsupported_microtone.musicxml",
+      "rejected": "microtonal"
+    },
+    {
+      "file": "unsupported_unclosed_midi.mid",
+      "rejected": "unterminated MIDI note"
+    },
+    {
+      "file": "unsupported_ambiguous_overlap.mid",
+      "rejected": "overlapping MIDI note"
+    }
+  ],
+  "failures": []
+}

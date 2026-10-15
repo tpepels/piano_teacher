@@ -147,6 +147,7 @@ python scripts/smoke_phase0.py
 python scripts/smoke_godot.py
 python scripts/smoke_adaptive_godot.py
 python scripts/check_generated_lesson.py --output-dir /tmp/lesson-pngs "/path/to/music.mid"
+python scripts/check_musical_fidelity_corpus.py --output /tmp/piano-musical-fidelity
 ```
 
 The following checks require a graphical desktop and inspect **actual rendered
@@ -167,6 +168,12 @@ JSON measurements and logs. `--bpms 40` selects a shorter probe; `--resolution
 launcher**, opens a real piece, exercises controls and captures all screens at
 1536×960, 1024×768 and 800×600. Both use isolated progress/preferences, preserving
 existing user data and source files.
+
+The musical fidelity corpus checks 26 actual MIDI/MusicXML imports and four
+unsupported inputs through source identity, generated exercises, real Verovio,
+evaluation and feedback. It writes score PNGs and explicit attack/continuation
+maps, including a six-page exercise. See [Phase 2A verification](docs/phase2a-musical-fidelity-verification.md)
+for source timing, clef/key support, progress compatibility and limitations.
 
 Automated Godot tests also exercise real engraving through multiple systems and
 pages, transparent cropping, screen-space note projection, feedback and musical

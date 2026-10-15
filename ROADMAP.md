@@ -32,6 +32,12 @@
   in geometry; transparent margins crop correctly. Compound rests and tied
   durations preserve onset alignment. The complete source passes required-note
   alignment and contains the held ending through beat 712/bar 237.
+- **Phase 2A source fidelity:** imported attacks retain canonical IDs through
+  exercise generation, real engraving, evaluation and feedback. Voice-scoped
+  ties, pickup/rest grids, explicit keys/spelling, readable clefs and conventional
+  tuplets are covered by 26 supported file fixtures and four rejection fixtures.
+  The supplied MIDI retains all 301 existing stage keys. See the
+  [Phase 2A evidence](docs/phase2a-musical-fidelity-verification.md).
 - **Adaptive engine retained:** five-error boundary recovery, 10% slowdown,
   target restoration, automatic repetition, three clean target-speed full takes,
   score-ready handoff and saved mastery remain regression/integration tested.
@@ -126,10 +132,11 @@ and only then advances. No hardware input means visual preview only.
 
 ### Phase 2 - Musical representation and notation fidelity
 
-Canonical quarter-beat timebase and stable note IDs shared by source notes,
-simplified lesson variants, engraving, evaluation and demonstrations. Better
-quantization, pickup bars, multiple voices, ties, chords, tempo maps, rests,
-hand assignments and outlier ledger lines. Allow persistent hand corrections.
+Phase 2A implements canonical source IDs, precise quarter-beat assessment,
+explicit attack/continuation engraving maps, pickup/rest grids, voices and ties,
+keys/spelling, named hands and register-aware clefs. See its verification record
+for supported material and explicit rejection cases. Source tempo-map playback
+and persistent manual hand corrections remain later work.
 
 **Acceptance:** a corpus of at least 20 representative MIDI/MusicXML imports
 produces readable *lesson notation*, and every displayed required note maps

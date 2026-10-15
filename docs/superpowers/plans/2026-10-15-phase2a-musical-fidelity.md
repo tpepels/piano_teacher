@@ -55,40 +55,40 @@ rounded microtones. Temporary pre-fix evidence: `/tmp/piano-phase2a-corpus-audit
 Owner: import worker. Files: `music.py`, `score.py:import_piece`, focused new
 `tests/test_source_fidelity.py`; coordinate score.py hunks with renderer worker.
 
-- [ ] Write real MIDI/XML tests reproducing unique repeated/unison/overlap IDs,
+- [x] Write real MIDI/XML tests reproducing unique repeated/unison/overlap IDs,
   voice-scoped contiguous ties, pickups (0,1,5), trailing rests and explicit names.
-- [ ] Confirm failing assertions before implementation; add unsupported malformed
+- [x] Confirm failing assertions before implementation; add unsupported malformed
   MIDI/ties, microtones, grace/nonpitched and conflicting measure/meter errors.
-- [ ] Implement source IDs and metadata with explicit source measures; preserve
+- [x] Implement source IDs and metadata with explicit source measures; preserve
   MIDI PPQ times and the supplied file's existing paired events/course structure.
-- [ ] Run import and course/persistence regressions; review and commit coherent work.
+- [x] Run import and course/persistence regressions; review and commit coherent work.
 
 ## 2. Explicit engraving, musical durations and readable registers
 
 Owner: engraving worker. Files: `lesson_score.py`, `score_geometry.py`,
 `lesson_validation.py`, `feedback.py`, renderer portions of `score.py`, new tests.
 
-- [ ] Reproduce wrong-staff feedback and crossing unison tie chains in actual Verovio.
-- [ ] Emit per-source attack/segment IDs and preserve stable lanes across measures.
-- [ ] Bind actual glyphs to source IDs, reject missing/duplicate/wrong-hand attacks,
+- [x] Reproduce wrong-staff feedback and crossing unison tie chains in actual Verovio.
+- [x] Emit per-source attack/segment IDs and preserve stable lanes across measures.
+- [x] Bind actual glyphs to source IDs, reject missing/duplicate/wrong-hand attacks,
   and prevent continuations satisfying an absent required attack.
-- [ ] Preserve source spelling/key/clef context; choose readable clefs where absent;
+- [x] Preserve source spelling/key/clef context; choose readable clefs where absent;
   keep source vs display timing separate, including tuplets and release quantization.
-- [ ] Verify real SVG/PNG and feedback correctness plus existing geometry/clock tests.
+- [x] Verify real SVG/PNG and feedback correctness plus existing geometry/clock tests.
 
 ## 3. Required regression corpus
 
 Owner: corpus worker. New `tests/fixtures/musical_fidelity/`, deterministic generator,
 manifest/README and `tests/test_musical_fidelity_corpus.py`.
 
-- [ ] Check in at least 20 small supported real MIDI/MusicXML fixtures covering
+- [x] Check in at least 20 small supported real MIDI/MusicXML fixtures covering
   varied meters, pickup, key changes, flats/enharmonics, source voices, crossed
   hands, low/high registers, unisons, ties, rests, tuplets and unusual PPQ timing.
-- [ ] Include separate unsupported/ambiguous fixtures with meaningful error assertions.
-- [ ] Test actual import → generated variants → compiler → production Verovio:
+- [x] Include separate unsupported/ambiguous fixtures with meaningful error assertions.
+- [x] Test actual import → generated variants → compiler → production Verovio:
   unique stable IDs, pitch/hand/source onset, exactly one attack, continuations,
   no disappearing/duplicated events, same assessment and feedback mapping.
-- [ ] Render representative PNGs and at least one actual multi-page exercise;
+- [x] Render representative PNGs and at least one actual multi-page exercise;
   retain pre-fix failures and final artifact manifest for reproducibility.
 
 ## 4. Consumer integration and preservation
@@ -96,21 +96,21 @@ manifest/README and `tests/test_musical_fidelity_corpus.py`.
 Owner: root. Files: `server.py`, `teaching.py`, small existing Godot preparation
 paths, checking scripts and focused tests, only where required by fidelity.
 
-- [ ] Write regressions for guided unison marks, metadata-through-active-exercise,
+- [x] Write regressions for guided unison marks, metadata-through-active-exercise,
   count-in clefs matching the body, and unchanged saved ordinary MIDI progress.
-- [ ] Pass metadata and use canonical attack lookups; retain existing public target
+- [x] Pass metadata and use canonical attack lookups; retain existing public target
   IDs/session keys as compatibility aliases and add canonical source IDs.
-- [ ] Keep playback, scoring policy, recovery, three-clean mastery, previews,
+- [x] Keep playback, scoring policy, recovery, three-clean mastery, previews,
   score acknowledgements, dark UI and compact course unchanged.
 
 ## 5. Verification and delivery
 
-- [ ] Fresh full pytest, Godot parser, smoke_phase0.py, smoke_godot.py,
+- [x] Fresh full pytest, Godot parser, smoke_phase0.py, smoke_godot.py,
   smoke_adaptive_godot.py, real engraving/generated-lesson checks.
-- [ ] Actual 2346-note complete-song alignment, multi-page source evidence,
+- [x] Actual 2346-note complete-song alignment, multi-page source evidence,
   visible playback 30/40/80/120 and normal launcher checks from README.
-- [ ] Independent whole-branch review and fixes with failing-first regressions.
-- [ ] Commit implementation on the requested branch, exact results, before/after
+- [x] Independent whole-branch review and fixes with failing-first regressions.
+- [x] Commit implementation on the requested branch, exact results, before/after
   explanation, PNG evidence, remaining limitations and Arch reproduction commands.
   Do not merge or wait for CI.
 
@@ -125,3 +125,15 @@ without a second approval round. Keep the original main and user files untouched
 Prioritize parallel tied unisons, quantization collisions, implicit pickups with
 part measure agreement, enharmonic keys/cancellations, source MIDI stage hashes,
 and real display anchors at the exact beats used for assessment.
+
+## Final execution evidence
+
+Final reviewed tree: 561 pytest tests passed in 200.42s, no skips/failures.
+All 30 corpus file cases passed across 76 variants and 14 real PNGs.
+Actual full source: 2346 attacks / 2579 glyphs / 60 pages at 40 BPM;
+237 bars / 712 beats / all 301 prior stage keys preserved. Native visible
+playback, normal-launcher UI, parser and required smokes passed locally.
+Independent review found conflicting simultaneous MIDI keys; a real-file
+RED→GREEN regression now rejects them while allowing equal duplicates.
+See docs/phase2a-musical-fidelity-verification.md for exact commands,
+checked-in PNGs, compatibility tests and remaining limitations.
