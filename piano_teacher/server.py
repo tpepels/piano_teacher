@@ -1219,7 +1219,7 @@ class PracticeEngine:
                 self.next_action = "Choose Learn to find the notes, or Practice to play the rhythm."
             return
         if self.pending_result is not None:
-            if self.next_at and now >= self.next_at:
+            if self.auto and self.next_at and now >= self.next_at:
                 previous_revision = self.score_revision
                 previous_identity = self.plan.identity
                 message = self._commit_pending()
