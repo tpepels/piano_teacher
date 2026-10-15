@@ -111,6 +111,10 @@ def test_open_builtin_starts_at_full_perform_without_adaptive_stages(tmp_path):
         engine.control("start")
         assert engine.mode == "practice" and engine.plan.hand == "left"
         engine.control("stop")
+        engine.control("practice")
+        assert engine.state()["phase"] == "ready"
+        assert engine.state()["mode"] == "practice"
+        assert not engine.running and engine.awaiting_score_revision is None
     finally:
         engine.db.close()
 
