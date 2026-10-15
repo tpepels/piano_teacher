@@ -38,6 +38,12 @@ func run() -> void:
         check(not baseline.has("error"), "untrimmed control strip must render")
         check(baseline.tiles.size() == strip.tiles.size(),
             "trimming cannot drop a musical system")
+        var safety_splices := 0
+        for item in strip.mappings:
+            if int(item.get("splice_right", -1)) > int(item.get("splice_left", -1)) \
+                    and int(item.get("splice_left", -1)) >= 0:
+                safety_splices += 1
+        print("SCROLL_SAFE_SPLICES:", safety_splices)
         var shortened := 0
         for i in range(1, strip.mappings.size()):
             var after: Dictionary = strip.mappings[i]

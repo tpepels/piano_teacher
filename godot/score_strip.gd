@@ -73,6 +73,8 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
         # barline. Trim only that redundant trailing run, not a note's
         # native spacing or any written barline/tie/accidental glyph.
         var trimmed_tail := false
+        var splice_left := -1
+        var splice_right := -1
         if bool(layout.get("strip_trim_repeated_headers", false)) \
                 and source_systems.find(system) < source_systems.size() - 1:
             # A tie crossing the upcoming system boundary may extend past
@@ -109,6 +111,25 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
                     if proposed_right < right - 8 and proposed_right > left + 16:
                         right = proposed_right
                         trimmed_tail = true
+                    # Cut only measured blank space between the last event
+                    # and the real system-ending barline. Removing it shortens
+                    # the artificial fast camera run while leaving notation
+                    # glyphs, barlines and their source identities untouched.
+                    var last_event_x := final_note_x
+                    for event in layout.get("anchors", []):
+                        if int(event.get("page", -1)) == page \
+                                and str(event.get("system", "")) == str(system.get("system", "")) \
+                                and not bool(event.get("terminal", false)):
+                            last_event_x = maxf(last_event_x, float(event.get("x", -INF)) * source_size.x)
+                    var cut_start: int = int(ceil(last_event_x + maxf(12.0, gap_for_tail * 1.5)))
+                    var cut_end: int = int(floor(last_barline_pixel - maxf(9.0, gap_for_tail)))
+                    var scan_top: int = maxi(0, int(floor(float(system.top) * source_size.y)))
+                    var scan_bottom: int = mini(image.get_height(), int(ceil(float(system.bottom) * source_size.y)))
+                    if cut_end - cut_start >= 12 and cut_start > left + 10 and cut_end < right - 5 \
+                            and _staff_only_gap(image, cut_start, cut_end,
+                                scan_top, scan_bottom, staff_lines_for_tail, source_size.y):
+                        splice_left = cut_start
+                        splice_right = cut_end
         var top: int = maxi(0, int(floor(float(system.top) * source_size.y)))
         var bottom: int = mini(image.get_height(), int(ceil(float(system.bottom) * source_size.y)))
         if right <= left or bottom <= top:
@@ -122,14 +143,28 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
         mappings.append({"source_page": page, "source_system": str(system.get("system", "")),
             "source_size": source_size, "crop": Rect2(crop), "position": Vector2(width, 0),
             "staff_offset": offset, "system": system,
-            "trimmed_header": trimmed_header,
-            "trimmed_tail": trimmed_tail})
-        width += float(crop.size.x)
+            "trimmed_header": trimmed_header, "trimmed_tail": trimmed_tail,
+            "splice_left": splice_left, "splice_right": splice_right})
+        width += float(crop.size.x - maxi(0, splice_right - splice_left))
     var size := Vector2(maxf(1.0, width), maxf(1.0, above + below))
     var tiles: Array = []
     for mapping in mappings:
         mapping.position.y = above - float(mapping.staff_offset)
         var image: Image = pages[int(mapping.source_page)].get_region(Rect2i(mapping.crop))
+        var cut_a: int = int(mapping.get("splice_left", -1))
+        var cut_b: int = int(mapping.get("splice_right", -1))
+        if cut_a >= 0 and cut_b > cut_a:
+            var crop: Rect2 = mapping.crop
+            var relative_a: int = cut_a - int(crop.position.x)
+            var relative_b: int = cut_b - int(crop.position.x)
+            var stitched := Image.create(image.get_width() - (relative_b - relative_a),
+                image.get_height(), false, image.get_format())
+            stitched.fill(Color.TRANSPARENT)
+            stitched.blit_rect(image, Rect2i(0, 0, relative_a, image.get_height()),
+                Vector2i.ZERO)
+            stitched.blit_rect(image, Rect2i(relative_b, 0,
+                image.get_width() - relative_b, image.get_height()), Vector2i(relative_a, 0))
+            image = stitched
         tiles.append({"texture": ImageTexture.create_from_image(image),
             "rect": Rect2(mapping.position, Vector2(image.get_size()))})
     var flat: Dictionary = layout.duplicate(true)
@@ -153,8 +188,8 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
         system["source_system"] = system.get("system", "")
         system["page"] = 0
         system["system"] = "strip"
-        system["left"] = (float(system.left)*source_size.x-crop.position.x+position.x)/size.x
-        system["right"] = (float(system.right)*source_size.x-crop.position.x+position.x)/size.x
+        system["left"] = _mapped_px(float(system.left), mapping) / size.x
+        system["right"] = _mapped_px(float(system.right), mapping) / size.x
         system["top"] = (float(system.top)*source_size.y-crop.position.y+position.y)/size.y
         system["bottom"] = (float(system.bottom)*source_size.y-crop.position.y+position.y)/size.y
         var lines: Array = []
@@ -165,6 +200,38 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
     flat["systems"] = flat_systems
     return {"layout": flat, "tiles": tiles, "size": size,
         "crop_origin": Vector2.ZERO, "crop_size": Vector2.ONE, "mappings": mappings}
+
+
+# A splice is allowed only where the raster contains staff lines and no
+# other visible ink. Beams, ties, accidentals, articulations, dynamics and
+# nonstandard symbols all cause an automatic safe fallback.
+static func _staff_only_gap(image: Image, x0: int, x1: int, y0: int, y1: int,
+        lines: Array, source_height: float) -> bool:
+    for x in range(x0, x1):
+        for y in range(y0, y1):
+            var pixel: Color = image.get_pixel(x, y)
+            if pixel.a < .18 or (pixel.r >= .92 and pixel.g >= .92 and pixel.b >= .92):
+                continue
+            var on_staff := false
+            for fraction in lines:
+                if absf(float(y) - float(fraction) * source_height) <= 2.5:
+                    on_staff = true
+                    break
+            if not on_staff:
+                return false
+    return true
+
+
+static func _mapped_px(normalized: float, mapping: Dictionary) -> float:
+    var absolute: float = normalized * float(mapping.source_size.x)
+    var removed_start: int = int(mapping.get("splice_left", -1))
+    var removed_end: int = int(mapping.get("splice_right", -1))
+    if removed_start >= 0 and removed_end > removed_start:
+        if absolute >= removed_end:
+            absolute -= float(removed_end - removed_start)
+        elif absolute > removed_start:
+            absolute = float(removed_start)
+    return absolute - float(mapping.crop.position.x) + float(mapping.position.x)
 
 
 static func _failure(message: String) -> Dictionary:
@@ -212,12 +279,12 @@ static func map_point(source: Dictionary, strip: Dictionary) -> Dictionary:
         mapped["source_y"] = y
         mapped["page"] = 0
         mapped["system"] = "strip"
-        mapped["x"] = (x*source_size.x-crop.position.x+position.x)/size.x
+        mapped["x"] = _mapped_px(x, mapping) / size.x
         mapped["y"] = (y*source_size.y-crop.position.y+position.y)/size.y
         if source.has("ink_left"):
             var ink_left: float = float(source.get("source_ink_left", source.ink_left))
             mapped["source_ink_left"] = ink_left
-            mapped["ink_left"] = (ink_left*source_size.x-crop.position.x+position.x)/size.x
+            mapped["ink_left"] = _mapped_px(ink_left, mapping) / size.x
         for key in ["top", "bottom"]:
             if source.has(key):
                 mapped[key] = (float(source[key])*source_size.y-crop.position.y+position.y)/size.y

@@ -92,7 +92,11 @@ the exact downbeat and a whole 9.6-second passage.
 For generated two-hand piano lessons with **unchanged clefs, key and meter**,
 the scrolling strip discards repeated *printed-system headers* at the
 start of subsequent systems and, where Verovio exposes the true final
-barline, trims only unused staff extension after that barline. Reprinted
+barline, trims unused staff extension after it. Where the pixels between
+the final sounded event and that barline contain **only the staff's own
+horizontal rules**, Godot removes that redundant blank run and stitches
+the two untouched raster regions together. Any slur, beam, tie or other
+visible ink triggers a conservative fallback instead of being cut. Reprinted
 clefs and excess blank staff are not musical time yet used to make the
 fixed playhead race across empty space at every join.
 The original starting clefs, staff, barlines, musical glyphs and Verovio
