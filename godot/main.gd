@@ -2049,13 +2049,13 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     elif phase == "recovering":
         feedback_label.text = str(parsed.get("feedback", "Short break before retry"))
     elif phase == "count_in":
-        feedback_label.text = "Follow the moving staff · play at the teal line"
+        feedback_label.text = "GET READY · follow the teal playhead"
     elif phase == "playing":
         var midi_count: int = int(parsed.get("midi_notes", 0))
         if bool(parsed.get("preview_only", false)):
-            feedback_label.text = "Timing preview · connect your piano to enable scoring"
+            feedback_label.text = "PREVIEW · connect your piano to earn clean runs"
         else:
-            feedback_label.text = "Playing · %d MIDI notes received" % midi_count if midi_count > 0 else "Playing · listening for your piano"
+            feedback_label.text = "PLAYING · %d notes heard" % midi_count if midi_count > 0 else "PLAYING · waiting for your piano"
     else:
         feedback_label.text = str(parsed.get("feedback", ""))
     if str(parsed.get("mode", "")) == "listen":
