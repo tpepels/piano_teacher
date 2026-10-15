@@ -32,6 +32,7 @@ def main() -> int:
         output = result.stdout + result.stderr
         for line in output.splitlines():
             if ("SCROLL_VELOCITY_AUDIT:" in line or
+                    "SCROLL_JOIN_DETAIL:" in line or
                     "SCORE_STRIP_FAILURES:" in line or "FAIL:" in line or
                     "SCRIPT ERROR:" in line):
                 print(line, flush=True)
