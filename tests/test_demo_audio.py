@@ -6,7 +6,15 @@ import wave
 
 import pytest
 
-from piano_teacher import demo
+from piano_teacher import demo, sample_piano
+
+
+@pytest.fixture(autouse=True)
+def keep_legacy_waveform_regressions_deterministic(monkeypatch):
+    # Existing harmonic-synthesis tests are deliberately about the fallback,
+    # even on developers' laptops where Salamander has been installed.
+    monkeypatch.setattr(sample_piano, "find_soundfont", lambda: None)
+
 from piano_teacher.exercise_generator import ExerciseVariant
 from piano_teacher.music import Note, Phrase
 
