@@ -89,6 +89,15 @@ def test_repaired_midi_passes_full_notation_import(tmp_path):
     # Verovio gets its canonical note IDs from build_lesson_score in the
     # runtime. The uploaded MIDI's original note IDs must remain stable.
     assert all(note.source_id for note in piece.notes)
+    from piano_teacher.server import PracticeEngine
+    engine = PracticeEngine(tmp_path / "engine-data", enable_midi=False)
+    try:
+        engine.load(str(path))
+        engraved = engine.engraving()
+        assert engraved.layout["mapping_schema"] == "source-note-v1"
+        assert engraved.layout["notes"]
+    finally:
+        engine.db.close()
 
 
 def test_implausible_time_signature_metadata_is_ignored_but_beat_times_survive(tmp_path):
