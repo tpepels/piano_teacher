@@ -188,6 +188,8 @@ func test_short_challenge_loop() -> void:
     var labels: Dictionary = app.practice_stage_labels
     check("DONE" in labels["left"].text and "NOW" in labels["right"].text,
         "Backend hand completion must unlock the next real stage")
+    check("RIGHT HAND UNLOCKED" in app.progress_label.text,
+        "Completed first hand should visibly unlock the next without opening a menu")
     check(app.practice_controls.get_child_count() == 3,
         "Game-like challenge flow must not add another transport button")
 
