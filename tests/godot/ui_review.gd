@@ -69,8 +69,14 @@ func run() -> void:
     await api("/control", {"action": "tempo", "bpm": 80})
     await wait_for(func(): return int(app.last_state.get("bpm", 0)) == 80 and app.score_view.texture != null)
     app.start_button.pressed.emit()
-    await wait_for(func(): return app._transport_beat_now() >= .3 and bool(app.last_state.get("running", false)))
-    app.pause_button.pressed.emit()
+    app._navigate("settings") # The Start HTTP response has not arrived yet.
+    await wait_for(func(): return bool(app.last_state.get("paused", false)))
+    if app.current_screen != "settings":
+        failures.append("Immediate Settings detour must retain its destination")
+    app._go_back()
+    app.start_button.pressed.emit()
+    await wait_for(func(): return app._transport_beat_now() >= .3 and bool(app.last_state.get("running", false)) and not bool(app.last_state.get("paused", true)))
+    app.start_button.pressed.emit()
     await wait_for(func(): return bool(app.last_state.get("paused", false)))
     await capture("practice")
     press("Lesson path")
@@ -104,4 +110,8 @@ func run() -> void:
     var file := FileAccess.open(folder + "/ui-result.json", FileAccess.WRITE)
     file.store_string(JSON.stringify({"failures": failures}, "  "))
     print("UI_REVIEW:", "PASS" if failures.is_empty() else str(failures))
+    for child in app.get_children():
+        if child is Timer:
+            child.stop()
+    await wait_for(func(): return not app.state_pending and not app.device_pending and not app.library_pending and not app.settings_pending and not app.lesson_pending and not app.action_pending)
     quit(0 if failures.is_empty() else 1)

@@ -116,3 +116,30 @@ def test_nested_verovio_svg_viewbox_maps_notehead_to_outer_page():
     )
     assert all(0 <= p["x"] <= 1 for p in layout["anchors"])
     assert all(0 <= p["top"] <= p["bottom"] <= 1 for p in layout["anchors"])
+
+
+def test_onset_ink_left_preserves_accidentals_chords_and_exact_ledger_paths():
+    # Content rectangles include displaced chord accidentals. Staff-level
+    # ledger paths extend farther left than their own notehead rectangles.
+    content = svg('''<g class="system" id="sys" transform="translate(100,0)">
+      <g class="staff" id="staff">
+        <g class="ledgerLines above"><path d="M 270 80 L 350 80"/></g>
+        <g class="ledgerLines above"><path d="M 690 80 L 750 80"/></g>
+        <g class="note" id="a">
+          <g class="note content-bounding-box"><rect x="240" y="80" width="90" height="80"/></g>
+          <g class="notehead"><use x="300" y="100"/></g>
+        </g>
+        <g class="note" id="b">
+          <g class="note content-bounding-box"><rect x="200" y="80" width="130" height="80"/></g>
+          <g class="notehead"><use x="300" y="120"/></g>
+        </g>
+        <g class="note" id="c">
+          <g class="note content-bounding-box"><rect x="700" y="60" width="40" height="80"/></g>
+          <g class="notehead"><use x="700" y="80"/></g>
+        </g>
+      </g></g>''')
+    layout = layout_from_pages([content], [dict(qstamp=0, on=['a', 'b']),
+                                          dict(qstamp=1, on=['c'])], 2)
+    assert layout['anchors'][0]['x'] == pytest.approx(.4)
+    assert layout['anchors'][0]['ink_left'] == pytest.approx(.3)
+    assert layout['anchors'][1]['ink_left'] == pytest.approx(.79)

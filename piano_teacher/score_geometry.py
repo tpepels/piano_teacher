@@ -1,7 +1,7 @@
 """Locate engraved noteheads and rests using Verovio SVG + its quarter-note timemap.
 
 Positions are SVG viewBox-relative. Timing is expressed in *notated quarter beats*,
-not wall-clock milliseconds, so practice at 40% and 100% use identical geometry.
+not wall-clock milliseconds. Tempo can change spacing while preserving beat IDs.
 No guessed linear page offsets are produced when Verovio supplies no matching notes.
 """
 from __future__ import annotations
@@ -76,6 +76,8 @@ class PageGeometry:
     system_ends: dict[str, float]
     # Actual staff lines, deduplicated across the measures in each system.
     staff_systems: dict[str, dict]
+    # Actual leftmost event ink, including accidentals and staff ledger paths.
+    ink_left: dict[str, float]
 
 
 def parse_svg_geometry(svg: str) -> PageGeometry:
@@ -86,12 +88,14 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
     bx, by, width, height = bounds
     matrix: dict[ET.Element, Matrix] = {}
     systems: dict[ET.Element, str] = {}
+    staffs: dict[ET.Element, ET.Element | None] = {}
     found: dict[str, tuple[float, float, str]] = {}
     system_ends: dict[str, float] = {}
     staff_segments = defaultdict(list)
+    ledgers = defaultdict(list)
 
     def walk(node: ET.Element, ancestor: Matrix, system: str,
-             viewport: tuple[float, float]):
+             viewport: tuple[float, float], staff: ET.Element | None = None):
         transform = _mul(ancestor, _transform(node.get("transform", "")))
         # Verovio uses an outer SVG viewport (e.g. 1056x255) containing a
         # second <svg class="definition-scale" viewBox="0 0 22000 5310">.
@@ -126,13 +130,29 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
                                              dx + x_offset, dy + y_offset))
                 viewport = (nested[2], nested[3])
         matrix[node] = transform
-        if "system" in _classes(node):
+        diagnostic = bool(_classes(node) & {"bounding-box", "content-bounding-box"})
+        if "system" in _classes(node) and not diagnostic:
             system = node.get("id") or f"system-{len(systems)}"
+        if "staff" in _classes(node) and not diagnostic:
+            staff = node
         systems[node] = system
+        staffs[node] = staff
         for child in node:
-            walk(child, transform, system, viewport)
+            walk(child, transform, system, viewport, staff)
 
     walk(root, IDENTITY, "system-0", (width, height))
+    for group in root.iter():
+        if "ledgerLines" not in _classes(group):
+            continue
+        for item in group:
+            match = re.fullmatch(
+                r"\s*M\s*(%s)[,\s]+(%s)\s*L\s*(%s)[,\s]+(%s)\s*"
+                % ((NUMBERS.pattern,) * 4), item.get("d", ""))
+            if match:
+                x1, y1, x2, y2 = map(float, match.groups())
+                left, _ = _apply(matrix[item], x1, y1)
+                right, _ = _apply(matrix[item], x2, y2)
+                ledgers[staffs[group]].append((min(left, right), max(left, right)))
     # Verovio puts each staff's five horizontal paths directly inside a
     # staff group, repeated in every measure. Only inspect those children:
     # descendants also contain note stems, beams and ledger lines.
@@ -160,6 +180,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
             if abs(y2 - y1) <= 1e-5 and abs(x2 - x1) > 1e-5:
                 staff_segments[systems[staff]].append(
                     ((min(x1, x2)-bx)/width, (max(x1, x2)-bx)/width, (y1-by)/height))
+    ink_left = {}
     for elem in root.iter():
         if not (_classes(elem) & {"note", "rest", "mRest", "multiRest"}):
             continue
@@ -174,6 +195,24 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
         if not all(math.isfinite(v) for v in normalized[:2]):
             raise ValueError("Non-finite SVG note position")
         found[identifier] = normalized
+        left = x
+        # Native content bounds include the actual displaced accidental in a
+        # chord; notehead origin alone would erase the pitch instruction.
+        for bounds_group in elem:
+            if "content-bounding-box" not in _classes(bounds_group):
+                continue
+            for rect in bounds_group:
+                if rect.tag.rsplit("}", 1)[-1] != "rect":
+                    continue
+                rx, ry = float(rect.get("x", "0")), float(rect.get("y", "0"))
+                rw, rh = float(rect.get("width", "0")), float(rect.get("height", "0"))
+                if rw > 0 and rh > 0:
+                    left = min(left, *(_apply(matrix[rect], cx, cy)[0]
+                        for cx, cy in ((rx, ry), (rx+rw, ry), (rx, ry+rh), (rx+rw, ry+rh))))
+        for ledger_left, ledger_right in ledgers.get(staffs[elem], []):
+            if ledger_left <= x <= ledger_right:
+                left = min(left, ledger_left)
+        ink_left[identifier] = (left-bx)/width
     # Use only actual Verovio right barlines for terminal held-note timing.
     # Accept SVG lines and absolute move-to paths; unknown glyphs are ignored.
     for elem in root.iter():
@@ -219,7 +258,7 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
             "top": max(0.0, top), "bottom": min(1.0, bottom),
             "staff_lines": lines,
         }
-    return PageGeometry(width, height, found, system_ends, staff_systems)
+    return PageGeometry(width, height, found, system_ends, staff_systems, ink_left)
 
 
 def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
@@ -253,7 +292,8 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
         for identifier in note_ids + rest_ids:
             if identifier in where:
                 page, x, y, system = where[identifier]
-                groups[(page, system, round(max(0, beat), 7))].append((x, y, identifier in note_ids))
+                groups[(page, system, round(max(0, beat), 7))].append(
+                    (x, y, identifier in note_ids, pages[page].ink_left[identifier]))
                 if identifier in pitches and identifier not in seen_note_ids:
                     positioned_notes.append({"id": identifier, "beat": round(max(0, beat), 7),
                                              "pitch": pitches[identifier], "page": page,
@@ -265,7 +305,7 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
     # with two systems, the playhead never extends through the wrong one.
     system_y = defaultdict(list)
     for (page, system, _), points in groups.items():
-        system_y[(page, system)].extend(y for _, y, _ in points)
+        system_y[(page, system)].extend(y for _, y, _, _ in points)
     anchors = []
     for (page, system, beat), points in groups.items():
         ys = system_y[(page, system)]
@@ -276,10 +316,11 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
         staff = pages[page].staff_systems.get(system, {})
         # A full-measure rest can be centered in the inactive hand. It must
         # never pull a simultaneous required note away from the timing line.
-        note_points = [(x, y) for x, y, is_note in points if is_note]
-        timed_points = note_points or [(x, y) for x, y, _ in points]
+        note_points = [(x, y) for x, y, is_note, _ in points if is_note]
+        timed_points = note_points or [(x, y) for x, y, _, _ in points]
         anchors.append({"beat": beat, "page": page,
                         "system": system, "x": sum(x for x, _ in timed_points) / len(timed_points),
+                        "ink_left": min(left for _, _, _, left in points),
                         "top": staff.get("top", max(0.0, top - margin)),
                         "bottom": staff.get("bottom", min(1.0, bottom + margin))})
     anchors.sort(key=lambda a: (a["beat"], a["page"], a["system"]))

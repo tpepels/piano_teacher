@@ -133,6 +133,10 @@ static func map_point(source: Dictionary, strip: Dictionary) -> Dictionary:
         mapped["system"] = "strip"
         mapped["x"] = (x*source_size.x-crop.position.x+position.x)/size.x
         mapped["y"] = (y*source_size.y-crop.position.y+position.y)/size.y
+        if source.has("ink_left"):
+            var ink_left: float = float(source.get("source_ink_left", source.ink_left))
+            mapped["source_ink_left"] = ink_left
+            mapped["ink_left"] = (ink_left*source_size.x-crop.position.x+position.x)/size.x
         for key in ["top", "bottom"]:
             if source.has(key):
                 mapped[key] = (float(source[key])*source_size.y-crop.position.y+position.y)/size.y

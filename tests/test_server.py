@@ -52,8 +52,8 @@ def test_layout_cached_until_score_revision_changes(tmp_path, monkeypatch):
     engine.plan = LearningPlan(fixture_piece())
     engine.score = object()
     calls = []
-    def fake_render(score, first, last, hand, *, total_beats):
-        calls.append((first,last,hand,total_beats))
+    def fake_render(score, first, last, hand, *, total_beats, bpm):
+        calls.append((first,last,hand,total_beats,bpm))
         return EngravedScore(("<svg>page 1</svg>","<svg>page 2</svg>"),
                              {"pages":2,"anchors":[{"beat":0,"x":.1}],"beats":total_beats,
                               "notes":[{"pitch":n.pitch,"beat":n.start-score.phrase.start}
@@ -62,12 +62,12 @@ def test_layout_cached_until_score_revision_changes(tmp_path, monkeypatch):
     assert engine.engraved(0) == "<svg>page 1</svg>"
     assert engine.engraved(1) == "<svg>page 2</svg>"
     assert engine.geometry()["pages"] == 2
-    assert calls == [(1,2,"right",8)]
+    assert calls == [(1,2,"right",8,40)]
     with __import__('pytest').raises(ValueError,match="Invalid score page"):
         engine.engraved(2)
     engine.control("hand",hand="both")
     assert engine.geometry()["pages"] == 2
-    assert calls[-1] == (1,2,"both",8)
+    assert calls[-1] == (1,2,"both",8,40)
     assert len(calls) == 2
     engine.db.close()
 

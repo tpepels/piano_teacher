@@ -107,7 +107,8 @@ def test_godot_loads_png_with_same_notehead_coordinates():
     assert "var opaque_bounds := _visible_engraving_bounds(picture)" in script
     assert "score_overlay.crop_origin = score_crop_origin" in script
     assert "score_overlay.active_page = current_page" in script
-    assert "func _sheet_xy(x: float, y: float)" in script
+    overlay = (Path(__file__).resolve().parents[1] / "godot/score_overlay.gd").read_text()
+    assert "func _sheet_xy(x: float, y: float)" in overlay
     assert "picture.load_svg_from_buffer" not in script
 
 

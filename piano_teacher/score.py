@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from .score_geometry import layout_from_pages, parse_svg_geometry
 from .lesson_score import LessonScore
+from .reading_spacing import space_for_reading
 
 from .music import Note, Piece, _bar_boundaries, _phrases, load_midi
 
@@ -186,7 +187,7 @@ class EngravedScore:
 
 
 def render_layout(notation: object, first: int, last: int, hand: str = "both",
-                  *, total_beats: float) -> EngravedScore:
+                  *, total_beats: float, bpm: float | None = None) -> EngravedScore:
     """Render *all* score pages and bind their noteheads to Verovio qstamps.
 
     The returned layout has exact engraved onset anchors, page/system IDs, and
@@ -200,7 +201,7 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     except ImportError as exc:
         raise RuntimeError("Engraving requires verovio and music21: pip install -e '.[godot]'") from exc
     if isinstance(notation, LessonScore):
-        return _engrave_xml(notation.musicxml, hand, total_beats)
+        return _engrave_xml(notation.musicxml, hand, total_beats, bpm=bpm)
     sc = copy.deepcopy(notation)
     if not list(sc.recurse().getElementsByClass(stream.Measure)):
         sc.makeMeasures(inPlace=True)
@@ -239,10 +240,11 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     if not list(out.parts):
         raise ValueError(f"No notation found for measures {first}-{last}")
     xml = GeneralObjectExporter(out).parse().decode("utf-8")
-    return _engrave_xml(xml, hand, total_beats)
+    return _engrave_xml(xml, hand, total_beats, bpm=bpm)
 
 
-def _engrave_xml(xml: str, hand: str, total_beats: float) -> EngravedScore:
+def _engrave_xml(xml: str, hand: str, total_beats: float,
+                 *, bpm: float | None = None) -> EngravedScore:
     import verovio
     toolkit = _create_verovio_toolkit(verovio)
     # Use one common layout for the SVGs and timing map. Timemap qstamps are
@@ -250,7 +252,11 @@ def _engrave_xml(xml: str, hand: str, total_beats: float) -> EngravedScore:
     options = {"inputFrom": "xml", "scale": 48,
                "pageWidth": 2200, "pageHeight": 1350,
                "adjustPageHeight": True, "breaks": "auto",
-               "svgViewBox": True, "smuflTextFont": "embedded"}
+               "svgViewBox": True, "smuflTextFont": "embedded",
+               "svgBoundingBoxes": True, "svgContentBoundingBoxes": True}
+    if bpm is not None:
+        xml, spacing = space_for_reading(xml, bpm)
+        options.update(spacing)
     if not toolkit.setOptions(options):
         raise RuntimeError("Verovio rejected its engraving options")
     if not toolkit.loadData(xml):
@@ -273,6 +279,20 @@ def _engrave_xml(xml: str, hand: str, total_beats: float) -> EngravedScore:
             raise ValueError("This passage requires unsupported spacing between piano staves")
         toolkit.redoLayout()
         pages = _svg_pages(toolkit)
+    if bpm is not None:
+        # Accidentals, flags and dense voices can need more room than the
+        # duration budget used to choose breaks. Measure native staff ends
+        # after collision avoidance, then enlarge the viewport once. Encoded
+        # breaks keep note spacing and glyph sizes unchanged by this relayout.
+        right = max((system["right"] for page in pages
+                     for system in parse_svg_geometry(page).staff_systems.values()),
+                    default=1.0)
+        if right > 1.0:
+            width = math.ceil(options["pageWidth"] * right + 100)
+            if not toolkit.setOptions({"pageWidth": width}):
+                raise ValueError("This passage requires an unsupported engraving width")
+            toolkit.redoLayout()
+            pages = _svg_pages(toolkit)
     pages = tuple(_fade_inactive_staff(page, hand) for page in pages)
     try:
         events = _verovio_object(toolkit.renderToTimemap(
@@ -283,7 +303,18 @@ def _engrave_xml(xml: str, hand: str, total_beats: float) -> EngravedScore:
         raise ValueError("Verovio produced no note timing map")
     pitches = _pitches_from_verovio(toolkit, events)
     layout = layout_from_pages(list(pages), events, total_beats, pitches=pitches)
-    return EngravedScore(pages, layout)
+    # Geometry consumes the native event bounds; diagnostic rectangles never
+    # enter the returned score or its raster/GPU textures.
+    import xml.etree.ElementTree as ET
+    cleaned = []
+    for page in pages:
+        root = ET.fromstring(page)
+        for parent in root.iter():
+            for child in list(parent):
+                if set(child.get("class", "").split()) & {"bounding-box", "content-bounding-box"}:
+                    parent.remove(child)
+        cleaned.append(ET.tostring(root, encoding="unicode"))
+    return EngravedScore(tuple(cleaned), layout)
 
 
 def _svg_pages(toolkit) -> tuple[str, ...]:

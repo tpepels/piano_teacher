@@ -54,7 +54,14 @@ func run() -> void:
     check(absf(previous_right - strip.size.x) < .01, "strip width covers every tile")
     var previous_beat := -INF
     var previous_x := -INF
-    for anchor in flat.anchors:
+    for index in range(flat.anchors.size()):
+        var anchor: Dictionary = flat.anchors[index]
+        var original_anchor: Dictionary = original.anchors[index]
+        var ink_point: Dictionary = original_anchor.duplicate(true)
+        ink_point.x = original_anchor.ink_left
+        var expected_ink: Dictionary = helper.map_point(ink_point, flat)
+        check(absf(float(anchor.ink_left) - float(expected_ink.x)) < .000001,
+              "opening accidentals and ledger bounds share the notehead transform")
         check(anchor.page == 0 and anchor.system == "strip", "anchors share the virtual staff")
         check(float(anchor.beat) >= previous_beat, "anchors remain in musical order")
         check(float(anchor.x) >= previous_x - .00001, "no backwards sweep at a system wrap")

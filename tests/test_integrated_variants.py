@@ -49,10 +49,11 @@ def test_renderer_uses_only_required_variant_not_original(tmp_path,monkeypatch):
     e.plan=LearningPlan(piece())
     e.score=object() # Source object would fail if passed to renderer.
     try:
-        def fake_renderer(notation,first,last,hand,*,total_beats):
+        def fake_renderer(notation,first,last,hand,*,total_beats,bpm):
             assert isinstance(notation,LessonScore)
             assert notation.phrase.notes==e.plan.active_phrase.notes
             assert len(notation.phrase.notes)==2 and total_beats==8
+            assert bpm == 40
             return EngravedScore(("<svg/>",), {"pages":1,"anchors":[{"beat":0,"x":.5}],
                 "notes":[{"pitch":n.pitch,"beat":n.start-notation.phrase.start}
                          for n in notation.phrase.notes]})

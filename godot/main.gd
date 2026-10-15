@@ -9,8 +9,10 @@ const PAPER := Design.FOREST
 const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
 const ScoreStrip := preload("res://score_strip.gd")
+const ScoreOverlay := preload("res://score_overlay.gd")
 
 var current_screen := "home"
+var settings_return_screen := "home"
 var screens: Dictionary = {}
 var library_request: HTTPRequest
 var settings_request: HTTPRequest
@@ -41,6 +43,9 @@ var folder_dialog: FileDialog
 var fullscreen_toggle: CheckButton
 var settings_message: Label
 var last_post_path := ""
+var last_control_action := ""
+var pending_transport_action := ""
+var action_request_started_ms := 0
 var state_request: HTTPRequest
 var score_request: HTTPRequest
 var layout_request: HTTPRequest
@@ -102,7 +107,7 @@ var lesson_description: Label
 var input_activity_label: Label
 var tempo_setting: SpinBox
 var metronome_toggle: CheckButton
-var pause_button: Button
+var stop_button: Button
 var lesson_info_label: Label
 var practice_progress: ProgressBar
 var practice_controls: GridContainer
@@ -110,81 +115,6 @@ var hand_buttons: Dictionary = {}
 var device_pending := false
 var practice_layout_box: VBoxContainer
 var score_margin_box: MarginContainer
-
-class ScoreOverlay extends Control:
-    var cursor: Dictionary = {}
-    var showing := false
-    var transport_active := false
-    var image_size := Vector2.ZERO
-    var marks: Array = []
-    var active_page := -1
-    var crop_origin := Vector2.ZERO
-    var crop_size := Vector2.ONE
-    var lead_first: Dictionary = {}
-    var lead_width_px := 0.0
-    var lead_staff_lines: Array = []
-
-    func _sheet_xy(x: float, y: float) -> Vector2:
-        # Preserve Verovio notehead coordinates after cropping and scrolling.
-        return size * ((Vector2(x, y) - crop_origin) / crop_size)
-
-    func _draw() -> void:
-        if image_size.x <= 0.0 or image_size.y <= 0.0:
-            return
-        # The empty preparation measure belongs to the same moving canvas
-        # as the notes. Keep it present after the downbeat so it exits smoothly.
-        if showing and lead_width_px > 2.0 and not lead_first.is_empty():
-            var first_x: float = _sheet_xy(float(lead_first.get("x", 0.0)), 0.0).x
-            var top: float = _sheet_xy(0.0, float(lead_first.get("top", 0.0))).y
-            var bottom: float = _sheet_xy(0.0, float(lead_first.get("bottom", 1.0))).y
-            var left: float = first_x - lead_width_px
-            # Mask any preceding source notes during a mid-piece recovery:
-            # this really is an empty preparation bar, not an overlay on notes.
-            draw_rect(Rect2(left, top - 16.0, lead_width_px,
-                            bottom - top + 32.0), Design.PANEL, true)
-            var ink := Color(Design.SLATE, 0.52)
-            for staff_y in lead_staff_lines:
-                var sy: float = _sheet_xy(0.0, float(staff_y)).y
-                draw_line(Vector2(left, sy), Vector2(first_x, sy), ink, 1.1, true)
-        # A faint green ring confirms correct notes; stronger colour markers
-        # distinguish mistakes without altering the underlying engraving.
-        var palette := {
-            "correct": Color("#4A987B"), "wrong": Color("#BB4A4A"),
-            "missed": Color("#BB4A4A"), "extra": Color("#BB4A4A"),
-            "early": Color("#BA852B"), "late": Color("#BA852B"),
-            "short": Color("#8660AF"), "long": Color("#8660AF")
-        }
-        var labels := {"wrong":"×", "missed":"!", "extra":"+",
-                       "early":"←", "late":"→", "short":"−", "long":"+"}
-        for marker in marks:
-            if int(marker.get("page", -1)) != active_page:
-                continue
-            var status: String = str(marker.get("status", ""))
-            var color: Color = palette.get(status, Color("#BB4A4A"))
-            var center: Vector2 = _sheet_xy(float(marker.get("x", 0.0)), float(marker.get("y", 0.0)))
-            if status == "correct":
-                draw_arc(center, 9.0, 0.0, TAU, 20, Color(color, 0.37), 1.5, true)
-            else:
-                var radius := 12.0 if status == "missed" else 10.0
-                draw_circle(center, radius, Color(Design.PANEL, 0.85))
-                draw_arc(center, radius, 0.0, TAU, 24, color, 2.5, true)
-                var symbol: String = str(labels.get(status, "!"))
-                var font: Font = ThemeDB.fallback_font
-                draw_string(font, center + Vector2(12, -9), symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, color)
-                if status == "extra":
-                    draw_string(font, center + Vector2(12, 5), str(marker.get("label", "")), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, color)
-        if showing and not cursor.is_empty() and int(cursor.get("page", -1)) == active_page:
-            var x: float = float(cursor.get("x", 0.0))
-            var top: float = float(cursor.get("top", 0.0))
-            var bottom: float = float(cursor.get("bottom", 1.0))
-            var start: Vector2 = _sheet_xy(x, top)
-            var end: Vector2 = _sheet_xy(x, bottom)
-            # The cyan beam is the timing rule, not a progress indicator tied
-            # to key presses. It travels at the clock's BPM even in silence.
-            var cyan := Design.TEAL if transport_active else Design.SAGE
-            draw_line(start, end, Color(cyan, 0.09), 16.0, true)
-            draw_line(start, end, Color(cyan, 0.18), 7.0, true)
-            draw_line(start, end, cyan, 2.5, true)
 
 func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
@@ -502,8 +432,18 @@ func _card_body(panel: PanelContainer, margin: int = 28) -> MarginContainer:
     return body
 
 func _navigate(screen: String) -> void:
-    if screen != "practice" and current_screen == "practice" and str(last_state.get("phase", "")) in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]:
-        _send_action({"action": "stop"})
+    if screen == "settings" and current_screen != "settings":
+        settings_return_screen = current_screen
+    if screen != "practice" and (current_screen == "practice" or screen in ["home", "library"]):
+        var phase: String = str(last_state.get("phase", ""))
+        var starting: bool = action_pending and last_post_path == "/control" and last_control_action in ["start", "restart", "resume", "score_ready"]
+        if screen in ["settings", "lesson"]:
+            if phase in ["count_in", "playing"] or starting:
+                _send_action({"action": "pause"})
+            elif phase in ["feedback", "recovering", "loading"]:
+                _send_action({"action": "stop"})
+        elif phase in ["count_in", "playing", "paused", "feedback", "recovering", "loading"] or starting:
+            _send_action({"action": "stop"})
     current_screen = screen
     for key in screens:
         (screens[key] as Control).visible = str(key) == screen
@@ -515,6 +455,9 @@ func _navigate(screen: String) -> void:
         _request_devices()
     elif screen == "lesson":
         _request_lesson()
+
+func _go_back() -> void:
+    _navigate(settings_return_screen if current_screen == "settings" else "practice")
 
 func _build_interface() -> void:
     theme = Design.create()
@@ -627,7 +570,7 @@ func _build_interface() -> void:
     settings_scroll.add_child(settings_layout)
     var settings_head := HBoxContainer.new()
     settings_layout.add_child(settings_head)
-    settings_head.add_child(_button("← Back", func(): _navigate("practice" if bool(last_state.get("loaded", false)) else "home")))
+    settings_head.add_child(_button("← Back", _go_back))
     settings_head.add_child(_space())
     settings_layout.add_child(_label("Settings", 39, INK, true))
     settings_layout.add_child(_label("Your piano, music folder and practice preferences.", 16, MUTED))
@@ -797,17 +740,15 @@ func _build_interface() -> void:
     (practice_progress.get_theme_stylebox("background") as StyleBoxFlat).set_content_margin_all(0)
     (practice_progress.get_theme_stylebox("fill") as StyleBoxFlat).set_content_margin_all(0)
     practice_layout.add_child(practice_progress)
-    var information := HBoxContainer.new()
+    var information := VBoxContainer.new()
+    information.add_theme_constant_override("separation", 4)
     practice_layout.add_child(information)
     progress_label = _label("", 14, MUTED)
     progress_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     information.add_child(progress_label)
-    information.add_child(_space())
     feedback_label = _label("Ready", 14, MUTED)
-    feedback_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-    feedback_label.clip_text = true
-    feedback_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-    feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     information.add_child(feedback_label)
     var controls_center := CenterContainer.new()
     practice_layout.add_child(controls_center)
@@ -821,8 +762,10 @@ func _build_interface() -> void:
     start_button = _button("Start  ·  Space", _toggle_playing, true)
     start_button.custom_minimum_size = Vector2(148, 53)
     controls.add_child(start_button)
-    pause_button = _button("Pause", _toggle_pause)
-    controls.add_child(pause_button)
+    stop_button = _button("Stop", func(): _send_action({"action": "stop"}))
+    stop_button.tooltip_text = "End this attempt · S"
+    stop_button.disabled = true
+    controls.add_child(stop_button)
     controls.add_child(_button("Restart", _restart_practice))
     controls.add_child(_button("Next →", func(): _send_action({"action": "next"})))
     _build_lesson_screen()
@@ -881,7 +824,7 @@ func _build_lesson_screen() -> void:
     page.add_child(content)
     var navigation := HBoxContainer.new()
     content.add_child(navigation)
-    navigation.add_child(_button("← Practice", func(): _navigate("practice")))
+    navigation.add_child(_button("← Practice", _go_back))
     navigation.add_child(_space())
     navigation.add_child(_label("Piano Teacher", 18, INK, true))
     content.add_child(_label("Your lesson path", 34, INK, true))
@@ -946,7 +889,10 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
         var status := "Completed" if bool(group["complete"]) else "Current passage" if bool(group["current"]) else str(group["kind"]).capitalize()
         row.add_child(_label("%s · Measures %d–%d" % [status, int(group["first"]), int(group["last"])], 18,
             ACCENT if bool(group["current"]) else INK, bool(group["current"])))
-        row.add_child(_label(" → ".join(group["labels"]), 14, MUTED))
+        var detail: String = " → ".join(group["labels"])
+        row.tooltip_text = detail
+        if bool(group["current"]):
+            row.add_child(_label(detail, 14, MUTED))
         lesson_rows.add_child(row)
 
 func _refresh_score_status() -> void:
@@ -1108,7 +1054,7 @@ func _toggle_fullscreen() -> void:
     _on_fullscreen_toggle(enabled)
 
 func _poll() -> void:
-    if not state_pending:
+    if not state_pending and not action_pending:
         state_pending = true
         state_request_started_ms = Time.get_ticks_msec()
         if state_request.request(URL + "/state") != OK:
@@ -1123,7 +1069,7 @@ func _process(_delta: float) -> void:
             if str(last_state.get("phase", "ready")) not in ["feedback", "recovering", "loading"]:
                 _layout_moving_score(_delta)
         return
-    # Count-in uses negative beats and waits on the first note. During play,
+    # Count-in uses negative beats on the same spacing as the opening notes.
     # position advances at BPM regardless of the user's MIDI performance.
     var clock: float = _transport_beat_now()
     var play_from: float = float(last_state.get("play_from_beat", 0.0))
@@ -1147,17 +1093,18 @@ func _process(_delta: float) -> void:
     score_overlay.lead_width_px = 0.0
     score_overlay.lead_staff_lines = []
     if int(initial_cursor.get("page", -1)) == current_page:
-        var virtual_width: float = score_frame.size.x * 0.72
+        var lead_beats: float = maxf(0.5, float(last_state.get("count_in_beats", 3)))
+        var beat_width: float = _beat_width_at(play_from)
         score_overlay.lead_first = initial_cursor
+        score_overlay.lead_beats = lead_beats
+        score_overlay.lead_meter = last_state.get("count_in_meter", [4, 4])
         for system in score_layout.get("systems", []):
             if int(system.get("page", -1)) == current_page and str(system.get("system", "")) == str(initial_cursor.get("system", "")):
                 score_overlay.lead_staff_lines = system.get("staff_lines", [])
                 break
-        score_overlay.lead_width_px = virtual_width
+        score_overlay.lead_width_px = lead_beats * beat_width / score_crop_size.x * score_content.size.x
         if clock < 0.0:
-            var lead_beats: float = maxf(0.5, float(last_state.get("count_in_beats", 3)))
-            var fraction: float = virtual_width / maxf(1.0, score_content.size.x) * score_crop_size.x
-            cursor["x"] = float(initial_cursor.get("x", 0.0)) + clock / lead_beats * fraction
+            cursor["x"] = float(initial_cursor.get("x", 0.0)) + clock * beat_width
     score_overlay.cursor = cursor
     score_overlay.showing = true
     score_overlay.transport_active = active
@@ -1185,6 +1132,18 @@ func _process(_delta: float) -> void:
                   " VISIBLE:", score_overlay.showing, " CONTENT_X:", score_content.position.x)
     score_overlay.queue_redraw()
 
+func _beat_width_at(beat: float) -> float:
+    var points: Array = score_layout.get("anchors", [])
+    for index in range(points.size() - 1):
+        var left: Dictionary = points[index]
+        var right: Dictionary = points[index + 1]
+        if float(right.get("beat", 0.0)) <= beat + .000001:
+            continue
+        var span: float = float(right.get("beat", 0.0)) - float(left.get("beat", 0.0))
+        if span > 0.0 and float(right.x) > float(left.x):
+            return (float(right.x) - float(left.x)) / span
+    return .01
+
 func _position_at_beat(beat: float) -> Dictionary:
     var points: Array = score_layout.get("anchors", [])
     if points.is_empty():
@@ -1206,8 +1165,13 @@ func _position_at_beat(beat: float) -> Dictionary:
                 position["x"] = lerpf(float(left["x"]), float(right["x"]), fraction)
     return position
 
-func _on_state(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-    state_pending = false
+func _on_state(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, sample_started_ms: int = -1) -> void:
+    if sample_started_ms < 0:
+        state_pending = false
+        # A pre-action snapshot can arrive after the control response. It
+        # must not put a fresh count-in or paused attempt back in its old state.
+        if action_request_started_ms > 0 and state_request_started_ms <= action_request_started_ms:
+            return
     if code != 200:
         feedback_label.text = _http_failure(code, body)
         return
@@ -1225,20 +1189,18 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         input_activity_label.add_theme_color_override("font_color", MUTED)
     # The backend sampled the clock during this HTTP round trip. Estimate
     # that sample at the midpoint so music never waits for the poll interval.
-    last_state_tick = int((state_request_started_ms + Time.get_ticks_msec()) / 2.0)
+    var started_ms: int = state_request_started_ms if sample_started_ms < 0 else sample_started_ms
+    last_state_tick = int((started_ms + Time.get_ticks_msec()) / 2.0)
     if not bool(parsed.get("loaded", false)):
         feedback_label.text = str(parsed.get("feedback", "Open a score"))
         _refresh_score_status()
         return
     title_label.text = str(parsed.get("title", "Piano Teacher"))
     var kind := str(parsed.get("kind", "learn")).capitalize()
-    var lesson_level: String = str(parsed.get("lesson_level", "original")).capitalize()
-    passage_label.text = "%s · Measures %d–%d · %s (%d/%d) · %d required notes" % [
-        kind, int(parsed.get("first_bar", 0)), int(parsed.get("last_bar", 0)),
-        lesson_level, int(parsed.get("lesson_level_number", 1)),
-        int(parsed.get("lesson_level_count", 1)), int(parsed.get("required_notes", 0))]
+    passage_label.text = "%s · Measures %d–%d" % [
+        kind, int(parsed.get("first_bar", 0)), int(parsed.get("last_bar", 0))]
     speed_label.text = "%d BPM" % int(parsed.get("bpm", 0))
-    hand_label.text = "%s hand · %d%% speed" % [str(parsed.get("hand", "right")).capitalize(), int(round(float(parsed.get("bpm", 0)) / max(1.0, float(parsed.get("original_bpm", 1))) * 100.0))]
+    hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
     if current_screen != "settings":
         tempo_setting.set_value_no_signal(float(parsed.get("target_bpm", parsed.get("bpm", 40))))
     var stage: String = str(parsed.get("lesson_level", "original"))
@@ -1250,8 +1212,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         var button: Button = hand_buttons[hand]
         button.disabled = not parsed.get("hands", []).has(hand) or str(parsed.get("hand", "")) == hand
     practice_progress.value = float(parsed.get("progress", 0.0))
-    pause_button.disabled = not bool(parsed.get("running", false))
-    pause_button.text = "Resume" if bool(parsed.get("paused", false)) else "Pause"
+    stop_button.disabled = not bool(parsed.get("running", false))
     var phase: String = str(parsed.get("phase", "ready"))
     if phase0_smoke_mode and phase != phase0_last_phase:
         phase0_last_phase = phase
@@ -1276,11 +1237,11 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
     if unpositioned > 0:
         feedback_label.text += " · %d unpositioned note(s)" % unpositioned
-    progress_label.text = "Lesson %d/%d  ·  %d/3 clean  ·  %d completed" % [
+    progress_label.text = "Stage %d of %d  ·  Clean runs %d of 3" % [
         int(parsed.get("lesson_step", 1)), int(parsed.get("lesson_steps", 1)),
-        int(parsed.get("streak", 0)), int(parsed.get("lesson_steps_mastered", 0))]
-    start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Stop  ·  Space" if bool(parsed.get("running", false)) else "Start  ·  Space"
-    start_button.tooltip_text = "Space: start/stop/resume · P: pause · R: restart"
+        int(parsed.get("streak", 0))]
+    start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Pause  ·  Space" if bool(parsed.get("running", false)) else "Start  ·  Space"
+    start_button.tooltip_text = "Space: start, pause or resume · R: restart · S: stop"
     start_button.disabled = not bool(parsed.get("running", false)) and (score_view.texture == null or layout_revision != revision)
     score_overlay.marks = []
     for marker in parsed.get("feedback_marks", []):
@@ -1450,6 +1411,7 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     score_view.texture = ImageTexture.create_from_image(cropped)
     score_view.visible = false
     score_overlay.image_size = strip["size"]
+    score_overlay.load_symbols(source_layout.get("symbols", {}))
     # Cropped tile textures now own all visible imagery. Release full pages
     # rather than retaining a second whole-song raster in CPU memory.
     page_images.clear()
@@ -1472,13 +1434,27 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         _send_action({"action": "score_ready", "revision": revision})
 
 func _send_action(command: Dictionary) -> void:
+    if action_pending:
+        # Navigation intent must survive an in-flight Start or Resume. Keep
+        # just the latest pause/stop intent, rather than queuing stale clicks.
+        if str(command.get("action", "")) in ["pause", "stop"]:
+            pending_transport_action = str(command["action"])
+        return
+    last_control_action = str(command.get("action", ""))
     _send_post("/control", command)
+
+func _flush_transport_action() -> void:
+    if not pending_transport_action.is_empty():
+        var action := pending_transport_action
+        pending_transport_action = ""
+        _send_action({"action": action})
 
 func _send_post(path: String, payload: Dictionary) -> void:
     if action_pending:
         return
     action_pending = true
     last_post_path = path
+    action_request_started_ms = Time.get_ticks_msec()
     var err := action_request.request(URL + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(payload))
     if err != OK:
         action_pending = false
@@ -1495,8 +1471,11 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         settings_message.text = message
         library_message.text = message
         home_recent_label.text = message
+        _flush_transport_action()
         return
-    if path == "/library/open":
+    if path == "/control":
+        _on_state(_result, code, _headers, body, action_request_started_ms)
+    elif path == "/library/open":
         library_error = ""
         score_error = ""
         _navigate("practice")
@@ -1507,6 +1486,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         _request_library()
     elif path == "/device":
         _request_settings()
+    _flush_transport_action()
     _poll()
 
 func _toggle_playing() -> void:
@@ -1516,7 +1496,7 @@ func _toggle_playing() -> void:
     if not bool(last_state.get("running", false)) and (score_view.texture == null or layout_revision != revision):
         feedback_label.text = "Preparing sheet music - wait for the notes before starting"
         return
-    _send_action({"action": "stop" if bool(last_state.get("running", false)) else "start"})
+    _send_action({"action": "pause" if bool(last_state.get("running", false)) else "start"})
 
 func _toggle_pause() -> void:
     if bool(last_state.get("running", false)):
@@ -1565,6 +1545,17 @@ func _choose_device(id: int) -> void:
         return
     _send_post("/device", {"name":device_names[id]})
     device_button.text = str(device_names[id]) + "  ✓"
+
+func _input(event: InputEvent) -> void:
+    if not event is InputEventKey:
+        return
+    var practice_shortcut: bool = current_screen == "practice" and event.keycode in [
+        KEY_ESCAPE, KEY_SPACE, KEY_P, KEY_R, KEY_S, KEY_LEFT, KEY_RIGHT]
+    if event.keycode == KEY_F11 or practice_shortcut:
+        # Consume press and release before focused buttons see ui_accept.
+        # Handling only the press can also activate Next/Stop on release.
+        _unhandled_key_input(event)
+        get_viewport().set_input_as_handled()
 
 func _unhandled_key_input(event: InputEvent) -> void:
     if event is InputEventKey and event.pressed and not event.echo:

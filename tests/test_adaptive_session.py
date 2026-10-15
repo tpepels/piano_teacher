@@ -39,6 +39,9 @@ def test_tempo_capped_lead_and_five_errors_slow_ten_percent(tmp_path,monkeypatch
         assert state["bpm"]==36
         assert state["streak"]==0 and state["mastered"]==0
         now[0]=e.next_at+.01
+        waiting=e.state()
+        assert waiting["phase"]=="loading"
+        e.control("score_ready",revision=waiting["revision"])
         assert e.state()["phase"]=="count_in"
         assert e.state()["clock_beat"]==pytest.approx(-2.0)
     finally:
@@ -60,6 +63,9 @@ def test_complete_current_chunk_before_rewinding(tmp_path,monkeypatch):
         assert e.state()["phase"]=="recovering"
         assert e.state()["recovery_beat"]==8
         now[0]=e.next_at+.01
+        waiting=e.state()
+        assert waiting["phase"]=="loading"
+        e.control("score_ready",revision=waiting["revision"])
         assert e.state()["play_from_beat"]==8
         assert e.state()["clock_beat"]==pytest.approx(-2.0)
     finally:
@@ -101,7 +107,8 @@ def test_godot_has_virtual_lead_in_notation():
     from pathlib import Path
     script=(Path(__file__).resolve().parents[1]/"godot"/"main.gd").read_text()
     assert "lead_width_px" in script and "lead_first" in script
-    assert 'cursor["x"] = float(initial_cursor.get("x", 0.0)) + clock / lead_beats * fraction' in script
+    assert 'score_overlay.lead_beats = lead_beats' in script
+    assert 'score_overlay.lead_meter = last_state.get("count_in_meter"' in script
     assert 'target_x = viewport.x * 0.42 - note_x * displayed_width' in script
 
 

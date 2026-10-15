@@ -178,6 +178,45 @@ def _render_measure(measure: ET.Element, segments: list[tuple[int, int, int, boo
             _append_event(measure, [None], length-position, lane_idx+1)
 
 
+def _write_accidentals(measure: ET.Element) -> None:
+    """Spell visible C-major alterations in onset order across all voices.
+
+    MusicXML's pitch alter affects playback, but Verovio needs an accidental
+    element to print its sharp or its later natural cancellation.
+    """
+    position = previous_onset = 0
+    events = []
+    for element in measure:
+        duration = int(element.findtext("duration", "0"))
+        if element.tag == "backup":
+            position -= duration
+        elif element.tag == "forward":
+            position += duration
+        elif element.tag == "note":
+            onset = previous_onset if element.find("chord") is not None else position
+            if element.find("pitch") is not None:
+                events.append((onset, len(events), element))
+            if element.find("chord") is None:
+                previous_onset = position
+                position += duration
+    context = {}
+    for _, _, note in sorted(events):
+        pitch = note.find("pitch")
+        key = (pitch.findtext("step"), pitch.findtext("octave"))
+        alteration = int(pitch.findtext("alter", "0"))
+        # A continuation carries the visible pitch from its tied attack.
+        # It does not establish a new accidental after a barline.
+        if any(tie.get("type") == "stop" for tie in note.findall("tie")):
+            continue
+        if alteration != context.get(key, 0):
+            accidental = ET.Element("accidental")
+            accidental.text = "sharp" if alteration == 1 else "natural"
+            after = max((index for index, child in enumerate(note)
+                         if child.tag in ("type", "dot")), default=len(note)-1)
+            note.insert(after + 1, accidental)
+        context[key] = alteration
+
+
 def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                        time_signatures: tuple[tuple[float, int, int], ...] = ()) -> LessonScore:
     """Create notation from the source measure grid, not averaged bars."""
@@ -247,4 +286,5 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                     segments.append((segment_start-bar_start, segment_end-bar_start,
                                      note.pitch, start < bar_start, end > bar_end))
             _render_measure(measure,segments,bar_end-bar_start)
+            _write_accidentals(measure)
     return LessonScore(ET.tostring(root, encoding="unicode"), phrase)

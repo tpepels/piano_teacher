@@ -21,8 +21,14 @@ def check(path: Path, output_dir: Path | None = None, *, complete_song: bool = F
         notation=build_lesson_score(stage.phrase, boundaries=piece.bar_boundaries,
                                     time_signatures=piece.time_signatures)
         engraving=render_layout(notation,stage.phrase.first_bar,stage.phrase.last_bar,
-                                 plan.hand,total_beats=stage.phrase.end-stage.phrase.start)
+                                 plan.hand,total_beats=stage.phrase.end-stage.phrase.start,
+                                 bpm=plan.bpm)
         require_lesson_alignment(stage.phrase,engraving.layout,plan.hand)
+        if any(not (0 <= note["x"] <= 1 and 0 <= note["y"] <= 1)
+               for note in engraving.layout["notes"]):
+            raise ValueError("Engraved notes extend outside the score page")
+        if any(system["right"] > 1.000001 for system in engraving.layout["systems"]):
+            raise ValueError("Engraved staff extends outside the score page")
         image=rasterize_score(engraving.pages[0])
         if output_dir:
             output_dir.mkdir(parents=True,exist_ok=True)

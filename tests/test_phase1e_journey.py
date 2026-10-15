@@ -54,6 +54,9 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
         assert failed["recovery_beat"]==0
         assert failed["mastered"]==0 and failed["streak"]==0
         t[0]=e.next_at+.01
+        waiting=e.state()
+        assert waiting["phase"]=="loading"
+        e.control("score_ready",revision=waiting["revision"])
         assert e.state()["phase"]=="count_in"
         assert e.state()["count_in_beats"]==4
         # Two clean performances restore the selected 80 BPM target,
@@ -74,12 +77,17 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
             assert all(mark["status"]=="correct" for mark in feedback["feedback_marks"])
             t[0]=e.next_at+.01
             after=e.state()
-            if after["phase"]=="loading":
+            if e.plan.active_variant.level == "outline":
                 # A harder generated level starts at the novice pace.
                 assert expected_bpm==80
+                assert after["phase"]=="loading"
                 assert after["bpm"] == e.plan.start_bpm
                 break
             assert after["bpm"]==expected_bpm
+            if after["phase"]=="loading":
+                # Returning toward the selected tempo changes note spacing.
+                e.control("score_ready",revision=after["revision"])
+                after=e.state()
             assert after["phase"]=="count_in"
         else:
             pytest.fail("Three clean target-speed repeats did not unlock the next level")

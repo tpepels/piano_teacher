@@ -49,9 +49,21 @@ func run() -> void:
     await process_frame
     var initial_size: Vector2 = app.score_content.size
     var note: Dictionary = app.score_layout["notes"][0]
+    check(app.score_overlay._symbols.size() == 4, "count-in loads the score's actual clefs and rests")
     var results: Array = []
     for bpm in [30, 40, 80, 120]:
         var lead: float = minf(3.0, floor(4.0 * bpm / 60.0 * 2.0) / 2.0)
+        var positions: Array[float] = []
+        for sample in [-0.01, 0.0, 0.01]:
+            app.last_state = {"running": true, "paused": true, "clock_beat": sample,
+                "bpm": bpm, "play_from_beat": 0.0, "duration_beats": 6.0,
+                "count_in_beats": lead, "count_in_meter": [3, 4]}
+            app._process(0.0)
+            positions.append(app.score_content.position.x)
+        var incoming: float = positions[1] - positions[0]
+        var outgoing: float = positions[2] - positions[1]
+        check(absf(incoming - outgoing) < maxf(.05, absf(outgoing) * .02),
+              "count-in and opening notes have matching speed at %d BPM" % bpm)
         var clock: float = -lead
         var step: float = float(bpm) / 60.0 / 60.0
         var previous_x := INF

@@ -166,7 +166,10 @@ func run_tempo(bpm: int) -> void:
     if not await wait_for(func(): return active_attempt(transport_id), 10.0, "running attempt"):
         return
     var previous: Dictionary = {}
-    for target in [-0.65, -0.1, 0.35, 1.1, 1.85]:
+    var lead: float = float(started.get("count_in_beats", 3.0))
+    # At slow tempi the opening note leaves the viewport sooner in musical
+    # beats because those beats deliberately have more horizontal space.
+    for target in [-lead + .2, -0.65, -0.1, 0.35, 0.7, 1.1]:
         if not await wait_for(func(): return app._transport_beat_now() >= target,
                 12.0, "target musical beat " + str(target)):
             return

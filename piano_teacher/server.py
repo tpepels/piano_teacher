@@ -42,6 +42,7 @@ class PracticeEngine:
         self.play_from_beat = 0.0
         self.next_boundary_beat = 0.0
         self.pending_rewind: float | None = None
+        self._rewind_requires_layout = False
         self.feedback_seconds = 2.5
         self.paused = False
         self.paused_at = 0.0
@@ -51,10 +52,12 @@ class PracticeEngine:
         self.preview_only = False
         self.count_in_beats = 0
         self.count_in_bar_beats = 4.0
+        self.count_in_meter = [4, 4]
         self.feedback = "Open a MIDI or MusicXML file"
         self.score_revision = 0
         self._layout_cache: EngravedScore | None = None
         self._layout_revision = -1
+        self._layout_bpm: float | None = None
         self._page_png: dict[int, bytes] = {}
         self.next_at = 0.0
         self.awaiting_score_revision: int | None = None
@@ -266,6 +269,7 @@ class PracticeEngine:
         self.next_at=0
         self.awaiting_score_revision=None
         self.pending_rewind=None
+        self._rewind_requires_layout=False
         self.play_from_beat=0.0
         self.recorder=None
         self.pending_result=None
@@ -279,10 +283,10 @@ class PracticeEngine:
         p = self.plan
         result = self.pending_result
         self.pending_result = None
-        before = p.identity
+        before = (p.identity, p.bpm)
         message = p.apply_result(correct=result.correct,
                                  total=len(result.notes), extras=result.extra_notes)
-        if p.identity != before:
+        if (p.identity, p.bpm) != before:
             self.score_revision += 1
         self._save()
         return message
@@ -305,6 +309,7 @@ class PracticeEngine:
             self.awaiting_score_revision=None
             self.pending_result=None
             self.pending_rewind=None
+            self._rewind_requires_layout=False
             self.feedback_marks=[]
             self.feedback_unmapped=0
             self.recorder=Recorder()
@@ -312,6 +317,14 @@ class PracticeEngine:
             active_bar = max(0, min(len(grid)-2,
                 next((i for i in range(len(grid)-1) if grid[i] <= self.play_from_beat < grid[i+1]), len(grid)-2)))
             self.count_in_bar_beats = grid[active_bar + 1] - grid[active_bar]
+            self.count_in_meter = [max(1, round(self.count_in_bar_beats)), 4]
+            source_beat = phrase.start + self.play_from_beat
+            meter = next(((numerator, denominator) for beat, numerator, denominator
+                          in sorted(self.plan.piece.time_signatures, reverse=True)
+                          if beat <= source_beat + 1e-7), None)
+            if meter is not None:
+                self.count_in_meter = list(meter)
+                self.count_in_bar_beats = meter[0] * 4 / meter[1]
             self.count_in_beats = lead_in_beats(self.count_in_bar_beats, self.plan.bpm)
             self.next_boundary_beat=next_chunk_end(grid,self.play_from_beat)
             self.run_at=time.monotonic()+self.count_in_beats*60/self.plan.bpm
@@ -326,13 +339,22 @@ class PracticeEngine:
                 revision = int(kwargs.get("revision", -1))
                 # Ignore delayed PNG acknowledgements from older passages.
                 if self.awaiting_score_revision == revision and revision == self.score_revision:
-                    self.start()
+                    self.start(from_beat=self.pending_rewind or 0.0)
                 return
             if action == "stop":
                 self._stop()
                 self.feedback="Stopped"
                 return
             if action in ("start", "restart"):
+                if (self.plan is not None and self._layout_cache is not None
+                        and self._layout_bpm != self.plan.bpm):
+                    # Restart can interrupt slower-tempo feedback before its
+                    # scheduled retry. Render that spacing before its clock.
+                    self._stop()
+                    self.score_revision += 1
+                    self.awaiting_score_revision = self.score_revision
+                    self.feedback = "Preparing sheet music"
+                    return
                 self.start()  # Fresh count-in; previous MIDI notes cannot carry over.
                 return
             if action == "pause":
@@ -395,10 +417,18 @@ class PracticeEngine:
                     self.auto=False
                     self.feedback = message or self.feedback
             return
+        if self.awaiting_score_revision is not None:
+            return
         if self.pending_rewind is not None:
             if now >= self.next_at:
-                where = self.pending_rewind
-                self.start(from_beat=where)
+                if self._rewind_requires_layout:
+                    self.score_revision += 1
+                    self.awaiting_score_revision = self.score_revision
+                    self._rewind_requires_layout = False
+                    self.next_at = 0
+                    self.feedback = "Preparing retry"
+                else:
+                    self.start(from_beat=self.pending_rewind)
             return
         if not self.running or self.paused or now < self.run_at:
             return
@@ -425,6 +455,7 @@ class PracticeEngine:
                 self.plan.failures+=1
                 before=self.plan.bpm
                 self.plan.bpm=max(12,round(before*.9))
+                self._rewind_requires_layout = self.plan.bpm != before
                 self._save()
                 self.pending_rewind=decision.restart_beat
                 self.running=False
@@ -539,6 +570,7 @@ class PracticeEngine:
                     "awaiting_score_revision":self.awaiting_score_revision,
                     "count_in_beats":self.count_in_beats if self.running else 0,
                     "count_in_bar_beats":self.count_in_bar_beats,
+                    "count_in_meter":self.count_in_meter,
                     "midi_notes":len(self.recorder.presses) if self.recorder is not None else 0,
                     "preview_only":self.preview_only,
                     "progress":progress,"duration":seconds,"beat":exercise_beat if self.running else 0.0,
@@ -551,17 +583,24 @@ class PracticeEngine:
         with self.lock:
             if not self.plan:
                 raise ValueError("No piece loaded")
-            if self._layout_revision != self.score_revision or self._layout_cache is None:
-                p=self.plan
+            p=self.plan
+            # Keep every feedback mark on the exact score just performed.
+            # The retry revision is queued only once its reading time ends.
+            if (self.pending_rewind is not None and self._rewind_requires_layout
+                    and self._layout_revision == self.score_revision and self._layout_cache is not None):
+                return self._layout_cache
+            if (self._layout_revision != self.score_revision or self._layout_cache is None
+                    or self._layout_bpm != p.bpm):
                 phrase=p.active_phrase
                 notation=build_lesson_score(phrase, boundaries=p.piece.bar_boundaries,
                                             time_signatures=p.piece.time_signatures)
                 layout = render_layout(notation,phrase.first_bar,phrase.last_bar,p.hand,
-                                       total_beats=phrase.end - phrase.start)
+                                       total_beats=phrase.end - phrase.start, bpm=p.bpm)
                 require_lesson_alignment(phrase, layout.layout, p.hand)
                 self._layout_cache = layout
                 self._page_png.clear()
                 self._layout_revision=self.score_revision
+                self._layout_bpm=p.bpm
             return self._layout_cache
 
     def engraved(self, page: int = 0) -> str:
@@ -582,7 +621,8 @@ class PracticeEngine:
             return self._page_png[page]
 
     def geometry(self) -> dict:
-        return self.engraving().layout
+        from .notation_symbols import preparation_symbols
+        return {**self.engraving().layout, "symbols": preparation_symbols()}
 
     def lesson_overview(self) -> dict:
         """Full readable curriculum, with unique per-hand/per-level progress."""

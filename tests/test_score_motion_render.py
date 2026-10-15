@@ -15,6 +15,7 @@ def make_render_fixture(folder, bars=2):
     from piano_teacher.lesson_score import build_lesson_score
     from piano_teacher.score import render_layout
     from piano_teacher.raster import rasterize_score
+    from piano_teacher.notation_symbols import preparation_symbols
 
     duration = bars * 3
     notes = tuple(Note(i, i + .5, 77 - (i // 3) % 5, 0, 0, "right")
@@ -23,6 +24,7 @@ def make_render_fixture(folder, bars=2):
     variant = generate_variants(phrase, "right")[-1]
     score = build_lesson_score(variant.phrase, boundaries=tuple(range(0, duration + 1, 3)))
     engraved = render_layout(score, 1, bars, "right", total_beats=duration)
+    engraved.layout["symbols"] = preparation_symbols()
     (folder / "layout.json").write_text(json.dumps(engraved.layout))
     (folder / "score.png").write_bytes(rasterize_score(engraved.pages[0]))
     for page, svg in enumerate(engraved.pages):

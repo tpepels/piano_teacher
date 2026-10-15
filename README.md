@@ -35,8 +35,8 @@ verify actual input activity. A saved available device reconnects automatically.
 
 ## Practice
 
-Press **Start**. A short, audible count-in begins immediately and blank staff
-space moves toward the fixed timing line. The first note arrives at its musical
+Press **Start**. A short, audible count-in begins immediately, with clefs, meter
+and rests on the moving staff. The first note arrives at its musical
 onset. Notation continues moving from right to left even when you play nothing.
 Without an input device this is an ungraded timing preview, which finishes
 without awarding mastery.
@@ -46,7 +46,9 @@ downbeat, and positive beats are playback. Godot extrapolates snapshots between
 HTTP polls. The raster, real noteheads, feedback and timing line share one
 projection. Engraved systems are preloaded as separate horizontal tiles, so a
 line or page wrap does not need a new image during playback. Transparent and
-opaque image margins are handled correctly. Notation size remains stable.
+opaque image margins are handled correctly. Slower tempos spread the notes
+farther apart while preserving the symbols' size and shape. The count-in uses
+the opening notes' spacing, so motion flows through the downbeat.
 
 Preparation lasts at most one bar and approximately four seconds. Settings can
 turn off practice metronome beats; the preparation count-in remains audible.
@@ -57,7 +59,7 @@ Controls:
 
 | Control | Action |
 |---|---|
-| Space | Start, stop, or resume |
+| Space | Start, pause, or resume |
 | P | Pause or resume |
 | R | Restart with a fresh count-in |
 | S | Stop |
@@ -70,6 +72,9 @@ and note feedback. **Lesson path** explains the course and allows hand selection
 **Settings** contains the music folder, MIDI selection and actual input activity,
 selected piece's target tempo, metronome and fullscreen control. Window layout
 uses the actual available dimensions rather than shrinking a desktop canvas.
+Opening Settings or Lesson path pauses an active attempt; return and press
+Resume to continue from the same place. Stop or returning to the library ends
+the attempt. Settings returns to the screen where you opened it.
 
 ## Adaptive teaching
 
