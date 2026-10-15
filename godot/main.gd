@@ -102,6 +102,7 @@ var layout_revision := -1
 var requested_layout_revision := -1
 var layout_pending := false
 var score_layout: Dictionary = {}
+var living_chords: Array = []
 var source_layout: Dictionary = {}
 var page_images: Array[Image] = []
 var score_tiles: Array[TextureRect] = []
@@ -1607,8 +1608,8 @@ func _process(_delta: float) -> void:
     # The note cue is a musical preview on the exact score, not an evaluator.
     # During count-in show the first chord. It disappears during rests longer
     # than 1.25 beats, and correct/missed/wrong pitch marks always take priority.
-    score_overlay.next_chord = LivingScore.next_chord(
-        score_layout, beat, score_overlay.marks)
+    score_overlay.next_chord = LivingScore.cue(
+        living_chords, beat, score_overlay.marks)
     var cursor: Dictionary = _position_at_beat(beat)
     if cursor.is_empty():
         score_overlay.showing = false
@@ -1998,6 +1999,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         revision = new_revision
         layout_revision = -1
         score_layout = {}
+        living_chords.clear()
         source_layout = {}
         page_images.clear()
         current_page = -1
@@ -2306,6 +2308,7 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         score_content.move_child(tile, score_overlay.get_index())
         score_tiles.append(tile)
     score_layout = strip["layout"]
+    living_chords = LivingScore.prepare(score_layout)
     score_crop_origin = Vector2.ZERO
     score_crop_size = Vector2.ONE
     score_view.texture = ImageTexture.create_from_image(cropped)
