@@ -1365,6 +1365,20 @@ class PracticeEngine:
             progress=min(1.0,max(0.0, exercise_beat/(ex.phrase.end-ex.phrase.start))) if self.running else 0.0
             phase=self._phase(now)
             live_marks=self._live_feedback(elapsed) if phase == "playing" else []
+            # Also publish the recent error in a stable HUD field. Engraved
+            # marks travel with the moving score and can leave the viewport
+            # before the student notices them.
+            live_errors = [mark for mark in live_marks
+                           if mark.get("status") in ("missed", "wrong")]
+            latest_error = max(live_errors, key=lambda mark: (mark.get("beat", -1), mark.get("pitch", -1)),
+                               default=None)
+            live_note_feedback = ({
+                "status": latest_error["status"],
+                "pitch": latest_error["pitch"],
+                "name": note_name(int(latest_error["pitch"])),
+                "count": len(live_errors),
+                "source_id": latest_error.get("source_id", ""),
+            } if latest_error is not None else None)
             result = {**input_activity,"mode":self.mode,"teaching":None,"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
                     "current_bar":bar_number_at(
@@ -1394,6 +1408,9 @@ class PracticeEngine:
                     "duration_beats":ex.phrase.end - ex.phrase.start,"running":self.running,
                     "device":self.midi_device,"feedback":"Paused" if self.paused else self.feedback,"revision":self.score_revision,
                     "feedback_marks":self.feedback_marks if (self.pause_context if self.paused else phase) in ("feedback", "recovering", "performance_complete") else live_marks,
+                    "live_note_feedback": live_note_feedback,
+                    "scoring_available": (not self.preview_only and self._piano_connected()
+                                          and self.mode in ("practice", "perform")),
                     "feedback_unmapped":self.feedback_unmapped if (self.pause_context if self.paused else phase) in ("feedback", "recovering", "performance_complete") else 0}
             if self.mode == "learn" and self.teaching is not None:
                 teaching = self.teaching.snapshot(now=time.monotonic())
