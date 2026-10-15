@@ -89,3 +89,25 @@ def test_repaired_midi_passes_full_notation_import(tmp_path):
     # Verovio gets its canonical note IDs from build_lesson_score in the
     # runtime. The uploaded MIDI's original note IDs must remain stable.
     assert all(note.source_id for note in piece.notes)
+
+
+def test_implausible_time_signature_metadata_is_ignored_but_beat_times_survive(tmp_path):
+    midi = mido.MidiFile(type=1, ticks_per_beat=480)
+    track = mido.MidiTrack()
+    track.append(mido.MetaMessage("time_signature", numerator=4, denominator=4, time=0))
+    track.append(mido.Message("note_on", note=60, velocity=90, channel=0, time=0))
+    track.append(mido.Message("note_off", note=60, channel=0, velocity=0, time=480))
+    track.append(mido.MetaMessage("time_signature", numerator=131, denominator=4, time=480))
+    track.append(mido.Message("note_on", note=64, velocity=90, channel=0, time=0))
+    track.append(mido.Message("note_off", note=64, velocity=0, channel=0, time=480))
+    track.append(mido.MetaMessage("time_signature", numerator=4, denominator=4, time=0))
+    track.append(mido.MetaMessage("end_of_track", time=480))
+    midi.tracks.append(track)
+    file = tmp_path / "wrong_meter.mid"
+    midi.save(file)
+    piece = load_midi(file)
+    assert piece.time_signatures == ((0.0, 4, 4),)
+    assert [(n.pitch, n.start, n.end) for n in piece.notes] == [
+        (60, 0.0, 1.0), (64, 2.0, 3.0),
+    ]
+    assert any("131/4" in warning for warning in piece.import_warnings)
