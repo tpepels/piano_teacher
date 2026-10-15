@@ -2107,13 +2107,15 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     # a running performance gives the stave as much space as possible.
     lesson_info_label.visible = (learning or phase not in ["playing", "count_in"]
         or bool(parsed.get("guided_recovery", false)))
-    start_button.text = "Resume  ·  Space" if bool(parsed.get("paused", false)) else "Pause  ·  Space" if active_transport else "Start  ·  Space"
+    # One short verb belongs on the central game control. Shortcuts and
+    # explanations live in the tooltip instead of making every button a menu.
+    start_button.text = "Resume" if bool(parsed.get("paused", false)) else "Pause" if active_transport else "Play"
     if learning:
-        start_button.text = "Resume  ·  Space" if phase == "paused" else "Try rhythm · Space" if phase in ["guided_complete", "disconnected"] else "Pause  ·  Space" if phase in ["guided_wait", "loading"] else "Learn · Space"
+        start_button.text = "Resume" if phase == "paused" else "Try rhythm" if phase in ["guided_complete", "disconnected"] else "Pause" if phase in ["guided_wait", "loading"] else "Learn"
         if phase == "guided_complete" and bool(parsed.get("guided_recovery", false)):
             start_button.text = "Retry rhythm"
         elif phase == "guided_complete" and bool(teaching.get("has_more_units", false)):
-            start_button.text = "Next idea · Space"
+            start_button.text = "Next idea"
     elif str(parsed.get("mode", "")) == "listen" and not active_transport:
         start_button.text = "Back to warm-up" if bool(parsed.get("warmup", false)) else "Listen again"
     start_button.tooltip_text = "Play, pause or resume · Space · Play any piano key when ready"
