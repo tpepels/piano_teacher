@@ -105,6 +105,12 @@ def test_open_builtin_starts_at_full_perform_without_adaptive_stages(tmp_path):
         assert engine.library_listing()["last_piece"] == PREFIX + "chords"
         with pytest.raises(ValueError, match="three clean"):
             engine.control("hand", hand="right")
+        assert not engine.state()["placement_available"]
+        assert not engine.state()["skip_available"]
+        with pytest.raises(ValueError, match="three clean"):
+            engine.control("skip_stage", reason="Skip")
+        with pytest.raises(ValueError, match="three clean"):
+            engine.control("place_original")
         engine.control("start")
         assert engine.preview_only and engine.mode == "practice"
         engine.control("stop")
