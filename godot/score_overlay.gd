@@ -8,6 +8,7 @@ var transport_active := false
 var guided_active := false
 var image_size := Vector2.ZERO
 var marks: Array = []
+var hit_pulses: Array = []
 var active_page := -1
 var crop_origin := Vector2.ZERO
 var crop_size := Vector2.ONE
@@ -165,6 +166,22 @@ func _draw() -> void:
             draw_string(font, center + Vector2(12, -9), symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, color)
             if status == "extra":
                 draw_string(font, center + Vector2(12, 5), str(marker.get("label", "")), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, color)
+    # A real physical attack produces a prominent short-lived pulse at the
+    # mapped engraved notehead. These pulses are provisional and distinct from
+    # the authoritative assessment marks rendered above.
+    var ticks: int = Time.get_ticks_msec()
+    for pulse in hit_pulses:
+        if int(pulse.get("page", -1)) != active_page:
+            continue
+        var alpha: float = clampf(float(int(pulse.get("until_ms", 0)) - ticks) / 700.0, 0.0, 1.0)
+        if alpha <= 0.0:
+            continue
+        var status: String = str(pulse.get("status", "heard"))
+        var color: Color = Color("#63D9AE") if status == "on_time" else Color("#D6AC61")
+        var center := _sheet_xy(float(pulse.get("x", 0.0)), float(pulse.get("y", 0.0)))
+        draw_circle(center, 15.0, Color(color, alpha * .17))
+        draw_arc(center, 14.0 + (1.0-alpha) * 12.0, 0.0, TAU, 32, Color(color, alpha), 4.0, true)
+
     if showing and not guided_active and not cursor.is_empty() and int(cursor.get("page", -1)) == active_page:
         var x: float = float(cursor.get("x", 0.0))
         var top: float = float(cursor.get("top", 0.0))
