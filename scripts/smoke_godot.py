@@ -24,6 +24,28 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 from smoke_phase0 import make_fixture
 
+def make_sparse_three_four_fixture(path: Path) -> None:
+    """Two 3/4 bars, one active hand and silent bass, as in the reported bug."""
+    import mido
+    midi = mido.MidiFile(ticks_per_beat=480)
+    meta = mido.MidiTrack([
+        mido.MetaMessage("set_tempo", tempo=500000, time=0),
+        mido.MetaMessage("time_signature", numerator=3, denominator=4, time=0),
+        mido.MetaMessage("end_of_track", time=0)
+    ])
+    midi.tracks.append(meta)
+    hand = mido.MidiTrack([mido.MetaMessage("track_name", name="Right Hand", time=0)])
+    last = 0
+    for index, pitch in enumerate((77, 77, 77, 76, 76, 76)):
+        at = index * 480
+        hand.append(mido.Message("note_on", note=pitch, velocity=85, channel=0, time=at-last))
+        hand.append(mido.Message("note_off", note=pitch, velocity=0, channel=0, time=240))
+        last = at + 240
+    hand.append(mido.MetaMessage("end_of_track", time=240))
+    midi.tracks.append(hand)
+    midi.save(path)
+
+
 URL = "http://127.0.0.1:8765"
 CURSOR_RE = re.compile(r"PHASE0_CURSOR_BEAT:([0-9.]+) SCREEN_X:([-0-9.]+) VISIBLE:(true|false)")
 
@@ -101,7 +123,7 @@ def run(file: Path | None = None) -> int:
         temp = Path(directory)
         fixture = temp / ("phase0" + file.suffix.lower() if file else "phase0.mid")
         if file is None:
-            make_fixture(fixture)
+            make_sparse_three_four_fixture(fixture)
         else:
             if not file.is_file():
                 raise ValueError(f"MIDI/MusicXML file not found: {file}")
@@ -140,7 +162,7 @@ def run(file: Path | None = None) -> int:
                 api("/settings", {"fullscreen": False})
                 api("/control", {"action": "tempo", "bpm": 240})
                 godot_process = subprocess.Popen(
-                    [godot, "--headless", "--path", str(ROOT / "godot"),
+                    [godot, "--headless", "--resolution", "1536x960", "--path", str(ROOT / "godot"),
                      "--", "--phase0-smoke"],
                     cwd=ROOT, env=env, stdout=ui_output,
                     stderr=subprocess.STDOUT)
@@ -149,6 +171,25 @@ def run(file: Path | None = None) -> int:
                     godot_process, ui_log, timeout=100,
                     description="Godot PNG notation display")
                 print("PASS Godot scene displayed an engraved PNG score", flush=True)
+                geom = api("/score/layout")
+                print("REAL SCORE NOTE GEOMETRY:", json.dumps(geom.get("notes", [])[:4]), flush=True)
+                print("REAL SCORE CURSOR ANCHORS:", json.dumps(geom.get("anchors", [])[:4]), flush=True)
+                from xml.etree import ElementTree as ET
+                with urlopen(URL + "/score.svg?page=0", timeout=15) as response:
+                    root = ET.fromstring(response.read())
+                print("REAL SVG ROOT:", json.dumps(root.attrib), flush=True)
+                parent_map = {child: parent for parent in root.iter() for child in parent}
+                first_note = next((e for e in root.iter()
+                                   if "note" in e.get("class", "").split()), None)
+                if first_note is not None:
+                    glyph = next((e for e in first_note.iter()
+                                  if e.tag.rsplit("}", 1)[-1] == "use"), first_note)
+                    chain = []
+                    node = glyph
+                    while node is not None:
+                        chain.append({"tag": node.tag.rsplit("}", 1)[-1], **node.attrib})
+                        node = parent_map.get(node)
+                    print("REAL SVG NOTE TRANSFORMS:", json.dumps(chain[:12]), flush=True)
                 started = api("/control", {"action": "start"})
                 if started.get("phase") != "count_in" or not started.get("preview_only"):
                     raise RuntimeError(f"Preview did not enter count-in: {started}")

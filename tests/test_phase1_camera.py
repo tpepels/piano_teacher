@@ -12,7 +12,7 @@ def test_fit_is_based_on_actual_required_noteheads():
 def test_playback_keeps_music_inside_frame():
     assert "focus_left * displayed_width" in SOURCE
     assert "focus_right * displayed_width" in SOURCE
-    assert "target_x = clampf(target_x, right_limit, left_limit)" in SOURCE
+    assert "target_x = clampf(target_x, minimum_x, maximum_x)" in SOURCE
     assert "var target_y: float = (viewport.y - displayed_height) * 0.5" in SOURCE
     assert "score_content.position = score_content.position.lerp(target, blend)" in SOURCE
 

@@ -28,7 +28,7 @@ def test_invalid_count_in_inputs_fail():
 def test_godot_scrolling_is_unconditional_during_transport():
     from pathlib import Path
     gd=(Path(__file__).resolve().parents[1]/"godot"/"main.gd").read_text()
-    assert "target_x = target_reading_x - note_x * displayed_width" in gd
+    assert "target_x = viewport.x * 0.42 - note_x * displayed_width" in gd
     assert "if displayed_width > viewport.x * 0.91:" not in gd
     assert "var initial_cursor: Dictionary = _position_at_beat(play_from)" in gd
     assert "PHASE0_LEAD_BEAT:" in gd
