@@ -87,6 +87,7 @@ var follow_system_key := ""
 var phase0_smoke_mode := false
 var phase0_last_phase := ""
 var phase0_last_cursor_tick := -1
+var phase0_last_lead_tick := -999
 
 class ScoreOverlay extends Control:
     var cursor: Dictionary = {}
@@ -107,21 +108,25 @@ class ScoreOverlay extends Control:
     func _draw() -> void:
         if image_size.x <= 0.0 or image_size.y <= 0.0:
             return
-        # Two empty, moving lead-in bars belong to the lesson canvas, not the
-        # imported MIDI. They scroll with the same transform as the score.
+        # The empty preparation measure belongs to the same moving canvas
+        # as the notes. Keep it present after the downbeat so it exits smoothly.
         if showing and lead_width_px > 2.0 and not lead_first.is_empty():
             var first_x: float = _sheet_xy(float(lead_first.get("x", 0.0)), 0.0).x
             var top: float = _sheet_xy(0.0, float(lead_first.get("top", 0.0))).y
             var bottom: float = _sheet_xy(0.0, float(lead_first.get("bottom", 1.0))).y
             var left: float = first_x - lead_width_px
+            # Mask any preceding source notes during a mid-piece recovery:
+            # this really is an empty preparation bar, not an overlay on notes.
+            draw_rect(Rect2(left, top - 16.0, lead_width_px,
+                            bottom - top + 32.0), Color("#FFFFFF"), true)
             var ink := Color(Color("#75867C"), 0.45)
             var staff_gap: float = maxf(5.0, (bottom - top) / 17.0)
             for j in range(5):
                 var offset: float = float(j) * staff_gap
                 draw_line(Vector2(left, top + offset), Vector2(first_x, top + offset), ink, 1.1, true)
                 draw_line(Vector2(left, bottom - offset), Vector2(first_x, bottom - offset), ink, 1.1, true)
-            for k in range(3):
-                var bx: float = left + lead_width_px * float(k) / 2.0
+            for k in range(2):
+                var bx: float = left + lead_width_px * float(k)
                 draw_line(Vector2(bx, top), Vector2(bx, top + 4.0 * staff_gap), ink, 1.25, true)
                 draw_line(Vector2(bx, bottom - 4.0 * staff_gap), Vector2(bx, bottom), ink, 1.25, true)
         # A faint green ring confirms correct notes; stronger colour markers
@@ -270,11 +275,12 @@ func _update_count_in() -> void:
         var bar_beats: int = maxi(1, int(last_state.get("count_in_beats", 4)))
         _count_tick(posmod(tick, bar_beats) == 0)
     if beat < 0.0:
-        count_in_display.text = "%d" % maxi(1, int(ceil(-beat)))
+        var lead: float = maxf(0.5, float(last_state.get("count_in_beats", 3.0)))
+        var step: int = mini(ceili(lead), int(floor(beat + lead)) + 1)
+        count_in_display.text = "GET READY  ·  %d / %d" % [maxi(1, step), ceili(lead)]
         count_in_display.visible = true
     else:
-        count_in_display.text = "PLAY"
-        count_in_display.visible = beat < 0.45
+        count_in_display.visible = false
 
 func _layout_moving_score(delta: float = 0.0) -> void:
     if score_view.texture == null or score_frame == null or score_content == null:
@@ -306,14 +312,10 @@ func _layout_moving_score(delta: float = 0.0) -> void:
         var note_x: float = (float(score_overlay.cursor.get("x", 0.0)) - score_crop_origin.x) / score_crop_size.x
         var target_reading_x: float = viewport.x * 0.42
         var margin: float = viewport.x * 0.045
-        if displayed_width > viewport.x * 0.91:
-            var min_x: float = viewport.x * 0.96 - displayed_width
-            if _transport_beat_now() < 0.0:
-                # The incoming score moves immediately during count-in.
-                # Never clamp away the blank measures before the first note.
-                target_x = target_reading_x - note_x * displayed_width
-            else:
-                target_x = clampf(target_reading_x - note_x * displayed_width, min_x, margin)
+        # Keep the cyan rule fixed at 42% of the viewport while the entire
+        # exercise passes beneath it. Centering/clamping short scores makes
+        # the notation appear completely stationary; never do that in play.
+        target_x = target_reading_x - note_x * displayed_width
     var target_y: float = (viewport.y - displayed_height) * 0.5
     if displayed_height > viewport.y:
         target_y = clampf(viewport.y * 0.5 - midpoint * displayed_height,
@@ -321,7 +323,7 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     # The PNG and feedback overlay share a parent, and therefore stay aligned
     # during panning. Smoothing is independent of frame rate.
     # Snap on staff/page changes rather than drifting over another system.
-    if delta <= 0.0 or key != follow_system_key:
+    if delta <= 0.0 or key != follow_system_key or _transport_beat_now() < 0.0:
         score_content.position = Vector2(target_x, target_y)
     else:
         var blend: float = 1.0 - exp(-14.0 * delta)
@@ -681,11 +683,16 @@ func _build_interface() -> void:
     score_retry_button = _button("Retry score", _retry_score)
     score_retry_button.visible = false
     status_content.add_child(score_retry_button)
-    count_in_display = _label("4", 66, ACCENT, true)
-    count_in_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    count_in_display.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    # A compact, unobtrusive cue. A huge centred numeral hid the movement.
+    count_in_display = _label("GET READY", 18, ACCENT, true)
+    count_in_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+    count_in_display.vertical_alignment = VERTICAL_ALIGNMENT_TOP
     count_in_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    count_in_display.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    count_in_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+    count_in_display.offset_left = 22.0
+    count_in_display.offset_right = -22.0
+    count_in_display.offset_top = 12.0
+    count_in_display.offset_bottom = 52.0
     count_in_display.visible = false
     score_frame.add_child(count_in_display)
     var information := HBoxContainer.new()
@@ -935,21 +942,32 @@ func _process(_delta: float) -> void:
         score_overlay.showing = false
         score_overlay.queue_redraw()
         return
+    # A fixed origin for the blank measure is necessary: rebuilding it
+    # from the changing cursor made the measure jump/disappear at downbeat.
+    var initial_cursor: Dictionary = _position_at_beat(play_from)
     score_overlay.lead_first = {}
     score_overlay.lead_width_px = 0.0
-    if clock < 0.0:
-        # The cursor crosses two time-bearing empty bars before the first
-        # required note, including after a recovery rewind.
-        var lead_beats: float = maxf(1.0, float(last_state.get("count_in_beats", 8)))
-        var virtual_width: float = score_frame.size.x * 0.80
-        var fraction: float = virtual_width / maxf(1.0, score_content.size.x) * score_crop_size.x
-        score_overlay.lead_first = cursor.duplicate()
+    if int(initial_cursor.get("page", -1)) == current_page:
+        var virtual_width: float = score_frame.size.x * 0.72
+        score_overlay.lead_first = initial_cursor
         score_overlay.lead_width_px = virtual_width
-        cursor["x"] = float(cursor.get("x", 0.0)) + clock / lead_beats * fraction
+        if clock < 0.0:
+            var lead_beats: float = maxf(0.5, float(last_state.get("count_in_beats", 3)))
+            var fraction: float = virtual_width / maxf(1.0, score_content.size.x) * score_crop_size.x
+            cursor["x"] = float(initial_cursor.get("x", 0.0)) + clock / lead_beats * fraction
     score_overlay.cursor = cursor
     score_overlay.showing = true
     score_overlay.transport_active = active
     _layout_moving_score(_delta)
+    if phase0_smoke_mode and clock < 0.0:
+        var lead_tick: int = int(floor(clock * 4.0))
+        if lead_tick != phase0_last_lead_tick:
+            phase0_last_lead_tick = lead_tick
+            var cursor_screen_x: float = score_content.position.x + (
+                (float(cursor.get("x", 0.0)) - score_crop_origin.x)
+                / score_crop_size.x * score_content.size.x)
+            print("PHASE0_LEAD_BEAT:", clock, " CONTENT_X:", score_content.position.x,
+                  " CURSOR_X:", cursor_screen_x, " VISIBLE:", score_overlay.showing)
     if phase0_smoke_mode and active:
         var cursor_tick: int = int(floor(beat * 4.0))
         if cursor_tick > phase0_last_cursor_tick:
@@ -1017,7 +1035,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     elif phase == "recovering":
         feedback_label.text = str(parsed.get("feedback", "Short break before retry"))
     elif phase == "count_in":
-        feedback_label.text = "Two moving lead-in bars · notes arrive after the count"
+        feedback_label.text = "Follow the moving staff · play when notes reach the cyan line"
     elif phase == "playing":
         var midi_count: int = int(parsed.get("midi_notes", 0))
         if bool(parsed.get("preview_only", false)):
