@@ -1716,37 +1716,37 @@ func _wrong_note_ghost(pitch: int, note: Dictionary) -> Dictionary:
 
 func _update_note_feedback_hud(parsed: Dictionary) -> void:
     # The red HUD has its own fixed screen position. Score-head markers
-        # alone are easy to miss once the continuous score scrolls away.
-        var active_mode: String = str(parsed.get("mode", "practice"))
-        var active_phase: String = str(parsed.get("phase", "ready"))
-        var feedback: Variant = parsed.get("live_note_feedback")
-        practice_note_feedback_panel.visible = false
-        if active_mode in ["practice", "perform"]:
-            if active_phase == "playing" and feedback is Dictionary:
-                var problem: Dictionary = feedback
-                var wrong: bool = str(problem.get("status", "")) == "wrong"
-                practice_note_feedback_label.text = (
-                    "WRONG  ·  %s" if wrong else "MISSED  ·  %s"
-                ) % str(problem.get("name", ""))
+    # alone are easy to miss once the continuous score scrolls away.
+    var active_mode: String = str(parsed.get("mode", "practice"))
+    var active_phase: String = str(parsed.get("phase", "ready"))
+    var feedback: Variant = parsed.get("live_note_feedback")
+    practice_note_feedback_panel.visible = false
+    if active_mode in ["practice", "perform"]:
+        if active_phase == "playing" and feedback is Dictionary:
+            var problem: Dictionary = feedback
+            var wrong: bool = str(problem.get("status", "")) == "wrong"
+            practice_note_feedback_label.text = (
+                "WRONG  ·  %s" if wrong else "MISSED  ·  %s"
+            ) % str(problem.get("name", ""))
+            practice_note_feedback_label.add_theme_color_override("font_color", Color("#FF827A"))
+            practice_note_feedback_panel.visible = true
+        elif active_phase in ["playing", "count_in"] and bool(parsed.get("preview_only", false)):
+            practice_note_feedback_label.text = "NO MIDI PIANO · SCORING OFF"
+            practice_note_feedback_label.add_theme_color_override("font_color", Color("#F1C67D"))
+            practice_note_feedback_panel.visible = true
+        elif active_phase in ["feedback", "recovering", "performance_complete"]:
+            var missed_count := 0
+            var wrong_count := 0
+            for mark in parsed.get("feedback_marks", []):
+                if str(mark.get("status", "")) == "missed":
+                    missed_count += 1
+                elif str(mark.get("status", "")) == "wrong":
+                    wrong_count += 1
+            if missed_count + wrong_count > 0:
+                practice_note_feedback_label.text = "%d missed · %d wrong" % [missed_count, wrong_count]
                 practice_note_feedback_label.add_theme_color_override("font_color", Color("#FF827A"))
                 practice_note_feedback_panel.visible = true
-            elif active_phase in ["playing", "count_in"] and bool(parsed.get("preview_only", false)):
-                practice_note_feedback_label.text = "NO MIDI PIANO · SCORING OFF"
-                practice_note_feedback_label.add_theme_color_override("font_color", Color("#F1C67D"))
-                practice_note_feedback_panel.visible = true
-            elif active_phase in ["feedback", "recovering", "performance_complete"]:
-                var missed_count := 0
-                var wrong_count := 0
-                for mark in parsed.get("feedback_marks", []):
-                    if str(mark.get("status", "")) == "missed":
-                        missed_count += 1
-                    elif str(mark.get("status", "")) == "wrong":
-                        wrong_count += 1
-                if missed_count + wrong_count > 0:
-                    practice_note_feedback_label.text = "%d missed · %d wrong" % [missed_count, wrong_count]
-                    practice_note_feedback_label.add_theme_color_override("font_color", Color("#FF827A"))
-                    practice_note_feedback_panel.visible = true
-    
+
 
 func _consume_live_piano_hits(state: Dictionary) -> void:
     var events: Array = state.get("midi_visual_events", [])
