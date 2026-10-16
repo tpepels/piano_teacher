@@ -1266,6 +1266,43 @@ preview, live green/orange/red note reactions, paused score and
 an uninterrupted three-clean-run progression. Scores, grading, lesson
 unlocks and source notes are not modified by this visual phase.
 
+## Phase 7.9 - Instrument feedback and clean-pass transitions
+
+The practice heading now contains a compact **MIDI CONNECTED / NO PIANO**
+status light next to tempo and the active hand. It briefly pulses when
+the backend reports a new physical MIDI note-on. An old event count
+from app startup cannot fabricate a fresh attack, and disconnect
+immediately extinguishes the light. Ungraded preview is explicitly
+labelled `PREVIEW`, not a successful or scored performance.
+
+A completed graded take now sends a short, subtle light wave across the
+performance stage. Clean passes are teal; retries are coral. The wave
+starts only when a new backend-confirmed take result arrives and never
+restarts on ordinary `/state` polls or on a pause/resume. Preview
+and Listen do not trigger a graded result celebration. The complete
+sheet-music raster remains above this stage lighting, so no notes,
+accidentals or staff endings are painted over.
+
+The three-clean-run indicator is now a legible, charged three-segment
+instrument rather than tiny outlined dots. Its filled segments still
+come exclusively from the backend streak; MIDI-free preview can never
+light one up. Real hand-unlock transitions retain their animated sweep.
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+.venv/bin/python -m pytest -q \
+    tests/test_phase79_status.py tests/test_phase78_stage.py \
+    tests/test_phase77_game_feel.py tests/test_practice_interactions.py
+./scripts/check_godot.sh
+./run.sh
+```
+
+The Godot fixtures cover input activity, status cycling, once-per-take
+celebration, exhausted animations, disabled preview scoring and the
+real practice UI hierarchy. Check the brightness and score readability
+on the actual desktop before regarding the art direction as final.
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
