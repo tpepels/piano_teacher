@@ -201,6 +201,26 @@ func run() -> void:
             break
     check(checked_onsets >= 3,
         "The score/metronome fixture must verify multiple note arrivals")
+    # A time-proportional strip must interpolate *through* each original
+    # system join rather than freezing until the following first note.
+    var checked_system_join := false
+    var all_anchors: Array = app.score_layout.get("anchors", [])
+    for i in range(all_anchors.size()-1):
+        var left: Dictionary = all_anchors[i]
+        var right: Dictionary = all_anchors[i+1]
+        if str(left.get("source_system", "")) == str(right.get("source_system", "")):
+            continue
+        if float(right.beat)-float(left.beat) <= .00001:
+            continue
+        var midpoint: float = (float(left.beat)+float(right.beat))*.5
+        var projected: Dictionary = app._position_at_beat(midpoint)
+        check(absf(float(projected.get("x", 0.0)) -
+            (float(left.x)+float(right.x))*.5) < .00001,
+            "Camera cannot stall between systems: midpoint must lie midway between notes")
+        checked_system_join = true
+    if app.score_layout.get("systems", []).size() > 1:
+        check(checked_system_join,
+            "Multi-system timing fixture must include a time-bearing system join")
     # The same actual canvas must remain continuous at every system/page join.
     for system in app.score_layout.get("systems", []):
         var boundary: float = float(system.start_beat)
