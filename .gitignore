@@ -1,6 +1,8 @@
 .venv/
 __pycache__/
 .pytest_cache/
+# Local piano sessions may contain file paths, timing traces and device names.
+playtest-results/
 *.py[cod]
 *.egg-info/
 *.mid
