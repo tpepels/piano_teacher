@@ -2,6 +2,7 @@ extends Control
 
 const Design := preload("res://practice_theme.gd")
 const Ink := preload("res://notehead_ink.gd")
+const Effects := preload("res://note_reactions.gd")
 
 var cursor: Dictionary = {}
 var showing := false
@@ -238,6 +239,22 @@ func _draw() -> void:
         draw_polyline(Ink.ellipse(focus, extent.x, extent.y),
             Color(tone, (.82 + .18 * attack) * remaining),
             3.5, true)
+        # Front-layer sparks: the raster score otherwise hides most of the
+        # existing particles drawn behind opaque engraved PNG tiles. These
+        # start well outside the notehead, so the pitch remains readable.
+        # Preview uses blue; assessed success uses bright mint.
+        for particle in range(Effects.PARTICLE_COUNT):
+            var endpoint: Vector2 = Effects.particle_endpoint(
+                focus, gap, progress, particle)
+            var radial: Vector2 = (endpoint - focus).normalized()
+            var brightness: float = pow(remaining, .75)
+            var tip_radius: float = maxf(1.6, gap * .12) * brightness
+            draw_line(endpoint - radial * gap * (.85 + .3 * progress), endpoint,
+                Color(tone, .84 * brightness), 2.25, true)
+            draw_circle(endpoint, tip_radius * 2.1,
+                Color(tone, .22 * brightness))
+            draw_circle(endpoint, tip_radius,
+                Color(tone, .96 * brightness))
         # Short four-point glint outside the ellipse: a much more visible
         # confirmation than the old hairline green circle.
         if attack > .0:
