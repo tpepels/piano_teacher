@@ -1710,6 +1710,21 @@ func _update_hand_stages(state: Dictionary) -> void:
         label.add_theme_stylebox_override("normal", style)
 
 
+# Animate the newly active hand without extra buttons or a separate
+# modal. Deferred until the backend-driven hand-stage labels are updated.
+func _pulse_hand_stage() -> void:
+    var hand: String = str(last_state.get("hand", ""))
+    if not practice_stage_labels.has(hand):
+        return
+    var label: Label = practice_stage_labels[hand]
+    if not label.visible:
+        return
+    label.modulate = Color("#A6FFE0")
+    var transition := create_tween()
+    transition.tween_property(label, "modulate", Color.WHITE, .68) \
+        .set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+
 func _open_library_piece(identifier: String) -> void:
     # Pause requests are asynchronous. Store a quick selection and open it
     # once the transport has acknowledged the pause, rather than dropping
@@ -1995,6 +2010,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if not unlocked.is_empty():
         hand_unlock_message = unlocked
         hand_unlock_until_ms = Time.get_ticks_msec() + 2600
+        game_streak.pulse_unlock()
+        call_deferred("_pulse_hand_stage")
     last_state = parsed
     game_phase_cue.present(parsed)
     # Low-latency local polling only while playing from a connected piano.
