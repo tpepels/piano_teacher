@@ -1186,6 +1186,45 @@ Check the offline report tool:
 .venv/bin/python -m pytest -q tests/test_hardware_acceptance_summary.py
 ```
 
+## Phase 8K - Automatic reconnect of selected USB MIDI piano
+
+The backend now remembers the piano explicitly selected in Settings and
+tries that *exact* MIDI input again when it returns after USB unplug/replug
+or a backend restart. Device discovery is bounded to at most one scan
+every three seconds while a preferred device exists; failed reopen attempts
+are rate-limited to one every four seconds. This avoids spinning or
+constantly reconnecting while ALSA is still releasing a USB device.
+
+Disconnection always cancels the current attempt and any pending clean
+result; it clears transient note input and stops hardware diagnostics.
+When the original port returns, the app reports that the piano
+reconnected and requires the learner to press **Start**. It does not
+automatically resume playback, fabricate notes or award progress.
+It never substitutes a different available MIDI input. Explicit
+disconnect in Settings clears the saved preference and disables
+automatic reconnect. If the operating system renames a MIDI device on
+replug, select the correct new name once in Settings.
+
+Automatic discovery also runs when the app is open without a keyboard;
+a saved preferred piano that becomes available later is attached without
+repeated visits to Settings. Transient discovery errors do not break the
+score state API or close a known healthy port.
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+.venv/bin/python -m pytest -q tests/test_midi_reconnect.py
+./scripts/check_godot.sh
+./run.sh
+```
+
+**Real piano acceptance:** connect the Kawai, begin a graded warm-up,
+unplug it while playing, and verify the attempt cancels without
+mastery. Reconnect it and confirm the same input reappears and does not
+play or grade until Start is pressed. Repeat after restarting the app,
+then test explicit Disconnect. No real USB event has been simulated as
+proof of hardware acceptance.
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
