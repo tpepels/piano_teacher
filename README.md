@@ -823,6 +823,20 @@ guided recognition, local audio and SQLite persistence. Godot's `main.gd` owns n
 `score_strip.gd` owns tiled score coordinates and `practice_theme.gd` the shared
 dark theme. The older Qt entrypoint remains available separately.
 
+## Semantic button hierarchy
+
+Actions now have reusable visual roles rather than identical rectangle
+skins. Mint-filled **primary actions** advance into practice; amber **review
+and retry** controls communicate repetition; blue **settings and listening**
+actions suggest audio/configuration; neutral ghost **navigation and utilities**
+stay subdued; coral **stop/quit** actions read as interruptions; lesson-hand
+**choices** show their selected state. Library entries display a dedicated
+music-note glyph and read as selectable rows rather than competing call-to-
+action buttons. The three tactile transport keys remain the largest and keep
+their own Play, Retry and Listen iconography. Hover, pressed, disabled and
+keyboard focus are styled for every role, and standard buttons continue to
+use their original callback and accessibility text.
+
 ## HiDPI score readability
 
 The notation now scales with the *available score-stage height* instead of

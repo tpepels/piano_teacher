@@ -94,6 +94,24 @@ func _run() -> void:
         "Play is visually dominant, not another website-sized button")
     _check(retry.size.x >= 145.0 and listen.size.x >= 145.0,
         "Secondary game keys need real hit targets")
+    _check(str(retry.get_meta("ui_button_role", "")) == "transport_retry" and
+        str(primary.get_meta("ui_button_role", "")) == "transport_primary" and
+        str(listen.get_meta("ui_button_role", "")) == "transport_listen",
+        "Transport controls need separate identity and accessible action targets")
+    var reset_face := retry.get_theme_stylebox("normal") as StyleBoxFlat
+    var play_face := primary.get_theme_stylebox("normal") as StyleBoxFlat
+    var listen_face := listen.get_theme_stylebox("normal") as StyleBoxFlat
+    _check(reset_face.bg_color != play_face.bg_color and
+        reset_face.bg_color != listen_face.bg_color and
+        listen_face.bg_color != play_face.bg_color,
+        "Play, Retry and Listen must have distinguishable base colours")
+    _check(str(browse_button.get_meta("ui_button_role", "")) == "primary",
+        "Choose music must use the primary action rather than a utility skin")
+    var nav: Control = scene.get("practice_settings_button")
+    _check(str(nav.get_meta("ui_button_role", "")) == "utility",
+        "Navigation must not have the same visual priority as transport")
+    _check((scene.get("practice_settings_button") as Button).focus_mode ==
+        Control.FOCUS_ALL, "Navigation must stay keyboard accessible")
     _check(not (scene.get("practice_progress") as ProgressBar).visible,
         "A duplicate progress bar below the score must not compete with the stage rail")
     var brand: Label = scene.get("game_brand")
@@ -194,6 +212,9 @@ func _run() -> void:
             _check(button.size.x + 1.0 >= button.get_combined_minimum_size().x,
                 "Library short control narrower than its text: " + button.text)
     _check(short_buttons == 4, "Expected Close, Settings, Refresh and Check files actions")
+    _check(str((scene.get("library_health_button") as Button).get_meta(
+        "ui_button_role", "")) == "settings",
+        "Library diagnostics require a distinguishable inspection action")
     var library_items: Control = scene.get("library_rows")
     var library_status: Label = scene.get("library_message")
     _check(library_status.get_global_rect().position.y < library_items.get_global_rect().position.y,

@@ -599,9 +599,11 @@ func _game_button(button: Button, central := false) -> void:
     var normal := StyleBoxFlat.new()
     var kind: String = str(button.get("action_kind"))
     var accent := Color("#A1FCD5") if central else (
-        Color("#F3CE93") if kind == "retry" else Color("#9ECFFF"))
+        Color("#F3CE93") if kind == "retry" else
+        Color("#9ECFFF") if kind == "listen" else Color("#A1FCD5"))
     normal.bg_color = Color("#286E60") if central else (
-        Color("#3A3029") if kind == "retry" else Color("#253C4C"))
+        Color("#3A3029") if kind == "retry" else
+        Color("#253C4C") if kind == "listen" else Color("#234438"))
     button.set_meta("ui_button_role",
         "transport_primary" if central else "transport_retry" if kind == "retry" else "transport_listen")
     normal.set_corner_radius_all(15 if central else 12)
@@ -2289,6 +2291,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         demo_player.synchronize(parsed, _transport_beat_now())
     listen_button.disabled = not bool(parsed.get("loaded", false))
     listen_button.text = "Practice" if str(parsed.get("mode", "")) == "listen" else "Listen"
+    var listen_kind := "practice" if listen_button.text == "Practice" else "listen"
+    if str(listen_button.get("action_kind")) != listen_kind:
+        listen_button.call("configure", listen_kind)
+        _game_button(listen_button)
     practice_retry_button.disabled = (not bool(parsed.get("loaded", false))
         or score_view.texture == null or layout_revision != revision)
     var summary: Dictionary = parsed.get("performance_summary", {}) if parsed.get("performance_summary") is Dictionary else {}

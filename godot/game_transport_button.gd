@@ -4,6 +4,7 @@ extends Button
 # Input goes through Button.pressed; this script never advances the lesson.
 const TEAL := Color("#96EFCB")
 const AMBER := Color("#ECC18C")
+const BLUE := Color("#9ECFFF")
 const DIM := Color("#64847A")
 
 var action_kind := "play"
@@ -68,7 +69,7 @@ func _process(delta: float) -> void:
 func _draw() -> void:
     if size.x < 100 or size.y < 35:
         return
-    var color := AMBER if action_kind == "retry" else TEAL
+    var color := AMBER if action_kind == "retry" else BLUE if action_kind == "listen" else TEAL
     if disabled:
         color = DIM
     var glow := .13 * hover_phase + .11 * release_flash
