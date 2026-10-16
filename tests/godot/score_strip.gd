@@ -184,6 +184,9 @@ func run() -> void:
     for index in range(strip.tiles.size()):
         var tile: Dictionary = strip.tiles[index]
         var rect: Rect2 = tile.rect
+        check(int(tile.get("upload_bytes", -1)) ==
+            int(rect.size.x) * int(rect.size.y) * 2,
+            "8H every uploaded engraving tile uses two bytes per raster pixel")
         check(absf(rect.position.x - previous_right) < .01, "system tiles join horizontally")
         previous_right = rect.end.x
         var line: float = float(flat.systems[index].staff_lines[0]) * strip.size.y
