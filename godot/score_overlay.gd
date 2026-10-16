@@ -227,28 +227,30 @@ func _draw() -> void:
             else Color("#A0FFDA") if str(hit.get("status", "")) == "on_time"
             else Color("#FFD49A"))
         var extent: Vector2 = radii * (1.55 + progress * 1.65)
-        draw_polyline(Ink.ellipse(focus, extent.x * 1.14,
-            extent.y * 1.14), Color(tone, (.14 + .23 * attack) * remaining),
-            8.0, true)
+        draw_polyline(Ink.ellipse(focus, extent.x * 1.27,
+            extent.y * 1.27), Color(tone, (.12 + .24 * attack) * remaining),
+            4.0, true)
         draw_polyline(Ink.ellipse(focus, extent.x, extent.y),
-            Color(tone, (.82 + .18 * attack) * remaining),
-            3.5, true)
+            Color(tone, (.90 + .10 * attack) * remaining),
+            2.75, true)
         # Front-layer sparks: the raster score otherwise hides most of the
         # existing particles drawn behind opaque engraved PNG tiles. These
         # start well outside the notehead, so the pitch remains readable.
         # Preview uses blue; assessed success uses bright mint.
-        for particle in range(Effects.PARTICLE_COUNT):
+        # Eight distinct comet trails, not sixteen equally prominent
+        # spokes. Ease outward quickly, linger, then dissolve. This keeps
+        # the notehead readable and halves foreground particle overdraw.
+        var travel: float = 1.0 - pow(remaining, 2.4)
+        for particle in range(0, Effects.PARTICLE_COUNT, 2):
             var endpoint: Vector2 = Effects.particle_endpoint(
-                focus, gap, progress, particle)
+                focus, gap, travel, particle)
             var radial: Vector2 = (endpoint - focus).normalized()
-            var brightness: float = pow(remaining, .75)
-            var tip_radius: float = maxf(1.6, gap * .12) * brightness
-            draw_line(endpoint - radial * gap * (.85 + .3 * progress), endpoint,
-                Color(tone, .84 * brightness), 2.25, true)
-            draw_circle(endpoint, tip_radius * 2.1,
-                Color(tone, .22 * brightness))
-            draw_circle(endpoint, tip_radius,
-                Color(tone, .96 * brightness))
+            var brightness: float = pow(remaining, 1.45)
+            var tip_radius: float = maxf(1.1, gap * .095) * brightness
+            draw_line(endpoint - radial * gap * (.34 + .18 * progress),
+                endpoint, Color(tone, .82 * brightness),
+                1.55 + .25 * attack, true)
+            draw_circle(endpoint, tip_radius, Color(tone, .94 * brightness))
         # Short four-point glint outside the ellipse: a much more visible
         # confirmation than the old hairline green circle.
         if attack > .0:

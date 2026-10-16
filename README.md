@@ -857,7 +857,10 @@ overdraw from large translucent gradients. The count-in drawing no longer
 uses an opaque rectangular background over the moving staff. HiDPI
 engraving remains vector sourced, but requests are bounded to 5200px
 and 10 megapixels per source page to reduce decode and raster cost.
-Frame interval statistics can be enabled with `--frame-diagnostics`.
+The note burst now uses eight clean foreground comet trails and a light
+double ripple, instead of sixteen equally bright radar-like spokes; the
+original notehead and accidental remain unobscured. Frame interval
+statistics can be enabled with `--frame-diagnostics`.
 
 ## HiDPI score readability
 
