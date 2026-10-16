@@ -428,6 +428,15 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     # This is a musical projection, not a camera chasing a moving object.
     # Smoothing introduces tempo-dependent lag; clamps let the rule wander.
     score_content.position = target
+    # Only a few contiguous systems can intersect the score viewport.
+    # Do not rebuild or rescale textures here: merely skip draw calls for
+    # offscreen tiles, with overscan to protect fast scrolls and seeks.
+    var tile_overscan: float = maxf(120.0, viewport.x * .18)
+    for i in range(score_tiles.size()):
+        var should_show: bool = ScoreStrip.tile_visible(
+            strip_tiles[i], target_x, scale, viewport.x, tile_overscan)
+        if score_tiles[i].visible != should_show:
+            score_tiles[i].visible = should_show
     follow_system_key = key
 
 func _new_request(callback: Callable) -> HTTPRequest:
@@ -1814,6 +1823,10 @@ func _process(_delta: float) -> void:
         var frame_result: Dictionary = frame_meter.record_frame(_delta)
         if not frame_result.is_empty():
             frame_result["score_tiles"] = score_tiles.size()
+            var visible_tiles := 0
+            for tile in score_tiles:
+                visible_tiles += int(tile.visible)
+            frame_result["visible_score_tiles"] = visible_tiles
             frame_result["phase"] = str(last_state.get("phase", ""))
             print("PHASE8D_FRAME_INTERVALS:", JSON.stringify(frame_result))
     # Animate short-lived hit pulses between HTTP state samples.
