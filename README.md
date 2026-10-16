@@ -823,6 +823,15 @@ guided recognition, local audio and SQLite persistence. Godot's `main.gd` owns n
 `score_strip.gd` owns tiled score coordinates and `practice_theme.gd` the shared
 dark theme. The older Qt entrypoint remains available separately.
 
+## Starting-point picker and fullscreen layout
+
+Selecting a MIDI file now closes the Music drawer and opens a responsive,
+centered in-app starting-point panel, rather than a malformed narrow native
+subwindow. The panel keeps source-measure selection, Learn vs Practice mode,
+explicit Cancel and Open actions, and Escape/Enter keyboard support. The
+dialog's content is sized independently of screen aspect ratio; layout tests
+exercise the modal at desktop and smaller windows.
+
 ## Semantic button hierarchy
 
 Actions now have reusable visual roles rather than identical rectangle

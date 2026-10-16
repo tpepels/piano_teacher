@@ -69,7 +69,8 @@ var library_search: LineEdit
 var library_path_label: Label
 var library_rows: VBoxContainer
 var library_message: Label
-var open_picker: ConfirmationDialog
+var open_picker: Control
+var open_panel: PanelContainer
 var open_measure: SpinBox
 var open_measure_slider: HSlider
 var open_mode: OptionButton
@@ -1298,25 +1299,57 @@ func _build_interface() -> void:
     add_child(folder_dialog)
     # MIDI files can be long. Choose the exact source measure before opening
     # a course stage, rather than forcing the user to skip through passages.
-    open_picker = ConfirmationDialog.new()
-    open_picker.title = "Choose a starting point"
-    open_picker.ok_button_text = "Open at this measure"
-    open_picker.min_size = Vector2i(540, 300)
+    # Native/embedded ConfirmationDialog geometry was broken under a
+    # fullscreen Godot window: its contents were squeezed into a narrow,
+    # nearly full-height window, and the music drawer stayed visible behind
+    # it. Use one predictable in-stage modal with ordinary Control layout.
+    open_picker = Control.new()
+    open_picker.name = "StartingMeasureOverlay"
+    open_picker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    open_picker.mouse_filter = Control.MOUSE_FILTER_STOP
+    open_picker.visible = false
     add_child(open_picker)
-    var start_content := VBoxContainer.new()
-    start_content.add_theme_constant_override("separation", 12)
-    open_picker.add_child(start_content)
-    open_title = _label("", 20, INK, true)
+    var start_scrim := ColorRect.new()
+    start_scrim.color = Color("#06110F", .81)
+    start_scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    start_scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+    start_scrim.gui_input.connect(func(event: InputEvent):
+        if event is InputEventMouseButton and event.pressed:
+            _cancel_open_picker())
+    open_picker.add_child(start_scrim)
+    var start_center := CenterContainer.new()
+    start_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    start_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    open_picker.add_child(start_center)
+    open_panel = PanelContainer.new()
+    open_panel.name = "StartingMeasurePanel"
+    open_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+    var start_style := Design.surface(Color("#1C3130"), 18)
+    start_style.set_content_margin_all(5)
+    start_style.set_border_width_all(2)
+    start_style.border_color = Color("#85D9BD", .63)
+    start_style.shadow_color = Color.BLACK
+    start_style.shadow_size = 16
+    start_style.shadow_offset = Vector2(0, 8)
+    open_panel.add_theme_stylebox_override("panel", start_style)
+    start_center.add_child(open_panel)
+    var start_content := _stack(18)
+    _card_body(open_panel, 26).add_child(start_content)
+    start_content.add_child(_label("CHOOSE A STARTING POINT", 14, ACCENT, true))
+    open_title = _label("", 24, INK, true)
     open_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     start_content.add_child(open_title)
-    start_content.add_child(_label("START AT SOURCE MEASURE", 15, MUTED, true))
+    var start_hint := _label(
+        "Start at any measure of this piece.", 16, MUTED)
+    start_content.add_child(start_hint)
+    start_content.add_child(_label("SOURCE MEASURE", 14, ACCENT, true))
     open_measure = SpinBox.new()
     open_measure.min_value = 1
     open_measure.max_value = 1
     open_measure.step = 1
-    open_measure.custom_minimum_size = Vector2(0, 52)
+    open_measure.custom_minimum_size = Vector2(0, 54)
     open_measure.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    open_measure.add_theme_font_size_override("font_size", _ui_font(18))
+    open_measure.add_theme_font_size_override("font_size", _ui_font(19))
     start_content.add_child(open_measure)
     open_measure_slider = HSlider.new()
     open_measure_slider.min_value = 1
@@ -1328,21 +1361,26 @@ func _build_interface() -> void:
         open_measure_slider.set_value_no_signal(value))
     open_measure_slider.value_changed.connect(func(value: float):
         open_measure.set_value_no_signal(value))
-    start_content.add_child(_label("BEGIN WITH", 15, MUTED, true))
+    start_content.add_child(_label("BEGIN WITH", 14, ACCENT, true))
     open_mode = OptionButton.new()
     open_mode.add_item("Learn notes (without timing)")
     open_mode.add_item("Practice rhythm")
-    open_mode.custom_minimum_size.y = 52
+    open_mode.custom_minimum_size.y = 54
     open_mode.add_theme_font_size_override("font_size", _ui_font(16))
     start_content.add_child(open_mode)
     var start_note := _label(
-        "Practice begins at the exact measure. Short guided lessons start there too.", 14, MUTED)
-    start_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        "Learn starts with notes only. Practice uses the metronome and rhythm.", 14, MUTED)
     start_content.add_child(start_note)
-    open_picker.confirmed.connect(func():
-        _navigate("practice")
-        _send_action({"action":"open_at", "bar":int(open_measure.value),
-            "mode":"practice" if open_mode.selected == 1 else "learn"}))
+    var start_actions := HBoxContainer.new()
+    start_actions.add_theme_constant_override("separation", 12)
+    start_content.add_child(start_actions)
+    var cancel_picker := _button("Cancel", _cancel_open_picker, false, "navigation")
+    cancel_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    start_actions.add_child(cancel_picker)
+    var confirm_picker := _button("Open music", _confirm_open_picker, true)
+    confirm_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    start_actions.add_child(confirm_picker)
+    _resize_open_picker()
     device_menu = PopupMenu.new()
     device_menu.id_pressed.connect(_choose_device)
     add_child(device_menu)
@@ -1380,6 +1418,7 @@ func _update_responsive_layout() -> void:
     if home_cards != null:
         home_cards.vertical = width < 1380
     _resize_overlay_drawer()
+    _resize_open_picker()
     if practice_header == null:
         return
     practice_header.add_theme_constant_override("separation", 16)
@@ -1744,6 +1783,26 @@ func _populate_library() -> void:
     if library_error.is_empty():
         library_message.add_theme_color_override("font_color", MUTED)
 
+func _resize_open_picker() -> void:
+    if open_panel == null:
+        return
+    # Centered from the actual viewport. Never a 240px-wide, 900px-tall
+    # native subwindow, including fullscreen and high-density displays.
+    open_panel.custom_minimum_size.x = minf(620.0, maxf(300.0, size.x - 36.0))
+
+
+func _cancel_open_picker() -> void:
+    open_picker.visible = false
+    _navigate("library")
+
+
+func _confirm_open_picker() -> void:
+    open_picker.visible = false
+    _navigate("practice")
+    _send_action({"action":"open_at", "bar":int(open_measure.value),
+        "mode":"practice" if open_mode.selected == 1 else "learn"})
+
+
 func _show_open_picker(state: Dictionary) -> void:
     # Opening metadata is source-based and does not require Verovio rendering
     # or a connected MIDI piano. Do not start the first guided lesson yet.
@@ -1757,7 +1816,12 @@ func _show_open_picker(state: Dictionary) -> void:
     open_measure_slider.min_value = 1
     open_measure_slider.set_value_no_signal(open_measure.value)
     open_mode.select(0)
-    open_picker.popup_centered(Vector2i(540, 330))
+    # Close the music drawer before presenting the modal. A picker over an
+    # open drawer had two active layers and unreadable, overlapping controls.
+    _navigate("practice")
+    _resize_open_picker()
+    open_picker.visible = true
+    open_measure.get_line_edit().grab_focus()
 
 
 func _update_hand_stages(state: Dictionary) -> void:
@@ -3043,6 +3107,16 @@ func _choose_device(id: int) -> void:
     device_button.text = str(device_names[id]) + "  ✓"
 
 func _input(event: InputEvent) -> void:
+    if open_picker != null and open_picker.visible and event is InputEventKey \
+            and event.pressed and not event.echo:
+        if event.keycode == KEY_ESCAPE:
+            _cancel_open_picker()
+            get_viewport().set_input_as_handled()
+            return
+        if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
+            _confirm_open_picker()
+            get_viewport().set_input_as_handled()
+            return
     if not event is InputEventKey:
         return
     if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,KEY_TAB]:
