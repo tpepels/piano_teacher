@@ -961,6 +961,32 @@ during actual Kawai practice. The checks never block playback, change
 MIDI grading or create extra GUI controls. Hardware-side measurement is
 still required to establish sound-to-screen and key-to-sound latencies.
 
+## Phase 8E - Bounded local Listen-audio storage
+
+Generated Listen WAVs now have explicit default retention limits:
+**512 MiB** total and **32** completed cached files. Cleanup runs
+after a cache hit or successful render. It keeps the most recently
+requested WAV and every currently rendering key, including overlapping
+background renders. If the currently needed WAV itself exceeds the
+limit, it is preserved rather than deleting the active example.
+
+Eviction affects only SHA-256-named `.wav` files inside Piano Teacher's
+own demo-audio directory. Partial `.tmp` renderings, original
+recordings, SoundFonts and unrelated files are never removed.
+Generated clips retain reproducible cache keys and unchanged
+modification timestamps on cache hits.
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+.venv/bin/python -m pytest -q \
+    tests/test_demo_cache_bounds.py tests/test_demo_audio.py \
+    tests/test_listen_perform.py
+```
+
+This bounds *long-term disk usage*, not memory needed to decode an
+individual long recording.
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
@@ -970,8 +996,8 @@ visible motion and click scheduling, not physical timing quality.
 General MIDI quantization, hand corrections, preserved source engraving/key
 metadata, pedal scoring, fingering hints, and musical phrase inference remain
 future work. Listen supports an optional sampled acoustic piano and retains a
-basic harmonic fallback; both decode the completed WAV in Godot and currently
-keep a disk cache without an eviction policy. Irregular supported durations are split into tied
+basic harmonic fallback; both decode the completed WAV in Godot and have a
+bounded disk cache. Irregular supported durations are split into tied
 notes/rests or explicit tuplets for engraving; original MIDI events remain the
 assessment source. Very long pieces preload cropped score textures: memory use
 grows with the piece, with additional transient raster memory.
