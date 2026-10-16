@@ -53,9 +53,9 @@ func run() -> void:
     var native_rails: Array = app.score_layout.systems[0].staff_lines
     var page_aspect: float = float(app.source_layout.heights[0]) / float(app.source_layout.widths[0])
     var chosen_width: int = Quality.png_width(app.source_layout, app.score_frame.size.y)
-    check(chosen_width >= 2000 and chosen_width <= 7200,
+    check(chosen_width >= 2000 and chosen_width <= 5200,
         "High-resolution score request stays in bounded PNG limits")
-    check(float(chosen_width) * float(chosen_width) * page_aspect <= 18000000.0 + 7200.0,
+    check(float(chosen_width) * float(chosen_width) * page_aspect <= 10000000.0 + 5200.0,
         "Responsive engraving respects the memory budget")
     check(Quality.staff_gap(800.0, native_rails) >
         Quality.staff_gap(400.0, native_rails) * 1.25,
