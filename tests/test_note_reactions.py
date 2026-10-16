@@ -82,7 +82,8 @@ func run() -> void:
         "Score reaction underlay must own the live pulse array")
     assert(app.score_overlay.hit_pulses[0].x == .32)
     assert(app.score_overlay.hit_pulses[1].x == .58)
-    assert(app.score_overlay.hit_pulses[0].duration_ms == 260)
+    # Phase 7.7 extends the audiovisual hit reaction to 450 ms.
+    assert(app.score_overlay.hit_pulses[0].duration_ms == 450)
     assert(app.score_overlay.wrong_ghosts.size() == 1)
     assert(app.score_overlay.wrong_ghosts[0].y == .47,
         "Wrong pitch must point to the true expected note, not a fake glyph")
@@ -90,6 +91,24 @@ func run() -> void:
         "No extra wrong-pitch text on the music")
     app._consume_live_piano_hits(state)
     assert(app.score_overlay.hit_pulses.size() == 2, "Repeated poll must not duplicate pulses")
+    # Old poll events must not grant a reward if Listen or an ungraded
+    # no-device preview has taken over the transport.
+    var previews := [
+        {"phase":"playing", "mode":"practice", "preview_only":true,
+         "transport_id":4, "midi_visual_events":[
+            {"sequence":4,"transport_id":4,"source_id":"a",
+             "status":"on_time","age":.01}]},
+        {"phase":"playing", "mode":"listen", "preview_only":false,
+         "transport_id":5, "midi_visual_events":[
+            {"sequence":5,"transport_id":5,"source_id":"a",
+             "status":"on_time","age":.01}]}
+    ]
+    for ungraded in previews:
+        app._consume_live_piano_hits(ungraded)
+    assert(app.score_overlay.hit_pulses.size() == 2,
+        "Listen and no-keyboard preview cannot generate an awarded hit")
+    assert(app.note_reactions.wrong_ghosts.size() == 1,
+        "Unexpected-note effects still use the original judged event")
     # Drawing the same score and reaction transform must parse and render
     # without any separate positioning / type-inference errors.
     app.score_overlay.queue_redraw()
