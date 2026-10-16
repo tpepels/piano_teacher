@@ -101,6 +101,19 @@ func run() -> void:
                 ) / app.score_crop_size.x * app.score_content.size.x
             check(absf(cursor_x - app.score_frame.size.x * 0.42) < 2.0,
                   "timing line must stay fixed at %d BPM / %.3f" % [bpm, clock])
+            if clock >= 0.0:
+                var tile_scale: float = app.score_content.size.x / float(app.score_layout.strip_size.x)
+                var ink_tile_under_cursor := false
+                for tile_index in range(app.strip_tiles.size()):
+                    var tile_rect: Rect2 = app.strip_tiles[tile_index]["rect"]
+                    var screen_left: float = app.score_content.position.x + tile_rect.position.x * tile_scale
+                    var screen_right: float = screen_left + tile_rect.size.x * tile_scale
+                    if screen_left - .1 <= cursor_x and screen_right + .1 >= cursor_x:
+                        ink_tile_under_cursor = true
+                        check(app.score_tiles[tile_index].visible,
+                            "the actual engraved tile at the timing line must never be culled")
+                check(ink_tile_under_cursor,
+                    "musical playback must keep a source tile under the timing line")
             check(projected.x <= previous_x + 0.2, "same note moves left continuously")
             check(app.score_content.size.distance_to(initial_size) < 0.2,
                   "starting playback must preserve notation scale")
