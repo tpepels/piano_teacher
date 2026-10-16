@@ -145,8 +145,8 @@ func run() -> void:
                 check(recovered_img.get_size() == original_img.get_size(),
                     "Seek restores original raster dimensions")
                 for px in [Vector2i(0, 0),
-                           Vector2i(recovered_img.get_width() / 2,
-                               recovered_img.get_height() / 2),
+                           Vector2i(int(recovered_img.get_width() / 2),
+                               int(recovered_img.get_height() / 2)),
                            Vector2i(recovered_img.get_width() - 1,
                                recovered_img.get_height() - 1)]:
                     var a: Color = recovered_img.get_pixelv(px)
