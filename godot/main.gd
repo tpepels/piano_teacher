@@ -22,6 +22,7 @@ const GameStreak := preload("res://game_streak.gd")
 const GameCountIn := preload("res://game_countin.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameTransportButton := preload("res://game_transport_button.gd")
+const ActionButton := preload("res://action_button.gd")
 const GameInputIndicator := preload("res://game_input_indicator.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const FrameMeter := preload("res://frame_meter.gd")
@@ -574,41 +575,19 @@ func _label(text: String, size: int, color: Color, bold := false) -> Label:
     label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     return label
 
-func _button(label: String, callback: Callable, primary := false) -> Button:
-    var button := Button.new()
+func _button(label: String, callback: Callable, primary := false,
+        role: String = "") -> Button:
+    var button := ActionButton.new()
     button.text = label
-    # Navigation/control text must never be clipped. Only long personal
-    # song rows opt into ellipsis to avoid forcing a wider library panel.
     button.clip_text = false
+    button.set_meta("ui_font_base", 15)
+    button.add_theme_font_size_override("font_size", _ui_font(15))
+    button.configure(role if not role.is_empty() else "primary" if primary else "secondary")
     var text_width: float = theme.default_font.get_string_size(
         label, HORIZONTAL_ALIGNMENT_LEFT, -1, _ui_font(15)).x
     button.custom_minimum_size = Vector2(
-        maxf(118.0, text_width + 58.0 * ui_scale), 50.0 * ui_scale)
-    var style := StyleBoxFlat.new()
-    style.bg_color = Design.PINE if primary else Design.PANEL
-    style.set_corner_radius_all(8)
-    style.set_border_width_all(1)
-    style.border_color = Design.SAGE if primary else Color(Design.SAGE, .4)
-    style.content_margin_left = 18 * ui_scale
-    style.content_margin_right = 18 * ui_scale
-    button.add_theme_stylebox_override("normal", style)
-    var hover := style.duplicate() as StyleBoxFlat
-    hover.bg_color = Design.SAGE if primary else Design.PINE
-    button.add_theme_stylebox_override("hover", hover)
-    button.add_theme_stylebox_override("pressed", hover)
-    var disabled_style := style.duplicate() as StyleBoxFlat
-    disabled_style.bg_color = Design.PANEL
-    button.add_theme_stylebox_override("disabled", disabled_style)
-    var focus := style.duplicate() as StyleBoxFlat
-    focus.set_border_width_all(2)
-    focus.border_color = ACCENT
-    button.add_theme_stylebox_override("focus", focus)
-    button.add_theme_color_override("font_color", INK)
-    button.add_theme_color_override("font_hover_color", INK.lightened(.15))
-    button.add_theme_color_override("font_disabled_color", MUTED)
-    button.set_meta("ui_font_base", 15)
-    button.add_theme_font_size_override("font_size", _ui_font(15))
-    button.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+        maxf(118.0, text_width + (80.0 if button.action_role != "secondary"
+            else 58.0) * ui_scale), 50.0 * ui_scale)
     button.pressed.connect(callback)
     return button
 
@@ -657,27 +636,9 @@ func _game_button(button: Button, central := false) -> void:
 
 
 func _utility_button(button: Button, destructive := false) -> void:
-    # Navigation is deliberately quieter than the three transport keys.
-    var face := StyleBoxFlat.new()
-    face.bg_color = Color.TRANSPARENT
-    face.set_corner_radius_all(8)
-    face.set_content_margin_all(8)
-    face.set_border_width_all(1)
-    face.border_color = Color("#759F92", .14)
-    button.add_theme_stylebox_override("normal", face)
-    var hover := face.duplicate() as StyleBoxFlat
-    hover.bg_color = Color("#29413D", .83)
-    hover.border_color = Color("#88C9B3", .48)
-    button.add_theme_stylebox_override("hover", hover)
-    button.add_theme_stylebox_override("pressed", hover)
-    var focus := face.duplicate() as StyleBoxFlat
-    focus.set_border_width_all(2)
-    focus.border_color = Color("#A6EFD0")
-    button.add_theme_stylebox_override("focus", focus)
-    var ink := Color("#DD9F9B") if destructive else Color("#A8C9BA")
-    button.add_theme_color_override("font_color", ink)
-    button.add_theme_color_override("font_hover_color", Color("#F6FCF8"))
-    button.add_theme_color_override("font_pressed_color", Color("#F6FCF8"))
+    if button is ActionButton:
+        button.configure("danger" if destructive else "utility")
+
 
 func _transport_button(label: String, callback: Callable, kind: String, central := false) -> Button:
     var button := GameTransportButton.new()
@@ -853,8 +814,8 @@ func _build_interface() -> void:
     home_layout.add_child(home_nav)
     home_nav.add_child(_label("Piano Teacher", 24, INK, true))
     home_nav.add_child(_space())
-    home_nav.add_child(_button("Settings", func(): _navigate("settings")))
-    home_nav.add_child(_button("Quit", func(): get_tree().quit()))
+    home_nav.add_child(_button("Settings", func(): _navigate("settings"), false, "settings"))
+    home_nav.add_child(_button("Quit", func(): get_tree().quit(), false, "danger"))
     var header := _stack(12)
     home_layout.add_child(header)
     header.add_child(_label("Your practice", 34, INK, true))
@@ -896,9 +857,9 @@ func _build_interface() -> void:
     library_page.add_child(library_layout)
     var library_head := HBoxContainer.new()
     library_layout.add_child(library_head)
-    library_head.add_child(_button("Close", func(): _navigate("practice")))
+    library_head.add_child(_button("Close", func(): _navigate("practice"), false, "navigation"))
     library_head.add_child(_space())
-    library_head.add_child(_button("Settings", func(): _navigate("settings")))
+    library_head.add_child(_button("Settings", func(): _navigate("settings"), false, "settings"))
     library_layout.add_child(_label("Your music", 39, INK, true))
     library_path_label = _label("Looking for scores…", 15, MUTED)
     library_path_label.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -914,8 +875,8 @@ func _build_interface() -> void:
     library_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     library_search.text_changed.connect(func(_text: String): _populate_library())
     library_controls.add_child(library_search)
-    library_controls.add_child(_button("Refresh", _request_library))
-    library_health_button = _button("Check files", func(): _start_library_health())
+    library_controls.add_child(_button("Refresh", _request_library, false, "utility"))
+    library_health_button = _button("Check files", func(): _start_library_health(), false, "settings")
     library_controls.add_child(library_health_button)
     # Import problems must appear next to the action, not at the very
     # bottom of a full-screen library where they are easy to miss.
@@ -949,7 +910,7 @@ func _build_interface() -> void:
     settings_scroll.add_child(settings_layout)
     var settings_head := HBoxContainer.new()
     settings_layout.add_child(settings_head)
-    settings_head.add_child(_button("← Back", _go_back))
+    settings_head.add_child(_button("← Back", _go_back, false, "navigation"))
     settings_head.add_child(_space())
     settings_layout.add_child(_label("Settings", 39, INK, true))
     settings_layout.add_child(_label("Your piano, music folder and practice preferences.", 16, MUTED))
@@ -975,15 +936,15 @@ func _build_interface() -> void:
     folder_actions.add_theme_constant_override("h_separation", 12)
     folder_actions.add_theme_constant_override("v_separation", 8)
     folder_row.add_child(folder_actions)
-    folder_actions.add_child(_button("Browse…", _browse_folder))
+    folder_actions.add_child(_button("Browse…", _browse_folder, false, "navigation"))
     folder_actions.add_child(_button("Save folder", _save_folder, true))
     settings_content.add_child(_label("PIANO INPUT", 13, ACCENT, true))
     var device_row := HFlowContainer.new()
     device_row.add_theme_constant_override("separation", 12)
     settings_content.add_child(device_row)
-    device_button = _button("Choose USB MIDI piano", _show_devices)
+    device_button = _button("Choose USB MIDI piano", _show_devices, false, "settings")
     device_row.add_child(device_button)
-    device_row.add_child(_button("Refresh devices", _request_devices))
+    device_row.add_child(_button("Refresh devices", _request_devices, false, "utility"))
     input_activity_label = _label("Connect your MIDI piano, then play a note to check input.", 15, MUTED)
     settings_content.add_child(input_activity_label)
     settings_content.add_child(_label("PRACTICE", 13, ACCENT, true))
@@ -998,7 +959,7 @@ func _build_interface() -> void:
     tempo_setting.suffix = " BPM"
     tempo_setting.custom_minimum_size = Vector2(160, 44)
     tempo_row.add_child(tempo_setting)
-    apply_tempo_button = _button("Apply tempo", func(): _send_action({"action": "tempo", "bpm": int(tempo_setting.value)}))
+    apply_tempo_button = _button("Apply tempo", func(): _send_action({"action": "tempo", "bpm": int(tempo_setting.value)}), false, "settings")
     tempo_row.add_child(apply_tempo_button)
     metronome_toggle = CheckButton.new()
     metronome_toggle.text = "Metronome during practice"
@@ -1205,7 +1166,7 @@ func _build_interface() -> void:
     score_browse_button = _button("Choose music", func(): _navigate("library"), true)
     score_browse_button.visible = true
     status_content.add_child(score_browse_button)
-    score_retry_button = _button("Retry score", _retry_score)
+    score_retry_button = _button("Retry score", _retry_score, false, "review")
     score_retry_button.visible = false
     status_content.add_child(score_retry_button)
     # A compact, unobtrusive cue. A huge centred numeral hid the movement.
@@ -1291,7 +1252,7 @@ func _build_interface() -> void:
     performance_review.add_child(performance_text)
     weak_button = _button("Review notes and repeat a section", func():
         if review_sheet != null:
-            review_sheet.call("open_review", last_state.get("performance_summary", {})))
+            review_sheet.call("open_review", last_state.get("performance_summary", {})), false, "review")
     performance_review.add_child(weak_button)
     # Flow containers wrap whole readable buttons instead of clipping labels
     # when the practice window is narrow or the user uses larger UI fonts.
@@ -1312,7 +1273,7 @@ func _build_interface() -> void:
     controls.add_child(listen_button)
     # Keyboard and Lesson Path retain Stop, passage navigation and mode
     # choices, without competing with the three routine controls.
-    stop_button = _button("Stop attempt", func(): _send_action({"action": "stop"}))
+    stop_button = _button("Stop attempt", func(): _send_action({"action": "stop"}), false, "danger")
     stop_button.tooltip_text = "End the attempt · S"
     stop_button.disabled = true
     _build_lesson_screen()
@@ -1476,7 +1437,7 @@ func _build_lesson_screen() -> void:
     page.add_child(content)
     var navigation := HBoxContainer.new()
     content.add_child(navigation)
-    navigation.add_child(_button("← Practice", _go_back))
+    navigation.add_child(_button("← Practice", _go_back, false, "navigation"))
     navigation.add_child(_space())
     navigation.add_child(_label("Piano Teacher", 18, INK, true))
     content.add_child(_label("Your lesson path", 34, INK, true))
@@ -1496,10 +1457,10 @@ func _build_lesson_screen() -> void:
     content.add_child(passage_nav)
     passage_nav.add_child(_button("Previous passage", func():
         _send_action({"action":"previous"})
-        _navigate("practice")))
+        _navigate("practice"), false, "navigation"))
     passage_nav.add_child(_button("Next passage", func():
         _send_action({"action":"next"})
-        _navigate("practice")))
+        _navigate("practice"), false, "navigation"))
     passage_nav.add_child(stop_button)
     var hand_row := HBoxContainer.new()
     hand_row.add_theme_constant_override("separation", 12)
@@ -1510,21 +1471,22 @@ func _build_lesson_screen() -> void:
                 _send_action({"action": "hand", "hand": hand})
                 _navigate("practice")
         )
+        button.configure("choice")
         hand_buttons[hand] = button
         hand_row.add_child(button)
     var course_choices := HBoxContainer.new()
     course_choices.add_theme_constant_override("separation", 8)
     content.add_child(course_choices)
-    skip_stage_button = _button("Skip this step · no mastery", func(): _send_action({"action":"skip_stage", "reason":"Learner chose to skip this step"}))
+    skip_stage_button = _button("Skip this step · no mastery", func(): _send_action({"action":"skip_stage", "reason":"Learner chose to skip this step"}), false, "review")
     skip_stage_button.custom_minimum_size.x = 250
     course_choices.add_child(skip_stage_button)
-    placement_button = _button("Try original notes", func(): _send_action({"action":"place_original"}))
+    placement_button = _button("Try original notes", func(): _send_action({"action":"place_original"}), false, "primary")
     course_choices.add_child(placement_button)
     var scroll := ScrollContainer.new()
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     content.add_child(scroll)
-    content.add_child(_button("Advanced practice controls", _open_advanced_pause))
+    content.add_child(_button("Advanced practice controls", _open_advanced_pause, false, "settings"))
     lesson_rows = _stack(10)
     lesson_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.add_child(lesson_rows)
@@ -1558,6 +1520,7 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
             var from_beat: float = float(spot.get("start_beat", 0))
             var revisit := _button("Revisit bars %d–%d" % [int(spot.get("first_bar", 1)),int(spot.get("last_bar", 1))],
                 func(): _send_action({"action":"revisit_trouble", "stage_key":stage_key, "start_beat":from_beat}))
+            revisit.configure("review")
             revisit.tooltip_text = "Find these notes again, then return to rhythm practice"
             lesson_rows.add_child(revisit)
     var groups: Dictionary = {}
@@ -1737,6 +1700,7 @@ func _populate_library() -> void:
             var prefix := "[OK] " if status == "ok" else "[REPAIRED] " if status == "warning" else "[ERROR] " if status == "error" else ""
             var button := _button("%s%s     ·     %s     ·     %s" % [prefix, title, format_name, hint],
                 func(): _open_library_piece(identifier))
+            button.configure("library")
             if status == "error":
                 button.add_theme_color_override("font_color", Color("#FF8B82"))
             elif status == "warning":
@@ -2297,6 +2261,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             progress_label.text = "%s · Notes found %d of %d" % [context,int(teaching.get("target_index", 0)),targets]
     for hand in hand_buttons:
         var button: Button = hand_buttons[hand]
+        if button is ActionButton:
+            button.set_selected(str(parsed.get("hand", "")) == hand)
         button.disabled = not parsed.get("hands", []).has(hand) or str(parsed.get("hand", "")) == hand
     practice_progress.value = float(parsed.get("progress", 0.0))
     game_stage.present(parsed)
