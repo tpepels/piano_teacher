@@ -2593,6 +2593,10 @@ func _clear_assessed_effects_in_ungraded_mode(state: Dictionary) -> void:
             return
         score_overlay.hit_pulses.clear()
         score_overlay.wrong_ghosts.clear()
+        # The stage is a separate canvas and must drop its older earned
+        # success energy along with the note particles on mode change.
+        game_stage.impact_energy = 0.0
+        game_stage.queue_redraw()
     else:
         if score_overlay.preview_pulses.is_empty():
             return

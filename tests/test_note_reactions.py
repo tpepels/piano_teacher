@@ -134,7 +134,7 @@ func run() -> void:
         app.note_reactions.hit_pulses.is_empty() and
         app.note_reactions.wrong_ghosts.is_empty(),
         "An ungraded preview must not inherit an earlier graded note burst")
-    var grouped := load("res://living_score.gd").groups_crossed(
+    var grouped: Array = load("res://living_score.gd").groups_crossed(
         app.living_chords, -.1, .05)
     assert(grouped.size() == 1 and grouped[0].notes.size() == 2,
         "One musical onset should include the whole chord exactly once")
