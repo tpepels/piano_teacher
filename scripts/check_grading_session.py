@@ -80,7 +80,7 @@ class SessionCapture:
             self.last_phase_key = phase_key
         # These are backend-generated MIDI judgments, not a second grader.
         for event in snapshot.get("midi_visual_events", []):
-            if not isinstance(event, dict):
+            if not graded or not isinstance(event, dict):
                 continue
             seq = int(event.get("sequence", -1))
             key = (int(event.get("transport_id", transport)), seq)
