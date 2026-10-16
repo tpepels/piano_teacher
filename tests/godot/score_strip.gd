@@ -281,6 +281,27 @@ func run() -> void:
             check(absf(float(lines[rail]) * strip.size.y - float(rail_positions[rail])) < .1,
                   "all piano staff lines stay level across systems and pages")
     check(absf(previous_right - strip.size.x) < .01, "strip width covers every tile")
+    if bool(original.get("strip_trim_repeated_headers", false)):
+        var proportional_speeds: Array[float] = []
+        for i in range(flat.anchors.size()-1):
+            var start: Dictionary = flat.anchors[i]
+            var end: Dictionary = flat.anchors[i+1]
+            var duration: float = float(end.beat)-float(start.beat)
+            if duration <= .00001:
+                continue
+            proportional_speeds.append((float(end.x)-float(start.x))*
+                float(strip.size.x)/duration)
+        check(proportional_speeds.size() > 5,
+            "actual Verovio note positions must test many rhythmic intervals")
+        if proportional_speeds.size() > 5:
+            proportional_speeds.sort()
+            var expected: float = proportional_speeds[proportional_speeds.size()/2]
+            for rate in proportional_speeds:
+                check(absf(float(rate)-expected) <= maxf(1.5,expected*.012),
+                    "Every source beat, including a system wrap, must take the same number of pixels")
+            print("TEMPO_PROPORTIONAL_AUDIT: rate=", snappedf(expected,.01),
+                " deviation=", snappedf(proportional_speeds[-1]-
+                proportional_speeds[0],.01), " beats=", proportional_speeds.size())
     # Quantify the musical pixel velocity the real camera must follow.
     # This is the exact Verovio geometry mapped into Godot texture pixels,
     # including accidentals, measure boundaries and joined print systems.
