@@ -133,6 +133,13 @@ var tile_window_initialized := false
 var tile_geometry_rebuilds := 0
 var tile_window_changes := 0
 var score_tile_upload_bytes := 0
+# Phase 8I: long scores retain compressed CPU ink instead of offscreen
+# Texture2Ds. Two neighbouring systems on each side are prefetched.
+var deferred_tile_mode := false
+var resident_tile_begin := 0
+var resident_tile_end := 0
+var resident_tile_bytes := 0
+var restored_tile_count := 0
 var current_page := -1
 var requested_page := -1
 var rendered_revision := -1
@@ -448,6 +455,11 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     var tile_overscan: float = maxf(120.0, viewport.x * .18)
     var window: Vector2i = ScoreStrip.visible_tile_range(
         strip_tiles, target_x, scale, viewport.x, tile_overscan)
+    # Stage new textures before releasing old ones, so rapid seeks have
+    # no frame with a missing notehead or accidental.
+    if not _set_tile_residency(window):
+        _score_failed("An engraved score tile could not be decoded")
+        return
     if not tile_window_initialized or visible_tile_begin != window.x \
             or visible_tile_end != window.y:
         tile_window_changes += 1
@@ -466,6 +478,37 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     visible_tile_begin = window.x
     visible_tile_end = window.y
     follow_system_key = key
+
+func _set_tile_residency(visible_range: Vector2i) -> bool:
+    if not deferred_tile_mode:
+        return true
+    var next_begin: int = maxi(0, visible_range.x - 2)
+    var next_end: int = mini(score_tiles.size(), visible_range.y + 2)
+    if resident_tile_begin == next_begin and resident_tile_end == next_end:
+        return true
+    # Decode incoming ink before evicting outgoing textures. The preload
+    # margin is wider than one system so normal playback almost always
+    # reveals a tile that has already been uploaded.
+    var incoming: Dictionary = {}
+    for i in range(next_begin, next_end):
+        if i >= resident_tile_begin and i < resident_tile_end:
+            continue
+        var texture: Texture2D = ScoreStrip.tile_texture(strip_tiles[i])
+        if texture == null:
+            return false
+        incoming[i] = texture
+    for i in range(resident_tile_begin, resident_tile_end):
+        if i < next_begin or i >= next_end:
+            score_tiles[i].texture = null
+            resident_tile_bytes -= int(strip_tiles[i].get("upload_bytes", 0))
+    for i in incoming:
+        score_tiles[i].texture = incoming[i]
+        resident_tile_bytes += int(strip_tiles[i].get("upload_bytes", 0))
+        restored_tile_count += 1
+    resident_tile_begin = next_begin
+    resident_tile_end = next_end
+    return true
+
 
 func _new_request(callback: Callable) -> HTTPRequest:
     var req := HTTPRequest.new()
@@ -1854,6 +1897,11 @@ func _process(_delta: float) -> void:
             frame_result["visible_score_tiles"] = visible_tile_end - visible_tile_begin
             frame_result["tile_upload_mib"] = snappedf(
                 float(score_tile_upload_bytes) / (1024.0 * 1024.0), .01)
+            frame_result["resident_tile_mib"] = snappedf(
+                float(resident_tile_bytes) / (1024.0 * 1024.0), .01)
+            frame_result["resident_tiles"] = resident_tile_end - resident_tile_begin \
+                if deferred_tile_mode else score_tiles.size()
+            frame_result["tile_restores"] = restored_tile_count
             frame_result["tile_geometry_rebuilds"] = tile_geometry_rebuilds
             frame_result["tile_window_changes"] = tile_window_changes
             frame_result["phase"] = str(last_state.get("phase", ""))
@@ -2661,7 +2709,10 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var bottom := mini(picture.get_height(), opaque_bounds.end.y + pad)
     crop_rect.size = Vector2i(right, bottom) - crop_rect.position
     var cropped := picture.get_region(crop_rect)
-    var strip: Dictionary = ScoreStrip.build(source_layout, page_images)
+    var should_defer: bool = source_layout.get("systems", []).size() >= \
+        ScoreStrip.DEFERRED_MIN_SYSTEMS
+    var strip: Dictionary = ScoreStrip.build(
+        source_layout, page_images, should_defer)
     if strip.has("error") or strip["tiles"].is_empty():
         _score_failed(str(strip.get("error", "No staff systems were found in the engraving")))
         return
@@ -2673,16 +2724,22 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     visible_tile_begin = 0
     visible_tile_end = 0
     tile_window_initialized = false
+    deferred_tile_mode = false
+    resident_tile_begin = 0
+    resident_tile_end = 0
+    resident_tile_bytes = 0
+    restored_tile_count = 0
     tile_geometry_rebuilds = 0
     tile_window_changes = 0
     strip_tiles = strip["tiles"]
+    deferred_tile_mode = should_defer
     score_tile_upload_bytes = 0
     for item in strip_tiles:
         score_tile_upload_bytes += int(item.get("upload_bytes", 0))
     var notation_material := Design.notation_material()
     for item in strip_tiles:
         var tile := TextureRect.new()
-        tile.texture = item["texture"]
+        tile.texture = item.get("texture") as Texture2D
         tile.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         tile.stretch_mode = TextureRect.STRETCH_SCALE
         tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2701,7 +2758,11 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     living_chords = LivingScore.prepare(score_layout)
     score_crop_origin = Vector2.ZERO
     score_crop_size = Vector2.ONE
-    score_view.texture = ImageTexture.create_from_image(cropped)
+    # The invisible score image is only a readiness sentinel. Do not keep
+    # an extra complete engraved page uploaded to the GPU.
+    var ready_pixel := Image.create(1, 1, false, Image.FORMAT_LA8)
+    ready_pixel.fill(Color(1, 1, 1, 0))
+    score_view.texture = ImageTexture.create_from_image(ready_pixel)
     score_view.visible = false
     score_overlay.image_size = strip["size"]
     note_reactions.active_page = 0
