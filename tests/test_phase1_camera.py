@@ -12,7 +12,7 @@ def test_fit_is_based_on_actual_required_noteheads():
 def test_playback_projects_clock_directly_under_fixed_rule():
     assert "target_x = viewport.x * 0.42 - note_x * displayed_width" in SOURCE
     assert "target_x = clampf" not in SOURCE
-    assert "var target_y: float = (viewport.y - displayed_height) * 0.5" in SOURCE
+    assert "var target_y: float = viewport.y * .5 - rail_center * displayed_height" in SOURCE
     assert "score_content.position = target" in SOURCE
 
 def test_camera_does_not_rerender_between_stop_and_start():

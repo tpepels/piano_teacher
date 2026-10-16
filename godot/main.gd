@@ -1072,6 +1072,7 @@ func _build_interface() -> void:
     score_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_frame.add_child(score_content)
     staff_continuity = StaffContinuity.new()
+    staff_continuity.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_content.add_child(staff_continuity)
     # The positive MIDI feedback halo is behind the actual engraved ink.
     note_reactions = NoteReactions.new()
