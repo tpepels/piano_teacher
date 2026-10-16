@@ -1083,7 +1083,7 @@ intended.
 
 ## Phase 8I - Bounded GPU residency for long scores
 
-Short lessons (fewer than 12 engraved systems) still upload their
+Short lessons (fewer than 8 engraved systems) still upload their
 complete score immediately. Longer lessons keep each Verovio system
 as a reversible, lossless FastLZ-compressed LA8 image buffer, without
 creating an initial GPU texture. On-screen systems plus two neighbouring
