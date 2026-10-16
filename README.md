@@ -825,16 +825,20 @@ dark theme. The older Qt entrypoint remains available separately.
 
 ## Preview notation scale and continuous scrolling (Phase 7.6 follow-up)
 
-The real grand staff determines practice zoom, and one staff layer joins
-the engraved system tiles. **Preview and MIDI practice now both use actual
-note-to-beat coordinates** to place the fixed playhead. The previous
-constant-pixels-per-beat camera was removed because its visible note
-crossings diverged from the audible metronome on irregularly spaced source
-engraving. This restores metronome/notation synchrony; some camera-speed
-variation can remain until truly time-proportional engraving is implemented.
-Preview/Listen have their own conspicuous blue-white note-arrival bursts
-and stage lighting, distinguished from mint/coral assessed MIDI feedback.
-Those neutral animations do not affect grading or reward progression.
+The grand staff determines zoom, and one continuous staff layer
+joins the engraved systems. For **generated piano practice exercises** with
+unchanging notation, the strip now applies a **tempo-proportional spacing
+pass** after Verovio resolves note collisions: every source-beat interval
+(including printed system joins) is assigned the same horizontal length.
+The score camera consequently moves at an unchanging pixels-per-second rate
+at the selected BPM, and noteheads still cross the playhead exactly on the
+audible metronome beat. The spacing pass stretches only intervals between
+protected notehead/accidental zones, never the notehead itself. Printed-system
+tiles remain bounded in size, and the long-score deferred upload path is
+preserved. Imported scores with changing clefs, meter or key keep their
+native notation, rather than risking damaged glyphs in this first version.
+Preview/Listen have blue-white, ungraded note-arrival bursts; graded MIDI
+success is mint/coral. This display work never changes assessment timing.
 
 ## Phase 7.7 - Resonance (visual polish)
 
