@@ -40,12 +40,25 @@ def test_capture_deduplicates_polled_events_and_authoritative_take_results():
     assert result["clean_takes"] == 1
     assert len(result["completed_takes"]) == 1
     assert result["completed_takes"][0]["correct"] == 2
+    assert result["completed_takes"][0]["hand"] == "left"
     assert result["streak_end"] == 1
     assert result["physical_latency_measured"] is False
     assert result["audio_latency_measured"] is False
     # The actual source IDs and individual pitches are intentionally absent.
     serialized = json.dumps(result)
     assert "note-a" not in serialized and '"pitch"' not in serialized
+
+
+def test_automatic_hand_unlock_does_not_relabel_previous_take():
+    capture = diag.SessionCapture(snapshot(hand="left"))
+    capture.observe(snapshot(phase="playing", hand="left"))
+    # The backend may advance the current hand before the final graded
+    # feedback becomes visible. The completed attempt was still left hand.
+    capture.observe(snapshot(phase="feedback", hand="right", streak=0,
+        take={"clean": True, "correct": 3, "total": 3}))
+    result = capture.report(2.1)
+    assert result["completed_takes"][0]["hand"] == "left"
+    assert result["hand_end"] == "right"
 
 
 def test_ungraded_preview_never_counts_success():
