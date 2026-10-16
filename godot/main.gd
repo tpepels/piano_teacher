@@ -1794,10 +1794,17 @@ func _update_hand_stages(state: Dictionary) -> void:
             " · DONE" if complete else " · NOW" if active else " · LOCKED" if locked else " · NEXT")
         label.add_theme_color_override("font_color",
             Color("#79DAAD") if complete else INK if active else MUTED)
-        var style := Design.surface(Color("#1C4940") if active else Color("#162725"), 10)
+        # Read as a three-step instrument runway, not three separate
+        # web-form cards. The active hand has a bright lower edge; completed
+        # hands retain a quieter mint trace, and locked ones recede.
+        var stage_color := (Color("#183932") if active else
+            Color("#152C27") if complete else Color("#142321"))
+        var style := Design.surface(stage_color, 5)
         style.set_content_margin_all(8)
-        style.set_border_width_all(2 if active else 1)
-        style.border_color = Color("#8DE9C9") if active else Color("#385850", .72)
+        style.set_border_width_all(0)
+        style.set_border_width(SIDE_BOTTOM, 3 if active else 2)
+        style.border_color = (Color("#8DE9C9") if active else
+            Color("#4DAE8D") if complete else Color("#2A4540"))
         label.add_theme_stylebox_override("normal", style)
 
 
