@@ -1288,6 +1288,12 @@ instrument rather than tiny outlined dots. Its filled segments still
 come exclusively from the backend streak; MIDI-free preview can never
 light one up. Real hand-unlock transitions retain their animated sweep.
 
+Upcoming source notes/chords also use a larger, softly animated warm-gold
+ring. This distinguishes **what to play next** (gold) from **what you
+actually played correctly** (teal), timing discrepancies (amber), and
+unexpected notes (coral). It remains a thin outline around the exact
+Verovio notehead rather than a new pitch glyph or an opaque mark.
+
 ```bash
 cd ~/Projects/piano_teacher
 git pull --ff-only
