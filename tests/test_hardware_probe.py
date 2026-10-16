@@ -88,3 +88,76 @@ def test_running_engine_rejects_probe_start(tmp_path):
             engine.hardware_diagnostics_action("start")
     finally:
         engine.db.close()
+
+
+def test_loopback_diagnostics_api_only_records_when_armed(tmp_path):
+    import json
+    from http.server import ThreadingHTTPServer
+    from threading import Thread
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
+
+    from piano_teacher.server import Handler
+
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    class LocalHandler(Handler):
+        pass
+    LocalHandler.engine = engine
+    service = ThreadingHTTPServer(("127.0.0.1", 0), LocalHandler)
+    thread = Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{service.server_port}"
+
+    def call(route, data=None):
+        body = json.dumps(data).encode() if data is not None else None
+        with urlopen(Request(base + route, body, {"Content-Type": "application/json"}
+                             if body is not None else {}), timeout=3) as response:
+            return json.load(response)
+    try:
+        assert call("/diagnostics/hardware")["events"] == []
+        with pytest.raises(HTTPError) as caught:
+            call("/diagnostics/hardware", {"action": "start"})
+        assert caught.value.code == 400
+        engine.midi_device = "Test MIDI"
+        engine.midi_port = SimpleNamespace(closed=False)
+        assert call("/diagnostics/hardware", {"action": "start"})["active"]
+        engine._receive(midi("note_on", note=72, velocity=100))
+        observed = call("/diagnostics/hardware")
+        assert observed["device"] == "Test MIDI"
+        assert observed["events"][-1]["pitch"] == 72
+        assert call("/diagnostics/hardware", {"action": "stop"})["note_ons"] == 1
+        engine._receive(midi("note_on", note=74, velocity=100))
+        assert call("/diagnostics/hardware")["note_ons"] == 1
+        assert "hardware_probe" not in call("/state")
+    finally:
+        service.shutdown()
+        service.server_close()
+        thread.join(timeout=3)
+        engine.db.close()
+
+
+def test_cli_reports_without_opening_second_midi_port(tmp_path, monkeypatch, capsys):
+    from scripts import check_hardware_session
+
+    from piano_teacher.hardware_probe import HardwareProbe
+    probe = HardwareProbe()
+    session = {"device": "Kawai CA", "running": False}
+    def fake_request(path, data=None):
+        if path == "/state":
+            return session
+        if data and data["action"] == "start":
+            return probe.start("Kawai CA", now=100)
+        if data and data["action"] == "stop":
+            return probe.stop(now=126)
+        return probe.snapshot(now=125)
+    monkeypatch.setattr(check_hardware_session, "request", fake_request)
+    # No real time wait and no piano needed; the CLI accesses the running
+    # backend, never opens an additional mido/ALSA input connection.
+    monkeypatch.setattr(check_hardware_session.time, "sleep", lambda _: None)
+    ticks = iter((0.0, 0.0, 26.0))
+    monkeypatch.setattr(check_hardware_session.time, "monotonic",
+                        lambda: next(ticks, 26.0))
+    report = check_hardware_session.run(25, tmp_path / "midi.json")
+    assert report["reason"] == "completed"
+    assert (tmp_path / "midi.json").exists()
+    assert "Kawai CA" in capsys.readouterr().out
