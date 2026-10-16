@@ -2124,7 +2124,12 @@ func _position_at_beat(beat: float) -> Dictionary:
     var position: Dictionary = left.duplicate()
     if at + 1 < points.size():
         var right: Dictionary = points[at + 1]
-        if int(left.get("page", 0)) == int(right.get("page", 0)) and str(left.get("system", "")) == str(right.get("system", "")):
+        # The generated scrolling strip is a single time-proportional
+        # canvas. Interpolate right THROUGH former page/system joins. Holding
+        # the last notehead until the next system would stop the camera for
+        # part of a beat and then jump ahead despite equalized engraving.
+        var continuous: bool = score_layout.has("strip_size")
+        if continuous or (int(left.get("page", 0)) == int(right.get("page", 0)) and str(left.get("system", "")) == str(right.get("system", ""))):
             var span: float = float(right.get("beat", 0.0)) - float(left.get("beat", 0.0))
             if span > 0:
                 var fraction: float = clampf((beat - float(left.get("beat", 0.0))) / span, 0.0, 1.0)
