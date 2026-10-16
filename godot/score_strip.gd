@@ -2,7 +2,12 @@ extends RefCounted
 
 # Keep page-sized GPU textures: a long course must never become one enormous
 # texture. All notation and feedback use the same virtual horizontal canvas.
-static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
+# Long scores can store completed tiles as compact CPU buffers until
+# needed. Ordinary short warmups keep the original fast eager texture path.
+const DEFERRED_MIN_SYSTEMS := 12
+
+static func build(layout: Dictionary, pages: Array[Image],
+        defer_textures: bool = false) -> Dictionary:
     var source_systems: Array = layout.get("systems", []).duplicate(true)
     if source_systems.is_empty():
         return _failure("The engraving has no measured staff systems")
@@ -210,9 +215,19 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
         # requiring two bytes per pixel instead of RGBA8's four.
         # The original source layouts and glyph positions are unchanged.
         image = compact_monochrome_tile(image)
-        tiles.append({"texture": ImageTexture.create_from_image(image),
+        var tile: Dictionary = {
             "rect": Rect2(mapping.position, Vector2(image.get_size())),
-            "upload_bytes": image.get_data().size()})
+            "upload_bytes": image.get_data().size()}
+        if defer_textures:
+            # FastLZ on the LA8 raster is inexpensive and reversible. The
+            # source buffer lives on the CPU; no Texture2D is uploaded until
+            # this engraved system approaches the viewport.
+            tile["packed_ink"] = image.get_data().compress(
+                FileAccess.COMPRESSION_FASTLZ)
+            tile["image_size"] = image.get_size()
+        else:
+            tile["texture"] = ImageTexture.create_from_image(image)
+        tiles.append(tile)
     var flat: Dictionary = layout.duplicate(true)
     flat["pages"] = 1
     flat["widths"] = [size.x]
@@ -255,6 +270,31 @@ static func compact_monochrome_tile(image: Image) -> Image:
     if image.get_format() != Image.FORMAT_LA8:
         image.convert(Image.FORMAT_LA8)
     return image
+
+
+# Restore an unmodified LA8 raster on demand. This is deliberately
+# independent of tile visibility and musical time, so seek cannot
+# introduce new note positions, re-engrave, or modify the source score.
+static func tile_texture(tile: Dictionary) -> Texture2D:
+    var eager: Variant = tile.get("texture")
+    if eager is Texture2D:
+        return eager
+    var compressed: PackedByteArray = tile.get("packed_ink", PackedByteArray())
+    var dimensions: Vector2i = tile.get("image_size", Vector2i.ZERO)
+    var expected: int = int(tile.get("upload_bytes", 0))
+    if dimensions.x <= 0 or dimensions.y <= 0 \
+            or expected != dimensions.x * dimensions.y * 2 \
+            or compressed.is_empty():
+        return null
+    var pixels: PackedByteArray = compressed.decompress(
+        expected, FileAccess.COMPRESSION_FASTLZ)
+    if pixels.size() != expected:
+        return null
+    var image := Image.create_from_data(dimensions.x, dimensions.y, false,
+        Image.FORMAT_LA8, pixels)
+    if image == null or image.is_empty():
+        return null
+    return ImageTexture.create_from_image(image)
 
 
 # Return anchors for one original system. The backend order is musical-time
