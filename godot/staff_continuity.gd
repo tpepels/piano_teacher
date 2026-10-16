@@ -16,7 +16,9 @@ func set_rails(lines: Array) -> void:
 func _draw() -> void:
     if staff_lines.is_empty() or size.x <= 1.0 or size.y <= 1.0:
         return
-    var ink := Color("#C0D0C5", 0.54)
+    # Match the bright engraved rule color at the safe raster seams.
+    # A dimmer underlay leaves visibly chopped staff endpoints.
+    var ink := Color("#E1EDE3", 0.90)
     for normalized in staff_lines:
         var y: float = float(normalized) * size.y
         if y < 0.0 or y > size.y:
