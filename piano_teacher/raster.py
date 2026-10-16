@@ -10,7 +10,7 @@ from io import BytesIO
 
 def rasterize_score(svg: str, *, width: int = 2000) -> bytes:
     """Convert sheet music to a verified, visible PNG image."""
-    if not 600 <= width <= 3000:
+    if not 600 <= width <= 7200:
         raise ValueError("Invalid engraving image width")
     try:
         import cairosvg

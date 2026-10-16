@@ -823,6 +823,21 @@ guided recognition, local audio and SQLite persistence. Godot's `main.gd` owns n
 `score_strip.gd` owns tiled score coordinates and `practice_theme.gd` the shared
 dark theme. The older Qt entrypoint remains available separately.
 
+## HiDPI score readability
+
+The notation now scales with the *available score-stage height* instead of
+stopping at a fixed 27px staff gap. It keeps the complete two-hand grand staff
+on screen with space for ledger notes, and reserves more window height for the
+actual score. The Godot client measures the engraver's staff-line proportions
+and requests a higher-resolution PNG for the entire exercise
+(`/score.png?page=0&width=N`), subject to an 18-million-pixel working
+budget and a 7200px width ceiling. CairoSVG renders the underlying **SVG
+vectors at the requested resolution**; Godot does not upscale the previous
+2000px PNG. Old clients continue to receive the standard 2000px images, and
+the server caches only one raster resolution per page. The score revision
+uses one consistent density across all pages, so texture and overlay
+coordinates, metronome timing and tile residency remain unchanged.
+
 ## Preview notation scale and continuous scrolling (Phase 7.6 follow-up)
 
 The grand staff determines zoom, and one continuous staff layer

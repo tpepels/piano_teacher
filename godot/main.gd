@@ -9,6 +9,7 @@ const PAPER := Design.FOREST
 const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
 const ScoreStrip := preload("res://score_strip.gd")
+const ScoreQuality := preload("res://score_quality.gd")
 const StaffContinuity := preload("res://staff_continuity.gd")
 const ScoreOverlay := preload("res://score_overlay.gd")
 const NoteReactions := preload("res://note_reactions.gd")
@@ -128,6 +129,7 @@ var score_tiles: Array[TextureRect] = []
 var strip_tiles: Array = []
 # Phase 8G: static raster geometry is independent of the moving camera.
 var score_tile_scale := -1.0
+var score_raster_width := 2000
 var visible_tile_begin := 0
 var visible_tile_end := 0
 var tile_window_initialized := false
@@ -414,9 +416,11 @@ func _layout_moving_score(delta: float = 0.0) -> void:
                 # The raster tile height includes large blank SVG margins.
                 # Scale from the actual grand staff, not those margins.
                 # Leave 35% of the stage for ledger lines and phrasing.
-                var desired_gap: float = clampf(viewport.y * .034, 19.0, 27.0)
-                scale = minf(width_scale, minf(desired_gap / native_gap,
-                    viewport.y * .65 / rail_extent))
+                # Score is the focal element; on a larger display the
+                # *actual* noteheads/staves must grow with the stage.
+                # The grand-staff bound protects both hands and ledger lines.
+                var desired_gap: float = ScoreQuality.staff_gap(viewport.y, rails)
+                scale = minf(width_scale, desired_gap / native_gap)
     var displayed_width: float = image.x * scale
     var displayed_height: float = image.y * scale
     if score_content.size.distance_to(Vector2(displayed_width, displayed_height)) > .1:
@@ -1429,7 +1433,10 @@ func _update_responsive_layout() -> void:
             button.clip_text = false
     if practice_controls != null:
         practice_layout_box.add_theme_constant_override("separation", 6 if compact else 9)
-        score_frame.custom_minimum_size.y = 170 if compact else 245
+        # Give the score roughly half the window height instead of
+        # allowing transport, menus and hint keyboard to dwarf it.
+        score_frame.custom_minimum_size.y = 195.0 if compact else clampf(
+            size.y * .48, 320.0, 760.0)
         for side in ["left", "right", "top", "bottom"]:
             score_margin_box.add_theme_constant_override("margin_" + side, 5 if compact else 10)
         for child in practice_controls.get_children():
@@ -2702,6 +2709,10 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
         return
     score_layout = parsed
     source_layout = parsed
+    # Select once for this score revision. All pages need identical
+    # resolution for the geometric strip; resizing during playback must
+    # never mix pixel densities within one source score.
+    score_raster_width = ScoreQuality.png_width(source_layout, score_frame.size.y)
     page_images.clear()
     page_images.resize(int(parsed.get("pages", 0)))
     layout_revision = revision
@@ -2721,7 +2732,8 @@ func _request_score(page: int) -> void:
     score_pending = true
     requested_page = page
     requested_revision = revision
-    if score_request.request(URL + "/score.png?page=%d" % page) != OK:
+    if score_request.request(URL + "/score.png?page=%d&width=%d" % [
+            page, score_raster_width]) != OK:
         score_pending = false
         _score_failed("Cannot request score page from the practice engine")
 

@@ -95,7 +95,7 @@ class PracticeEngine:
         self._layout_cache: EngravedScore | None = None
         self._layout_revision = -1
         self._layout_bpm: float | None = None
-        self._page_png: dict[int, bytes] = {}
+        self._page_png: dict[tuple[int, int], bytes] = {}
         self.next_at = 0.0
         self.awaiting_score_revision: int | None = None
         self.pending_result = None
@@ -1772,16 +1772,27 @@ class PracticeEngine:
             raise ValueError("Invalid score page")
         return score.pages[page]
 
-    def engraved_png(self, page: int = 0) -> bytes:
-        # Verovio glyph references are not rendered consistently by Godot SVG.
-        # Keep the SVG for geometry, but send a verified raster page to the UI.
+    def engraved_png(self, page: int = 0, *, width: int = 2000) -> bytes:
+        # Source SVG and note geometry stay resolution-independent.
+        # Godot requests an appropriately dense PNG for the actual staff
+        # size; the default preserves compatibility with existing clients.
+        if not 600 <= width <= 7200:
+            raise ValueError("Invalid engraving image width")
         with self.lock:
             score = self.engraving()
             if not 0 <= page < len(score.pages):
                 raise ValueError("Invalid score page")
-            if page not in self._page_png:
-                self._page_png[page] = rasterize_score(score.pages[page])
-            return self._page_png[page]
+            key = (page, width)
+            if key not in self._page_png:
+                # Keep only one resolution per page so changing window size
+                # between lessons cannot accumulate multiple large PNGs.
+                for cached in list(self._page_png):
+                    if cached[0] == page:
+                        del self._page_png[cached]
+                self._page_png[key] = (
+                    rasterize_score(score.pages[page]) if width == 2000
+                    else rasterize_score(score.pages[page], width=width))
+            return self._page_png[key]
 
     def geometry(self) -> dict:
         from .notation_symbols import preparation_symbols
@@ -1856,10 +1867,14 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200,self.engine.geometry())
             elif route in ("/score.svg", "/score.png"):
                 from urllib.parse import parse_qs
-                values=parse_qs(urlsplit(self.path).query).get("page", ["0"])
-                page=int(values[0])
+                query=parse_qs(urlsplit(self.path).query)
+                page=int(query.get("page", ["0"])[0])
                 if route=="/score.png":
-                    self._reply(200,self.engine.engraved_png(page),"image/png")
+                    if "width" in query:
+                        width=int(query["width"][0])
+                        self._reply(200,self.engine.engraved_png(page, width=width),"image/png")
+                    else:
+                        self._reply(200,self.engine.engraved_png(page),"image/png")
                 else:
                     self._reply(200,self.engine.engraved(page).encode(),"image/svg+xml; charset=utf-8")
             else:

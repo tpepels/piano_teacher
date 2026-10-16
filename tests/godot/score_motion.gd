@@ -47,6 +47,19 @@ func run() -> void:
     app._on_score(0, 200, PackedStringArray(), FileAccess.get_file_as_bytes(folder + "/score.png"))
     await process_frame
     await process_frame
+    # Responsive zoom must follow the grand staff's actual geometry, not
+    # the legacy maximum of 27 pixels at every desktop resolution.
+    var Quality = load("res://score_quality.gd")
+    var native_rails: Array = app.score_layout.systems[0].staff_lines
+    var page_aspect: float = float(app.source_layout.heights[0]) / float(app.source_layout.widths[0])
+    var chosen_width: int = Quality.png_width(app.source_layout, app.score_frame.size.y)
+    check(chosen_width >= 2000 and chosen_width <= 7200,
+        "High-resolution score request stays in bounded PNG limits")
+    check(float(chosen_width) * float(chosen_width) * page_aspect <= 18000000.0 + 7200.0,
+        "Responsive engraving respects the memory budget")
+    check(Quality.staff_gap(800.0, native_rails) >
+        Quality.staff_gap(400.0, native_rails) * 1.25,
+        "Large stage must produce visibly larger staves and notes")
     var initial_size: Vector2 = app.score_content.size
     # Phase 8G keeps tile positions and sizes fixed during ordinary
     # scrolling. Only score_content.position is allowed to move per frame.

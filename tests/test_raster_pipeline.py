@@ -27,6 +27,16 @@ def test_verovio_style_symbol_use_has_visible_pixels():
     assert all(channel < 60 for channel in image.getpixel((110, 160))[:3])
 
 
+def test_higher_resolution_engraving_preserves_vector_sharpness():
+    standard = Image.open(BytesIO(rasterize_score(VEROVIO_GLYPH, width=1000)))
+    detailed = Image.open(BytesIO(rasterize_score(VEROVIO_GLYPH, width=3600)))
+    assert detailed.size == (3600, 2160)
+    # The same SVG path is rerasterized by Cairo at the new resolution;
+    # it is NOT a blurred resize of the original PNG.
+    assert detailed.getpixel((396, 576))[:3] == standard.getpixel((110, 160))[:3]
+    assert detailed.getpixel((400, 720))[0] < 90
+
+
 def test_rasterizer_rejects_blank_page():
     blank = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"/>'
     with pytest.raises(RuntimeError, match="blank page"):
@@ -38,6 +48,29 @@ def test_rasterizer_rejects_corrupted_svg_and_excessive_output():
         rasterize_score("<svg broken>")
     with pytest.raises(ValueError, match="width"):
         rasterize_score(VEROVIO_GLYPH, width=7000)
+
+
+def test_engine_caches_png_per_requested_resolution(tmp_path, monkeypatch):
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    class FakeScore:
+        pages = (VEROVIO_GLYPH,)
+    monkeypatch.setattr(engine, "engraving", lambda: FakeScore())
+    calls = []
+    def fake_raster(svg, *, width=2000):
+        calls.append(width)
+        return f"png-{width}".encode()
+    monkeypatch.setattr("piano_teacher.server.rasterize_score", fake_raster)
+    try:
+        assert engine.engraved_png(width=4200) == b"png-4200"
+        assert engine.engraved_png(width=4200) == b"png-4200"
+        assert engine.engraved_png(width=3000) == b"png-3000"
+        assert engine.engraved_png(width=4200) == b"png-4200"
+        assert calls == [4200, 3000, 4200]
+        assert len(engine._page_png) == 1
+        with pytest.raises(ValueError, match="width"):
+            engine.engraved_png(width=9000)
+    finally:
+        engine.db.close()
 
 
 def test_engine_caches_png_and_validates_page(tmp_path, monkeypatch):
