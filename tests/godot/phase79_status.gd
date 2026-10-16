@@ -58,6 +58,14 @@ func run() -> void:
         "midi_input_age":null, "preview_only":false})
     check(lamp.label == "NO PIANO" and lamp.activity == 0,
         "USB disconnect cannot inherit the last note's light")
+    lamp.present({"device":"Another MIDI keyboard", "midi_input_count":40,
+        "midi_input_age":.03, "preview_only":false})
+    check(lamp.activity == 0 and lamp.label == "MIDI CONNECTED",
+        "Selecting a different keyboard cannot replay an old attack")
+    lamp.present({"device":"Another MIDI keyboard", "midi_input_count":41,
+        "midi_input_age":.02, "preview_only":false})
+    check(lamp.activity == 1,
+        "A subsequent physical attack from the new piano lights the indicator")
 
     var stage = Stage.new()
     root.add_child(stage)
