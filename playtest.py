@@ -251,7 +251,7 @@ class Playtest:
                 self.process.kill()
             self.process.wait(timeout=5)
 
-    def _collect(self) -> None:
+    def _collect(self) -> bool:
         assert self.process is not None
         started = self.clock()
         online = False
@@ -277,9 +277,17 @@ class Playtest:
             self.sleep(POLL_SECONDS)
         if not online:
             self.note("No live backend states were captured. Review godot.log.")
+        if self.process.poll() not in (None, 0):
+            self.note("Godot launcher exited with an error. Review godot.log.")
+            return False
+        return online and lost < 8
 
     def _finalize(self) -> Path:
         self._finish_probe()
+        if self.probe_report is not None:
+            # A previously finished or restored probe must also appear in
+            # the shareable bundle (including interrupted sessions).
+            write_json(self.output / "midi-summary.json", self.probe_report)
         if self.capture is not None:
             graded = self.capture.report(self.clock() - self.session_started)
             write_json(self.output / "graded.json", graded)
@@ -312,11 +320,12 @@ class Playtest:
 
     def run(self) -> int:
         self.output.mkdir(parents=True, exist_ok=True)
+        ok = True
         try:
             if not self._preflight():
                 return 1
             self._launch()
-            self._collect()
+            ok = self._collect()
         except KeyboardInterrupt:
             self.note("Stopping play session; preparing captured evidence.")
         finally:
@@ -328,7 +337,7 @@ class Playtest:
             archive = self._finalize()
             self.note(f"One file to share: {archive}")
             self.note(f"Readable summary: {self.output / 'report.md'}")
-        return 0
+        return 0 if ok else 1
 
 
 def main(argv: list[str] | None = None) -> int:
