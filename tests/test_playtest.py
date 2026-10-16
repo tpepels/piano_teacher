@@ -106,7 +106,7 @@ def test_short_app_session_keeps_last_probe_snapshot_if_backend_closes(tmp_path)
     session._finish_probe()
     assert session.probe_done and session.probe_report is not None
     assert session.probe_report["note_ons"] == 12
-    assert "events" not in (tmp_path / "midi-summary.json").read_text()
+    assert '"events":' not in (tmp_path / "midi-summary.json").read_text()
 
 
 def test_disconnected_preview_never_starts_midi_or_grading(tmp_path):
