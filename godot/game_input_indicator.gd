@@ -12,6 +12,7 @@ var is_preview := false
 var label := "NO PIANO"
 var activity := 0.0
 var previous_count := -1
+var previous_device := ""
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -21,7 +22,8 @@ func _init() -> void:
     size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 func present(state: Dictionary) -> void:
-    var current_connected: bool = not str(state.get("device", "")).is_empty()
+    var current_device: String = str(state.get("device", ""))
+    var current_connected: bool = not current_device.is_empty()
     var preview: bool = bool(state.get("preview_only", false))
     var count: int = maxi(0, int(state.get("midi_input_count", 0)))
     var age: Variant = state.get("midi_input_age")
@@ -29,13 +31,14 @@ func present(state: Dictionary) -> void:
         and float(age) < .6)
     # An existing count when the UI opens is not a newly received MIDI
     # event. A disconnected/reconnected device cannot inherit old glow.
-    var new_input: bool = current_connected and previous_count >= 0 \
-        and count > previous_count and recent
+    var new_input: bool = current_connected and current_device == previous_device \
+        and previous_count >= 0 and count > previous_count and recent
     if not current_connected:
         activity = 0.0
     elif new_input:
         activity = 1.0
     previous_count = count
+    previous_device = current_device
     var next_label: String = (
         "NO PIANO" if not current_connected else
         "PREVIEW" if preview else "MIDI CONNECTED")
