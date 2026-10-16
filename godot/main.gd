@@ -140,6 +140,8 @@ var last_audio_transport_id := -1
 var follow_system_key := ""
 # Opt-in diagnostic hook for the actual headless UI integration test only.
 var phase0_smoke_mode := false
+var listen_sync_diagnostics := false
+var last_listen_sync_report_ms := 0
 var phase0_last_phase := ""
 var phase0_last_cursor_tick := -1
 var phase0_last_lead_tick := -999
@@ -186,6 +188,7 @@ var state_poll_timer: Timer
 
 func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
+    listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     ui_scale = _readable_ui_scale()
     _build_interface()
     demo_player = preload("res://demo_player.gd").new()
@@ -1823,6 +1826,10 @@ func _process(_delta: float) -> void:
             and bool(last_state.get("running", false)):
         demo_player.keep_synchronized(_transport_beat_now(),
             maxf(1.0, float(last_state.get("bpm", 60.0))))
+        if listen_sync_diagnostics and ticks - last_listen_sync_report_ms >= 1000:
+            last_listen_sync_report_ms = ticks
+            print("PHASE8B_LISTEN_SOFTWARE_SYNC:",
+                JSON.stringify(demo_player.sync_report()))
     _update_count_in()
     if str(last_state.get("mode", "practice")) == "learn":
         score_overlay.next_chord.clear()
