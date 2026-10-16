@@ -101,7 +101,11 @@ def test_godot_loads_png_with_same_notehead_coordinates():
     assert '"/score.png?page=%d"' in script
     assert "picture.load_png_from_buffer(body)" in script
     assert 'score_overlay.image_size = strip["size"]' in script
-    assert 'ScoreStrip.build(source_layout, page_images)' in script
+    # Long scores defer texture uploads but share the exact same engraving
+    # geometry as short scores; the score view itself is only a sentinel.
+    assert 'ScoreStrip.build(' in script
+    assert 'source_layout, page_images, should_defer' in script
+    assert 'score_view.texture = ImageTexture.create_from_image(ready_pixel)' in script
     # Both transparent and opaque margins are excluded; strip tiles preserve
     # the real geometry and avoid a single oversized GPU texture.
     assert "var opaque_bounds := _visible_engraving_bounds(picture)" in script
