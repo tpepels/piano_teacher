@@ -126,7 +126,7 @@ func run() -> void:
     for x in range(45,51):
         for y in range(12,18):
             ink_test.set_pixel(x,y,Color.BLACK)
-    var stretched_ink: Image = tempo.warp_image(ink_test,
+    var stretched_ink: Image = load("res://tempo_strip.gd").warp_image(ink_test,
         [Vector2(0,0),Vector2(20,20),Vector2(90,210),Vector2(120,240)])
     check(stretched_ink.get_width() == 240,
         "Added beat spacing must extend only the horizontal score canvas")
