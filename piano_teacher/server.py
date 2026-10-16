@@ -143,6 +143,9 @@ class PracticeEngine:
         self.midi_device = ""
         self.midi_port = None
         self.live_input.clear_device()
+        # The last key shown in the HUD must not survive a USB loss.
+        self.midi_input_note = None
+        self.midi_input_at = None
         self.hardware_probe.stop(reason)
         self._stop()
         if self.teaching is not None:
@@ -209,6 +212,8 @@ class PracticeEngine:
             self.midi_port = None
             self.midi_device = ""
             self.live_input.clear_device()
+            self.midi_input_note = None
+            self.midi_input_at = None
             self.hardware_probe.stop("device_changed")
             self._stop()
             if port is not None:
