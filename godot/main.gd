@@ -130,6 +130,8 @@ var score_tile_scale := -1.0
 var visible_tile_begin := 0
 var visible_tile_end := 0
 var tile_window_initialized := false
+var tile_geometry_rebuilds := 0
+var tile_window_changes := 0
 var current_page := -1
 var requested_page := -1
 var rendered_revision := -1
@@ -424,6 +426,7 @@ func _layout_moving_score(delta: float = 0.0) -> void:
             score_tiles[i].position = rect.position * scale
             score_tiles[i].size = rect.size * scale
         score_tile_scale = scale
+        tile_geometry_rebuilds += 1
     var midpoint_x: float = (focus_left + focus_right) * 0.5
     var target_x: float = viewport.x * 0.5 - midpoint_x * displayed_width
     if score_layout.has("strip_size") and not score_layout.get("notes", []).is_empty():
@@ -444,6 +447,9 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     var tile_overscan: float = maxf(120.0, viewport.x * .18)
     var window: Vector2i = ScoreStrip.visible_tile_range(
         strip_tiles, target_x, scale, viewport.x, tile_overscan)
+    if not tile_window_initialized or visible_tile_begin != window.x \
+            or visible_tile_end != window.y:
+        tile_window_changes += 1
     if not tile_window_initialized:
         # Fresh TextureRect nodes default to visible; initialize them once.
         for tile in score_tiles:
@@ -1845,6 +1851,8 @@ func _process(_delta: float) -> void:
         if not frame_result.is_empty():
             frame_result["score_tiles"] = score_tiles.size()
             frame_result["visible_score_tiles"] = visible_tile_end - visible_tile_begin
+            frame_result["tile_geometry_rebuilds"] = tile_geometry_rebuilds
+            frame_result["tile_window_changes"] = tile_window_changes
             frame_result["phase"] = str(last_state.get("phase", ""))
             print("PHASE8D_FRAME_INTERVALS:", JSON.stringify(frame_result))
     # Animate short-lived hit pulses between HTTP state samples.
@@ -2662,6 +2670,8 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     visible_tile_begin = 0
     visible_tile_end = 0
     tile_window_initialized = false
+    tile_geometry_rebuilds = 0
+    tile_window_changes = 0
     strip_tiles = strip["tiles"]
     var notation_material := Design.notation_material()
     for item in strip_tiles:
