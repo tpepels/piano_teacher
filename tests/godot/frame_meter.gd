@@ -32,10 +32,14 @@ func run() -> void:
     check(not bool(report.get("physical_display_latency_measured", true)),
         "Frame intervals cannot infer a physical refresh or display latency")
     check(meter.samples.is_empty(), "Bounded report window clears on emission")
-    meter.record_frame(.05)
+    report = {}
+    meter.clear()
+    report = meter.record_frame(.05)
     for i in range(48):
-        meter.record_frame(.02)
-    report = meter.record_frame(.02)
+        var measured: Dictionary = meter.record_frame(.02)
+        if not measured.is_empty():
+            report = measured
+    check(not report.is_empty(), "Stall window must emit one complete report")
     check(float(report.get("worst_frame_ms", 0)) >= 49.9,
         "A missed frame must appear as a stall")
     check(float(report.get("p95_frame_ms", 0)) >= 19.9,
