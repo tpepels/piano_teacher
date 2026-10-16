@@ -15,6 +15,7 @@ var active_page := 0
 var crop_origin := Vector2.ZERO
 var crop_size := Vector2.ONE
 var staff_gap_fraction := 0.02
+var staff_lines: Array = []
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -60,6 +61,25 @@ func _impact(center: Vector2, progress: float, gap: float,
         draw_circle(point, radius + gap * .06, Color(tone, .085 * fade))
         draw_circle(point, radius, Color(tone, .9 * fade))
 
+# Staff light is restricted to the measured ten Verovio rules,
+# never guessed from note pitch. Each successful key illuminates only
+# the nearest lines for a few frames, underneath the real engraving.
+func _staff_resonance(center: Vector2, gap: float,
+        tone: Color, remaining: float) -> void:
+    if staff_lines.is_empty():
+        return
+    var extent: float = gap * (2.2 + 1.8 * remaining)
+    for normalized in staff_lines:
+        var y: float = (float(normalized) - crop_origin.y) / crop_size.y * size.y
+        if absf(y - center.y) > gap * 4.5:
+            continue
+        draw_line(Vector2(center.x - extent, y),
+            Vector2(center.x + extent, y),
+            Color(tone, .13 * remaining), 4.0, true)
+        draw_line(Vector2(center.x - extent, y),
+            Vector2(center.x + extent, y),
+            Color(tone, .52 * remaining), 1.1, true)
+
 func _draw() -> void:
     if hit_pulses.is_empty() and wrong_ghosts.is_empty():
         return
@@ -75,7 +95,9 @@ func _draw() -> void:
             continue
         var progress: float = 1.0 - remaining
         var tone: Color = HIT if str(hit.get("status", "")) == "on_time" else TIMING
-        _impact(_sheet_position(hit), progress, gap, radii, tone, true)
+        var position: Vector2 = _sheet_position(hit)
+        _impact(position, progress, gap, radii, tone, true)
+        _staff_resonance(position, gap, tone, remaining)
     # Unexpected physical attacks never create success particles. Their
     # smaller coral sparks accompany the error outline on the top layer.
     for i in range(maxi(0, wrong_ghosts.size() - MAX_VISIBLE_HITS), wrong_ghosts.size()):
