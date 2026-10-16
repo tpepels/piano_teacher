@@ -101,6 +101,8 @@ class Playtest:
         self.probe_done = midi_seconds <= 0
         self.probe_retry_at = 0.0
         self.probe_report: dict | None = None
+        self.probe_snapshot: dict | None = None
+        self.probe_last_sample_at = -10.0
         self.probe_device = ""
         self.last_backend_error = ""
         self.capture_notes: list[str] = []
@@ -139,14 +141,29 @@ class Playtest:
         try:
             raw = self.request("/diagnostics/hardware", {"action": "stop"})
             self.probe_report = safe_midi_report(raw)
-            write_json(self.output / "midi-summary.json", self.probe_report)
-            self.note(f"MIDI diagnostic captured {self.probe_report.get('note_ons', 0)} "
-                      "attacks (raw pitches excluded).")
         except RuntimeError as exc:
-            self.note(f"Could not save MIDI diagnostic: {exc}")
+            # Closing the UI tears down run.sh's backend immediately.
+            # Preserve the most recent aggregate snapshot rather than losing
+            # the entire hardware audit at the end of a short session.
+            self.probe_report = self.probe_snapshot
+            self.note(f"MIDI backend stopped before final probe read: {exc}")
         finally:
             self.probe_done = True
             self.probe_started_at = None
+        if self.probe_report is not None:
+            write_json(self.output / "midi-summary.json", self.probe_report)
+            self.note(f"MIDI diagnostic retained {self.probe_report.get('note_ons', 0)} "
+                      "attacks (raw pitches excluded).")
+
+    def _sample_probe(self, now: float) -> None:
+        if self.probe_started_at is None or now - self.probe_last_sample_at < 1.0:
+            return
+        self.probe_last_sample_at = now
+        try:
+            self.probe_snapshot = safe_midi_report(
+                self.request("/diagnostics/hardware"))
+        except RuntimeError:
+            pass  # A device can vanish between input callback and /state.
 
     def observe(self, state: dict) -> None:
         now = self.clock()
@@ -157,6 +174,7 @@ class Playtest:
                     or str(state.get("device", "")) != self.probe_device):
                 self._finish_probe()
         self._maybe_start_probe(state, now)
+        self._sample_probe(now)
 
         if self.capture is None:
             if state.get("device") and state.get("mode", "practice") in ("practice", "perform"):
