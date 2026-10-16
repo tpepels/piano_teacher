@@ -52,6 +52,7 @@ func run() -> void:
     # scrolling. Only score_content.position is allowed to move per frame.
     var first_tile_position: Vector2 = app.score_tiles[0].position
     var first_tile_size: Vector2 = app.score_tiles[0].size
+    var initial_geometry_rebuilds: int = app.tile_geometry_rebuilds
     check(app.tile_window_initialized and app.score_tile_scale > 0.0,
         "8G camera must initialize cached raster geometry and visibility")
     var note: Dictionary = app.score_layout["notes"][0]
@@ -141,6 +142,11 @@ func run() -> void:
                     "scale_x": app.score_content.size.x / app.score_overlay.image_size.x})
                 captures += 1
             clock += step
+    check(initial_geometry_rebuilds == 1 and
+        app.tile_geometry_rebuilds == initial_geometry_rebuilds,
+        "8G must build tile geometry only once at a fixed zoom, even while moving")
+    check(app.tile_window_changes >= 1,
+        "8G must track visibility changes independently of geometry")
     check(app.score_tiles[0].position.distance_to(first_tile_position) < .01,
         "8G cannot reposition an engraved tile during constant-scale playback")
     check(app.score_tiles[0].size.distance_to(first_tile_size) < .01,
