@@ -398,6 +398,19 @@ static func _mapped_px(normalized: float, mapping: Dictionary) -> float:
         + float(mapping.get("entry_padding", 0))
 
 
+# Phase 8F: avoid submitting far-offscreen Verovio tiles to the
+# renderer. Textures and native geometry stay loaded for instant seeking;
+# the overdraw margin prevents a seam flashing on a fast transport update.
+static func tile_visible(tile: Dictionary, content_x: float, scale: float,
+        viewport_width: float, overscan: float) -> bool:
+    var rect: Rect2 = tile.get("rect", Rect2())
+    if viewport_width <= 0.0 or scale <= 0.0 or rect.size.x <= 0.0:
+        return true # Invalid view: fail open rather than hide sheet music.
+    var left: float = content_x + rect.position.x * scale
+    var right: float = left + rect.size.x * scale
+    return right >= -overscan and left <= viewport_width + overscan
+
+
 static func _failure(message: String) -> Dictionary:
     return {"error": message, "layout": {}, "tiles": [], "size": Vector2.ZERO,
         "crop_origin": Vector2.ZERO, "crop_size": Vector2.ONE, "mappings": []}
