@@ -597,22 +597,28 @@ func _game_button(button: Button, central := false) -> void:
     # generic form submissions. Keep a fixed tactile vocabulary.
     button.add_theme_font_size_override("font_size", _ui_font(17 if central else 15))
     var normal := StyleBoxFlat.new()
-    normal.bg_color = Color("#286E60") if central else Color("#192B2C")
+    var kind: String = str(button.get("action_kind"))
+    var accent := Color("#A1FCD5") if central else (
+        Color("#F3CE93") if kind == "retry" else Color("#9ECFFF"))
+    normal.bg_color = Color("#286E60") if central else (
+        Color("#3A3029") if kind == "retry" else Color("#253C4C"))
+    button.set_meta("ui_button_role",
+        "transport_primary" if central else "transport_retry" if kind == "retry" else "transport_listen")
     normal.set_corner_radius_all(15 if central else 12)
     normal.set_content_margin_all(12)
     normal.set_border_width_all(2 if central else 1)
-    normal.border_color = Color("#8CF4D0", .90) if central else Color("#668C82", .55)
-    normal.shadow_color = Color("#3ABF9D", .22) if central else Color.BLACK
+    normal.border_color = Color(accent, .94 if central else .65)
+    normal.shadow_color = Color(accent, .25 if central else .12)
     normal.shadow_size = 7 if central else 2
     normal.shadow_offset = Vector2(0, 3)
     button.add_theme_stylebox_override("normal", normal)
     var hover := normal.duplicate() as StyleBoxFlat
-    hover.bg_color = Color("#378F76") if central else Color("#244340")
-    hover.border_color = Color("#B5FFE0")
+    hover.bg_color = normal.bg_color.lightened(.16)
+    hover.border_color = accent.lightened(.14)
     hover.shadow_size = 12 if central else 4
     button.add_theme_stylebox_override("hover", hover)
     var pressed := normal.duplicate() as StyleBoxFlat
-    pressed.bg_color = Color("#205D53") if central else Color("#203733")
+    pressed.bg_color = normal.bg_color.darkened(.18)
     pressed.shadow_size = 0
     pressed.shadow_offset = Vector2.ZERO
     button.add_theme_stylebox_override("pressed", pressed)
@@ -623,7 +629,7 @@ func _game_button(button: Button, central := false) -> void:
     button.add_theme_stylebox_override("disabled", disabled)
     var focus := normal.duplicate() as StyleBoxFlat
     focus.bg_color = Color.TRANSPARENT
-    focus.border_color = Color("#D6FFE8")
+    focus.border_color = Color("#F5FFF7")
     focus.set_border_width_all(2)
     focus.shadow_size = 0
     button.add_theme_stylebox_override("focus", focus)
@@ -1390,7 +1396,9 @@ func _update_responsive_layout() -> void:
             button.add_theme_font_size_override("font_size", font_size)
             var measured: float = button.get_theme_font("font").get_string_size(
                 button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-            button.custom_minimum_size = Vector2(maxf(65.0, measured + 19.0), 34.0 if compact else 36.0)
+            # Icon + label still need one accessible, unclipped click target.
+            button.custom_minimum_size = Vector2(maxf(90.0, measured + 60.0),
+                34.0 if compact else 36.0)
             button.clip_text = false
     if practice_controls != null:
         practice_layout_box.add_theme_constant_override("separation", 6 if compact else 9)
