@@ -1121,6 +1121,71 @@ git pull --ff-only
 ./run.sh -- --frame-diagnostics
 ```
 
+## Phase 8J - Consolidated real-hardware acceptance evidence
+
+The end-to-end hardware review can now be generated from actual local
+observations, **not invented benchmark data**. It is an offline report
+combining the existing Kawai input, graded practice and Godot render/audio
+diagnostics. The report has a separate status for missing evidence and
+will never claim to measure key-to-sound, speaker or display latency.
+
+From the updated checkout, launch the application in one terminal and
+capture the opt-in Godot metrics in a local log:
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+./run.sh -- --frame-diagnostics --listen-sync-diagnostics 2>&1 | tee /tmp/piano-godot.log
+```
+
+Connect your physical piano in Settings. While the application is
+ready/stopped, run the MIDI diagnostics in another terminal. Play soft
+and loud single notes, a chord, repeated notes and sustain:
+
+```bash
+cd ~/Projects/piano_teacher
+.venv/bin/python scripts/check_hardware_session.py \
+    --duration 25 --output /tmp/piano-midi.json
+```
+
+Then, before starting a real left/right/both warm-up, start the passive
+graded capture in a second terminal. Play several attempts, including
+mistakes and clean completions:
+
+```bash
+.venv/bin/python scripts/check_grading_session.py \
+    --duration 180 --takes 10 --output /tmp/piano-graded.json
+```
+
+Use Listen on a passage during the same logging session to collect
+software-only audio-to-score drift. After closing the Godot application,
+assemble the evidence:
+
+```bash
+.venv/bin/python scripts/summarize_hardware_acceptance.py \
+    --midi /tmp/piano-midi.json \
+    --graded /tmp/piano-graded.json \
+    --log /tmp/piano-godot.log \
+    --output /tmp/piano-acceptance.md \
+    --json-output /tmp/piano-acceptance.json
+```
+
+The Markdown report compares backend-observed MIDI attacks/releases,
+sustain changes, graded and clean takes, observed hand transitions,
+median and minimum frame FPS, largest p95 and worst-frame intervals,
+packed/resident tile sizes and Listen clock drift. It warns when frames
+miss a **60 FPS / 17 ms review target**; that is a diagnostic target, not
+a manufactured performance result. Raw MIDI event lists, note pitches
+and velocities do not enter the report. Physical input/output latency
+still requires a separately instrumented measurement and remains
+unverified even if all other evidence looks healthy.
+
+Check the offline report tool:
+
+```bash
+.venv/bin/python -m pytest -q tests/test_hardware_acceptance_summary.py
+```
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
