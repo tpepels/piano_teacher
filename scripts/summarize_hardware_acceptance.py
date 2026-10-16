@@ -83,8 +83,10 @@ def summarize(midi: dict | None, graded: dict | None,
             pedal_changes=int(_numeric(midi.get("pedal_changes"))),
             orphan_releases=int(_numeric(midi.get("orphan_releases"))),
             repeated_attacks=int(_numeric(midi.get("repeated_attacks"))),
-            held_notes=len(midi.get("held_notes", []))
-                if isinstance(midi.get("held_notes", []), list) else 0)
+            held_notes=(max(0, int(_numeric(midi["held_note_count"])))
+                        if "held_note_count" in midi
+                        else len(midi.get("held_notes", []))
+                        if isinstance(midi.get("held_notes", []), list) else 0))
         midi_result["status"] = (
             "observed" if midi_result["note_ons"] > 0 and midi_result["note_offs"] > 0
             else "incomplete")
