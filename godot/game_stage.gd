@@ -28,7 +28,7 @@ var last_result_key := ""
 var result_wave := 0.0
 var result_age := 0.0
 var result_tone := AURA
-const AMBIENT_REDRAW_SECONDS := 1.0 / 30.0
+const AMBIENT_REDRAW_SECONDS := 1.0 / 20.0
 var ambient_redraw_elapsed := 0.0
 
 func _init() -> void:
@@ -137,12 +137,9 @@ func _draw() -> void:
     var h: float = size.y
     if w < 1 or h < 1:
         return
-    for i in range(32):
-        var y: float = h * float(i) / 32.0
-        var lift: float = 1.0 - absf(float(i) - 14.0) / 25.0
-        draw_rect(Rect2(0, y, w, h / 32.0 + 1.0),
-            Color("#101B1D").lerp(Color("#1A2929"),
-                clampf(lift * .75, 0.0, 1.0)))
+    # One stage fill rather than 32 full-width alpha bands per frame.
+    # This dramatically reduces overdraw at 2880x1800 / HiDPI.
+    draw_rect(Rect2(0, 0, w, h), Color("#132021"))
     # The playhead is at 42% of the viewport. All light stays behind
     # the actual score. During preview, beat motion is neutral: it does
     # not pretend a note has been struck or assessed correctly.
@@ -152,10 +149,12 @@ func _draw() -> void:
     var pulse_tone: Color = Color("#91AFAB") if score_preview else AURA
     var ambient: float = (.028 + .010 * sin(breath) + beat_attack * .018
         if transport_active else .008)
-    for i in range(12, 0, -1):
-        var spread: float = float(i) / 12.0
-        draw_circle(center, base_radius * (1.0 + spread * 3.2),
-            Color(pulse_tone, ambient * (1.0 - spread) * .7))
+    # Three diffuse rings give a softer cinematic glow with far less
+    # translucent overdraw than twelve stacked screen-scale discs.
+    for i in range(3, 0, -1):
+        var spread: float = float(i) / 3.0
+        draw_circle(center, base_radius * (1.0 + spread * 1.3),
+            Color(pulse_tone, ambient * (1.0 - spread) * .22))
     if transport_active:
         var x: float = center.x
         draw_line(Vector2(x, h * .17), Vector2(x, h * .83),
@@ -182,10 +181,10 @@ func _draw() -> void:
     var drawn_tone: Color = impact_tone if impact_energy > preview_energy else Color("#9DC8FF")
     if drawn_energy > .001:
         var expansion: float = 1.0 + impact_age * .58
-        for i in range(10, 0, -1):
-            var spread: float = float(i) / 10.0
-            draw_circle(center, base_radius * expansion * (.9 + spread * 2.5),
-                Color(drawn_tone, drawn_energy * (1.0 - spread) * .11))
+        for i in range(3, 0, -1):
+            var spread: float = float(i) / 3.0
+            draw_circle(center, base_radius * expansion * (.9 + spread * 1.6),
+                Color(drawn_tone, drawn_energy * (1.0 - spread) * .13))
         for i in range(12):
             var angle: float = TAU * float(i) / 12.0 + .23
             var ray: Vector2 = Vector2(cos(angle), sin(angle))

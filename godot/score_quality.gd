@@ -2,9 +2,9 @@ extends RefCounted
 
 # The practice score uses the real grand-staff geometry rather than a
 # fixed zoom or the whitespace surrounding a rasterized Verovio page.
-const MAX_PNG_WIDTH := 7200
+const MAX_PNG_WIDTH := 5200
 const MIN_PNG_WIDTH := 2000
-const MAX_PAGE_PIXELS := 18000000
+const MAX_PAGE_PIXELS := 10000000
 
 static func staff_gap(viewport_height: float, lines: Array) -> float:
     if lines.size() < 2:

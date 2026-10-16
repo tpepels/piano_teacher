@@ -846,6 +846,19 @@ their own Play, Retry and Listen iconography. Hover, pressed, disabled and
 keyboard focus are styled for every role, and standard buttons continue to
 use their original callback and accessibility text.
 
+## Phase 7.8 - CPU and camera stability
+
+For high-refresh-rate Linux laptops, the display is capped at 60 visual
+frames per second (the musical transport and MIDI assessment are not capped).
+Camera anchor lookups use binary search, and static score bounds are cached
+by score revision instead of rescanned each frame. The ambient stage now
+uses a single opaque background and a small number of light passes, avoiding
+overdraw from large translucent gradients. The count-in drawing no longer
+uses an opaque rectangular background over the moving staff. HiDPI
+engraving remains vector sourced, but requests are bounded to 5200px
+and 10 megapixels per source page to reduce decode and raster cost.
+Frame interval statistics can be enabled with `--frame-diagnostics`.
+
 ## HiDPI score readability
 
 The notation now scales with the *available score-stage height* instead of

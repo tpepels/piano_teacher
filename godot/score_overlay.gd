@@ -87,8 +87,6 @@ func _draw_preparation() -> void:
     if not showing or lead_width_px <= 2.0 or lead_first.is_empty():
         return
     var first_x: float = _sheet_xy(float(lead_first.get("x", 0.0)), 0.0).x
-    var top: float = _sheet_xy(0.0, float(lead_first.get("top", 0.0))).y
-    var bottom: float = _sheet_xy(0.0, float(lead_first.get("bottom", 1.0))).y
     var lines: Array[float] = []
     for staff_y in lead_staff_lines:
         lines.append(_sheet_xy(0.0, float(staff_y)).y)
@@ -97,13 +95,9 @@ func _draw_preparation() -> void:
         return
     var left: float = first_x - lead_width_px
     var margin_left: float = left - gap * 9.0
-    var ink_left: float = _sheet_xy(float(lead_first.get("ink_left", lead_first.get("x", 0.0))), 0.0).x
-    var mask_end: float = minf(first_x, ink_left) - 1.0
-    # The preparation measure stays on the moving canvas after the downbeat.
-    # Preserve the complete opening accidental/ledger ink, not only its
-    # notehead. These bounds come from the actual engraved source glyphs.
-    draw_rect(Rect2(margin_left, top - 16.0, maxf(0.0, mask_end - margin_left),
-                    bottom - top + 32.0), Design.PANEL, true)
+    # No opaque starting rectangle. The old mask covered the actual score
+    # as it scrolled underneath and looked like a dark square that lagged
+    # behind the timing line. All preparation ink is transparent.
     var ink := Color(Design.SLATE, .52)
     for sy in lines:
         draw_line(Vector2(margin_left, sy), Vector2(first_x, sy), ink, 1.1, true)

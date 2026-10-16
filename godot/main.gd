@@ -131,6 +131,9 @@ var score_tiles: Array[TextureRect] = []
 var strip_tiles: Array = []
 # Phase 8G: static raster geometry is independent of the moving camera.
 var score_tile_scale := -1.0
+var cached_bounds: Dictionary = {}
+var cached_bounds_revision := -1
+var camera_last_scale := -1.0
 var score_raster_width := 2000
 var visible_tile_begin := 0
 var visible_tile_end := 0
@@ -211,6 +214,10 @@ var last_seen_midi_visual_sequence := 0
 var state_poll_timer: Timer
 
 func _ready() -> void:
+    # On 120/144 Hz laptops Godot otherwise renders the entire translucent
+    # piano stage on every monitor refresh even though MIDI timing is handled
+    # by the independent Python transport. Cap visual frames, not music.
+    Engine.max_fps = 60
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
@@ -344,6 +351,11 @@ func _update_count_in() -> void:
         _count_tick(posmod(tick, bar_beats) == 0)
 
 func _score_note_bounds(page: int) -> Dictionary:
+    if cached_bounds_revision == revision and cached_bounds.has(page):
+        return cached_bounds[page]
+    if cached_bounds_revision != revision:
+        cached_bounds_revision = revision
+        cached_bounds.clear()
     # Derive framing from actual engraved required notes, not the white area
     # around the page or a cursor's approximated staff bounds.
     var left: float = INF
@@ -361,10 +373,14 @@ func _score_note_bounds(page: int) -> Dictionary:
             var ax: float = (float(item.get("x", 0.0)) - score_crop_origin.x) / maxf(score_crop_size.x, 0.00001)
             left = minf(left, ax)
             right = maxf(right, ax)
+    var bounds: Dictionary
     if not is_finite(left) or not is_finite(right):
-        return {"left": 0.0, "right": 1.0}
-    return {"left": clampf(left - 0.04, 0.0, 1.0),
+        bounds = {"left": 0.0, "right": 1.0}
+    else:
+        bounds = {"left": clampf(left - 0.04, 0.0, 1.0),
             "right": clampf(right + 0.04, 0.0, 1.0)}
+    cached_bounds[page] = bounds
+    return bounds
 
 
 func _visible_score_noteheads() -> int:
@@ -2161,11 +2177,22 @@ func _layout_guided_score() -> void:
 
 func _beat_width_at(beat: float) -> float:
     var points: Array = score_layout.get("anchors", [])
-    for index in range(points.size() - 1):
-        var left: Dictionary = points[index]
-        var right: Dictionary = points[index + 1]
-        if float(right.get("beat", 0.0)) <= beat + .000001:
-            continue
+    if points.size() < 2:
+        return .01
+    # Start at the same indexed region as the camera. A silent lead-in
+    # should not walk a hundred pages of future notes every rendered frame.
+    var low := 0
+    var high: int = points.size()
+    while low < high:
+        var middle: int = (low + high) / 2
+        if float(points[middle].get("beat", 0.0)) <= beat + .000001:
+            low = middle + 1
+        else:
+            high = middle
+    var index: int = clampi(low - 1, 0, points.size() - 2)
+    for offset in range(index, mini(index + 3, points.size() - 1)):
+        var left: Dictionary = points[offset]
+        var right: Dictionary = points[offset + 1]
         var span: float = float(right.get("beat", 0.0)) - float(left.get("beat", 0.0))
         if span > 0.0 and float(right.x) > float(left.x):
             return (float(right.x) - float(left.x)) / span
@@ -2175,12 +2202,18 @@ func _position_at_beat(beat: float) -> Dictionary:
     var points: Array = score_layout.get("anchors", [])
     if points.is_empty():
         return {}
-    var at: int = 0
-    for i in range(points.size()):
-        if float(points[i].get("beat", 0.0)) <= beat + 0.000001:
-            at = i
+    # A long imported song may have thousands of anchors. The old linear
+    # search walked from beat zero at every display frame (120 times/sec on
+    # many laptops), causing rising CPU use and late camera frames.
+    var low := 0
+    var high: int = points.size()
+    while low < high:
+        var middle: int = (low + high) / 2
+        if float(points[middle].get("beat", 0.0)) <= beat + .000001:
+            low = middle + 1
         else:
-            break
+            high = middle
+    var at: int = maxi(0, low - 1)
     var left: Dictionary = points[at]
     var position: Dictionary = left.duplicate()
     if at + 1 < points.size():
@@ -2767,6 +2800,8 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
     if typeof(parsed) != TYPE_DICTIONARY or not parsed.has("anchors"):
         _score_failed("The engraving engine returned invalid note positions")
         return
+    cached_bounds.clear()
+    cached_bounds_revision = -1
     score_layout = parsed
     source_layout = parsed
     # Select once for this score revision. All pages need identical
@@ -2905,6 +2940,8 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         resident_tile_end = score_tiles.size()
         resident_tile_bytes = score_tile_upload_bytes
     score_layout = strip["layout"]
+    cached_bounds.clear()
+    cached_bounds_revision = -1
     var rail_groups: Array = score_layout.get("systems", [])
     if not rail_groups.is_empty():
         staff_continuity.set_rails(rail_groups[0].get("staff_lines", []))

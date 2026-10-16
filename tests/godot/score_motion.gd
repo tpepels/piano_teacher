@@ -189,6 +189,17 @@ func run() -> void:
         check(app.score_tiles[i].visible ==
             (i >= app.visible_tile_begin and i < app.visible_tile_end),
             "8G cached tile window must equal actual rendered system visibility")
+    # A long score must be looked up by musical beat, not by scanning
+    # thousands of earlier notes on every frame. Boundary sampling must
+    # stay monotone and preserve the same target interpolation.
+    var lookup_points: Array = app.score_layout.get("anchors", [])
+    if lookup_points.size() > 3:
+        for sample_index in [0, 1, lookup_points.size()/2,
+                lookup_points.size()-2, lookup_points.size()-1]:
+            var exact: Dictionary = lookup_points[sample_index]
+            var lookup: Dictionary = app._position_at_beat(float(exact.beat))
+            check(absf(float(lookup.x)-float(exact.x)) < .00001,
+                "Binary lookup must preserve the exact source onset")
     # Musical metronome and visible notes must share one transport beat.
     # A constant-rate camera applied to unequally-spaced Verovio glyphs
     # previously let notes pass the playhead off the metronome clicks.

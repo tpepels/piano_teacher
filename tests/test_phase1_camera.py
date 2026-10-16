@@ -3,6 +3,13 @@ from pathlib import Path
 
 SOURCE = (Path(__file__).resolve().parents[1] / "godot" / "main.gd").read_text()
 
+def test_fixed_frame_budget_and_logarithmic_lookup():
+    assert "Engine.max_fps = 60" in SOURCE
+    assert "var middle: int = (low + high) / 2" in SOURCE
+    assert "cached_bounds[page] = bounds" in SOURCE
+    assert "cached_bounds.clear()" in SOURCE
+
+
 def test_fit_is_based_on_actual_required_noteheads():
     assert "func _score_note_bounds(page: int)" in SOURCE
     assert 'score_layout.get("notes", [])' in SOURCE
