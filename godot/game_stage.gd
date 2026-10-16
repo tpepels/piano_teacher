@@ -14,6 +14,8 @@ var transport_active := false
 var breath := 0.0
 var impact_energy := 0.0
 var impact_tone := AURA
+const AMBIENT_REDRAW_SECONDS := 1.0 / 30.0
+var ambient_redraw_elapsed := 0.0
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -58,7 +60,15 @@ func _process(delta: float) -> void:
         redraw = true
     if transport_active:
         breath = fposmod(breath + delta * .42, TAU)
-        redraw = true
+        # Slow ambient breathing doesn't require a 60/144 Hz repaint of
+        # the whole score panel. Short-lived MIDI impacts remain uncapped.
+        ambient_redraw_elapsed += maxf(0.0, delta)
+        if ambient_redraw_elapsed >= AMBIENT_REDRAW_SECONDS:
+            ambient_redraw_elapsed = fposmod(
+                ambient_redraw_elapsed, AMBIENT_REDRAW_SECONDS)
+            redraw = true
+    else:
+        ambient_redraw_elapsed = 0.0
     if redraw:
         queue_redraw()
 
