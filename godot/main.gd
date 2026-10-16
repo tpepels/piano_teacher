@@ -125,6 +125,11 @@ var source_layout: Dictionary = {}
 var page_images: Array[Image] = []
 var score_tiles: Array[TextureRect] = []
 var strip_tiles: Array = []
+# Phase 8G: static raster geometry is independent of the moving camera.
+var score_tile_scale := -1.0
+var visible_tile_begin := 0
+var visible_tile_end := 0
+var tile_window_initialized := false
 var current_page := -1
 var requested_page := -1
 var rendered_revision := -1
@@ -402,17 +407,23 @@ func _layout_moving_score(delta: float = 0.0) -> void:
                     viewport.y * .65 / rail_extent))
     var displayed_width: float = image.x * scale
     var displayed_height: float = image.y * scale
-    score_content.size = Vector2(displayed_width, displayed_height)
+    if score_content.size.distance_to(Vector2(displayed_width, displayed_height)) > .1:
+        score_content.size = Vector2(displayed_width, displayed_height)
     staff_continuity.position = Vector2.ZERO
     # Rebuilding a very long rail canvas every 60-Hz camera tick wastes
     # work; the rules are static until the score is resized or replaced.
     if staff_continuity.size.distance_to(score_content.size) > .1:
         staff_continuity.size = score_content.size
         staff_continuity.queue_redraw()
-    for i in range(score_tiles.size()):
-        var rect: Rect2 = strip_tiles[i]["rect"]
-        score_tiles[i].position = rect.position * scale
-        score_tiles[i].size = rect.size * scale
+    # Keep all source tile geometry in local canvas coordinates. Only a
+    # change in zoom requires touching every node; ordinary camera movement
+    # changes score_content.position alone.
+    if absf(scale - score_tile_scale) > .000001:
+        for i in range(score_tiles.size()):
+            var rect: Rect2 = strip_tiles[i]["rect"]
+            score_tiles[i].position = rect.position * scale
+            score_tiles[i].size = rect.size * scale
+        score_tile_scale = scale
     var midpoint_x: float = (focus_left + focus_right) * 0.5
     var target_x: float = viewport.x * 0.5 - midpoint_x * displayed_width
     if score_layout.has("strip_size") and not score_layout.get("notes", []).is_empty():
@@ -428,15 +439,25 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     # This is a musical projection, not a camera chasing a moving object.
     # Smoothing introduces tempo-dependent lag; clamps let the rule wander.
     score_content.position = target
-    # Only a few contiguous systems can intersect the score viewport.
-    # Do not rebuild or rescale textures here: merely skip draw calls for
-    # offscreen tiles, with overscan to protect fast scrolls and seeks.
+    # Two binary searches locate the visible half-open tile interval.
+    # Update only entering/leaving tiles, rather than all systems at 60 Hz.
     var tile_overscan: float = maxf(120.0, viewport.x * .18)
-    for i in range(score_tiles.size()):
-        var should_show: bool = ScoreStrip.tile_visible(
-            strip_tiles[i], target_x, scale, viewport.x, tile_overscan)
-        if score_tiles[i].visible != should_show:
-            score_tiles[i].visible = should_show
+    var window: Vector2i = ScoreStrip.visible_tile_range(
+        strip_tiles, target_x, scale, viewport.x, tile_overscan)
+    if not tile_window_initialized:
+        # Fresh TextureRect nodes default to visible; initialize them once.
+        for tile in score_tiles:
+            tile.visible = false
+        tile_window_initialized = true
+    else:
+        for i in range(visible_tile_begin, visible_tile_end):
+            if i < window.x or i >= window.y:
+                score_tiles[i].visible = false
+    for i in range(window.x, window.y):
+        if i < visible_tile_begin or i >= visible_tile_end:
+            score_tiles[i].visible = true
+    visible_tile_begin = window.x
+    visible_tile_end = window.y
     follow_system_key = key
 
 func _new_request(callback: Callable) -> HTTPRequest:
@@ -1823,10 +1844,7 @@ func _process(_delta: float) -> void:
         var frame_result: Dictionary = frame_meter.record_frame(_delta)
         if not frame_result.is_empty():
             frame_result["score_tiles"] = score_tiles.size()
-            var visible_tiles := 0
-            for tile in score_tiles:
-                visible_tiles += int(tile.visible)
-            frame_result["visible_score_tiles"] = visible_tiles
+            frame_result["visible_score_tiles"] = visible_tile_end - visible_tile_begin
             frame_result["phase"] = str(last_state.get("phase", ""))
             print("PHASE8D_FRAME_INTERVALS:", JSON.stringify(frame_result))
     # Animate short-lived hit pulses between HTTP state samples.
@@ -2640,6 +2658,10 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         score_content.remove_child(tile)
         tile.queue_free()
     score_tiles.clear()
+    score_tile_scale = -1.0
+    visible_tile_begin = 0
+    visible_tile_end = 0
+    tile_window_initialized = false
     strip_tiles = strip["tiles"]
     var notation_material := Design.notation_material()
     for item in strip_tiles:
