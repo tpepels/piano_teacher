@@ -939,6 +939,28 @@ tests/test_grading_session_capture.py`. On-machine keyboard and screen
 acceptance are still required. Hardware input delay, acoustic output delay
 and actual displayed FPS remain outside the loopback API's capabilities.
 
+## Phase 8D - Frame interval acceptance
+
+An optional Godot diagnostic samples actual process-frame intervals on the
+visible Practice screen. It reports mean FPS, mean/p95/worst frame interval
+in milliseconds, tile count and the backend phase, once per approximately
+one second. This is frame scheduling evidence, **not** physical monitor
+refresh or sound-to-screen latency.
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+.venv/bin/python -m pytest -q tests/test_frame_meter.py
+./run.sh -- --frame-diagnostics
+```
+
+For simultaneous software audio and rendering checks, use
+`./run.sh -- --frame-diagnostics --listen-sync-diagnostics`.
+Capture the terminal output during a long multi-system preview, then
+during actual Kawai practice. The checks never block playback, change
+MIDI grading or create extra GUI controls. Hardware-side measurement is
+still required to establish sound-to-screen and key-to-sound latencies.
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
