@@ -102,7 +102,8 @@ def test_png_http_endpoint_and_svg_debug(tmp_path, monkeypatch):
     from urllib.error import HTTPError
     from piano_teacher.server import Handler
     engine = PracticeEngine(tmp_path, enable_midi=False)
-    monkeypatch.setattr(engine, "engraved_png", lambda page=0: rasterize_score(VEROVIO_GLYPH, width=1000)
+    monkeypatch.setattr(engine, "engraved_png",
+                        lambda page=0, *, width=1000: rasterize_score(VEROVIO_GLYPH, width=width)
                         if page == 0 else (_ for _ in ()).throw(ValueError("Invalid score page")))
     monkeypatch.setattr(engine, "engraved", lambda page=0: VEROVIO_GLYPH)
     class LocalHandler(Handler):
@@ -116,6 +117,9 @@ def test_png_http_endpoint_and_svg_debug(tmp_path, monkeypatch):
         with urlopen(base + "/score.png?page=0", timeout=5) as response:
             assert response.headers["Content-Type"] == "image/png"
             assert response.read(8) == bytes.fromhex("89504e470d0a1a0a")
+        with urlopen(base + "/score.png?page=0&width=2400", timeout=5) as response:
+            sharp = Image.open(BytesIO(response.read()))
+            assert sharp.size == (2400, 1440)
         with urlopen(base + "/score.svg?page=0", timeout=5) as response:
             assert response.headers["Content-Type"].startswith("image/svg+xml")
             assert b"<svg" in response.read()
@@ -131,7 +135,8 @@ def test_png_http_endpoint_and_svg_debug(tmp_path, monkeypatch):
 
 def test_godot_loads_png_with_same_notehead_coordinates():
     script = (Path(__file__).resolve().parents[1] / "godot/main.gd").read_text()
-    assert '"/score.png?page=%d"' in script
+    assert '"/score.png?page=%d&width=%d"' in script
+    assert "ScoreQuality.png_width(source_layout, score_frame.size.y)" in script
     assert "picture.load_png_from_buffer(body)" in script
     assert 'score_overlay.image_size = strip["size"]' in script
     # Long scores defer texture uploads but share the exact same engraving
