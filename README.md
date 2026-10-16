@@ -1081,6 +1081,46 @@ the earlier version, including at system joins. No difference in
 scoring, MIDI timing, navigation, audio or exercise selection is
 intended.
 
+## Phase 8I - Bounded GPU residency for long scores
+
+Short lessons (fewer than 12 engraved systems) still upload their
+complete score immediately. Longer lessons keep each Verovio system
+as a reversible, lossless FastLZ-compressed LA8 image buffer, without
+creating an initial GPU texture. On-screen systems plus two neighbouring
+systems to either side are uploaded on demand. Camera movement only
+restores arriving textures and releases the `TextureRect.texture`
+reference for departing textures. A seek restores all required score
+ink *before* committing the new visibility window. If unpacking fails,
+the app displays a score error rather than pretending a musical note
+was rendered.
+
+The hidden full-page score texture is also gone: a tiny marker now
+represents completed score readiness, while the engraved system tiles
+remain the only source of visible notation. Score overlay and MIDI
+reactions continue using original note IDs and the same measured
+coordinate transforms. Previous full-page source images are released
+once all tiles have been built.
+
+Frame logs from `./run.sh -- --frame-diagnostics` distinguish
+`tile_upload_mib` (all raw tiles if eagerly uploaded),
+`resident_tile_mib` (raw size of currently uploaded tiles) and
+`packed_tile_mib` (sum of compressed CPU-side tile buffers).
+These are source-pixel estimates, not measured GPU driver VRAM.
+Also check `resident_tiles` and `tile_restores` after seeking
+through a long piece. On the desktop, first seeking and fast jumps
+might still require noticeable synchronous decompression; hardware
+acceptance must rule out audible/visible interruptions.
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+.venv/bin/python -m pytest -q \
+    tests/test_score_strip.py tests/test_score_motion_render.py \
+    tests/test_godot_practice_smoke.py tests/test_raster_pipeline.py
+./scripts/check_godot.sh
+./run.sh -- --frame-diagnostics
+```
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
