@@ -22,6 +22,7 @@ const GameStreak := preload("res://game_streak.gd")
 const GameCountIn := preload("res://game_countin.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameTransportButton := preload("res://game_transport_button.gd")
+const GameInputIndicator := preload("res://game_input_indicator.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 
@@ -53,6 +54,7 @@ var practice_header: HBoxContainer
 var game_brand: Label
 var game_stage: Control
 var game_streak: Control
+var game_input_indicator: Control
 var game_count_in: Control
 var score_status_panel: CenterContainer
 var score_status_label: Label
@@ -1111,6 +1113,8 @@ func _build_interface() -> void:
     hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(hand_label)
+    game_input_indicator = GameInputIndicator.new()
+    tempo.add_child(game_input_indicator)
     lesson_info_label = _label("", 16, Color("#A9C2B7"))
     lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_stage_bar = HFlowContainer.new()
@@ -1451,6 +1455,7 @@ func _update_responsive_layout() -> void:
         hand_label.add_theme_font_size_override("font_size", _ui_font(15))
         progress_label.add_theme_font_size_override("font_size", _ui_font(15))
         game_streak.custom_minimum_size = Vector2(130 if width < 950 else 155, 30)
+        game_input_indicator.custom_minimum_size = Vector2(145, 25)
         feedback_label.add_theme_font_size_override("font_size", _ui_font(17))
         lesson_info_label.add_theme_font_size_override("font_size", _ui_font(16))
         practice_playback_banner.add_theme_font_size_override("font_size", _ui_font(17))
@@ -2175,6 +2180,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     last_state_tick = int((started_ms + received_ms) / 2.0)
     visual_transport_clock.accept(parsed, last_state_tick, received_ms)
     if not bool(parsed.get("loaded", false)):
+        game_input_indicator.present(parsed)
         game_stage.present(parsed)
         game_streak.present({})
         mode_choice.disabled = true
@@ -2214,8 +2220,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     speed_label.add_theme_font_size_override("font_size", _ui_font(16 if size.x < 900 else 18))
     speed_label.tooltip_text = "Current practice tempo and your selected target"
     hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
-    hand_label.text += " · " + ("Piano connected" if not str(parsed.get("device", "")).is_empty() else "No piano")
-    hand_label.tooltip_text = str(parsed.get("device", "Connect your USB MIDI piano in Settings"))
+    hand_label.tooltip_text = "Current hand of the backend lesson"
+    game_input_indicator.present(parsed)
     if current_screen != "settings":
         tempo_setting.set_value_no_signal(float(parsed.get("target_bpm", parsed.get("bpm", 40))))
     var stage: String = str(parsed.get("lesson_level", "original"))
