@@ -32,6 +32,39 @@ func run() -> void:
         "Far-left tile must no longer render")
     check(helper.tile_visible(probe_tile, 0.0, 1.0, 0.0, 50.0),
         "Unknown viewport must fail open, never hide the score")
+    # Phase 8G: binary interval selection must agree with the old
+    # per-tile predicate across scroll, zoom and both viewport boundaries.
+    var many_tiles: Array = []
+    var running_left := 0.0
+    for n in range(80):
+        var width: float = 37.0 + float(n % 7) * 9.0
+        many_tiles.append({"rect": Rect2(running_left, 0, width, 100)})
+        running_left += width
+    var windows := [
+        [-1200.0, 1.0, 500.0, 80.0],
+        [-180.0, 1.0, 360.0, 0.0],
+        [0.0, 1.0, 400.0, 100.0],
+        [400.0, 1.0, 400.0, 40.0],
+        [-4000.0, 2.0, 800.0, 100.0],
+        [-100.0, .42, 480.0, 30.0],
+        [-15000.0, 1.0, 400.0, 50.0],
+        [-running_left - 500.0, 1.0, 400.0, 50.0]]
+    for values in windows:
+        var camera_x: float = float(values[0])
+        var zoom: float = float(values[1])
+        var view_width: float = float(values[2])
+        var overscan: float = float(values[3])
+        var visible_range: Vector2i = helper.visible_tile_range(
+            many_tiles, camera_x, zoom, view_width, overscan)
+        for i in range(many_tiles.size()):
+            var expected: bool = helper.tile_visible(
+                many_tiles[i], camera_x, zoom, view_width, overscan)
+            check((i >= visible_range.x and i < visible_range.y) == expected,
+                "8G interval search must match real raster visibility at tile %d" % i)
+    check(helper.visible_tile_range([], 0, 1, 300, 50) == Vector2i.ZERO,
+        "Empty scores have an empty visible interval")
+    check(helper.visible_tile_range(many_tiles, 0, 0, 300, 50) ==
+        Vector2i(0, many_tiles.size()), "Unusable viewport must preserve all notes")
     var no_pages: Array[Image] = []
     check(not str(helper.build({}, no_pages).get("error", "")).is_empty(),
           "missing measured systems must return an explicit error")
