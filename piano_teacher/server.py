@@ -33,6 +33,7 @@ from .lesson_timing import lead_in_beats
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
 from .live_feedback import settled_assessment, expired_attack_misses
 from .live_input_view import LiveInputView
+from .hardware_probe import HardwareProbe
 from .instruction import next_full_attempt
 from .learner_state import LearnerStateStore, guided_units, next_guided_unit, placement_candidate
 
@@ -106,6 +107,7 @@ class PracticeEngine:
         self.midi_input_note = None
         self.midi_input_at = None
         self.live_input = LiveInputView()
+        self.hardware_probe = HardwareProbe()
         self.enable_midi = enable_midi
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
         self.library_health = LibraryHealth(self.library)
@@ -145,6 +147,7 @@ class PracticeEngine:
                 self.midi_device = ""
                 self.midi_port = None
                 self.live_input.clear_device()
+                self.hardware_probe.stop("device_disconnected")
                 self._stop()
                 if self.teaching is not None:
                     self.teaching.set_connected(False, now=time.monotonic())
@@ -168,6 +171,7 @@ class PracticeEngine:
             self.midi_port = None
             self.midi_device = ""
             self.live_input.clear_device()
+            self.hardware_probe.stop("device_changed")
             self._stop()
             if port is not None:
                 try:
@@ -193,6 +197,22 @@ class PracticeEngine:
                 self.teaching.set_connected(self.midi_port is not None, now=time.monotonic())
             self.next_action = "Press Start when you are ready." if name else "Connect your piano for feedback."
             self.library.update(midi_device=name)
+
+    def hardware_diagnostics(self) -> dict:
+        with self.lock:
+            return self.hardware_probe.snapshot()
+
+    def hardware_diagnostics_action(self, action: str) -> dict:
+        with self.lock:
+            if action == "start":
+                if not self._piano_connected():
+                    raise RuntimeError("Connect a MIDI piano in Settings before testing")
+                if self.running:
+                    raise RuntimeError("Stop the current practice attempt before testing MIDI input")
+                return self.hardware_probe.start(self.midi_device)
+            if action == "stop":
+                return self.hardware_probe.stop()
+            raise ValueError("Hardware diagnostics action must be start or stop")
 
     def library_listing(self) -> dict:
         with self.lock:
@@ -239,6 +259,7 @@ class PracticeEngine:
         # Timestamp in the hardware input callback, not on the rendering thread.
         now = time.monotonic()
         with self.lock:
+            self.hardware_probe.receive(message, now=now)
             if message.type == "note_on" and message.velocity > 0:
                 self.midi_input_count += 1
                 self.midi_input_note = message.note
@@ -1763,6 +1784,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200,self.engine.preferences())
             elif route=="/devices":
                 self._json(200,{"devices":self.engine.ports()})
+            elif route=="/diagnostics/hardware":
+                self._json(200,self.engine.hardware_diagnostics())
             elif route=="/demo.wav":
                 from urllib.parse import parse_qs
                 token = parse_qs(urlsplit(self.path).query).get("token", [""])[0]
@@ -1807,6 +1830,9 @@ class Handler(BaseHTTPRequestHandler):
                 self.engine.set_preferences(**args)
             elif route=="/device":
                 self.engine.connect(args.get("name",""))
+            elif route=="/diagnostics/hardware":
+                self._json(200,self.engine.hardware_diagnostics_action(args.get("action","")))
+                return
             elif route=="/control":
                 self.engine.control(**args)
             else:

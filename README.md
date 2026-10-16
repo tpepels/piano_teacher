@@ -778,6 +778,35 @@ guided recognition, local audio and SQLite persistence. Godot's `main.gd` owns n
 `score_strip.gd` owns tiled score coordinates and `practice_theme.gd` the shared
 dark theme. The older Qt entrypoint remains available separately.
 
+## Phase 8 - Physical piano acceptance (first milestone)
+
+Phase 8 adds an opt-in, bounded local MIDI diagnostic session. It observes
+the **same callback** as the live Godot practice engine, with no additional
+MIDI-port ownership and no change to grading, tempo or saved progress. Connect
+the Kawai in **Settings → Piano input**, leave Practice stopped, and launch
+the application normally. In another terminal run:
+
+```bash
+.venv/bin/python scripts/check_hardware_session.py --duration 25 \
+    --output /tmp/piano-hardware-check.json
+```
+
+During recording play quiet/loud single notes, a three-note chord, repeated
+attacks and sustain-pedal down/up. The report includes note-on/off counts,
+velocity range, chord overlaps, pedal events, unmatched releases and held
+notes; full timestamped note events are retained **in memory only while
+requested**, at most 512 events or 90 seconds, unless you explicitly provide
+an output path. Never share the optional report if you consider the notes
+private. The backend provides a loopback-only `GET /diagnostics/hardware` and
+`POST /diagnostics/hardware` with `{"action":"start"}` or `{"action":"stop"}`.
+Changing/disconnecting the instrument stops the capture. Unplug/reconnect
+tests and callback timing instrumentation are covered without hardware.
+
+**Not yet measured:** physical key-to-MIDI delay, output speaker/audio delay,
+full graded performance through the actual Kawai and corresponding screen
+recording. These require an instrument-side test; callback timestamps cannot
+establish physical or acoustic latency on their own.
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
