@@ -18,8 +18,14 @@ func run() -> void:
     check(demo.player.stream.data.size() > 2000, "Stream carries rendered samples")
     check(not demo.player.playing, "Audio waits for backend ready acknowledgement")
     var state: Dictionary = {"mode":"listen", "revision":8, "running":true, "paused":false, "clock_beat":0.0, "bpm":80, "demo":{"token":"lesson-a", "ready":true}}
-    demo.synchronize(state)
+    # The last server poll reports beat zero, while the score's live
+    # extrapolated clock has already reached half a beat at 80 BPM.
+    demo.synchronize(state, .5)
+    check(absf(demo.last_start_offset_s - .375) < .001,
+        "Listen must start from the current visible beat, not the stale snapshot")
     check(demo.player.playing, "Running Listen starts actual audio output")
+    check(not bool(demo.sync_report()["physical_latency_measured"]),
+        "Local sync checks never claim to measure speaker or piano latency")
     state["paused"] = true
     demo.synchronize(state)
     check(demo.player.stream_paused, "Pause freezes the audio stream")
