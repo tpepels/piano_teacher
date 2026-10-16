@@ -2697,21 +2697,13 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         if page_images[page] == null:
             _request_score(page)
             return
-    # Remove empty page margins without breaking notehead annotations.
-    var original_size := Vector2(picture.get_width(), picture.get_height())
+    # Validate that the source page has real notation. System tiles
+    # are the only visible score images; an additional cropped whole-page
+    # image would create an unused full-resolution CPU allocation.
     var opaque_bounds := _visible_engraving_bounds(picture)
     if opaque_bounds.size.x < 16 or opaque_bounds.size.y < 16:
         _score_failed("The engraving image contains no visible musical notation")
         return
-    var pad := maxi(18, int(0.035 * float(opaque_bounds.size.y)))
-    var crop_rect := Rect2i(
-        Vector2i(maxi(0, opaque_bounds.position.x - pad), maxi(0, opaque_bounds.position.y - pad)),
-        Vector2i(0, 0)
-    )
-    var right := mini(picture.get_width(), opaque_bounds.end.x + pad)
-    var bottom := mini(picture.get_height(), opaque_bounds.end.y + pad)
-    crop_rect.size = Vector2i(right, bottom) - crop_rect.position
-    var cropped := picture.get_region(crop_rect)
     var should_defer: bool = source_layout.get("systems", []).size() >= \
         ScoreStrip.DEFERRED_MIN_SYSTEMS
     var strip: Dictionary = ScoreStrip.build(
@@ -2753,6 +2745,10 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         score_content.add_child(tile)
         score_content.move_child(tile, score_overlay.get_index())
         score_tiles.append(tile)
+    if not deferred_tile_mode:
+        resident_tile_begin = 0
+        resident_tile_end = score_tiles.size()
+        resident_tile_bytes = score_tile_upload_bytes
     score_layout = strip["layout"]
     var rail_groups: Array = score_layout.get("systems", [])
     if not rail_groups.is_empty():
