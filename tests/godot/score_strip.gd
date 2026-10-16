@@ -26,6 +26,29 @@ func run() -> void:
           "missing measured systems must return an explicit error")
     check(not str(helper.build(original, no_pages).get("error", "")).is_empty(),
           "missing score pages must return an explicit error")
+    # Phase 7.7a: only loose raster staff rails may disappear at
+    # joins; a real vertical measure barline must survive untouched.
+    var synthetic := Image.create(80, 70, false, Image.FORMAT_RGBA8)
+    synthetic.fill(Color.TRANSPARENT)
+    for x in range(80):
+        synthetic.set_pixel(x, 15, Color.BLACK)
+        synthetic.set_pixel(x, 25, Color.BLACK)
+    for y in range(10, 31):
+        synthetic.set_pixel(75, y, Color.BLACK)
+    var synthetic_mapping := {
+        "system": {"staff_lines": [15.0 / 70.0, 25.0 / 70.0]},
+        "source_size": Vector2(80, 70),
+        "crop": Rect2(0, 0, 80, 70),
+        "trimmed_header": true, "entry_padding": 0}
+    var removed: int = helper._clear_join_rails(synthetic,
+        synthetic_mapping, true, true)
+    check(removed > 0, "seam cleanup must remove orphaned staff-rule ink")
+    check(synthetic.get_pixel(0, 15).a < .01 and synthetic.get_pixel(79, 15).a < .01,
+        "staff joins must be supplied by the continuous rails, not tile ends")
+    check(synthetic.get_pixel(40, 15).a > .9,
+        "staff ink away from tile joins must remain")
+    check(synthetic.get_pixel(75, 20).a > .9 and synthetic.get_pixel(75, 15).a > .9,
+        "a real barline near the system end must never be erased")
     var strip: Dictionary = helper.build(original, pages)
     var flat: Dictionary = strip.layout
     check(strip.tiles.size() == original.systems.size(), "every system becomes a tile")
