@@ -51,7 +51,53 @@ static func controls(source_positions: Array, target_positions: Array,
     points.append(Vector2(native_width, final_width))
     return points
 
-static func warp_image(image: Image, points: Array) -> Image:
+# Expand blank horizontal space whenever possible. Stretching a Verovio
+# raster interval used to elongate *rest glyphs, accidentals, beams and tied
+# noteheads*, particularly at slow tempo. A safe split contains only staff
+# rules (repainted by StaffContinuity) or transparency; all other source
+# columns are copied at their original width.
+static func _clean_gap(image: Image, source_a: int, source_b: int,
+        staff_rows: Array) -> int:
+    var span: int = source_b - source_a
+    if span < 8:
+        return -1
+    var center: int = (source_a + source_b) / 2
+    var left: int = source_a + maxi(2, int(span * .16))
+    var right: int = source_b - maxi(2, int(span * .16))
+    var height: int = image.get_height()
+    if left >= right or height <= 0:
+        return -1
+    var excluded := PackedByteArray()
+    excluded.resize(height)
+    for row in staff_rows:
+        var center_y: int = int(row)
+        for y in range(maxi(0, center_y-3), mini(height, center_y+4)):
+            excluded[y] = 1
+    var ink: PackedByteArray = image.get_data()
+    var width: int = image.get_width()
+    # Search from the interval's centre outwards so note spacing remains
+    # visually balanced. Reject a cut intersecting any non-staff glyph.
+    for offset in range(span / 2 + 1):
+        for sign in [-1, 1]:
+            var x: int = center + sign * offset
+            if x < left or x >= right:
+                continue
+            var safe := true
+            for y in range(0, height, 2):
+                if excluded[y] != 0:
+                    continue
+                var at: int = (y * width + x) * 4
+                if ink[at+3] > 40 and (ink[at] < 235 or
+                        ink[at+1] < 235 or ink[at+2] < 235):
+                    safe = false
+                    break
+            if safe:
+                return x
+    return -1
+
+
+static func warp_image(image: Image, points: Array,
+        staff_rows: Array = []) -> Image:
     if points.size() < 2:
         return image
     var target_width: int = roundi(float(points[-1].y))
@@ -70,13 +116,38 @@ static func warp_image(image: Image, points: Array) -> Image:
         var dest_b: int = clampi(roundi(right.y), 0, target_width)
         if source_b <= source_a or dest_b <= dest_a:
             continue
-        var region := image.get_region(Rect2i(source_a,0,
-            source_b-source_a,image.get_height()))
-        if dest_b-dest_a != source_b-source_a:
-            # Staff lines are handled separately. Continuous beams and ties
-            # can stretch between intact noteheads without breaking.
-            region.resize(dest_b-dest_a, image.get_height(),
+        var original_width: int = source_b-source_a
+        var target_span: int = dest_b-dest_a
+        if target_span >= original_width:
+            var cut: int = _clean_gap(image, source_a, source_b, staff_rows) \
+                if target_span > original_width else -1
+            if cut >= 0:
+                # Exact unscaled Verovio pixels on BOTH sides. The inserted
+                # transparent interval gains continuous lines from the
+                # independent staff layer and cannot smear musical symbols.
+                var left_width: int = cut-source_a
+                var right_width: int = source_b-cut
+                out.blit_rect(image, Rect2i(source_a,0,left_width,
+                    image.get_height()), Vector2i(dest_a,0))
+                out.blit_rect(image, Rect2i(cut,0,right_width,
+                    image.get_height()), Vector2i(dest_b-right_width,0))
+            elif original_width == target_span:
+                out.blit_rect(image, Rect2i(source_a,0,original_width,
+                    image.get_height()), Vector2i(dest_a,0))
+            else:
+                # A tie or beam crosses every possible cut. Preserve its
+                # connectivity rather than severing the actual notation.
+                var region := image.get_region(Rect2i(source_a,0,
+                    original_width,image.get_height()))
+                region.resize(target_span,image.get_height(),
+                    Image.INTERPOLATE_BILINEAR)
+                out.blit_rect(region,Rect2i(0,0,target_span,
+                    image.get_height()),Vector2i(dest_a,0))
+        else:
+            var region := image.get_region(Rect2i(source_a,0,
+                original_width,image.get_height()))
+            region.resize(target_span,image.get_height(),
                 Image.INTERPOLATE_BILINEAR)
-        out.blit_rect(region, Rect2i(0,0,region.get_width(),
-            region.get_height()), Vector2i(dest_a,0))
+            out.blit_rect(region,Rect2i(0,0,target_span,
+                image.get_height()),Vector2i(dest_a,0))
     return out

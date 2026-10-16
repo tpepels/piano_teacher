@@ -208,7 +208,12 @@ static func build(layout: Dictionary, pages: Array[Image],
                                 .80 if offset == 0 else .14))
             image = expanded
         if mapping.get("tempo_warp", []).size() > 1:
-            image = TempoStrip.warp_image(image, mapping.tempo_warp)
+            var source_rule_rows: Array = []
+            for line in mapping.system.get("staff_lines", []):
+                source_rule_rows.append(roundi(float(line) * mapping.source_size.y
+                    - mapping.crop.position.y))
+            image = TempoStrip.warp_image(image, mapping.tempo_warp,
+                source_rule_rows)
         var tempo_gap: int = int(mapping.get("tempo_gap", 0))
         if tempo_gap > 0:
             var joined := Image.create(image.get_width() + tempo_gap,

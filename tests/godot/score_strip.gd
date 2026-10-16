@@ -118,6 +118,24 @@ func run() -> void:
         "staff ink away from tile joins must remain")
     check(synthetic.get_pixel(75, 20).a > .9 and synthetic.get_pixel(75, 15).a > .9,
         "a real barline near the system end must never be erased")
+    # Enlarging musical time must not enlarge a rest or accidental glyph.
+    # Native ink copied either side of an empty gap stays pixel-for-pixel
+    # identical, unlike the former bilinear stretch of whole musical strips.
+    var ink_test := Image.create(120,48,false,Image.FORMAT_RGBA8)
+    ink_test.fill(Color.TRANSPARENT)
+    for x in range(45,51):
+        for y in range(12,18):
+            ink_test.set_pixel(x,y,Color.BLACK)
+    var stretched_ink: Image = tempo.warp_image(ink_test,
+        [Vector2(0,0),Vector2(20,20),Vector2(90,210),Vector2(120,240)])
+    check(stretched_ink.get_width() == 240,
+        "Added beat spacing must extend only the horizontal score canvas")
+    var ink_pixels := 0
+    for x in range(stretched_ink.get_width()):
+        if stretched_ink.get_pixel(x,14).a > .5:
+            ink_pixels += 1
+    check(ink_pixels == 6,
+        "Rest symbol must keep original pixel width when adding empty space")
     # 7.7a: the full staff is owned by one continuous layer, not by
     # individual printed system rasters with visible horizontal endings.
     # Keep a genuine end-of-measure barline and a notehead crossing a line.
