@@ -1019,6 +1019,37 @@ Test normal practice and a seek across multiple printed systems. FPS
 must be measured on the actual laptop; the presence of tile culling
 is not evidence of a particular achieved frame rate.
 
+## Phase 8G - Camera update complexity for long scores
+
+The virtual score keeps the same original Verovio image tiles and scroll
+transform. During normal playback, tile-local position and size are now
+cached: only a zoom/score change rebuilds these values. The moving
+camera changes one parent coordinate, and two binary searches identify the
+small contiguous interval of tiles actually needed at that moment.
+Visibility updates touch only tiles that enter or leave this interval.
+A large seek can touch many nodes once; steady motion no longer loops
+over every printed system to reposition or check each texture every frame.
+
+The viewport uses the same generous offscreen margin as Phase 8F. The
+visible tile count reported by `--frame-diagnostics` is taken from the
+cached interval. Godot regression fixtures verify that range selection
+agrees with the original per-tile predicate through scrolls and zooms,
+and that the real engraved tile under the playhead stays visible.
+This optimization does not alter the MIDI clock, audio stream, sound
+samples, assessment or the original texture residency in memory.
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+.venv/bin/python -m pytest -q tests/test_score_strip.py
+./scripts/check_godot.sh
+./run.sh -- --frame-diagnostics
+```
+
+Long-score and multi-system seeks still need visual examination on the
+actual desktop. FPS and VRAM improvements cannot be inferred from
+source-level complexity alone; report on-device measurements.
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
