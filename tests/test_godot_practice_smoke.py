@@ -9,7 +9,11 @@ def test_smoke_enters_practice_and_waits_for_png_and_playing():
     assert 'OS.get_cmdline_user_args().has("--phase0-smoke")' in SCENE
     assert 'if phase0_smoke_mode:\n        _navigate("practice")' in SCENE
     assert 'print("PHASE0_SCORE_READY:"' in SCENE
-    assert 'score_view.texture = ImageTexture.create_from_image(cropped)' in SCENE
+    # The score view is a readiness sentinel: actual ink lives on system
+    # tiles, not a second hidden full-page GPU texture.
+    assert 'score_view.texture = ImageTexture.create_from_image(ready_pixel)' in SCENE
+    assert 'tile.texture = item.get("texture") as Texture2D' in SCENE
+    assert 'ScoreStrip.tile_texture(strip_tiles[i])' in SCENE
     assert 'lambda log: "PHASE0_SCORE_READY:" in log' in SMOKE
     assert 'lambda log: "PHASE0_PHASE:count_in" in log' in SMOKE
     assert 'lambda log: "PHASE0_PHASE:playing" in log' in SMOKE
