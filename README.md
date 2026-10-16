@@ -1190,13 +1190,16 @@ Check the offline report tool:
 
 The backend now remembers the piano explicitly selected in Settings and
 tries that *exact* MIDI input again when it returns after USB unplug/replug
-or a backend restart. Device discovery is bounded to at most one scan
-every three seconds while a preferred device exists; failed reopen attempts
-are rate-limited to one every four seconds. This avoids spinning or
-constantly reconnecting while ALSA is still releasing a USB device.
+or a backend restart. Background discovery is performed at most once every three seconds,
+and failed reopen attempts are rate-limited to one every four seconds.
+This avoids spinning while ALSA releases a USB device.
 
-Disconnection always cancels the current attempt and any pending clean
-result; it clears transient note input and stops hardware diagnostics.
+Background state polling limits MIDI input enumeration to once every
+three seconds; opening the Settings device list still explicitly refreshes
+the available inputs on demand. Failed reopen attempts are never faster
+than once per four seconds. Disconnection cancels the current attempt
+and any pending clean result, clears transient note input, and stops
+hardware diagnostics.
 When the original port returns, the app reports that the piano
 reconnected and requires the learner to press **Start**. It does not
 automatically resume playback, fabricate notes or award progress.
