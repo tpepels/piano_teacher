@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import threading
 from typing import Iterator
 import wave
 
@@ -136,11 +137,71 @@ def iter_pcm_chunks(variant: ExerciseVariant, bpm: Real, *, sample_rate: int = 4
 
 
 class DemoAudioCache:
+    """An on-disk WAV cache with bounded retention.
+
+    Existing and active render keys are protected from eviction. Cache
+    cleanup touches only our SHA-256-named .wav files and never temp renders,
+    user-provided files or a SoundFont installation.
+    """
+
+    DEFAULT_MAX_CACHE_BYTES = 512 * 1024 * 1024
+    DEFAULT_MAX_CACHE_FILES = 32
+
     def __init__(self, cache_dir: str | Path, *, sample_rate: int = 44100,
-                 chunk_frames: int = 4096):
+                 chunk_frames: int = 4096,
+                 max_cache_bytes: int = DEFAULT_MAX_CACHE_BYTES,
+                 max_cache_files: int = DEFAULT_MAX_CACHE_FILES):
+        for name, value in (("max_cache_bytes", max_cache_bytes),
+                            ("max_cache_files", max_cache_files)):
+            if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
         self.cache_dir = Path(cache_dir)
         self.sample_rate = sample_rate
         self.chunk_frames = chunk_frames
+        self.max_cache_bytes = max_cache_bytes
+        self.max_cache_files = max_cache_files
+        self._lock = threading.Lock()
+        self._latest_key = ""
+        self._in_flight: set[str] = set()
+
+    def _prune(self, active_key: str) -> None:
+        """Evict oldest completed WAVs while preserving in-flight/current.
+
+        The latest requested key remains safe when an older render finishes
+        out of order. A single oversized current recording is allowed.
+        """
+        with self._lock:
+            keep = {active_key, self._latest_key, *self._in_flight}
+            entries: list[tuple[int, str, Path, int]] = []
+            try:
+                candidates = self.cache_dir.iterdir()
+            except FileNotFoundError:
+                return
+            for candidate in candidates:
+                if (candidate.suffix != ".wav" or len(candidate.stem) != 64
+                        or any(ch not in "0123456789abcdef" for ch in candidate.stem)
+                        or candidate.is_symlink()):
+                    continue
+                try:
+                    info = candidate.stat()
+                    if not candidate.is_file():
+                        continue
+                except OSError:
+                    continue
+                entries.append((info.st_mtime_ns, candidate.name, candidate, info.st_size))
+            total = sum(entry[3] for entry in entries)
+            count = len(entries)
+            for _, _, candidate, length in sorted(entries):
+                if count <= self.max_cache_files and total <= self.max_cache_bytes:
+                    break
+                if candidate.stem in keep:
+                    continue
+                try:
+                    candidate.unlink()
+                except OSError:
+                    continue
+                total -= length
+                count -= 1
 
     def render(self, variant: ExerciseVariant, bpm: Real) -> DemoAudio:
         """Return a reproducible WAV for this exact source variant and BPM."""
@@ -160,29 +221,38 @@ class DemoAudioCache:
                        getattr(n, "velocity", 85)) for n in variant.notes],
         }
         key = hashlib.sha256(json.dumps(content, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
-        path = self.cache_dir/f'{key}.wav'
+        path = self.cache_dir / f"{key}.wav"
         result = DemoAudio(path, duration, frames, self.sample_rate, key,
                            soundfont.label if soundfont else "Basic synthesized piano")
-        if path.is_file():
-            return result
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        handle, temporary = tempfile.mkstemp(prefix=f'.{key}.', suffix='.tmp', dir=self.cache_dir)
+        with self._lock:
+            self._latest_key = key
+            self._in_flight.add(key)
         try:
-            with os.fdopen(handle, 'wb') as output:
-                if soundfont is None:
-                    with wave.open(output, 'wb') as wav:
-                        wav.setnchannels(1)
-                        wav.setsampwidth(2)
-                        wav.setframerate(self.sample_rate)
-                        wav.setnframes(frames)
-                        for chunk in _pcm_chunks(voices, frames, self.sample_rate, self.chunk_frames):
-                            wav.writeframesraw(chunk)
-            if soundfont is not None:
-                render_wav(Path(temporary), variant, bpm=float(bpm), frames=frames,
-                           sample_rate=self.sample_rate, chunk_frames=self.chunk_frames,
-                           soundfont=soundfont)
-            os.replace(temporary, path)
+            if not path.is_file():
+                self.cache_dir.mkdir(parents=True, exist_ok=True)
+                handle, temporary = tempfile.mkstemp(
+                    prefix=f".{key}.", suffix=".tmp", dir=self.cache_dir)
+                try:
+                    with os.fdopen(handle, "wb") as output:
+                        if soundfont is None:
+                            with wave.open(output, "wb") as wav:
+                                wav.setnchannels(1)
+                                wav.setsampwidth(2)
+                                wav.setframerate(self.sample_rate)
+                                wav.setnframes(frames)
+                                for chunk in _pcm_chunks(voices, frames,
+                                                        self.sample_rate, self.chunk_frames):
+                                    wav.writeframesraw(chunk)
+                    if soundfont is not None:
+                        render_wav(Path(temporary), variant, bpm=float(bpm), frames=frames,
+                                   sample_rate=self.sample_rate,
+                                   chunk_frames=self.chunk_frames, soundfont=soundfont)
+                    os.replace(temporary, path)
+                finally:
+                    if os.path.exists(temporary):
+                        os.unlink(temporary)
+            return result
         finally:
-            if os.path.exists(temporary):
-                os.unlink(temporary)
-        return result
+            with self._lock:
+                self._in_flight.discard(key)
+            self._prune(key)
