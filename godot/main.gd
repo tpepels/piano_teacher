@@ -1328,6 +1328,10 @@ func _build_interface() -> void:
     open_panel = PanelContainer.new()
     open_panel.name = "StartingMeasurePanel"
     open_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+    # CenterContainer otherwise expands its child to the full viewport:
+    # the old bug appeared as a 900px-high, unusable skinny panel.
+    open_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+    open_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     var start_style := Design.surface(Color("#1C3130"), 18)
     start_style.set_content_margin_all(5)
     start_style.set_border_width_all(2)
