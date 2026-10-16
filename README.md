@@ -792,6 +792,51 @@ smooth motion; intermediate engraved attack crossings can differ from
 their real musical timestamps until fully time-proportional engraving
 replaces the old layout. Scoring is disabled in this mode.
 
+## Phase 7.7 - Resonance (visual polish)
+
+Phase 7.7 is implemented on `main` in four layers:
+
+- **7.7a, continuous score:** generated multi-system strips clear only isolated
+  horizontal raster lines at tile seams. A measured column containing real
+  musical ink (barline, tie, stem, note or other symbol) is preserved; the
+  single underlying staff supplies the unbroken lines. The rail color now
+  matches engraved notation. The long staff is redrawn only on resize or
+  score change, rather than on every camera frame.
+- **7.7b, note impacts:** actual assessed MIDI note-on events produce bright
+  mint notehead outlines, a short bloom and twelve deterministic light
+  particles per note. Early/late notes use amber, and unexpected notes
+  produce shorter coral sparks; all effects expire within 450 ms. There
+  are no particle nodes, and at most sixteen active hits render.
+- **7.7c, ambient stage:** the score has a subtle breathing studio glow and
+  fixed playhead illumination while the transport runs. The studio briefly
+  brightens on judged piano input. Only physically received MIDI events
+  create note impacts; no-piano preview and Listen receive ambient motion
+  but no achievement or correct-note effect. Nearby *measured* staff
+  lines briefly illuminate when an assessed MIDI note arrives.
+- **7.7d, progress:** the existing three-clean-run indicators animate
+  verified success, with a traveling highlight when the backend unlocks
+  the next left/right/both-hand stage. The newly active hand label pulses
+  once. The underlying score and saved progress logic are unchanged.
+
+Local checks on Arch Linux:
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+.venv/bin/python -m pytest -q tests/test_phase77_game_feel.py tests/test_score_strip.py
+./scripts/check_godot.sh
+./run.sh
+```
+
+For a useful visual check, open a multi-system warm-up and play without a
+keyboard first, checking consistent motion and staff joins. Connect the Kawai
+and play single notes, a chord, a wrong note, then three clean repetitions.
+The two modes must be visually distinguishable. Genuinely engraved barlines
+remain visible; tile-edge artifacts should not. Physical piano latency,
+60 FPS on a full-screen long score and hand progression still require
+desktop/instrument acceptance. Headless tests are not sufficient to prove
+these visual outcomes.
+
 ## Phase 8 - Physical piano acceptance (first milestone)
 
 Phase 8 adds an opt-in, bounded local MIDI diagnostic session. It observes
