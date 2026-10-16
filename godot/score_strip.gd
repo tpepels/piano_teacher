@@ -411,6 +411,45 @@ static func tile_visible(tile: Dictionary, content_x: float, scale: float,
     return right >= -overscan and left <= viewport_width + overscan
 
 
+# Return the half-open contiguous tile interval which intersects the
+# moving viewport plus its overscan. Build() puts systems in horizontal
+# order, with positive widths and no overlap. Two binary searches make
+# camera movement O(log systems), regardless of the length of the piece.
+static func visible_tile_range(tiles: Array, content_x: float, scale: float,
+        viewport_width: float, overscan: float) -> Vector2i:
+    var count: int = tiles.size()
+    if count == 0:
+        return Vector2i.ZERO
+    if not is_finite(content_x) or not is_finite(scale) or scale <= 0.0 \
+            or not is_finite(viewport_width) or viewport_width <= 0.0 \
+            or not is_finite(overscan) or overscan < 0.0:
+        return Vector2i(0, count) # Fail open: never hide notation.
+    var minimum: float = (-overscan - content_x) / scale
+    var maximum: float = (viewport_width + overscan - content_x) / scale
+    var low := 0
+    var high := count
+    # First tile whose right edge reaches the left viewport boundary.
+    while low < high:
+        var mid: int = (low + high) / 2
+        var rect: Rect2 = tiles[mid].get("rect", Rect2())
+        if rect.end.x < minimum:
+            low = mid + 1
+        else:
+            high = mid
+    var first: int = low
+    low = first
+    high = count
+    # First tile starting strictly after the right viewport boundary.
+    while low < high:
+        var mid: int = (low + high) / 2
+        var rect: Rect2 = tiles[mid].get("rect", Rect2())
+        if rect.position.x <= maximum:
+            low = mid + 1
+        else:
+            high = mid
+    return Vector2i(first, low)
+
+
 static func _failure(message: String) -> Dictionary:
     return {"error": message, "layout": {}, "tiles": [], "size": Vector2.ZERO,
         "crop_origin": Vector2.ZERO, "crop_size": Vector2.ONE, "mappings": []}
