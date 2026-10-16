@@ -1089,6 +1089,7 @@ func _build_interface() -> void:
     score_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_content.add_child(score_overlay)
     note_reactions.hit_pulses = score_overlay.hit_pulses
+    note_reactions.wrong_ghosts = score_overlay.wrong_ghosts
     # Score status must live inside the score panel: feedback_label is replaced
     # by regular state polling and cannot hold engraving errors reliably.
     score_status_panel = CenterContainer.new()
@@ -2423,9 +2424,13 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                     "duration_ms": 420,
                     "until_ms": Time.get_ticks_msec() + remaining
                 })
+                if score_overlay.wrong_ghosts.size() > 32:
+                    score_overlay.wrong_ghosts.pop_front()
+                game_stage.react("unexpected")
+                note_reactions.queue_redraw()
                 break
             continue
-        if status not in ["on_time", "early", "late"] or age > .28:
+        if status not in ["on_time", "early", "late"] or age > .42:
             continue
         var note_id: String = str(mapping.get(source, ""))
         if note_id.is_empty():
@@ -2437,9 +2442,12 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                     "x": float(note.get("x", 0.0)),
                     "y": float(note.get("y", 0.0)),
                     "status": status,
-                    "duration_ms": 260,
-                    "until_ms": Time.get_ticks_msec() + maxi(1, 260 - int(age * 1000.0))
+                    "duration_ms": 450,
+                    "until_ms": Time.get_ticks_msec() + maxi(1, 450 - int(age * 1000.0))
                 })
+                if score_overlay.hit_pulses.size() > 32:
+                    score_overlay.hit_pulses.pop_front()
+                game_stage.react(status)
                 note_reactions.queue_redraw()
                 break
 
