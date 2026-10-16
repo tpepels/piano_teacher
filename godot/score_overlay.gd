@@ -162,9 +162,11 @@ func _draw() -> void:
             continue
         var focus: Vector2 = _sheet_xy(float(note.get("x", 0.0)), float(note.get("y", 0.0)))
         var strength: float = clampf(float(note.get("emphasis", 0.0)), 0.0, 1.0)
-        var extent: Vector2 = radii * 1.14
+        var breathe: float = .5 + .5 * sin(float(Time.get_ticks_msec()) * .0038)
+        var extent: Vector2 = radii * (1.46 + .075 * breathe)
+        # Wide anticipation: never obscure the pitch or pretend it was hit.
         draw_polyline(Ink.ellipse(focus, extent.x, extent.y),
-            Color("#91E9CA", 0.37 + 0.38 * strength), 1.45, true)
+            Color("#91FFD1", .48 + .34 * strength + .08 * breathe), 1.8, true)
 
     for marker in marks:
         if int(marker.get("page", -1)) != active_page:
@@ -198,7 +200,26 @@ func _draw() -> void:
         draw_polyline(Ink.ellipse(center, extent.x, extent.y),
             Color("#F0807A", remaining * .92), 1.8, true)
 
-    # The acoustic attack ring is drawn by NoteReactions *behind* the actual
+    # A short, bright rim outside a real struck note. The particle burst
+    # lives behind the raster, while this outline stays above the ink to
+    # make a correct MIDI attack visible even on a densely engraved chord.
+    # Ungraded previews never contain these assessed MIDI hit events.
+    for hit in hit_pulses:
+        if int(hit.get("page", -1)) != active_page:
+            continue
+        var duration: float = maxf(1.0, float(hit.get("duration_ms", 450)))
+        var remaining: float = clampf(float(int(hit.get("until_ms", 0)) - now_ms) /
+            duration, 0.0, 1.0)
+        if remaining <= 0.0:
+            continue
+        var progress: float = 1.0 - remaining
+        var focus: Vector2 = _sheet_xy(float(hit.get("x", 0.0)), float(hit.get("y", 0.0)))
+        var extent: Vector2 = radii * (1.36 + progress * 1.0)
+        var tone: Color = Color("#8DFFD3") if str(hit.get("status", "")) == "on_time" else Color("#F0C785")
+        draw_polyline(Ink.ellipse(focus, extent.x, extent.y),
+            Color(tone, remaining * .88), 2.4, true)
+
+    # The particle glow is drawn by NoteReactions *behind* the actual
     # raster tiles. Nothing here paints over correct notes.
     if showing and not guided_active and not cursor.is_empty() and int(cursor.get("page", -1)) == active_page:
         var x: float = float(cursor.get("x", 0.0))
