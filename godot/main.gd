@@ -397,8 +397,11 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     var displayed_height: float = image.y * scale
     score_content.size = Vector2(displayed_width, displayed_height)
     staff_continuity.position = Vector2.ZERO
-    staff_continuity.size = score_content.size
-    staff_continuity.queue_redraw()
+    # Rebuilding a very long rail canvas every 60-Hz camera tick wastes
+    # work; the rules are static until the score is resized or replaced.
+    if staff_continuity.size.distance_to(score_content.size) > .1:
+        staff_continuity.size = score_content.size
+        staff_continuity.queue_redraw()
     for i in range(score_tiles.size()):
         var rect: Rect2 = strip_tiles[i]["rect"]
         score_tiles[i].position = rect.position * scale
