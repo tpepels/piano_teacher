@@ -9,6 +9,12 @@ const BAD := Color("#EF7776")
 var value := 0
 var state := "idle"
 var reveal := 0.0
+var unlock_wave := -1.0
+
+func pulse_unlock() -> void:
+    # Only the backend's actual left/right/both hand unlock starts this wave.
+    unlock_wave = 0.0
+    queue_redraw()
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -29,6 +35,11 @@ func _process(delta: float) -> void:
     if reveal > 0.001:
         reveal = maxf(0.0, reveal - delta * 1.1)
         queue_redraw()
+    if unlock_wave >= 0.0:
+        unlock_wave += delta * 1.05
+        if unlock_wave >= 1.0:
+            unlock_wave = -1.0
+        queue_redraw()
 
 func _draw() -> void:
     var w := size.x
@@ -38,6 +49,12 @@ func _draw() -> void:
     var tone := BAD if state == "retry" else ON
     draw_line(Vector2(start, mid), Vector2(start + spacing*2, mid),
         Color(OFF, .55), 3, true)
+    if unlock_wave >= 0.0:
+        var wave_x: float = lerpf(start, start + spacing * 2.0, unlock_wave)
+        draw_line(Vector2(start, mid), Vector2(wave_x, mid),
+            Color(ON, .86), 3.0, true)
+        draw_circle(Vector2(wave_x, mid), 13.0, Color(ON, .19))
+        draw_circle(Vector2(wave_x, mid), 4.5, Color(ON, .94))
     for i in range(3):
         var pos := Vector2(start + spacing * i, mid)
         var filled := i < value and state != "preview"
