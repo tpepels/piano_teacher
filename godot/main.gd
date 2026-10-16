@@ -133,6 +133,7 @@ var tile_window_initialized := false
 var tile_geometry_rebuilds := 0
 var tile_window_changes := 0
 var score_tile_upload_bytes := 0
+var score_tile_packed_bytes := 0
 # Phase 8I: long scores retain compressed CPU ink instead of offscreen
 # Texture2Ds. Two neighbouring systems on each side are prefetched.
 var deferred_tile_mode := false
@@ -1899,6 +1900,8 @@ func _process(_delta: float) -> void:
                 float(score_tile_upload_bytes) / (1024.0 * 1024.0), .01)
             frame_result["resident_tile_mib"] = snappedf(
                 float(resident_tile_bytes) / (1024.0 * 1024.0), .01)
+            frame_result["packed_tile_mib"] = snappedf(
+                float(score_tile_packed_bytes) / (1024.0 * 1024.0), .01)
             frame_result["resident_tiles"] = resident_tile_end - resident_tile_begin \
                 if deferred_tile_mode else score_tiles.size()
             frame_result["tile_restores"] = restored_tile_count
@@ -2734,8 +2737,11 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     strip_tiles = strip["tiles"]
     deferred_tile_mode = should_defer
     score_tile_upload_bytes = 0
+    score_tile_packed_bytes = 0
     for item in strip_tiles:
         score_tile_upload_bytes += int(item.get("upload_bytes", 0))
+        var packed: PackedByteArray = item.get("packed_ink", PackedByteArray())
+        score_tile_packed_bytes += packed.size()
     var notation_material := Design.notation_material()
     for item in strip_tiles:
         var tile := TextureRect.new()
