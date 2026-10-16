@@ -5,6 +5,7 @@ extends RefCounted
 # Long scores can store completed tiles as compact CPU buffers until
 # needed. Ordinary short warmups keep the original fast eager texture path.
 const DEFERRED_MIN_SYSTEMS := 8
+const TempoStrip := preload("res://tempo_strip.gd")
 
 static func build(layout: Dictionary, pages: Array[Image],
         defer_textures: bool = false) -> Dictionary:
@@ -163,6 +164,11 @@ static func build(layout: Dictionary, pages: Array[Image],
     # Imported/change-of-context scores are left completely untouched.
     if bool(layout.get("strip_trim_repeated_headers", false)):
         width = _pad_short_system_joins(layout, mappings)
+        # Once Verovio has resolved glyph collisions, redistribute its
+        # variable spaces into equal lengths of musical time. No camera
+        # easing or tempo-dependent hacks: every beat now occupies exactly
+        # the same horizontal distance, including system joins.
+        width = _equalize_beat_spacing(layout, mappings)
     var size := Vector2(maxf(1.0, width), maxf(1.0, above + below))
     var tiles: Array = []
     for mapping in mappings:
@@ -201,6 +207,16 @@ static func build(layout: Dictionary, pages: Array[Image],
                             expanded.set_pixel(x, y, Color(0, 0, 0,
                                 .80 if offset == 0 else .14))
             image = expanded
+        if mapping.get("tempo_warp", []).size() > 1:
+            image = TempoStrip.warp_image(image, mapping.tempo_warp)
+        var tempo_gap: int = int(mapping.get("tempo_gap", 0))
+        if tempo_gap > 0:
+            var joined := Image.create(image.get_width() + tempo_gap,
+                image.get_height(), false, image.get_format())
+            joined.fill(Color.TRANSPARENT)
+            joined.blit_rect(image, Rect2i(Vector2i.ZERO,image.get_size()),
+                Vector2i(tempo_gap,0))
+            image = joined
         # The background StaffContinuity layer must own *all* uninterrupted
         # horizontal rules, not just nine pixels at each tile edge. Otherwise
         # rasterized staff segments end abruptly at every system join and the
@@ -295,6 +311,104 @@ static func tile_texture(tile: Dictionary) -> Texture2D:
     if image == null or image.is_empty():
         return null
     return ImageTexture.create_from_image(image)
+
+
+# Recalculate every note position using its *beat* rather than the current
+# distance of a Verovio-engraved note/rest. We only extend gaps; no symbol
+# or accidental is horizontally compressed. The native-width region around
+# each notehead is copied without resizing by TempoStrip.
+static func _native_local_px(normalized: float, mapping: Dictionary) -> float:
+    var absolute: float = normalized * float(mapping.source_size.x)
+    var removed_start: int = int(mapping.get("splice_left", -1))
+    var removed_end: int = int(mapping.get("splice_right", -1))
+    if removed_start >= 0 and removed_end > removed_start:
+        if absolute >= removed_end:
+            absolute -= float(removed_end - removed_start)
+        elif absolute > removed_start:
+            absolute = float(removed_start)
+    return absolute - float(mapping.crop.position.x) \
+        + float(mapping.get("entry_padding", 0))
+
+
+static func _native_tile_width(mapping: Dictionary) -> int:
+    return int(mapping.crop.size.x) - maxi(0, int(mapping.get("splice_right", -1)) \
+        - int(mapping.get("splice_left", -1))) + int(mapping.get("entry_padding", 0))
+
+
+static func _equalize_beat_spacing(layout: Dictionary, mappings: Array) -> float:
+    var source_groups: Array = []
+    var time_positions: Array = []
+    var ordered: Array = []
+    for mapping in mappings:
+        var group: Array = _source_anchors(layout, mapping)
+        group.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+            return float(a.beat) < float(b.beat))
+        source_groups.append(group)
+        var pixel_group: Array = []
+        for anchor in group:
+            var native: float = _native_local_px(float(anchor.x),mapping)
+            pixel_group.append(native)
+            ordered.append({"beat":float(anchor.beat),
+                "x":float(mapping.position.x)+native})
+        time_positions.append(pixel_group)
+    if ordered.size() < 2:
+        return mappings[-1].position.x + _native_tile_width(mappings[-1])
+    var velocities: Array[float] = []
+    for index in range(ordered.size()-1):
+        var beats: float = float(ordered[index+1].beat) - float(ordered[index].beat)
+        if beats <= .00001:
+            # Ties on a printed system boundary cannot be given artificial
+            # time without modifying their source rhythm.
+            return mappings[-1].position.x + _native_tile_width(mappings[-1])
+        velocities.append(maxf(0.0,
+            (float(ordered[index+1].x)-float(ordered[index].x))/beats))
+    velocities.sort()
+    # A single tempo-scaled pixels/beat unit for the entire score; choose
+    # enough clearance for Verovio's largest existing interval. Slower BPM
+    # already creates wider source engraving through reading_spacing.py.
+    var rate: float = maxf(1.0, velocities[-1])
+    var running_width := 0.0
+    var previous_last_beat := -INF
+    var previous_last_x := 0.0
+    var previous_tile_width := 0.0
+    for index in range(mappings.size()):
+        var mapping: Dictionary = mappings[index]
+        var group: Array = source_groups[index]
+        var native_points: Array = time_positions[index]
+        var native_width: int = _native_tile_width(mapping)
+        if group.is_empty():
+            mapping["position"] = Vector2(running_width,0)
+            running_width += native_width
+            continue
+        var beat_first: float = float(group[0].beat)
+        var src_first: float = float(native_points[0])
+        var targets: Array = []
+        for entry in group:
+            targets.append(src_first + (float(entry.beat)-beat_first)*rate)
+        var rail: Array = mapping.system.get("staff_lines",[])
+        var gap: float = absf(float(rail[1])-float(rail[0])) * float(mapping.source_size.y) \
+            if rail.size() >= 2 else 12.0
+        var controls: Array = TempoStrip.controls(native_points, targets,
+            native_width, gap)
+        var warp_width: int = roundi(float(controls[-1].y))
+        # A wide system is already split into separate printed tiles; refuse
+        # a tile beyond GPU limits, rather than silently misalign notation.
+        if warp_width > 16384:
+            return mappings[-1].position.x + _native_tile_width(mappings[-1])
+        var extra: int = 0
+        if index > 0 and is_finite(previous_last_beat):
+            var span: float = beat_first - previous_last_beat
+            var existing_join: float = previous_tile_width - previous_last_x + src_first
+            extra = maxi(0, roundi(span*rate-existing_join))
+        mapping["tempo_warp"] = controls
+        mapping["tempo_gap"] = extra
+        mapping["tempo_rate"] = rate
+        mapping["position"] = Vector2(running_width,0)
+        running_width += float(warp_width + extra)
+        previous_last_beat = float(group[-1].beat)
+        previous_last_x = float(targets[-1]) + float(extra)
+        previous_tile_width = float(warp_width + extra)
+    return running_width
 
 
 # Return anchors for one original system. The backend order is musical-time
@@ -507,16 +621,11 @@ static func _clear_join_rails(image: Image, mapping: Dictionary,
 
 
 static func _mapped_px(normalized: float, mapping: Dictionary) -> float:
-    var absolute: float = normalized * float(mapping.source_size.x)
-    var removed_start: int = int(mapping.get("splice_left", -1))
-    var removed_end: int = int(mapping.get("splice_right", -1))
-    if removed_start >= 0 and removed_end > removed_start:
-        if absolute >= removed_end:
-            absolute -= float(removed_end - removed_start)
-        elif absolute > removed_start:
-            absolute = float(removed_start)
-    return absolute - float(mapping.crop.position.x) + float(mapping.position.x) \
-        + float(mapping.get("entry_padding", 0))
+    var native: float = _native_local_px(normalized, mapping)
+    var control: Array = mapping.get("tempo_warp", [])
+    if control.size() > 1:
+        native = TempoStrip.project(native, control)
+    return native + float(mapping.position.x) + float(mapping.get("tempo_gap", 0))
 
 
 # Phase 8F: avoid submitting far-offscreen Verovio tiles to the
