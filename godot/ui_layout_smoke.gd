@@ -73,9 +73,9 @@ func _run() -> void:
         "piece_last_bar":77, "selected_start_bar":1})
     await process_frame
     await process_frame
-    var picker: Control = scene.get("open_picker")
+    var preview_picker: Control = scene.get("open_picker")
     var modal: PanelContainer = scene.get("open_panel")
-    _check(picker.visible and not scene.get("overlay_root").visible,
+    _check(preview_picker.visible and not scene.get("overlay_root").visible,
         "Starting point must hide the library drawer behind its modal")
     _check(modal.size.x >= minf(500.0, viewport.x-36.0) and
         modal.size.y < viewport.y*.90,
@@ -88,7 +88,7 @@ func _run() -> void:
     _check((scene.get("open_measure") as SpinBox).max_value == 77,
         "Starting-point measure range must reflect the opened music")
     scene.call("_cancel_open_picker")
-    _check(not picker.visible and str(scene.get("current_screen")) == "library",
+    _check(not preview_picker.visible and str(scene.get("current_screen")) == "library",
         "Cancel restores music selection instead of opening a lesson")
     scene.call("_navigate", "practice")
     var cue: Control = scene.get("game_phase_cue")
@@ -320,7 +320,7 @@ func _run() -> void:
         "selected_start_bar": 87
     })
     await process_frame
-    var picker: ConfirmationDialog = scene.get("open_picker")
+    var picker: Control = scene.get("open_picker")
     var measure: SpinBox = scene.get("open_measure")
     var slider: HSlider = scene.get("open_measure_slider")
     var start_mode: OptionButton = scene.get("open_mode")
