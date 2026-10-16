@@ -860,12 +860,14 @@ Phase 7.7 is implemented on `main` in four layers:
   no allocated particle nodes, random timers or grading changes. Listen
   and keyboard-free preview cannot produce a correct-note burst; entering
   those modes also clears any lingering effects from a graded take.
-- **7.7c, ambient stage:** the score has a subtle breathing studio glow and
-  fixed playhead illumination while the transport runs. The studio briefly
-  brightens on judged piano input. Only physically received MIDI events
-  create note impacts; no-piano preview and Listen receive ambient motion
-  but no achievement or correct-note effect. Nearby *measured* staff
-  lines briefly illuminate when an assessed MIDI note arrives.
+- **7.7c, ambient stage:** the score has a breathing studio glow and
+  fixed playhead illumination. Assessed MIDI input produces green or coral
+  note impacts and strengthens stage lighting. In keyboard-free Preview and
+  Listen, actual source onsets produce **blue-white, explicitly ungraded**
+  particle bursts and stage pulses so the effects can be inspected without
+  a keyboard. Those effects never generate grades, achievements or hand
+  progression. Bright sparks draw above the opaque engraved image while
+  their soft halo remains behind it, preserving readable noteheads.
 - **7.7d, progress:** the existing three-clean-run indicators animate
   verified success, with a traveling highlight when the backend unlocks
   the next left/right/both-hand stage. The newly active hand label pulses
