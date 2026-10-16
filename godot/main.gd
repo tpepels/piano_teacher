@@ -1817,6 +1817,12 @@ func _process(_delta: float) -> void:
         score_overlay.queue_redraw()
         note_reactions.queue_redraw()
     apply_tempo_button.disabled = action_pending
+    # Continuous Listen drift measurements are display/audio only and
+    # never feed back into the MIDI grading or the Python transport.
+    if demo_player != null and str(last_state.get("mode", "")) == "listen" \
+            and bool(last_state.get("running", false)):
+        demo_player.keep_synchronized(_transport_beat_now(),
+            maxf(1.0, float(last_state.get("bpm", 60.0))))
     _update_count_in()
     if str(last_state.get("mode", "practice")) == "learn":
         score_overlay.next_chord.clear()
@@ -2151,7 +2157,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     # optional instead of interrupting every brief pause.
     start_button.visible = true
     if demo_player != null:
-        demo_player.synchronize(parsed)
+        # Rendered note arrival and Listen audio start share the same
+        # continuously extrapolated clock, not an older HTTP snapshot.
+        demo_player.synchronize(parsed, _transport_beat_now())
     listen_button.disabled = not bool(parsed.get("loaded", false))
     listen_button.text = "Practice" if str(parsed.get("mode", "")) == "listen" else "Listen"
     practice_retry_button.disabled = (not bool(parsed.get("loaded", false))
