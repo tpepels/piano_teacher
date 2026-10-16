@@ -201,15 +201,15 @@ static func build(layout: Dictionary, pages: Array[Image],
                             expanded.set_pixel(x, y, Color(0, 0, 0,
                                 .80 if offset == 0 else .14))
             image = expanded
-        # Remove only the loose horizontal rules at the *raster seam*.
-        # The single StaffContinuity canvas supplies those pixels instead.
-        # A column containing a barline, tie, stem or any non-staff ink is
-        # never erased. Actual measure barlines remain fully engraved.
+        # The background StaffContinuity layer must own *all* uninterrupted
+        # horizontal rules, not just nine pixels at each tile edge. Otherwise
+        # rasterized staff segments end abruptly at every system join and the
+        # duplicated line weights remain visible. Keep any column containing
+        # non-staff ink unchanged: real notes, ties, clefs and barlines are
+        # never reconstructed or erased.
         if bool(layout.get("strip_trim_repeated_headers", false)):
-            var has_previous: bool = mappings.find(mapping) > 0
-            var has_next: bool = mappings.find(mapping) < mappings.size() - 1
-            mapping["seam_pixels_removed"] = _clear_join_rails(
-                image, mapping, has_previous, has_next)
+            mapping["rail_pixels_replaced"] = _extract_isolated_staff_rules(
+                image, mapping)
         # Verovio's score raster is monochrome engraving with alpha.
         # LA8 preserves the ink luminance and antialiased alpha while
         # requiring two bytes per pixel instead of RGBA8's four.
@@ -400,6 +400,72 @@ static func _longest_staff_only_run(image: Image, x0: int, x1: int,
                 best = Vector2i(current, x)
             current = -1
     return best
+
+
+# A printed staff system contains long horizontal lines which can overlap
+# or end abruptly when multiple systems are reassembled as a scroll. The
+# continuous, full-width staff lives behind the raster tiles. Extract only
+# isolated horizontal rule pixels from the source tiles, so that line weight
+# is consistent everywhere (not only in the 9-pixel joining gutters).
+#
+# Safety rule: a complete source-image column must contain NO ink outside
+# the engraved staff-rule bands before its lines may be cleared. This leaves
+# original barlines, stems, notes, clefs, ties, accidentals, articulations and
+# every other glyph untouched, including those intersecting the staff.
+# Use one byte scan for the full tile instead of image.get_pixel per scan
+# pixel: long excerpts have many source systems.
+static func _extract_isolated_staff_rules(image: Image, mapping: Dictionary) -> int:
+    var measured: Array = mapping.system.get("staff_lines", [])
+    if measured.is_empty() or image.get_width() <= 0 or image.get_height() <= 0:
+        return 0
+    if image.get_format() != Image.FORMAT_RGBA8:
+        image.convert(Image.FORMAT_RGBA8)
+    var width: int = image.get_width()
+    var height: int = image.get_height()
+    var rule_rows := PackedByteArray()
+    rule_rows.resize(height)
+    var rail_centers: Array[int] = []
+    for fraction in measured:
+        var center: int = roundi(float(fraction) * float(mapping.source_size.y)
+            - float(mapping.crop.position.y))
+        if center < -3 or center > height + 3:
+            continue
+        rail_centers.append(center)
+        for y in range(maxi(0, center - 2), mini(height, center + 3)):
+            rule_rows[y] = 1
+    if rail_centers.is_empty():
+        return 0
+    var ink: PackedByteArray = image.get_data()
+    var protected_columns := PackedByteArray()
+    protected_columns.resize(width)
+    # If anything besides a horizontal staff line is present at this x,
+    # preserve the entire source column. Non-staff ink may be far above or
+    # below the notehead (e.g., a stem, clef, or connected barline).
+    for y in range(height):
+        if rule_rows[y] != 0:
+            continue
+        var row_start: int = y * width * 4
+        for x in range(width):
+            if protected_columns[x] != 0:
+                continue
+            var at: int = row_start + x * 4
+            if ink[at + 3] >= 46 and (ink[at] < 235 or
+                    ink[at + 1] < 235 or ink[at + 2] < 235):
+                protected_columns[x] = 1
+    var removed := 0
+    for center in rail_centers:
+        for y in range(maxi(0, center - 2), mini(height, center + 3)):
+            var row_start: int = y * width * 4
+            for x in range(width):
+                if protected_columns[x] != 0:
+                    continue
+                var at: int = row_start + x * 4
+                if ink[at + 3] < 10 or (ink[at] >= 245 and
+                        ink[at + 1] >= 245 and ink[at + 2] >= 245):
+                    continue
+                image.set_pixel(x, y, Color.TRANSPARENT)
+                removed += 1
+    return removed
 
 
 # Erase orphaned *horizontal* staff-rule fragments where adjacent

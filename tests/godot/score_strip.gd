@@ -118,6 +118,38 @@ func run() -> void:
         "staff ink away from tile joins must remain")
     check(synthetic.get_pixel(75, 20).a > .9 and synthetic.get_pixel(75, 15).a > .9,
         "a real barline near the system end must never be erased")
+    # 7.7a: the full staff is owned by one continuous layer, not by
+    # individual printed system rasters with visible horizontal endings.
+    # Keep a genuine end-of-measure barline and a notehead crossing a line.
+    var continuous := Image.create(110, 80, false, Image.FORMAT_RGBA8)
+    continuous.fill(Color.TRANSPARENT)
+    for x in range(110):
+        for y in [17, 27, 37, 47, 57]:
+            continuous.set_pixel(x, y, Color.BLACK)
+    for y in range(10, 66):
+        continuous.set_pixel(103, y, Color.BLACK) # real barline
+    for x in range(48, 58):
+        for y in range(23, 32):
+            continuous.set_pixel(x, y, Color.BLACK) # engraved notehead
+    var complete_mapping := {
+        "system":{"staff_lines":[17.0 / 80.0, 27.0 / 80.0,
+            37.0 / 80.0, 47.0 / 80.0, 57.0 / 80.0]},
+        "source_size":Vector2(110, 80), "crop":Rect2(0, 0, 110, 80)}
+    var replaced: int = helper._extract_isolated_staff_rules(
+        continuous, complete_mapping)
+    check(replaced > 350,
+        "the entire isolated raster staff must be replaced, not just its ends")
+    for x in [0, 12, 39, 80, 109]:
+        check(continuous.get_pixel(x, 27).a < .01,
+            "all isolated staff rules must come from the continuous canvas")
+    check(continuous.get_pixel(53, 27).a > .99 and
+        continuous.get_pixel(53, 25).a > .99,
+        "a real notehead crossing a staff line must retain its native ink")
+    check(continuous.get_pixel(103, 37).a > .99 and
+        continuous.get_pixel(103, 41).a > .99,
+        "the genuine barline must survive, including intersections")
+    check(continuous.get_pixel(2, 12).a < .01,
+        "rail extraction must not manufacture other glyphs")
     var strip: Dictionary = helper.build(original, pages)
     # Phase 8I: compare deferred CPU-packed tiles to the same real
     # Verovio engraving built with eager texture upload.
@@ -161,6 +193,13 @@ func run() -> void:
         "Corrupt deferred ink must fail explicitly rather than show false notes")
     var flat: Dictionary = strip.layout
     check(strip.tiles.size() == original.systems.size(), "every system becomes a tile")
+    if bool(original.get("strip_trim_repeated_headers", false)):
+        var cleaned_tiles := 0
+        for mapping in strip.mappings:
+            if int(mapping.get("rail_pixels_replaced", 0)) > 0:
+                cleaned_tiles += 1
+        check(cleaned_tiles == strip.mappings.size(),
+            "all generated systems, not just seam edges, replace their isolated raster staff rules")
     # Compare identical real SVG tiles with and without the safe repeated
     # header removal. The score must not stretch or re-synthesize any note.
     if bool(original.get("strip_trim_repeated_headers", false)) and original.systems.size() > 1:
