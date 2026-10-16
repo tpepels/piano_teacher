@@ -430,7 +430,7 @@ static func visible_tile_range(tiles: Array, content_x: float, scale: float,
     var high := count
     # First tile whose right edge reaches the left viewport boundary.
     while low < high:
-        var mid: int = (low + high) / 2
+        var mid: int = (low + high) >> 1
         var rect: Rect2 = tiles[mid].get("rect", Rect2())
         if rect.end.x < minimum:
             low = mid + 1
@@ -441,7 +441,7 @@ static func visible_tile_range(tiles: Array, content_x: float, scale: float,
     high = count
     # First tile starting strictly after the right viewport boundary.
     while low < high:
-        var mid: int = (low + high) / 2
+        var mid: int = (low + high) >> 1
         var rect: Rect2 = tiles[mid].get("rect", Rect2())
         if rect.position.x <= maximum:
             low = mid + 1
