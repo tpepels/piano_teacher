@@ -1228,6 +1228,44 @@ play or grade until Start is pressed. Repeat after restarting the app,
 then test explicit Disconnect. No real USB event has been simulated as
 proof of hardware acceptance.
 
+## Phase 7.8 - Score-stage visual polish
+
+The practice screen is now more instrument-like without introducing any
+new routine control. The stage lights breathe softly at the real
+playhead (42% across the notation viewport), and a tiny metrical pulse
+shows the backend's current beat. MIDI-free preview and Listen use a
+restrained neutral colour, never a fake clean-note response. During
+graded practice, real assessed MIDI note-on events generate a short,
+bright, differently coloured burst for on-time, early/late and
+unexpected input. The glow fades naturally while the original
+Verovio noteheads and feedback remain fully visible above it.
+
+Count-in has a readable numeric 3-2-1 (or whatever number of
+preparation beats the backend supplies) beside the existing small
+meter lights. Both disappear precisely at the first playable beat;
+pausing freezes the stage and hides the countdown. These effects use
+the very same extrapolated **Python-owned musical clock** as the moving
+score, not local timing or a second metronome. The compact phase cue
+has clearer type, and the left/right/both learning ribbon has a
+subtle illuminated active-state edge instead of large website cards.
+
+Verify the real UI modules and unchanged transport interactions:
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+.venv/bin/python -m pytest -q \
+    tests/test_phase78_stage.py tests/test_phase77_game_feel.py \
+    tests/test_practice_interactions.py tests/test_score_motion_render.py
+./scripts/check_godot.sh
+./run.sh
+```
+
+During an actual warm-up check the moving count-in, neutral
+preview, live green/orange/red note reactions, paused score and
+an uninterrupted three-clean-run progression. Scores, grading, lesson
+unlocks and source notes are not modified by this visual phase.
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
