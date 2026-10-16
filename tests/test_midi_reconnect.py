@@ -288,6 +288,7 @@ def test_automatic_discovery_detects_disappearance_without_open_input_closing(
     engine.start()
     original = engine.midi_port
     midi.names = []
+    engine._midi_next_scan_at = 0.0
     clock[0] = 105.0
     state = engine.state()
     assert state["device"] == ""
