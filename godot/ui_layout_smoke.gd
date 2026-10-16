@@ -69,7 +69,7 @@ func _run() -> void:
     _check(score.size.y >= 135.0, "Notation area became unusably small")
     # A sourced MIDI piece must open in a true centered in-app modal, not
     # a narrow embedded Window accidentally stretched to viewport height.
-    scene.call("_show_open_picker", {"title":"Ala - Joep Beving",
+    scene.call("_show_open_picker", {"title":"Ala_-_Joep_Beving",
         "piece_last_bar":77, "selected_start_bar":1})
     await process_frame
     await process_frame
@@ -83,6 +83,8 @@ func _run() -> void:
     _check(absf(modal.get_global_rect().get_center().x-viewport.x*.5) < 6.0 and
         absf(modal.get_global_rect().get_center().y-viewport.y*.5) < 6.0,
         "Starting point modal must be centered in the real viewport")
+    _check(str(scene.get("open_title").text) == "Ala - Joep Beving",
+        "MIDI filename separators must render as normal punctuation")
     _check((scene.get("open_measure") as SpinBox).max_value == 77,
         "Starting-point measure range must reflect the opened music")
     scene.call("_cancel_open_picker")

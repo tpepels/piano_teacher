@@ -875,8 +875,9 @@ func _build_interface() -> void:
     library_path_label.clip_text = true
     library_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     library_layout.add_child(library_path_label)
-    var library_controls := HBoxContainer.new()
-    library_controls.add_theme_constant_override("separation", 12)
+    # Keep search full-width in the narrow Music drawer.
+    var library_controls := VBoxContainer.new()
+    library_controls.add_theme_constant_override("separation", 9)
     library_layout.add_child(library_controls)
     library_search = LineEdit.new()
     library_search.placeholder_text = "Search your music"
@@ -884,9 +885,12 @@ func _build_interface() -> void:
     library_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     library_search.text_changed.connect(func(_text: String): _populate_library())
     library_controls.add_child(library_search)
-    library_controls.add_child(_button("Refresh", _request_library, false, "utility"))
+    var library_utilities := HBoxContainer.new()
+    library_utilities.add_theme_constant_override("separation", 10)
+    library_controls.add_child(library_utilities)
+    library_utilities.add_child(_button("Refresh", _request_library, false, "utility"))
     library_health_button = _button("Check files", func(): _start_library_health(), false, "settings")
-    library_controls.add_child(library_health_button)
+    library_utilities.add_child(library_health_button)
     # Import problems must appear next to the action, not at the very
     # bottom of a full-screen library where they are easy to miss.
     library_message = _label("", 18, MUTED, true)
@@ -1807,7 +1811,7 @@ func _show_open_picker(state: Dictionary) -> void:
     # Opening metadata is source-based and does not require Verovio rendering
     # or a connected MIDI piano. Do not start the first guided lesson yet.
     var last_bar: int = maxi(1, int(state.get("piece_last_bar", 1)))
-    open_title.text = str(state.get("title", "Untitled piece"))
+    open_title.text = str(state.get("title", "Untitled piece")).replace("_", " ")
     open_measure.max_value = last_bar
     open_measure.min_value = 1
     open_measure.value = clampi(int(state.get("selected_start_bar", 1)), 1, last_bar)
