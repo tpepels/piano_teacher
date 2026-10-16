@@ -119,6 +119,46 @@ func run() -> void:
     check(synthetic.get_pixel(75, 20).a > .9 and synthetic.get_pixel(75, 15).a > .9,
         "a real barline near the system end must never be erased")
     var strip: Dictionary = helper.build(original, pages)
+    # Phase 8I: compare deferred CPU-packed tiles to the same real
+    # Verovio engraving built with eager texture upload.
+    var deferred: Dictionary = helper.build(original, pages, true)
+    check(not deferred.has("error") and deferred.tiles.size() == strip.tiles.size(),
+        "Deferred build preserves every engraved system")
+    var packed_bytes := 0
+    var raw_bytes := 0
+    var indexes: Array[int] = [0, int(strip.tiles.size() / 2), strip.tiles.size() - 1]
+    for tile_index in range(deferred.tiles.size()):
+        var packed_tile: Dictionary = deferred.tiles[tile_index]
+        packed_bytes += int(packed_tile.packed_ink.size())
+        raw_bytes += int(packed_tile.upload_bytes)
+        check(not packed_tile.has("texture"),
+            "Offscreen packed tiles must never hold eager GPU textures")
+        check(packed_tile.rect == strip.tiles[tile_index].rect,
+            "Packing cannot change the canonical staff and note transforms")
+        if indexes.has(tile_index):
+            var recovered: Texture2D = helper.tile_texture(packed_tile)
+            check(recovered != null,
+                "Viewport must restore a real GPU texture on first entry")
+            if recovered != null:
+                var recovered_img: Image = recovered.get_image()
+                var original_img: Image = strip.tiles[tile_index].texture.get_image()
+                check(recovered_img.get_size() == original_img.get_size(),
+                    "Seek restores original raster dimensions")
+                for px in [Vector2i(0, 0),
+                           Vector2i(recovered_img.get_width() / 2,
+                               recovered_img.get_height() / 2),
+                           Vector2i(recovered_img.get_width() - 1,
+                               recovered_img.get_height() - 1)]:
+                    var a: Color = recovered_img.get_pixelv(px)
+                    var b: Color = original_img.get_pixelv(px)
+                    check(absf(a.r - b.r) < .02 and absf(a.a - b.a) < .02,
+                        "8I decompressed score ink must agree with eager GPU texture")
+    check(packed_bytes < raw_bytes,
+        "Monochrome raster must compress smaller than raw LA8 tile memory")
+    var invalid_packed: Dictionary = deferred.tiles[0].duplicate()
+    invalid_packed["packed_ink"] = PackedByteArray()
+    check(helper.tile_texture(invalid_packed) == null,
+        "Corrupt deferred ink must fail explicitly rather than show false notes")
     var flat: Dictionary = strip.layout
     check(strip.tiles.size() == original.systems.size(), "every system becomes a tile")
     # Compare identical real SVG tiles with and without the safe repeated
