@@ -2614,6 +2614,8 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         staff_continuity.set_rails(rail_groups[0].get("staff_lines", []))
     else:
         staff_continuity.set_rails([])
+    # Exact same measured staff geometry for the MIDI resonance glow.
+    note_reactions.staff_lines = staff_continuity.staff_lines
     living_chords = LivingScore.prepare(score_layout)
     score_crop_origin = Vector2.ZERO
     score_crop_size = Vector2.ONE
