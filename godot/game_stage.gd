@@ -21,6 +21,12 @@ var beat_in_bar := 0
 var beats_per_bar := 4
 var score_preview := false
 var impact_age := 0.0
+# One-shot result wave, keyed to the actual assessed take. Repeated /state
+# polling cannot restart the animation or manufacture progress.
+var last_result_key := ""
+var result_wave := 0.0
+var result_age := 0.0
+var result_tone := AURA
 const AMBIENT_REDRAW_SECONDS := 1.0 / 30.0
 var ambient_redraw_elapsed := 0.0
 
@@ -39,6 +45,19 @@ func present(state: Dictionary) -> void:
         ERROR if next_phase == "feedback" and failed_take
         else AMBER if next_phase in ["paused", "recovering"]
         else AURA)
+    if (bool(state.get("loaded", false))
+            and not bool(state.get("preview_only", false))
+            and str(state.get("mode", "")) in ["practice", "perform"]
+            and next_phase == "feedback" and result is Dictionary):
+        var result_key: String = "%s|%s|%s|%s" % [
+            str(state.get("title", "")), str(state.get("transport_id", -1)),
+            str(state.get("hand", "")), str(result.get("clean", false))]
+        if result_key != last_result_key:
+            last_result_key = result_key
+            result_tone = AURA if bool(result.get("clean", false)) else ERROR
+            result_age = 0.0
+            result_wave = 1.0
+            queue_redraw()
     if next_progress < progress - .08:
         shown_progress = next_progress
     if phase != next_phase or absf(next_progress-progress) > .003 \
@@ -84,6 +103,10 @@ func _process(delta: float) -> void:
     if impact_energy > .001:
         impact_energy = maxf(0.0, impact_energy - delta * 1.6)
         impact_age = minf(1.0, impact_age + delta * 1.7)
+        redraw = true
+    if result_wave > .001:
+        result_wave = maxf(0.0, result_wave - maxf(0.0, delta) * .86)
+        result_age = minf(1.0, result_age + maxf(0.0, delta) * .86)
         redraw = true
     if transport_active:
         breath = fposmod(breath + delta * .42, TAU)
@@ -162,6 +185,27 @@ func _draw() -> void:
                 Color(impact_tone, impact_energy * .69), 1.8, true)
             draw_circle(origin + ray * ray_length, 1.8,
                 Color(impact_tone, impact_energy * .82))
+    # Clean takes generate an instrument-wide wave from the playhead;
+    # retries have a softer coral wash. It is drawn *behind* engraved
+    # notation and disappears after the one-shot result transition.
+    if result_wave > .001:
+        var sweep: float = result_age * 1.4
+        var energy: float = result_wave * result_wave
+        var spread_px: float = minf(w * .62, w * (.10 + sweep * .53))
+        var left_x: float = maxf(0.0, center.x - spread_px)
+        var right_x: float = minf(w, center.x + spread_px)
+        for band in range(8):
+            var height_offset: float = float(band) * 3.4
+            draw_line(Vector2(left_x, h - 4.0 - height_offset),
+                Vector2(right_x, h - 4.0 - height_offset),
+                Color(result_tone, energy * (.14 - .014 * band)),
+                1.8 + float(7 - band) * .75, true)
+        for arc in range(3):
+            var radius: float = base_radius * (.85 + sweep * 2.1 + float(arc) * .16)
+            draw_arc(center, radius, PI * .11, PI * .89, 48,
+                Color(result_tone, energy * (.28 - .07 * arc)), 1.6, true)
+            draw_arc(center, radius, PI * 1.11, PI * 1.89, 48,
+                Color(result_tone, energy * (.28 - .07 * arc)), 1.6, true)
     draw_line(Vector2(1, 1), Vector2(w - 1, 1), Color("#759D94", .13), 1.0)
     draw_rect(Rect2(1, h - 4, maxf(0, w - 2), 2), Color("#789B90", .18))
     if shown_progress > 0:
