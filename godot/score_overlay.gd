@@ -163,10 +163,16 @@ func _draw() -> void:
         var focus: Vector2 = _sheet_xy(float(note.get("x", 0.0)), float(note.get("y", 0.0)))
         var strength: float = clampf(float(note.get("emphasis", 0.0)), 0.0, 1.0)
         var breathe: float = .5 + .5 * sin(float(Time.get_ticks_msec()) * .0038)
-        var extent: Vector2 = radii * (1.46 + .075 * breathe)
-        # Wide anticipation: never obscure the pitch or pretend it was hit.
+        # Next-note anticipation is warm ivory/gold, deliberately
+        # distinct from teal (a genuinely graded successful attack).
+        # Two outline passes surround the exact Verovio notehead rather
+        # than painting over its accidentals or filling in its pitch.
+        var extent: Vector2 = radii * (1.55 + .12 * breathe)
+        var anticipation := Color("#F6D5A0")
+        draw_polyline(Ink.ellipse(focus, extent.x * 1.16, extent.y * 1.16),
+            Color(anticipation, .13 + .09 * breathe + .05 * strength), 5.0, true)
         draw_polyline(Ink.ellipse(focus, extent.x, extent.y),
-            Color("#91FFD1", .48 + .34 * strength + .08 * breathe), 1.8, true)
+            Color(anticipation, .65 + .19 * strength + .10 * breathe), 2.15, true)
 
     for marker in marks:
         if int(marker.get("page", -1)) != active_page:
