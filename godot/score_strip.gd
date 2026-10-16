@@ -4,7 +4,7 @@ extends RefCounted
 # texture. All notation and feedback use the same virtual horizontal canvas.
 # Long scores can store completed tiles as compact CPU buffers until
 # needed. Ordinary short warmups keep the original fast eager texture path.
-const DEFERRED_MIN_SYSTEMS := 12
+const DEFERRED_MIN_SYSTEMS := 8
 
 static func build(layout: Dictionary, pages: Array[Image],
         defer_textures: bool = false) -> Dictionary:
