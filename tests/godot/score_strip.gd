@@ -21,6 +21,17 @@ func run() -> void:
     if helper == null:
         quit(1)
         return
+    var probe_tile := {"rect": Rect2(500.0, 0.0, 100.0, 80.0)}
+    check(not helper.tile_visible(probe_tile, 0.0, 1.0, 400.0, 50.0),
+        "Far-right tile must not issue a draw call")
+    check(helper.tile_visible(probe_tile, -250.0, 1.0, 400.0, 50.0),
+        "Scrolling a tile into the viewport restores it immediately")
+    check(helper.tile_visible(probe_tile, -100.0, 1.0, 400.0, 50.0),
+        "Overscan protects the incoming edge of the raster")
+    check(not helper.tile_visible(probe_tile, -2000.0, 1.0, 400.0, 50.0),
+        "Far-left tile must no longer render")
+    check(helper.tile_visible(probe_tile, 0.0, 1.0, 0.0, 50.0),
+        "Unknown viewport must fail open, never hide the score")
     var no_pages: Array[Image] = []
     check(not str(helper.build({}, no_pages).get("error", "")).is_empty(),
           "missing measured systems must return an explicit error")
