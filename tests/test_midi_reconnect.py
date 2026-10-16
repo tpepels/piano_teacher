@@ -27,6 +27,7 @@ class MidiBackend:
         self.discovery_error = None
         self.open_error = None
         self.opened = []
+        self.attempts = []
 
     def get_input_names(self):
         if self.discovery_error:
@@ -34,6 +35,7 @@ class MidiBackend:
         return list(self.names)
 
     def open_input(self, name, *, callback):
+        self.attempts.append(name)
         if self.open_error:
             raise self.open_error
         if name not in self.names:
@@ -185,3 +187,122 @@ def test_explicit_disconnect_clears_saved_preference_despite_close_failure(conne
     assert engine.midi_port is None and engine.midi_device == ""
     assert engine.preferences()["midi_device"] == ""
     assert not engine.running
+
+
+def test_previously_selected_piano_auto_connects_without_restarting_practice(
+        tmp_path, monkeypatch):
+    midi = MidiBackend()
+    monkeypatch.setitem(sys.modules, "mido", midi)
+    first = PracticeEngine(tmp_path)
+    try:
+        first.connect("USB Piano")
+        first.connect("USB Piano")
+        preferred = first.preferences()["midi_device"]
+    finally:
+        first.midi_port.close()
+        first.db.close()
+    second = PracticeEngine(tmp_path)
+    try:
+        assert preferred == "USB Piano"
+        assert second.midi_device == ""
+        state = second.state()  # first poll should offer bounded discovery
+        assert state["device"] == "USB Piano"
+        assert second.midi_port is not None
+        assert not second.running
+        assert second.recorder is None
+        assert not second.preview_only
+        assert second.transport_id == 0
+    finally:
+        if second.midi_port:
+            second.midi_port.close()
+        second.db.close()
+
+
+def test_auto_reconnect_after_usb_return_never_resumes_cancelled_take(
+        connected, monkeypatch):
+    engine, midi = connected
+    from piano_teacher import server
+    clock = [100.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
+    engine.start()
+    transport_before = engine.transport_id
+    assert engine.running
+    original = engine.midi_port
+    midi.names = []
+    assert engine.ports() == []
+    assert original.closed
+    assert not engine.running and engine.recorder is None
+    assert engine.preferences()["midi_device"] == "USB Piano"
+    assert not engine.auto
+
+    midi.names = ["Other Device"]
+    clock[0] = 105.0
+    assert engine.ports() == ["Other Device"]
+    assert engine.midi_port is None  # no substitution with another piano
+    midi.names = ["Other Device", "USB Piano"]
+    clock[0] = 107.0
+    assert engine.ports() == midi.names
+    assert engine.midi_device == "USB Piano"
+    assert engine.midi_port is not original
+    assert not engine.running and engine.recorder is None
+    assert engine.transport_id == transport_before
+    assert not engine.plan.mastered
+    assert "Press Start" in engine.feedback
+    engine.start()
+    assert engine.running and not engine.preview_only
+
+
+def test_auto_reconnect_rate_limits_failed_alsa_open_and_recovers(
+        connected, monkeypatch):
+    engine, midi = connected
+    from piano_teacher import server
+    clock = [100.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
+    midi.names = []
+    engine.ports()
+    attempts_before = len(midi.attempts)
+    midi.names = ["USB Piano"]
+    midi.open_error = OSError("Device still busy")
+    clock[0] = 105.0
+    for _ in range(5):
+        assert engine.ports() == ["USB Piano"]
+    assert len(midi.attempts) == attempts_before + 1
+    assert "Cannot reconnect" in engine.feedback
+    midi.open_error = None
+    clock[0] = 108.0
+    engine.ports()
+    assert len(midi.attempts) == attempts_before + 1
+    assert engine.midi_port is None
+    clock[0] = 109.1
+    engine.ports()
+    assert engine.midi_device == "USB Piano"
+    assert engine.midi_port is not None
+
+
+def test_automatic_discovery_detects_disappearance_without_open_input_closing(
+        connected, monkeypatch):
+    engine, midi = connected
+    from piano_teacher import server
+    clock = [100.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
+    engine.start()
+    original = engine.midi_port
+    midi.names = []
+    clock[0] = 105.0
+    state = engine.state()
+    assert state["device"] == ""
+    assert original.closed
+    assert not engine.running
+    assert "disconnected" in engine.feedback.lower()
+
+
+def test_explicit_disconnect_never_auto_connects_even_when_port_available(connected):
+    engine, midi = connected
+    engine.connect("")
+    assert engine.preferences()["midi_device"] == ""
+    before = len(midi.attempts)
+    for _ in range(4):
+        engine.ports()
+        engine.state()
+    assert engine.midi_port is None
+    assert len(midi.attempts) == before
