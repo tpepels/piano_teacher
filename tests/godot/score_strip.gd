@@ -65,6 +65,31 @@ func run() -> void:
         "Empty scores have an empty visible interval")
     check(helper.visible_tile_range(many_tiles, 0, 0, 300, 50) ==
         Vector2i(0, many_tiles.size()), "Unusable viewport must preserve all notes")
+    # Phase 8H: monochrome tile images use two channels, preserve
+    # alpha and grayscale ink, and retain exact source pixel dimensions.
+    var original_ink := Image.create(16, 12, false, Image.FORMAT_RGBA8)
+    original_ink.fill(Color(1, 1, 1, 0))
+    original_ink.set_pixel(0, 0, Color(0, 0, 0, 1))
+    original_ink.set_pixel(1, 0, Color(.4, .4, .4, .6))
+    original_ink.set_pixel(2, 0, Color(1, 1, 1, 1))
+    var compact_ink: Image = helper.compact_monochrome_tile(original_ink)
+    check(compact_ink.get_format() == Image.FORMAT_LA8,
+        "8H must upload only luminance and alpha channels")
+    check(compact_ink.get_data().size() == 16 * 12 * 2,
+        "8H raw tile data must use two bytes per source pixel")
+    check(compact_ink.get_size() == Vector2i(16, 12),
+        "8H must not rescale or re-engrave the source score")
+    check(compact_ink.get_pixel(0, 0).r < .02 and
+        compact_ink.get_pixel(0, 0).a > .98,
+        "solid note ink must survive the image conversion")
+    check(absf(compact_ink.get_pixel(1, 0).r - .4) < .02 and
+        absf(compact_ink.get_pixel(1, 0).a - .6) < .02,
+        "grayscale antialiasing and note transparency are preserved")
+    check(compact_ink.get_pixel(2, 0).r > .98,
+        "opaque page white remains white for the notation shader")
+    var gpu_texture := ImageTexture.create_from_image(compact_ink)
+    check(gpu_texture != null and gpu_texture.get_size() == Vector2i(16, 12),
+        "Godot can create a real graphics texture from compact notation")
     var no_pages: Array[Image] = []
     check(not str(helper.build({}, no_pages).get("error", "")).is_empty(),
           "missing measured systems must return an explicit error")
