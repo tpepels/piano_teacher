@@ -2,6 +2,10 @@ extends Node
 # Actual local PCM output follows the engine's Listen session and clock.
 signal prepared(token: String, revision: int)
 signal failed(message: String)
+const ListenSync := preload("res://listen_sync.gd")
+var sync_monitor = ListenSync.new()
+var last_sync_probe_ms := 0
+var last_start_offset_s := 0.0
 var player: AudioStreamPlayer
 var request: HTTPRequest
 var token := ""
@@ -35,7 +39,7 @@ func set_listen_volume_db(value: float) -> void:
     config.set_value("audio", "listen_volume_db", listen_volume_db)
     config.save("user://audio.cfg")
 
-func synchronize(state: Dictionary) -> void:
+func synchronize(state: Dictionary, visual_beat: float = NAN) -> void:
     if str(state.get("mode", "")) != "listen" or not state.get("demo") is Dictionary:
         clear()
         return
@@ -63,13 +67,49 @@ func synchronize(state: Dictionary) -> void:
         prepared.emit(token, revision)
         return
     if bool(state.get("running", false)):
+        var bpm: float = maxf(1.0, float(state.get("bpm", 60)))
+        var beat: float = visual_beat if is_finite(visual_beat) else float(
+            state.get("clock_beat", 0.0))
+        var target_s: float = maxf(0.0, beat * 60.0 / bpm)
         if not started:
-            player.play(maxf(0.0, float(state.get("clock_beat", 0.0))*60.0/float(state.get("bpm", 60))))
+            # Align the sound with the extrapolated visible score clock,
+            # not the earlier snapshot timestamp returned by HTTP.
+            last_start_offset_s = minf(target_s,
+                maxf(0.0, player.stream.get_length() - .05))
+            player.play(last_start_offset_s)
             started = true
+            sync_monitor.reset_pending()
         player.stream_paused = bool(state.get("paused", false))
+        if bool(state.get("paused", false)):
+            sync_monitor.reset_pending()
+        else:
+            keep_synchronized(beat, bpm)
     elif started:
         player.stop()
         started = false
+        sync_monitor.reset_pending()
+
+# Sample the *audible* software play position, excluding the output-device
+# buffer estimated by Godot. It is not a piano or speaker latency meter.
+# Inspect at most five times per second and correct only persistent drift.
+func keep_synchronized(visual_beat: float, bpm: float) -> void:
+    if not loaded or not started or player == null or not player.playing \
+            or player.stream_paused or not is_finite(visual_beat) or bpm <= .0:
+        return
+    var now_ms: int = Time.get_ticks_msec()
+    if now_ms - last_sync_probe_ms < 200:
+        return
+    last_sync_probe_ms = now_ms
+    var duration_s: float = player.stream.get_length()
+    var target_s: float = maxf(0.0, visual_beat * 60.0 / bpm)
+    var audible_s: float = maxf(0.0, player.get_playback_position() +
+        AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency())
+    if sync_monitor.evaluate(target_s, audible_s, duration_s, now_ms):
+        player.seek(clampf(target_s, 0.0, duration_s - .05))
+
+func sync_report() -> Dictionary:
+    return sync_monitor.report()
+
 
 func _downloaded(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
     downloading = false
@@ -103,3 +143,6 @@ func clear() -> void:
     started = false
     downloading = false
     audio_error = false
+    last_start_offset_s = 0.0
+    last_sync_probe_ms = 0
+    sync_monitor.reset_session()
