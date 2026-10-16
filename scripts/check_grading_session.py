@@ -56,6 +56,9 @@ class SessionCapture:
         self.event_counts: Counter[str] = Counter()
         self.seen_events: set[tuple[int, int]] = set()
         self.seen_takes: set[int] = set()
+        # Backend may unlock a new hand immediately after judging an
+        # attempt. Attribute the take to the hand seen during that transport.
+        self.transport_hands: dict[int, str] = {}
         self.last_phase_key: tuple[int, str] | None = None
 
     def observe(self, snapshot: dict) -> None:
@@ -68,6 +71,8 @@ class SessionCapture:
         phase = str(snapshot.get("phase", ""))
         transport = int(snapshot.get("transport_id", 0))
         preview = bool(snapshot.get("preview_only", False))
+        if phase in ("count_in", "playing") and transport not in self.transport_hands:
+            self.transport_hands[transport] = str(snapshot.get("hand", ""))
         graded = bool(snapshot.get("scoring_available", False)) and not preview \
             and mode in ("practice", "perform")
         self.graded_samples += int(graded)
@@ -96,7 +101,8 @@ class SessionCapture:
                 and phase in ("feedback", "recovering", "loading", "ready")):
             self.seen_takes.add(transport)
             self.completed_takes.append({
-                "transport_id": transport, "hand": str(snapshot.get("hand", "")),
+                "transport_id": transport,
+                "hand": self.transport_hands.get(transport, str(snapshot.get("hand", ""))),
                 "clean": bool(result.get("clean", False)),
                 "correct": int(result.get("correct", 0)),
                 "total": int(result.get("total", 0)),
