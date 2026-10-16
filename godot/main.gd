@@ -2251,7 +2251,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         feedback_label.text = str(parsed.get("feedback", "Open a score"))
         _refresh_score_status()
         return
-    title_label.text = str(parsed.get("title", "Piano Teacher"))
+    title_label.text = str(parsed.get("title", "Piano Teacher")).replace("_", " ")
     var kind := str(parsed.get("kind", "learn")).capitalize()
     passage_label.text = ("%s · Measures %d–%d" % [
         kind, int(parsed.get("first_bar", 0)), int(parsed.get("last_bar", 0))])
