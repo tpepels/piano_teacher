@@ -13,6 +13,7 @@ var accent := AURA
 var transport_active := false
 var breath := 0.0
 var impact_energy := 0.0
+var preview_energy := 0.0
 var impact_tone := AURA
 # Phase 7.8: visual beat is sampled from the Python-owned transport clock.
 # This is lighting, not a second metronome or note-grading clock.
@@ -86,6 +87,12 @@ func sync_beat(beat: float, meter: int, preview: bool) -> void:
         queue_redraw()
 
 
+func preview_react() -> void:
+    # Neutral blue metrical arrival - never a graded success effect.
+    preview_energy = minf(.85, preview_energy + .48)
+    queue_redraw()
+
+
 func react(status: String) -> void:
     # Called only for assessed, fresh MIDI events. Preview never invokes it.
     impact_tone = ERROR if status == "unexpected" else (
@@ -99,6 +106,9 @@ func _process(delta: float) -> void:
     var redraw := false
     if absf(shown_progress - progress) > .0005:
         shown_progress = move_toward(shown_progress, progress, delta * .75)
+        redraw = true
+    if preview_energy > .001:
+        preview_energy = maxf(0.0, preview_energy - delta * 1.15)
         redraw = true
     if impact_energy > .001:
         impact_energy = maxf(0.0, impact_energy - delta * 1.6)
@@ -166,15 +176,16 @@ func _draw() -> void:
             draw_circle(p, 2.4 + (1.4 * beat_attack if selected else 0.0),
                 Color(pulse_tone if selected else Color("#66877F"),
                     (.60 + beat_attack * .36) if selected else .36))
-    # Graded physical MIDI attacks create an unmistakable short-lived
-    # colour burst. This code is called by the assessed-MIDI event path,
-    # never by the beat clock, Listen, or ungraded preview.
-    if impact_energy > .001:
+    # Physical MIDI affects the green/coral scored energy. A preview note
+    # creates blue energy through an independent, explicitly ungraded path.
+    var drawn_energy: float = maxf(impact_energy, preview_energy)
+    var drawn_tone: Color = impact_tone if impact_energy > preview_energy else Color("#9DC8FF")
+    if drawn_energy > .001:
         var expansion: float = 1.0 + impact_age * .58
         for i in range(10, 0, -1):
             var spread: float = float(i) / 10.0
             draw_circle(center, base_radius * expansion * (.9 + spread * 2.5),
-                Color(impact_tone, impact_energy * (1.0 - spread) * .060))
+                Color(drawn_tone, drawn_energy * (1.0 - spread) * .11))
         for i in range(12):
             var angle: float = TAU * float(i) / 12.0 + .23
             var ray: Vector2 = Vector2(cos(angle), sin(angle))
@@ -182,9 +193,9 @@ func _draw() -> void:
             var ray_length: float = 4.0 + float(i % 4) * 2.0
             var origin: Vector2 = center + ray * inner_radius
             draw_line(origin, origin + ray * ray_length,
-                Color(impact_tone, impact_energy * .69), 1.8, true)
+                Color(drawn_tone, drawn_energy * .84), 1.8, true)
             draw_circle(origin + ray * ray_length, 1.8,
-                Color(impact_tone, impact_energy * .82))
+                Color(drawn_tone, drawn_energy * .92))
     # Clean takes generate an instrument-wide wave from the playhead;
     # retries have a softer coral wash. It is drawn *behind* engraved
     # notation and disappears after the one-shot result transition.

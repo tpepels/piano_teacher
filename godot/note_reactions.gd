@@ -7,12 +7,14 @@ const Ink := preload("res://notehead_ink.gd")
 const HIT := Color("#A0FFDA")
 const TIMING := Color("#FFD49A")
 const ERROR := Color("#FF8582")
+const PREVIEW := Color("#9DC8FF")
 const MAX_VISIBLE_HITS := 16
 const PARTICLE_COUNT := 16
 const HIT_DURATION_MS := 450
 const ERROR_DURATION_MS := 420
 
 var hit_pulses: Array = []
+var preview_pulses: Array = []
 var wrong_ghosts: Array = []
 var active_page := 0
 var crop_origin := Vector2.ZERO
@@ -125,7 +127,7 @@ func _staff_resonance(center: Vector2, gap: float,
             Color(tone, .64 * remaining), 1.5, true)
 
 func _draw() -> void:
-    if hit_pulses.is_empty() and wrong_ghosts.is_empty():
+    if hit_pulses.is_empty() and wrong_ghosts.is_empty() and preview_pulses.is_empty():
         return
     var now_ms: int = Time.get_ticks_msec()
     var gap: float = maxf(5.0, staff_gap_fraction * size.y)
@@ -143,6 +145,18 @@ func _draw() -> void:
         _success_impact(position, 1.0 - remaining, gap, radii, tone)
         _staff_resonance(position, gap, tone, remaining)
 
+    # Blue-white preview impacts follow real metrical onsets and do not
+    # imply success. They are separate from judged green MIDI pulses.
+    for index in range(maxi(0, preview_pulses.size() - MAX_VISIBLE_HITS),
+            preview_pulses.size()):
+        var preview: Dictionary = preview_pulses[index]
+        if int(preview.get("page", -1)) != active_page:
+            continue
+        var remaining: float = _remaining(preview, now_ms, 620)
+        if remaining > 0.0:
+            var center: Vector2 = _sheet_position(preview)
+            _success_impact(center, 1.0 - remaining, gap, radii, PREVIEW)
+            _staff_resonance(center, gap, PREVIEW, remaining)
     for index in range(maxi(0, wrong_ghosts.size() - MAX_VISIBLE_HITS),
             wrong_ghosts.size()):
         var wrong: Dictionary = wrong_ghosts[index]

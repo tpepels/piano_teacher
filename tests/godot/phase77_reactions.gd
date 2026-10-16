@@ -30,6 +30,9 @@ func run() -> void:
     check(stage.transport_active, "MIDI-free preview receives ambient movement")
     check(stage.impact_energy == 0.0,
         "preview never earns a note hit or a success bloom")
+    stage.preview_react()
+    check(stage.preview_energy > 0.0 and stage.impact_energy == 0.0,
+        "Keyboard-free preview creates blue note energy, never a success grade")
     stage.react("on_time")
     check(stage.impact_energy > .0 and stage.impact_tone == Color("#69E2BF"),
         "an assessed on-time note triggers the success glow")
@@ -61,6 +64,10 @@ func run() -> void:
     reactions.queue_redraw()
     check(reactions.hit_pulses.size() == 1,
         "one physical MIDI note produces one visible note reaction")
+    reactions.preview_pulses.append({"page":0, "x":.42, "y":.3,
+        "status":"preview", "duration_ms":620, "until_ms":now+620})
+    check(reactions.preview_pulses.size() == 1,
+        "Preview light remains separate from graded note reactions")
     check(Reactions.MAX_VISIBLE_HITS <= 16, "dense chords have bounded effects")
     var streak = Streak.new()
     root.add_child(streak)

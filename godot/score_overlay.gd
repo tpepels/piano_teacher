@@ -13,6 +13,7 @@ var marks: Array = []
 var next_chord: Array = []
 var wrong_ghosts: Array = []
 var hit_pulses: Array = []
+var preview_pulses: Array = []
 var staff_gap_fraction := 0.02
 var active_page := -1
 var crop_origin := Vector2.ZERO
@@ -215,7 +216,7 @@ func _draw() -> void:
     # Bold, outside-the-ink notehead flash. The lower layer carries the
     # sixteen-particle burst; this bright rim stays readable above even
     # opaque staff ink. It never triggers merely on playhead crossing.
-    for hit in hit_pulses:
+    for hit in hit_pulses + preview_pulses:
         if int(hit.get("page", -1)) != active_page:
             continue
         var duration: float = maxf(1.0, float(hit.get("duration_ms", 450)))
@@ -227,7 +228,9 @@ func _draw() -> void:
         var attack: float = 1.0 - clampf(progress * 3.8, 0.0, 1.0)
         var focus: Vector2 = _sheet_xy(float(hit.get("x", 0.0)),
             float(hit.get("y", 0.0)))
-        var tone: Color = Color("#A0FFDA") if str(hit.get("status", "")) == "on_time" else Color("#FFD49A")
+        var tone: Color = (Color("#9DC8FF") if str(hit.get("status", "")) == "preview"
+            else Color("#A0FFDA") if str(hit.get("status", "")) == "on_time"
+            else Color("#FFD49A"))
         var extent: Vector2 = radii * (1.55 + progress * 1.65)
         draw_polyline(Ink.ellipse(focus, extent.x * 1.14,
             extent.y * 1.14), Color(tone, (.14 + .23 * attack) * remaining),
@@ -258,7 +261,7 @@ func _draw() -> void:
         var cyan := Design.TEAL if transport_active else Design.SAGE
         # The timing line reacts at the *musical onset*, not the notehead.
         # Actual notehead illumination remains MIDI-triggered only.
-        var onset: float = clampf(float(onset_until_ms - Time.get_ticks_msec()) / 135.0, 0.0, 1.0)
+        var onset: float = clampf(float(onset_until_ms - Time.get_ticks_msec()) / 180.0, 0.0, 1.0)
         draw_line(start, end, Color(cyan, .15 + onset * .17),
             5.0 + onset * 4.0, true)
         draw_line(start, end, Color(cyan, .93), 1.7 + onset * .55, true)

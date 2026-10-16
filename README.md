@@ -825,17 +825,16 @@ dark theme. The older Qt entrypoint remains available separately.
 
 ## Preview notation scale and continuous scrolling (Phase 7.6 follow-up)
 
-The real grand staff now determines practice zoom, rather than the full
-height of an SVG page containing large empty margins. A background staff
-joins all preloaded system tiles at their precise vertical line positions;
-the original engraved noteheads, clefs, accidentals and barlines are
-unchanged. Normal MIDI practice continues to align each source attack
-to the fixed playhead at its authoritative musical time. An **ungraded
-preview with no keyboard** uses a constant visual pixel-per-beat scroll,
-including through barlines and system joins. That preview mode prioritizes
-smooth motion; intermediate engraved attack crossings can differ from
-their real musical timestamps until fully time-proportional engraving
-replaces the old layout. Scoring is disabled in this mode.
+The real grand staff determines practice zoom, and one staff layer joins
+the engraved system tiles. **Preview and MIDI practice now both use actual
+note-to-beat coordinates** to place the fixed playhead. The previous
+constant-pixels-per-beat camera was removed because its visible note
+crossings diverged from the audible metronome on irregularly spaced source
+engraving. This restores metronome/notation synchrony; some camera-speed
+variation can remain until truly time-proportional engraving is implemented.
+Preview/Listen have their own conspicuous blue-white note-arrival bursts
+and stage lighting, distinguished from mint/coral assessed MIDI feedback.
+Those neutral animations do not affect grading or reward progression.
 
 ## Phase 7.7 - Resonance (visual polish)
 

@@ -10,7 +10,6 @@ const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
 const ScoreStrip := preload("res://score_strip.gd")
 const StaffContinuity := preload("res://staff_continuity.gd")
-const PreviewMotion := preload("res://preview_motion.gd")
 const ScoreOverlay := preload("res://score_overlay.gd")
 const NoteReactions := preload("res://note_reactions.gd")
 const ChallengeFlow := preload("res://challenge_flow.gd")
@@ -1184,6 +1183,7 @@ func _build_interface() -> void:
     score_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_content.add_child(score_overlay)
     note_reactions.hit_pulses = score_overlay.hit_pulses
+    note_reactions.preview_pulses = score_overlay.preview_pulses
     note_reactions.wrong_ghosts = score_overlay.wrong_ghosts
     # Score status must live inside the score panel: feedback_label is replaced
     # by regular state polling and cannot hold engraving errors reliably.
@@ -1924,13 +1924,17 @@ func _process(_delta: float) -> void:
     # Animate short-lived hit pulses between HTTP state samples.
     var ticks: int = Time.get_ticks_msec()
     var effects_were_visible: bool = (not score_overlay.hit_pulses.is_empty()
-        or not score_overlay.wrong_ghosts.is_empty())
+        or not score_overlay.wrong_ghosts.is_empty()
+        or not score_overlay.preview_pulses.is_empty())
     for index in range(score_overlay.hit_pulses.size() - 1, -1, -1):
         if int(score_overlay.hit_pulses[index].get("until_ms", 0)) <= ticks:
             score_overlay.hit_pulses.remove_at(index)
     for index in range(score_overlay.wrong_ghosts.size() - 1, -1, -1):
         if int(score_overlay.wrong_ghosts[index].get("until_ms", 0)) <= ticks:
             score_overlay.wrong_ghosts.remove_at(index)
+    for index in range(score_overlay.preview_pulses.size() - 1, -1, -1):
+        if int(score_overlay.preview_pulses[index].get("until_ms", 0)) <= ticks:
+            score_overlay.preview_pulses.remove_at(index)
     # Redraw the *last* expiry too. Otherwise a paused score may retain
     # the final faded wrong pitch until another transport update arrives.
     if effects_were_visible:
@@ -1964,6 +1968,10 @@ func _process(_delta: float) -> void:
         return
     score_overlay.guided_active = false
     if last_state.is_empty() or not bool(last_state.get("running", false)) or layout_revision != revision:
+        if not score_overlay.preview_pulses.is_empty():
+            score_overlay.preview_pulses.clear()
+            score_overlay.queue_redraw()
+            note_reactions.queue_redraw()
         last_playhead_strike_transport = -1
         score_overlay.onset_until_ms = 0
         # The very first expected attack must be visible before the pianist
@@ -1998,9 +2006,13 @@ func _process(_delta: float) -> void:
         last_playhead_strike_beat = musical_clock
         score_overlay.onset_until_ms = 0
     else:
-        if musical_clock - last_playhead_strike_beat <= .5 and LivingScore.crosses_onset(
-                living_chords, last_playhead_strike_beat, musical_clock):
-            score_overlay.onset_until_ms = Time.get_ticks_msec() + 135
+        if musical_clock - last_playhead_strike_beat <= .5:
+            var onsets: Array = LivingScore.groups_crossed(
+                living_chords, last_playhead_strike_beat, musical_clock)
+            if not onsets.is_empty():
+                score_overlay.onset_until_ms = Time.get_ticks_msec() + 180
+                if bool(last_state.get("preview_only", false)) or str(last_state.get("mode", "")) == "listen":
+                    _preview_note_arrivals(onsets)
         last_playhead_strike_beat = musical_clock
     # The note cue is a musical preview on the exact score, not an evaluator.
     # During count-in show the first chord. It disappears during rests longer
@@ -2088,8 +2100,6 @@ func _layout_guided_score() -> void:
 
 func _beat_width_at(beat: float) -> float:
     var points: Array = score_layout.get("anchors", [])
-    if bool(last_state.get("preview_only", false)) and str(last_state.get("mode", "practice")) in ["practice", "perform"] and score_layout.has("strip_size"):
-        return PreviewMotion.pixels_per_beat(points)
     for index in range(points.size() - 1):
         var left: Dictionary = points[index]
         var right: Dictionary = points[index + 1]
@@ -2112,11 +2122,6 @@ func _position_at_beat(beat: float) -> Dictionary:
             break
     var left: Dictionary = points[at]
     var position: Dictionary = left.duplicate()
-    # The ungraded preview must never hesitate between unevenly spaced
-    # engraving anchors. Real MIDI practice retains exact arrival geometry.
-    if bool(last_state.get("preview_only", false)) and str(last_state.get("mode", "practice")) in ["practice", "perform"] and score_layout.has("strip_size"):
-        position["x"] = PreviewMotion.position(points, beat)
-        return position
     if at + 1 < points.size():
         var right: Dictionary = points[at + 1]
         if int(left.get("page", 0)) == int(right.get("page", 0)) and str(left.get("system", "")) == str(right.get("system", "")):
@@ -2464,6 +2469,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         score_overlay.next_chord.clear()
         score_overlay.hit_pulses.clear()
         score_overlay.wrong_ghosts.clear()
+        score_overlay.preview_pulses.clear()
         note_reactions.queue_redraw()
         _request_layout()
     if str(parsed.get("phase", "")) == "loading" and layout_revision == revision and rendered_revision == revision and score_view.texture != null:
@@ -2550,6 +2556,30 @@ func _update_note_feedback_hud(parsed: Dictionary) -> void:
     # All mapped mistakes appear directly on the engraved notes.
     # The status line below the score already reports feedback_unmapped;
     # do not overlay another (potentially clipped) notification on the music.
+
+
+func _preview_note_arrivals(groups: Array) -> void:
+    # Demonstrate musical energy when there is no keyboard, but in blue
+    # rather than graded mint. These are backend-clock onsets, never grades.
+    if groups.is_empty():
+        return
+    var now_ms: int = Time.get_ticks_msec()
+    for group in groups:
+        var notes: Array = group.get("notes", [])
+        for note in notes:
+            if score_overlay.preview_pulses.size() >= 24:
+                score_overlay.preview_pulses.pop_front()
+            score_overlay.preview_pulses.append({
+                "page": int(note.get("page", 0)),
+                "x": float(note.get("x", 0.0)),
+                "y": float(note.get("y", 0.0)),
+                "duration_ms": 620,
+                "until_ms": now_ms + 620,
+                "status": "preview"
+            })
+    game_stage.preview_react()
+    score_overlay.queue_redraw()
+    note_reactions.queue_redraw()
 
 
 func _clear_assessed_effects_in_ungraded_mode(state: Dictionary) -> void:

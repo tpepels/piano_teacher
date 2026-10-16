@@ -176,22 +176,31 @@ func run() -> void:
         check(app.score_tiles[i].visible ==
             (i >= app.visible_tile_begin and i < app.visible_tile_end),
             "8G cached tile window must equal actual rendered system visibility")
-    # With no physical piano attached, preview keeps an absolutely constant
-    # musical scroll rate through irregular note spacing and printed systems.
-    var constant_scroll: Array[float] = []
-    for sample in [0.0, .25, .5, .75, 1.0, 1.25, 1.5, 1.75]:
+    # Musical metronome and visible notes must share one transport beat.
+    # A constant-rate camera applied to unequally-spaced Verovio glyphs
+    # previously let notes pass the playhead off the metronome clicks.
+    var last_checked_beat := -INF
+    var checked_onsets := 0
+    for entry in app.score_layout.get("anchors", []):
+        var onset_beat: float = float(entry.get("beat", -INF))
+        if onset_beat <= last_checked_beat + .00001 or onset_beat < 0:
+            continue
+        last_checked_beat = onset_beat
         app.last_state = {"running": true, "paused": true, "preview_only": true,
-            "mode":"practice", "clock_beat": sample, "bpm": 60,
+            "mode":"practice", "clock_beat": onset_beat, "bpm": 60,
             "play_from_beat": 0.0, "duration_beats": app.score_layout.beats,
             "transport_id": 198, "phase": "playing"}
         app._process(.016)
-        constant_scroll.append(app.score_content.position.x)
-    var reference_step: float = constant_scroll[1] - constant_scroll[0]
-    check(reference_step < -.01, "Preview sheet music must move forward")
-    for i in range(1, constant_scroll.size() - 1):
-        var step: float = constant_scroll[i+1] - constant_scroll[i]
-        check(absf(step - reference_step) < 0.12,
-            "Ungraded preview cannot hesitate at uneven note gaps")
+        var ink_x: float = app.score_content.position.x + (
+            (float(entry.get("x", 0.0)) - app.score_crop_origin.x)
+            / app.score_crop_size.x * app.score_content.size.x)
+        check(absf(ink_x - app.score_frame.size.x * .42) < 2.0,
+            "Preview note must cross the fixed playhead on its exact metronome beat")
+        checked_onsets += 1
+        if checked_onsets >= 12:
+            break
+    check(checked_onsets >= 3,
+        "The score/metronome fixture must verify multiple note arrivals")
     # The same actual canvas must remain continuous at every system/page join.
     for system in app.score_layout.get("systems", []):
         var boundary: float = float(system.start_beat)
