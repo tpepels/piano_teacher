@@ -1050,6 +1050,37 @@ Long-score and multi-system seeks still need visual examination on the
 actual desktop. FPS and VRAM improvements cannot be inferred from
 source-level complexity alone; report on-device measurements.
 
+## Phase 8H - Compact score-tile uploads
+
+All Verovio engraving tiles now use a two-channel `Image.FORMAT_LA8`
+luminance/alpha image before creating their Godot texture. The source
+PNG scores are monochrome with anti-aliased transparency; source
+position, exact notehead shape, image dimensions and glyph opacity
+remain unchanged. Staff joins and MIDI feedback are processed before
+tile conversion. For the same raster dimensions, raw tile image data
+requires **two bytes/pixel**, rather than the previous RGBA8
+**four bytes/pixel**. Actual VRAM residency is driver-dependent and
+must be checked on the hardware.
+
+The opt-in `--frame-diagnostics` log now reports
+`tile_upload_mib` together with score tile counts, geometry rebuild
+counts and frame intervals. It measures the sum of raw submitted image
+bytes, not the OpenGL/Vulkan driver's allocated GPU memory.
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+.venv/bin/python -m pytest -q tests/test_score_strip.py
+./scripts/check_godot.sh
+./run.sh -- --frame-diagnostics
+```
+
+Open a short warm-up and a long imported piano piece. Verify that
+treble/bass ink, accidentals and the final barlines look identical to
+the earlier version, including at system joins. No difference in
+scoring, MIDI timing, navigation, audio or exercise selection is
+intended.
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
