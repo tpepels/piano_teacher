@@ -55,6 +55,10 @@ func run() -> void:
     var initial_geometry_rebuilds: int = app.tile_geometry_rebuilds
     check(app.tile_window_initialized and app.score_tile_scale > 0.0,
         "8G camera must initialize cached raster geometry and visibility")
+    check(app.deferred_tile_mode == (
+        app.source_layout.get("systems", []).size() >=
+        app.ScoreStrip.DEFERRED_MIN_SYSTEMS),
+        "8I enables deferred score textures only for long scores")
     var note: Dictionary = app.score_layout["notes"][0]
     var first_rails: Array = app.score_layout["systems"][0].get("staff_lines", [])
     check(app.staff_continuity.staff_lines == first_rails,
@@ -119,6 +123,8 @@ func run() -> void:
                         ink_tile_under_cursor = true
                         check(app.score_tiles[tile_index].visible,
                             "the actual engraved tile at the timing line must never be culled")
+                        check(app.score_tiles[tile_index].texture != null,
+                            "8I must restore real note ink beneath the playhead before drawing")
                 check(ink_tile_under_cursor,
                     "musical playback must keep a source tile under the timing line")
             check(projected.x <= previous_x + 0.2, "same note moves left continuously")
@@ -147,6 +153,21 @@ func run() -> void:
         "8G must build tile geometry only once at a fixed zoom, even while moving")
     check(app.tile_window_changes >= 1,
         "8G must track visibility changes independently of geometry")
+    if app.deferred_tile_mode:
+        var resident_count := 0
+        var summed_bytes := 0
+        for i in range(app.score_tiles.size()):
+            var loaded: bool = app.score_tiles[i].texture != null
+            check(loaded == (i >= app.resident_tile_begin and
+                i < app.resident_tile_end),
+                "8I only the neighbourhood of the camera is on the GPU")
+            if loaded:
+                resident_count += 1
+                summed_bytes += int(app.strip_tiles[i].get("upload_bytes", 0))
+        check(app.resident_tile_bytes == summed_bytes,
+            "8I resident memory accounting must track actual uploaded tiles")
+        check(resident_count <= app.visible_tile_end - app.visible_tile_begin + 4,
+            "8I cannot retain unbounded offscreen engraving textures")
     check(app.score_tiles[0].position.distance_to(first_tile_position) < .01,
         "8G cannot reposition an engraved tile during constant-scale playback")
     check(app.score_tiles[0].size.distance_to(first_tile_size) < .01,
