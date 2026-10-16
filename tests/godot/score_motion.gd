@@ -48,6 +48,12 @@ func run() -> void:
     await process_frame
     await process_frame
     var initial_size: Vector2 = app.score_content.size
+    # Phase 8G keeps tile positions and sizes fixed during ordinary
+    # scrolling. Only score_content.position is allowed to move per frame.
+    var first_tile_position: Vector2 = app.score_tiles[0].position
+    var first_tile_size: Vector2 = app.score_tiles[0].size
+    check(app.tile_window_initialized and app.score_tile_scale > 0.0,
+        "8G camera must initialize cached raster geometry and visibility")
     var note: Dictionary = app.score_layout["notes"][0]
     var first_rails: Array = app.score_layout["systems"][0].get("staff_lines", [])
     check(app.staff_continuity.staff_lines == first_rails,
@@ -135,6 +141,14 @@ func run() -> void:
                     "scale_x": app.score_content.size.x / app.score_overlay.image_size.x})
                 captures += 1
             clock += step
+    check(app.score_tiles[0].position.distance_to(first_tile_position) < .01,
+        "8G cannot reposition an engraved tile during constant-scale playback")
+    check(app.score_tiles[0].size.distance_to(first_tile_size) < .01,
+        "8G cannot resize notation while the music is moving")
+    for i in range(app.score_tiles.size()):
+        check(app.score_tiles[i].visible ==
+            (i >= app.visible_tile_begin and i < app.visible_tile_end),
+            "8G cached tile window must equal actual rendered system visibility")
     # With no physical piano attached, preview keeps an absolutely constant
     # musical scroll rate through irregular note spacing and printed systems.
     var constant_scroll: Array[float] = []
