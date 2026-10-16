@@ -154,7 +154,7 @@ def test_completed_session_produces_only_one_shareable_zip(tmp_path):
     (tmp_path / "godot-diagnostics.log").write_text(
         'PHASE8D_FRAME_INTERVALS:{"fps":60,"p95_frame_ms":16.6,'
         '"resident_tile_mib":1.8,"packed_tile_mib":0.4}\n'
-        'PHASE8B_LISTEN_SOFTWARE_SYNC:{"software_drift_s":-.03,"seeks":0}\n')
+        'PHASE8B_LISTEN_SOFTWARE_SYNC:{"software_drift_s":-0.03,"seeks":0}\n')
     t[0] = 60
     archive = session._finalize()
     assert archive.name == "playtest.zip"
