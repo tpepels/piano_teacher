@@ -143,6 +143,12 @@ func _draw() -> void:
     var gap: float = maxf(5.0, staff_gap_fraction * size.y)
     var radii: Vector2 = Ink.radii(gap)
     var judged: Dictionary = {}
+    # The scored attack wins visually over the warm pre-attack cue. Polling
+    # may still reference the same "next" chord until the next HTTP tick.
+    for hit in hit_pulses:
+        var hit_id: String = str(hit.get("note_id", ""))
+        if not hit_id.is_empty():
+            judged[hit_id] = true
     for marker in marks:
         if not marker is Dictionary:
             continue
@@ -206,10 +212,9 @@ func _draw() -> void:
         draw_polyline(Ink.ellipse(center, extent.x, extent.y),
             Color("#F0807A", remaining * .92), 1.8, true)
 
-    # A short, bright rim outside a real struck note. The particle burst
-    # lives behind the raster, while this outline stays above the ink to
-    # make a correct MIDI attack visible even on a densely engraved chord.
-    # Ungraded previews never contain these assessed MIDI hit events.
+    # Bold, outside-the-ink notehead flash. The lower layer carries the
+    # sixteen-particle burst; this bright rim stays readable above even
+    # opaque staff ink. It never triggers merely on playhead crossing.
     for hit in hit_pulses:
         if int(hit.get("page", -1)) != active_page:
             continue
@@ -219,11 +224,25 @@ func _draw() -> void:
         if remaining <= 0.0:
             continue
         var progress: float = 1.0 - remaining
-        var focus: Vector2 = _sheet_xy(float(hit.get("x", 0.0)), float(hit.get("y", 0.0)))
-        var extent: Vector2 = radii * (1.36 + progress * 1.0)
-        var tone: Color = Color("#8DFFD3") if str(hit.get("status", "")) == "on_time" else Color("#F0C785")
+        var attack: float = 1.0 - clampf(progress * 3.8, 0.0, 1.0)
+        var focus: Vector2 = _sheet_xy(float(hit.get("x", 0.0)),
+            float(hit.get("y", 0.0)))
+        var tone: Color = Color("#A0FFDA") if str(hit.get("status", "")) == "on_time" else Color("#FFD49A")
+        var extent: Vector2 = radii * (1.55 + progress * 1.65)
+        draw_polyline(Ink.ellipse(focus, extent.x * 1.14,
+            extent.y * 1.14), Color(tone, (.14 + .23 * attack) * remaining),
+            8.0, true)
         draw_polyline(Ink.ellipse(focus, extent.x, extent.y),
-            Color(tone, remaining * .88), 2.4, true)
+            Color(tone, (.82 + .18 * attack) * remaining),
+            3.5, true)
+        # Short four-point glint outside the ellipse: a much more visible
+        # confirmation than the old hairline green circle.
+        if attack > .0:
+            for direction in [Vector2.LEFT, Vector2.RIGHT,
+                    Vector2.UP, Vector2.DOWN]:
+                var edge: Vector2 = focus + direction * gap * 1.5
+                draw_line(edge, edge + direction * gap * (.5 + .35 * progress),
+                    Color(tone, attack * .84), 2.0, true)
 
     # The particle glow is drawn by NoteReactions *behind* the actual
     # raster tiles. Nothing here paints over correct notes.

@@ -14,6 +14,7 @@ def test_notehead_outlines_and_reactions_use_real_score_mapping(tmp_path):
     script = tmp_path / "note_reactions.gd"
     script.write_text('''extends SceneTree
 const Ink := preload("res://notehead_ink.gd")
+const Effects := preload("res://note_reactions.gd")
 
 class FixtureApp extends "res://main.gd":
     func _ready() -> void:
@@ -38,6 +39,18 @@ func run() -> void:
     assert(bounds.size.x > bounds.size.y)
     assert(bounds.size.x < 40 and bounds.size.y < 30)
 
+    # The brighter sixteen-spark burst must stay deterministic and
+    # wide enough to be visibly different from the older tiny green ring.
+    assert(Effects.PARTICLE_COUNT == 16)
+    assert(Effects.MAX_VISIBLE_HITS == 16)
+    var at: Vector2 = Effects.particle_endpoint(
+        Vector2(160, 90), 20.0, .45, 7)
+    assert(at == Effects.particle_endpoint(Vector2(160, 90), 20.0, .45, 7),
+        "Particles must not jitter on repeated redraws")
+    assert(at.distance_to(Vector2(160, 90)) > 30.0,
+        "Visible particles must escape the small notehead circle")
+    assert(Effects.impact_reach(20.0, .5) > 60.0,
+        "Impact halo must be conspicuous at ordinary notation scale")
     var app := FixtureApp.new()
     root.add_child(app)
     await process_frame
@@ -84,6 +97,12 @@ func run() -> void:
     assert(app.score_overlay.hit_pulses[1].x == .58)
     # Phase 7.7 extends the audiovisual hit reaction to 450 ms.
     assert(app.score_overlay.hit_pulses[0].duration_ms == 450)
+    assert(app.score_overlay.hit_pulses[0].note_id == "na",
+        "A scored note must override its pending gold outline")
+    assert(app.score_overlay.hit_pulses[1].note_id == "nc")
+    assert(app.note_reactions.material is CanvasItemMaterial and
+        app.note_reactions.material.blend_mode == CanvasItemMaterial.BLEND_MODE_ADD,
+        "Glow should accumulate luminous light rather than opaque circles")
     assert(app.score_overlay.wrong_ghosts.size() == 1)
     assert(app.score_overlay.wrong_ghosts[0].y == .47,
         "Wrong pitch must point to the true expected note, not a fake glyph")

@@ -2609,6 +2609,7 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                     "x": float(note.get("x", 0.0)),
                     "y": float(note.get("y", 0.0)),
                     "status": status,
+                    "note_id": note_id,
                     "duration_ms": 450,
                     "until_ms": Time.get_ticks_msec() + maxi(1, 450 - int(age * 1000.0))
                 })

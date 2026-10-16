@@ -849,11 +849,17 @@ Phase 7.7 is implemented on `main` in four layers:
   identical line weight through every seam. Genuine printed measure
   barlines remain musical and are not removed. The rail redraws only after
   a score or viewport size change, not on every camera frame.
-- **7.7b, note impacts:** actual assessed MIDI note-on events produce bright
-  mint notehead outlines, a short bloom and twelve deterministic light
-  particles per note. Early/late notes use amber, and unexpected notes
-  produce shorter coral sparks; all effects expire within 450 ms. There
-  are no particle nodes, and at most sixteen active hits render.
+- **7.7b, Resonance note impacts:** physically assessed correct MIDI
+  attacks produce a layered, additive glow, sixteen deterministic sparks
+  extending several staff spaces, luminous staff-line resonance, and a
+  prominent bright outline *above* the engraved notehead. Correct chords
+  naturally accumulate light from their individual notes. Early/late hits
+  use amber; unexpected notes use restrained coral ticks without a
+  success flash. MIDI hits suppress the warm upcoming-note cue for that
+  note so colors do not collide between backend polls. Animations last
+  at most 450 ms and render at most sixteen concurrent hits; there are
+  no allocated particle nodes, random timers or grading changes. Listen
+  and keyboard-free preview cannot produce a correct-note burst.
 - **7.7c, ambient stage:** the score has a subtle breathing studio glow and
   fixed playhead illumination while the transport runs. The studio briefly
   brightens on judged piano input. Only physically received MIDI events
