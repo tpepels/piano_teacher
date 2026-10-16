@@ -108,8 +108,10 @@ func _skin() -> void:
     add_theme_stylebox_override("pressed", pressed)
     add_theme_stylebox_override("hover_pressed", pressed)
     var disabled_style := normal.duplicate() as StyleBoxFlat
-    disabled_style.bg_color = Color("#182725", .6)
-    disabled_style.border_color = Color("#667B72", .2)
+    disabled_style.bg_color = (background if action_role == "choice" and
+        is_selected else Color("#182725", .6))
+    disabled_style.border_color = (Color(MINT, .83) if action_role == "choice" and
+        is_selected else Color("#667B72", .2))
     disabled_style.shadow_size = 0
     add_theme_stylebox_override("disabled", disabled_style)
     var focus := normal.duplicate() as StyleBoxFlat
@@ -128,7 +130,8 @@ func _skin() -> void:
     add_theme_color_override("font_pressed_color", Color.WHITE)
     add_theme_color_override("font_hover_pressed_color", Color.WHITE)
     add_theme_color_override("font_focus_color", Color.WHITE)
-    add_theme_color_override("font_disabled_color", Color("#718B80"))
+    add_theme_color_override("font_disabled_color",
+        MINT if action_role == "choice" and is_selected else Color("#718B80"))
     add_theme_color_override("icon_normal_color", accent)
 
 func _draw() -> void:
