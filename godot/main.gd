@@ -1936,6 +1936,16 @@ func _process(_delta: float) -> void:
             print("PHASE8B_LISTEN_SOFTWARE_SYNC:",
                 JSON.stringify(demo_player.sync_report()))
     _update_count_in()
+    # The stage's lighting follows exactly the musical beat used by the
+    # moving Verovio notation. Preview/Listen use a neutral pulse; neither
+    # this visual beat nor its glow can create grading events.
+    if game_stage != null and bool(last_state.get("running", false)) \
+            and not bool(last_state.get("paused", false)):
+        game_stage.sync_beat(
+            _transport_beat_now(),
+            maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4))))),
+            bool(last_state.get("preview_only", false))
+                or str(last_state.get("mode", "")) == "listen")
     if str(last_state.get("mode", "practice")) == "learn":
         score_overlay.next_chord.clear()
         _layout_guided_score()
