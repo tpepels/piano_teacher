@@ -2583,15 +2583,20 @@ func _preview_note_arrivals(groups: Array) -> void:
 
 
 func _clear_assessed_effects_in_ungraded_mode(state: Dictionary) -> void:
-    # A graded effect may still have animation frames remaining when the
-    # player switches modes. A preview must never inherit a success flash.
-    if not bool(state.get("preview_only", false)) \
-            and str(state.get("mode", "")) != "listen":
-        return
-    if score_overlay.hit_pulses.is_empty() and score_overlay.wrong_ghosts.is_empty():
-        return
-    score_overlay.hit_pulses.clear()
-    score_overlay.wrong_ghosts.clear()
+    # Mode-specific colors have distinct meanings. Clear old assessed
+    # success when entering preview/Listen, and clear blue preview sparks
+    # when returning to a real scored MIDI take.
+    var ungraded: bool = bool(state.get("preview_only", false)) \
+        or str(state.get("mode", "")) == "listen"
+    if ungraded:
+        if score_overlay.hit_pulses.is_empty() and score_overlay.wrong_ghosts.is_empty():
+            return
+        score_overlay.hit_pulses.clear()
+        score_overlay.wrong_ghosts.clear()
+    else:
+        if score_overlay.preview_pulses.is_empty():
+            return
+        score_overlay.preview_pulses.clear()
     score_overlay.queue_redraw()
     note_reactions.queue_redraw()
 
