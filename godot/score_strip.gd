@@ -361,7 +361,7 @@ static func _clear_join_rails(image: Image, mapping: Dictionary,
         rail_y.append(float(fraction) * float(mapping.source_size.y) -
             float(mapping.crop.position.y))
     var columns: Array[int] = []
-    var edge: int = mini(9, image.get_width() / 4)
+    var edge: int = mini(9, floori(float(image.get_width()) / 4.0))
     if has_previous and bool(mapping.get("trimmed_header", false)):
         for x in range(edge):
             columns.append(x + int(mapping.get("entry_padding", 0)))
