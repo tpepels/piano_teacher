@@ -132,6 +132,7 @@ var visible_tile_end := 0
 var tile_window_initialized := false
 var tile_geometry_rebuilds := 0
 var tile_window_changes := 0
+var score_tile_upload_bytes := 0
 var current_page := -1
 var requested_page := -1
 var rendered_revision := -1
@@ -1851,6 +1852,8 @@ func _process(_delta: float) -> void:
         if not frame_result.is_empty():
             frame_result["score_tiles"] = score_tiles.size()
             frame_result["visible_score_tiles"] = visible_tile_end - visible_tile_begin
+            frame_result["tile_upload_mib"] = snappedf(
+                float(score_tile_upload_bytes) / (1024.0 * 1024.0), .01)
             frame_result["tile_geometry_rebuilds"] = tile_geometry_rebuilds
             frame_result["tile_window_changes"] = tile_window_changes
             frame_result["phase"] = str(last_state.get("phase", ""))
@@ -2673,6 +2676,9 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     tile_geometry_rebuilds = 0
     tile_window_changes = 0
     strip_tiles = strip["tiles"]
+    score_tile_upload_bytes = 0
+    for item in strip_tiles:
+        score_tile_upload_bytes += int(item.get("upload_bytes", 0))
     var notation_material := Design.notation_material()
     for item in strip_tiles:
         var tile := TextureRect.new()
