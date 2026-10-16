@@ -903,6 +903,42 @@ display latency. They must not be presented as a measured piano latency
 figure. Real Kawai playback and full graded warm-up validation remain
 the subsequent Phase 8 acceptance tasks.
 
+## Phase 8C - Passive graded piano-session capture
+
+This milestone adds a local observer for the **real** connected instrument.
+Unlike the static MIDI diagnostic, it runs alongside an active graded
+Practice/Perform session and does not claim to solve grading itself.
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+./run.sh
+```
+
+Choose a warm-up, connect the Kawai and leave the app ready. In a second
+terminal, before starting the practice run:
+
+```bash
+cd ~/Projects/piano_teacher
+.venv/bin/python scripts/check_grading_session.py \
+    --duration 180 --takes 10 --output /tmp/piano-graded-session.json
+```
+
+Then play normally. The capture records backend-generated graded take
+results, hand stage, clean streak, MIDI attack counts, actual visual-feedback
+status counts and phase changes. Consecutive HTTP polls cannot duplicate a
+note or take. The report contains **no per-note pitches, source IDs or
+individual timestamps**; it is an aggregate of what the canonical engine
+actually observed, capped at 512 unique visual events and 128 phase changes.
+A preview cannot count as a graded take. Choose a larger `--takes` value
+if you want to include mistakes and three clean runs in the same recording.
+Capture stops at the specified maximum duration even if there is no result.
+
+Verify with `.venv/bin/python -m pytest -q
+tests/test_grading_session_capture.py`. On-machine keyboard and screen
+acceptance are still required. Hardware input delay, acoustic output delay
+and actual displayed FPS remain outside the loopback API's capabilities.
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
