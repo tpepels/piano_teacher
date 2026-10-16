@@ -205,8 +205,14 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
             var has_next: bool = mappings.find(mapping) < mappings.size() - 1
             mapping["seam_pixels_removed"] = _clear_join_rails(
                 image, mapping, has_previous, has_next)
+        # Verovio's score raster is monochrome engraving with alpha.
+        # LA8 preserves the ink luminance and antialiased alpha while
+        # requiring two bytes per pixel instead of RGBA8's four.
+        # The original source layouts and glyph positions are unchanged.
+        image = compact_monochrome_tile(image)
         tiles.append({"texture": ImageTexture.create_from_image(image),
-            "rect": Rect2(mapping.position, Vector2(image.get_size()))})
+            "rect": Rect2(mapping.position, Vector2(image.get_size())),
+            "upload_bytes": image.get_data().size()})
     var flat: Dictionary = layout.duplicate(true)
     flat["pages"] = 1
     flat["widths"] = [size.x]
@@ -240,6 +246,15 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
     flat["systems"] = flat_systems
     return {"layout": flat, "tiles": tiles, "size": size,
         "crop_origin": Vector2.ZERO, "crop_size": Vector2.ONE, "mappings": mappings}
+
+
+# Called only once per source tile, after all raster-safe cropping and
+# rail cleanup. Staff notation has no required RGB color channels: existing
+# code shades real notes via a separate shader and canvas overlays.
+static func compact_monochrome_tile(image: Image) -> Image:
+    if image.get_format() != Image.FORMAT_LA8:
+        image.convert(Image.FORMAT_LA8)
+    return image
 
 
 # Return anchors for one original system. The backend order is musical-time
