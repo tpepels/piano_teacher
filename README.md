@@ -841,12 +841,14 @@ replaces the old layout. Scoring is disabled in this mode.
 
 Phase 7.7 is implemented on `main` in four layers:
 
-- **7.7a, continuous score:** generated multi-system strips clear only isolated
-  horizontal raster lines at tile seams. A measured column containing real
-  musical ink (barline, tie, stem, note or other symbol) is preserved; the
-  single underlying staff supplies the unbroken lines. The rail color now
-  matches engraved notation. The long staff is redrawn only on resize or
-  score change, rather than on every camera frame.
+- **7.7a, continuous score:** generated multi-system strips now replace
+  isolated horizontal raster staff rules throughout *each entire tile*,
+  not merely nine pixels at its edges. A column containing any musical ink
+  outside the staff-line bands (barline, tie, stem, note, clef, etc.) is
+  preserved without modification. One continuous staff underlay provides
+  identical line weight through every seam. Genuine printed measure
+  barlines remain musical and are not removed. The rail redraws only after
+  a score or viewport size change, not on every camera frame.
 - **7.7b, note impacts:** actual assessed MIDI note-on events produce bright
   mint notehead outlines, a short bloom and twelve deterministic light
   particles per note. Early/late notes use amber, and unexpected notes
