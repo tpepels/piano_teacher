@@ -57,7 +57,7 @@ static func controls(source_positions: Array, target_positions: Array,
 # rules (repainted by StaffContinuity) or transparency; all other source
 # columns are copied at their original width.
 static func _clean_gap(image: Image, source_a: int, source_b: int,
-        staff_rows: Array) -> int:
+        staff_rows: Array, ink: PackedByteArray) -> int:
     var span: int = source_b - source_a
     if span < 8:
         return -1
@@ -73,7 +73,6 @@ static func _clean_gap(image: Image, source_a: int, source_b: int,
         var center_y: int = int(row)
         for y in range(maxi(0, center_y-3), mini(height, center_y+4)):
             excluded[y] = 1
-    var ink: PackedByteArray = image.get_data()
     var width: int = image.get_width()
     # Search from the interval's centre outwards so note spacing remains
     # visually balanced. Reject a cut intersecting any non-staff glyph.
@@ -107,6 +106,9 @@ static func warp_image(image: Image, points: Array,
         return image # Never compress music or create an oversized GPU tile.
     var out := Image.create(target_width, image.get_height(), false, image.get_format())
     out.fill(Color.TRANSPARENT)
+    # One immutable CPU copy per tile, not a multi-megabyte allocation for
+    # every interval between consecutive noteheads.
+    var source_pixels: PackedByteArray = image.get_data()
     for index in range(points.size() - 1):
         var left: Vector2 = points[index]
         var right: Vector2 = points[index+1]
@@ -119,8 +121,8 @@ static func warp_image(image: Image, points: Array,
         var original_width: int = source_b-source_a
         var target_span: int = dest_b-dest_a
         if target_span >= original_width:
-            var cut: int = _clean_gap(image, source_a, source_b, staff_rows) \
-                if target_span > original_width else -1
+            var cut: int = _clean_gap(image, source_a, source_b, staff_rows,
+                source_pixels) if target_span > original_width else -1
             if cut >= 0:
                 # Exact unscaled Verovio pixels on BOTH sides. The inserted
                 # transparent interval gains continuous lines from the
