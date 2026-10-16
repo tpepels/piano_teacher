@@ -100,18 +100,27 @@ func _draw() -> void:
     if rendered_text.is_empty() or rendered_alpha <= .001 or size.x < 25.0:
         return
     var font: Font = ThemeDB.fallback_font
-    var font_size := 15
+    # Stronger type and clear status ink at laptop viewing distance.
+    # Do not put an enormous notification over moving notes.
+    var font_size := 17
     var ink_width: float = font.get_string_size(rendered_text,
         HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-    var bubble_width: float = minf(size.x - 2.0, ink_width + 31.0)
+    var bubble_width: float = minf(size.x - 2.0, ink_width + 44.0)
     var x: float = maxf(0.0, size.x - bubble_width - 1.0)
-    var slide: float = (1.0 - onset) * 9.0
-    var rect := Rect2(x + slide, 1.0, bubble_width, minf(size.y - 2.0, 32.0))
-    draw_rect(rect, Color("#152B29", .83 * rendered_alpha))
-    draw_rect(Rect2(rect.position, Vector2(2.0, rect.size.y)),
-        Color(rendered_tone, rendered_alpha * .86))
+    var slide: float = (1.0 - onset) * 14.0
+    var rect := Rect2(x + slide, 1.0, bubble_width, minf(size.y - 2.0, 35.0))
+    draw_rect(rect, Color("#112421", .92 * rendered_alpha))
+    draw_rect(Rect2(rect.position, Vector2(3.0, rect.size.y)),
+        Color(rendered_tone, rendered_alpha))
+    draw_line(Vector2(rect.position.x + 11, rect.end.y - 3),
+        Vector2(rect.end.x - 7, rect.end.y - 3),
+        Color(rendered_tone, .22 * rendered_alpha), 1.0, true)
     var baseline: float = rect.position.y + (rect.size.y +
         font.get_ascent(font_size) - font.get_descent(font_size)) * .5
-    draw_string(font, Vector2(rect.position.x + 13.0, baseline),
-        rendered_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 18.0,
-        font_size, Color("#EDF8EF", rendered_alpha))
+    var tx := Vector2(rect.position.x + 19.0, baseline)
+    draw_string(font, tx + Vector2(0.7, 1.0),
+        rendered_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 26.0,
+        font_size, Color("#010807", .66 * rendered_alpha))
+    draw_string(font, tx,
+        rendered_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 26.0,
+        font_size, Color("#F2FCF4", rendered_alpha))
