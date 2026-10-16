@@ -859,7 +859,8 @@ Phase 7.7 is implemented on `main` in four layers:
   note so colors do not collide between backend polls. Animations last
   at most 450 ms and render at most sixteen concurrent hits; there are
   no allocated particle nodes, random timers or grading changes. Listen
-  and keyboard-free preview cannot produce a correct-note burst.
+  and keyboard-free preview cannot produce a correct-note burst; entering
+  those modes also clears any lingering effects from a graded take.
 - **7.7c, ambient stage:** the score has a subtle breathing studio glow and
   fixed playhead illumination while the transport runs. The studio briefly
   brightens on judged piano input. Only physically received MIDI events

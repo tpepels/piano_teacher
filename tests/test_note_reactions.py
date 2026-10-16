@@ -128,6 +128,12 @@ func run() -> void:
         "Listen and no-keyboard preview cannot generate an awarded hit")
     assert(app.note_reactions.wrong_ghosts.size() == 1,
         "Unexpected-note effects still use the original judged event")
+    app._clear_assessed_effects_in_ungraded_mode(
+        {"preview_only":true, "mode":"practice"})
+    assert(app.score_overlay.hit_pulses.is_empty() and
+        app.note_reactions.hit_pulses.is_empty() and
+        app.note_reactions.wrong_ghosts.is_empty(),
+        "An ungraded preview must not inherit an earlier graded note burst")
     # Drawing the same score and reaction transform must parse and render
     # without any separate positioning / type-inference errors.
     app.score_overlay.queue_redraw()

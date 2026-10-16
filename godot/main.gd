@@ -2156,6 +2156,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         game_streak.pulse_unlock()
         call_deferred("_pulse_hand_stage")
     last_state = parsed
+    _clear_assessed_effects_in_ungraded_mode(parsed)
     game_phase_cue.present(parsed)
     # Low-latency local polling only while playing from a connected piano.
     # The backend remains authoritative; Godot never guesses note scoring.
@@ -2549,6 +2550,20 @@ func _update_note_feedback_hud(parsed: Dictionary) -> void:
     # All mapped mistakes appear directly on the engraved notes.
     # The status line below the score already reports feedback_unmapped;
     # do not overlay another (potentially clipped) notification on the music.
+
+
+func _clear_assessed_effects_in_ungraded_mode(state: Dictionary) -> void:
+    # A graded effect may still have animation frames remaining when the
+    # player switches modes. A preview must never inherit a success flash.
+    if not bool(state.get("preview_only", false)) \
+            and str(state.get("mode", "")) != "listen":
+        return
+    if score_overlay.hit_pulses.is_empty() and score_overlay.wrong_ghosts.is_empty():
+        return
+    score_overlay.hit_pulses.clear()
+    score_overlay.wrong_ghosts.clear()
+    score_overlay.queue_redraw()
+    note_reactions.queue_redraw()
 
 
 func _consume_live_piano_hits(state: Dictionary) -> void:
