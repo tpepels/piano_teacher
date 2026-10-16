@@ -57,7 +57,7 @@ func run() -> void:
         "8G camera must initialize cached raster geometry and visibility")
     check(app.deferred_tile_mode == (
         app.source_layout.get("systems", []).size() >=
-        app.ScoreStrip.DEFERRED_MIN_SYSTEMS),
+        load("res://score_strip.gd").DEFERRED_MIN_SYSTEMS),
         "8I enables deferred score textures only for long scores")
     var note: Dictionary = app.score_layout["notes"][0]
     var first_rails: Array = app.score_layout["systems"][0].get("staff_lines", [])
