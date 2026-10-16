@@ -213,8 +213,8 @@ func run() -> void:
         if float(right.beat)-float(left.beat) <= .00001:
             continue
         var midpoint: float = (float(left.beat)+float(right.beat))*.5
-        var projected: Dictionary = app._position_at_beat(midpoint)
-        check(absf(float(projected.get("x", 0.0)) -
+        var join_cursor: Dictionary = app._position_at_beat(midpoint)
+        check(absf(float(join_cursor.get("x", 0.0)) -
             (float(left.x)+float(right.x))*.5) < .00001,
             "Camera cannot stall between systems: midpoint must lie midway between notes")
         checked_system_join = true
