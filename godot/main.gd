@@ -1321,10 +1321,6 @@ func _build_interface() -> void:
         if event is InputEventMouseButton and event.pressed:
             _cancel_open_picker())
     open_picker.add_child(start_scrim)
-    var start_center := CenterContainer.new()
-    start_center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    start_center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    open_picker.add_child(start_center)
     open_panel = PanelContainer.new()
     open_panel.name = "StartingMeasurePanel"
     open_panel.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1340,9 +1336,14 @@ func _build_interface() -> void:
     start_style.shadow_size = 16
     start_style.shadow_offset = Vector2(0, 8)
     open_panel.add_theme_stylebox_override("panel", start_style)
-    start_center.add_child(open_panel)
-    var start_content := _stack(18)
-    _card_body(open_panel, 26).add_child(start_content)
+    open_picker.add_child(open_panel)
+    var start_scroll := ScrollContainer.new()
+    start_scroll.name = "StartContentScroll"
+    start_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    start_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+    _card_body(open_panel, 18).add_child(start_scroll)
+    var start_content := _stack(12)
+    start_scroll.add_child(start_content)
     start_content.add_child(_label("CHOOSE A STARTING POINT", 14, ACCENT, true))
     open_title = _label("", 24, INK, true)
     open_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1796,7 +1797,14 @@ func _resize_open_picker() -> void:
         return
     # Centered from the actual viewport. Never a 240px-wide, 900px-tall
     # native subwindow, including fullscreen and high-density displays.
-    open_panel.custom_minimum_size.x = minf(620.0, maxf(300.0, size.x - 36.0))
+    var width: float = minf(620.0, maxf(280.0, size.x-36.0))
+    # The PanelContainer is positioned directly under the full-screen
+    # overlay, NOT under a CenterContainer that might expand it vertically.
+    # The scroll area handles short laptop windows without hiding Cancel.
+    var height: float = minf(570.0, size.y*.84)
+    open_panel.custom_minimum_size = Vector2(width, 0)
+    open_panel.size = Vector2(width, height)
+    open_panel.position = (size - open_panel.size)*.5
 
 
 func _cancel_open_picker() -> void:
