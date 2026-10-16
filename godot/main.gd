@@ -23,6 +23,7 @@ const GameCountIn := preload("res://game_countin.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameTransportButton := preload("res://game_transport_button.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
+const FrameMeter := preload("res://frame_meter.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -142,6 +143,8 @@ var follow_system_key := ""
 var phase0_smoke_mode := false
 var listen_sync_diagnostics := false
 var last_listen_sync_report_ms := 0
+var frame_diagnostics := false
+var frame_meter = FrameMeter.new()
 var phase0_last_phase := ""
 var phase0_last_cursor_tick := -1
 var phase0_last_lead_tick := -999
@@ -189,6 +192,7 @@ var state_poll_timer: Timer
 func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
+    frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
     ui_scale = _readable_ui_scale()
     _build_interface()
     demo_player = preload("res://demo_player.gd").new()
@@ -1804,6 +1808,14 @@ func _poll() -> void:
             state_pending = false
 
 func _process(_delta: float) -> void:
+    # On-device frame intervals, opt-in only. _delta is never fed back into
+    # the backend tempo or score assessment; tests may call _process(0).
+    if frame_diagnostics and current_screen == "practice":
+        var frame_result: Dictionary = frame_meter.record_frame(_delta)
+        if not frame_result.is_empty():
+            frame_result["score_tiles"] = score_tiles.size()
+            frame_result["phase"] = str(last_state.get("phase", ""))
+            print("PHASE8D_FRAME_INTERVALS:", JSON.stringify(frame_result))
     # Animate short-lived hit pulses between HTTP state samples.
     var ticks: int = Time.get_ticks_msec()
     var effects_were_visible: bool = (not score_overlay.hit_pulses.is_empty()
