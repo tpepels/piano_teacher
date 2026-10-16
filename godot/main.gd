@@ -2419,6 +2419,10 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
         if sequence <= last_seen_midi_visual_sequence:
             continue
         last_seen_midi_visual_sequence = sequence
+        # Even if an old MIDI event survived a mode transition, Listen
+        # and keyboard-free preview must never display a success burst.
+        if bool(state.get("preview_only", false)) or str(state.get("mode", "")) == "listen":
+            continue
         if str(state.get("phase", "")) != "playing" or layout_revision != revision:
             continue
         if int(event.get("transport_id", -1)) != int(state.get("transport_id", -2)):
