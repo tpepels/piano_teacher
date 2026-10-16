@@ -866,6 +866,43 @@ full graded performance through the actual Kawai and corresponding screen
 recording. These require an instrument-side test; callback timestamps cannot
 establish physical or acoustic latency on their own.
 
+## Phase 8B - Listen audio/score synchronization
+
+The visible playhead and actual Listen WAV now use the same interpolated
+backend transport beat at playback start. The previous snapshot-only start
+could be late by one HTTP polling interval. Godot then checks the software
+audio-mix position no more than five times per second; a correction is
+permitted only after **three consecutive errors exceeding 200 ms**, with
+at least 1.8 seconds between corrections and no corrective seeks near the
+start or end. Pausing clears pending drift observations. Listen never writes
+MIDI grades, auto-unlocks hands or changes source note timing.
+
+The optional on-device log is:
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+.venv/bin/python -m pytest -q \
+    tests/test_note_reactions.py tests/test_phase77_game_feel.py \
+    tests/test_listen_sync.py tests/test_demo_player.py
+./scripts/check_godot.sh
+./run.sh -- --listen-sync-diagnostics
+```
+
+During **Listen**, the terminal prints a
+`PHASE8B_LISTEN_SOFTWARE_SYNC` record at most once per second, with
+software-mix drift in seconds, largest observed software drift and the
+number of corrective seeks. For useful acceptance evidence, collect the
+log while listening to a passage, pause and resume twice, then repeat on
+a long score. The frame-capture and actual Kawai audio setup can then
+be compared separately.
+
+**Important:** These values cannot measure physical key-to-MIDI latency,
+operating-system speaker latency, acoustic loudspeaker delay or visual
+display latency. They must not be presented as a measured piano latency
+figure. Real Kawai playback and full graded warm-up validation remain
+the subsequent Phase 8 acceptance tasks.
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
