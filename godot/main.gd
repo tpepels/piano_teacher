@@ -1528,7 +1528,7 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
             var from_beat: float = float(spot.get("start_beat", 0))
             var revisit := _button("Revisit bars %d–%d" % [int(spot.get("first_bar", 1)),int(spot.get("last_bar", 1))],
                 func(): _send_action({"action":"revisit_trouble", "stage_key":stage_key, "start_beat":from_beat}))
-            revisit.configure("review")
+            revisit.call("configure", "review")
             revisit.tooltip_text = "Find these notes again, then return to rhythm practice"
             lesson_rows.add_child(revisit)
     var groups: Dictionary = {}
@@ -1708,7 +1708,7 @@ func _populate_library() -> void:
             var prefix := "[OK] " if status == "ok" else "[REPAIRED] " if status == "warning" else "[ERROR] " if status == "error" else ""
             var button := _button("%s%s     ·     %s     ·     %s" % [prefix, title, format_name, hint],
                 func(): _open_library_piece(identifier))
-            button.configure("library")
+            button.call("configure", "library")
             if status == "error":
                 button.add_theme_color_override("font_color", Color("#FF8B82"))
             elif status == "warning":
@@ -2270,7 +2270,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     for hand in hand_buttons:
         var button: Button = hand_buttons[hand]
         if button is ActionButton:
-            button.set_selected(str(parsed.get("hand", "")) == hand)
+            button.call("set_selected", str(parsed.get("hand", "")) == hand)
         button.disabled = not parsed.get("hands", []).has(hand) or str(parsed.get("hand", "")) == hand
     practice_progress.value = float(parsed.get("progress", 0.0))
     game_stage.present(parsed)
