@@ -49,6 +49,15 @@ func run() -> void:
     await process_frame
     var initial_size: Vector2 = app.score_content.size
     var note: Dictionary = app.score_layout["notes"][0]
+    var first_rails: Array = app.score_layout["systems"][0].get("staff_lines", [])
+    check(app.staff_continuity.staff_lines == first_rails,
+        "The same horizontal staff continues underneath every engraved tile")
+    check(app.staff_continuity.size == app.score_content.size,
+        "Continuous staff shares the real scroll and zoom transform")
+    if first_rails.size() >= 2:
+        var displayed_gap: float = absf(float(first_rails[1]) - float(first_rails[0])) * app.score_content.size.y
+        check(displayed_gap >= 18.0,
+            "Practice staves must be readable, not minimized by blank SVG margins")
     check(app.score_overlay._symbols.size() == 4, "count-in loads the score's actual clefs and rests")
     var original_clefs: Dictionary = app.score_layout.get("staff_clefs", {})
     var changed_clefs := {"right":{"sign":"F","line":4,"octave_change":0},
@@ -112,6 +121,22 @@ func run() -> void:
                     "scale_x": app.score_content.size.x / app.score_overlay.image_size.x})
                 captures += 1
             clock += step
+    # With no physical piano attached, preview keeps an absolutely constant
+    # musical scroll rate through irregular note spacing and printed systems.
+    var constant_scroll: Array[float] = []
+    for sample in [0.0, .25, .5, .75, 1.0, 1.25, 1.5, 1.75]:
+        app.last_state = {"running": true, "paused": true, "preview_only": true,
+            "mode":"practice", "clock_beat": sample, "bpm": 60,
+            "play_from_beat": 0.0, "duration_beats": app.score_layout.beats,
+            "transport_id": 198, "phase": "playing"}
+        app._process(.016)
+        constant_scroll.append(app.score_content.position.x)
+    var reference_step: float = constant_scroll[1] - constant_scroll[0]
+    check(reference_step < -.01, "Preview sheet music must move forward")
+    for i in range(1, constant_scroll.size() - 1):
+        var step: float = constant_scroll[i+1] - constant_scroll[i]
+        check(absf(step - reference_step) < 0.12,
+            "Ungraded preview cannot hesitate at uneven note gaps")
     # The same actual canvas must remain continuous at every system/page join.
     for system in app.score_layout.get("systems", []):
         var boundary: float = float(system.start_beat)

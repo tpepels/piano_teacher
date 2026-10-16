@@ -778,6 +778,20 @@ guided recognition, local audio and SQLite persistence. Godot's `main.gd` owns n
 `score_strip.gd` owns tiled score coordinates and `practice_theme.gd` the shared
 dark theme. The older Qt entrypoint remains available separately.
 
+## Preview notation scale and continuous scrolling (Phase 7.6 follow-up)
+
+The real grand staff now determines practice zoom, rather than the full
+height of an SVG page containing large empty margins. A background staff
+joins all preloaded system tiles at their precise vertical line positions;
+the original engraved noteheads, clefs, accidentals and barlines are
+unchanged. Normal MIDI practice continues to align each source attack
+to the fixed playhead at its authoritative musical time. An **ungraded
+preview with no keyboard** uses a constant visual pixel-per-beat scroll,
+including through barlines and system joins. That preview mode prioritizes
+smooth motion; intermediate engraved attack crossings can differ from
+their real musical timestamps until fully time-proportional engraving
+replaces the old layout. Scoring is disabled in this mode.
+
 ## Phase 8 - Physical piano acceptance (first milestone)
 
 Phase 8 adds an opt-in, bounded local MIDI diagnostic session. It observes

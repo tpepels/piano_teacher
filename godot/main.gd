@@ -9,6 +9,8 @@ const PAPER := Design.FOREST
 const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
 const ScoreStrip := preload("res://score_strip.gd")
+const StaffContinuity := preload("res://staff_continuity.gd")
+const PreviewMotion := preload("res://preview_motion.gd")
 const ScoreOverlay := preload("res://score_overlay.gd")
 const NoteReactions := preload("res://note_reactions.gd")
 const ChallengeFlow := preload("res://challenge_flow.gd")
@@ -98,6 +100,7 @@ var score_overlay: ScoreOverlay
 var note_reactions: Control
 var score_frame: Control
 var score_content: Control
+var staff_continuity: Control
 var score_crop_origin := Vector2.ZERO
 var score_crop_size := Vector2.ONE
 var count_tick_index := -1
@@ -375,20 +378,27 @@ func _layout_moving_score(delta: float = 0.0) -> void:
         width_scale = INF
     var height_scale: float = viewport.y * 0.77 / image.y
     var scale: float = maxf(0.01, minf(width_scale, height_scale))
-    # A two-note warm-up otherwise gets magnified until the score looks
-    # like a blown-up PDF. Limit staff-line spacing, *not* the note timing.
-    # All notes, clefs, stems and overlays continue using the same scale.
     var systems: Array = score_layout.get("systems", [])
+    var rail_center := .5
     if not systems.is_empty():
         var rails: Array = systems[0].get("staff_lines", [])
         if rails.size() >= 2:
             var native_gap: float = absf(float(rails[1]) - float(rails[0])) * image.y
-            if native_gap > .001:
-                var desired_gap: float = clampf(viewport.y * .034, 13.0, 21.0)
-                scale = minf(scale, desired_gap / native_gap)
+            var rail_extent: float = absf(float(rails[-1]) - float(rails[0])) * image.y
+            rail_center = (float(rails[0]) + float(rails[-1])) * .5
+            if native_gap > .001 and rail_extent > .001:
+                # The raster tile height includes large blank SVG margins.
+                # Scale from the actual grand staff, not those margins.
+                # Leave 35% of the stage for ledger lines and phrasing.
+                var desired_gap: float = clampf(viewport.y * .034, 19.0, 27.0)
+                scale = minf(width_scale, minf(desired_gap / native_gap,
+                    viewport.y * .65 / rail_extent))
     var displayed_width: float = image.x * scale
     var displayed_height: float = image.y * scale
     score_content.size = Vector2(displayed_width, displayed_height)
+    staff_continuity.position = Vector2.ZERO
+    staff_continuity.size = score_content.size
+    staff_continuity.queue_redraw()
     for i in range(score_tiles.size()):
         var rect: Rect2 = strip_tiles[i]["rect"]
         score_tiles[i].position = rect.position * scale
@@ -401,9 +411,8 @@ func _layout_moving_score(delta: float = 0.0) -> void:
         var note_x: float = (float(score_overlay.cursor.get("x", 0.0))
             - score_crop_origin.x) / maxf(score_crop_size.x, 0.00001)
         target_x = viewport.x * 0.42 - note_x * displayed_width
-    var target_y: float = (viewport.y - displayed_height) * 0.5
-    # The PNG is ink-cropped; centering it vertically keeps both staves on
-    # screen. Do not re-center using the approximate notehead staff bounds.
+    # Centre the *real staff*, not the large blank area in the SVG raster.
+    var target_y: float = viewport.y * .5 - rail_center * displayed_height
     var target := Vector2(target_x, target_y)
     var key: String = "%d/%d/%d" % [revision, current_page, int(last_state.get("transport_id", 0))]
     # This is a musical projection, not a camera chasing a moving object.
@@ -1062,6 +1071,8 @@ func _build_interface() -> void:
     score_content = Control.new()
     score_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_frame.add_child(score_content)
+    staff_continuity = StaffContinuity.new()
+    score_content.add_child(staff_continuity)
     # The positive MIDI feedback halo is behind the actual engraved ink.
     note_reactions = NoteReactions.new()
     note_reactions.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1917,6 +1928,8 @@ func _layout_guided_score() -> void:
 
 func _beat_width_at(beat: float) -> float:
     var points: Array = score_layout.get("anchors", [])
+    if bool(last_state.get("preview_only", false)) and str(last_state.get("mode", "practice")) in ["practice", "perform"] and score_layout.has("strip_size"):
+        return PreviewMotion.pixels_per_beat(points)
     for index in range(points.size() - 1):
         var left: Dictionary = points[index]
         var right: Dictionary = points[index + 1]
@@ -1939,6 +1952,11 @@ func _position_at_beat(beat: float) -> Dictionary:
             break
     var left: Dictionary = points[at]
     var position: Dictionary = left.duplicate()
+    # The ungraded preview must never hesitate between unevenly spaced
+    # engraving anchors. Real MIDI practice retains exact arrival geometry.
+    if bool(last_state.get("preview_only", false)) and str(last_state.get("mode", "practice")) in ["practice", "perform"] and score_layout.has("strip_size"):
+        position["x"] = PreviewMotion.position(points, beat)
+        return position
     if at + 1 < points.size():
         var right: Dictionary = points[at + 1]
         if int(left.get("page", 0)) == int(right.get("page", 0)) and str(left.get("system", "")) == str(right.get("system", "")):
@@ -2562,6 +2580,11 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         score_content.move_child(tile, score_overlay.get_index())
         score_tiles.append(tile)
     score_layout = strip["layout"]
+    var rail_groups: Array = score_layout.get("systems", [])
+    if not rail_groups.is_empty():
+        staff_continuity.set_rails(rail_groups[0].get("staff_lines", []))
+    else:
+        staff_continuity.set_rails([])
     living_chords = LivingScore.prepare(score_layout)
     score_crop_origin = Vector2.ZERO
     score_crop_size = Vector2.ONE
