@@ -40,7 +40,8 @@ def test_privacy_safe_midi_report_omits_all_raw_notes():
     saved = json.dumps(sanitized)
     assert sanitized["held_note_count"] == 1
     assert "pitch" not in saved
-    assert "velocity" not in saved or "velocity_min" in saved
+    assert '"velocity":' not in saved
+    assert '"velocity_min":' not in saved  # fixture has no aggregate min
     assert "at_s" not in saved
     assert "events" not in sanitized
     assert "held_notes" not in sanitized
@@ -56,6 +57,8 @@ def test_one_pass_automatically_arms_idle_midi_probe_then_captures_grading(tmp_p
             return {"active": True}
         if path == "/diagnostics/hardware" and payload == {"action": "stop"}:
             return midi_report()
+        if path == "/diagnostics/hardware" and payload is None:
+            return midi_report()
         raise AssertionError(path)
 
     session = playtest.Playtest(tmp_path, request=fake_api, clock=lambda: t[0],
@@ -63,7 +66,8 @@ def test_one_pass_automatically_arms_idle_midi_probe_then_captures_grading(tmp_p
     session.observe(snapshot(input_count=4))
     assert session.probe_started_at == 0.
     assert session.capture is not None
-    assert calls == [("/diagnostics/hardware", {"action": "start"})]
+    assert calls[0] == ("/diagnostics/hardware", {"action": "start"})
+    assert calls[1] == ("/diagnostics/hardware", None)
 
     # Polls during the real grading phase never open a MIDI port or send
     # transport actions, and do not restart the diagnostic.
@@ -74,13 +78,35 @@ def test_one_pass_automatically_arms_idle_midi_probe_then_captures_grading(tmp_p
                              take={"clean": True, "correct": 4, "total": 4}))
     t[0] = 5.2
     session.observe(snapshot(phase="ready", input_count=8))
-    assert calls == [("/diagnostics/hardware", {"action": "start"}),
-                     ("/diagnostics/hardware", {"action": "stop"})]
+    assert calls.count(("/diagnostics/hardware", {"action": "start"})) == 1
+    assert calls.count(("/diagnostics/hardware", {"action": "stop"})) == 1
+    assert not any(path in ("/control", "/device") for path, _ in calls)
     assert session.probe_done is True
     assert session.capture.report(6)["clean_takes"] == 1
     assert session.probe_report["held_note_count"] == 1
     assert session.probe_report.get("events") is None
     assert (tmp_path / "midi-summary.json").exists()
+
+
+def test_short_app_session_keeps_last_probe_snapshot_if_backend_closes(tmp_path):
+    calls = []
+    t = [2.]
+
+    def api(path, payload=None):
+        calls.append((path, payload))
+        if path == "/diagnostics/hardware" and payload == {"action": "start"}:
+            return {"active": True}
+        if path == "/diagnostics/hardware" and payload is None:
+            return midi_report()
+        raise RuntimeError("backend already stopped")
+
+    session = playtest.Playtest(tmp_path, request=api, clock=lambda: t[0])
+    session.observe(snapshot())
+    assert session.probe_snapshot is not None
+    session._finish_probe()
+    assert session.probe_done and session.probe_report is not None
+    assert session.probe_report["note_ons"] == 12
+    assert "events" not in (tmp_path / "midi-summary.json").read_text()
 
 
 def test_disconnected_preview_never_starts_midi_or_grading(tmp_path):
