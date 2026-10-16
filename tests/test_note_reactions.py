@@ -134,6 +134,19 @@ func run() -> void:
         app.note_reactions.hit_pulses.is_empty() and
         app.note_reactions.wrong_ghosts.is_empty(),
         "An ungraded preview must not inherit an earlier graded note burst")
+    var grouped := load("res://living_score.gd").groups_crossed(
+        app.living_chords, -.1, .05)
+    assert(grouped.size() == 1 and grouped[0].notes.size() == 2,
+        "One musical onset should include the whole chord exactly once")
+    app._preview_note_arrivals(grouped)
+    assert(app.score_overlay.preview_pulses.size() == 2 and
+        app.note_reactions.preview_pulses.size() == 2,
+        "Keyboard-free playback must show clearly visible ungraded note impacts")
+    assert(app.score_overlay.preview_pulses[0].status == "preview" and
+        app.score_overlay.hit_pulses.is_empty() and
+        app.game_stage.impact_energy == 0.0 and
+        app.game_stage.preview_energy > 0.0,
+        "Preview must illuminate notes without inventing a scored success")
     # Drawing the same score and reaction transform must parse and render
     # without any separate positioning / type-inference errors.
     app.score_overlay.queue_redraw()
