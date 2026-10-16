@@ -78,13 +78,13 @@ def test_in_flight_render_is_protected_from_cache_cleanup(tmp_path):
                            max_cache_bytes=100)
     first = cache.render(source(60), 60)
     with cache._lock:
-        cache._in_flight.add(first.cache_key)
+        cache._in_flight[first.cache_key] = 1
     try:
         next_audio = cache.render(source(62), 60)
         assert first.path.exists() and next_audio.path.exists()
     finally:
         with cache._lock:
-            cache._in_flight.discard(first.cache_key)
+            cache._in_flight.pop(first.cache_key, None)
     final_audio = cache.render(source(64), 60)
     assert final_audio.path.exists()
     assert len(list(tmp_path.glob("*.wav"))) == 1
