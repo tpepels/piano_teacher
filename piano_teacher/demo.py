@@ -162,16 +162,16 @@ class DemoAudioCache:
         self.max_cache_files = max_cache_files
         self._lock = threading.Lock()
         self._latest_key = ""
-        self._in_flight: set[str] = set()
+        self._in_flight: dict[str, int] = {}
 
-    def _prune(self, active_key: str) -> None:
+    def _prune(self) -> None:
         """Evict oldest completed WAVs while preserving in-flight/current.
 
         The latest requested key remains safe when an older render finishes
         out of order. A single oversized current recording is allowed.
         """
         with self._lock:
-            keep = {active_key, self._latest_key, *self._in_flight}
+            keep = {self._latest_key, *self._in_flight}
             entries: list[tuple[int, str, Path, int]] = []
             try:
                 candidates = self.cache_dir.iterdir()
@@ -226,7 +226,7 @@ class DemoAudioCache:
                            soundfont.label if soundfont else "Basic synthesized piano")
         with self._lock:
             self._latest_key = key
-            self._in_flight.add(key)
+            self._in_flight[key] = self._in_flight.get(key, 0) + 1
         try:
             if not path.is_file():
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -254,5 +254,9 @@ class DemoAudioCache:
             return result
         finally:
             with self._lock:
-                self._in_flight.discard(key)
-            self._prune(key)
+                pending = self._in_flight.get(key, 0)
+                if pending <= 1:
+                    self._in_flight.pop(key, None)
+                else:
+                    self._in_flight[key] = pending - 1
+            self._prune()
