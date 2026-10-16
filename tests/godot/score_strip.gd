@@ -150,6 +150,29 @@ func run() -> void:
         "the genuine barline must survive, including intersections")
     check(continuous.get_pixel(2, 12).a < .01,
         "rail extraction must not manufacture other glyphs")
+    # Exact musical events get equal pixel distances, but noteheads are
+    # copied from Verovio at their original widths. The protected note core
+    # must be byte-for-byte preserved after extending spaces between beats.
+    var tempo = load("res://tempo_strip.gd")
+    var sample := Image.create(110, 36, false, Image.FORMAT_RGBA8)
+    sample.fill(Color.TRANSPARENT)
+    for center in [20, 50, 80]:
+        for x in range(center-5,center+6):
+            for y in range(15,22):
+                sample.set_pixel(x,y,Color.BLACK)
+    var positions: Array = [20.0,50.0,80.0]
+    var goals: Array = [20.0,60.0,100.0]
+    var controls: Array = tempo.controls(positions,goals,110,10.0)
+    var stretched: Image = tempo.warp_image(sample,controls)
+    check(stretched.get_width() == 130,
+        "Tempo-based gap stretching must increase scroll width predictably")
+    for index in range(3):
+        var x: int = roundi(tempo.project(float(positions[index]),controls))
+        check(absf(float(x)-float(goals[index])) < 1,
+            "Original attack coordinates map exactly to quarter beats")
+        for dx in range(-4,5):
+            check(stretched.get_pixel(x+dx,18).a > .99,
+                "Engraved noteheads must not become stretched or disappear")
     var strip: Dictionary = helper.build(original, pages)
     # Phase 8I: compare deferred CPU-packed tiles to the same real
     # Verovio engraving built with eager texture upload.
