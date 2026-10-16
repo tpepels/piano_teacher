@@ -987,6 +987,38 @@ git pull --ff-only
 This bounds *long-term disk usage*, not memory needed to decode an
 individual long recording.
 
+## Phase 8F - Long-score draw-call reduction
+
+For a scrolling piece with many systems, Godot now draws only the
+engraved system tiles intersecting the score viewport plus a generous
+offscreen safety margin. All textures and authoritative positions remain
+in memory for instant seek, pause and resume. A hidden system reappears
+immediately as it enters the viewport; the real playhead must always
+have its underlying engraved tile. Measured staff continuity, source
+note identities, clefs, accidental ink and timing are unchanged.
+
+The atmospheric lighting layer is capped at 30 redraws/second during
+ordinary playback; actual MIDI hits still produce immediate impact
+frames. The opt-in `--frame-diagnostics` log now reports both total and
+*visible* system tiles, so it is possible to verify culling on an
+actual long piece. This reduces drawing work, **not** the RAM/VRAM
+held by preloaded image textures.
+
+Regression checks:
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+.venv/bin/python -m pytest -q tests/test_score_strip.py \
+    tests/test_phase77_game_feel.py tests/test_frame_meter.py
+./scripts/check_godot.sh
+./run.sh -- --frame-diagnostics
+```
+
+Test normal practice and a seek across multiple printed systems. FPS
+must be measured on the actual laptop; the presence of tile culling
+is not evidence of a particular achieved frame rate.
+
 ## Remaining limitations
 
 Physical speaker audibility/latency and a real USB piano session still need
