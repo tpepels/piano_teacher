@@ -88,7 +88,7 @@ func run() -> void:
     check(compact_ink.get_pixel(2, 0).r > .98,
         "opaque page white remains white for the notation shader")
     var gpu_texture := ImageTexture.create_from_image(compact_ink)
-    check(gpu_texture != null and gpu_texture.get_size() == Vector2i(16, 12),
+    check(gpu_texture != null and gpu_texture.get_size() == Vector2(16, 12),
         "Godot can create a real graphics texture from compact notation")
     var no_pages: Array[Image] = []
     check(not str(helper.build({}, no_pages).get("error", "")).is_empty(),
