@@ -138,7 +138,7 @@ func _draw() -> void:
     if not _has_symbol() or size.x < 45 or size.y < 32:
         return
     var accent: Color = _accent()
-    var alpha := .32 if disabled else 1.0
+    var alpha := 1.0 if action_role == "choice" and is_selected else .32 if disabled else 1.0
     accent.a *= alpha
     var center := Vector2(23.0, size.y*.5)
     var radius := 14.0 if action_role in ["primary", "choice"] else 12.5
