@@ -104,6 +104,10 @@ static func warp_image(image: Image, points: Array,
         return image
     if target_width < image.get_width() or target_width > 16384:
         return image # Never compress music or create an oversized GPU tile.
+    # PNG page decoders may return RGB8 or RGBA8. The gap classifier indexes
+    # exactly four channels, so normalize format before examining source ink.
+    if image.get_format() != Image.FORMAT_RGBA8:
+        image.convert(Image.FORMAT_RGBA8)
     var out := Image.create(target_width, image.get_height(), false, image.get_format())
     out.fill(Color.TRANSPARENT)
     # One immutable CPU copy per tile, not a multi-megabyte allocation for
