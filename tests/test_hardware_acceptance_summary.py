@@ -135,7 +135,6 @@ def test_missing_or_untrusted_sources_do_not_generate_false_certification(tmp_pa
     raw = tmp_path / "oversized.json"
     raw.write_bytes(b"x" * 32)
     assert acceptance.main(["--midi", str(raw)]) == 1
-    assert acceptance._read_json(raw) if False else True
     # A documented input-size guard prevents accidentally reading huge logs.
     original_limit = acceptance.MAX_JSON_BYTES
     try:
