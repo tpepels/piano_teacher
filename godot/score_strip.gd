@@ -196,6 +196,15 @@ static func build(layout: Dictionary, pages: Array[Image]) -> Dictionary:
                             expanded.set_pixel(x, y, Color(0, 0, 0,
                                 .80 if offset == 0 else .14))
             image = expanded
+        # Remove only the loose horizontal rules at the *raster seam*.
+        # The single StaffContinuity canvas supplies those pixels instead.
+        # A column containing a barline, tie, stem or any non-staff ink is
+        # never erased. Actual measure barlines remain fully engraved.
+        if bool(layout.get("strip_trim_repeated_headers", false)):
+            var has_previous: bool = mappings.find(mapping) > 0
+            var has_next: bool = mappings.find(mapping) < mappings.size() - 1
+            mapping["seam_pixels_removed"] = _clear_join_rails(
+                image, mapping, has_previous, has_next)
         tiles.append({"texture": ImageTexture.create_from_image(image),
             "rect": Rect2(mapping.position, Vector2(image.get_size()))})
     var flat: Dictionary = layout.duplicate(true)
@@ -336,6 +345,44 @@ static func _longest_staff_only_run(image: Image, x0: int, x1: int,
                 best = Vector2i(current, x)
             current = -1
     return best
+
+
+# Erase orphaned *horizontal* staff-rule fragments where adjacent
+# engraved image tiles meet. The rails behind all the tiles are already
+# continuous, so their positions are preserved. Guard each individual column:
+# never cut a real barline or a notation glyph that happens to cross the edge.
+static func _clear_join_rails(image: Image, mapping: Dictionary,
+        has_previous: bool, has_next: bool) -> int:
+    var measured: Array = mapping.system.get("staff_lines", [])
+    if measured.is_empty() or image.get_width() <= 4:
+        return 0
+    var rail_y: Array = []
+    for fraction in measured:
+        rail_y.append(float(fraction) * float(mapping.source_size.y) -
+            float(mapping.crop.position.y))
+    var columns: Array[int] = []
+    var edge: int = mini(9, image.get_width() / 4)
+    if has_previous and bool(mapping.get("trimmed_header", false)):
+        for x in range(edge):
+            columns.append(x + int(mapping.get("entry_padding", 0)))
+    if has_next:
+        for x in range(image.get_width() - edge, image.get_width()):
+            columns.append(x)
+    var removed := 0
+    for x in columns:
+        if x < 0 or x >= image.get_width():
+            continue
+        # The source-height normalization here is deliberately 1: rail_y
+        # already describes local *pixel* coordinates of this stitched tile.
+        if not _staff_only_gap(image, x, x + 1, 0, image.get_height(), rail_y, 1.0):
+            continue
+        for rail in rail_y:
+            var center := roundi(float(rail))
+            for y in range(maxi(0, center - 3), mini(image.get_height(), center + 4)):
+                if image.get_pixel(x, y).a > .01:
+                    image.set_pixel(x, y, Color.TRANSPARENT)
+                    removed += 1
+    return removed
 
 
 static func _mapped_px(normalized: float, mapping: Dictionary) -> float:
