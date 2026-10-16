@@ -11,7 +11,9 @@ func record_frame(delta: float) -> Dictionary:
         return {}
     elapsed += delta
     samples.append(delta * 1000.0)
-    if elapsed < 1.0:
+    # Avoid 60 identical 1/60-second frames summing infinitesimally
+    # below 1.0 because of floating-point representation.
+    if elapsed < 1.0 - .000001:
         return {}
     var ordered: Array[float] = samples.duplicate()
     ordered.sort()
