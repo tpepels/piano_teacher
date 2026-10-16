@@ -103,6 +103,10 @@ class PracticeEngine:
         self.feedback_unmapped = 0
         self.midi_port = None
         self.midi_device = ""
+        # Phase 8K: bounded reconnect of the explicitly saved MIDI preference.
+        # Never infer another device or resume an interrupted take.
+        self._midi_next_scan_at = 0.0
+        self._midi_retry_after = 0.0
         self.midi_input_count = 0
         self.midi_input_note = None
         self.midi_input_at = None
@@ -130,39 +134,73 @@ class PracticeEngine:
         self.db.commit()
         self.learner_store = LearnerStateStore(self.db)
 
+    MIDI_SCAN_SECONDS = 3.0
+    MIDI_RETRY_SECONDS = 4.0
+
+    def _midi_lost(self, reason: str = "device_disconnected") -> None:
+        """Cancel every active/pending take before allowing reconnection."""
+        old_name, old_port = self.midi_device, self.midi_port
+        self.midi_device = ""
+        self.midi_port = None
+        self.live_input.clear_device()
+        self.hardware_probe.stop(reason)
+        self._stop()
+        if self.teaching is not None:
+            self.teaching.set_connected(False, now=time.monotonic())
+        if old_port is not None:
+            try:
+                old_port.close()
+            except Exception:
+                pass  # ALSA may have already released an unplugged port.
+        self._midi_retry_after = time.monotonic() + self.MIDI_RETRY_SECONDS
+        self.feedback = f"MIDI piano disconnected: {old_name}. Reconnect it, then press Start."
+        self.next_action = "Reconnect your piano, then press Start."
+
     def ports(self) -> list[str]:
+        """Discover input names and cautiously restore the chosen device.
+
+        Only the explicitly stored preferred device may reconnect. Discovery
+        failure never destroys a known healthy connection. Neither successful
+        reconnection nor startup with a remembered piano starts gameplay.
+        """
         if not self.enable_midi:
             return []
         with self.lock:
-            discovery_error = None
-            names = []
             try:
                 import mido
-                names = mido.get_input_names()
+                names = list(mido.get_input_names())
             except Exception as exc:
-                discovery_error = exc
-            if self.midi_device and (self.midi_port is None or getattr(self.midi_port, "closed", False)
-                                     or (discovery_error is None and self.midi_device not in names)):
-                name, port = self.midi_device, self.midi_port
-                self.midi_device = ""
-                self.midi_port = None
-                self.live_input.clear_device()
-                self.hardware_probe.stop("device_disconnected")
-                self._stop()
-                if self.teaching is not None:
-                    self.teaching.set_connected(False, now=time.monotonic())
-                if port is not None:
-                    try:
-                        port.close()
-                    except Exception:
-                        pass  # An unplugged backend may already have released it.
-                # Keep the saved preferred name so discovery can reconnect it
-                # when it returns. An interrupted attempt cannot earn mastery.
-                self.feedback = f"MIDI piano disconnected: {name}. Reconnect it, then press Start."
-                self.next_action = "Reconnect your piano, then press Start."
-            if discovery_error is not None:
-                self.feedback = f"Cannot list MIDI input devices: {discovery_error}. Check your MIDI backend and connection."
-                raise RuntimeError(self.feedback) from discovery_error
+                if self.midi_device and (self.midi_port is None
+                        or getattr(self.midi_port, "closed", False)):
+                    self._midi_lost()
+                self.feedback = (
+                    f"Cannot list MIDI input devices: {exc}. "
+                    "Check your MIDI backend and connection.")
+                raise RuntimeError(self.feedback) from exc
+            if self.midi_device and (self.midi_port is None
+                    or getattr(self.midi_port, "closed", False)
+                    or self.midi_device not in names):
+                self._midi_lost()
+            preferred = self.library.settings.get("midi_device", "")
+            now = time.monotonic()
+            if (preferred and not self._piano_connected()
+                    and preferred in names and now >= self._midi_retry_after):
+                try:
+                    port = mido.open_input(preferred, callback=self._receive)
+                except Exception as exc:
+                    self._midi_retry_after = now + self.MIDI_RETRY_SECONDS
+                    self.feedback = (
+                        f"Cannot reconnect MIDI piano {preferred}: {exc}. "
+                        "Check the USB connection or select a device in Settings.")
+                    self.next_action = "Reconnect your piano, then press Start."
+                else:
+                    self.midi_port = port
+                    self.midi_device = preferred
+                    if self.teaching is not None:
+                        self.teaching.set_connected(True, now=now)
+                    self.feedback = (
+                        f"MIDI piano reconnected: {preferred}. Press Start when ready.")
+                    self.next_action = "Press Start when you are ready."
             return names
 
     def connect(self, name: str):
@@ -178,6 +216,8 @@ class PracticeEngine:
                     port.close()
                 except Exception:
                     pass  # Failure closing a lost device must not retain it.
+            self._midi_retry_after = 0.0
+            self._midi_next_scan_at = time.monotonic() + self.MIDI_SCAN_SECONDS
             if not isinstance(name, str):
                 raise ValueError("MIDI input name must be text")
             if name:
@@ -1239,12 +1279,21 @@ class PracticeEngine:
             self._save()
 
     def _update(self):
+        # State polling is frequent, so enumerate ALSA inputs only once per
+        # interval. This works even if the USB device vanishes without the
+        # driver marking the existing port object as closed.
         if self.midi_port is not None and getattr(self.midi_port, "closed", False):
-            self.midi_port = None
-            self.midi_device = ""
-            self._stop()
-            self.feedback = "MIDI piano disconnected. Reconnect it before starting again."
-            self.next_action = "Reconnect your piano, then press Start."
+            self._midi_lost()
+        now = time.monotonic()
+        if (self.enable_midi and now >= self._midi_next_scan_at and (
+                self.midi_device or self.library.settings.get("midi_device"))):
+            self._midi_next_scan_at = now + self.MIDI_SCAN_SECONDS
+            try:
+                self.ports()
+            except RuntimeError:
+                # Preserve readable feedback; a temporary ALSA discovery
+                # error must not turn the entire /state endpoint into a 400.
+                pass
         if not self.plan:
             return
         now=time.monotonic()
