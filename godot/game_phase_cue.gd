@@ -107,22 +107,22 @@ func _draw() -> void:
     var font: Font = get_theme_font("font")
     # Stronger type and clear status ink at laptop viewing distance.
     # Do not put an enormous notification over moving notes.
-    var font_size := 17
+    var font_size := clampi(roundi(size.y * .48), 22, 27)
     var ink_width: float = font.get_string_size(rendered_text,
         HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-    var bubble_width: float = minf(size.x - 2.0, ink_width + 44.0)
+    var bubble_width: float = minf(size.x - 2.0, ink_width + 66.0)
     var x: float = maxf(0.0, size.x - bubble_width - 1.0)
     var rise: float = 1.0 - pow(1.0 - onset, 3.0)
     var slide: float = (1.0 - rise) * 22.0
-    var rect := Rect2(x + slide, 1.0, bubble_width, minf(size.y - 2.0, 35.0))
+    var rect := Rect2(x + slide, 1.0, bubble_width, minf(size.y - 2.0, 50.0))
     # Rounded status capsule rather than a square web notification.
-    var r: float = minf(rect.size.y * .5, 16.0)
+    var r: float = minf(rect.size.y * .5, 19.0)
     var body := Color("#254F3F", .94 * rendered_alpha)
     draw_rect(Rect2(rect.position.x + r, rect.position.y,
         maxf(0.0, rect.size.x - 2.0 * r), rect.size.y), body)
     draw_circle(Vector2(rect.position.x + r, rect.position.y + r), r, body)
     draw_circle(Vector2(rect.end.x - r, rect.position.y + r), r, body)
-    draw_circle(Vector2(rect.position.x + 12.0,
+    draw_circle(Vector2(rect.position.x + 18.0,
         rect.position.y + rect.size.y * .5), 3.5,
         Color(rendered_tone, rendered_alpha))
     # A short entry highlight makes the phase cue feel placed rather
@@ -137,10 +137,10 @@ func _draw() -> void:
         Color(rendered_tone, .22 * rendered_alpha), 1.0, true)
     var baseline: float = rect.position.y + (rect.size.y +
         font.get_ascent(font_size) - font.get_descent(font_size)) * .5
-    var tx := Vector2(rect.position.x + 24.0, baseline)
+    var tx := Vector2(rect.position.x + 37.0, baseline)
     draw_string(font, tx + Vector2(0.7, 1.0),
-        rendered_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 26.0,
+        rendered_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0,
         font_size, Color("#010807", .66 * rendered_alpha))
     draw_string(font, tx,
-        rendered_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 26.0,
+        rendered_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 42.0,
         font_size, Color(Design.FOCUS, rendered_alpha))
