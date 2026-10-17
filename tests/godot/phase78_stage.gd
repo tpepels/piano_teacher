@@ -28,6 +28,9 @@ func run() -> void:
     if Stage == null or CountIn == null:
         quit(1)
         return
+    check(Design.STAGE.get_luminance() < .22 and
+        Design.SCORE_INK.get_luminance() > .70,
+        "Dark stage must have contrasting luminous notation ink")
     var stage = Stage.new()
     root.add_child(stage)
     stage.size = Vector2(1200, 650)
@@ -100,10 +103,13 @@ func run() -> void:
         "Countdown stays inside the music rather than creating a website row")
     app._update_visual_frame_rate({"running":false, "paused":false})
     check(Engine.max_fps == 30, "Idle Godot presentation must run at lower CPU cost")
+    check(OS.low_processor_usage_mode, "Idle stage must render on demand")
     app._update_visual_frame_rate({"running":true, "paused":false})
     check(Engine.max_fps == 60, "Moving sheet music retains the full 60 FPS budget")
+    check(not OS.low_processor_usage_mode, "Moving score requires continuous frames")
     app._update_visual_frame_rate({"running":true, "paused":true})
     check(Engine.max_fps == 30, "Pausing reduces visual CPU usage")
+    check(OS.low_processor_usage_mode, "Paused score returns to low CPU mode")
     app.last_state = {"loaded":true, "running":true, "paused":false,
         "phase":"count_in", "mode":"practice", "preview_only":true,
         "clock_beat":-1.5, "bpm":60.0, "count_in_bar_beats":3,
