@@ -185,14 +185,14 @@ func _draw() -> void:
     var base_radius: float = minf(w, h) * .15
     var beat_attack: float = pow(1.0 - beat_fraction, 4.0) if transport_active else 0.0
     var pulse_tone: Color = Color("#5D8AA6") if score_preview else Design.SCORE_ACCENT
-    var ambient: float = (.035 + .014 * sin(breath) + beat_attack * .045
-        if transport_active else .008)
+    var ambient: float = (.15 + .045 * sin(breath) + beat_attack * .12
+        if transport_active else .085)
     # Three diffuse rings give a softer cinematic glow with far less
     # translucent overdraw than twelve stacked screen-scale discs.
     for i in range(3, 0, -1):
         var spread: float = float(i) / 3.0
         draw_circle(center, base_radius * (1.0 + spread * 1.3),
-            Color(pulse_tone, ambient * (1.0 - spread) * .27))
+            Color(pulse_tone, ambient * (1.0 - spread) * .48))
     if transport_active:
         var x: float = center.x
         draw_line(Vector2(x, h * .17), Vector2(x, h * .83),
