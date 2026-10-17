@@ -4,8 +4,10 @@ An offline Linux piano teacher built with Godot 4 and Python. Import your own
 MIDI or MusicXML, learn simplified passages, restore the original notes, then
 connect the passages into a complete performance. All progress stays local.
 
-The interface follows `moodboard.png`: forest background, charcoal workspaces,
-stone notation and a restrained teal timing line.
+The interface follows `moodboard.png`: a forest-green application shell,
+an ivory high-contrast score surface, a crisp teal timing line, and a five-part
+segmented progress rail. The MIDI clock, grade and CPU budget remain separate
+from these presentation effects.
 
 ## Install and launch
 

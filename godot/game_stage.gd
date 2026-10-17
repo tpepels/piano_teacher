@@ -31,7 +31,7 @@ var impact_age := 0.0
 var last_result_key := ""
 var result_wave := 0.0
 var result_age := 0.0
-var result_tone := AURA
+var result_tone := Design.SCORE_ACCENT
 const AMBIENT_REDRAW_SECONDS := 1.0 / 20.0
 var ambient_redraw_elapsed := 0.0
 
@@ -59,7 +59,7 @@ func present(state: Dictionary) -> void:
             str(state.get("hand", "")), str(result.get("clean", false))]
         if result_key != last_result_key:
             last_result_key = result_key
-            result_tone = AURA if bool(result.get("clean", false)) else ERROR
+            result_tone = Design.SCORE_ACCENT if bool(result.get("clean", false)) else Color("#BC5A50")
             result_age = 0.0
             result_wave = 1.0
             queue_redraw()

@@ -28,8 +28,11 @@ func _verify() -> void:
     check(modal.bg_color == Design.PANEL_RAISED and
         modal.corner_radius_top_left >= card.corner_radius_top_left,
         "Modal rises above cards through the same elevation system")
-    check(stage.bg_color == Design.STAGE,
-        "Score stage has the canonical quiet background")
+    check(stage.bg_color == Design.STAGE and
+        Design.STAGE.get_luminance() > .8 and
+        Design.SCORE_INK.get_luminance() < .25 and
+        Design.FOREST.get_luminance() < .1,
+        "Moodboard score has ivory paper, dark vector ink and forest shell")
     check(theme.get_stylebox("normal", "LineEdit") is StyleBoxFlat and
         theme.get_stylebox("focus", "LineEdit") is StyleBoxFlat and
         theme.get_color("caret_color", "LineEdit") == Design.MINT,

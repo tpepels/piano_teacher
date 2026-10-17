@@ -101,7 +101,7 @@ func run() -> void:
         "A scored note must override its pending gold outline")
     assert(app.score_overlay.hit_pulses[1].note_id == "nc")
     assert(app.note_reactions.material is CanvasItemMaterial and
-        app.note_reactions.material.blend_mode == CanvasItemMaterial.BLEND_MODE_ADD,
+        app.note_reactions.material.blend_mode == CanvasItemMaterial.BLEND_MODE_MIX,
         "Glow should accumulate luminous light rather than opaque circles")
     assert(app.score_overlay.wrong_ghosts.size() == 1)
     assert(app.score_overlay.wrong_ghosts[0].y == .47,

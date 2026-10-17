@@ -111,15 +111,22 @@ func _draw() -> void:
     var x: float = maxf(0.0, size.x - bubble_width - 1.0)
     var slide: float = (1.0 - onset) * 14.0
     var rect := Rect2(x + slide, 1.0, bubble_width, minf(size.y - 2.0, 35.0))
-    draw_rect(rect, Color(Design.PANEL_RECESSED, .92 * rendered_alpha))
-    draw_rect(Rect2(rect.position, Vector2(3.0, rect.size.y)),
+    # Rounded status capsule rather than a square web notification.
+    var r: float = minf(rect.size.y * .5, 16.0)
+    var body := Color("#254F3F", .94 * rendered_alpha)
+    draw_rect(Rect2(rect.position.x + r, rect.position.y,
+        maxf(0.0, rect.size.x - 2.0 * r), rect.size.y), body)
+    draw_circle(Vector2(rect.position.x + r, rect.position.y + r), r, body)
+    draw_circle(Vector2(rect.end.x - r, rect.position.y + r), r, body)
+    draw_circle(Vector2(rect.position.x + 12.0,
+        rect.position.y + rect.size.y * .5), 3.5,
         Color(rendered_tone, rendered_alpha))
     draw_line(Vector2(rect.position.x + 11, rect.end.y - 3),
         Vector2(rect.end.x - 7, rect.end.y - 3),
         Color(rendered_tone, .22 * rendered_alpha), 1.0, true)
     var baseline: float = rect.position.y + (rect.size.y +
         font.get_ascent(font_size) - font.get_descent(font_size)) * .5
-    var tx := Vector2(rect.position.x + 19.0, baseline)
+    var tx := Vector2(rect.position.x + 24.0, baseline)
     draw_string(font, tx + Vector2(0.7, 1.0),
         rendered_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 26.0,
         font_size, Color("#010807", .66 * rendered_alpha))
