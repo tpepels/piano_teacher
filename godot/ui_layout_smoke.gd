@@ -281,9 +281,12 @@ func _run() -> void:
         "Library import failures must appear above the score rows, not below a full screen")
     var found_long_title := false
     for control in library_items.get_children():
-        if control is Button and "Bill Evans" in str((control as Button).text):
+        if control is Button and "Bill Evans" in str(control.get_meta("library_title", "")):
             found_long_title = true
-            _check((control as Button).clip_text, "Long library titles must use ellipsis")
+            var title_ink: Label = control.find_child("MusicTitle", true, false) as Label
+            _check(title_ink != null and title_ink.clip_text and
+                title_ink.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS,
+                "Long music titles must clip independently of their metadata")
             _check((control as Button).tooltip_text.contains("Portrait in Jazz"),
                 "Long library title tooltip lost its complete name")
     _check(found_long_title, "Synthetic long title missing from library")
@@ -302,7 +305,7 @@ func _run() -> void:
     _check(not health_button.disabled, "Recheck should be available after scan completes")
     var flagged := false
     for control in library_items.get_children():
-        if control is Button and "[REPAIRED]" in control.text:
+        if control is Button and str(control.get_meta("library_status", "")) == "warning":
             flagged = "unmatched release" in control.tooltip_text
     _check(flagged, "The repaired MIDI row must explain its specific import warning")
     diagnostics["running"] = true
