@@ -115,6 +115,17 @@ func _run() -> void:
             "Music row separates title and descriptive metadata")
         _check(item.tooltip_text.contains("Imported music"),
             "Clipped row keeps full source details in its tooltip")
+        # During a long file check, changing progress counts should update
+        # the message only. Recreating the focused music row on each poll
+        # causes visible flicker and unexpected keyboard focus loss.
+        scene.set("library_health_info", {"started":true, "running":true,
+            "checked":1, "total":10, "items":{}})
+        scene.call("_on_library_health", 0, 200, PackedStringArray(),
+            JSON.stringify({"started":true, "running":true,
+                "checked":2, "total":10, "ok":2, "warning":0,
+                "error":0, "items":{}}).to_utf8_buffer())
+        _check(item.get_parent() == rows,
+            "Checking another music file must not replace existing library rows")
     scene.call("_navigate", "practice")
     var cue: Control = scene.get("game_phase_cue")
     _check(cue != null and cue.get_parent() == score,
