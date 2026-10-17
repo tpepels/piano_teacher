@@ -832,8 +832,11 @@ func _resize_overlay_drawer() -> void:
     if overlay_drawer == null:
         return
     var viewport: Vector2 = size
-    var drawer_width: float = viewport.x if viewport.x <= 700 else minf(
-        1000.0, maxf(500.0, viewport.x * 0.72))
+    # Keep the music visible beside a legible panel. The old layout wanted
+    # 72% of the viewport, while its actual contents often collapsed to a
+    # narrow form. Use a predictable instrument-side panel width.
+    var drawer_width: float = viewport.x if viewport.x <= 700.0 else minf(
+        700.0, maxf(520.0, viewport.x * .43))
     # Right-anchored offsets must be relative to the RIGHT edge. Setting
     # both global position and size after PRESET_TOP_RIGHT can shrink the
     # panel to its minimum width on resize (real 1536×960 screenshot).
@@ -932,7 +935,7 @@ func _build_interface() -> void:
     library_search.placeholder_text = "Search title, composer or folder"
     library_search.clear_button_enabled = true
     library_search.tooltip_text = "Ctrl+F or / to focus search · Esc closes the library"
-    library_search.custom_minimum_size = Vector2(0, 48)
+    library_search.custom_minimum_size = Vector2(0, 58)
     library_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     # Avoid destroying and recreating every music-row button on every key.
     # The visible search text changes immediately; results settle after the
@@ -947,8 +950,8 @@ func _build_interface() -> void:
             library_scroll.scroll_vertical = 0
         library_filter_timer.start())
     library_controls.add_child(library_search)
-    library_controls.add_child(_label(
-        "Ctrl+F or / to search  ·  Enter opens music  ·  Esc closes", 12, MUTED))
+    # Shortcuts remain active and discoverable in the search tooltip.
+    # A permanent tiny instruction line made the library feel like a form.
     var library_utilities := HBoxContainer.new()
     library_utilities.add_theme_constant_override("separation", 10)
     library_controls.add_child(library_utilities)
@@ -1249,9 +1252,9 @@ func _build_interface() -> void:
     game_phase_cue = GamePhaseCue.new()
     game_phase_cue.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
     game_phase_cue.offset_left = 178.0
-    game_phase_cue.offset_right = -12.0
-    game_phase_cue.offset_top = 9.0
-    game_phase_cue.offset_bottom = 46.0
+    game_phase_cue.offset_right = -18.0
+    game_phase_cue.offset_top = 18.0
+    game_phase_cue.offset_bottom = 76.0
     score_frame.add_child(game_phase_cue)
     # Short earned-judgment coaching, placed below the notes on the right.
     # No preview note may create one of these success/correction labels.
@@ -1851,7 +1854,8 @@ func _populate_library() -> void:
             row.pressed.connect(func(): _open_library_piece(identifier))
             library_rows.add_child(row)
             row.set_entry(title.replace("_", " "), detail, status)
-            row.custom_minimum_size.y = 72.0 * ui_scale
+            row.set_text_scale(ui_scale)
+            row.custom_minimum_size.y = 86.0 * ui_scale
             if entry.has("description"):
                 row.tooltip_text += "\n" + str(entry["description"])
             if not diagnosis.is_empty():
@@ -2203,7 +2207,10 @@ func _process(_delta: float) -> void:
     score_overlay.lead_first = {}
     score_overlay.lead_width_px = 0.0
     score_overlay.lead_staff_lines = []
-    if int(initial_cursor.get("page", -1)) == current_page:
+    # Count-in graphics belong only to the negative-beat pre-roll.
+    # Leaving them enabled throughout playback doubles the opening clefs,
+    # meter and rests, especially after pausing or switching to Listen.
+    if active and clock < 0.0 and int(initial_cursor.get("page", -1)) == current_page:
         var lead_beats: float = maxf(0.5, float(last_state.get("count_in_beats", 3)))
         var beat_width: float = _beat_width_at(play_from)
         score_overlay.lead_first = initial_cursor
@@ -2214,8 +2221,7 @@ func _process(_delta: float) -> void:
                 score_overlay.lead_staff_lines = system.get("staff_lines", [])
                 break
         score_overlay.lead_width_px = lead_beats * beat_width / score_crop_size.x * score_content.size.x
-        if clock < 0.0:
-            cursor["x"] = float(initial_cursor.get("x", 0.0)) + clock * beat_width
+        cursor["x"] = float(initial_cursor.get("x", 0.0)) + clock * beat_width
     score_overlay.cursor = cursor
     score_overlay.showing = true
     score_overlay.transport_active = active
