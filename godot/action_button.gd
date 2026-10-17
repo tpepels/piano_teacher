@@ -51,12 +51,12 @@ func _has_symbol() -> bool:
 func _skin() -> void:
     var accent: Color = _accent()
     var background: Color = _background()
-    var flat := action_role in ["navigation", "utility"]
+    var flat := action_role in ["navigation", "utility", "library"]
     var important := action_role == "primary" or (action_role == "choice" and is_selected)
     var rounded := Design.RADIUS_CARD + 1 if important else (
         Design.RADIUS_INPUT + 2 if not flat else Design.RADIUS_INPUT)
     var normal := StyleBoxFlat.new()
-    normal.bg_color = background
+    normal.bg_color = Color(background, .62) if action_role == "library" else background
     normal.set_corner_radius_all(rounded)
     normal.set_border_width_all(2 if important else 1)
     normal.border_color = Color(accent, .94 if important else .55 if not flat else .20)
