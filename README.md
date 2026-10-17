@@ -846,6 +846,16 @@ their own Play, Retry and Listen iconography. Hover, pressed, disabled and
 keyboard focus are styled for every role, and standard buttons continue to
 use their original callback and accessibility text.
 
+## Music selection and start-point usability
+
+The music drawer shows two-line, fully clickable rows with clear titles
+above subdued format, tempo and location information. Full metadata remains
+in tooltips. Search has a clear control and **Ctrl+F** or **/** shortcut.
+Starting a MIDI file offers Beginning, Middle and End jumps alongside
+the exact measure spinner and slider. Enter confirms the panel once,
+Escape returns to the music drawer, and an open mode menu retains Enter.
+There is no new continuously running animation.
+
 ## Phase 7.8 - CPU and camera stability
 
 For high-refresh-rate Linux laptops, the display is capped at 60 visual

@@ -87,9 +87,34 @@ func _run() -> void:
         "MIDI filename separators must render as normal punctuation")
     _check((scene.get("open_measure") as SpinBox).max_value == 77,
         "Starting-point measure range must reflect the opened music")
+    var jumps: HBoxContainer = modal.find_child("SourceMeasureQuickJumps", true, false) as HBoxContainer
+    _check(jumps != null and jumps.get_child_count() == 3,
+        "Measure picker needs visible Beginning, Middle and End shortcuts")
+    if jumps != null and jumps.get_child_count() == 3:
+        (jumps.get_child(2) as Button).pressed.emit()
+        _check(int((scene.get("open_measure") as SpinBox).value) == 77,
+            "End shortcut selects the last source measure")
+        (jumps.get_child(0) as Button).pressed.emit()
+        _check(int((scene.get("open_measure") as SpinBox).value) == 1,
+            "Beginning shortcut returns to measure one")
     scene.call("_cancel_open_picker")
     _check(not preview_picker.visible and str(scene.get("current_screen")) == "library",
         "Cancel restores music selection instead of opening a lesson")
+    scene.set("library_info", {"pieces":[{"id":"fixture.mid",
+        "title":"A Very Long Piano Piece With a Complicated Name",
+        "format":"MIDI", "folder":"Imported music"}], "warmups":[]})
+    scene.call("_populate_library")
+    var rows: VBoxContainer = scene.get("library_rows")
+    var music_rows: Array = rows.find_children("*", "Button", true, false)
+    _check(music_rows.size() == 1,
+        "One score requires exactly one focusable full-width library action")
+    if music_rows.size() == 1:
+        var item: Button = music_rows[0]
+        _check(item.get_node_or_null("MusicRowContent") != null and
+            str(item.get_meta("library_title", "")).begins_with("A Very Long"),
+            "Music row separates title and descriptive metadata")
+        _check(item.tooltip_text.contains("Imported music"),
+            "Clipped row keeps full source details in its tooltip")
     scene.call("_navigate", "practice")
     var cue: Control = scene.get("game_phase_cue")
     _check(cue != null and cue.get_parent() == score,

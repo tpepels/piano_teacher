@@ -23,6 +23,7 @@ const GameCountIn := preload("res://game_countin.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameTransportButton := preload("res://game_transport_button.gd")
 const ActionButton := preload("res://action_button.gd")
+const LibraryRow := preload("res://library_row.gd")
 const GameInputIndicator := preload("res://game_input_indicator.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const FrameMeter := preload("res://frame_meter.gd")
@@ -66,6 +67,7 @@ var pending_library_piece := ""
 var home_recent_label: Label
 var home_resume_button: Button
 var library_search: LineEdit
+var library_scroll: ScrollContainer
 var library_path_label: Label
 var library_rows: VBoxContainer
 var library_message: Label
@@ -753,6 +755,8 @@ func _navigate(screen: String) -> void:
             or str(key) == "practice" and screen != "practice")
     if screen == "library":
         _request_library()
+        if library_search != null:
+            library_search.call_deferred("grab_focus")
     elif screen == "settings":
         tempo_setting.set_value_no_signal(float(last_state.get("target_bpm", 40)))
         _request_settings()
@@ -896,11 +900,18 @@ func _build_interface() -> void:
     library_controls.add_theme_constant_override("separation", 9)
     library_layout.add_child(library_controls)
     library_search = LineEdit.new()
-    library_search.placeholder_text = "Search your music"
+    library_search.placeholder_text = "Search title, composer or folder"
+    library_search.clear_button_enabled = true
+    library_search.tooltip_text = "Ctrl+F or / to focus search · Esc closes the library"
     library_search.custom_minimum_size = Vector2(0, 48)
     library_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    library_search.text_changed.connect(func(_text: String): _populate_library())
+    library_search.text_changed.connect(func(_text: String):
+        if library_scroll != null:
+            library_scroll.scroll_vertical = 0
+        _populate_library())
     library_controls.add_child(library_search)
+    library_controls.add_child(_label(
+        "Ctrl+F or / to search  ·  Enter opens music  ·  Esc closes", 12, MUTED))
     var library_utilities := HBoxContainer.new()
     library_utilities.add_theme_constant_override("separation", 10)
     library_controls.add_child(library_utilities)
@@ -920,6 +931,7 @@ func _build_interface() -> void:
     library_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     library_layout.add_child(library_panel)
     var scroll := ScrollContainer.new()
+    library_scroll = scroll
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     _card_body(library_panel, 22).add_child(scroll)
@@ -1386,6 +1398,21 @@ func _build_interface() -> void:
         open_measure_slider.set_value_no_signal(value))
     open_measure_slider.value_changed.connect(func(value: float):
         open_measure.set_value_no_signal(value))
+    var source_jumps := HBoxContainer.new()
+    source_jumps.name = "SourceMeasureQuickJumps"
+    source_jumps.add_theme_constant_override("separation", 10)
+    start_content.add_child(source_jumps)
+    for kind in ["Beginning", "Middle", "End"]:
+        var choice: String = kind
+        var jump := _button(kind, func():
+            var target := 1 if choice == "Beginning" else (
+                int(ceil(open_measure.max_value / 2.0)) if choice == "Middle"
+                else int(open_measure.max_value))
+            open_measure.value = target, false, "utility")
+        jump.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        jump.custom_minimum_size = Vector2(0, 40)
+        jump.add_theme_font_size_override("font_size", _ui_font(13))
+        source_jumps.add_child(jump)
     start_content.add_child(_label("BEGIN WITH", 14, ACCENT, true))
     open_mode = OptionButton.new()
     open_mode.add_item("Learn notes (without timing)")
@@ -1771,27 +1798,23 @@ func _populate_library() -> void:
                 location if not location.is_empty() else "Music folder")
             var diagnosis: Dictionary = library_health_info.get("items", {}).get(identifier, {})
             var status: String = str(diagnosis.get("status", ""))
-            var prefix := "[OK] " if status == "ok" else "[REPAIRED] " if status == "warning" else "[ERROR] " if status == "error" else ""
-            var button := _button("%s%s     ·     %s     ·     %s" % [prefix, title, format_name, hint],
-                func(): _open_library_piece(identifier))
-            button.call("configure", "library")
+            var detail: String = format_name + "  ·  " + hint
             if status == "error":
-                button.add_theme_color_override("font_color", Color("#FF8B82"))
+                detail = "Needs attention  ·  " + detail
             elif status == "warning":
-                button.add_theme_color_override("font_color", Color("#F1C67D"))
-            button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-            button.custom_minimum_size = Vector2(0, 58 * ui_scale)
-            button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-            button.clip_text = true
-            button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-            button.tooltip_text = title + " · " + format_name + " · " + hint + (
-                "\n" + str(entry["description"]) if entry.has("description") else "")
+                detail = "Repaired  ·  " + detail
+            var row := LibraryRow.new()
+            row.pressed.connect(func(): _open_library_piece(identifier))
+            library_rows.add_child(row)
+            row.set_entry(title.replace("_", " "), detail, status)
+            row.custom_minimum_size.y = 72.0 * ui_scale
+            if entry.has("description"):
+                row.tooltip_text += "\n" + str(entry["description"])
             if not diagnosis.is_empty():
-                button.tooltip_text += "\nImport check: " + str(diagnosis.get("message", ""))
+                row.tooltip_text += "\nImport check: " + str(diagnosis.get("message", ""))
                 if status != "error":
-                    button.tooltip_text += " · %d notes · %d measures" % [
+                    row.tooltip_text += " · %d notes · %d measures" % [
                         int(diagnosis.get("notes", 0)), int(diagnosis.get("measures", 0))]
-            library_rows.add_child(button)
             visible += 1
     var issue: String = str(library_info.get("error", ""))
     if not library_error.is_empty():
@@ -1802,7 +1825,7 @@ func _populate_library() -> void:
     elif pieces.is_empty() and warmups.is_empty():
         library_message.text = "No scores yet. Add .mid, .midi or MusicXML files to this folder."
     elif visible == 0:
-        library_message.text = "No matching scores."
+        library_message.text = "No matches for “%s”. Try another title or clear the search." % library_search.text.strip_edges()
     else:
         library_message.text = "%d personal files  ·  %d built-in warm-ups  ·  %d shown" % [pieces.size(), warmups.size(), visible]
     if library_error.is_empty():
@@ -1829,6 +1852,8 @@ func _cancel_open_picker() -> void:
 
 
 func _confirm_open_picker() -> void:
+    if action_pending or not open_picker.visible:
+        return
     open_picker.visible = false
     _navigate("practice")
     _send_action({"action":"open_at", "bar":int(open_measure.value),
@@ -3167,10 +3192,21 @@ func _input(event: InputEvent) -> void:
             get_viewport().set_input_as_handled()
             return
         if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
+            if open_mode.get_popup().visible:
+                return
             _confirm_open_picker()
             get_viewport().set_input_as_handled()
             return
     if not event is InputEventKey:
+        return
+    # Search without hunting for a small field in the Music drawer.
+    # Once focused, / remains normal text input.
+    if event.pressed and not event.echo and current_screen == "library" \
+            and ((event.ctrl_pressed and event.keycode == KEY_F) or
+            (event.keycode == KEY_SLASH and get_viewport().gui_get_focus_owner() != library_search)):
+        library_search.grab_focus()
+        library_search.select_all()
+        get_viewport().set_input_as_handled()
         return
     if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,KEY_TAB]:
         return
