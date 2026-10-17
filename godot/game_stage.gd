@@ -11,6 +11,8 @@ const AMBER := Design.AMBER
 var phase := "ready"
 var progress := 0.0
 var shown_progress := 0.0
+var progress_spark := 0.0
+var last_progress_session := ""
 var accent := AURA
 var transport_active := false
 var breath := 0.0
@@ -61,8 +63,19 @@ func present(state: Dictionary) -> void:
             result_age = 0.0
             result_wave = 1.0
             queue_redraw()
+    var session_key: String = "%s|%s|%s" % [
+        str(state.get("revision", -1)), str(state.get("transport_id", -1)),
+        str(state.get("hand", ""))]
+    if session_key != last_progress_session:
+        last_progress_session = session_key
+        shown_progress = next_progress
+        progress_spark = 0.0
+    elif next_progress > progress + .04 and next_progress >= shown_progress:
+        # This is the backend's actual progress, never a simulated reward.
+        progress_spark = 1.0
     if next_progress < progress - .08:
         shown_progress = next_progress
+        progress_spark = 0.0
     if phase != next_phase or absf(next_progress-progress) > .003 \
             or accent != next_accent or transport_active != next_active:
         phase = next_phase
@@ -110,7 +123,10 @@ func react(status: String) -> void:
 func _process(delta: float) -> void:
     var redraw := false
     if absf(shown_progress - progress) > .0005:
-        shown_progress = move_toward(shown_progress, progress, delta * .75)
+        shown_progress = move_toward(shown_progress, progress, delta * .9)
+        redraw = true
+    if progress_spark > .001:
+        progress_spark = maxf(0.0, progress_spark - delta * 2.8)
         redraw = true
     if preview_energy > .001:
         preview_energy = maxf(0.0, preview_energy - delta * 1.15)
@@ -151,26 +167,26 @@ func _draw() -> void:
     var center := Vector2(w * .42, h * .51)
     var base_radius: float = minf(w, h) * .15
     var beat_attack: float = pow(1.0 - beat_fraction, 4.0) if transport_active else 0.0
-    var pulse_tone: Color = Color("#91AFAB") if score_preview else AURA
-    var ambient: float = (.028 + .010 * sin(breath) + beat_attack * .018
+    var pulse_tone: Color = Color("#5D8AA6") if score_preview else Design.SCORE_ACCENT
+    var ambient: float = (.035 + .014 * sin(breath) + beat_attack * .045
         if transport_active else .008)
     # Three diffuse rings give a softer cinematic glow with far less
     # translucent overdraw than twelve stacked screen-scale discs.
     for i in range(3, 0, -1):
         var spread: float = float(i) / 3.0
         draw_circle(center, base_radius * (1.0 + spread * 1.3),
-            Color(pulse_tone, ambient * (1.0 - spread) * .22))
+            Color(pulse_tone, ambient * (1.0 - spread) * .27))
     if transport_active:
         var x: float = center.x
         draw_line(Vector2(x, h * .17), Vector2(x, h * .83),
-            Color(pulse_tone, .025 + .050 * beat_attack), 30.0, true)
+            Color(pulse_tone, .035 + .085 * beat_attack), 28.0, true)
         draw_line(Vector2(x, h * .26), Vector2(x, h * .74),
-            Color(pulse_tone, .055 + .12 * beat_attack), 6.0, true)
+            Color(pulse_tone, .09 + .16 * beat_attack), 7.0, true)
         # A restrained metrical pulse below the score: no busy grid across
         # the notation and no duplicate click track.
         var gap: float = minf(17.0, maxf(7.0, w * .019))
         var group_left: float = center.x - float(beats_per_bar - 1) * gap * .5
-        var pulse_y: float = h - 19.0
+        var pulse_y: float = h - 43.0
         for i in range(beats_per_bar):
             var selected: bool = i == beat_in_bar
             var p: Vector2 = Vector2(group_left + i * gap, pulse_y)
@@ -178,12 +194,15 @@ func _draw() -> void:
                 draw_circle(p, 7.0 + beat_attack * 3.0,
                     Color(pulse_tone, .07 + beat_attack * .16))
             draw_circle(p, 2.4 + (1.4 * beat_attack if selected else 0.0),
-                Color(pulse_tone if selected else Color("#66877F"),
-                    (.60 + beat_attack * .36) if selected else .36))
+                Color(pulse_tone if selected else Color("#A4B7A9"),
+                    (.64 + beat_attack * .36) if selected else .58))
     # Physical MIDI affects the green/coral scored energy. A preview note
     # creates blue energy through an independent, explicitly ungraded path.
     var drawn_energy: float = maxf(impact_energy, preview_energy)
-    var drawn_tone: Color = impact_tone if impact_energy > preview_energy else Color("#9DC8FF")
+    var drawn_tone: Color = (Design.SCORE_ACCENT if impact_energy > preview_energy
+        and impact_tone == AURA else Color("#C05A51") if impact_energy > preview_energy
+        and impact_tone == ERROR else Color("#A98240") if impact_energy > preview_energy
+        else Color("#477CA6"))
     if drawn_energy > .001:
         var expansion: float = 1.0 + impact_age * .58
         for i in range(3, 0, -1):
@@ -221,10 +240,48 @@ func _draw() -> void:
                 Color(result_tone, energy * (.28 - .07 * arc)), 1.6, true)
             draw_arc(center, radius, PI * 1.11, PI * 1.89, 48,
                 Color(result_tone, energy * (.28 - .07 * arc)), 1.6, true)
-    draw_line(Vector2(1, 1), Vector2(w - 1, 1), Color("#759D94", .13), 1.0)
-    draw_rect(Rect2(1, h - 4, maxf(0, w - 2), 2), Color("#789B90", .18))
-    if shown_progress > 0:
-        var tip_x: float = 1.0 + (w - 2.0) * shown_progress
-        draw_rect(Rect2(1, h - 4, maxf(0, tip_x - 1), 2), Color(accent, .92))
-        draw_circle(Vector2(tip_x, h - 3), 5.0, Color(accent, .13))
-        draw_circle(Vector2(tip_x, h - 3), 2.3, Color(accent, .95))
+    # Moodboard: five separated progress measures below the score, not a
+    # thin anonymous browser-style loading bar. The backend is authoritative.
+    draw_line(Vector2(1, 1), Vector2(w-1, 1), Color("#ADC3B4", .36), 1.0)
+    var slots := 5
+    var inset: float = clampf(w * .045, 15.0, 58.0)
+    var spacing: float = 7.0
+    var rail_width: float = maxf(1.0, w - inset * 2.0)
+    var segment: float = maxf(1.0, (rail_width - spacing * float(slots-1)) / float(slots))
+    var track_y: float = h - 20.0
+    for i in range(slots):
+        var left: float = inset + float(i) * (segment + spacing)
+        var amount: float = clampf(shown_progress * float(slots) - float(i), 0.0, 1.0)
+        draw_rect(Rect2(left, track_y, segment, 7.0),
+            Color("#DDE7DF"), true)
+        if amount > .0001:
+            draw_rect(Rect2(left, track_y, segment * amount, 7.0),
+                Color(Design.SCORE_PROGRESS, .89 + progress_spark * .1), true)
+    if progress_spark > .001 and shown_progress > .001:
+        var spot: float = inset + rail_width * shown_progress
+        draw_circle(Vector2(spot, track_y + 3.5),
+            13.0 * progress_spark, Color(Design.SCORE_ACCENT, .12 * progress_spark))
+        draw_circle(Vector2(spot, track_y + 3.5), 3.5,
+            Color(Design.SCORE_ACCENT, .86 * progress_spark))
+    # A crisp, small green "play here" flag follows the *existing* fixed
+    # timing rule. It has no independent musical clock or grading state.
+    if transport_active:
+        var flag_width := 90.0
+        var flag_height := 25.0
+        var x: float = clampf(center.x - flag_width * .5, 5.0,
+            maxf(5.0, w - flag_width - 5.0))
+        var top_y: float = maxf(6.0, h * .09)
+        var flag := Rect2(x, top_y, flag_width, flag_height)
+        draw_rect(flag, Color("#295B49"))
+        draw_colored_polygon(PackedVector2Array([
+            Vector2(center.x - 5.0, flag.end.y),
+            Vector2(center.x + 5.0, flag.end.y),
+            Vector2(center.x, flag.end.y + 6.0)]), Color("#295B49"))
+        var font: Font = ThemeDB.fallback_font
+        var text: String = "FOLLOW" if score_preview else "PLAY HERE"
+        var font_size := 13
+        var ink_width: float = font.get_string_size(text,
+            HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+        draw_string(font, Vector2(center.x - ink_width * .5,
+            flag.position.y + 17.0), text, HORIZONTAL_ALIGNMENT_LEFT,
+            -1, font_size, Color("#F6FBF6"))

@@ -80,7 +80,7 @@ func _draw_meter(center_x: float, staff_top: float, staff_gap: float) -> void:
         var text_width: float = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
         var center_y: float = staff_top + staff_gap * float(1 + index * 2)
         draw_string(font, Vector2(center_x - text_width * .5, center_y + baseline_offset),
-            text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Design.STONE)
+            text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Design.SCORE_INK)
 
 
 func _draw_preparation() -> void:
@@ -98,7 +98,7 @@ func _draw_preparation() -> void:
     # No opaque starting rectangle. The old mask covered the actual score
     # as it scrolled underneath and looked like a dark square that lagged
     # behind the timing line. All preparation ink is transparent.
-    var ink := Color(Design.SLATE, .52)
+    var ink := Color(Design.SCORE_MUTED, .64)
     for sy in lines:
         draw_line(Vector2(margin_left, sy), Vector2(first_x, sy), ink, 1.1, true)
     if lines.size() < 10:
@@ -127,7 +127,7 @@ func _draw_preparation_clef(hand: String, x: float, lines: Array[float], first_l
     var octaves: int = int(clef.get("octave_change", 0))
     if octaves != 0:
         var y: float = lines[first_line] - gap * 1.1 if octaves > 0 else lines[first_line + 4] + gap * 2.1
-        draw_string(ThemeDB.fallback_font, Vector2(x + gap * .35, y), "8" if absi(octaves) == 1 else "15", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(gap * 1.4)), Design.STONE)
+        draw_string(ThemeDB.fallback_font, Vector2(x + gap * .35, y), "8" if absi(octaves) == 1 else "15", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(gap * 1.4)), Design.SCORE_INK)
 
 
 func _draw() -> void:
@@ -170,7 +170,7 @@ func _draw() -> void:
         # Two outline passes surround the exact Verovio notehead rather
         # than painting over its accidentals or filling in its pitch.
         var extent: Vector2 = radii * (1.55 + .12 * breathe)
-        var anticipation := Color("#F6D5A0")
+        var anticipation := Color("#B57C28")
         draw_polyline(Ink.ellipse(focus, extent.x * 1.16, extent.y * 1.16),
             Color(anticipation, .13 + .09 * breathe + .05 * strength), 5.0, true)
         draw_polyline(Ink.ellipse(focus, extent.x, extent.y),
@@ -184,9 +184,9 @@ func _draw() -> void:
         # not a permanent checkmark drawn over the engraved score.
         if status in ["correct", "on_time"]:
             continue
-        var tone: Color = Color("#F0807A") if status in ["wrong", "missed", "extra"] else (
-            Color("#E7B776") if status in ["early", "late", "short", "long", "assisted"] else
-            Color("#91E9CA"))
+        var tone: Color = Color("#C65450") if status in ["wrong", "missed", "extra"] else (
+            Color("#B4832B") if status in ["early", "late", "short", "long", "assisted"] else
+            Color("#218765"))
         var focus: Vector2 = _sheet_xy(float(marker.get("x", 0.0)), float(marker.get("y", 0.0)))
         var extent: Vector2 = radii * (1.17 if status in ["wrong", "missed", "extra"] else 1.12)
         draw_polyline(Ink.ellipse(focus, extent.x, extent.y),
@@ -206,7 +206,7 @@ func _draw() -> void:
         var center: Vector2 = _sheet_xy(float(event.get("x", 0.0)), float(event.get("y", 0.0)))
         var extent: Vector2 = radii * 1.19
         draw_polyline(Ink.ellipse(center, extent.x, extent.y),
-            Color("#F0807A", remaining * .92), 1.8, true)
+            Color("#C65450", remaining * .92), 1.8, true)
 
     # Bold, outside-the-ink notehead flash. The lower layer carries the
     # sixteen-particle burst; this bright rim stays readable above even
@@ -223,9 +223,9 @@ func _draw() -> void:
         var attack: float = 1.0 - clampf(progress * 3.8, 0.0, 1.0)
         var focus: Vector2 = _sheet_xy(float(hit.get("x", 0.0)),
             float(hit.get("y", 0.0)))
-        var tone: Color = (Color("#9DC8FF") if str(hit.get("status", "")) == "preview"
-            else Color("#A0FFDA") if str(hit.get("status", "")) == "on_time"
-            else Color("#FFD49A"))
+        var tone: Color = (Color("#477BA9") if str(hit.get("status", "")) == "preview"
+            else Color("#168864") if str(hit.get("status", "")) == "on_time"
+            else Color("#B7832F"))
         var extent: Vector2 = radii * (1.55 + progress * 1.65)
         draw_polyline(Ink.ellipse(focus, extent.x * 1.27,
             extent.y * 1.27), Color(tone, (.12 + .24 * attack) * remaining),
@@ -271,13 +271,15 @@ func _draw() -> void:
         # A stable vertical strike line and two compact edge pointers make
         # the note arrival legible without painting a glow over the pitches.
         # The note itself only reacts to the physical MIDI attack.
-        var cyan := Design.TEAL if transport_active else Design.SAGE
+        var cyan := Design.SCORE_ACCENT if transport_active else Design.SCORE_MUTED
         # The timing line reacts at the *musical onset*, not the notehead.
         # Actual notehead illumination remains MIDI-triggered only.
         var onset: float = clampf(float(onset_until_ms - Time.get_ticks_msec()) / 180.0, 0.0, 1.0)
-        draw_line(start, end, Color(cyan, .15 + onset * .17),
-            5.0 + onset * 4.0, true)
-        draw_line(start, end, Color(cyan, .93), 1.7 + onset * .55, true)
+        draw_line(start, end, Color(cyan, .11 + onset * .14),
+            15.0 + onset * 5.0, true)
+        draw_line(start, end, Color(cyan, .20 + onset * .13),
+            5.0 + onset * 3.0, true)
+        draw_line(start, end, Color(cyan, .96), 2.4 + onset * .45, true)
         var marker := 7.0
         draw_colored_polygon(PackedVector2Array([
             start + Vector2(-marker, -marker * .6),

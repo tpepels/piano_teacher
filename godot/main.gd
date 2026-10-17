@@ -1212,7 +1212,7 @@ func _build_interface() -> void:
     status_content.custom_minimum_size = Vector2(280, 85)
     status_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     score_status_panel.add_child(status_content)
-    score_status_label = _label("Choose a piece from your library", 18, MUTED)
+    score_status_label = _label("Choose a piece from your library", 18, Design.SCORE_INK)
     score_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     score_status_label.clip_text = true
     status_content.add_child(score_status_label)

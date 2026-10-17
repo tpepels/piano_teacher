@@ -4,10 +4,10 @@ extends Control
 # is painted behind Verovio's own notation so a particle cannot erase pitch,
 # fingering, note duration, or an accidental. No child nodes or random timers.
 const Ink := preload("res://notehead_ink.gd")
-const HIT := Color("#A0FFDA")
-const TIMING := Color("#FFD49A")
-const ERROR := Color("#FF8582")
-const PREVIEW := Color("#9DC8FF")
+const HIT := Color("#24916D")
+const TIMING := Color("#BA8738")
+const ERROR := Color("#C9534F")
+const PREVIEW := Color("#467BA7")
 const MAX_VISIBLE_HITS := 16
 const PARTICLE_COUNT := 16
 const HIT_DURATION_MS := 450
@@ -28,7 +28,9 @@ func _init() -> void:
     # Light accumulates naturally when three notes of a chord are struck;
     # unlike opaque sprites, the actual white engraved ink stays untouched.
     var bloom_material := CanvasItemMaterial.new()
-    bloom_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+    # The moodboard's ivory score needs pigment rather than additive light:
+    # ADD makes mint-white particles disappear on a pale background.
+    bloom_material.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX
     material = bloom_material
 
 func _sheet_position(item: Dictionary) -> Vector2:

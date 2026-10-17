@@ -38,27 +38,27 @@ func _draw() -> void:
     var x: float = 21.0
     # The restrained halo makes the beat readable without covering
     # noteheads or implying that the learner earned a correct hit.
-    draw_circle(Vector2(x, y), 18.0, Color("#6BD8B8", .045 + .075 * pulse))
+    draw_circle(Vector2(x, y), 18.0, Color("#58B58F", .10 + .12 * pulse))
     draw_arc(Vector2(x, y), 17.0, -.5 * PI,
         -.5 * PI + TAU * beat_fraction, 36,
-        Color("#8FEBD0", .70), 2.0, true)
+        Color("#25866C", .78), 2.0, true)
     var numeral_width: float = font.get_string_size(
         numeral, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
     var baseline: float = y + (
         font.get_ascent(font_size) - font.get_descent(font_size)) * .5
     draw_string(font, Vector2(x - numeral_width * .5, baseline),
         numeral, HORIZONTAL_ALIGNMENT_LEFT, -1,
-        font_size, Color("#E9FFF2"))
+        font_size, Color("#284A3B"))
     var space: float = maxf(6.0, (size.x - 64.0) / float(maxi(1, count)))
     var gap: float = minf(19.0, space)
     for i in range(count):
         var p: Vector2 = Vector2(56.0 + gap * i, y)
-        draw_circle(p, 5.3, Color("#385C56", .86))
+        draw_circle(p, 5.3, Color("#D4E0D8", .96))
         draw_arc(p, 5.5, 0, TAU, 24,
-            Color("#72A798", .72), 1.0, true)
+            Color("#769486", .74), 1.0, true)
         if i == current:
             draw_circle(p, 7.0 + 3.0 * beat_fraction,
-                Color("#82ECC7", .08 + .23 * pulse))
-            draw_circle(p, 3.9 + 1.1 * pulse, Color("#AEFADF"))
+                Color("#48A87F", .12 + .24 * pulse))
+            draw_circle(p, 3.9 + 1.1 * pulse, Color("#236A50"))
         elif i < current:
-            draw_circle(p, 2.8, Color("#79BBA4"))
+            draw_circle(p, 2.8, Color("#4C9175"))
