@@ -65,6 +65,7 @@ func _verify() -> void:
     # Only backend-provided, graded progress may light the milestone.
     var scored := initial.duplicate()
     scored["preview_only"] = false
+    scored["loaded"] = true
     scored["mode"] = "practice"
     scored["transport_id"] = 23
     scored["progress"] = 0.0
