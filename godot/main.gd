@@ -224,6 +224,8 @@ var last_seen_midi_visual_sequence := 0
 var state_poll_timer: Timer
 # No repeated camera work for an unchanged, paused transport snapshot.
 var last_paused_score_key := ""
+# Only project the stopped score when its intended ready position changes.
+var last_ready_score_key := ""
 
 func _ready() -> void:
     # On 120/144 Hz laptops Godot otherwise renders the entire translucent
@@ -2185,10 +2187,20 @@ func _process(_delta: float) -> void:
         if score_overlay.showing:
             score_overlay.showing = false
             score_overlay.queue_redraw()
-            if str(last_state.get("phase", "ready")) not in ["feedback", "recovering", "loading", "paused"]:
+        # Feedback/pause deliberately retain the last played camera position.
+        # Ready and disconnected should return to the beginning exactly once,
+        # even if the overlay was already hidden on an earlier frame.
+        var stopped_phase: String = str(last_state.get("phase", "ready"))
+        if stopped_phase in ["ready", "disconnected"] and layout_revision == revision:
+            var ready_key: String = "%s|%s|%s|%s" % [
+                str(revision), str(current_page),
+                str(last_state.get("play_from_beat", 0.0)),
+                str(last_state.get("transport_id", -1))]
+            if ready_key != last_ready_score_key:
+                last_ready_score_key = ready_key
                 _layout_moving_score(_delta)
-        # Stopped score geometry is static; resizing and score load already
-        # call _layout_moving_score. Avoid a full layout pass every idle frame.
+        else:
+            last_ready_score_key = ""
         return
     # Count-in uses negative beats on the same spacing as the opening notes.
     # position advances at BPM regardless of the user's MIDI performance.
@@ -2234,21 +2246,22 @@ func _process(_delta: float) -> void:
     score_overlay.lead_first = {}
     score_overlay.lead_width_px = 0.0
     score_overlay.lead_staff_lines = []
-    # Count-in graphics belong only to the negative-beat pre-roll.
-    # Leaving them enabled throughout playback doubles the opening clefs,
-    # meter and rests, especially after pausing or switching to Listen.
-    if active and clock < 0.0 and int(initial_cursor.get("page", -1)) == current_page:
-        var lead_beats: float = maxf(0.5, float(last_state.get("count_in_beats", 3)))
+    # Negative beat projection must remain time-proportional across zero
+    # even for paused/seeked transport snapshots. Count-in decorations are
+    # a separate visibility decision: never leave extra clefs on the score.
+    if clock < 0.0 and int(initial_cursor.get("page", -1)) == current_page:
         var beat_width: float = _beat_width_at(play_from)
-        score_overlay.lead_first = initial_cursor
-        score_overlay.lead_beats = lead_beats
-        score_overlay.lead_meter = last_state.get("count_in_meter", [4, 4])
-        for system in score_layout.get("systems", []):
-            if int(system.get("page", -1)) == current_page and str(system.get("system", "")) == str(initial_cursor.get("system", "")):
-                score_overlay.lead_staff_lines = system.get("staff_lines", [])
-                break
-        score_overlay.lead_width_px = lead_beats * beat_width / score_crop_size.x * score_content.size.x
         cursor["x"] = float(initial_cursor.get("x", 0.0)) + clock * beat_width
+        if active:
+            var lead_beats: float = maxf(0.5, float(last_state.get("count_in_beats", 3)))
+            score_overlay.lead_first = initial_cursor
+            score_overlay.lead_beats = lead_beats
+            score_overlay.lead_meter = last_state.get("count_in_meter", [4, 4])
+            for system in score_layout.get("systems", []):
+                if int(system.get("page", -1)) == current_page and str(system.get("system", "")) == str(initial_cursor.get("system", "")):
+                    score_overlay.lead_staff_lines = system.get("staff_lines", [])
+                    break
+            score_overlay.lead_width_px = lead_beats * beat_width / score_crop_size.x * score_content.size.x
     score_overlay.cursor = cursor
     score_overlay.showing = true
     score_overlay.transport_active = active
