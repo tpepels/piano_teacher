@@ -93,6 +93,28 @@ func test_quick_music_selection_survives_pending_pause() -> void:
         "Successful queue draining must not reopen a song twice")
 
 
+func test_start_picker_keyboard_is_modal() -> void:
+    show_state("ready")
+    app._show_open_picker({"title":"Test_-_MIDI", "piece_last_bar":77,
+        "selected_start_bar":1})
+    var pending_field: LineEdit = app.open_measure.get_line_edit()
+    pending_field.grab_focus()
+    pending_field.text = "63"
+    var space := InputEventKey.new()
+    space.keycode = KEY_SPACE
+    space.pressed = true
+    app._input(space)
+    app._unhandled_key_input(space)
+    check(app.wire_commands.is_empty(),
+        "Modal Space cannot start the underlying playback transport")
+    check(app.open_picker.visible,
+        "Using a modal keyboard shortcut must keep the source picker open")
+    app._confirm_open_picker()
+    check(app.wire_commands == [{"action":"open_at", "bar":63, "mode":"learn"}],
+        "Typed source measure commits before confirming the modal: "
+        + str(app.wire_commands))
+
+
 func test_response_before_poll() -> void:
     show_state("ready")
     app._send_action({"action": "start"})
@@ -149,6 +171,7 @@ func run() -> void:
         "response_before_poll": test_response_before_poll()
         "stop_overrides_pause": test_stop_overrides_pending_pause()
         "quick_music_click": await test_quick_music_selection_survives_pending_pause()
+        "picker_modal": test_start_picker_keyboard_is_modal()
         "failure_flushes_intent": test_failed_request_flushes_intent()
         _: check(false, "Unknown scenario: " + scenario)
     print("PENDING_NAVIGATION_FAILURES:", failures.size())

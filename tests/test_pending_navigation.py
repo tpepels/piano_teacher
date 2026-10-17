@@ -14,7 +14,7 @@ GODOT = shutil.which("godot") or shutil.which("godot4")
 @pytest.mark.parametrize("scenario", [
     "start_settings", "start_lesson", "resume_settings", "resume_lesson",
     "start_library", "start_home", "response_before_poll", "stop_overrides_pause",
-    "failure_flushes_intent", "quick_music_click",
+    "failure_flushes_intent", "quick_music_click", "picker_modal",
 ])
 def test_navigation_survives_pending_control(scenario, tmp_path):
     env = os.environ.copy()
