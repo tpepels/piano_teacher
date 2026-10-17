@@ -4,10 +4,10 @@ extends Control
 # is painted behind Verovio's own notation so a particle cannot erase pitch,
 # fingering, note duration, or an accidental. No child nodes or random timers.
 const Ink := preload("res://notehead_ink.gd")
-const HIT := Color("#24916D")
-const TIMING := Color("#BA8738")
-const ERROR := Color("#C9534F")
-const PREVIEW := Color("#467BA7")
+const HIT := Color("#82F5C8")
+const TIMING := Color("#F2C980")
+const ERROR := Color("#FF9F98")
+const PREVIEW := Color("#9ECAFF")
 const MAX_VISIBLE_HITS := 16
 const PARTICLE_COUNT := 16
 const HIT_DURATION_MS := 450
