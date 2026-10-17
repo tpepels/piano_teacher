@@ -82,7 +82,12 @@ def _duration_parts(duration: int) -> tuple[int, ...]:
             parts.append(length)
             remaining -= length
     if remaining:
-        parts.append(remaining)  # Exact residual is represented as a tuplet.
+        # An expressive MIDI duration between ordinary values is one event,
+        # not a conventional note tied to a tiny residual. Those additional
+        # noteheads impose collision spacing at almost identical clock times.
+        # Keep its exact duration in one ratio; ordinary compounds still use
+        # the conventional tied spelling above. Barline ties are independent.
+        return (duration,)
     return tuple(parts)
 
 
@@ -119,8 +124,15 @@ def _append_note(measure: ET.Element, pitch: int | None, duration: int,
         # alone is insufficient: Verovio derives its timemap from type and
         # time-modification. Preserve the integer duration with an exact ratio.
         tuplet = _tuplet_type(duration)
-        ET.SubElement(el, "type").text = tuplet[0] if tuplet else "64th"
-        ratio = Fraction(tuplet[2],tuplet[1]) if tuplet else Fraction(duration, DIVISIONS // 16)
+        if tuplet:
+            label, actual, normal = tuplet
+            ratio = Fraction(normal, actual)
+        else:
+            bases = ((4, "whole"), (2, "half"), (1, "quarter"),
+                     (.5, "eighth"), (.25, "16th"), (.125, "32nd"), (.0625, "64th"))
+            beats, label = min(bases, key=lambda value: abs(value[0] * DIVISIONS-duration))
+            ratio = Fraction(duration, round(beats * DIVISIONS))
+        ET.SubElement(el, "type").text = label
         modification = ET.SubElement(el, "time-modification")
         ET.SubElement(modification, "actual-notes").text = str(ratio.denominator)
         ET.SubElement(modification, "normal-notes").text = str(ratio.numerator)
@@ -319,7 +331,7 @@ def _spelling(note, fifths):
     return None
 
 
-def _phrase_lanes(phrase, hand):
+def _phrase_lanes(phrase, hand, grid=()):
     groups = defaultdict(list)
     attacks = {}
     identities = set()
@@ -365,6 +377,15 @@ def _phrase_lanes(phrase, hand):
             rounded = round(end/(DIVISIONS//4))*(DIVISIONS//4)
             if _tuplet_type(end-start) is None and rounded > start and abs(rounded-end) <= _ticks(.12):
                 end = min(rounded,_ticks(phrase.end-phrase.start),lane[i+1][0] if i+1 < len(lane) else _ticks(phrase.end-phrase.start))
+            if i+1 < len(lane):
+                following = lane[i+1][0]
+                # Tiny key-release gaps in performance MIDI are articulation,
+                # not useful additional rest instructions. Extend display only
+                # to the next attack in this stable lane, within this measure.
+                # Source notes, attack bindings and assessed releases stay exact.
+                if (0 < following-end <= DIVISIONS/64
+                        and not any(end <= _ticks(boundary) < following for boundary in grid)):
+                    end = following
             lane[i] = (start,end,tones)
     return lanes
 
@@ -400,7 +421,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
         part = ET.SubElement(root, "part", id=ident)
         last_meter = None
         last_key = last_clef = None
-        lanes = _phrase_lanes(phrase, hand)
+        lanes = _phrase_lanes(phrase, hand, grid)
         keys = sorted((key for key in key_signatures if key.hand in (hand,'both')),key=lambda item:item.beat)
         clefs = sorted((clef for clef in clef_changes if clef.hand in (hand,'both')),key=lambda item:item.beat)
         for lane in lanes:

@@ -25,7 +25,7 @@ from .library import ScoreLibrary
 from .library_health import LibraryHealth
 from .warmups import is_warmup
 from .raster import rasterize_score
-from .recovery import check_two_bar_window
+from .recovery import check_rolling_two_bar_window, check_two_bar_window
 from .music import Phrase, source_note_id, note_name
 from .lesson_score import build_lesson_score
 from .lesson_validation import require_lesson_alignment
@@ -1363,16 +1363,20 @@ class PracticeEngine:
         score_beat=self.play_from_beat+elapsed_beats
         grid=phrase_grid(phrase,self.plan.piece.bar_boundaries)
         beats_per_bar=grid[1]-grid[0]
-        # Defer five-error recovery until the two-bar boundary. Silent
+        # Detect rolling five-error windows at the completed two-bar boundary. Silent
         # previews never generate failure, assessment or mastery.
         while (self.mode == "practice" and self.review_end_beat is None and not self.preview_only
                and self.next_boundary_beat and score_beat >= self.next_boundary_beat):
-            decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
-                self.recorder.presses if self.recorder else [],
-                from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
-                beats_per_bar=beats_per_bar,
-                threshold=2 if self.is_builtin_warmup else 5,
-                window_start_beat=chunk_start_at_end(grid,self.next_boundary_beat))
+            if self.is_builtin_warmup:
+                decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
+                    self.recorder.presses if self.recorder else [],
+                    from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
+                    beats_per_bar=beats_per_bar, threshold=2,
+                    window_start_beat=chunk_start_at_end(grid,self.next_boundary_beat))
+            else:
+                decision=check_rolling_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
+                    self.recorder.presses if self.recorder else [],
+                    from_beat=self.play_from_beat, end_beat=self.next_boundary_beat, grid=grid)
             if decision is not None:
                 # Capture marks at the performance tempo, not at the slower
                 # BPM selected for the next retry. Re-scaling the recorded
@@ -1386,11 +1390,14 @@ class PracticeEngine:
                             phrase.start+self.play_from_beat, phrase.end,
                             tuple(note for note in phrase.notes if note.start >= phrase.start+self.play_from_beat)),
                             self.plan.hand, self.plan.bpm, self.recorder.presses if self.recorder else [])
-                        pitches = sorted({entry.note.pitch for entry in assessed.notes
+                        # Rolling detection can include the preceding idea;
+                        # saved trouble describes only this canonical unit.
+                        unit_errors = [entry for entry in assessed.notes
                             if entry.status in ("missed", "wrong")
-                            and phrase.start+decision.restart_beat <= entry.note.start < phrase.start+decision.end_beat})
+                            and phrase.start+decision.restart_beat <= entry.note.start < phrase.start+decision.end_beat]
+                        pitches = sorted({entry.note.pitch for entry in unit_errors})
                         self.learner_store.record_trouble(self.fingerprint, self.plan.identity, unit,
-                                                         errors=decision.errors, pitches=pitches)
+                                                         errors=len(unit_errors), pitches=pitches)
                         self.learner_store.save_resume(self.fingerprint, self.plan.identity, unit)
                 self.plan.streak=0
                 self.plan.failures+=1
@@ -1502,7 +1509,13 @@ class PracticeEngine:
             return
         self.pending_result=result
         if not result.clean:
-            self.auto = False  # Keep the review visible until the learner chooses what to do.
+            # Failure breaks consecutive clean takes immediately, even if
+            # Start/Restart/Stop discards this feedback before its commit.
+            # Success and mastery still wait until the feedback interval ends.
+            self.plan.streak = 0
+            self._save()
+            if self.is_builtin_warmup:
+                self.auto = False  # Keep the beginner-study review available.
         self.next_action=next_full_attempt(self.plan, result)
         self.next_at=now+self.feedback_seconds if self.auto else 0
 

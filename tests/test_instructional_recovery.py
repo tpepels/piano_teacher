@@ -44,10 +44,10 @@ def send(e, now, at, pitch, down=True):
                            velocity=84 if down else 0))
 
 
-def play(e, now, *, before=None, jitter=False):
+def play(e, now, *, before=None, jitter=False, omit=()):
     """Perform the displayed source events through the physical-input callback."""
     start, bpm, offset = e.run_at, e.plan.bpm, e.play_from_beat
-    notes = [n for n in e.plan.active_phrase.notes if n.start >= offset and
+    notes = [n for n in e.plan.active_phrase.notes if n.start >= offset and n.start not in omit and
              (before is None or n.start < before)]
     events = []
     for i, note in enumerate(notes):
@@ -158,6 +158,55 @@ def test_feedback_pause_freezes_break_and_does_not_commit_clean_mastery(lesson):
     assert e.state()['phase'] == 'feedback' and not e.plan.mastered
     now[0] += .02
     assert e.state()['phase'] == 'ready' and identity in e.plan.mastered
+
+
+@pytest.mark.parametrize('action', ('start', 'restart', 'stop'))
+def test_failed_full_take_cannot_preserve_clean_streak_when_feedback_is_abandoned(lesson, action):
+    e, now, grid = lesson(120)
+    e.fingerprint = 'consecutive-full-takes'
+    stage = e.plan.identity
+    for _ in range(2):
+        finish_take(e, now, 16)
+        after_break(e, now)
+    assert e.plan.streak == 2
+
+    # One missed final note is below the five-error recovery threshold.
+    play(e, now, before=15)
+    now[0] = e.run_at + 16 * 60 / 120 + .22
+    failed = e.state()
+    assert failed['phase'] == 'feedback'
+    assert e.pending_result.correct == 15 and len(e.pending_result.notes) == 16
+    assert failed['streak'] == 0
+    assert e.db.execute('SELECT streak FROM sessions WHERE fingerprint=?',
+                        (e.fingerprint,)).fetchone() == (0,)
+
+    e.control(action)
+    assert e.pending_result is None and e.plan.streak == 0
+    if action == 'stop':
+        e.control('start')
+    for expected in (1, 2):
+        finish_take(e, now, 16)
+        after_break(e, now)
+        assert e.plan.streak == expected and stage not in e.plan.mastered
+    finish_take(e, now, 16)
+    after_break(e, now)
+    assert e.plan.mastered[stage] == 120
+
+
+def test_failed_full_imported_practice_repeats_after_its_feedback_interval(lesson):
+    e, now, _ = lesson(120)
+    stage, transport = e.plan.identity, e.transport_id
+    play(e, now, before=15)
+    now[0] = e.run_at + 16 * 60 / 120 + .22
+    failed = e.state()
+    assert failed['phase'] == 'feedback' and e.pending_result.correct == 15
+    assert e.next_at > now[0]
+    now[0] = e.next_at - .01
+    assert e.state()['phase'] == 'feedback' and e.transport_id == transport
+    repeated = after_break(e, now)
+    assert repeated['phase'] == 'count_in' and e.transport_id == transport + 1
+    assert e.plan.identity == stage and repeated['play_from_beat'] == 0
+    assert repeated['streak'] == 0 and not e.plan.mastered
 
 
 @pytest.mark.parametrize('guided', (False, True))
@@ -313,6 +362,43 @@ def test_only_five_distinct_wrong_or_missed_notes_trigger_after_boundary(lesson,
     assert state['phase'] == 'recovering'
     assert state['feedback'].startswith('5 wrong or missed notes')
     assert state['retry_range']['first_bar'] == 3
+
+
+@pytest.mark.parametrize('mixed,misses', ((False, (4, 5, 6, 8, 9)),
+                                        (True, (3, 4, 5, 6, 7))))
+def test_rolling_errors_cross_chunk_boundary_but_retry_current_canonical_idea(lesson, mixed, misses):
+    e, now, grid = lesson(120, mixed=mixed)
+    e.fingerprint = 'rolling-source-errors'
+    play(e, now, omit=misses)
+    now[0] = e.run_at + (grid[-1]-.01)*.5
+    assert e.state()['phase'] == 'playing'  # Threshold never stops mid-chunk.
+    state = boundary(e, now, grid[-1])
+    assert state['phase'] == 'recovering' and state['bpm'] == 108
+    assert state['recovery_notice']['errors'] == 5
+    assert state['retry_range'] == {'first_bar': 3, 'last_bar': 4,
+                                   'start_beat': grid[2], 'end_beat': grid[4]}
+    trouble = e.lesson_overview()['trouble_spots']
+    assert len(trouble) == 1
+    assert trouble[0]['first_bar'] == 3 and trouble[0]['errors'] == 2
+    assert after_break(e, now)['play_from_beat'] == grid[2]
+
+    # A subsequent failure of this canonical idea still opens exact Learn help.
+    second = boundary(e, now, grid[-1])
+    assert second['guided_recovery'] and second['phase'] == 'recovering'
+    guided = after_break(e, now)
+    assert guided['mode'] == 'learn' and guided['phase'] == 'guided_wait'
+    assert (guided['first_bar'], guided['last_bar']) == (3, 4)
+    assert not e.plan.mastered and e.plan.streak == 0
+
+
+@pytest.mark.parametrize('mixed,misses', ((False, (4, 5, 8, 9)),
+                                        (True, (3, 4, 6, 7))))
+def test_four_rolling_misses_keep_playing_without_slowdown(lesson, mixed, misses):
+    e, now, grid = lesson(120, mixed=mixed)
+    play(e, now, omit=misses)
+    state = boundary(e, now, grid[-1])
+    assert state['phase'] == 'playing' and state['bpm'] == 120
+    assert state['retry_range'] is None and not e.plan.mastered
 
 
 def test_live_miss_appears_after_release_grace_and_score_keeps_moving_through_rest(lesson):

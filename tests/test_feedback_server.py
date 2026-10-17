@@ -14,6 +14,8 @@ def piece():
 
 
 def test_score_feedback_waits_until_displayed_before_curriculum_advance(tmp_path,monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr(server.time, 'monotonic', lambda: now[0])
     e=PracticeEngine(tmp_path,enable_midi=False)
     e.plan=LearningPlan(piece())
     e.fingerprint='feedback-case'
@@ -33,20 +35,22 @@ def test_score_feedback_waits_until_displayed_before_curriculum_advance(tmp_path
     assert first["take_result"]["clean"] is False
     assert first["take_result"]["total"] == 1
     assert e.plan.failures==0
-    e.next_at=time.monotonic()-0.1
+    deadline = e.next_at
+    now[0] = deadline-.01
     second=e.state()
-    # Failed attempts remain readable until the player decides to retry.
-    # Merely passing the old auto-advance deadline must not change mastery.
+    # Keep the completed score readable throughout feedback, then automatically
+    # retry imported Practice without changing the curriculum or mastery.
     assert second['phase']=='feedback'
     assert second['feedback_marks'][0]['status']=='missed'
     assert second['performance_summary']['missed']==1
     assert e.plan.failures==0
-    e.control('restart')
+    now[0] = deadline+.01
     restarted=e.state()
     assert restarted['phase']=='count_in'
     assert restarted['feedback_marks']==[]
     assert restarted['take_result'] is None
-    assert e.plan.failures==0  # Cancelled feedback never awards or penalizes.
+    assert e.plan.failures==1
+    assert not e.plan.mastered and e.plan.index == 0 and e.plan.streak == 0
     e.db.close()
 
 
