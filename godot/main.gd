@@ -222,6 +222,8 @@ var ui_scale := 1.0
 var last_seen_midi_input_count := -1
 var last_seen_midi_visual_sequence := 0
 var state_poll_timer: Timer
+# No repeated camera work for an unchanged, paused transport snapshot.
+var last_paused_score_key := ""
 
 func _ready() -> void:
     # On 120/144 Hz laptops Godot otherwise renders the entire translucent
@@ -2115,7 +2117,8 @@ func _process(_delta: float) -> void:
     # Continuous Listen drift measurements are display/audio only and
     # never feed back into the MIDI grading or the Python transport.
     if demo_player != null and str(last_state.get("mode", "")) == "listen" \
-            and bool(last_state.get("running", false)):
+            and bool(last_state.get("running", false)) \
+            and not bool(last_state.get("paused", false)):
         demo_player.keep_synchronized(_transport_beat_now(),
             maxf(1.0, float(last_state.get("bpm", 60.0))))
         if listen_sync_diagnostics and ticks - last_listen_sync_report_ms >= 1000:
@@ -2133,6 +2136,21 @@ func _process(_delta: float) -> void:
             maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4))))),
             bool(last_state.get("preview_only", false))
                 or str(last_state.get("mode", "")) == "listen")
+    # A paused Listen or practice score is a frozen frame. The previous
+    # path ran note indexing and geometry projection 30 times per second
+    # while the instrument was idle. Allow one pass after any seek, mode,
+    # score or transport change and let queued MIDI visuals expire above.
+    if bool(last_state.get("paused", false)) and layout_revision == revision:
+        var static_key: String = "%s|%s|%s|%s|%s|%s" % [
+            str(revision), str(last_state.get("transport_id", -1)),
+            str(last_state.get("clock_beat", 0.0)),
+            str(last_state.get("play_from_beat", 0.0)),
+            str(last_state.get("mode", "")), str(last_state.get("phase", ""))]
+        if static_key == last_paused_score_key:
+            return
+        last_paused_score_key = static_key
+    else:
+        last_paused_score_key = ""
     if str(last_state.get("mode", "practice")) == "learn":
         score_overlay.next_chord.clear()
         _layout_guided_score()
