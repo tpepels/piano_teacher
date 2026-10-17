@@ -1,10 +1,12 @@
 extends Control
 
+const Design := preload("res://practice_theme.gd")
+
 # Three clean passes rendered as luminous instrument indicators.
 # Engine-assessed result/streak are passed in; this component never scores.
-const ON := Color("#7CF0C4")
-const OFF := Color("#516D67")
-const BAD := Color("#EF7776")
+const ON := Design.MINT
+const OFF := Design.SAGE
+const BAD := Design.CORAL
 
 var value := 0
 var state := "idle"

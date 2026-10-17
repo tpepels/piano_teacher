@@ -1,10 +1,12 @@
 extends Control
 
+const Design := preload("res://practice_theme.gd")
+
 # A discreet transition cue. Every state and result comes from the backend;
 # this script only animates presentation, never grading or progression.
-const TEAL := Color("#9DECCA")
-const AMBER := Color("#F0C18A")
-const ERROR := Color("#F18E87")
+const TEAL := Design.MINT
+const AMBER := Design.AMBER
+const ERROR := Design.CORAL
 
 var message := ""
 var accent := TEAL
@@ -99,7 +101,7 @@ func _draw() -> void:
     var rendered_tone: Color = accent if not message.is_empty() else fading_accent
     if rendered_text.is_empty() or rendered_alpha <= .001 or size.x < 25.0:
         return
-    var font: Font = ThemeDB.fallback_font
+    var font: Font = get_theme_font("font")
     # Stronger type and clear status ink at laptop viewing distance.
     # Do not put an enormous notification over moving notes.
     var font_size := 17
@@ -109,7 +111,7 @@ func _draw() -> void:
     var x: float = maxf(0.0, size.x - bubble_width - 1.0)
     var slide: float = (1.0 - onset) * 14.0
     var rect := Rect2(x + slide, 1.0, bubble_width, minf(size.y - 2.0, 35.0))
-    draw_rect(rect, Color("#112421", .92 * rendered_alpha))
+    draw_rect(rect, Color(Design.PANEL_RECESSED, .92 * rendered_alpha))
     draw_rect(Rect2(rect.position, Vector2(3.0, rect.size.y)),
         Color(rendered_tone, rendered_alpha))
     draw_line(Vector2(rect.position.x + 11, rect.end.y - 3),
@@ -123,4 +125,4 @@ func _draw() -> void:
         font_size, Color("#010807", .66 * rendered_alpha))
     draw_string(font, tx,
         rendered_text, HORIZONTAL_ALIGNMENT_LEFT, rect.size.x - 26.0,
-        font_size, Color("#F2FCF4", rendered_alpha))
+        font_size, Color(Design.FOCUS, rendered_alpha))

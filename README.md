@@ -846,6 +846,17 @@ their own Play, Retry and Listen iconography. Hover, pressed, disabled and
 keyboard focus are styled for every role, and standard buttons continue to
 use their original callback and accessibility text.
 
+## Unified visual system
+
+Practice, the music drawer, settings, lesson path and starting-point panel
+reuse one design system in `godot/practice_theme.gd`: stage and surface
+colors, border treatments, a common font stack and explicit semantic colors
+for play/success, listen/configuration, retry/warning and stop/error.
+Form fields, cards, drawers, transport buttons, library entries and HUD
+now derive styles from these shared tokens rather than independent colors.
+The backdrop uses fewer static drawing bands. This pass adds no
+continuously running animation and does not affect notation or MIDI timing.
+
 ## Music selection and start-point usability
 
 The music drawer shows two-line, fully clickable rows with clear titles

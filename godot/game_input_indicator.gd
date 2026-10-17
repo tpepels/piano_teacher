@@ -1,11 +1,13 @@
 extends Control
 
+const Design := preload("res://practice_theme.gd")
+
 # Phase 7.9: a readable instrument-status lamp in the practice header.
 # Connected/disconnected and recent input come solely from Python snapshots.
 # A note reception is not a correct-note judgment or a mastery event.
-const READY := Color("#82EBC2")
-const QUIET := Color("#8BA59B")
-const MISSING := Color("#E4AF83")
+const READY := Design.MINT
+const QUIET := Design.SLATE
+const MISSING := Design.AMBER
 
 var connected := false
 var is_preview := false
@@ -67,10 +69,10 @@ func _draw() -> void:
     # when the physical device actually reports new MIDI input.
     draw_circle(center, 10.0 + flash * 5.0,
         Color(tone, .07 + flash * .16))
-    draw_circle(center, 6.0, Color("#112422"))
+    draw_circle(center, 6.0, Design.PANEL_RECESSED)
     draw_arc(center, 6.4, 0, TAU, 32, Color(tone, .64), 1.25, true)
     draw_circle(center, 3.4 + flash * 2.0, Color(tone, .66 + flash * .34))
-    var font: Font = ThemeDB.fallback_font
+    var font: Font = get_theme_font("font")
     var font_size := 13
     var available: float = maxf(0.0, size.x - 32.0)
     var baseline: float = y + (font.get_ascent(font_size)

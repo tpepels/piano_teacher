@@ -1,10 +1,12 @@
 extends Control
 
+const Design := preload("res://practice_theme.gd")
+
 # Phase 7.7c: the score remains the light source. These inexpensive canvas
 # primitives are decorative only: no fake note hits in ungraded preview.
-const AURA := Color("#69E2BF")
-const ERROR := Color("#EF7776")
-const AMBER := Color("#F0BC76")
+const AURA := Design.MINT
+const ERROR := Design.CORAL
+const AMBER := Design.AMBER
 
 var phase := "ready"
 var progress := 0.0
@@ -142,7 +144,7 @@ func _draw() -> void:
         return
     # One stage fill rather than 32 full-width alpha bands per frame.
     # This dramatically reduces overdraw at 2880x1800 / HiDPI.
-    draw_rect(Rect2(0, 0, w, h), Color("#132021"))
+    draw_rect(Rect2(0, 0, w, h), Design.STAGE)
     # The playhead is at 42% of the viewport. All light stays behind
     # the actual score. During preview, beat motion is neutral: it does
     # not pretend a note has been struck or assessed correctly.
