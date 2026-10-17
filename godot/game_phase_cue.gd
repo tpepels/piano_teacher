@@ -62,7 +62,8 @@ func present(state: Dictionary) -> void:
         next_message = ""
     var key: String = "%s|%s|%s|%s" % [phase, mode, next_message,
         str(state.get("transport_id", -1))]
-    if key != last_key:
+    var phase_changed: bool = key != last_key
+    if phase_changed:
         last_key = key
         onset = 0.0
         if next_message.is_empty() and not message.is_empty():
@@ -77,7 +78,9 @@ func present(state: Dictionary) -> void:
     message = next_message
     accent = next_accent
     target_opacity = 0.0 if message.is_empty() else 1.0
-    queue_redraw()
+    # A stable Ready/Paused cue needs no redraw every HTTP state poll.
+    if phase_changed:
+        queue_redraw()
 
 func _process(delta: float) -> void:
     if not is_visible_in_tree():
