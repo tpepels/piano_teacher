@@ -1,5 +1,7 @@
 extends SceneTree
 
+const Design := preload("res://practice_theme.gd")
+
 # Phase 7.7 game-feel contract. This test does not synthesize grading.
 # It ensures presentation remains idle in preview until an actual MIDI
 # event is explicitly delivered by the controller.
@@ -34,10 +36,10 @@ func run() -> void:
     check(stage.preview_energy > 0.0 and stage.impact_energy == 0.0,
         "Keyboard-free preview creates blue note energy, never a success grade")
     stage.react("on_time")
-    check(stage.impact_energy > .0 and stage.impact_tone == Color("#69E2BF"),
+    check(stage.impact_energy > .0 and stage.impact_tone == Design.MINT,
         "an assessed on-time note triggers the success glow")
     stage.react("unexpected")
-    check(stage.impact_tone == Color("#EF7776"),
+    check(stage.impact_tone == Design.CORAL,
         "an unexpected note must be visibly distinct from success")
     stage._process(2.0)
     check(stage.impact_energy <= .001, "event light fully expires")

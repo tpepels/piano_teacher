@@ -1,5 +1,7 @@
 extends SceneTree
 
+const Design := preload("res://practice_theme.gd")
+
 # Phase 7.8: real Godot modules, real controller rendering state, no
 # synthetic grading. Ambient beat movement must not resemble a note hit.
 class FixtureApp extends "res://main.gd":
@@ -45,13 +47,13 @@ func run() -> void:
         "Moving light respects the active musical meter")
     stage.react("on_time")
     check(stage.impact_age == 0.0 and stage.impact_energy > .3
-        and stage.impact_tone == Color("#69E2BF"),
+        and stage.impact_tone == Design.MINT,
         "A genuinely graded note triggers visible teal particles")
     stage._process(.2)
     check(stage.impact_age > 0 and stage.impact_energy > 0,
         "One real MIDI event grows and fades a visual burst")
     stage.react("unexpected")
-    check(stage.impact_tone == Color("#EF7776") and stage.impact_age == 0.0,
+    check(stage.impact_tone == Design.CORAL and stage.impact_age == 0.0,
         "Incorrect physical notes visibly replace the success colour")
     stage.present({"phase":"paused", "running":true, "paused":true})
     var frozen: float = stage.beat_fraction

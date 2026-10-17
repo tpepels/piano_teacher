@@ -1,5 +1,7 @@
 extends SceneTree
 
+const Design := preload("res://practice_theme.gd")
+
 # Phase 7.9: all light is driven by real backend-sourced state/events.
 # There is no score grading, fake MIDI input, or additional transport UI.
 class FixtureApp extends "res://main.gd":
@@ -87,7 +89,7 @@ func run() -> void:
     result["phase"] = "feedback"
     result["take_result"] = {"clean":true, "correct":10}
     stage.present(result)
-    check(stage.result_wave == 1.0 and stage.result_tone == Color("#69E2BF"),
+    check(stage.result_wave == 1.0 and stage.result_tone == Design.MINT,
         "A real clean feedback result begins the teal success wave")
     stage._process(.27)
     var energy: float = stage.result_wave
@@ -104,7 +106,7 @@ func run() -> void:
     failure["transport_id"] = 4
     failure["take_result"] = {"clean":false, "correct":6}
     stage.present(failure)
-    check(stage.result_wave == 1.0 and stage.result_tone == Color("#EF7776"),
+    check(stage.result_wave == 1.0 and stage.result_tone == Design.CORAL,
         "Next assessed failed take shows a distinct coral wave")
     stage._process(3.0)
     check(stage.result_wave == 0, "Result wave expires and leaves score unobscured")
