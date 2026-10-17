@@ -36,6 +36,8 @@ func press(text: String) -> void:
     failures.append("Button not found " + text)
 
 func capture(name: String) -> void:
+    # Review settled drawer opacity/position, not its entrance animation.
+    await create_timer(0.3).timeout
     await process_frame
     await process_frame
     RenderingServer.force_draw()
@@ -58,7 +60,7 @@ func run() -> void:
     root.add_child(app)
     await wait_for(func(): return not app.library_info.is_empty())
     await capture("home")
-    press("Browse library  →")
+    press("Music")
     await wait_for(func(): return app.current_screen == "library" and not app.library_pending)
     app.library_search.text = source.get_file().get_basename().replace("_", " ")
     app._populate_library()
@@ -79,10 +81,10 @@ func run() -> void:
     app.start_button.pressed.emit()
     await wait_for(func(): return bool(app.last_state.get("paused", false)))
     await capture("practice")
-    press("Lesson path")
+    press("Path")
     await wait_for(func(): return not app.lesson_pending and app.lesson_rows.get_child_count() > 0)
     await capture("lesson")
-    press("← Practice")
+    app._go_back()
     press("Settings")
     await wait_for(func(): return not app.settings_pending)
     app.metronome_toggle.button_pressed = false
@@ -107,6 +109,27 @@ func run() -> void:
         if app.practice_controls.get_global_rect().end.x > visible_width + 1:
             failures.append("Practice controls overflow " + str(dimensions))
         app._navigate("settings")
+    var saved_hand: String = str(app.last_state.get("hand", ""))
+    var saved_tempo: int = int(app.last_state.get("target_bpm", 0))
+    app.library_search.text = ""
+    app._navigate("library")
+    await wait_for(func(): return not app.library_pending)
+    await capture("library-recent-800x600")
+    var continued := false
+    for row in app.library_rows.get_children():
+        if str(row.get_meta("library_detail", "")).begins_with("Continue from saved place"):
+            row.pressed.emit()
+            continued = true
+            break
+    if not continued:
+        failures.append("Music drawer must expose Continue for the imported piece")
+    else:
+        await wait_for(func(): return not app.action_pending and app.current_screen == "practice" \
+            and app.score_view.texture != null and app.rendered_revision == app.revision)
+        if app.open_picker.visible or str(app.last_state.get("hand", "")) != saved_hand \
+                or int(app.last_state.get("target_bpm", 0)) != saved_tempo:
+            failures.append("Continue must restore saved hand and tempo without a starting-point picker")
+        await capture("continued-practice-800x600")
     var file := FileAccess.open(folder + "/ui-result.json", FileAccess.WRITE)
     file.store_string(JSON.stringify({"failures": failures}, "  "))
     print("UI_REVIEW:", "PASS" if failures.is_empty() else str(failures))

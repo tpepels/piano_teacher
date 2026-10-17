@@ -68,6 +68,8 @@ var score_retry_button: Button
 var score_error := ""
 var library_error := ""
 var pending_library_piece := ""
+var pending_library_resume := false
+var library_resume_requested := false
 var home_recent_label: Label
 var home_resume_button: Button
 var library_search: LineEdit
@@ -457,6 +459,14 @@ func _layout_moving_score(delta: float = 0.0) -> void:
                 # The grand-staff bound protects both hands and ledger lines.
                 var desired_gap: float = ScoreQuality.staff_gap(viewport.y, rails)
                 scale = minf(width_scale, desired_gap / native_gap)
+    # Fit the whole engraving above the progress rail. Staff-only fitting
+    # clipped the opening clefs and lower meter, especially beside hints.
+    var ink_top: float = float(score_layout.get("strip_ink_top", 0.0))
+    var ink_bottom: float = float(score_layout.get("strip_ink_bottom", 1.0))
+    var notation_top := 8.0
+    var notation_height: float = maxf(1.0, viewport.y - notation_top - 32.0)
+    if score_layout.has("strip_ink_top"):
+        scale = minf(scale, notation_height / maxf(1.0, (ink_bottom-ink_top)*image.y))
     var displayed_width: float = image.x * scale
     var displayed_height: float = image.y * scale
     if score_content.size.distance_to(Vector2(displayed_width, displayed_height)) > .1:
@@ -488,6 +498,9 @@ func _layout_moving_score(delta: float = 0.0) -> void:
         target_x = viewport.x * 0.42 - note_x * displayed_width
     # Centre the *real staff*, not the large blank area in the SVG raster.
     var target_y: float = viewport.y * .5 - rail_center * displayed_height
+    if score_layout.has("strip_ink_top"):
+        target_y = notation_top + (notation_height - (ink_bottom-ink_top)*displayed_height)*.5 \
+            - ink_top*displayed_height
     var target := Vector2(target_x, target_y)
     if game_stage != null and not systems.is_empty():
         var band_rails: Array = systems[0].get("staff_lines", [])
@@ -952,7 +965,7 @@ func _build_interface() -> void:
     library_controls.add_theme_constant_override("separation", 9)
     library_layout.add_child(library_controls)
     library_search = LineEdit.new()
-    library_search.placeholder_text = "Search title, composer or folder"
+    library_search.placeholder_text = "Search title or folder"
     library_search.clear_button_enabled = true
     library_search.tooltip_text = "Ctrl+F or / to focus search · Esc closes the library"
     library_search.custom_minimum_size = Vector2(0, 58)
@@ -1355,8 +1368,8 @@ func _build_interface() -> void:
     feedback_label = _label("Ready", 16, Color("#A1BAAF"))
     feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    information.add_child(feedback_label)
-    information.add_child(lesson_info_label)
+    information.add_child(_caption_slot(feedback_label, 1))
+    information.add_child(_caption_slot(lesson_info_label, 2))
     performance_review = VBoxContainer.new()
     performance_review.visible = false
     information.add_child(performance_review)
@@ -1516,6 +1529,34 @@ func _build_interface() -> void:
     _navigate("practice")
     _refresh_score_status()
 
+func _caption_slot(caption: Label, lines: int) -> Control:
+    # Containers must reserve this space even when the phase hides its text.
+    # A plain Control prevents wrapped label minimum sizes resizing the score.
+    var slot := Control.new()
+    slot.name = "FeedbackCaption" if caption == feedback_label else "InstructionCaption"
+    slot.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    slot.clip_contents = true
+    caption.set_meta("caption_lines", lines)
+    caption.max_lines_visible = lines
+    caption.mouse_filter = Control.MOUSE_FILTER_PASS
+    caption.clip_text = true
+    caption.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    caption.autowrap_mode = TextServer.AUTOWRAP_OFF if lines == 1 else TextServer.AUTOWRAP_WORD_SMART
+    slot.add_child(caption)
+    caption.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    return slot
+
+
+func _resize_caption_slots() -> void:
+    for caption in [feedback_label, lesson_info_label]:
+        var lines: int = int(caption.get_meta("caption_lines", 1))
+        var font: Font = caption.get_theme_font("font")
+        var font_size: int = caption.get_theme_font_size("font_size")
+        var line_spacing: int = caption.get_theme_constant("line_spacing")
+        caption.get_parent().custom_minimum_size.y = ceilf(
+            font.get_height(font_size) * lines + line_spacing * (lines - 1))
+
+
 func _update_responsive_layout() -> void:
     ui_scale = _readable_ui_scale()
     theme.default_font_size = _ui_font(16)
@@ -1591,9 +1632,10 @@ func _update_responsive_layout() -> void:
         hand_label.add_theme_font_size_override("font_size", _ui_font(15))
         progress_label.add_theme_font_size_override("font_size", _ui_font(15))
         game_streak.custom_minimum_size = Vector2(130 if width < 950 else 155, 30)
-        game_input_indicator.custom_minimum_size = Vector2(145, 25)
+        game_input_indicator.custom_minimum_size.y = 25
         feedback_label.add_theme_font_size_override("font_size", _ui_font(17))
         lesson_info_label.add_theme_font_size_override("font_size", _ui_font(16))
+        _resize_caption_slots()
         practice_playback_banner.add_theme_font_size_override("font_size", _ui_font(17))
         practice_note_feedback_label.add_theme_font_size_override("font_size", _ui_font(18))
         practice_note_feedback_panel.offset_left = - minf(330.0, maxf(180.0, score_frame.size.x - 24.0))
@@ -1726,6 +1768,9 @@ func _refresh_score_status() -> void:
     if score_status_panel == null or score_view == null:
         return
     score_status_panel.visible = score_view.texture == null
+    # Phase guidance already has captions below the score and count-in
+    # lights. An opaque capsule must never cover engraved noteheads.
+    game_phase_cue.visible = score_status_panel.visible
     if not score_status_panel.visible:
         return
     if not score_error.is_empty():
@@ -1847,6 +1892,15 @@ func _on_library_health(_result: int, code: int, _headers: PackedStringArray, bo
         _populate_library()
 
 
+func _last_library_entry() -> Dictionary:
+    var identifier: String = str(library_info.get("last_piece", ""))
+    if not identifier.is_empty():
+        for entry in library_info.get("warmups", []) + library_info.get("pieces", []):
+            if str(entry.get("id", "")) == identifier:
+                return entry
+    return {}
+
+
 func _populate_library() -> void:
     if library_rows == null:
         return
@@ -1859,10 +1913,20 @@ func _populate_library() -> void:
     var warmups: Array = library_info.get("warmups", [])
     var query := library_search.text.strip_edges().to_lower()
     var visible := 0
-    for section in [ {"title": "BUILT-IN WARM-UPS", "entries": warmups},
-                    {"title": "YOUR MUSIC", "entries": pieces}]:
+    var recent: Dictionary = _last_library_entry()
+    var show_recent: bool = query.is_empty() and not recent.is_empty()
+    var sections: Array = []
+    if show_recent:
+        sections.append({"title": "LAST OPENED", "entries": [recent], "resume": true})
+    sections.append({"title": "BUILT-IN WARM-UPS", "entries": warmups})
+    sections.append({"title": "YOUR MUSIC", "entries": pieces})
+    for section in sections:
         var section_added := false
         for entry in section.entries:
+            var identifier: String = str(entry.get("id", ""))
+            var resume_saved: bool = bool(section.get("resume", false))
+            if show_recent and not resume_saved and identifier == str(recent.get("id", "")):
+                continue
             var title: String = str(entry.get("title", "Untitled"))
             var location: String = str(entry.get("folder", ""))
             var focus: String = str(entry.get("focus", ""))
@@ -1871,7 +1935,6 @@ func _populate_library() -> void:
             if not section_added:
                 library_rows.add_child(_label(str(section.title), 13, ACCENT, true))
                 section_added = true
-            var identifier: String = str(entry.get("id", ""))
             var format_name: String = str(entry.get("format", ""))
             var hint: String = ("%d BPM · %s" % [int(entry.get("bpm", 0)), focus]
                 if not focus.is_empty() else
@@ -1883,8 +1946,13 @@ func _populate_library() -> void:
                 detail = "Needs attention  ·  " + detail
             elif status == "warning":
                 detail = "Repaired  ·  " + detail
+            if resume_saved:
+                detail = "Continue from saved place  ·  " + detail
             var row := LibraryRow.new()
-            row.pressed.connect(func(): _open_library_piece(identifier))
+            if resume_saved:
+                row.pressed.connect(_resume_last)
+            else:
+                row.pressed.connect(func(): _open_library_piece(identifier))
             library_rows.add_child(row)
             row.set_entry(title.replace("_", " "), detail, status)
             row.set_text_scale(ui_scale)
@@ -1976,8 +2044,9 @@ func _show_open_picker(state: Dictionary) -> void:
 
 func _update_hand_stages(state: Dictionary) -> void:
     var stages: Array = state.get("hand_stages", [])
-    practice_stage_bar.visible = not stages.is_empty() and size.y >= 750.0 \
-        and str(state.get("phase", "")) not in ["playing", "count_in"]
+    # Transport changes must not add/remove a layout row: doing so changes
+    # the score's zoom and moves its notes at Start and Pause.
+    practice_stage_bar.visible = not stages.is_empty() and size.y >= 750.0
     var by_hand: Dictionary = {}
     for stage in stages:
         by_hand[str(stage.get("hand", ""))] = stage
@@ -2024,23 +2093,25 @@ func _pulse_hand_stage() -> void:
         .set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
-func _open_library_piece(identifier: String) -> void:
+func _open_library_piece(identifier: String, resume_saved := false) -> void:
     # Pause requests are asynchronous. Store a quick selection and open it
     # once the transport has acknowledged the pause, rather than dropping
     # the click while action_pending is true.
     if action_pending:
         pending_library_piece = identifier
+        pending_library_resume = resume_saved
         library_message.text = "Preparing your selected music…"
         return
     library_error = ""
     library_message.text = "Opening score…"
     library_message.add_theme_color_override("font_color", MUTED)
+    library_resume_requested = resume_saved
     _send_post("/library/open", {"id": identifier})
 
 func _resume_last() -> void:
-    var identifier: String = str(library_info.get("last_piece", ""))
-    if not identifier.is_empty():
-        _open_library_piece(identifier)
+    var recent: Dictionary = _last_library_entry()
+    if not recent.is_empty():
+        _open_library_piece(str(recent["id"]), true)
 
 func _request_settings() -> void:
     if settings_pending or settings_request == null:
@@ -2525,10 +2596,6 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     hints_toggle.disabled = not learning or str(parsed.get("phase", "")) == "loading"
     hints_toggle.set_pressed_no_signal(bool(parsed.get("hints_enabled", false)))
     _update_hand_stages(parsed)
-    # While notes are moving, the fixed HUD already identifies the hand.
-    # Restore the three-hand roadmap at Ready, Pause and Feedback.
-    if str(parsed.get("phase", "")) in ["playing", "count_in"]:
-        practice_stage_bar.visible = false
     if learning:
         hint_keyboard.update_state(teaching)
     else:
@@ -2700,6 +2767,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         or audio_problem or unpositioned > 0
     lesson_info_label.visible = (learning or not busy_music
         or bool(parsed.get("guided_recovery", false)))
+    feedback_label.tooltip_text = feedback_label.text
+    lesson_info_label.tooltip_text = lesson_info_label.text
     # One short verb belongs on the central game control. Shortcuts and
     # explanations live in the tooltip instead of making every button a menu.
     start_button.text = "Resume" if bool(parsed.get("paused", false)) else "Pause" if active_transport else "Play"
@@ -3192,15 +3261,24 @@ func _send_post(path: String, payload: Dictionary) -> void:
 func _on_action(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     action_pending = false
     var path := last_post_path
+    var resume_saved: bool = path == "/library/open" and library_resume_requested
+    if path == "/library/open":
+        library_resume_requested = false
     var completed_action := last_control_action
     if code != 200:
         var message := _http_failure(code, body)
+        var queued_library_failed: bool = not pending_library_piece.is_empty()
+        pending_library_piece = ""
+        pending_library_resume = false
         if path == "/library/open":
             library_error = "Cannot open score: " + message
             library_message.add_theme_color_override("font_color", Color("#FF8B82"))
+        elif queued_library_failed:
+            library_error = "Cannot open selected music: " + message
+            library_message.add_theme_color_override("font_color", Color("#FF8B82"))
         feedback_label.text = message
         settings_message.text = message
-        library_message.text = message
+        library_message.text = library_error if queued_library_failed else message
         home_recent_label.text = message
         _flush_transport_action()
         return
@@ -3215,8 +3293,12 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         _populate_library()
         score_error = ""
         var opened: Variant = _decode_json(body)
-        if opened is Dictionary and bool(opened.get("warmup", false)):
+        if opened is Dictionary and (bool(opened.get("warmup", false)) or resume_saved):
             _navigate("practice")
+            if resume_saved:
+                # Loading already restores the backend's lesson, hand, tempo
+                # and clean streak. A new open_at would replace that place.
+                _on_state(_result, code, _headers, body, action_request_started_ms)
             _refresh_score_status()
         elif opened is Dictionary:
             _show_open_picker(opened)
@@ -3230,8 +3312,10 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     _poll()
     if not pending_library_piece.is_empty():
         var queued: String = pending_library_piece
+        var queued_resume: bool = pending_library_resume
         pending_library_piece = ""
-        call_deferred("_open_library_piece", queued)
+        pending_library_resume = false
+        call_deferred("_open_library_piece", queued, queued_resume)
 
 func _has_active_transport() -> bool:
     return bool(last_state.get("running", false)) or str(last_state.get("phase", "")) in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]

@@ -3,6 +3,15 @@ extends SceneTree
 # Actual Godot container geometry smoke, without a backend or piano.
 # Re-run at 1536x960, 1024x768 and 800x600. Reject clipped transport
 # buttons and pause panels rather than relying on Python unit tests.
+class FixtureApp extends "res://main.gd":
+    func _ready() -> void:
+        # Exercise real widgets/layout without starting HTTP requests or
+        # timers that can replace synthetic entries with a live library.
+        _build_interface()
+        resized.connect(_update_responsive_layout)
+        _update_responsive_layout()
+        set_process(false)
+
 var failures: Array[String] = []
 
 
@@ -32,6 +41,14 @@ func _check_actions(container: Control, viewport: Vector2, label: String) -> voi
                 "%s: %s has clipped button width" % [label, control.text])
 
 
+func _library_entries(rows: Control) -> Array[Button]:
+    var entries: Array[Button] = []
+    for child in rows.get_children():
+        if child is Button and child.has_meta("library_title"):
+            entries.append(child as Button)
+    return entries
+
+
 func _run() -> void:
     # Godot --headless --script creates a 64x64 root Window even when
     # --resolution is supplied. Explicitly size it before loading the UI.
@@ -44,7 +61,8 @@ func _run() -> void:
         quit(2)
         return
     root.size = Vector2i(int(requested[0]), int(requested[1]))
-    var scene = load("res://main.tscn").instantiate()
+    var scene := FixtureApp.new()
+    scene.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_child(scene)
     await process_frame
     scene.call("_navigate", "practice")
@@ -105,7 +123,7 @@ func _run() -> void:
         "format": "MIDI", "folder": "Imported music"}], "warmups": []})
     scene.call("_populate_library")
     var rows: VBoxContainer = scene.get("library_rows")
-    var music_rows: Array = rows.find_children("*", "Button", true, false)
+    var music_rows: Array[Button] = _library_entries(rows)
     _check(music_rows.size() == 1,
         "One score requires exactly one focusable full-width library action")
     if music_rows.size() == 1:
@@ -286,14 +304,15 @@ func _run() -> void:
     _check(library_status.get_global_rect().position.y < library_items.get_global_rect().position.y,
         "Library import failures must appear above the score rows, not below a full screen")
     var found_long_title := false
-    for control in library_items.get_children():
+    for control in _library_entries(library_items):
         if control is Button and "Bill Evans" in str(control.get_meta("library_title", "")):
             found_long_title = true
             var title_ink: Label = control.find_child("MusicTitle", true, false) as Label
             _check(title_ink != null and title_ink.clip_text and
                 title_ink.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS,
                 "Long music titles must clip independently of their metadata")
-            _check((control as Button).tooltip_text.contains("Portrait in Jazz"),
+            _check(control.tooltip_text.contains(
+                "Bill Evans on Autumn Leaves From the Album Portrait in Jazz"),
                 "Long library title tooltip lost its complete name")
     _check(found_long_title, "Synthetic long title missing from library")
     var health_entry := "long.mid"
@@ -310,9 +329,11 @@ func _run() -> void:
         "Library health summary must explain repairs")
     _check(not health_button.disabled, "Recheck should be available after scan completes")
     var flagged := false
-    for control in library_items.get_children():
+    for control in _library_entries(library_items):
         if control is Button and str(control.get_meta("library_status", "")) == "warning":
-            flagged = "unmatched release" in control.tooltip_text
+            flagged = control.tooltip_text.contains("Ignored an unmatched release") \
+                and control.tooltip_text.contains("42 notes · 16 measures") \
+                and str(control.get_meta("library_title", "")).contains("Bill Evans")
     _check(flagged, "The repaired MIDI row must explain its specific import warning")
     diagnostics["running"] = true
     scene.call("_on_library_health", 0, 200, PackedStringArray(),
@@ -389,7 +410,8 @@ func _run() -> void:
         {"hand": "both", "active": false, "complete": false, "locked": true}]})
     var ribbon: Control = scene.get("practice_stage_bar")
     var stage_labels: Dictionary = scene.get("practice_stage_labels")
-    _check(ribbon.visible, "Hand progression must be visible while practising")
+    _check(ribbon.visible == (viewport.y >= 750.0),
+        "Hand progression must stay visible on tall windows and collapse on compact windows")
     _check("DONE" in stage_labels["left"].text
         and "NOW" in stage_labels["right"].text
         and "LOCKED" in stage_labels["both"].text,
@@ -441,6 +463,8 @@ func _run() -> void:
     _check(_in_viewport(panel, viewport), "Pause panel extends outside window")
     _check(_in_viewport(resume, viewport), "Resume button not visible")
     _check(resume.size.y >= 50.0, "Pause resume button too small")
+    _check(scene.find_children("*", "HTTPRequest", true, false).is_empty(),
+        "Layout-only smoke must not create backend HTTP requests")
     for failure in failures:
         push_error("PHASE2_UI_FAIL: " + failure)
     if failures.is_empty():

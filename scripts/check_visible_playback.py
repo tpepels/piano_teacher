@@ -4,8 +4,8 @@
 Run from a graphical Linux session, for example:
   python scripts/check_visible_playback.py --output-dir /tmp/piano-visible
 
-PNG frames, measured note positions, and both process logs are retained in
-the output directory. This check requires an unused backend port 8765.
+The ordinary run.sh launcher starts both processes. PNG frames, measured
+note positions and its log are retained. Port 8765 must be unused.
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -39,11 +40,11 @@ def request(route: str, payload: dict | None = None, *, raw: bool = False):
 def stop_process(process: subprocess.Popen | None) -> None:
     if process is None or process.poll() is not None:
         return
-    process.terminate()
+    os.killpg(process.pid, signal.SIGTERM)
     try:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        process.kill()
+        os.killpg(process.pid, signal.SIGKILL)
         process.wait(timeout=5)
 
 
@@ -67,17 +68,20 @@ def run(output: Path, bpms: list[int], resolution: tuple[int, int]) -> None:
         environment[key] = str(output / folder)
     environment["PYTHONPATH"] = str(ROOT) + (
         os.pathsep + environment["PYTHONPATH"] if environment.get("PYTHONPATH") else "")
-    backend = None
     desktop = None
-    with (output / "backend.log").open("w") as backend_log, (output / "godot.log").open("w") as ui_log:
+    with (output / "godot.log").open("w") as ui_log:
         try:
-            backend = subprocess.Popen(
-                [sys.executable, "-m", "piano_teacher.server", "--no-midi"],
-                cwd=ROOT, env=environment, stdout=backend_log, stderr=subprocess.STDOUT)
+            width, height = resolution
+            desktop = subprocess.Popen(
+                [str(ROOT / "run.sh"), "--windowed", "--resolution", f"{width}x{height}",
+                 "--script", str(ROOT / "tests/godot/live_playback.gd"), "--",
+                 str(output), ",".join(map(str, bpms)), str(width), str(height)],
+                cwd=ROOT, env=environment, stdout=ui_log, stderr=subprocess.STDOUT,
+                start_new_session=True)
             deadline = time.monotonic() + 20
             while True:
-                if backend.poll() is not None:
-                    raise RuntimeError("Backend exited; see backend.log")
+                if desktop.poll() is not None:
+                    raise RuntimeError("Launcher exited; see godot.log")
                 try:
                     request("/state")
                     break
@@ -85,18 +89,13 @@ def run(output: Path, bpms: list[int], resolution: tuple[int, int]) -> None:
                     if time.monotonic() >= deadline:
                         raise RuntimeError("Backend did not become ready in 20 seconds")
                     time.sleep(.1)
+            request("/device", {"name": ""})
             request("/load", {"path": str(fixture)})
             request("/settings", {"fullscreen": False})
             # Retain the actual source raster and coordinates for reviewing a
             # failed pixel check; the UI still fetches these over its own HTTP.
             (output / "source-layout.json").write_text(json.dumps(request("/score/layout"), indent=2))
             (output / "source-score.png").write_bytes(request("/score.png?page=0", raw=True))
-            width, height = resolution
-            desktop = subprocess.Popen(
-                [godot, "--path", str(ROOT / "godot"), "--resolution", f"{width}x{height}",
-                 "--script", str(ROOT / "tests/godot/live_playback.gd"), "--",
-                 str(output), ",".join(map(str, bpms)), str(width), str(height)],
-                cwd=ROOT, env=environment, stdout=ui_log, stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 60 + sum(15 + 150 / bpm for bpm in bpms)
             previous_size = 0
             while desktop.poll() is None:
@@ -119,7 +118,6 @@ def run(output: Path, bpms: list[int], resolution: tuple[int, int]) -> None:
             print(f"PASS {len(result['samples'])} rendered samples at {bpms} BPM; artifacts: {output}", flush=True)
         finally:
             stop_process(desktop)
-            stop_process(backend)
 
 
 def main() -> int:

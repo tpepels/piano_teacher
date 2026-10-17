@@ -70,9 +70,9 @@ func note_position(note: Dictionary) -> Vector2:
     return app.score_content.get_global_transform_with_canvas() * local
 
 func local_ink(frame: Image, position: Vector2) -> Dictionary:
-    # Glyph coordinates locate the left edge of a notehead. Detect contrast
-    # across several rows/columns so a single staff line or timing beam alone
-    # cannot satisfy the notehead check. Median color works on light/dark UI.
+    # Glyph coordinates locate the left edge of a notehead. Remove long
+    # horizontal/vertical rules before counting compact contrasting ink;
+    # thick staff lines and the timing beam cannot stand in for a notehead.
     var region := Rect2i(int(position.x) + 2, int(position.y) - 7, 24, 15)
     if not Rect2i(Vector2i.ZERO, frame.get_size()).encloses(region):
         return {"pixels": 0, "rows": 0, "columns": 0}
@@ -90,19 +90,48 @@ func local_ink(frame: Image, position: Vector2) -> Dictionary:
     blue.sort()
     var middle: int = red.size() / 2
     var background := Color(red[middle], green[middle], blue[middle])
-    var pixels := 0
-    var rows := {}
-    var columns := {}
+    var mask := {}
+    var row_counts := {}
+    var column_counts := {}
     for y in range(region.position.y, region.end.y):
         for x in range(region.position.x, region.end.x):
             var color := frame.get_pixel(x, y)
             var contrast: float = maxf(absf(color.r - background.r),
                 maxf(absf(color.g - background.g), absf(color.b - background.b)))
             if contrast >= 0.15:
-                pixels += 1
-                rows[y] = true
-                columns[x] = true
+                mask[Vector2i(x, y)] = true
+                row_counts[y] = int(row_counts.get(y, 0)) + 1
+                column_counts[x] = int(column_counts.get(x, 0)) + 1
+    var pixels := 0
+    var rows := {}
+    var columns := {}
+    for point in mask:
+        if int(row_counts[point.y]) >= region.size.x * .8 \
+                or int(column_counts[point.x]) >= region.size.y * .8:
+            continue
+        pixels += 1
+        rows[point.y] = true
+        columns[point.x] = true
     return {"pixels": pixels, "rows": rows.size(), "columns": columns.size()}
+
+func has_note_ink(ink: Dictionary) -> bool:
+    return int(ink.pixels) >= 8 and int(ink.rows) >= 4 and int(ink.columns) >= 3
+
+func check_ink_detector() -> void:
+    var frame := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+    var position := Vector2(16, 32)
+    frame.fill(Color("#1E3A34"))
+    frame.fill_rect(Rect2i(0, 31, 64, 3), Color.WHITE)
+    check(not has_note_ink(local_ink(frame, position)), "A thick staff rule cannot count as a notehead")
+    frame.fill_rect(Rect2i(24, 0, 3, 64), Color.WHITE)
+    check(not has_note_ink(local_ink(frame, position)), "Crossed staff and timing rules cannot count as a notehead")
+    frame.fill(Color("#1E3A34"))
+    frame.fill_rect(Rect2i(0, 31, 64, 3), Color.WHITE)
+    for y in range(26, 39):
+        for x in range(19, 35):
+            if pow((x-27.0)/8.0, 2) + pow((y-32.0)/6.0, 2) < 1.0:
+                frame.set_pixel(x, y, Color.WHITE)
+    check(has_note_ink(local_ink(frame, position)), "Compact notehead ink remains detectable across a staff rule")
 
 func write_samples() -> void:
     var output := FileAccess.open(folder + "/samples.json", FileAccess.WRITE)
@@ -132,25 +161,34 @@ func capture(bpm: int, label: String) -> Dictionary:
     var beam: Vector2 = (app.score_content.get_global_transform_with_canvas() * beam_local) * pixel_scale
     var canvas_panel: Rect2 = app.score_frame.get_global_rect()
     var panel := Rect2(canvas_panel.position * pixel_scale, canvas_panel.size * pixel_scale)
-    check(panel.has_point(position), "%d BPM %s: tracked note is visible" % [bpm, label])
     check(absf(beam.x - (panel.position.x + panel.size.x * 0.42)) < 2.0,
         "%d BPM %s: timing line stays fixed" % [bpm, label])
     check(app.score_content.size.distance_to(baseline_size) < 0.5,
         "%d BPM %s: notation scale stays stable" % [bpm, label])
     var ink := local_ink(frame, position)
-    var paused_modal: bool = bool(app.last_state.get("paused", false))
+    var paused_modal: bool = app.pause_sheet.is_visible_in_tree()
     var modal_ink: Dictionary = {}
     if paused_modal:
         # The real pause sheet deliberately shades the staff. Its Resume text
         # must render, while note geometry remains frozen until it is uncovered.
-        check(app.pause_sheet.is_visible_in_tree(), "%d BPM %s: actual pause sheet is visible" % [bpm, label])
         var resume_center: Vector2 = app.pause_sheet.resume_button.get_global_rect().get_center()
         modal_ink = local_ink(frame, (resume_center - Vector2(12, 0)) * pixel_scale)
         check(int(modal_ink.pixels) >= 6 and int(modal_ink.rows) >= 3 and int(modal_ink.columns) >= 3,
             "%d BPM %s: actual rendered Resume text exists (%s)" % [bpm, label, str(modal_ink)])
     else:
-        check(int(ink.pixels) >= 6 and int(ink.rows) >= 3 and int(ink.columns) >= 3,
-            "%d BPM %s: actual rendered notehead ink exists (%s)" % [bpm, label, str(ink)])
+        # Empty staff before the first onset is intentional. Once playing,
+        # check actual ink for a note inside the viewport, even after our
+        # original tracked note has scrolled out of view.
+        var visible_note := false
+        var visible_ink := false
+        for candidate in app.score_layout.get("notes", []):
+            var point: Vector2 = note_position(candidate) * pixel_scale
+            if panel.grow(-25.0).has_point(point):
+                visible_note = true
+                var pixels := local_ink(frame, point)
+                visible_ink = visible_ink or has_note_ink(pixels)
+        check(visible_ink or (not visible_note and app.rendered_clock < 0.0),
+            "%d BPM %s: visible notation contains actual notehead pixels" % [bpm,label])
     var filename := "frame-%d-%s.png" % [bpm, label]
     check(frame.save_png(folder + "/" + filename) == OK, "Save rendered frame " + filename)
     var result := {"bpm": bpm, "label": label, "beat": app.rendered_clock,
@@ -170,27 +208,44 @@ func run_tempo(bpm: int) -> void:
     if not await wait_for(func(): return app.revision == wanted_revision and score_ready(),
             90.0, "engraved score revision at " + str(bpm)):
         return
+    await process_frame
+    await process_frame
     baseline_size = app.score_content.size
     tracked_id = str(app.score_layout["notes"][0].get("id", ""))
     check(not tracked_id.is_empty(), "Required note has a stable ID")
-    var started: Dictionary = await api({"action": "start"})
-    var transport_id: int = int(started.get("transport_id", -2))
-    if not await wait_for(func(): return active_attempt(transport_id), 10.0, "running attempt"):
+    var prior_id: int = int(app.last_state.get("transport_id", -1))
+    app.start_button.pressed.emit()
+    if not await wait_for(func(): return int(app.last_state.get("transport_id", -1)) > prior_id \
+            and active_attempt(int(app.last_state.get("transport_id", -1))), 10.0, "Play button starts a running attempt"):
         return
+    var started: Dictionary = app.last_state
+    var transport_id: int = int(started.get("transport_id", -2))
     var previous: Dictionary = {}
+    var moving_samples: Array = []
     var lead: float = float(started.get("count_in_beats", 3.0))
     # At slow tempi the opening note leaves the viewport sooner in musical
     # beats because those beats deliberately have more horizontal space.
-    for target in [-lead + .2, -0.65, -0.1, 0.35, 0.7, 1.1]:
+    for target in [-lead + .2, -0.65, -0.1, 0.0, 0.35, 0.7, 1.1]:
         if not await wait_for(func(): return app._transport_beat_now() >= target,
                 12.0, "target musical beat " + str(target)):
             return
         var sample: Dictionary = await capture(bpm, "beat-%s" % str(target).replace(".", "_"))
+        moving_samples.append(sample)
         if not previous.is_empty() and not sample.is_empty():
             check(float(sample.note_x) < float(previous.note_x) - 2.0,
                 "%d BPM: same note moves left through count-in and playback" % bpm)
         previous = sample
-    await api({"action": "pause"})
+    if moving_samples.size() >= 2 and not moving_samples[0].is_empty() and not previous.is_empty():
+        var first: Dictionary = moving_samples[0]
+        var pixels_per_beat: float = (float(first.note_x) - float(previous.note_x)) \
+            / (float(previous.beat) - float(first.beat))
+        for sample in moving_samples:
+            if sample.is_empty():
+                continue
+            var at_downbeat: float = float(sample.note_x) + float(sample.beat) * pixels_per_beat
+            check(absf(at_downbeat - float(sample.beam_x)) < 1.5,
+                "%d BPM: constant screen-space travel arrives at the line on beat zero" % bpm)
+    app.start_button.pressed.emit()
     if not await wait_for(func(): return bool(app.last_state.get("paused", false)), 5.0, "pause"):
         return
     var paused_a: Dictionary = await capture(bpm, "paused-a")
@@ -199,7 +254,7 @@ func run_tempo(bpm: int) -> void:
     check(absf(float(paused_b.get("note_x", 0.0)) - float(paused_a.get("note_x", 0.0))) < 1.0,
         "%d BPM: pause freezes the actual displayed note" % bpm)
     var pause_beat: float = app._transport_beat_now()
-    await api({"action": "resume"})
+    app.start_button.pressed.emit()
     if not await wait_for(func(): return not bool(app.last_state.get("paused", true)) \
             and app._transport_beat_now() >= pause_beat + 0.35, 5.0, "resume"):
         return
@@ -221,6 +276,7 @@ func run_tempo(bpm: int) -> void:
 func run() -> void:
     var args := OS.get_cmdline_user_args()
     folder = args[0]
+    check_ink_detector()
     if DisplayServer.get_name() == "headless":
         check(false, "A real desktop renderer is required")
         write_samples()

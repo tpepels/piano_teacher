@@ -177,6 +177,8 @@ static func build(layout: Dictionary, pages: Array[Image],
         if warp.size() > 1 and float(warp[-1].y) + float(mapping.get("tempo_gap", 0)) > 16384:
             defer_textures = true
     var tiles: Array = []
+    var ink_top := INF
+    var ink_bottom := -INF
     for mapping in mappings:
         mapping.position.y = above - float(mapping.staff_offset)
         var image: Image = pages[int(mapping.source_page)].get_region(Rect2i(mapping.crop))
@@ -213,6 +215,12 @@ static func build(layout: Dictionary, pages: Array[Image],
                             expanded.set_pixel(x, y, Color(0, 0, 0,
                                 .80 if offset == 0 else .14))
             image = expanded
+        # The viewport must fit complete clefs, meters and ledger lines,
+        # not just the five staff rules. Horizontal warping leaves Y intact.
+        var ink: Rect2i = image.get_used_rect()
+        if ink.has_area():
+            ink_top = minf(ink_top, float(mapping.position.y) + ink.position.y)
+            ink_bottom = maxf(ink_bottom, float(mapping.position.y) + ink.end.y)
         var warp_points: Array = mapping.get("tempo_warp", [])
         var tempo_gap: int = int(mapping.get("tempo_gap", 0))
         var warped_width: int = roundi(float(warp_points[-1].y)) if warp_points.size() > 1 else image.get_width()
@@ -279,6 +287,9 @@ static func build(layout: Dictionary, pages: Array[Image],
     flat["widths"] = [size.x]
     flat["heights"] = [size.y]
     flat["strip_size"] = size
+    if is_finite(ink_top) and ink_bottom > ink_top:
+        flat["strip_ink_top"] = ink_top / size.y
+        flat["strip_ink_bottom"] = ink_bottom / size.y
     flat["strip_mappings"] = mappings
     for key in ["notes", "anchors"]:
         var positioned: Array = []

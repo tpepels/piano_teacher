@@ -168,6 +168,7 @@ func test_short_challenge_loop() -> void:
         {"hand":"right","active":false,"complete":false,"locked":true},
         {"hand":"both","active":false,"complete":false,"locked":true}]
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
+    var ribbon_visible_at_ready: bool = app.practice_stage_bar.visible
     check("LEFT HAND" in app.progress_label.text and "1/3 CLEAN" in app.progress_label.text,
         "Practice should show the short musical challenge and committed clean streak")
     run["phase"] = "count_in"
@@ -175,8 +176,11 @@ func test_short_challenge_loop() -> void:
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
     check(app.game_phase_cue.message == "GET READY",
         "Count-in uses one compact cue alongside beat lights")
-    check(not app.feedback_label.visible and not app.practice_stage_bar.visible,
-        "Count-in hides repeated status text and large hand cards")
+    check(not app.feedback_label.visible,
+        "Count-in hides repeated status text")
+    check(app.practice_stage_bar.visible == ribbon_visible_at_ready
+        and app.practice_stage_bar.visible == (app.size.y >= 750.0),
+        "Hand progression keeps the same allocation through count-in, except on compact windows")
     run["phase"] = "playing"
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
     check(app.game_phase_cue.message.is_empty() and not app.feedback_label.visible,
@@ -391,13 +395,105 @@ func test_compact_feedback() -> void:
     await process_frame
     await process_frame
     var viewport := root.get_visible_rect()
-    check(app.feedback_label.get_line_count() > 1,
-        "MIDI connection guidance wraps into readable lines at 800 pixels")
+    check(app.feedback_label.max_lines_visible == 1 and app.feedback_label.clip_text
+        and app.feedback_label.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS,
+        "Compact feedback uses one readable line with ellipsis")
+    check(app.feedback_label.tooltip_text == state()["feedback"],
+        "Full MIDI connection guidance remains available from the bounded feedback")
     var font_size: int = app.feedback_label.get_theme_font_size("font_size")
-    check(app.feedback_label.size.y >= app.feedback_label.get_line_count() * font_size,
-        "Feedback reserves enough height for every wrapped line")
+    check(font_size >= 16 and app.feedback_label.size.y >= font_size,
+        "Feedback reserves enough height without shrinking readable type")
     for control in [app.feedback_label, app.progress_label, app.practice_controls, app.speed_label]:
         check(viewport.encloses(control.get_global_rect()), "Compact practice control remains inside the viewport: " + str(control))
+
+func test_caption_bounds() -> void:
+    for dimensions in [Vector2i(800, 600), Vector2i(1536, 960)]:
+        root.size = dimensions
+        await process_frame
+        await process_frame
+        var expected := Rect2()
+        for phase in ["ready", "count_in", "playing", "paused", "feedback", "ready"]:
+            var snapshot := state(phase)
+            snapshot["mode"] = "practice"
+            snapshot["preview_only"] = false
+            snapshot["device"] = "Test piano"
+            snapshot["hand_stages"] = [
+                {"hand": "right", "active": true, "complete": false, "locked": false},
+                {"hand": "left", "active": false, "complete": false, "locked": true},
+                {"hand": "both", "active": false, "complete": false, "locked": true}]
+            snapshot["feedback"] = "This detailed connection guidance must remain available while the notation keeps the same size. ".repeat(8)
+            snapshot["next_action"] = "Retry measures 1–2, release the key, and prepare to play after the count-in. ".repeat(8)
+            app._on_state(0, 200, PackedStringArray(), JSON.stringify(snapshot).to_utf8_buffer())
+            for frame in range(6):
+                await process_frame
+            var score_rect: Rect2 = app.score_frame.get_global_rect()
+            if expected.size == Vector2.ZERO:
+                expected = score_rect
+            check(score_rect.is_equal_approx(expected),
+                "Caption changes must not move or resize notation at %s during %s: %s vs %s" % [dimensions, phase, score_rect, expected])
+            var viewport := Rect2(Vector2.ZERO, Vector2(dimensions))
+            check(score_rect.size.y >= 135.0 and viewport.encloses(score_rect),
+                "Captions leave a usable notation region at %s" % dimensions)
+            check(viewport.encloses(app.practice_controls.get_global_rect()),
+                "Caption slots must leave all transport controls visible at %s" % dimensions)
+            for caption in [app.feedback_label, app.lesson_info_label]:
+                check(caption.get_theme_font_size("font_size") >= 16,
+                    "Caption containment must preserve readable typography")
+                check(caption.tooltip_text == caption.text,
+                    "The full bounded caption must remain available in its tooltip")
+                check(caption.mouse_filter != Control.MOUSE_FILTER_IGNORE,
+                    "Bounded captions must receive pointer hover for their full tooltip")
+                check(viewport.encloses(caption.get_parent().get_global_rect()),
+                    "Caption slot must fit the viewport at %s" % dimensions)
+            check(app.feedback_label.max_lines_visible == 1 and app.lesson_info_label.max_lines_visible == 2,
+                "Reserve one feedback line and two instruction lines")
+
+func test_notation_phase_cues() -> void:
+    var texture: Texture2D = app.score_view.texture
+    for dimensions in [Vector2i(800, 600), Vector2i(1536, 960)]:
+        root.size = dimensions
+        app.score_view.texture = texture
+        await process_frame
+        await process_frame
+        for phase in ["ready", "count_in", "playing", "paused", "feedback"]:
+            var snapshot := state(phase)
+            snapshot["device"] = "Test piano"
+            snapshot["mode"] = "practice"
+            snapshot["preview_only"] = false
+            snapshot["feedback"] = "Review your notes before trying again"
+            app._on_state(0, 200, PackedStringArray(), JSON.stringify(snapshot).to_utf8_buffer())
+            app._update_count_in()
+            await process_frame
+            await process_frame
+            check(not app.game_phase_cue.is_visible_in_tree(),
+                "A phase capsule must never obscure loaded notation during %s at %s" % [phase, dimensions])
+            var score_rect: Rect2 = app.score_frame.get_global_rect()
+            check(score_rect.size.y >= 135.0,
+                "Removing an overlapping capsule must not reduce the notation floor")
+            check(not app.progress_label.text.is_empty()
+                and not score_rect.intersects(app.progress_label.get_global_rect()),
+                "Useful practice progress remains outside notation during " + phase)
+            for caption in [app.feedback_label, app.lesson_info_label]:
+                if caption.is_visible_in_tree():
+                    check(not caption.text.is_empty()
+                        and not score_rect.intersects(caption.get_global_rect()),
+                        "Visible phase guidance must remain outside notation during " + phase)
+            if phase == "count_in":
+                check(app.game_count_in.visible and app.game_count_in.beats_left > 0,
+                    "Backend-timed preparation lights remain available without the capsule")
+            elif phase == "ready":
+                check(app.lesson_info_label.visible and "Play any piano key" in app.lesson_info_label.text,
+                    "Ready practice retains its actionable starting instruction")
+            elif phase == "paused":
+                check(app.feedback_label.visible and "Paused" in app.feedback_label.text,
+                    "Pause retains its ordinary state caption")
+        # A preparing score can still show a genuine transition cue: there
+        # are no engraved noteheads underneath it until a texture arrives.
+        app.score_view.texture = null
+        app._on_state(0, 200, PackedStringArray(), JSON.stringify(state("loading")).to_utf8_buffer())
+        check(app.game_phase_cue.visible and app.game_phase_cue.message == "PREPARING",
+            "The phase cue remains available while engraving is not yet ready")
+
 
 func test_instructional_transition() -> void:
     var retry: Dictionary = state("recovering")
@@ -691,6 +787,8 @@ func run() -> void:
         "settings_back_origin": test_settings_back_origin()
         "abandon_practice": test_abandon_practice()
         "compact_feedback": await test_compact_feedback()
+        "caption_bounds": await test_caption_bounds()
+        "notation_phase_cues": await test_notation_phase_cues()
         "instructional_transition": test_instructional_transition()
         "modes": test_modes()
         "pause_choices": test_pause_choices()

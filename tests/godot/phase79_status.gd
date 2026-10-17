@@ -126,8 +126,41 @@ func run() -> void:
     await process_frame
     check(app.game_input_indicator.get_parent() == app.speed_label.get_parent(),
         "Activity lamp belongs beside BPM/hand, not over engraved music")
-    check(app.game_input_indicator.get_combined_minimum_size().x >= 130,
-        "Live MIDI status must remain readable")
+    # Fixed-width status controls used to lose the final D despite passing
+    # the old arbitrary minimum-width assertion. Measure the actual font
+    # after normal responsive containers have assigned the control's width.
+    for dimensions in [Vector2i(1536, 960), Vector2i(1024, 768), Vector2i(800, 600)]:
+        root.size = dimensions
+        await process_frame
+        await process_frame
+        var indicator: Control = app.game_input_indicator
+        indicator.present({"device": "Kawai CA-49", "preview_only": false})
+        var label_width: float = indicator.get_theme_font("font").get_string_size(
+            "MIDI CONNECTED", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+        print("PHASE79_STATUS_WIDTH: window=", dimensions, " control=", indicator.size.x,
+            " text=", label_width)
+        check(indicator.size.x - 32.0 >= ceilf(label_width),
+            "Complete MIDI status must fit its real font at %s" % dimensions)
+        check(indicator.get_global_rect().end.x <= float(dimensions.x),
+            "Readable MIDI status must remain inside the viewport at %s" % dimensions)
+    # A different installed/theme font must invalidate the intrinsic width,
+    # while changing status alone must not make the tempo column jump.
+    app.game_input_indicator.add_theme_font_override("font", Design.font(900))
+    await process_frame
+    await process_frame
+    var changed_width: float = app.game_input_indicator.get_theme_font("font").get_string_size(
+        "MIDI CONNECTED", HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x
+    check(app.game_input_indicator.size.x - 32.0 >= ceilf(changed_width),
+        "MIDI status must remeasure when its theme font changes")
+    var connected_width: float = app.game_input_indicator.size.x
+    app.game_input_indicator.present({"device": "", "preview_only": true})
+    await process_frame
+    await process_frame
+    check(app.game_input_indicator.size.x == connected_width,
+        "Disconnect must not shift the tempo column")
+    root.size = Vector2i(1024, 768)
+    await process_frame
+    await process_frame
     check(app.practice_controls.get_child_count() == 3,
         "New gaming cues must not introduce a fourth transport button")
     check(app.score_frame.get_global_rect().end.x <= 1026.0,

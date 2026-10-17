@@ -96,10 +96,11 @@ Each warm-up is a three-step course:
 
 An incorrect performance resets the clean streak; it never advances to a
 harder hand. The student's current hand, streak and unlocked stages are saved
-locally. During the beginner studies there is no automatic two-measure
-rewind/slowdown. The count-in, moving notation, Listen demonstration, manual
-Restart and hands-free MIDI start still work. Without a piano, a timing preview
-cannot earn mastery.
+locally. Two wrong/missed required notes within a two-bar warm-up chunk trigger
+a boundary retry at 90% tempo. A failed full-study review stays available for
+the learner's next choice. Count-in, moving notation, Listen, manual Restart
+and hands-free MIDI start still work. Without a piano, a timing preview cannot
+earn mastery.
 
 | Warm-up | Tempo | Focus |
 |---|---:|---|
@@ -125,14 +126,12 @@ Pausing, restarting or seeking clears any stale cue.
 
 ## Phase 7.6 - Stable timebase under noisy MIDI/HTTP timing
 
-The visible musical clock filters *phase error*, not the moving sheet music.
-Normal polling jitter has a 0.025-beat deadband and low-pass filter so the
-camera moves at the requested BPM rather than accelerating/decelerating on
-each response. Persistent phase differences are corrected gradually with
-a 2% maximum tempo adjustment (down from 6%). Retry, pause, resume, score
-changes and actual seeks still reset synchronously. The regression checks
-both alternating network delays and independent timestamp jitter, including
-the exact downbeat and a whole 9.6-second passage.
+Python's sampled musical clock is projected at the requested BPM. The frontend
+calibrates its process-clock offset from low-latency idle responses and freezes
+that calibration while notes move. It does not adjust camera tempo to chase
+polling jitter. Retry, pause, resume, score changes and actual seeks reset the
+projection synchronously. This supersedes the earlier phase-error filter and
+2% tempo correction. See the [regression report](docs/regression-recovery-2026-10-17.md).
 
 ## Phase 7.6 - Stable scrolling through system joins
 
@@ -583,8 +582,8 @@ During a MIDI-connected practice attempt, the app distinguishes:
 Mistakes in a warm-up now participate in adaptive recovery: **two**
 wrong/missed required pitches in a two-bar window trigger a
 boundary-aligned restart at 90% of the previous BPM. Imported-piece
-Practice still uses five errors. The slowdown banner names the missed
-count, original/next tempo and retry measures. A clean partial retry
+Practice uses five errors in a rolling two-bar window. The captions name the
+original/next tempo and retry measures without covering notes. A clean partial retry
 must still be followed by a whole clean passage; three clean target
 speed performances are still required for advancement.
 
@@ -778,14 +777,21 @@ python scripts/smoke_student_journey.py --output-dir /tmp/piano-student
 python scripts/smoke_learning_ui.py --output-dir /tmp/piano-learning-ui
 ```
 
-The visible playback check captures the same note at 30, 40, 80 and 120 BPM,
+The visible playback check starts the ordinary `./run.sh` launcher with no MIDI
+device, presses the real Play/Pause/Resume controls, and captures the same note
+at 30, 40, 80 and 120 BPM. It
 checks local raster ink, leftward movement, fixed timing line, stable scale,
-pause/resume, restart and a naturally completed ungraded preview. It writes PNGs,
+constant pixels per beat through the downbeat, pause/resume, restart and a
+naturally completed ungraded preview. It writes PNGs,
 JSON measurements and logs. `--bpms 40` selects a shorter probe; `--resolution
 1024x768` selects a window size. The UI check runs **the normal `./run.sh`
 launcher**, opens a real piece, exercises controls and captures all screens at
 1536×960, 1024×768 and 800×600. Both use isolated progress/preferences, preserving
 existing user data and source files.
+
+The [17 October handoff verification](docs/handoff-verification-2026-10-17.md)
+records the subsequent fixes for phase-dependent zoom, clipped notation,
+expressive MIDI rest/tie clutter, rolling recovery and interrupted clean streaks.
 
 The musical fidelity corpus checks 26 actual MIDI/MusicXML imports and four
 unsupported inputs through source identity, generated exercises, real Verovio,

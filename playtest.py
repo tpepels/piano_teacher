@@ -207,6 +207,8 @@ class Playtest:
                "tests/test_visual_transport_clock.py",
                "tests/test_recovery_layout.py",
                "tests/test_recovery_motion.py",
+               "tests/test_practice_score_bounds.py",
+               "tests/test_lesson_score_dense_midi.py",
                "tests/test_rendered_playhead.py"]
         self.note("Running the practice UI/MIDI/score tests before launching the piano.")
         with (self.output / "preflight.log").open("w", encoding="utf-8") as out:

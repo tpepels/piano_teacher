@@ -1,6 +1,6 @@
 # Piano Teacher — adaptive MIDI-to-exercise piano tutor
 
-## Current implementation status — 2026-10-15
+## Current implementation status — 2026-10-17
 
 - **Teaching interactions implemented:** imported music opens in untimed Learn,
   with fresh note/chord recognition and contextual keyboard hints. Successive
@@ -21,6 +21,9 @@
   80 and 120 BPM track the same rendered note moving left under a stable timing
   line. Count-in, pause/resume, restart, rests and multi-page/system projection
   are covered. Python remains the sole clock; no-input previews cannot master.
+  The ordinary launcher is now covered by the desktop pixel test. Caption and
+  hand-status rows reserve stable space across transport phases; complete
+  engraving ink fits above the progress rail, including clefs and meters.
 - **Dark UI implemented and desktop inspected:** library, practice, lesson path
   and settings use the approved forest/charcoal/stone palette. The normal launcher
   was exercised with a real MIDI at desktop and 1024×768/800×600 window sizes.
@@ -41,6 +44,9 @@
 - **Adaptive engine retained:** five-error boundary recovery, 10% slowdown,
   target restoration, automatic repetition, three clean target-speed full takes,
   score-ready handoff and saved mastery remain regression/integration tested.
+  Recovery detects errors across adjacent two-bar chunks. A failed full take
+  immediately clears its saved clean streak, even when feedback is interrupted;
+  imported Practice failures repeat after the feedback interval.
 - **Physical acceptance remains open:** real USB MIDI input, disconnect/reconnect
   behavior on the target instrument, speaker audibility and latency must be
   checked with the user. Software captures do not replace this gate.
@@ -48,6 +54,8 @@
 See `docs/teaching-p0-baseline.md` through `docs/teaching-p5-verification.md`
 and `docs/teaching-methodology.md` for teaching evidence and limitations;
 `docs/verification-2026-10-15.md` records the earlier playback baseline.
+See [handoff verification](docs/handoff-verification-2026-10-17.md) for the latest
+desktop evidence, dense-MIDI display normalization and remaining hardware checks.
 The remaining roadmap below describes product direction and hardware acceptance;
 older CI notes at the end are historical evidence, not the current test count.
 
