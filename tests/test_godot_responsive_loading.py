@@ -25,7 +25,12 @@ def test_fullscreen_layout_has_adaptive_margins_and_stackable_cards():
 
 
 def test_long_song_names_cannot_force_controls_wider():
-    assert 'button.clip_text = true' in SCRIPT
+    # File entries now use a two-line row; the title and detail each have
+    # independent ellipsis clipping instead of one unreadable joined string.
+    library_row = (ROOT / 'godot' / 'library_row.gd').read_text(encoding='utf-8')
+    assert 'title_label.clip_text = true' in library_row
+    assert 'detail_label.clip_text = true' in library_row
+    assert 'title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in library_row
     assert 'title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in SCRIPT
     assert 'home_recent_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in SCRIPT
     assert 'library_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in SCRIPT
