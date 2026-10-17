@@ -102,6 +102,8 @@ func run() -> void:
                 "bpm": bpm, "play_from_beat": 0.0, "duration_beats": 6.0,
                 "count_in_beats": lead, "count_in_meter": [3, 4]}
             app._process(0.0)
+            check(app.score_overlay.lead_width_px <= .001,
+                "Paused score must not repeat count-in clefs or meter at %d BPM" % bpm)
             positions.append(app.score_content.position.x)
         var incoming: float = positions[1] - positions[0]
         var outgoing: float = positions[2] - positions[1]
@@ -117,6 +119,12 @@ func run() -> void:
                 "count_in_beats": lead, "transport_id": bpm, "phase": "playing"}
             app.last_state_tick = Time.get_ticks_msec()
             app._process(1.0 / 60.0)
+            if clock < -.01:
+                check(app.score_overlay.lead_width_px > 0.0,
+                    "Count-in must retain its lead-in staff before downbeat")
+            elif clock >= 0.0:
+                check(app.score_overlay.lead_width_px <= .001,
+                    "Count-in glyphs must disappear on the first sounding beat")
             var projected: Vector2 = app.score_content.position + (
                 Vector2(float(note.x), float(note.y)) - app.score_crop_origin
                 ) / app.score_crop_size * app.score_content.size
