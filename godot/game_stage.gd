@@ -12,6 +12,8 @@ var phase := "ready"
 var progress := 0.0
 var shown_progress := 0.0
 var progress_spark := 0.0
+var milestone_slot := -1
+var milestone_light := 0.0
 var last_progress_session := ""
 var accent := AURA
 var transport_active := false
@@ -63,6 +65,11 @@ func present(state: Dictionary) -> void:
             result_age = 0.0
             result_wave = 1.0
             queue_redraw()
+    var earned_milestone: bool = bool(state.get("loaded", false)) and not bool(
+        state.get("preview_only", false)) and str(state.get("mode", "")) in [
+        "practice", "perform"] and next_phase in ["playing", "feedback"]
+    var earlier_slot: int = clampi(int(floor(progress * 5.0 + .00001)), 0, 5)
+    var latest_slot: int = clampi(int(floor(next_progress * 5.0 + .00001)), 0, 5)
     var session_key: String = "%s|%s|%s" % [
         str(state.get("revision", -1)), str(state.get("transport_id", -1)),
         str(state.get("hand", ""))]
@@ -70,6 +77,13 @@ func present(state: Dictionary) -> void:
         last_progress_session = session_key
         shown_progress = next_progress
         progress_spark = 0.0
+        milestone_slot = -1
+        milestone_light = 0.0
+    elif earned_milestone and latest_slot > earlier_slot:
+        milestone_slot = maxi(0, mini(4, latest_slot - 1))
+        milestone_light = 1.0
+        progress_spark = 1.0
+        queue_redraw()
     elif next_progress > progress + .04 and next_progress >= shown_progress:
         # This is the backend's actual progress, never a simulated reward.
         progress_spark = 1.0
@@ -127,6 +141,9 @@ func _process(delta: float) -> void:
         redraw = true
     if progress_spark > .001:
         progress_spark = maxf(0.0, progress_spark - delta * 2.8)
+        redraw = true
+    if milestone_light > .001:
+        milestone_light = maxf(0.0, milestone_light - delta * 1.7)
         redraw = true
     if preview_energy > .001:
         preview_energy = maxf(0.0, preview_energy - delta * 1.15)
@@ -257,6 +274,19 @@ func _draw() -> void:
         if amount > .0001:
             draw_rect(Rect2(left, track_y, segment * amount, 7.0),
                 Color(Design.SCORE_PROGRESS, .89 + progress_spark * .1), true)
+        # One quick gold-toned glint for a *backend-confirmed* fifth
+        # milestone. Never triggered by Listen or keyboard-free preview.
+        if i == milestone_slot and milestone_light > .001:
+            var glint: float = milestone_light * milestone_light
+            var sweep_x: float = left + segment * (1.0 - milestone_light)
+            draw_line(Vector2(left, track_y - 2.0),
+                Vector2(left + segment, track_y - 2.0),
+                Color("#BCA06A", glint * .34), 2.0, true)
+            draw_circle(Vector2(sweep_x, track_y + 3.0),
+                7.0 + (1.0 - milestone_light) * 3.0,
+                Color("#C9A96B", glint * .14))
+            draw_circle(Vector2(sweep_x, track_y + 3.0),
+                2.6, Color("#B89A62", glint * .8))
     if progress_spark > .001 and shown_progress > .001:
         var spot: float = inset + rail_width * shown_progress
         draw_circle(Vector2(spot, track_y + 3.5),

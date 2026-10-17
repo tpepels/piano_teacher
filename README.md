@@ -859,6 +859,20 @@ now derive styles from these shared tokens rather than independent colors.
 The backdrop uses fewer static drawing bands. This pass adds no
 continuously running animation and does not affect notation or MIDI timing.
 
+## Moodboard game-feel - event-driven coaching
+
+The ivory score, forest-green controls and five-step progress rail share one
+palette and interaction rhythm. Graded, fresh MIDI attacks can show a compact
+`RIGHT ON TIME`, `A LITTLE EARLY`, `A LITTLE LATE`, or `TRY THAT NOTE`
+coaching card at the edge of the score. Chord notes arriving within 115ms
+coalesce into one message. The note-impact card lasts under 0.7 seconds,
+redraws only while active and is cleared on switching into an ungraded
+preview. Confirmed fifth-of-exercise milestones create a short champagne
+glint along the segmented progress rail. Preview and Listen cannot earn
+these judgments or milestones. Phase transitions ease into view once, and
+the active transport button uses a 13Hz idle pulse rather than an unbounded
+60Hz redraw loop. No new timers, note grading or sound engines are added.
+
 ## Music selection and start-point usability
 
 The music drawer shows two-line, fully clickable rows with clear titles

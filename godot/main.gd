@@ -18,6 +18,7 @@ const LivingScore := preload("res://living_score.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
 const GameBackdrop := preload("res://game_backdrop.gd")
 const GameStage := preload("res://game_stage.gd")
+const GameImpactCallout := preload("res://game_impact_callout.gd")
 const GameStreak := preload("res://game_streak.gd")
 const GameCountIn := preload("res://game_countin.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
@@ -55,6 +56,7 @@ var practice_navigation: HFlowContainer
 var practice_header: HBoxContainer
 var game_brand: Label
 var game_stage: Control
+var game_impact_callout: Control
 var game_streak: Control
 var game_input_indicator: Control
 var game_count_in: Control
@@ -1230,6 +1232,15 @@ func _build_interface() -> void:
     game_phase_cue.offset_top = 9.0
     game_phase_cue.offset_bottom = 46.0
     score_frame.add_child(game_phase_cue)
+    # Short earned-judgment coaching, placed below the notes on the right.
+    # No preview note may create one of these success/correction labels.
+    game_impact_callout = GameImpactCallout.new()
+    game_impact_callout.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
+    game_impact_callout.offset_left = -264.0
+    game_impact_callout.offset_right = -14.0
+    game_impact_callout.offset_top = -116.0
+    game_impact_callout.offset_bottom = -54.0
+    score_frame.add_child(game_impact_callout)
     game_count_in = GameCountIn.new()
     game_count_in.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
     game_count_in.position = Vector2(22, 12)
@@ -2751,6 +2762,8 @@ func _clear_assessed_effects_in_ungraded_mode(state: Dictionary) -> void:
     var ungraded: bool = bool(state.get("preview_only", false)) \
         or str(state.get("mode", "")) == "listen"
     if ungraded:
+        if game_impact_callout != null:
+            game_impact_callout.call("clear")
         if score_overlay.hit_pulses.is_empty() and score_overlay.wrong_ghosts.is_empty():
             return
         score_overlay.hit_pulses.clear()
@@ -2810,6 +2823,7 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                 if score_overlay.wrong_ghosts.size() > 32:
                     score_overlay.wrong_ghosts.pop_front()
                 game_stage.react("unexpected")
+                game_impact_callout.call("react", "unexpected")
                 note_reactions.queue_redraw()
                 break
             continue
@@ -2832,6 +2846,7 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                 if score_overlay.hit_pulses.size() > 32:
                     score_overlay.hit_pulses.pop_front()
                 game_stage.react(status)
+                game_impact_callout.call("react", status)
                 note_reactions.queue_redraw()
                 break
 

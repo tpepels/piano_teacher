@@ -5,6 +5,7 @@ extends SceneTree
 const Design := preload("res://practice_theme.gd")
 const Stage := preload("res://game_stage.gd")
 const PhaseCue := preload("res://game_phase_cue.gd")
+const ImpactCallout := preload("res://game_impact_callout.gd")
 var failures: Array[String] = []
 
 func check(condition: bool, description: String) -> void:
@@ -51,6 +52,8 @@ func _verify() -> void:
         "Earned progress moves forward and fades without jumps")
     var faded: float = stage.progress_spark
     stage.present(advance)
+    check(stage.milestone_light == 0.0 and stage.milestone_slot == -1,
+        "Preview visual progress cannot produce an earned milestone celebration")
     check(absf(stage.progress_spark - faded) < .0001,
         "Repeated HTTP polling cannot restart progression animation")
     var new_take: Dictionary = initial.duplicate()
@@ -59,6 +62,39 @@ func _verify() -> void:
     stage.present(new_take)
     check(stage.progress_spark == 0.0 and stage.shown_progress == 0.0,
         "New practice transport resets the segment rail with no success reward")
+    # Only backend-provided, graded progress may light the milestone.
+    var scored := initial.duplicate()
+    scored["preview_only"] = false
+    scored["mode"] = "practice"
+    scored["transport_id"] = 23
+    scored["progress"] = 0.0
+    stage.present(scored)
+    scored["progress"] = .22
+    stage.present(scored)
+    check(stage.milestone_slot == 0 and stage.milestone_light > .0,
+        "A scored fifth of the exercise gets a short progress celebration")
+    stage._process(.22)
+    var milestone_after: float = stage.milestone_light
+    stage.present(scored)
+    check(absf(stage.milestone_light - milestone_after) < .001,
+        "Polling the same progress must not restart the milestone glow")
+    var impact := ImpactCallout.new()
+    surface.add_child(impact)
+    impact.size = Vector2(230, 60)
+    impact.react("on_time", 1000)
+    check(impact.message == "RIGHT ON TIME" and impact.elapsed == 0.0,
+        "Only a received on-time judgment creates a coaching card")
+    impact._process(.25)
+    var elapsed_after: float = impact.elapsed
+    impact.react("on_time", 1050)
+    check(absf(impact.elapsed-elapsed_after) < .0001,
+        "Chord attacks in the same instant cannot spam competing cards")
+    impact.react("late", 1250)
+    check(impact.message == "A LITTLE LATE" and impact.tone != Design.SCORE_ACCENT,
+        "Timing errors get a distinct, supportive visual reaction")
+    impact.clear()
+    check(impact.elapsed >= ImpactCallout.DURATION,
+        "Entering ungraded playback removes an old success message")
     cue.present({"loaded":true, "phase":"count_in", "mode":"practice",
         "transport_id":22})
     cue._process(.15)

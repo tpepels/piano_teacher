@@ -109,7 +109,8 @@ func _draw() -> void:
         HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
     var bubble_width: float = minf(size.x - 2.0, ink_width + 44.0)
     var x: float = maxf(0.0, size.x - bubble_width - 1.0)
-    var slide: float = (1.0 - onset) * 14.0
+    var rise: float = 1.0 - pow(1.0 - onset, 3.0)
+    var slide: float = (1.0 - rise) * 22.0
     var rect := Rect2(x + slide, 1.0, bubble_width, minf(size.y - 2.0, 35.0))
     # Rounded status capsule rather than a square web notification.
     var r: float = minf(rect.size.y * .5, 16.0)
@@ -121,6 +122,13 @@ func _draw() -> void:
     draw_circle(Vector2(rect.position.x + 12.0,
         rect.position.y + rect.size.y * .5), 3.5,
         Color(rendered_tone, rendered_alpha))
+    # A short entry highlight makes the phase cue feel placed rather
+    # than simply shown. No animation remains once the cue settles.
+    if onset < 1.0:
+        draw_line(Vector2(rect.position.x + 10, rect.position.y + 3),
+            Vector2(rect.position.x + 10 + (rect.size.x - 21) * rise,
+                rect.position.y + 3), Color(rendered_tone,
+                (.4 * (1.0-rise)) * rendered_alpha), 2.0, true)
     draw_line(Vector2(rect.position.x + 11, rect.end.y - 3),
         Vector2(rect.end.x - 7, rect.end.y - 3),
         Color(rendered_tone, .22 * rendered_alpha), 1.0, true)

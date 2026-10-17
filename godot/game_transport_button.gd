@@ -16,6 +16,7 @@ var hover_phase := 0.0
 var press_phase := 0.0
 var release_flash := 0.0
 var activity_time := 0.0
+var live_redraw_elapsed := 0.0
 
 func _init() -> void:
     # Godot's default centred Button label would overlap our icon. Keep text
@@ -60,7 +61,12 @@ func _process(delta: float) -> void:
         animating = true
     if live and not disabled:
         activity_time += delta
-        animating = true
+        live_redraw_elapsed += maxf(0.0, delta)
+        if live_redraw_elapsed >= .075:
+            live_redraw_elapsed = fposmod(live_redraw_elapsed, .075)
+            animating = true
+    else:
+        live_redraw_elapsed = 0.0
     if animating:
         # The button's layout slot and its keyboard focus remain unchanged.
         var scale_factor := 1.0 + .013 * hover_phase - .033 * press_phase + .008 * release_flash
