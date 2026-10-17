@@ -104,6 +104,9 @@ func run() -> void:
         app.note_reactions.material.blend_mode == CanvasItemMaterial.BLEND_MODE_MIX,
         "Glow should accumulate luminous light rather than opaque circles")
     assert(app.score_overlay.wrong_ghosts.size() == 1)
+    assert(app.game_impact_callout.last_status == "unexpected" and
+        app.game_impact_callout.message == "TRY THAT NOTE",
+        "Judged MIDI events trigger compact coaching, not ungraded preview")
     assert(app.score_overlay.wrong_ghosts[0].y == .47,
         "Wrong pitch must point to the true expected note, not a fake glyph")
     assert(not app.score_overlay.wrong_ghosts[0].has("label"),
@@ -134,6 +137,8 @@ func run() -> void:
         app.note_reactions.hit_pulses.is_empty() and
         app.note_reactions.wrong_ghosts.is_empty(),
         "An ungraded preview must not inherit an earlier graded note burst")
+    assert(app.game_impact_callout.elapsed >= app.game_impact_callout.DURATION,
+        "An ungraded preview cannot inherit earned coaching labels")
     var grouped: Array = load("res://living_score.gd").groups_crossed(
         app.living_chords, -.1, .05)
     assert(grouped.size() == 1 and grouped[0].notes.size() == 2,
