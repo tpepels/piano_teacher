@@ -8,12 +8,15 @@ extends RefCounted
 static func project(source_x: float, points: Array) -> float:
     if points.is_empty():
         return source_x
+    if points.size() == 1:
+        var only: Vector2 = points[0]
+        return only.y + maxf(0.0, source_x-only.x)
     # A full lesson can have hundreds of note-spacing control points.
     # Mapping every attack/accidental through a linear scan makes score
     # assembly quadratic. Controls are monotone by construction: search
     # the first right edge that reaches the source pixel in O(log N).
     var low := 0
-    var high: int = points.size() - 1
+    var high: int = points.size() - 2
     while low < high:
         var mid: int = (low + high) / 2
         if source_x <= (points[mid + 1] as Vector2).x:
