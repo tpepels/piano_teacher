@@ -8,6 +8,10 @@ const AURA := Design.MINT
 const ERROR := Design.CORAL
 const AMBER := Design.AMBER
 
+# The illuminated playing lane follows the actual measured staff geometry.
+# There is no alternative sheet renderer and no second timing source.
+var staff_band_top := .28
+var staff_band_bottom := .80
 var phase := "ready"
 var progress := 0.0
 var shown_progress := 0.0
@@ -40,6 +44,14 @@ var ambient_redraw_elapsed := 0.0
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     focus_mode = Control.FOCUS_NONE
+
+func set_staff_band(first_line_fraction: float, last_line_fraction: float) -> void:
+    var top: float = clampf(first_line_fraction, .06, .90)
+    var bottom: float = clampf(last_line_fraction, top + .02, .94)
+    if absf(top - staff_band_top) > .003 or absf(bottom - staff_band_bottom) > .003:
+        staff_band_top = top
+        staff_band_bottom = bottom
+        queue_redraw()
 
 func present(state: Dictionary) -> void:
     var next_phase: String = str(state.get("phase", "ready"))
@@ -178,6 +190,22 @@ func _draw() -> void:
     # One stage fill rather than 32 full-width alpha bands per frame.
     # This dramatically reduces overdraw at 2880x1800 / HiDPI.
     draw_rect(Rect2(0, 0, w, h), Design.STAGE)
+    # Concentrate the atmosphere around the real grand staff. This is only a
+    # subdued underlay, with no reconstructed notes, clefs or opaque masks.
+    var band_top: float = maxf(8.0, staff_band_top * h - 26.0)
+    var band_bottom: float = minf(h - 8.0, staff_band_bottom * h + 26.0)
+    if band_bottom > band_top:
+        draw_rect(Rect2(0, band_top, w, band_bottom - band_top),
+            Color(Design.SAGE, .046))
+        draw_line(Vector2(0, band_top), Vector2(w, band_top),
+            Color(Design.TEAL, .13), 1.0)
+        draw_line(Vector2(0, band_bottom), Vector2(w, band_bottom),
+            Color(Design.TEAL, .13), 1.0)
+        var note_light: float = impact_energy * .12 + preview_energy * .06
+        if note_light > .001:
+            draw_rect(Rect2(0, band_top, w, band_bottom - band_top),
+                Color(impact_tone if impact_energy >= preview_energy else Design.BLUE,
+                    note_light))
     # The playhead is at 42% of the viewport. All light stays behind
     # the actual score. During preview, beat motion is neutral: it does
     # not pretend a note has been struck or assessed correctly.
