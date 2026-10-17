@@ -228,6 +228,10 @@ func _ready() -> void:
     # piano stage on every monitor refresh even though MIDI timing is handled
     # by the independent Python transport. Cap visual frames, not music.
     Engine.max_fps = 60
+    # The static score and drawers should not keep the display rendering
+    # continuously while no transport is moving.
+    OS.low_processor_usage_mode_sleep_usec = 33000
+    OS.low_processor_usage_mode = true
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
@@ -741,6 +745,9 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
         and not bool(state.get("paused", false)) \
         and current_screen == "practice"
     var target_fps: int = 60 if active else 30
+    # Interactive transport retains its full 60 FPS camera. Idle score,
+    # settings and library redraw only on user input or changed content.
+    OS.low_processor_usage_mode = not active
     if Engine.max_fps != target_fps:
         Engine.max_fps = target_fps
 
@@ -2149,8 +2156,8 @@ func _process(_delta: float) -> void:
             score_overlay.queue_redraw()
             if str(last_state.get("phase", "ready")) not in ["feedback", "recovering", "loading", "paused"]:
                 _layout_moving_score(_delta)
-        elif str(last_state.get("phase", "ready")) in ["ready", "disconnected"]:
-            _layout_moving_score(_delta)
+        # Stopped score geometry is static; resizing and score load already
+        # call _layout_moving_score. Avoid a full layout pass every idle frame.
         return
     # Count-in uses negative beats on the same spacing as the opening notes.
     # position advances at BPM regardless of the user's MIDI performance.
