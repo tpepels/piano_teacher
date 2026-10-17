@@ -334,6 +334,7 @@ func _run() -> void:
         "Settings must open as a readable contextual sheet")
     _check(settings_panel.size.x >= minf(viewport.x, 500.0) - 2.0,
         "Settings drawer narrowed to a clipped strip")
+    print("SETTINGS_DEBUG: panel_rect=", settings_panel.get_global_rect(), " viewport=", viewport)
     _check(_in_viewport(settings_panel, viewport),
         "Settings drawer overflows the viewport")
     var essential: Array[Control] = [
