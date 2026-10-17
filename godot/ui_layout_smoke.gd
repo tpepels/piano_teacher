@@ -69,19 +69,19 @@ func _run() -> void:
     _check(score.size.y >= 135.0, "Notation area became unusably small")
     # A sourced MIDI piece must open in a true centered in-app modal, not
     # a narrow embedded Window accidentally stretched to viewport height.
-    scene.call("_show_open_picker", {"title":"Ala_-_Joep_Beving",
-        "piece_last_bar":77, "selected_start_bar":1})
+    scene.call("_show_open_picker", {"title": "Ala_-_Joep_Beving",
+        "piece_last_bar": 77, "selected_start_bar": 1})
     await process_frame
     await process_frame
     var preview_picker: Control = scene.get("open_picker")
     var modal: PanelContainer = scene.get("open_panel")
     _check(preview_picker.visible and not scene.get("overlay_root").visible,
         "Starting point must hide the library drawer behind its modal")
-    _check(modal.size.x >= minf(500.0, viewport.x-36.0) and
-        modal.size.y < viewport.y*.90,
+    _check(modal.size.x >= minf(500.0, viewport.x - 36.0) and
+        modal.size.y < viewport.y * .90,
         "Starting point must be broad and compact, not a tall thin window")
-    _check(absf(modal.get_global_rect().get_center().x-viewport.x*.5) < 6.0 and
-        absf(modal.get_global_rect().get_center().y-viewport.y*.5) < 6.0,
+    _check(absf(modal.get_global_rect().get_center().x - viewport.x * .5) < 6.0 and
+        absf(modal.get_global_rect().get_center().y - viewport.y * .5) < 6.0,
         "Starting point modal must be centered in the real viewport")
     _check(str(scene.get("open_title").text) == "Ala - Joep Beving",
         "MIDI filename separators must render as normal punctuation")
@@ -100,9 +100,9 @@ func _run() -> void:
     scene.call("_cancel_open_picker")
     _check(not preview_picker.visible and str(scene.get("current_screen")) == "library",
         "Cancel restores music selection instead of opening a lesson")
-    scene.set("library_info", {"pieces":[{"id":"fixture.mid",
-        "title":"A Very Long Piano Piece With a Complicated Name",
-        "format":"MIDI", "folder":"Imported music"}], "warmups":[]})
+    scene.set("library_info", {"pieces": [ {"id": "fixture.mid",
+        "title": "A Very Long Piano Piece With a Complicated Name",
+        "format": "MIDI", "folder": "Imported music"}], "warmups": []})
     scene.call("_populate_library")
     var rows: VBoxContainer = scene.get("library_rows")
     var music_rows: Array = rows.find_children("*", "Button", true, false)
@@ -118,12 +118,12 @@ func _run() -> void:
         # During a long file check, changing progress counts should update
         # the message only. Recreating the focused music row on each poll
         # causes visible flicker and unexpected keyboard focus loss.
-        scene.set("library_health_info", {"started":true, "running":true,
-            "checked":1, "total":10, "items":{}})
+        scene.set("library_health_info", {"started": true, "running": true,
+            "checked": 1, "total": 10, "items": {}})
         scene.call("_on_library_health", 0, 200, PackedStringArray(),
-            JSON.stringify({"started":true, "running":true,
-                "checked":2, "total":10, "ok":2, "warning":0,
-                "error":0, "items":{}}).to_utf8_buffer())
+            JSON.stringify({"started": true, "running": true,
+                "checked": 2, "total": 10, "ok": 2, "warning": 0,
+                "error": 0, "items": {}}).to_utf8_buffer())
         _check(item.get_parent() == rows,
             "Checking another music file must not replace existing library rows")
     scene.call("_navigate", "practice")
@@ -190,7 +190,7 @@ func _run() -> void:
 
     # Check wrong physical pitches use the real staff's pitch spacing and
     # do not move a correct chord note or invent a separate score location.
-    scene.set("score_layout", {"systems": [{
+    scene.set("score_layout", {"systems": [ {
         "page": 0, "left": 0.05, "right": 0.95,
         "staff_lines": [0.10, 0.12, 0.14, 0.16, 0.18,
                         0.30, 0.32, 0.34, 0.36, 0.38]
@@ -208,10 +208,10 @@ func _run() -> void:
          "x": 0.3, "y": 0.14, "hand": "right"})
     _check(outside.is_empty(), "Wrong note must not fabricate a missing source staff")
     var live_overlay: Control = scene.get("score_overlay")
-    live_overlay.wrong_ghosts.append({"until_ms": Time.get_ticks_msec()-2,
-        "page":0, "x":0.3, "y":0.14, "label":"D4"})
-    live_overlay.hit_pulses.append({"until_ms":Time.get_ticks_msec()-2,
-        "page":0, "x":0.3, "y":0.14, "status":"on_time"})
+    live_overlay.wrong_ghosts.append({"until_ms": Time.get_ticks_msec() - 2,
+        "page": 0, "x": 0.3, "y": 0.14, "label": "D4"})
+    live_overlay.hit_pulses.append({"until_ms": Time.get_ticks_msec() - 2,
+        "page": 0, "x": 0.3, "y": 0.14, "status": "on_time"})
     scene.call("_process", 0.016)
     _check(live_overlay.wrong_ghosts.is_empty() and live_overlay.hit_pulses.is_empty(),
         "Expired played-note ghosts must vanish even while the score is stationary")
@@ -240,7 +240,7 @@ func _run() -> void:
 
     # Short library actions must not truncate ('Setting', 'Refres', etc.)
     # while intentionally long MIDI titles remain scroll-safe with ellipsis.
-    scene.set("library_info", {"pieces": [{
+    scene.set("library_info", {"pieces": [ {
         "id": "long.mid", "title": "Bill Evans on Autumn Leaves From the Album Portrait in Jazz",
         "folder": "", "format": "MIDI"}], "warmups": []})
     scene.call("_populate_library")
@@ -264,7 +264,7 @@ func _run() -> void:
         "Music search remains inside the library drawer")
     var filter_timer: Timer = scene.get("library_filter_timer")
     _check(filter_timer != null and filter_timer.one_shot and
-        absf(filter_timer.wait_time-.12) < .001,
+        absf(filter_timer.wait_time - .12) < .001,
         "Typing in a large library must coalesce UI row rebuilds")
     var short_buttons := 0
     for control in library_root.find_children("*", "Button", true, false):
@@ -297,10 +297,10 @@ func _run() -> void:
                 "Long library title tooltip lost its complete name")
     _check(found_long_title, "Synthetic long title missing from library")
     var health_entry := "long.mid"
-    var diagnostics := {"started":true, "running":false,
-        "checked":1, "total":1, "ok":0, "warning":1, "error":0,
-        "items":{health_entry:{"status":"warning", "notes":42, "measures":16,
-            "message":"Ignored an unmatched release"}}}
+    var diagnostics := {"started": true, "running": false,
+        "checked": 1, "total": 1, "ok": 0, "warning": 1, "error": 0,
+        "items": {health_entry: {"status": "warning", "notes": 42, "measures": 16,
+            "message": "Ignored an unmatched release"}}}
     scene.call("_on_library_health", 0, 200, PackedStringArray(),
         JSON.stringify(diagnostics).to_utf8_buffer())
     await process_frame
@@ -384,9 +384,9 @@ func _run() -> void:
     picker.hide()
 
     scene.call("_update_hand_stages", {"hand_stages": [
-        {"hand":"left", "active":false, "complete":true, "locked":false},
-        {"hand":"right", "active":true, "complete":false, "locked":false},
-        {"hand":"both", "active":false, "complete":false, "locked":true}]})
+        {"hand": "left", "active": false, "complete": true, "locked": false},
+        {"hand": "right", "active": true, "complete": false, "locked": false},
+        {"hand": "both", "active": false, "complete": false, "locked": true}]})
     var ribbon: Control = scene.get("practice_stage_bar")
     var stage_labels: Dictionary = scene.get("practice_stage_labels")
     _check(ribbon.visible, "Hand progression must be visible while practising")
@@ -403,7 +403,7 @@ func _run() -> void:
         "accuracy_percent": 50.0, "correct": 2, "total": 4,
         "missed": 1, "wrong": 1, "extra_notes": 1,
         "early": 0, "late": 0, "short": 1, "long": 0,
-        "sections": [{
+        "sections": [ {
             "first_bar": 3, "last_bar": 4, "start_beat": 8.0, "end_beat": 16.0,
             "errors": 3, "issues": [
                 {"bar": 3, "status": "missed", "pitch": 60, "name": "C4"},
@@ -428,10 +428,10 @@ func _run() -> void:
     review.hide()
 
     var pause: Control = scene.get("pause_sheet")
-    pause.call("present", {"paused":true, "mode":"practice", "bpm":68,
-        "hand":"left", "hands":["left","right","both"],
-        "first_bar":1, "last_bar":8, "seek_available":true,
-        "seek_range":{"first_bar":1,"last_bar":8}})
+    pause.call("present", {"paused": true, "mode": "practice", "bpm": 68,
+        "hand": "left", "hands": ["left", "right", "both"],
+        "first_bar": 1, "last_bar": 8, "seek_available": true,
+        "seek_range": {"first_bar": 1, "last_bar": 8}})
     await process_frame
     await process_frame
     var panel: Control = pause.get("modal_panel")

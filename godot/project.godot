@@ -1,16 +1,27 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
 config_version=5
 
 [application]
+
 config/name="Piano Teacher"
-run/main_scene="res://main.tscn"
 config/description="Practice your own piano scores, two measures at a time."
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.7")
 
 [display]
+
 window/size/viewport_width=1220
 window/size/viewport_height=780
 window/size/mode=3
-window/stretch/mode="disabled"
 
 [rendering]
+
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"

@@ -246,7 +246,7 @@ func _ready() -> void:
     listen_volume_slider.set_value_no_signal(float(demo_player.get("listen_volume_db")))
     _show_listen_volume(float(demo_player.get("listen_volume_db")))
     demo_player.prepared.connect(func(token: String, ready_revision: int):
-        _send_action({"action":"demo_ready", "token":token, "revision":ready_revision}))
+        _send_action({"action": "demo_ready", "token": token, "revision": ready_revision}))
     demo_player.failed.connect(func(message: String): feedback_label.text = message)
     if phase0_smoke_mode:
         _navigate("practice")
@@ -377,7 +377,7 @@ func _score_note_bounds(page: int) -> Dictionary:
     # Derive framing from actual engraved required notes, not the white area
     # around the page or a cursor's approximated staff bounds.
     var left: float = INF
-    var right: float = -INF
+    var right: float = - INF
     for item in score_layout.get("notes", []):
         if int(item.get("page", -1)) != page:
             continue
@@ -767,7 +767,7 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
 func _navigate(screen: String) -> void:
     var previous_screen: String = current_screen
     if screen == "home":
-        screen = "practice"  # Old Home is no longer part of normal navigation.
+        screen = "practice" # Old Home is no longer part of normal navigation.
     if screen == "settings" and current_screen != "settings":
         settings_return_screen = current_screen
     if screen != "practice" and current_screen == "practice":
@@ -844,11 +844,14 @@ func _resize_overlay_drawer() -> void:
     if overlay_drawer == null:
         return
     var viewport: Vector2 = size
-    # Keep the music visible beside a legible panel. The old layout wanted
-    # 72% of the viewport, while its actual contents often collapsed to a
-    # narrow form. Use a predictable instrument-side panel width.
-    var drawer_width: float = viewport.x if viewport.x <= 700.0 else minf(
-        700.0, maxf(520.0, viewport.x * .43))
+    # Keep the music visible beside a legible panel. Use 65% of the viewport
+    # with a floor of 580px so contents are not clipped. Then clamp to the
+    # viewport so the panel never overflows the right edge on any resolution.
+    # Finally, honour the drawer's own minimum size (e.g. long button labels)
+    # to prevent Godot from expanding the panel past our computed right edge.
+    var desired: float = maxf(viewport.x * 0.65, 580.0)
+    var min_size: float = overlay_drawer.get_combined_minimum_size().x
+    var drawer_width: float = clampf(maxf(desired, min_size), min_size, viewport.x)
     # Right-anchored offsets must be relative to the RIGHT edge. Setting
     # both global position and size after PRESET_TOP_RIGHT can shrink the
     # panel to its minimum width on resize (real 1536×960 screenshot).
@@ -856,7 +859,7 @@ func _resize_overlay_drawer() -> void:
     overlay_drawer.anchor_right = 1.0
     overlay_drawer.anchor_top = 0.0
     overlay_drawer.anchor_bottom = 1.0
-    overlay_drawer.offset_left = -drawer_width
+    overlay_drawer.offset_left = - drawer_width
     overlay_drawer.offset_right = 0.0
     overlay_drawer.offset_top = 0.0
     overlay_drawer.offset_bottom = 0.0
@@ -927,6 +930,7 @@ func _build_interface() -> void:
     var library_page := _screen("Library")
     screens["library"] = library_page
     var library_layout := _stack(22)
+    library_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     library_page.add_child(library_layout)
     var library_head := HBoxContainer.new()
     library_layout.add_child(library_head)
@@ -1128,14 +1132,14 @@ func _build_interface() -> void:
     mode_choice.custom_minimum_size = Vector2(210 * ui_scale, 48 * ui_scale)
     mode_choice.add_theme_font_size_override("font_size", _ui_font(15))
     mode_choice.item_selected.connect(func(index: int):
-        _send_action({"action": "learn" if index == 0 else "practice" if index == 1 else "perform", "scope":"whole" if index == 3 else "current"}))
+        _send_action({"action": "learn" if index == 0 else "practice" if index == 1 else "perform", "scope": "whole" if index == 3 else "current"}))
     # Advanced mode and hint choices live in Lesson Path, not the stage.
     # Listen is a main transport choice, not a navigation option.
     hints_toggle = CheckButton.new()
     hints_toggle.text = "Hints"
     hints_toggle.add_theme_font_size_override("font_size", _ui_font(15))
     hints_toggle.tooltip_text = "Keep key hints visible while learning notes"
-    hints_toggle.toggled.connect(func(enabled: bool): _send_action({"action":"hints", "enabled":enabled}))
+    hints_toggle.toggled.connect(func(enabled: bool): _send_action({"action": "hints", "enabled": enabled}))
     # Teaching hints are controlled in Lesson Path.
     var path_button := _button("Path", func(): _navigate("lesson"))
     path_button.tooltip_text = "Learning stages and advanced practice"
@@ -1582,13 +1586,21 @@ func _update_responsive_layout() -> void:
         lesson_info_label.add_theme_font_size_override("font_size", _ui_font(16))
         practice_playback_banner.add_theme_font_size_override("font_size", _ui_font(17))
         practice_note_feedback_label.add_theme_font_size_override("font_size", _ui_font(18))
-        practice_note_feedback_panel.offset_left = -minf(330.0, maxf(180.0, score_frame.size.x - 24.0))
+        practice_note_feedback_panel.offset_left = - minf(330.0, maxf(180.0, score_frame.size.x - 24.0))
 
 func _build_lesson_screen() -> void:
     var page := _screen("Lesson")
     screens["lesson"] = page
+    # Wrap the entire lesson content in a ScrollContainer so all controls
+    # remain accessible on short laptop viewports (mirrors settings screen).
+    var outer_scroll := ScrollContainer.new()
+    outer_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    outer_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    outer_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    page.add_child(outer_scroll)
     var content := _stack(20)
-    page.add_child(content)
+    content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    outer_scroll.add_child(content)
     var navigation := HBoxContainer.new()
     content.add_child(navigation)
     navigation.add_child(_button("← Practice", _go_back, false, "navigation"))
@@ -1610,10 +1622,10 @@ func _build_lesson_screen() -> void:
     passage_nav.add_theme_constant_override("h_separation", 10)
     content.add_child(passage_nav)
     passage_nav.add_child(_button("Previous passage", func():
-        _send_action({"action":"previous"})
+        _send_action({"action": "previous"})
         _navigate("practice"), false, "navigation"))
     passage_nav.add_child(_button("Next passage", func():
-        _send_action({"action":"next"})
+        _send_action({"action": "next"})
         _navigate("practice"), false, "navigation"))
     passage_nav.add_child(stop_button)
     var hand_row := HBoxContainer.new()
@@ -1631,10 +1643,10 @@ func _build_lesson_screen() -> void:
     var course_choices := HBoxContainer.new()
     course_choices.add_theme_constant_override("separation", 8)
     content.add_child(course_choices)
-    skip_stage_button = _button("Skip this step · no mastery", func(): _send_action({"action":"skip_stage", "reason":"Learner chose to skip this step"}), false, "review")
+    skip_stage_button = _button("Skip this step · no mastery", func(): _send_action({"action": "skip_stage", "reason": "Learner chose to skip this step"}), false, "review")
     skip_stage_button.custom_minimum_size.x = 250
     course_choices.add_child(skip_stage_button)
-    placement_button = _button("Try original notes", func(): _send_action({"action":"place_original"}), false, "primary")
+    placement_button = _button("Try original notes", func(): _send_action({"action": "place_original"}), false, "primary")
     course_choices.add_child(placement_button)
     var scroll := ScrollContainer.new()
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1672,8 +1684,8 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
         for spot in trouble:
             var stage_key: String = str(spot.get("stage_key", ""))
             var from_beat: float = float(spot.get("start_beat", 0))
-            var revisit := _button("Revisit bars %d–%d" % [int(spot.get("first_bar", 1)),int(spot.get("last_bar", 1))],
-                func(): _send_action({"action":"revisit_trouble", "stage_key":stage_key, "start_beat":from_beat}))
+            var revisit := _button("Revisit bars %d–%d" % [int(spot.get("first_bar", 1)), int(spot.get("last_bar", 1))],
+                func(): _send_action({"action": "revisit_trouble", "stage_key": stage_key, "start_beat": from_beat}))
             revisit.call("configure", "review")
             revisit.tooltip_text = "Find these notes again, then return to rhythm practice"
             lesson_rows.add_child(revisit)
@@ -1839,7 +1851,7 @@ func _populate_library() -> void:
     var warmups: Array = library_info.get("warmups", [])
     var query := library_search.text.strip_edges().to_lower()
     var visible := 0
-    for section in [{"title": "BUILT-IN WARM-UPS", "entries": warmups},
+    for section in [ {"title": "BUILT-IN WARM-UPS", "entries": warmups},
                     {"title": "YOUR MUSIC", "entries": pieces}]:
         var section_added := false
         for entry in section.entries:
@@ -1897,14 +1909,14 @@ func _resize_open_picker() -> void:
         return
     # Centered from the actual viewport. Never a 240px-wide, 900px-tall
     # native subwindow, including fullscreen and high-density displays.
-    var width: float = minf(620.0, maxf(280.0, size.x-36.0))
+    var width: float = minf(620.0, maxf(280.0, size.x - 36.0))
     # The PanelContainer is positioned directly under the full-screen
     # overlay, NOT under a CenterContainer that might expand it vertically.
     # The scroll area handles short laptop windows without hiding Cancel.
-    var height: float = minf(570.0, size.y*.84)
+    var height: float = minf(570.0, size.y * .84)
     open_panel.custom_minimum_size = Vector2(width, 0)
     open_panel.size = Vector2(width, height)
-    open_panel.position = (size - open_panel.size)*.5
+    open_panel.position = (size - open_panel.size) * .5
 
 
 func _cancel_open_picker() -> void:
@@ -1923,8 +1935,8 @@ func _confirm_open_picker() -> void:
             int(open_measure.max_value))
     open_picker.visible = false
     _navigate("practice")
-    _send_action({"action":"open_at", "bar":int(open_measure.value),
-        "mode":"practice" if open_mode.selected == 1 else "learn"})
+    _send_action({"action": "open_at", "bar": int(open_measure.value),
+        "mode": "practice" if open_mode.selected == 1 else "learn"})
 
 
 func _show_open_picker(state: Dictionary) -> void:
@@ -2464,7 +2476,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         else:
             passage_label.text = "%s · %s" % [kind, bar_text]
     _update_note_feedback_hud(parsed)
-    speed_label.text = "%d BPM · target %d" % [int(parsed.get("bpm", 0)),int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
+    speed_label.text = "%d BPM · target %d" % [int(parsed.get("bpm", 0)), int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
     var recovery_notice: Variant = parsed.get("recovery_notice")
     speed_label.add_theme_font_size_override("font_size", _ui_font(16 if size.x < 900 else 18))
     speed_label.tooltip_text = "Current practice tempo and your selected target"
@@ -2524,8 +2536,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         progress_label.text = "Notes found %d of %d · No rhythm scoring yet" % [int(teaching.get("target_index", 0)), targets]
         if not learner.is_empty():
             var unit_number: int = int(learner.get("unit_number", 0))
-            var context: String = "Idea %d of %d" % [unit_number,int(learner.get("total_units", 1))] if unit_number > 0 else "Selected bars %d–%d" % [int(parsed.get("first_bar", 1)),int(parsed.get("last_bar", 1))]
-            progress_label.text = "%s · Notes found %d of %d" % [context,int(teaching.get("target_index", 0)),targets]
+            var context: String = "Idea %d of %d" % [unit_number, int(learner.get("total_units", 1))] if unit_number > 0 else "Selected bars %d–%d" % [int(parsed.get("first_bar", 1)), int(parsed.get("last_bar", 1))]
+            progress_label.text = "%s · Notes found %d of %d" % [context, int(teaching.get("target_index", 0)), targets]
     for hand in hand_buttons:
         var button: Button = hand_buttons[hand]
         if button is ActionButton:
@@ -2773,14 +2785,14 @@ func _wrong_note_ghost(pitch: int, note: Dictionary) -> Dictionary:
     var lines: Array = staff.get("staff_lines", [])
     var hand: String = str(note.get("hand", "right"))
     var index: int = 5 if hand == "left" else 0
-    var gap: float = absf(float(lines[index+1]) - float(lines[index]))
+    var gap: float = absf(float(lines[index + 1]) - float(lines[index]))
     if gap <= 0.0:
         return {}
     var steps: int = _staff_diatonic_index(pitch) - _staff_diatonic_index(int(note.get("pitch", pitch)))
     var target_y: float = source_y - float(steps) * gap * 0.5
     var ledgers: Array = []
     var top: float = float(lines[index])
-    var bottom: float = float(lines[index+4])
+    var bottom: float = float(lines[index + 4])
     for n in range(1, 7):
         if target_y <= top - float(n) * gap + gap * 0.25:
             ledgers.append(top - float(n) * gap)
@@ -3231,7 +3243,7 @@ func _toggle_playing() -> void:
         var phase: String = str(last_state.get("phase", "ready"))
         var teaching: Dictionary = last_state.get("teaching", {}) if last_state.get("teaching") is Dictionary else {}
         if phase == "guided_complete" and bool(teaching.get("has_more_units", false)) and not bool(last_state.get("guided_recovery", false)):
-            _send_action({"action":"learn_next"})
+            _send_action({"action": "learn_next"})
             return
         _send_action({"action": "resume" if phase == "paused" else "practice" if phase in ["guided_complete", "disconnected"] else "pause" if phase in ["guided_wait", "loading"] else "learn_retry"})
         return
@@ -3252,7 +3264,7 @@ func _open_advanced_pause() -> void:
     if bool(last_state.get("paused", false)):
         pause_sheet.present(last_state)
     elif _has_active_transport():
-        _send_action({"action":"pause"})
+        _send_action({"action": "pause"})
     else:
         # Advanced options require a live paused attempt; use Path controls
         # directly when nothing is playing.
@@ -3304,7 +3316,7 @@ func _choose_device(id: int) -> void:
         return
     if id < 0 or id >= device_names.size():
         return
-    _send_post("/device", {"name":device_names[id]})
+    _send_post("/device", {"name": device_names[id]})
     device_button.text = str(device_names[id]) + "  ✓"
 
 func _input(event: InputEvent) -> void:
@@ -3335,7 +3347,7 @@ func _input(event: InputEvent) -> void:
         library_search.select_all()
         get_viewport().set_input_as_handled()
         return
-    if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,KEY_TAB]:
+    if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_TAB]:
         return
     if get_viewport().gui_get_focus_owner() is LineEdit and event.keycode not in [KEY_F11, KEY_ESCAPE] and not (event.ctrl_pressed and event.keycode == KEY_Q):
         return
@@ -3355,7 +3367,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
     if open_picker != null and open_picker.visible:
         return
     if event is InputEventKey and event.pressed and not event.echo:
-        if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,KEY_TAB]:
+        if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_TAB]:
             return
         if get_viewport().gui_get_focus_owner() is LineEdit and event.keycode not in [KEY_F11, KEY_ESCAPE] and not (event.ctrl_pressed and event.keycode == KEY_Q):
             return
@@ -3391,11 +3403,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
                 _listen_or_return_to_practice()
                 get_viewport().set_input_as_handled()
             KEY_S:
-                _send_action({"action":"stop"})
+                _send_action({"action": "stop"})
                 get_viewport().set_input_as_handled()
             KEY_LEFT:
-                _send_action({"action":"previous"})
+                _send_action({"action": "previous"})
                 get_viewport().set_input_as_handled()
             KEY_RIGHT:
-                _send_action({"action":"next"})
+                _send_action({"action": "next"})
                 get_viewport().set_input_as_handled()

@@ -1,0 +1,15 @@
+{
+    "mcpServers": {
+        "godot-mcp-toolkit": {
+            "type": "stdio",
+            "command": "npx",
+            "args": [
+                "-y",
+                "@npgamedev/godot-mcp-server"
+            ],
+            "env": {
+                "GODOT_MCP_PROJECT_PATH": "${workspaceFolder}/godot"
+            }
+        }
+    }
+}
