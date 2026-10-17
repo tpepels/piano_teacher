@@ -59,7 +59,7 @@ func _verify() -> void:
     var transport := Transport.new()
     host.add_child(transport)
     transport.configure("retry")
-    check(transport.AMBER == Design.role_accent("review"),
+    check(Transport.AMBER == Design.role_accent("review"),
         "Transport retry matches the review accent")
     print("VISUAL_SYSTEM_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)
