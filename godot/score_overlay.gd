@@ -49,6 +49,17 @@ func load_symbols(raw: Dictionary) -> void:
             str(source.get("svg", "")).to_utf8_buffer(), 128.0 / bounds.size.y)
         if error != OK or picture.is_empty():
             continue
+        # Symbols are separate SVG rasters, not part of the score-tile shader.
+        # Preserve just their antialiased ink on the dark stage.
+        picture.convert(Image.FORMAT_RGBA8)
+        for py in range(picture.get_height()):
+            for px in range(picture.get_width()):
+                var pixel: Color = picture.get_pixel(px, py)
+                var black_ink: float = clampf(1.0 - (
+                    pixel.r * .2126 + pixel.g * .7152 + pixel.b * .0722), 0.0, 1.0)
+                picture.set_pixel(px, py, Color(
+                    Design.SCORE_INK.r, Design.SCORE_INK.g, Design.SCORE_INK.b,
+                    pixel.a * black_ink))
         _symbols[str(name)] = {"texture": ImageTexture.create_from_image(picture),
             "bounds": bounds, "units_per_space": units}
     queue_redraw()
