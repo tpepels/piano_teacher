@@ -53,7 +53,14 @@ func set_entry(title: String, detail: String, status: String = "") -> void:
     set_meta("library_title", title)
     set_meta("library_detail", detail)
     set_meta("library_status", status)
-    text = ""
+    # Keep the native Button's accessible label/keyboard identity. The
+    # title is painted by a dedicated clipped Label for better typography,
+    # so its duplicate native rendering is transparent, not removed.
+    text = title
+    clip_text = true
+    for state_color in ["font_color", "font_hover_color", "font_pressed_color",
+            "font_hover_pressed_color", "font_focus_color", "font_disabled_color"]:
+        add_theme_color_override(state_color, Color.TRANSPARENT)
     tooltip_text = title + "\n" + detail
     if title_label == null:
         return
