@@ -975,13 +975,14 @@ func _build_interface() -> void:
     library_health_label.visible = false
     library_layout.add_child(library_health_label)
     var library_panel := _card()
+    library_panel.add_theme_stylebox_override("panel", Design.surface(Design.PANEL_RECESSED, 12))
     library_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     library_layout.add_child(library_panel)
     var scroll := ScrollContainer.new()
     library_scroll = scroll
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    _card_body(library_panel, 22).add_child(scroll)
+    _card_body(library_panel, 12).add_child(scroll)
     library_rows = _stack(6)
     library_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.add_child(library_rows)
