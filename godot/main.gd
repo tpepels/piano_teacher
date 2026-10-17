@@ -2202,6 +2202,9 @@ func _process(_delta: float) -> void:
         else:
             last_ready_score_key = ""
         return
+    # Any running attempt invalidates the cached Ready projection so that
+    # Stop can restore the start even when the transport ID is unchanged.
+    last_ready_score_key = ""
     # Count-in uses negative beats on the same spacing as the opening notes.
     # position advances at BPM regardless of the user's MIDI performance.
     var clock: float = _transport_beat_now()
