@@ -10,7 +10,7 @@ var detail_label: Label
 
 func _init() -> void:
     super._init()
-    custom_minimum_size = Vector2(0, 76)
+    custom_minimum_size = Vector2(0, 92)
     size_flags_horizontal = Control.SIZE_EXPAND_FILL
     clip_text = false
 
@@ -22,21 +22,21 @@ func _ready() -> void:
     content.name = "MusicRowContent"
     content.mouse_filter = Control.MOUSE_FILTER_IGNORE
     content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    content.add_theme_constant_override("margin_left", 54)
+    content.add_theme_constant_override("margin_left", 58)
     content.add_theme_constant_override("margin_right", 16)
-    content.add_theme_constant_override("margin_top", 11)
-    content.add_theme_constant_override("margin_bottom", 9)
+    content.add_theme_constant_override("margin_top", 14)
+    content.add_theme_constant_override("margin_bottom", 12)
     add_child(content)
     var lines := VBoxContainer.new()
     lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    lines.add_theme_constant_override("separation", 3)
+    lines.add_theme_constant_override("separation", 7)
     content.add_child(lines)
     title_label = Label.new()
     title_label.name = "MusicTitle"
     title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     title_label.clip_text = true
     title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-    title_label.add_theme_font_size_override("font_size", 17)
+    title_label.add_theme_font_size_override("font_size", 22)
     title_label.add_theme_color_override("font_color", Palette.STONE)
     lines.add_child(title_label)
     detail_label = Label.new()
@@ -44,7 +44,7 @@ func _ready() -> void:
     detail_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     detail_label.clip_text = true
     detail_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-    detail_label.add_theme_font_size_override("font_size", 13)
+    detail_label.add_theme_font_size_override("font_size", 16)
     detail_label.add_theme_color_override("font_color", Palette.SLATE)
     lines.add_child(detail_label)
 
