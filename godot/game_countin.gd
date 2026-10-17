@@ -48,17 +48,17 @@ func _draw() -> void:
         font.get_ascent(font_size) - font.get_descent(font_size)) * .5
     draw_string(font, Vector2(x - numeral_width * .5, baseline),
         numeral, HORIZONTAL_ALIGNMENT_LEFT, -1,
-        font_size, Color("#284A3B"))
+        font_size, Color("#EAF4ED"))
     var space: float = maxf(6.0, (size.x - 64.0) / float(maxi(1, count)))
     var gap: float = minf(19.0, space)
     for i in range(count):
         var p: Vector2 = Vector2(56.0 + gap * i, y)
-        draw_circle(p, 5.3, Color("#D4E0D8", .96))
+        draw_circle(p, 5.3, Color("#54756F", .86))
         draw_arc(p, 5.5, 0, TAU, 24,
-            Color("#769486", .74), 1.0, true)
+            Color("#B2CFC0", .74), 1.0, true)
         if i == current:
             draw_circle(p, 7.0 + 3.0 * beat_fraction,
                 Color("#48A87F", .12 + .24 * pulse))
-            draw_circle(p, 3.9 + 1.1 * pulse, Color("#236A50"))
+            draw_circle(p, 3.9 + 1.1 * pulse, Color("#7BE8C0"))
         elif i < current:
             draw_circle(p, 2.8, Color("#4C9175"))
