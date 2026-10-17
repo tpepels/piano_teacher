@@ -26,6 +26,12 @@ func wait_for(predicate: Callable, description: String, seconds: float = 20.0) -
         await process_frame
     return true
 
+func imported_row() -> Button:
+    for row in app.library_rows.get_children():
+        if row is Button and str(row.get_meta("library_title", "")).begins_with("Imported"):
+            return row
+    return null
+
 func press(text: String) -> void:
     for button in app.find_children("*", "Button", true, false):
         if button.text == text and button.is_visible_in_tree() and not button.disabled:
@@ -48,7 +54,7 @@ func note_position() -> Vector2:
 
 func capture(label: String) -> Dictionary:
     await process_frame
-    await RenderingServer.frame_post_draw
+    RenderingServer.force_draw()
     var picture := root.get_texture().get_image()
     var filename := label + ".png"
     check(picture.save_png(folder + "/" + filename) == OK, "Save rendered " + filename)
@@ -74,7 +80,7 @@ func capture(label: String) -> Dictionary:
                     if color.r > .5 and color.g > .5 and color.b > .45:
                         ink += 1
         entry["notehead_ink"] = ink
-        check(ink >= 8, "Real notehead pixels remain visible: " + label)
+        check(ink >= 8 or (str(app.last_state.get("phase", "")) == "count_in" and position.x > app.score_frame.get_global_rect().end.x), "Real notehead pixels remain visible or approach from beyond the count-in: " + label)
     if label == "wrong-note-hint":
         var keyboard: Control = app.hint_keyboard
         check(keyboard.is_visible_in_tree(), "Wrong input reveals contextual keyboard")
@@ -103,7 +109,7 @@ func capture(label: String) -> Dictionary:
         entry["hint_bounds"] = str(keyboard.get_global_rect())
     if app.current_screen == "practice":
         var viewport := root.get_visible_rect()
-        for control in [app.start_button, app.stop_button]:
+        for control in [app.start_button, app.practice_retry_button, app.listen_button]:
             check(control.is_visible_in_tree(), "Practice control is visible: " + label)
             check(viewport.encloses(control.get_global_rect()), "Practice control fits viewport: " + label)
     frames.append(entry)
@@ -136,16 +142,19 @@ func run() -> void:
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device", "")) == "Journey test piano",
         "normal UI MIDI selection")
     press("← Back")
-    press("Browse library  →")
+    press("Music")
     await wait_for(func(): return app.current_screen == "library" and not app.library_pending \
-        and app.library_rows.get_child_count() == 1, "imported file in normal library")
-    var piece_button := app.library_rows.get_child(0) as Button
-    check(piece_button != null and piece_button.text.contains("Imported repeated chords"),
+        and imported_row() != null, "imported file in normal library")
+    var piece_button := imported_row()
+    check(piece_button != null and str(piece_button.get_meta("library_title", "")).contains("Imported repeated chords"),
         "User MIDI is the imported library piece")
     piece_button.pressed.emit()
+    await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
+    app.open_mode.select(0)
+    press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() \
         and str(app.last_state.get("phase", "")) == "guided_wait", "import automatically enters Learn")
-    press("Lesson path")
+    press("Path")
     await wait_for(func(): return app.current_screen == "lesson" and not app.lesson_pending, "hand selection")
     press("Both hands")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() \
@@ -191,7 +200,8 @@ func run() -> void:
     await create_timer(.5).timeout
     var later := await capture("practice-playing-b")
     check(float(later.note_x) < float(playing.note_x)-10, "Actual notes move left during practice")
-    check(not app.hint_keyboard.visible, "Timed practice does not retain guided keyboard")
+    check(not app.hint_keyboard.visible or app.hint_keyboard._live_mode,
+        "Timed practice switches from the guided target to real live MIDI input")
     app.stop_button.pressed.emit()
     await wait_for(func(): return not app.action_pending and not bool(app.last_state.get("running", true)) \
         and str(app.last_state.get("phase", "")) == "ready", "visible Stop abandons practice")

@@ -40,6 +40,16 @@ def test_signed_beat_is_continuous_at_downbeat(harness):
     assert e.state()['beat'] == pytest.approx(1.5)
 
 
+def test_clock_snapshot_publishes_its_authoritative_sample_time(harness):
+    e, t = harness
+    assert e.state().get('clock_sampled_at_ms') == pytest.approx(t[0] * 1000)
+    e.start()
+    t[0] += 1.25
+    snapshot = e.state()
+    assert snapshot.get('clock_sampled_at_ms') == pytest.approx(t[0] * 1000)
+    assert snapshot['clock_beat'] == pytest.approx((t[0] - e.run_at) * e.plan.bpm / 60)
+
+
 def test_pause_during_count_in_freezes_clock(harness):
     e, t = harness
     e.start()

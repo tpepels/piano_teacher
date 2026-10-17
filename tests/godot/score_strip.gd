@@ -217,6 +217,36 @@ func run() -> void:
         for dx in range(-4,5):
             check(stretched.get_pixel(x+dx,18).a > .99,
                 "Engraved noteheads must not become stretched or disappear")
+    # Huge inserted gaps must not become huge textures or force a fallback
+    # to native, uneven spacing. A core at a GPU-sized coordinate stays whole.
+    var wide_goals: Array = [20.0, 8192.0, 20000.0]
+    var wide_controls: Array = tempo.controls(positions, wide_goals, 110, 10.0)
+    var wide_segments: Array = tempo.warp_segments(tempo_pixels, wide_controls)
+    var previous_edge := 0
+    for segment in wide_segments:
+        check(segment.x == previous_edge and segment.image.get_width() <= tempo_pixels.get_width(),
+            "Wide proportional notation is contiguous with bounded native textures")
+        previous_edge = segment.x + segment.width
+    check(previous_edge == roundi(wide_controls[-1].y),
+        "Sparse textures cover the complete proportional canvas")
+    for target_x in [8192, 20000]:
+        for dx in range(-4, 5):
+            var found_ink := false
+            for segment in wide_segments:
+                if target_x+dx >= segment.x and target_x+dx < segment.x+segment.width:
+                    var native_x: int = roundi(float(target_x+dx-segment.x)*segment.image.get_width()/segment.width)
+                    found_ink = segment.image.get_pixel(native_x,18).a > .99
+            check(found_ink, "A GPU-sized coordinate preserves native-width attack pixels")
+    var connected_ink := Image.create(110, 36, false, Image.FORMAT_RGBA8)
+    connected_ink.fill(Color.TRANSPARENT)
+    connected_ink.fill_rect(Rect2i(0,12,110,6), Color.BLACK)
+    var connected_segments: Array = tempo.warp_segments(connected_ink,
+        [Vector2.ZERO, Vector2(110,20000)])
+    check(connected_segments.size() == 1 and connected_segments[0].width == 20000,
+        "Connected beam or tie stays in one logical interval across GPU-sized coordinates")
+    if connected_segments.size() == 1:
+        check(connected_segments[0].image.get_data() == connected_ink.get_data(),
+            "Connected notation retains every original pixel without independent boundary resampling")
     var strip: Dictionary = helper.build(original, pages)
     # Phase 8I: compare deferred CPU-packed tiles to the same real
     # Verovio engraving built with eager texture upload.

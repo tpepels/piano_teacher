@@ -26,6 +26,12 @@ func wait_for(predicate: Callable, description: String, seconds: float = 25.0) -
         await process_frame
     return true
 
+func imported_row() -> Button:
+    for row in app.library_rows.get_children():
+        if row is Button and str(row.get_meta("library_title", "")).begins_with("Imported"):
+            return row
+    return null
+
 func press(text: String) -> void:
     for button in app.find_children("*", "Button", true, false):
         if button.text == text and button.is_visible_in_tree() and not button.disabled:
@@ -73,7 +79,7 @@ func ink(picture: Image, point: Vector2) -> int:
 
 func capture(label: String, beat: float = -999) -> Dictionary:
     await process_frame
-    await RenderingServer.frame_post_draw
+    RenderingServer.force_draw()
     var picture := root.get_texture().get_image()
     var scale := Vector2(picture.get_size()) / root.get_visible_rect().size
     var panel: Rect2 = app.score_frame.get_global_rect()
@@ -127,8 +133,8 @@ func capture(label: String, beat: float = -999) -> Dictionary:
             "Timing line remains fixed in " + label)
     check(picture.save_png(folder+"/"+label+".png") == OK, "Save actual rendered " + label)
     if not obscured:
-        check(app.start_button.is_visible_in_tree() and app.stop_button.is_visible_in_tree(),
-            "Primary and Stop stay visible in " + label)
+        check(app.start_button.is_visible_in_tree() and app.practice_retry_button.is_visible_in_tree() and app.listen_button.is_visible_in_tree(),
+            "Three transport controls stay visible in " + label)
         check(root.get_visible_rect().encloses(app.start_button.get_global_rect()),
             "Primary control fits desktop during " + label)
     if phase() in ["recovering", "feedback", "paused"]:
@@ -173,7 +179,7 @@ func finish_earned_modes() -> void:
     await wait_for(func(): return phase() == "performance_complete","original Perform reaches its held endpoint")
     check(int(app.last_state.mastered) == 1 and int(app.last_state.streak) == 0,"All-missed original Perform adds no mastery")
     await capture("33-earned-original-performance-review")
-    press("Lesson path")
+    press("Path")
     await wait_for(func(): return app.current_screen == "lesson" and not app.lesson_pending,"saved source trouble appears in lesson path")
     var revisit: Button = null
     for button in app.find_children("*","Button",true,false):
@@ -215,12 +221,15 @@ func run() -> void:
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device", "")) == "Journey test piano",
         "input selected through visible MIDI menu")
     press("← Back")
-    press("Browse library  →")
+    press("Music")
     await wait_for(func(): return app.current_screen == "library" and not app.library_pending \
-        and app.library_rows.get_child_count() == 1, "temporary user file listed")
-    var piece := app.library_rows.get_child(0) as Button
-    check(piece.text.contains("Imported four-bar lesson"), "Library shows the user-imported MIDI")
+        and imported_row() != null, "temporary user file listed")
+    var piece := imported_row()
+    check(str(piece.get_meta("library_title", "")).contains("Imported four-bar lesson"), "Library shows the user-imported MIDI")
     piece.pressed.emit()
+    await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
+    app.open_mode.select(0)
+    press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait",
         "import enters source-generated Learn")
     press("Settings")

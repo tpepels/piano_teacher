@@ -1572,6 +1572,7 @@ class PracticeEngine:
             p=self.plan
             seek_grid = self._seek_grid()
             input_activity = {
+                "clock_sampled_at_ms": time.monotonic() * 1000.0,
                 "learner": self._learner_snapshot() if p is not None else None,
                 "placement_available": (not self.is_builtin_warmup and placement_candidate(p) is not None) if p is not None else False,
                 "skip_available": (not self.is_builtin_warmup and p.lesson_step_number < len(p.lesson_steps)) if p is not None else False,
@@ -1630,7 +1631,8 @@ class PracticeEngine:
                     hand_stages.append({"hand": hand, "active": hand == p.hand,
                                         "complete": finished, "locked": locked,
                                         "available": available})
-            now=self.paused_at if self.paused else time.monotonic()
+            sampled_at = time.monotonic()
+            now=self.paused_at if self.paused else sampled_at
             total_beats = ex.phrase.end-ex.phrase.start
             practice_end = min(total_beats, self.review_end_beat) if self.review_end_beat is not None else total_beats
             start_beat = self.play_from_beat if self.review_end_beat is not None else 0.0
@@ -1656,6 +1658,7 @@ class PracticeEngine:
                 "source_id": latest_error.get("source_id", ""),
             } if latest_error is not None else None)
             result = {**input_activity,"mode":self.mode,"teaching":None,"loaded":True,"title":p.piece.title,"kind":ex.kind,
+                    "clock_sampled_at_ms": sampled_at * 1000.0,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
                     "current_bar":bar_number_at(
                         phrase_grid(p.active_phrase, p.piece.bar_boundaries),

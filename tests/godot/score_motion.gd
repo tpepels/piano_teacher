@@ -47,6 +47,22 @@ func run() -> void:
     app._on_score(0, 200, PackedStringArray(), FileAccess.get_file_as_bytes(folder + "/score.png"))
     await process_frame
     await process_frame
+    # Equal travel is a whole-passage invariant. Checking the first note or
+    # merely monotone joins misses acceleration at rests and barlines.
+    var spacing_rates: Array[float] = []
+    var timing_points: Array = app.score_layout.get("anchors", [])
+    for index in range(timing_points.size() - 1):
+        var a: Dictionary = timing_points[index]
+        var b: Dictionary = timing_points[index + 1]
+        var duration: float = float(b.beat) - float(a.beat)
+        if duration > .00001:
+            spacing_rates.append((float(b.x) - float(a.x)) * app.score_content.size.x / duration)
+    spacing_rates.sort()
+    if not spacing_rates.is_empty():
+        var nominal: float = spacing_rates[spacing_rates.size() / 2]
+        print("FULL_PASSAGE_SPACING: min=", spacing_rates[0], " max=", spacing_rates[-1], " median=", nominal)
+        check(spacing_rates[0] > 0 and spacing_rates[-1] - spacing_rates[0] <= maxf(1.5, nominal * .012),
+            "Whole passage has constant pixels per beat, including rests, barlines and system joins")
     # Responsive zoom must follow the grand staff's actual geometry, not
     # the legacy maximum of 27 pixels at every desktop resolution.
     var Quality = load("res://score_quality.gd")
@@ -70,7 +86,8 @@ func run() -> void:
         "8G camera must initialize cached raster geometry and visibility")
     check(app.deferred_tile_mode == (
         app.source_layout.get("systems", []).size() >=
-        load("res://score_strip.gd").DEFERRED_MIN_SYSTEMS),
+        load("res://score_strip.gd").DEFERRED_MIN_SYSTEMS or
+        app.strip_tiles.size() > app.source_layout.get("systems", []).size()),
         "8I enables deferred score textures only for long scores")
     var note: Dictionary = app.score_layout["notes"][0]
     var first_rails: Array = app.score_layout["systems"][0].get("staff_lines", [])
@@ -84,6 +101,8 @@ func run() -> void:
         check(displayed_gap >= 18.0,
             "Practice staves must be readable, not minimized by blank SVG margins")
     check(app.score_overlay._symbols.size() == 4, "count-in loads the score's actual clefs and rests")
+    check(app.score_overlay.get("show_preparation_header") == false,
+        "Actual engraved score owns clefs and meter; count-in cannot duplicate its header")
     var original_clefs: Dictionary = app.score_layout.get("staff_clefs", {})
     var changed_clefs := {"right":{"sign":"F","line":4,"octave_change":0},
         "left":{"sign":"G","line":2,"octave_change":0}}
@@ -159,7 +178,7 @@ func run() -> void:
                 await process_frame
                 await process_frame
                 if DisplayServer.get_name() != "headless":
-                    await RenderingServer.frame_post_draw
+                    RenderingServer.force_draw()
                     var frame := root.get_texture().get_image()
                     frame.save_png(folder + "/frame-%d-%d.png" % [bpm, captures])
                 results.append({"bpm": bpm, "beat": clock, "note_x": projected.x,
@@ -266,14 +285,15 @@ func run() -> void:
             if offset < 0.0:
                 before = app.score_content.position
             else:
-                check(app.score_content.position.distance_to(before) < 3.0,
+                var expected_travel: float = app._beat_width_at(boundary) * app.score_content.size.x * .002
+                check(absf(app.score_content.position.distance_to(before) - expected_travel) < .2,
                       "system/page transition must not jump or blank the canvas")
         check(app.score_view.texture != null and not app.score_tiles.is_empty(),
               "all score systems must already be loaded before playback")
         if DisplayServer.get_name() != "headless":
             await process_frame
             await process_frame
-            await RenderingServer.frame_post_draw
+            RenderingServer.force_draw()
             root.get_texture().get_image().save_png(folder + "/join-%.2f.png" % boundary)
     app.last_state = {"running": true, "paused": true, "clock_beat": 1.0,
         "duration_beats": app.score_layout.beats}

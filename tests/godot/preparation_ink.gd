@@ -18,7 +18,7 @@ func check(ok: bool, message: String) -> void:
 func frame() -> Image:
     await process_frame
     await process_frame
-    await RenderingServer.frame_post_draw
+    RenderingServer.force_draw()
     return root.get_texture().get_image()
 
 func _initialize() -> void:

@@ -23,6 +23,12 @@ func wait_for(predicate: Callable,description: String,seconds: float = 25.0) -> 
         await process_frame
     return true
 
+func imported_row() -> Button:
+    for row in app.library_rows.get_children():
+        if row is Button and str(row.get_meta("library_title", "")).begins_with("Imported"):
+            return row
+    return null
+
 func press(text: String) -> void:
     for button in app.find_children("*","Button",true,false):
         if button.is_visible_in_tree() and button.text == text and not button.disabled:
@@ -72,8 +78,9 @@ func note_ink(picture: Image,point: Vector2) -> int:
 
 func capture(label: String) -> Dictionary:
     await process_frame
-    await RenderingServer.frame_post_draw
+    RenderingServer.force_draw()
     var picture := root.get_texture().get_image()
+    picture.save_png(folder+"/"+label+".png")
     var viewport := root.get_visible_rect()
     var scale := Vector2(picture.get_size())/viewport.size
     var paused := sheet() != null and sheet().is_visible_in_tree()
@@ -94,7 +101,7 @@ func capture(label: String) -> Dictionary:
             var text_width := font.get_string_size(label_node.text,HORIZONTAL_ALIGNMENT_LEFT,-1,label_node.get_theme_font_size("font_size")).x
             check(viewport.encloses(label_node.get_global_rect()),"Speed/hand label fits actual viewport in "+label)
             check(label_node.size.x >= text_width,"Speed/hand text is not clipped in "+label)
-        if not paused:
+        if not paused and bool(app.last_state.get("loaded", false)):
             var panel: Rect2 = app.score_frame.get_global_rect()
             var found := false
             for note in app.score_layout.get("notes",[]):
@@ -105,10 +112,11 @@ func capture(label: String) -> Dictionary:
                     entry["notehead_ink"] = pixels
                     found = true
                     break
-            check(found,"Actual engraved note pixels remain visible in "+label)
-            for button in [app.start_button,app.stop_button]:
+            check(found or phase() == "count_in",
+                "Actual engraved note pixels remain visible after the count-in in "+label)
+            for button in [app.start_button,app.practice_retry_button,app.listen_button]:
                 check(button.is_visible_in_tree() and viewport.encloses(button.get_global_rect()),
-                    "Primary and Stop fit actual viewport in "+label)
+                    "Three transport controls fit actual viewport in "+label)
         for button in app.practice_navigation.get_children():
             if button is Button and button.is_visible_in_tree() and not button.text.is_empty():
                 var font: Font = button.get_theme_font("font")
@@ -124,10 +132,14 @@ func capture(label: String) -> Dictionary:
             for control in [sheet().resume_button,sheet().retry_button,sheet().listen_button,
                     sheet().slower_button,sheet().faster_button,sheet().exit_button,
                     sheet().hand_choice,sheet().bar_choice,sheet().seek_button]:
+                sheet().scroll.ensure_control_visible(control)
+                await process_frame
+                await process_frame
                 check(control.is_visible_in_tree() and viewport.encloses(control.get_global_rect()),
-                    "Pause choice fits actual viewport in "+label)
+                    "Pause choice can be scrolled into the actual viewport in "+label)
                 commands.append(str(control.get_global_rect()))
             entry["pause_controls"] = commands
+            sheet().scroll.scroll_vertical = 0
     check(picture.save_png(folder+"/"+label+".png") == OK,"Save actual learning UI frame "+label)
     frames.append(entry)
     print("LEARNING_UI_FRAME:",label)
@@ -142,7 +154,10 @@ func ensure_paused() -> void:
         await wait_for(func(): return bool(app.last_state.get("running",false)) or phase() == "guided_wait" or phase() == "loading",
             "ordinary Start before pausing")
     await wait_for(func(): return not app.action_pending,"transport control ready")
-    app.start_button.pressed.emit()
+    press("Path")
+    await wait_for(func(): return app.current_screen == "lesson" and phase() == "paused" and not app.action_pending,
+        "Path pauses the attempt before exposing advanced controls")
+    press("Advanced practice controls")
     await wait_for(func(): return phase() == "paused" and sheet() != null and sheet().is_visible_in_tree(),
         "visible Pause sheet freezes engine")
 
@@ -171,10 +186,13 @@ func run() -> void:
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device","")) == "Journey test piano","MIDI input selected in real menu")
     await capture("02-settings")
     press("← Back")
-    press("Browse library  →")
-    await wait_for(func(): return app.current_screen == "library" and not app.library_pending and app.library_rows.get_child_count() == 1,"user MIDI listed")
+    press("Music")
+    await wait_for(func(): return app.current_screen == "library" and not app.library_pending and imported_row() != null,"user MIDI listed")
     await capture("03-library")
-    (app.library_rows.get_child(0) as Button).pressed.emit()
+    (imported_row()).pressed.emit()
+    await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
+    app.open_mode.select(0)
+    press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait","generated Learn opens")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,"choose practice target")

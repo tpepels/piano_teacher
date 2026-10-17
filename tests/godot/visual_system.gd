@@ -29,10 +29,10 @@ func _verify() -> void:
         modal.corner_radius_top_left >= card.corner_radius_top_left,
         "Modal rises above cards through the same elevation system")
     check(stage.bg_color == Design.STAGE and
-        Design.STAGE.get_luminance() > .8 and
-        Design.SCORE_INK.get_luminance() < .25 and
+        Design.STAGE.get_luminance() < .25 and
+        Design.SCORE_INK.get_luminance() > .8 and
         Design.FOREST.get_luminance() < .1,
-        "Moodboard score has ivory paper, dark vector ink and forest shell")
+        "Score has luminous ink on the dark stage and forest shell")
     check(theme.get_stylebox("normal", "LineEdit") is StyleBoxFlat and
         theme.get_stylebox("focus", "LineEdit") is StyleBoxFlat and
         theme.get_color("caret_color", "LineEdit") == Design.MINT,
@@ -46,7 +46,10 @@ func _verify() -> void:
         host.add_child(button)
         button.configure(role)
         var face := button.get_theme_stylebox("normal") as StyleBoxFlat
-        check(face != null and face.bg_color == Design.role_fill(role),
+        var expected: Color = Design.role_fill(role)
+        if role == "library":
+            expected.a = .62
+        check(face != null and face.bg_color == expected,
             "Button " + role + " uses its shared fill")
         check(button.focus_mode == Control.FOCUS_ALL and
             button.get_theme_stylebox("focus") is StyleBoxFlat,

@@ -202,7 +202,12 @@ class Playtest:
                "tests/test_phase78_stage.py",
                "tests/test_midi_reconnect.py",
                "tests/test_listen_sync.py",
-               "tests/test_score_motion_render.py"]
+               "tests/test_score_motion_render.py",
+               "tests/test_phase1_transport.py",
+               "tests/test_visual_transport_clock.py",
+               "tests/test_recovery_layout.py",
+               "tests/test_recovery_motion.py",
+               "tests/test_rendered_playhead.py"]
         self.note("Running the practice UI/MIDI/score tests before launching the piano.")
         with (self.output / "preflight.log").open("w", encoding="utf-8") as out:
             result = subprocess.run(cmd, cwd=ROOT, stdout=out, stderr=subprocess.STDOUT,

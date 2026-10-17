@@ -502,6 +502,10 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     # Don't invalidate the long score canvas if nothing has moved.
     if score_content.position != target:
         score_content.position = target
+        # The playhead is drawn in this moving canvas. Its local coordinate
+        # must repaint on the SAME frame as the parent moves, or a cached
+        # 30 Hz line drifts left on alternate 60 Hz score frames.
+        score_overlay.queue_redraw()
     # Two binary searches locate the visible half-open tile interval.
     # Update only entering/leaving tiles, rather than all systems at 60 Hz.
     var tile_overscan: float = maxf(120.0, viewport.x * .18)
@@ -859,7 +863,7 @@ func _resize_overlay_drawer() -> void:
     overlay_drawer.anchor_right = 1.0
     overlay_drawer.anchor_top = 0.0
     overlay_drawer.anchor_bottom = 1.0
-    overlay_drawer.offset_left = - drawer_width
+    overlay_drawer.offset_left = -drawer_width
     overlay_drawer.offset_right = 0.0
     overlay_drawer.offset_top = 0.0
     overlay_drawer.offset_bottom = 0.0
@@ -1240,6 +1244,9 @@ func _build_interface() -> void:
     score_view.stretch_mode = TextureRect.STRETCH_SCALE
     score_content.add_child(score_view)
     score_overlay = ScoreOverlay.new()
+    # The Verovio strip already includes its genuine opening clefs/meter.
+    # Count-in adds staff/rests only, never a second copy of that context.
+    score_overlay.show_preparation_header = false
     score_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_content.add_child(score_overlay)
@@ -1497,6 +1504,7 @@ func _build_interface() -> void:
     add_child(pause_sheet)
     pause_sheet.chosen.connect(func(command: Dictionary):
         if command.get("action") == "exit":
+            _send_action({"action": "stop"})
             _navigate("library")
         else:
             _send_action(command))
@@ -1528,6 +1536,8 @@ func _update_responsive_layout() -> void:
         home_cards.vertical = width < 1380
     _resize_overlay_drawer()
     _resize_open_picker()
+    if practice_stage_bar != null:
+        _update_hand_stages(last_state)
     if practice_header == null:
         return
     practice_header.add_theme_constant_override("separation", 16)
@@ -1552,10 +1562,10 @@ func _update_responsive_layout() -> void:
             button.clip_text = false
     if practice_controls != null:
         practice_layout_box.add_theme_constant_override("separation", 6 if compact else 9)
-        # Give the score roughly half the window height instead of
-        # allowing transport, menus and hint keyboard to dwarf it.
-        score_frame.custom_minimum_size.y = 195.0 if compact else clampf(
-            size.y * .48, 320.0, 760.0)
+        # The expanding score panel gets all remaining vertical space.
+        # A window-relative minimum ignored the keyboard/status heights and
+        # pushed the transport below the screen when those became visible.
+        score_frame.custom_minimum_size.y = 135.0
         for side in ["left", "right", "top", "bottom"]:
             score_margin_box.add_theme_constant_override("margin_" + side, 5 if compact else 10)
         for child in practice_controls.get_children():
@@ -1648,14 +1658,12 @@ func _build_lesson_screen() -> void:
     course_choices.add_child(skip_stage_button)
     placement_button = _button("Try original notes", func(): _send_action({"action": "place_original"}), false, "primary")
     course_choices.add_child(placement_button)
-    var scroll := ScrollContainer.new()
-    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    content.add_child(scroll)
-    content.add_child(_button("Advanced practice controls", _open_advanced_pause, false, "settings"))
+    # The outer scroll owns the whole path. A nested expanding ScrollContainer
+    # has zero minimum height inside it, hiding every lesson stage.
     lesson_rows = _stack(10)
     lesson_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    scroll.add_child(lesson_rows)
+    content.add_child(lesson_rows)
+    content.add_child(_button("Advanced practice controls", _open_advanced_pause, false, "settings"))
 
 func _request_lesson() -> void:
     if lesson_request == null or lesson_pending or not bool(last_state.get("loaded", false)):
@@ -1968,7 +1976,8 @@ func _show_open_picker(state: Dictionary) -> void:
 
 func _update_hand_stages(state: Dictionary) -> void:
     var stages: Array = state.get("hand_stages", [])
-    practice_stage_bar.visible = not stages.is_empty()
+    practice_stage_bar.visible = not stages.is_empty() and size.y >= 750.0 \
+        and str(state.get("phase", "")) not in ["playing", "count_in"]
     var by_hand: Dictionary = {}
     for stage in stages:
         by_hand[str(stage.get("hand", ""))] = stage
@@ -2661,7 +2670,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         progress_label.add_theme_color_override("font_color",
             Color("#78DBAD") if challenge_kind == "success" else
             Color("#F0B971") if challenge_kind in ["retry", "recovering"] else INK)
-        if challenge_kind == "success":
+        if challenge_kind == "success" and next_action.is_empty():
             lesson_info_label.text = str(challenge.get("detail", ""))
         if Time.get_ticks_msec() < hand_unlock_until_ms:
             progress_label.text = hand_unlock_message
@@ -3077,7 +3086,7 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     tile_geometry_rebuilds = 0
     tile_window_changes = 0
     strip_tiles = strip["tiles"]
-    deferred_tile_mode = should_defer
+    deferred_tile_mode = bool(strip.get("deferred", should_defer))
     score_tile_upload_bytes = 0
     score_tile_packed_bytes = 0
     for item in strip_tiles:

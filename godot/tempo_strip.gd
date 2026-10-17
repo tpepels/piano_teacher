@@ -170,3 +170,36 @@ static func warp_image(image: Image, points: Array,
             out.blit_rect(region,Rect2i(0,0,target_span,
                 image.get_height()),Vector2i(dest_a,0))
     return out
+
+
+# A wide proportional system is sparse: preserve source-size glyph textures
+# and represent added space by logical rectangles. Connected ties/beams use
+# one source region across their entire target span, so clipping never creates
+# independently resampled seams or requires a giant intermediate raster.
+static func warp_segments(image: Image, points: Array, staff_rows: Array = []) -> Array:
+    if image.get_format() != Image.FORMAT_RGBA8:
+        image.convert(Image.FORMAT_RGBA8)
+    var pixels: PackedByteArray = image.get_data()
+    var segments: Array = []
+    for index in range(points.size() - 1):
+        var left: Vector2 = points[index]
+        var right: Vector2 = points[index + 1]
+        var a: int = clampi(roundi(left.x), 0, image.get_width())
+        var b: int = clampi(roundi(right.x), 0, image.get_width())
+        var destination: int = roundi(left.y)
+        var width: int = roundi(right.y) - destination
+        if b <= a or width <= 0:
+            continue
+        var cut: int = _clean_gap(image, a, b, staff_rows, pixels) if width > b-a else -1
+        if cut >= 0:
+            segments.append({"image":image.get_region(Rect2i(a,0,cut-a,image.get_height())),
+                "x":destination, "width":cut-a})
+            var empty := Image.create(1, image.get_height(), false, Image.FORMAT_RGBA8)
+            empty.fill(Color.TRANSPARENT)
+            segments.append({"image":empty, "x":destination+cut-a, "width":width-(b-a)})
+            segments.append({"image":image.get_region(Rect2i(cut,0,b-cut,image.get_height())),
+                "x":destination+width-(b-cut), "width":b-cut})
+        else:
+            segments.append({"image":image.get_region(Rect2i(a,0,b-a,image.get_height())),
+                "x":destination, "width":width})
+    return segments

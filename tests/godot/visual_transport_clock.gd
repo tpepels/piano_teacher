@@ -62,7 +62,40 @@ func run() -> void:
     check(absf(last_beat - (-3.0 + 9.6 * beat_rate)) < .06,
         "Filtered jitter must still track real musical time within 60ms")
 
+    # Both processes run on this machine's monotonic clock. Repeated HTTP
+    # sampling error must never change BPM between authoritative transitions.
+    for tempo in [40.0, 80.0, 120.0]:
+        var fixed = load("res://visual_transport_clock.gd").new()
+        var snapshot := {"revision": 8, "transport_id": 12, "bpm": tempo,
+            "running": true, "paused": false, "clock_beat": -3.0}
+        fixed.accept(snapshot, base_ms, base_ms)
+        for tick in range(1, 501):
+            var at: int = base_ms + tick * 20
+            if tick % 8 == 0:
+                # Persistent sampling bias used to engage a 2% tempo slew.
+                snapshot.clock_beat = -3.0 + (tick * .020 + .065) * tempo / 60.0
+                fixed.accept(snapshot, at, at)
+            var expected: float = -3.0 + tick * .020 * tempo / 60.0
+            check(absf(fixed.now(at) - expected) < .000001,
+                "HTTP sampling error cannot change nominal BPM at %.0f BPM" % tempo)
+
     # The downbeat has no special animation and cannot change tempo.
+    var stamped = load("res://visual_transport_clock.gd").new()
+    var idle := {"revision":0, "transport_id":0, "bpm":80.0,
+        "running":false, "paused":false, "clock_beat":0.0,
+        "clock_sampled_at_ms":500000.0}
+    stamped.accept(idle, base_ms, base_ms)
+    var first := {"revision":1, "transport_id":1, "bpm":80.0,
+        "running":true, "paused":false, "clock_beat":-3.0,
+        "clock_sampled_at_ms":500100.0}
+    # The first active HTTP midpoint is biased by 65ms. Its explicit backend
+    # timestamp, calibrated while idle, still identifies the correct origin.
+    stamped.accept(first, base_ms + 165, base_ms + 200)
+    check(absf(stamped.now(base_ms + 200) - (-3.0 + .1*80.0/60.0)) < .000001,
+        "Backend sample timestamp removes first-active-snapshot phase bias")
+    check(absf(stamped.now(base_ms + 3200) - (-3.0 + 3.1*80.0/60.0)) < .000001,
+        "Timestamped projection stays at exact BPM through the first onset")
+
     var near_zero: float = clock.now(now_ms)
     check(near_zero > 0.0, "Count-in must cross the downbeat in source time")
     state["running"] = false

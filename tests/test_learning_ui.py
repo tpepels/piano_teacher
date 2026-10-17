@@ -7,11 +7,13 @@ import pytest
 from scripts.smoke_learning_ui import run
 
 
-def test_real_learning_ui_at_three_sizes_fullscreen_and_all_pause_choices(tmp_path):
+def test_real_learning_ui_at_three_sizes_fullscreen_and_all_pause_choices(tmp_path, monkeypatch):
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
         pytest.skip("Rendered learning UI requires a graphical desktop")
     if not (shutil.which("godot") or shutil.which("godot4")):
         pytest.skip("Godot unavailable")
+    from piano_teacher import sample_piano
+    monkeypatch.setattr(sample_piano, "find_soundfont", lambda: None)
     result = run(tmp_path)
     assert result["failures"] == []
     assert result["renderer"] != "headless"

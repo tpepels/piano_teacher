@@ -161,15 +161,21 @@ static func build(layout: Dictionary, pages: Array[Image],
     # Natural engraving can leave a *short* join after safe cropping.
     # Preserve constant temporal travel by inserting an unmarked staff
     # extension, without stretching any existing note, accidental or barline.
-    # Imported/change-of-context scores are left completely untouched.
+    # Only proven repeated headers may be cropped. Genuine context changes
+    # remain engraved, independently of the requested temporal spacing.
     if bool(layout.get("strip_trim_repeated_headers", false)):
         width = _pad_short_system_joins(layout, mappings)
-        # Once Verovio has resolved glyph collisions, redistribute its
-        # variable spaces into equal lengths of musical time. No camera
-        # easing or tempo-dependent hacks: every beat now occupies exactly
-        # the same horizontal distance, including system joins.
+    var proportional: bool = bool(layout.get("strip_time_proportional",
+        layout.get("strip_trim_repeated_headers", false)))
+    if proportional:
+        # Preserve glyph/context ink while redistributing variable spacing
+        # into equal lengths of musical time, including system joins.
         width = _equalize_beat_spacing(layout, mappings)
     var size := Vector2(maxf(1.0, width), maxf(1.0, above + below))
+    for mapping in mappings:
+        var warp: Array = mapping.get("tempo_warp", [])
+        if warp.size() > 1 and float(warp[-1].y) + float(mapping.get("tempo_gap", 0)) > 16384:
+            defer_textures = true
     var tiles: Array = []
     for mapping in mappings:
         mapping.position.y = above - float(mapping.staff_offset)
@@ -207,14 +213,36 @@ static func build(layout: Dictionary, pages: Array[Image],
                             expanded.set_pixel(x, y, Color(0, 0, 0,
                                 .80 if offset == 0 else .14))
             image = expanded
-        if mapping.get("tempo_warp", []).size() > 1:
+        var warp_points: Array = mapping.get("tempo_warp", [])
+        var tempo_gap: int = int(mapping.get("tempo_gap", 0))
+        var warped_width: int = roundi(float(warp_points[-1].y)) if warp_points.size() > 1 else image.get_width()
+        if warped_width + tempo_gap > 16384:
+            # Tiny MIDI intervals can require a wide logical canvas. Retain
+            # native source textures and sparse gaps instead of allocating
+            # its empty space or abandoning the proportional time mapping.
+            if proportional:
+                mapping["rail_pixels_replaced"] = _extract_isolated_staff_rules(image, mapping)
+            var rows: Array = []
+            for line in mapping.system.get("staff_lines", []):
+                rows.append(roundi(float(line) * mapping.source_size.y - mapping.crop.position.y))
+            if tempo_gap > 0:
+                var empty := Image.create(1, image.get_height(), false, Image.FORMAT_RGBA8)
+                empty.fill(Color.TRANSPARENT)
+                tiles.append(_encode_tile(compact_monochrome_tile(empty), mapping.position,
+                    defer_textures, tempo_gap))
+            for segment in TempoStrip.warp_segments(image, warp_points, rows):
+                var native_image: Image = compact_monochrome_tile(segment.image)
+                tiles.append(_encode_tile(native_image,
+                    mapping.position + Vector2(float(segment.x) + tempo_gap, 0),
+                    defer_textures, float(segment.width)))
+            continue
+        if warp_points.size() > 1:
             var source_rule_rows: Array = []
             for line in mapping.system.get("staff_lines", []):
                 source_rule_rows.append(roundi(float(line) * mapping.source_size.y
                     - mapping.crop.position.y))
             image = TempoStrip.warp_image(image, mapping.tempo_warp,
                 source_rule_rows)
-        var tempo_gap: int = int(mapping.get("tempo_gap", 0))
         if tempo_gap > 0:
             var joined := Image.create(image.get_width() + tempo_gap,
                 image.get_height(), false, image.get_format())
@@ -228,7 +256,7 @@ static func build(layout: Dictionary, pages: Array[Image],
         # duplicated line weights remain visible. Keep any column containing
         # non-staff ink unchanged: real notes, ties, clefs and barlines are
         # never reconstructed or erased.
-        if bool(layout.get("strip_trim_repeated_headers", false)):
+        if proportional:
             mapping["rail_pixels_replaced"] = _extract_isolated_staff_rules(
                 image, mapping)
         # Verovio's score raster is monochrome engraving with alpha.
@@ -236,19 +264,7 @@ static func build(layout: Dictionary, pages: Array[Image],
         # requiring two bytes per pixel instead of RGBA8's four.
         # The original source layouts and glyph positions are unchanged.
         image = compact_monochrome_tile(image)
-        var tile: Dictionary = {
-            "rect": Rect2(mapping.position, Vector2(image.get_size())),
-            "upload_bytes": image.get_data().size()}
-        if defer_textures:
-            # FastLZ on the LA8 raster is inexpensive and reversible. The
-            # source buffer lives on the CPU; no Texture2D is uploaded until
-            # this engraved system approaches the viewport.
-            tile["packed_ink"] = image.get_data().compress(
-                FileAccess.COMPRESSION_FASTLZ)
-            tile["image_size"] = image.get_size()
-        else:
-            tile["texture"] = ImageTexture.create_from_image(image)
-        tiles.append(tile)
+        tiles.append(_encode_tile(image, mapping.position, defer_textures))
     var flat: Dictionary = layout.duplicate(true)
     # The feedback API identifies noteheads by their source ID without an
     # engraved system name. Store each note's first source system ONCE
@@ -290,7 +306,8 @@ static func build(layout: Dictionary, pages: Array[Image],
         flat_systems.append(system)
     flat["systems"] = flat_systems
     return {"layout": flat, "tiles": tiles, "size": size,
-        "crop_origin": Vector2.ZERO, "crop_size": Vector2.ONE, "mappings": mappings}
+        "crop_origin": Vector2.ZERO, "crop_size": Vector2.ONE, "mappings": mappings,
+        "deferred": defer_textures}
 
 
 # Called only once per source tile, after all raster-safe cropping and
@@ -349,6 +366,20 @@ static func _native_tile_width(mapping: Dictionary) -> int:
         - int(mapping.get("splice_left", -1))) + int(mapping.get("entry_padding", 0))
 
 
+static func _encode_tile(image: Image, position: Vector2, deferred: bool,
+        logical_width: float = 0.0) -> Dictionary:
+    var dimensions := Vector2(image.get_size())
+    if logical_width > 0:
+        dimensions.x = logical_width
+    var tile := {"rect": Rect2(position, dimensions),
+        "upload_bytes": image.get_data().size()}
+    if deferred:
+        tile["packed_ink"] = image.get_data().compress(FileAccess.COMPRESSION_FASTLZ)
+        tile["image_size"] = image.get_size()
+    else:
+        tile["texture"] = ImageTexture.create_from_image(image)
+    return tile
+
 static func _equalize_beat_spacing(layout: Dictionary, mappings: Array) -> float:
     var source_groups: Array = []
     var time_positions: Array = []
@@ -405,10 +436,8 @@ static func _equalize_beat_spacing(layout: Dictionary, mappings: Array) -> float
         var controls: Array = TempoStrip.controls(native_points, targets,
             native_width, gap)
         var warp_width: int = roundi(float(controls[-1].y))
-        # A wide system is already split into separate printed tiles; refuse
-        # a tile beyond GPU limits, rather than silently misalign notation.
-        if warp_width > 16384:
-            return mappings[-1].position.x + _native_tile_width(mappings[-1])
+        # Logical score width is independent of the GPU texture limit.
+        # build() slices wide outputs without changing their time geometry.
         var extra: int = 0
         if index > 0 and is_finite(previous_last_beat):
             var span: float = beat_first - previous_last_beat

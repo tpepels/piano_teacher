@@ -36,7 +36,7 @@ func run() -> void:
     normal.queue_redraw()
     changed.queue_redraw()
     await process_frame
-    await RenderingServer.frame_post_draw
+    RenderingServer.force_draw()
     var picture := root.get_texture().get_image()
     picture.save_png(args[1])
     for bounds in [Rect2i(90,80,80,120),Rect2i(90,325,80,130)]:

@@ -38,7 +38,7 @@ func fit_window(width: int, height: int) -> void:
 
 func pixels(name: String) -> Image:
     await settle()
-    await RenderingServer.frame_post_draw
+    RenderingServer.force_draw()
     var image := root.get_texture().get_image()
     image.save_png(folder.path_join(name + ".png"))
     return image
@@ -109,7 +109,7 @@ func run() -> void:
         var heard_at := keyboard.position + Vector2(c_rect.end.x - 6, c_rect.end.y - 14)
         check(color_distance(image.get_pixelv(Vector2i(triangle_at)), Color("#C8AC7C")) < .1,
             "rendered target has a triangular amber marker")
-        check(color_distance(image.get_pixelv(Vector2i(heard_at)), Color("#8B9A92")) < .1,
+        check(color_distance(image.get_pixelv(Vector2i(heard_at)), load("res://practice_theme.gd").SLATE) < .1,
             "rendered correct pitch keeps its separate round heard marker")
     # Every black key must lie between its natural neighbours, including octave boundaries.
     for pitch in range(22, 108):

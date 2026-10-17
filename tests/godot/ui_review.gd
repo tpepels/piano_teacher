@@ -38,7 +38,7 @@ func press(text: String) -> void:
 func capture(name: String) -> void:
     await process_frame
     await process_frame
-    await RenderingServer.frame_post_draw
+    RenderingServer.force_draw()
     var frame := root.get_texture().get_image()
     frame.save_png(folder + "/" + name + ".png")
     var color: Color = frame.get_pixel(5, 5)

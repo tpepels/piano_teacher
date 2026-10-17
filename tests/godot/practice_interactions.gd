@@ -495,7 +495,7 @@ func test_pause_choices() -> void:
     check(app.speed_label.text.contains("target"), "Current and target tempos remain visible")
     app.pause_sheet.exit_button.pressed.emit()
     check(app.current_screen == "library", "Sheet Exit returns to the music library")
-    check(app.commands.is_empty(), "Music drawer preserves an already paused attempt")
+    check(app.commands == [{"action":"stop"}], "Explicit Exit stops the paused attempt before opening music")
 
 func test_focus_trap() -> void:
     var paused := state("paused")

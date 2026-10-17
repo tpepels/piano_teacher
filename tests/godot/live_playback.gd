@@ -111,7 +111,7 @@ func write_samples() -> void:
 
 func capture(bpm: int, label: String) -> Dictionary:
     await process_frame
-    await RenderingServer.frame_post_draw
+    RenderingServer.force_draw()
     var frame: Image = root.get_texture().get_image()
     var note: Dictionary = {}
     for candidate in app.score_layout.get("notes", []):

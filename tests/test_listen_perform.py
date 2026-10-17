@@ -10,6 +10,15 @@ from piano_teacher.music import Note, Phrase, Piece
 from test_instructional_recovery import lesson, send, play, boundary, finish_take, after_break
 
 
+@pytest.fixture(autouse=True)
+def deterministic_transport_audio(monkeypatch):
+    # These tests exercise timing/readiness and PCM audibility. Keep the
+    # optional 1.2 GiB user bank out of concurrent transport test workers;
+    # real FluidSynth rendering has its own test in test_sampled_piano.py.
+    from piano_teacher import sample_piano
+    monkeypatch.setattr(sample_piano, "find_soundfont", lambda: None)
+
+
 def wait_audio(e):
     worker = e._demo_thread
     worker.join(10)

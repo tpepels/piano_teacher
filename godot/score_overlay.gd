@@ -7,6 +7,7 @@ const Effects := preload("res://note_reactions.gd")
 var cursor: Dictionary = {}
 var showing := false
 var transport_active := false
+var show_preparation_header := true
 var onset_until_ms := 0
 var guided_active := false
 var image_size := Vector2.ZERO
@@ -114,10 +115,11 @@ func _draw_preparation() -> void:
         draw_line(Vector2(margin_left, sy), Vector2(first_x, sy), ink, 1.1, true)
     if lines.size() < 10:
         return
-    _draw_preparation_clef("right", left - gap * 7.0, lines, 0, gap)
-    _draw_preparation_clef("left", left - gap * 7.0, lines, 5, gap)
-    _draw_meter(left - gap * 2.7, lines[0], gap)
-    _draw_meter(left - gap * 2.7, lines[5], gap)
+    if show_preparation_header:
+        _draw_preparation_clef("right", left - gap * 7.0, lines, 0, gap)
+        _draw_preparation_clef("left", left - gap * 7.0, lines, 5, gap)
+        _draw_meter(left - gap * 2.7, lines[0], gap)
+        _draw_meter(left - gap * 2.7, lines[5], gap)
     if lead_beats <= 0.0:
         return
     var beat_width: float = lead_width_px / lead_beats

@@ -1,13 +1,10 @@
 extends RefCounted
 
 # Presentation clock; the backend alone scores MIDI and schedules Listen.
-# Most HTTP snapshot error is sampling/transport jitter, not a real tempo
-# change. Low-pass its *phase error*, not the score position. With a deadband,
-# the display runs at exactly the chosen BPM unless a persistent error exists.
-const MAX_SLEW_FRACTION := 0.02
-const FOLLOW_GAIN := 0.38
-const PHASE_DEADBAND_BEATS := 0.025
-const MEASUREMENT_WEIGHT := 0.18
+# HTTP snapshots contain sampling/transport error. Once an authoritative
+# snapshot establishes the origin, project at its BPM until a transport
+# transition. Backend and frontend use the same machine's monotonic time;
+# chasing poll phase error introduces audible/visible tempo modulation.
 const DISCONTINUITY_BEATS := 0.8
 
 var initialized := false
@@ -17,7 +14,9 @@ var bpm := 60.0
 var active := false
 var beat := 0.0
 var last_ms := 0
-var phase_error := 0.0
+var backend_offset_ms := 0.0
+var best_round_trip_ms := INF
+var has_backend_offset := false
 
 func matches(state: Dictionary) -> bool:
     return initialized and transport_id == int(state.get("transport_id", 0)) \
@@ -31,15 +30,7 @@ func now(now_ms: int) -> float:
     var elapsed: float = maxf(0.0, float(now_ms - last_ms) / 1000.0)
     if elapsed <= 0.0:
         return beat
-    var nominal: float = bpm / 60.0
-    var drift: float = signf(phase_error) * maxf(0.0,
-        absf(phase_error) - PHASE_DEADBAND_BEATS)
-    var correction: float = clampf(drift * FOLLOW_GAIN,
-        -nominal * MAX_SLEW_FRACTION, nominal * MAX_SLEW_FRACTION)
-    # Pure tempo is the common case. When a genuine clock drift persists,
-    # the difference is corrected by at most 2%, never by position jumps.
-    beat += elapsed * (nominal + correction)
-    phase_error -= elapsed * correction
+    beat += elapsed * bpm / 60.0
     last_ms = now_ms
     return beat
 
@@ -49,6 +40,17 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
     var next_id: int = int(state.get("transport_id", 0))
     var next_revision: int = int(state.get("revision", -1))
     var captured_ms: int = mini(measured_ms, received_ms)
+    if state.has("clock_sampled_at_ms"):
+        var backend_ms: float = float(state.clock_sampled_at_ms)
+        var round_trip: float = maxf(0.0, 2.0 * (received_ms - captured_ms))
+        # Calibrate clock epochs on the lowest-latency idle sample, before
+        # the attempt. A delayed first active response then cannot shift its
+        # origin. Freeze this offset while moving; never alter musical speed.
+        if not has_backend_offset or (not next_active and round_trip < best_round_trip_ms):
+            backend_offset_ms = float(captured_ms) - backend_ms
+            best_round_trip_ms = round_trip
+            has_backend_offset = true
+        captured_ms = mini(roundi(backend_ms + backend_offset_ms), received_ms)
     var observed: float = float(state.get("clock_beat", 0.0))
     if next_active:
         observed += float(received_ms - captured_ms) * next_bpm / 60000.0
@@ -61,14 +63,8 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
     # Huge differences are also explicit seeks, not network jitter.
     if new_session or absf(error) > DISCONTINUITY_BEATS:
         beat = observed
-        phase_error = 0.0
-    elif next_active:
-        # Poll updates may contain +/-50 ms of scheduling jitter. Averaging
-        # the error avoids accelerating/decelerating with every HTTP reply.
-        phase_error = lerpf(phase_error, error, MEASUREMENT_WEIGHT)
-    else:
+    elif not next_active:
         beat = observed
-        phase_error = 0.0
     initialized = true
     transport_id = next_id
     revision = next_revision

@@ -7,11 +7,13 @@ import pytest
 from scripts.smoke_instructional_godot import run
 
 
-def test_real_student_prepares_recovers_masters_listens_performs_and_revisits(tmp_path):
+def test_real_student_prepares_recovers_masters_listens_performs_and_revisits(tmp_path, monkeypatch):
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
         pytest.skip("Rendered instructional journey requires a graphical desktop")
     if not (shutil.which("godot") or shutil.which("godot4")):
         pytest.skip("Godot unavailable")
+    from piano_teacher import sample_piano
+    monkeypatch.setattr(sample_piano, "find_soundfont", lambda: None)
     result = run(tmp_path,finish_modes=True)
     assert result["failures"] == []
     assert result["renderer"] != "headless"

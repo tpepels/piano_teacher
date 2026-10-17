@@ -23,6 +23,12 @@ func wait_for(predicate: Callable, description: String, seconds: float = 25.0) -
         await process_frame
     return true
 
+func imported_row() -> Button:
+    for row in app.library_rows.get_children():
+        if row is Button and str(row.get_meta("library_title", "")).begins_with("Imported"):
+            return row
+    return null
+
 func press(text: String) -> void:
     for button in app.find_children("*","Button",true,false):
         if button.is_visible_in_tree() and button.text == text and not button.disabled:
@@ -60,7 +66,7 @@ func note_ink(picture: Image, point: Vector2) -> int:
 
 func capture(label: String, track_beat: float = -999) -> Dictionary:
     await process_frame
-    await RenderingServer.frame_post_draw
+    RenderingServer.force_draw()
     var picture := root.get_texture().get_image()
     var scale := Vector2(picture.get_size())/root.get_visible_rect().size
     var panel: Rect2 = app.score_frame.get_global_rect()
@@ -91,13 +97,13 @@ func capture(label: String, track_beat: float = -999) -> Dictionary:
         entry["audio_position"] = player.get_playback_position()
         entry["pcm_bytes"] = player.stream.data.size()
     check(picture.save_png(folder+"/"+label+".png") == OK,"Save actual mode frame "+label)
-    check(app.start_button.is_visible_in_tree() and app.stop_button.is_visible_in_tree(),
+    check(app.start_button.is_visible_in_tree() and app.practice_retry_button.is_visible_in_tree() and app.listen_button.is_visible_in_tree(),
         "Transport controls stay visible in "+label)
     var viewport := root.get_visible_rect()
     entry["viewport"] = str(viewport)
     entry["primary_bounds"] = str(app.start_button.get_global_rect())
     entry["stop_bounds"] = str(app.stop_button.get_global_rect())
-    for control in [app.start_button,app.stop_button]:
+    for control in [app.start_button,app.practice_retry_button,app.listen_button]:
         check(viewport.encloses(control.get_global_rect()),"Transport control fits actual viewport in "+label)
     check(app.score_frame.size.y >= 135,"Notation retains135px height in "+label)
     if app.performance_review.is_visible_in_tree():
@@ -145,11 +151,14 @@ func run() -> void:
     app.device_menu.hide()
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device","")) == "Journey test piano","input selected in MIDI menu")
     press("← Back")
-    press("Browse library  →")
-    await wait_for(func(): return app.current_screen == "library" and not app.library_pending and app.library_rows.get_child_count() == 1,"temporary user file listed")
-    var piece := app.library_rows.get_child(0) as Button
-    check(piece.text.contains("Imported rest and held ending"),"Library opens arbitrary user MIDI")
+    press("Music")
+    await wait_for(func(): return app.current_screen == "library" and not app.library_pending and imported_row() != null,"temporary user file listed")
+    var piece := imported_row()
+    check(str(piece.get_meta("library_title", "")).contains("Imported rest and held ending"),"Library opens arbitrary user MIDI")
     piece.pressed.emit()
+    await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
+    app.open_mode.select(0)
+    press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait","import enters generated Learn")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,"choose tempo")
@@ -204,17 +213,29 @@ func run() -> void:
     await wait_for(func(): return phase() == "performance_complete","all-missed Perform reaches musical endpoint")
     await capture("09-performance-summary")
     var summary_text := labels_text()
-    for word in ["0%","early","late","missed","weakest"]:
+    for word in ["0%","missed","wrong","timing/duration"]:
         check(summary_text.contains(word),"Visible performance summary includes "+word)
     var weak_button: Button = null
     for button in app.find_children("*","Button",true,false):
         var text: String = button.text.to_lower()
-        if button.is_visible_in_tree() and not button.disabled and text.contains("practice") and text.contains("weak"):
+        if button.is_visible_in_tree() and not button.disabled and text.contains("review notes"):
             weak_button = button
             break
     check(weak_button != null,"Weakest section has a real visible Practice control")
     if weak_button != null:
         weak_button.pressed.emit()
+    await wait_for(func(): return app.review_sheet.visible, "Detailed source assessment opens")
+    var repeat_button: Button = null
+    for candidate in app.review_sheet.find_children("*", "Button", true, false):
+        if candidate.text.begins_with("Repeat Measures"):
+            repeat_button = candidate
+            break
+    check(repeat_button != null, "Detailed assessment exposes a source-section Repeat action")
+    if repeat_button != null:
+        repeat_button.pressed.emit()
+    await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "practice" \
+        and phase() == "ready", "Reviewed source section waits for the learner")
+    app.start_button.pressed.emit()
     await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "practice" and phase() == "count_in","weak section starts actual timed Practice")
     await capture("10-weak-section-practice-count-in")
     print("MODES_STAGE:weak-practice-playing")

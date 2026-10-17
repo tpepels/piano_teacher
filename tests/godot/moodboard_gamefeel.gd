@@ -28,12 +28,12 @@ func _verify() -> void:
     surface.add_child(cue)
     await process_frame
     var shader: ShaderMaterial = Design.notation_material()
-    check(Design.STAGE.get_luminance() > .8 and
-        Design.SCORE_INK.get_luminance() < .25 and
+    check(Design.STAGE.get_luminance() < .25 and
+        Design.SCORE_INK.get_luminance() > .8 and
         Design.FOREST.get_luminance() < .1,
-        "Sheet must be light with contrasting forest-ink vector notation")
-    check(shader.shader.code.contains("vec3(0.149, 0.239, 0.204)"),
-        "Engraved raster receives dark high-resolution ink, not white notes")
+        "Sheet must retain contrasting luminous notation on a dark stage")
+    check(shader.shader.code.contains("vec3(0.918, 0.957, 0.929)"),
+        "Engraved raster receives luminous high-resolution ink")
     var initial := {"revision":4, "transport_id":21, "hand":"left",
         "progress":.08, "running":true, "paused":false,
         "phase":"playing", "preview_only":true}

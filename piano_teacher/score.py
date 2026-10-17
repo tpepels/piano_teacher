@@ -331,6 +331,9 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
                                note_bindings=note_bindings)
     layout["strip_trim_repeated_headers"] = _can_remove_repeated_system_headers(
         xml, note_bindings)
+    # Keeping a genuine clef/key/meter change must not disable the temporal
+    # layout. Header safety and equal musical beat spacing are independent.
+    layout["strip_time_proportional"] = bpm is not None or layout["strip_trim_repeated_headers"]
     if staff_clefs is not None:
         layout['staff_clefs'] = staff_clefs
     # Geometry consumes the native event bounds; diagnostic rectangles never
