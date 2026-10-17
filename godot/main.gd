@@ -449,7 +449,8 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     var displayed_height: float = image.y * scale
     if score_content.size.distance_to(Vector2(displayed_width, displayed_height)) > .1:
         score_content.size = Vector2(displayed_width, displayed_height)
-    staff_continuity.position = Vector2.ZERO
+    if staff_continuity.position != Vector2.ZERO:
+        staff_continuity.position = Vector2.ZERO
     # Rebuilding a very long rail canvas every 60-Hz camera tick wastes
     # work; the rules are static until the score is resized or replaced.
     if staff_continuity.size.distance_to(score_content.size) > .1:
@@ -479,7 +480,10 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     var key: String = "%d/%d/%d" % [revision, current_page, int(last_state.get("transport_id", 0))]
     # This is a musical projection, not a camera chasing a moving object.
     # Smoothing introduces tempo-dependent lag; clamps let the rule wander.
-    score_content.position = target
+    # During Ready/Pause the exact same transform is requested repeatedly.
+    # Don't invalidate the long score canvas if nothing has moved.
+    if score_content.position != target:
+        score_content.position = target
     # Two binary searches locate the visible half-open tile interval.
     # Update only entering/leaving tiles, rather than all systems at 60 Hz.
     var tile_overscan: float = maxf(120.0, viewport.x * .18)

@@ -7,6 +7,7 @@ def test_fixed_frame_budget_and_logarithmic_lookup():
     assert "Engine.max_fps = 60" in SOURCE
     assert "var middle: int = (low + high) / 2" in SOURCE
     assert "cached_bounds[page] = bounds" in SOURCE
+    assert "if score_content.position != target:" in SOURCE
     assert "cached_bounds.clear()" in SOURCE
 
 
