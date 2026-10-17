@@ -136,6 +136,32 @@ func run() -> void:
             ink_pixels += 1
     check(ink_pixels == 6,
         "Rest symbol must keep original pixel width when adding empty space")
+    # Binary tempo projection must be byte-for-byte equivalent to the
+    # former first-right-edge linear mapping, including exact control
+    # points, duplicated edges, and beyond-the-end positions.
+    var tempo_mapper = load("res://tempo_strip.gd")
+    var control_points: Array = []
+    for ci in range(150):
+        var cx: float = float(ci * 13)
+        var cy: float = float(ci * 21)
+        control_points.append(Vector2(cx, cy))
+    for sample_idx in range(-5, 2040, 3):
+        var source_coord: float = float(sample_idx)
+        var reference: float = 0.0
+        var reached := false
+        for ci in range(control_points.size()-1):
+            var a: Vector2 = control_points[ci]
+            var b: Vector2 = control_points[ci+1]
+            if source_coord <= b.x:
+                reference = lerpf(a.y, b.y,
+                    clampf((source_coord-a.x)/(b.x-a.x), 0.0, 1.0))
+                reached = true
+                break
+        if not reached:
+            var final: Vector2 = control_points[-1]
+            reference = final.y + maxf(0.0, source_coord-final.x)
+        check(absf(tempo_mapper.project(source_coord, control_points)-reference) < .001,
+            "Indexed tempo mapping must preserve exact notation geometry")
     # 7.7a: the full staff is owned by one continuous layer, not by
     # individual printed system rasters with visible horizontal endings.
     # Keep a genuine end-of-measure barline and a notehead crossing a line.

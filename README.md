@@ -856,6 +856,17 @@ the exact measure spinner and slider. Enter confirms the panel once,
 Escape returns to the music drawer, and an open mode menu retains Enter.
 There is no new continuously running animation.
 
+## Performance pass - stable notation and lightweight animation
+
+Score spacing is now evaluated with a monotone binary lookup rather than
+scanning every stored control point for each note. During playback the actual
+score/camera still updates at up to 60 FPS, while the translucent notehead
+effects have a 30 FPS visual redraw limit. Ambient lighting uses its original
+20 FPS cadence rather than repainting on every fractional beat update; a
+meter or beat-boundary change still forces an immediate update. Expired
+particles clear immediately. These changes only affect display scheduling,
+not audio playback, MIDI timing, grading, or tempo.
+
 ## Phase 7.8 - CPU and camera stability
 
 For high-refresh-rate Linux laptops, the display is capped at 60 visual

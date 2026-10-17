@@ -135,6 +135,9 @@ var strip_tiles: Array = []
 var score_tile_scale := -1.0
 var cached_bounds: Dictionary = {}
 var cached_bounds_revision := -1
+# Only animated overlays use a 30 FPS redraw cadence. The engraving camera
+# stays at 60 FPS and musical timing remains owned by the Python engine.
+var last_overlay_animation_ms := -1000
 var camera_last_scale := -1.0
 var score_raster_width := 2000
 var visible_tile_begin := 0
@@ -2044,6 +2047,8 @@ func _process(_delta: float) -> void:
     var effects_were_visible: bool = (not score_overlay.hit_pulses.is_empty()
         or not score_overlay.wrong_ghosts.is_empty()
         or not score_overlay.preview_pulses.is_empty())
+    var effects_before: int = score_overlay.hit_pulses.size() + \
+        score_overlay.wrong_ghosts.size() + score_overlay.preview_pulses.size()
     for index in range(score_overlay.hit_pulses.size() - 1, -1, -1):
         if int(score_overlay.hit_pulses[index].get("until_ms", 0)) <= ticks:
             score_overlay.hit_pulses.remove_at(index)
@@ -2055,7 +2060,14 @@ func _process(_delta: float) -> void:
             score_overlay.preview_pulses.remove_at(index)
     # Redraw the *last* expiry too. Otherwise a paused score may retain
     # the final faded wrong pitch until another transport update arrives.
-    if effects_were_visible:
+    var effects_after: int = score_overlay.hit_pulses.size() + \
+        score_overlay.wrong_ghosts.size() + score_overlay.preview_pulses.size()
+    var pulse_expired: bool = effects_before != effects_after
+    # Expired particles disappear immediately; live particles and
+    # anticipation normally redraw at 30 rather than 60 FPS.
+    if effects_were_visible and (pulse_expired or \
+            ticks - last_overlay_animation_ms >= 33):
+        last_overlay_animation_ms = ticks
         score_overlay.queue_redraw()
         note_reactions.queue_redraw()
     apply_tempo_button.disabled = action_pending
@@ -2192,7 +2204,11 @@ func _process(_delta: float) -> void:
             var screen_x: float = score_content.position.x + cropped_x * score_content.size.x
             print("PHASE0_CURSOR_BEAT:", beat, " SCREEN_X:", screen_x,
                   " VISIBLE:", score_overlay.showing, " CONTENT_X:", score_content.position.x)
-    score_overlay.queue_redraw()
+    # Score transforms are still applied each visual frame. The line,
+    # notehalo and particles do not need to repaint that often.
+    if ticks - last_overlay_animation_ms >= 33:
+        last_overlay_animation_ms = ticks
+        score_overlay.queue_redraw()
 
 func _layout_guided_score() -> void:
     score_overlay.guided_active = true

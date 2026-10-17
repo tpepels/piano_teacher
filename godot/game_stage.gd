@@ -77,13 +77,16 @@ func sync_beat(beat: float, meter: int, preview: bool) -> void:
     var next_meter: int = clampi(meter, 1, 12)
     var next_fraction: float = fposmod(beat, 1.0)
     var next_bar: int = posmod(int(floor(beat)), next_meter)
-    if (absf(beat_fraction - next_fraction) > .018
-            or next_bar != beat_in_bar or next_meter != beats_per_bar
-            or preview != score_preview):
-        beat_fraction = next_fraction
-        beat_in_bar = next_bar
-        beats_per_bar = next_meter
-        score_preview = preview
+    # Store the latest clock each frame; redraw on metrical changes or at
+    # the stage's 20 Hz ambient cadence in _process. Previously every
+    # ~0.018 beat triggered another redraw, defeating the frame cap.
+    var structural_change: bool = next_bar != beat_in_bar or \
+        next_meter != beats_per_bar or preview != score_preview
+    beat_fraction = next_fraction
+    beat_in_bar = next_bar
+    beats_per_bar = next_meter
+    score_preview = preview
+    if structural_change:
         queue_redraw()
 
 

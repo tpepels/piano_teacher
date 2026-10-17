@@ -8,16 +8,26 @@ extends RefCounted
 static func project(source_x: float, points: Array) -> float:
     if points.is_empty():
         return source_x
-    for index in range(points.size() - 1):
-        var a: Vector2 = points[index]
-        var b: Vector2 = points[index + 1]
-        if source_x <= b.x:
-            var span: float = b.x - a.x
-            if span < .00001:
-                return b.y
-            return lerpf(a.y, b.y, clampf((source_x-a.x)/span, 0.0, 1.0))
-    var last: Vector2 = points[-1]
-    return last.y + maxf(0.0, source_x-last.x)
+    # A full lesson can have hundreds of note-spacing control points.
+    # Mapping every attack/accidental through a linear scan makes score
+    # assembly quadratic. Controls are monotone by construction: search
+    # the first right edge that reaches the source pixel in O(log N).
+    var low := 0
+    var high: int = points.size() - 1
+    while low < high:
+        var mid: int = (low + high) / 2
+        if source_x <= (points[mid + 1] as Vector2).x:
+            high = mid
+        else:
+            low = mid + 1
+    var a: Vector2 = points[low]
+    var b: Vector2 = points[low + 1]
+    if source_x <= b.x:
+        var span: float = b.x - a.x
+        if span < .00001:
+            return b.y
+        return lerpf(a.y, b.y, clampf((source_x-a.x)/span, 0.0, 1.0))
+    return b.y + maxf(0.0, source_x-b.x)
 
 static func controls(source_positions: Array, target_positions: Array,
         native_width: int, staff_gap: float) -> Array:
