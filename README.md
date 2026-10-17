@@ -5,7 +5,7 @@ MIDI or MusicXML, learn simplified passages, restore the original notes, then
 connect the passages into a complete performance. All progress stays local.
 
 The interface follows `moodboard.png`: a forest-green application shell,
-an ivory high-contrast score surface, a crisp teal timing line, and a five-part
+a dark charcoal score stage with luminous engraved notation, a crisp teal timing line, and a five-part
 segmented progress rail. The MIDI clock, grade and CPU budget remain separate
 from these presentation effects.
 
