@@ -1,5 +1,6 @@
 extends Control
 const Design := preload("res://practice_theme.gd")
+const ActionButton := preload("res://action_button.gd")
 
 # Practice pauses must remain usable from a piano bench at 1024x768 and on
 # smaller screens. The underlying musical engine remains frozen by Python.
@@ -26,7 +27,7 @@ func _ready() -> void:
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     mouse_filter = Control.MOUSE_FILTER_STOP
     var shade := ColorRect.new()
-    shade.color = Color(0.015, 0.045, 0.035, 0.67)
+    shade.color = Color(Design.FOREST, .76)
     shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     shade.mouse_filter = Control.MOUSE_FILTER_STOP
     add_child(shade)
@@ -35,9 +36,7 @@ func _ready() -> void:
     center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(center)
     modal_panel = PanelContainer.new()
-    var panel_style := Design.surface(Design.PANEL, 14)
-    panel_style.set_border_width_all(2)
-    panel_style.border_color = Color(Design.TEAL, 0.7)
+    var panel_style := Design.modal_surface()
     panel_style.set_content_margin_all(20)
     modal_panel.add_theme_stylebox_override("panel", panel_style)
     center.add_child(modal_panel)
@@ -60,23 +59,23 @@ func _ready() -> void:
     var main_actions := HBoxContainer.new()
     main_actions.add_theme_constant_override("separation", 10)
     content.add_child(main_actions)
-    retry_button = _button("Retry from start", {}, main_actions)
+    retry_button = _button("Retry from start", {}, main_actions, false, "review")
     retry_button.pressed.connect(func():
         chosen.emit({"action": "learn_retry" if current.get("mode") == "learn"
             else "listen" if current.get("mode") == "listen" else "restart"}))
-    listen_button = _button("Listen", {"action": "listen"}, main_actions)
+    listen_button = _button("Listen", {"action": "listen"}, main_actions, false, "listen")
 
     _label("TEMPO", 16, Design.SLATE, true, content)
     var tempo_row := HBoxContainer.new()
     tempo_row.add_theme_constant_override("separation", 10)
     content.add_child(tempo_row)
-    slower_button = _button("Slower -10%", {}, tempo_row)
+    slower_button = _button("Slower -10%", {}, tempo_row, false, "utility")
     slower_button.pressed.connect(func():
         chosen.emit({"action":"tempo", "bpm":maxi(12, roundi(float(current.get("bpm",80)) * 0.9))}))
     tempo_value = _label("68 BPM", 20, Design.STONE, true, tempo_row)
     tempo_value.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     tempo_value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    faster_button = _button("Faster +10%", {}, tempo_row)
+    faster_button = _button("Faster +10%", {}, tempo_row, false, "utility")
     faster_button.pressed.connect(func():
         chosen.emit({"action":"tempo", "bpm":mini(300,
             maxi(int(current.get("bpm",80))+1, roundi(float(current.get("bpm",80)) * 1.1)))}))
@@ -101,7 +100,7 @@ func _ready() -> void:
     bar_choice.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     bar_choice.add_theme_font_size_override("font_size", 20)
     seek.add_child(bar_choice)
-    seek_button = _button("Practise from here", {}, seek)
+    seek_button = _button("Practise from here", {}, seek, false, "primary")
     seek_button.pressed.connect(func():
         chosen.emit({"action":"seek", "bar":int(bar_choice.value)}))
     # Don't let arrow-navigation inside an editable field leave the modal.
@@ -109,7 +108,7 @@ func _ready() -> void:
         for direction in ["left", "right", "top", "bottom"]:
             editor.set("focus_neighbor_" + direction, editor.get_path())
     _separator(content)
-    exit_button = _button("Exit to library", {"action": "exit"}, content)
+    exit_button = _button("Exit to library", {"action": "exit"}, content, false, "danger")
     get_viewport().size_changed.connect(_fit_panel)
     _fit_panel()
     visible = false
@@ -128,11 +127,7 @@ func _label(text: String, font_size: int, color: Color, bold: bool, parent: Node
     label.text = text
     label.add_theme_font_size_override("font_size", font_size)
     label.add_theme_color_override("font_color", color)
-    if bold:
-        var face := SystemFont.new()
-        face.font_names = PackedStringArray(["Inter", "Noto Sans", "DejaVu Sans"])
-        face.font_weight = 700
-        label.add_theme_font_override("font", face)
+    label.add_theme_font_override("font", Design.font(700 if bold else 400))
     parent.add_child(label)
     return label
 
@@ -143,26 +138,14 @@ func _separator(parent: Node) -> void:
     parent.add_child(line)
 
 
-func _button(text: String, command: Dictionary, parent: Node, primary: bool = false) -> Button:
-    var button := Button.new()
+func _button(text: String, command: Dictionary, parent: Node,
+        primary: bool = false, role: String = "") -> Button:
+    var button := ActionButton.new()
     button.text = text
     button.custom_minimum_size.y = 53
     button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     button.add_theme_font_size_override("font_size", 19)
-    button.add_theme_color_override("font_color", Design.STONE)
-    button.add_theme_color_override("font_hover_color", Color.WHITE)
-    button.add_theme_color_override("font_disabled_color", Design.SLATE)
-    var normal := Design.surface(Design.PINE if primary else Design.FOREST, 7)
-    normal.set_border_width_all(1)
-    normal.border_color = Design.TEAL if primary else Color(Design.SLATE, .3)
-    button.add_theme_stylebox_override("normal", normal)
-    var hover := Design.surface(Design.SAGE, 7)
-    button.add_theme_stylebox_override("hover", hover)
-    button.add_theme_stylebox_override("pressed", hover)
-    var focus := Design.surface(Color.TRANSPARENT)
-    focus.set_border_width_all(2)
-    focus.border_color = Design.TEAL
-    button.add_theme_stylebox_override("focus", focus)
+    button.configure(role if not role.is_empty() else "primary" if primary else "secondary")
     parent.add_child(button)
     if not command.is_empty():
         button.pressed.connect(func(): chosen.emit(command))

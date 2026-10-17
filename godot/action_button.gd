@@ -131,6 +131,10 @@ func _draw() -> void:
         "utility":
             for x in [-5.0, 0.0, 5.0]:
                 draw_circle(center+Vector2(x,0),1.65,accent)
+        "listen":
+            draw_circle(center + Vector2(-5, 0), 2.6, accent)
+            draw_arc(center + Vector2(-5, 0), 6.8, -.36*PI, .36*PI, 24, accent, 2.0, true)
+            draw_arc(center + Vector2(-5, 0), 11.0, -.36*PI, .36*PI, 24, accent, 1.6, true)
         "settings":
             draw_arc(center,5.5,0,TAU,24,accent,1.9,true)
             draw_circle(center,1.7,accent)

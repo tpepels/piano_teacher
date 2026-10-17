@@ -1,5 +1,8 @@
 extends AcceptDialog
 
+const Design := preload("res://practice_theme.gd")
+const ActionButton := preload("res://action_button.gd")
+
 # Detailed, scrollable explanation of the authoritative note assessment.
 # No timing or scoring decisions are made here.
 signal retry_requested(first_bar: int, last_bar: int)
@@ -10,6 +13,7 @@ var active_report: Dictionary = {}
 
 
 func _ready() -> void:
+    theme = Design.create()
     title = "Review your playing"
     ok_button_text = "Close"
     min_size = Vector2i(520, 320)
@@ -36,7 +40,8 @@ func _line(text: String, font_size: int = 16, muted: bool = false) -> Label:
     var label := Label.new()
     label.text = text
     label.add_theme_font_size_override("font_size", font_size)
-    label.add_theme_color_override("font_color", Color("#A7B9B0") if muted else Color("#E7EAE5"))
+    label.add_theme_color_override("font_color", Design.SLATE if muted else Design.STONE)
+    label.add_theme_font_override("font", Design.font(400))
     label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     return label
@@ -85,9 +90,7 @@ func open_review(report: Dictionary) -> void:
     for index in range(mini(sections.size(), 15)):
         var section: Dictionary = sections[index]
         var panel := PanelContainer.new()
-        var style := StyleBoxFlat.new()
-        style.bg_color = Color("#294139")
-        style.set_corner_radius_all(7)
+        var style := Design.bordered_surface(Design.PANEL_RECESSED, Design.RADIUS_INPUT, .3)
         style.set_content_margin_all(12)
         panel.add_theme_stylebox_override("panel", style)
         section_list.add_child(panel)
@@ -103,7 +106,8 @@ func open_review(report: Dictionary) -> void:
             content.add_child(_line(_issue_text(issues[issue_index]), 16, true))
         if issues.size() > 10:
             content.add_child(_line("…and %d additional notes" % (issues.size()-10), 15, true))
-        var repeat_button := Button.new()
+        var repeat_button := ActionButton.new()
+        repeat_button.configure("review")
         repeat_button.text = "Repeat " + measure_text
         repeat_button.custom_minimum_size.y = 50
         repeat_button.add_theme_font_size_override("font_size", 17)
