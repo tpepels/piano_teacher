@@ -34,6 +34,10 @@ func run() -> void:
     var stage = Stage.new()
     root.add_child(stage)
     stage.size = Vector2(1200, 650)
+    stage.set_staff_band(.31, .72)
+    check(absf(stage.staff_band_top - .31) < .001
+        and absf(stage.staff_band_bottom - .72) < .001,
+        "Reactive musical light must use real measured staff bounds")
     stage.present({"phase":"playing", "running":true,
         "preview_only":true, "progress":.25})
     stage.sync_beat(-1.25, 3, true)
