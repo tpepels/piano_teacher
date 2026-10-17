@@ -487,6 +487,12 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     # Centre the *real staff*, not the large blank area in the SVG raster.
     var target_y: float = viewport.y * .5 - rail_center * displayed_height
     var target := Vector2(target_x, target_y)
+    if game_stage != null and not systems.is_empty():
+        var band_rails: Array = systems[0].get("staff_lines", [])
+        if band_rails.size() >= 2:
+            var first_y: float = (target_y + float(band_rails[0]) * displayed_height) / viewport.y
+            var last_y: float = (target_y + float(band_rails[-1]) * displayed_height) / viewport.y
+            game_stage.set_staff_band(first_y, last_y)
     var key: String = "%d/%d/%d" % [revision, current_page, int(last_state.get("transport_id", 0))]
     # This is a musical projection, not a camera chasing a moving object.
     # Smoothing introduces tempo-dependent lag; clamps let the rule wander.
