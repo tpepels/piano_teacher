@@ -1,6 +1,6 @@
 extends "res://action_button.gd"
 
-const Design := preload("res://practice_theme.gd")
+const Palette := preload("res://practice_theme.gd")
 
 # One fully-clickable, focusable music row. Both lines belong to the same
 # button, rather than squeezing title, format, location and BPM onto one line.
@@ -37,7 +37,7 @@ func _ready() -> void:
     title_label.clip_text = true
     title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     title_label.add_theme_font_size_override("font_size", 17)
-    title_label.add_theme_color_override("font_color", Design.STONE)
+    title_label.add_theme_color_override("font_color", Palette.STONE)
     lines.add_child(title_label)
     detail_label = Label.new()
     detail_label.name = "MusicDetail"
@@ -45,7 +45,7 @@ func _ready() -> void:
     detail_label.clip_text = true
     detail_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     detail_label.add_theme_font_size_override("font_size", 13)
-    detail_label.add_theme_color_override("font_color", Design.SLATE)
+    detail_label.add_theme_color_override("font_color", Palette.SLATE)
     lines.add_child(detail_label)
 
 func set_entry(title: String, detail: String, status: String = "") -> void:
@@ -69,8 +69,8 @@ func set_entry(title: String, detail: String, status: String = "") -> void:
     title_label.text = title
     detail_label.text = detail
     if status == "error":
-        title_label.add_theme_color_override("font_color", Design.CORAL)
+        title_label.add_theme_color_override("font_color", Palette.CORAL)
     elif status == "warning":
-        title_label.add_theme_color_override("font_color", Design.AMBER)
+        title_label.add_theme_color_override("font_color", Palette.AMBER)
     else:
-        title_label.add_theme_color_override("font_color", Design.STONE)
+        title_label.add_theme_color_override("font_color", Palette.STONE)
