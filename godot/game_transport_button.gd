@@ -2,9 +2,10 @@ extends Button
 
 # Physical transport key with independently laid-out icon and label.
 # Input goes through Button.pressed; this script never advances the lesson.
-const TEAL := Color("#96EFCB")
-const AMBER := Color("#ECC18C")
-const BLUE := Color("#9ECFFF")
+const Design := preload("res://practice_theme.gd")
+const TEAL := Design.MINT
+const AMBER := Design.AMBER
+const BLUE := Design.BLUE
 const DIM := Color("#64847A")
 
 var action_kind := "play"
@@ -113,7 +114,7 @@ func _draw() -> void:
     while font_size > 12 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT,
             -1, font_size).x > available:
         font_size -= 1
-    var ink := Color("#FAFFFC") if not disabled else Color("#879D94")
+    var ink := Design.FOCUS if not disabled else Design.SAGE
     var label_width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
     var label_x := 76.0 + maxf(0.0, (available - label_width) * .5)
     var baseline := (size.y + font.get_ascent(font_size) - font.get_descent(font_size)) * .5

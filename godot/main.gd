@@ -594,10 +594,7 @@ func _label(text: String, size: int, color: Color, bold := false) -> Label:
     label.add_theme_color_override("font_color", color)
     label.set_meta("ui_font_base", size)
     label.add_theme_font_size_override("font_size", _ui_font(size))
-    var font := SystemFont.new()
-    font.font_names = PackedStringArray(["Inter", "Noto Sans", "DejaVu Sans"])
-    font.font_weight = 700 if bold else 400
-    label.add_theme_font_override("font", font)
+    label.add_theme_font_override("font", Design.font(700 if bold else 400))
     label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     return label
@@ -625,15 +622,12 @@ func _game_button(button: Button, central := false) -> void:
     button.add_theme_font_size_override("font_size", _ui_font(17 if central else 15))
     var normal := StyleBoxFlat.new()
     var kind: String = str(button.get("action_kind"))
-    var accent := Color("#A1FCD5") if central else (
-        Color("#F3CE93") if kind == "retry" else
-        Color("#9ECFFF") if kind == "listen" else Color("#A1FCD5"))
-    normal.bg_color = Color("#286E60") if central else (
-        Color("#3A3029") if kind == "retry" else
-        Color("#253C4C") if kind == "listen" else Color("#234438"))
+    var role: String = "play" if central else kind
+    var accent: Color = Design.role_accent(role)
+    normal.bg_color = Design.role_fill(role)
     button.set_meta("ui_button_role",
         "transport_primary" if central else "transport_retry" if kind == "retry" else "transport_listen")
-    normal.set_corner_radius_all(15 if central else 12)
+    normal.set_corner_radius_all(Design.RADIUS_CARD + 1 if central else Design.RADIUS_INPUT + 2)
     normal.set_content_margin_all(12)
     normal.set_border_width_all(2 if central else 1)
     normal.border_color = Color(accent, .94 if central else .65)
@@ -652,13 +646,13 @@ func _game_button(button: Button, central := false) -> void:
     pressed.shadow_offset = Vector2.ZERO
     button.add_theme_stylebox_override("pressed", pressed)
     var disabled := normal.duplicate() as StyleBoxFlat
-    disabled.bg_color = Color("#172324")
-    disabled.border_color = Color("#456059", .3)
+    disabled.bg_color = Design.PANEL_RECESSED
+    disabled.border_color = Color(Design.BORDER, .3)
     disabled.shadow_size = 0
     button.add_theme_stylebox_override("disabled", disabled)
     var focus := normal.duplicate() as StyleBoxFlat
     focus.bg_color = Color.TRANSPARENT
-    focus.border_color = Color("#F5FFF7")
+    focus.border_color = Design.FOCUS
     focus.set_border_width_all(2)
     focus.shadow_size = 0
     button.add_theme_stylebox_override("focus", focus)
@@ -722,12 +716,7 @@ func _space() -> Control:
 
 func _card() -> PanelContainer:
     var panel := PanelContainer.new()
-    var style := StyleBoxFlat.new()
-    style.bg_color = WHITE
-    style.set_corner_radius_all(10)
-    style.set_border_width_all(1)
-    style.border_color = Color(Design.SAGE, .32)
-    panel.add_theme_stylebox_override("panel", style)
+    panel.add_theme_stylebox_override("panel", Design.card_surface())
     return panel
 
 func _card_body(panel: PanelContainer, margin: int = 28) -> MarginContainer:
@@ -795,7 +784,7 @@ func _mount_overlays() -> void:
     overlay_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(overlay_root)
     overlay_backdrop = ColorRect.new()
-    overlay_backdrop.color = Color(0.012, 0.035, 0.028, 0.68)
+    overlay_backdrop.color = Color(Design.FOREST, .78)
     overlay_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     overlay_backdrop.mouse_filter = Control.MOUSE_FILTER_STOP
     overlay_backdrop.gui_input.connect(func(event: InputEvent):
@@ -806,11 +795,7 @@ func _mount_overlays() -> void:
     overlay_drawer.name = "ContextDrawer"
     overlay_drawer.clip_contents = true
     overlay_drawer.mouse_filter = Control.MOUSE_FILTER_STOP
-    var style := Design.surface(Design.PANEL, 12)
-    style.set_border_width_all(2)
-    style.border_color = Color(Design.TEAL, 0.5)
-    style.set_content_margin_all(3)
-    overlay_drawer.add_theme_stylebox_override("panel", style)
+    overlay_drawer.add_theme_stylebox_override("panel", Design.drawer_surface())
     overlay_root.add_child(overlay_drawer)
     for page in ["library", "settings", "lesson"]:
         var content: Control = screens[page]
@@ -1085,7 +1070,7 @@ func _build_interface() -> void:
     practice_navigation.add_theme_constant_override("v_separation", 8)
     practice_navigation.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(practice_navigation)
-    game_brand = _label("PIANO TEACHER", 13, Color("#75CEAF"), true)
+    game_brand = _label("PIANO TEACHER", 13, Design.TEAL, true)
     game_brand.custom_minimum_size = Vector2(168, 32)
     game_brand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     game_brand.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -1131,7 +1116,7 @@ func _build_interface() -> void:
     var heading := _stack(2)
     heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     practice_header.add_child(heading)
-    title_label = _label("Piano Teacher", 27, Color("#F3F7EF"), true)
+    title_label = _label("Piano Teacher", 27, Design.STONE, true)
     title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     title_label.clip_text = true
     title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -1144,7 +1129,7 @@ func _build_interface() -> void:
     tempo.custom_minimum_size = Vector2(190, 0)
     tempo.size_flags_horizontal = Control.SIZE_SHRINK_END
     practice_header.add_child(tempo)
-    speed_label = _label("-- BPM", 20, Color("#90E9C6"), true)
+    speed_label = _label("-- BPM", 20, Design.MINT, true)
     speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(speed_label)
@@ -1165,25 +1150,18 @@ func _build_interface() -> void:
         var stage_label := _label("", 15, MUTED, true)
         stage_label.custom_minimum_size = Vector2(168, 38)
         stage_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-        var stage_style := Design.surface(Design.PANEL, 6)
+        var stage_style := Design.bordered_surface(Design.PANEL_RECESSED, Design.RADIUS_INPUT, .25)
         stage_style.set_content_margin_all(8)
         stage_label.add_theme_stylebox_override("normal", stage_style)
         practice_stage_bar.add_child(stage_label)
         practice_stage_labels[hand] = stage_label
-    practice_playback_banner = _label("", 18, Color("#F6BC70"), true)
+    practice_playback_banner = _label("", 18, Design.AMBER, true)
     practice_playback_banner.visible = false
     practice_playback_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_playback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
     var score_panel := _card()
     # One continuous performance stage, not another grey website card.
-    var stage_shell := StyleBoxFlat.new()
-    stage_shell.bg_color = Color("#101B1C")
-    stage_shell.set_corner_radius_all(12)
-    stage_shell.set_border_width_all(1)
-    stage_shell.border_color = Color("#527B70", .27)
-    stage_shell.shadow_color = Color.BLACK
-    stage_shell.shadow_size = 0
-    score_panel.add_theme_stylebox_override("panel", stage_shell)
+    score_panel.add_theme_stylebox_override("panel", Design.stage_surface())
     practice_score_panel = score_panel
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(score_panel)
@@ -1390,14 +1368,7 @@ func _build_interface() -> void:
     # the old bug appeared as a 900px-high, unusable skinny panel.
     open_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
     open_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    var start_style := Design.surface(Color("#1C3130"), 18)
-    start_style.set_content_margin_all(5)
-    start_style.set_border_width_all(2)
-    start_style.border_color = Color("#85D9BD", .63)
-    start_style.shadow_color = Color.BLACK
-    start_style.shadow_size = 16
-    start_style.shadow_offset = Vector2(0, 8)
-    open_panel.add_theme_stylebox_override("panel", start_style)
+    open_panel.add_theme_stylebox_override("panel", Design.modal_surface())
     open_picker.add_child(open_panel)
     var start_scroll := ScrollContainer.new()
     start_scroll.name = "StartContentScroll"

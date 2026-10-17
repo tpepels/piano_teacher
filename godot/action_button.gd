@@ -3,15 +3,14 @@ extends Button
 # Semantic action roles - one consistent hierarchy across Home, Library,
 # Lesson Path, Settings and the practice stage.
 # Button.pressed remains the only action; drawing is decoration only.
-const SAGE := Color("#A4CABA")
-const MINT := Color("#A5FFDB")
-const BLUE := Color("#9DCAFF")
-const AMBER := Color("#F2CB92")
-const CORAL := Color("#FFA5A0")
+const Design := preload("res://practice_theme.gd")
+const SAGE := Design.SLATE
+const MINT := Design.MINT
+const BLUE := Design.BLUE
+const AMBER := Design.AMBER
+const CORAL := Design.CORAL
 var action_role := "secondary"
 var is_selected := false
-var _hover := 0.0
-var _pressed := 0.0
 
 func _init() -> void:
     focus_mode = Control.FOCUS_ALL
@@ -39,38 +38,12 @@ func set_selected(selected: bool) -> void:
     queue_redraw()
 
 func _accent() -> Color:
-    match action_role:
-        "primary", "choice":
-            return MINT
-        "settings":
-            return BLUE
-        "review":
-            return AMBER
-        "danger":
-            return CORAL
-        "library":
-            return Color("#B6DCCC")
-        _:
-            return SAGE
+    return Design.role_accent(action_role)
+
 
 func _background() -> Color:
-    match action_role:
-        "primary":
-            return Color("#286F59")
-        "secondary":
-            return Color("#203432")
-        "settings":
-            return Color("#253949")
-        "review":
-            return Color("#382F29")
-        "danger":
-            return Color("#39292B")
-        "choice":
-            return Color("#27634F") if is_selected else Color("#1C3330")
-        "library":
-            return Color("#192C2B")
-        _:
-            return Color("#142725", .20)
+    return Design.role_fill(action_role, is_selected)
+
 
 func _has_symbol() -> bool:
     return action_role != "secondary"
@@ -80,7 +53,8 @@ func _skin() -> void:
     var background: Color = _background()
     var flat := action_role in ["navigation", "utility"]
     var important := action_role == "primary" or (action_role == "choice" and is_selected)
-    var rounded := 15 if important else 12 if not flat else 9
+    var rounded := Design.RADIUS_CARD + 1 if important else (
+        Design.RADIUS_INPUT + 2 if not flat else Design.RADIUS_INPUT)
     var normal := StyleBoxFlat.new()
     normal.bg_color = background
     normal.set_corner_radius_all(rounded)
@@ -117,19 +91,19 @@ func _skin() -> void:
     var focus := normal.duplicate() as StyleBoxFlat
     focus.bg_color = Color.TRANSPARENT
     focus.set_border_width_all(2)
-    focus.border_color = Color("#F5FFF7")
+    focus.border_color = Design.FOCUS
     focus.shadow_size = 0
     add_theme_stylebox_override("focus", focus)
-    var ink := Color("#F3FFF8") if important else Color("#DEEEE6")
+    var ink := Design.FOCUS if important else Design.STONE
     if flat:
-        ink = Color("#B9D9CB")
+        ink = Design.SLATE
     if action_role == "danger":
-        ink = Color("#FFD7D3")
+        ink = Design.CORAL
     add_theme_color_override("font_color", ink)
-    add_theme_color_override("font_hover_color", Color.WHITE)
-    add_theme_color_override("font_pressed_color", Color.WHITE)
-    add_theme_color_override("font_hover_pressed_color", Color.WHITE)
-    add_theme_color_override("font_focus_color", Color.WHITE)
+    add_theme_color_override("font_hover_color", Design.FOCUS)
+    add_theme_color_override("font_pressed_color", Design.FOCUS)
+    add_theme_color_override("font_hover_pressed_color", Design.FOCUS)
+    add_theme_color_override("font_focus_color", Design.FOCUS)
     add_theme_color_override("font_disabled_color",
         MINT if action_role == "choice" and is_selected else Color("#718B80"))
     add_theme_color_override("icon_normal_color", accent)
