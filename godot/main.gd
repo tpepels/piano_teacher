@@ -1749,8 +1749,8 @@ func _on_library_health(_result: int, code: int, _headers: PackedStringArray, bo
     var parsed: Variant = _decode_json(body)
     if not parsed is Dictionary:
         return
-    var previous_checked: int = int(library_health_info.get("checked", -1))
     var previous_started: bool = bool(library_health_info.get("started", false))
+    var previous_running: bool = bool(library_health_info.get("running", false))
     library_health_info = parsed
     var active: bool = bool(parsed.get("running", false))
     var started: bool = bool(parsed.get("started", false))
@@ -1765,7 +1765,12 @@ func _on_library_health(_result: int, code: int, _headers: PackedStringArray, bo
              int(parsed.get("ok", 0)), int(parsed.get("warning", 0)), int(parsed.get("error", 0))]
         if not str(parsed.get("message", "")).is_empty():
             library_health_label.text += "\n" + str(parsed["message"])
-    if previous_checked != int(parsed.get("checked", -1)) or previous_started != started:
+    # A large music collection may scan hundreds of files. Rebuilding
+    # every clickable row at each file-progress tick caused visible drawer
+    # flicker, lost keyboard focus and expensive Godot allocations. Keep
+    # updating the small progress label; rebuild row statuses only at start
+    # and once when the scan finishes.
+    if previous_started != started or (previous_running and not active):
         _populate_library()
 
 
