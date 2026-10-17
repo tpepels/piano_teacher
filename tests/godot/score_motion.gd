@@ -294,6 +294,13 @@ func run() -> void:
     app._process(1.0 / 60.0)
     check(absf(app.score_content.position.x - app.score_frame.size.x * .04) < 1.0,
           "Stop during feedback returns the score to its ready position")
+    var ready_position: Vector2 = app.score_content.position
+    var ready_projection: String = app.last_ready_score_key
+    app._process(1.0 / 60.0)
+    check(app.score_content.position == ready_position
+        and app.last_ready_score_key == ready_projection
+        and not ready_projection.is_empty(),
+        "Ready keeps its restored score still without recalculating camera on every frame")
     var output := FileAccess.open(folder + "/samples.json", FileAccess.WRITE)
     output.store_string(JSON.stringify(results, "  "))
     print("SCORE_MOTION_FAILURES:", failures.size())
