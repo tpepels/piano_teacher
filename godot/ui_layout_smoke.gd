@@ -265,13 +265,15 @@ func _run() -> void:
     var short_buttons := 0
     for control in library_root.find_children("*", "Button", true, false):
         var button := control as Button
-        if button.text in ["Close", "Settings", "Refresh", "Check files"]:
+        if button.text in ["Close", "Settings", "Refresh", "Check files",
+                "Checking…", "Recheck files"]:
             short_buttons += 1
             _check(not button.clip_text, "Library short control clips text: " + button.text)
             _check(_in_viewport(button, viewport), "Library short control outside window: " + button.text)
             _check(button.size.x + 1.0 >= button.get_combined_minimum_size().x,
                 "Library short control narrower than its text: " + button.text)
-    _check(short_buttons == 4, "Expected Close, Settings, Refresh and Check files actions")
+    _check(short_buttons == 4,
+        "Expected Close, Settings, Refresh and file-check actions in any valid status")
     _check(str((scene.get("library_health_button") as Button).get_meta(
         "ui_button_role", "")) == "settings",
         "Library diagnostics require a distinguishable inspection action")

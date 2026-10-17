@@ -917,6 +917,11 @@ func _build_interface() -> void:
     library_controls.add_child(library_utilities)
     library_utilities.add_child(_button("Refresh", _request_library, false, "utility"))
     library_health_button = _button("Check files", func(): _start_library_health(), false, "settings")
+    # Dynamic text also says "Checking…" or "Recheck files". Reserve room
+    # from the start so the button does not visibly resize or clip.
+    library_health_button.custom_minimum_size.x = maxf(
+        library_health_button.custom_minimum_size.x,
+        _ui_font(15) * 8.3 + 80.0 * ui_scale)
     library_utilities.add_child(library_health_button)
     # Import problems must appear next to the action, not at the very
     # bottom of a full-screen library where they are easy to miss.
