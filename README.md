@@ -858,6 +858,8 @@ There is no new continuously running animation.
 
 ## Performance pass - stable notation and lightweight animation
 
+Searching a music library also coalesces rapid text edits for 120 ms,
+avoiding repeated reconstruction of hundreds of buttons on each keystroke.
 Idle, paused and drawer views now target 30 FPS, automatically returning
 to 60 FPS for active practice. The score strip indexes note IDs to their
 engraved system at assembly time, removing repeated full-score scans

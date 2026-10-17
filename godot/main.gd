@@ -67,6 +67,7 @@ var pending_library_piece := ""
 var home_recent_label: Label
 var home_resume_button: Button
 var library_search: LineEdit
+var library_filter_timer: Timer
 var library_scroll: ScrollContainer
 var library_path_label: Label
 var library_rows: VBoxContainer
@@ -921,10 +922,18 @@ func _build_interface() -> void:
     library_search.tooltip_text = "Ctrl+F or / to focus search · Esc closes the library"
     library_search.custom_minimum_size = Vector2(0, 48)
     library_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    # Avoid destroying and recreating every music-row button on every key.
+    # The visible search text changes immediately; results settle after the
+    # final keystroke without blocking the score renderer.
+    library_filter_timer = Timer.new()
+    library_filter_timer.one_shot = true
+    library_filter_timer.wait_time = .12
+    library_filter_timer.timeout.connect(_populate_library)
+    add_child(library_filter_timer)
     library_search.text_changed.connect(func(_text: String):
         if library_scroll != null:
             library_scroll.scroll_vertical = 0
-        _populate_library())
+        library_filter_timer.start())
     library_controls.add_child(library_search)
     library_controls.add_child(_label(
         "Ctrl+F or / to search  ·  Enter opens music  ·  Esc closes", 12, MUTED))
@@ -1798,6 +1807,8 @@ func _on_library_health(_result: int, code: int, _headers: PackedStringArray, bo
 func _populate_library() -> void:
     if library_rows == null:
         return
+    if library_filter_timer != null and not library_filter_timer.is_stopped():
+        library_filter_timer.stop()
     for child in library_rows.get_children():
         library_rows.remove_child(child)
         child.queue_free()

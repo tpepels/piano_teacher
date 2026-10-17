@@ -262,6 +262,10 @@ func _run() -> void:
         "Music drawer cannot exceed available window width")
     _check(library_root.is_ancestor_of(scene.get("library_search")),
         "Music search remains inside the library drawer")
+    var filter_timer: Timer = scene.get("library_filter_timer")
+    _check(filter_timer != null and filter_timer.one_shot and
+        absf(filter_timer.wait_time-.12) < .001,
+        "Typing in a large library must coalesce UI row rebuilds")
     var short_buttons := 0
     for control in library_root.find_children("*", "Button", true, false):
         var button := control as Button
