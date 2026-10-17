@@ -595,6 +595,8 @@ func _resize_ui_fonts(node: Node) -> void:
     if node is Control and node.has_meta("ui_font_base"):
         (node as Control).add_theme_font_size_override(
             "font_size", _ui_font(int(node.get_meta("ui_font_base"))))
+    if node.has_method("set_text_scale"):
+        node.call("set_text_scale", ui_scale)
     for child in node.get_children():
         _resize_ui_fonts(child)
 
