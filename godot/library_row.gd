@@ -53,6 +53,7 @@ func _ready() -> void:
 # the same display scale explicitly, without shrinking to the Button theme.
 func set_text_scale(scale_factor: float) -> void:
     text_scale = clampf(scale_factor, 1.0, 1.75)
+    custom_minimum_size.y = 86.0 * text_scale
     if title_label == null or detail_label == null:
         return
     title_label.add_theme_font_size_override("font_size", roundi(22.0 * text_scale))
