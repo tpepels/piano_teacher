@@ -71,7 +71,7 @@ func _draw() -> void:
         return
     var rect := Rect2(Vector2((1.0-entry)*15.0, 1.0), size-Vector2(18, 5))
     var radius: float = minf(13.0, rect.size.y*.26)
-    var paper := Color("#F7F9F4", alpha*.96)
+    var paper := Color("#203D3A", alpha*.96)
     draw_rect(Rect2(rect.position.x+radius, rect.position.y,
         rect.size.x-2*radius, rect.size.y), paper)
     draw_circle(rect.position+Vector2(radius, radius), radius, paper)
@@ -85,15 +85,15 @@ func _draw() -> void:
     draw_line(rect.position+Vector2(5, 9),Vector2(rect.position.x+5,rect.end.y-9),
         Color(tone,alpha*.95),4.0,true)
     var font: Font = get_theme_font("font")
-    var main_size := 15
-    var small_size := 12
+    var main_size := 19
+    var small_size := 14
     var baseline := rect.position.y + 24.0
     draw_string(font,Vector2(rect.position.x+20,baseline),message,
         HORIZONTAL_ALIGNMENT_LEFT,maxf(10.0,rect.size.x-33),main_size,
-        Color("#233C32",alpha))
+        Color("#EBF9EF",alpha))
     draw_string(font,Vector2(rect.position.x+20,baseline+18),subtext,
         HORIZONTAL_ALIGNMENT_LEFT,maxf(10.0,rect.size.x-33),small_size,
-        Color("#60786C",alpha))
+        Color("#B3D6C5",alpha))
     # Small expressive sparkle at the top edge, not sixteen independent
     # full-screen particle nodes.
     var spark: float = pow(1.0-t,2.0)
