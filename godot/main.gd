@@ -1854,6 +1854,12 @@ func _cancel_open_picker() -> void:
 func _confirm_open_picker() -> void:
     if action_pending or not open_picker.visible:
         return
+    # Godot sends _input() before a SpinBox's embedded LineEdit commits its
+    # pending digits. Honor the value the learner actually typed on Enter.
+    if get_viewport().gui_get_focus_owner() == open_measure.get_line_edit():
+        open_measure.value = clampi(
+            open_measure.get_line_edit().text.to_int(), 1,
+            int(open_measure.max_value))
     open_picker.visible = false
     _navigate("practice")
     _send_action({"action":"open_at", "bar":int(open_measure.value),
@@ -3197,6 +3203,10 @@ func _input(event: InputEvent) -> void:
             _confirm_open_picker()
             get_viewport().set_input_as_handled()
             return
+    # Never pass modal keyboard input to background Play/Pause/Retry/Listen
+    # shortcuts; Tab and Space must remain available to the focused controls.
+    if open_picker != null and open_picker.visible:
+        return
     if not event is InputEventKey:
         return
     # Search without hunting for a small field in the Music drawer.
@@ -3225,6 +3235,8 @@ func _input(event: InputEvent) -> void:
         get_viewport().set_input_as_handled()
 
 func _unhandled_key_input(event: InputEvent) -> void:
+    if open_picker != null and open_picker.visible:
+        return
     if event is InputEventKey and event.pressed and not event.echo:
         if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN,KEY_TAB]:
             return
