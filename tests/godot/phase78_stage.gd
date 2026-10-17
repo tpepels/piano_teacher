@@ -96,6 +96,12 @@ func run() -> void:
         "Beat lighting lives beneath the same score canvas as real engraving")
     check(app.game_count_in.get_parent() == app.score_frame,
         "Countdown stays inside the music rather than creating a website row")
+    app._update_visual_frame_rate({"running":false, "paused":false})
+    check(Engine.max_fps == 30, "Idle Godot presentation must run at lower CPU cost")
+    app._update_visual_frame_rate({"running":true, "paused":false})
+    check(Engine.max_fps == 60, "Moving sheet music retains the full 60 FPS budget")
+    app._update_visual_frame_rate({"running":true, "paused":true})
+    check(Engine.max_fps == 30, "Pausing reduces visual CPU usage")
     app.last_state = {"loaded":true, "running":true, "paused":false,
         "phase":"count_in", "mode":"practice", "preview_only":true,
         "clock_beat":-1.5, "bpm":60.0, "count_in_bar_beats":3,

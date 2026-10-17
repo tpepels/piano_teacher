@@ -858,7 +858,11 @@ There is no new continuously running animation.
 
 ## Performance pass - stable notation and lightweight animation
 
-Score spacing is now evaluated with a monotone binary lookup rather than
+Idle, paused and drawer views now target 30 FPS, automatically returning
+to 60 FPS for active practice. The score strip indexes note IDs to their
+engraved system at assembly time, removing repeated full-score scans
+when the backend reports feedback. Score spacing is now evaluated with
+a monotone binary lookup rather than
 scanning every stored control point for each note. During playback the actual
 score/camera still updates at up to 60 FPS, while the translucent notehead
 effects have a 30 FPS visual redraw limit. Ambient lighting uses its original

@@ -735,6 +735,18 @@ func _card_body(panel: PanelContainer, margin: int = 28) -> MarginContainer:
 # Music selection, lesson path and settings are drawers over the
 # persistent practice stage. Opening a drawer pauses an ongoing attempt
 # without discarding the player's place or MIDI assessment.
+func _update_visual_frame_rate(state: Dictionary) -> void:
+    # An idle screen or paused lesson does not need the same redraw budget
+    # as a scrolling score. This never changes Python-owned audio, tempo
+    # or MIDI grading, only how often the Godot display is presented.
+    var active: bool = bool(state.get("running", false)) \
+        and not bool(state.get("paused", false)) \
+        and current_screen == "practice"
+    var target_fps: int = 60 if active else 30
+    if Engine.max_fps != target_fps:
+        Engine.max_fps = target_fps
+
+
 func _navigate(screen: String) -> void:
     if screen == "home":
         screen = "practice"  # Old Home is no longer part of normal navigation.
@@ -749,6 +761,7 @@ func _navigate(screen: String) -> void:
                       "recovering", "loading"] or starting):
             _send_action({"action": "pause"})
     current_screen = screen
+    _update_visual_frame_rate(last_state)
     if overlay_root != null:
         overlay_root.visible = screen != "practice"
     if pause_sheet != null:
@@ -2317,6 +2330,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         game_streak.pulse_unlock()
         call_deferred("_pulse_hand_stage")
     last_state = parsed
+    _update_visual_frame_rate(parsed)
     _clear_assessed_effects_in_ungraded_mode(parsed)
     game_phase_cue.present(parsed)
     # Low-latency local polling only while playing from a connected piano.

@@ -446,6 +446,23 @@ func run() -> void:
         check(float(anchor.x) >= previous_x - .00001, "no backwards sweep at a system wrap")
         previous_beat = float(anchor.beat)
         previous_x = float(anchor.x)
+    # Marker positions, including missing system metadata, must match
+    # the original scan behavior after indexing source note IDs.
+    if not original.get("notes", []).is_empty():
+        var source_note: Dictionary = original.notes[0]
+        var note_id: String = str(source_note.get("id", ""))
+        if not note_id.is_empty():
+            check(flat.strip_note_system_index.has(note_id),
+                "Built score provides an indexed source system for its notes")
+            var by_id: Dictionary = source_note.duplicate(true)
+            by_id.erase("source_system")
+            by_id.erase("system")
+            by_id["note_id"] = note_id
+            var indexed: Dictionary = helper.map_point(by_id, flat)
+            var explicit: Dictionary = helper.map_point(source_note, flat)
+            check(absf(float(indexed.get("x", -1.0)) -
+                float(explicit.get("x", -2.0))) < .00001,
+                "Indexed feedback note must retain the exact engraving x")
     # Living cues reuse the very same Verovio attacks that were positioned
     # onto the real strip tiles above. Test an actual grand-staff chord,
     # single-note errors and rests without a separate simulated score.

@@ -250,6 +250,15 @@ static func build(layout: Dictionary, pages: Array[Image],
             tile["texture"] = ImageTexture.create_from_image(image)
         tiles.append(tile)
     var flat: Dictionary = layout.duplicate(true)
+    # The feedback API identifies noteheads by their source ID without an
+    # engraved system name. Store each note's first source system ONCE
+    # rather than scanning thousands of notes for every feedback marker.
+    var source_system_by_note_id: Dictionary = {}
+    for source_note in layout.get("notes", []):
+        var id: String = str(source_note.get("id", ""))
+        if not id.is_empty() and not source_system_by_note_id.has(id):
+            source_system_by_note_id[id] = str(source_note.get("system", ""))
+    flat["strip_note_system_index"] = source_system_by_note_id
     flat["pages"] = 1
     flat["widths"] = [size.x]
     flat["heights"] = [size.y]
@@ -698,10 +707,16 @@ static func map_point(source: Dictionary, strip: Dictionary) -> Dictionary:
     var system: String = str(source.get("source_system", source.get("system", "")))
     # HTTP feedback names a note_id, page and beat; it does not carry system.
     if system.is_empty() and source.has("note_id"):
-        for note in layout.get("notes", []):
-            if str(note.get("id", "")) == str(source.note_id):
-                system = str(note.get("source_system", ""))
-                break
+        if layout.has("strip_note_system_index"):
+            system = str(layout["strip_note_system_index"].get(
+                str(source.note_id), ""))
+        else:
+            # Preserve compatibility for external layouts not constructed
+            # by ScoreStrip.build().
+            for note in layout.get("notes", []):
+                if str(note.get("id", "")) == str(source.note_id):
+                    system = str(note.get("source_system", ""))
+                    break
     if system.is_empty():
         for mapping in layout.get("strip_mappings", []):
             if page != int(mapping.source_page):
