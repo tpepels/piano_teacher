@@ -33,6 +33,8 @@ var current_screen := "practice"
 var settings_return_screen := "practice"
 var overlay_root: Control
 var overlay_drawer: PanelContainer
+var drawer_intro: Tween
+var picker_intro: Tween
 var overlay_backdrop: ColorRect
 var score_browse_button: Button
 var screens: Dictionary = {}
@@ -744,6 +746,7 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
 
 
 func _navigate(screen: String) -> void:
+    var previous_screen: String = current_screen
     if screen == "home":
         screen = "practice"  # Old Home is no longer part of normal navigation.
     if screen == "settings" and current_screen != "settings":
@@ -760,6 +763,17 @@ func _navigate(screen: String) -> void:
     _update_visual_frame_rate(last_state)
     if overlay_root != null:
         overlay_root.visible = screen != "practice"
+        if drawer_intro != null and drawer_intro.is_running():
+            drawer_intro.kill()
+        if screen != "practice" and previous_screen == "practice":
+            # A quick deliberate entrance; no continuously animated glass.
+            # Only the drawer fades, not the fullscreen scrim or the score.
+            overlay_drawer.modulate.a = 0.0
+            drawer_intro = create_tween()
+            drawer_intro.tween_property(overlay_drawer, "modulate:a", 1.0, .18) \
+                .set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+        else:
+            overlay_drawer.modulate.a = 1.0
     if pause_sheet != null:
         pause_sheet.present(last_state if screen == "practice" and advanced_pause_open else {})
     for key in screens:
@@ -1907,6 +1921,12 @@ func _show_open_picker(state: Dictionary) -> void:
     _navigate("practice")
     _resize_open_picker()
     open_picker.visible = true
+    if picker_intro != null and picker_intro.is_running():
+        picker_intro.kill()
+    open_panel.modulate.a = 0.0
+    picker_intro = create_tween()
+    picker_intro.tween_property(open_panel, "modulate:a", 1.0, .18) \
+        .set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
     open_measure.get_line_edit().grab_focus()
 
 
