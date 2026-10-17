@@ -89,7 +89,7 @@ func run() -> void:
     result["phase"] = "feedback"
     result["take_result"] = {"clean":true, "correct":10}
     stage.present(result)
-    check(stage.result_wave == 1.0 and stage.result_tone == Design.MINT,
+    check(stage.result_wave == 1.0 and stage.result_tone == Design.SCORE_ACCENT,
         "A real clean feedback result begins the teal success wave")
     stage._process(.27)
     var energy: float = stage.result_wave
@@ -106,7 +106,7 @@ func run() -> void:
     failure["transport_id"] = 4
     failure["take_result"] = {"clean":false, "correct":6}
     stage.present(failure)
-    check(stage.result_wave == 1.0 and stage.result_tone == Design.CORAL,
+    check(stage.result_wave == 1.0 and stage.result_tone == Color("#BC5A50"),
         "Next assessed failed take shows a distinct coral wave")
     stage._process(3.0)
     check(stage.result_wave == 0, "Result wave expires and leaves score unobscured")
