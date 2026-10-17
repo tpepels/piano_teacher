@@ -97,6 +97,16 @@ func run() -> void:
     root.add_child(app)
     await process_frame
     await process_frame
+    check(app.overlay_drawer.size.x >= 510.0,
+        "At 1024px the library must not collapse to a 400px website sidebar")
+    var music_row = load("res://library_row.gd").new()
+    root.add_child(music_row)
+    music_row.set_entry("Chopin - Nocturne", "MIDI - Music folder")
+    music_row.set_text_scale(1.3)
+    check(music_row.title_label.get_theme_font_size("font_size") >= 28
+        and music_row.detail_label.get_theme_font_size("font_size") >= 20,
+        "Music picker uses scaled readable titles and descriptions")
+    music_row.queue_free()
     check(app.game_stage.get_parent() == app.score_frame,
         "Beat lighting lives beneath the same score canvas as real engraving")
     check(app.game_count_in.get_parent() == app.score_frame,
