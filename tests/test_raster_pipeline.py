@@ -51,7 +51,7 @@ def test_rasterizer_rejects_corrupted_svg_and_excessive_output():
     with pytest.raises(RuntimeError, match="Cannot rasterize"):
         rasterize_score("<svg broken>")
     with pytest.raises(ValueError, match="width"):
-        rasterize_score(VEROVIO_GLYPH, width=9000)
+        rasterize_score(VEROVIO_GLYPH, width=13000)
 
 
 def test_engine_caches_png_per_requested_resolution(tmp_path, monkeypatch):
