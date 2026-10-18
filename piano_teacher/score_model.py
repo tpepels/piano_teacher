@@ -45,7 +45,7 @@ class ScoreMeasure:
     start_beat: float
     end_beat: float
     meter: tuple[int, int]
-    key_fifths: int
+    keys: dict[str, int]
     clefs: dict[str, dict]
 
 
@@ -115,7 +115,7 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
     measures: list[ScoreMeasure] = []
     segment_ids = set()
     meters: dict[int, tuple[int, int]] = {}
-    keys: dict[int, int] = {}
+    keys: dict[int, dict[str, int]] = {}
     clefs: dict[int, dict[str, dict]] = {}
     for part_id, hand in PART_HAND.items():
         part_measures = parts[part_id].findall("measure")
@@ -223,10 +223,10 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                 raise ValueError(f"Incomplete {hand} measure {number}")
             if bar_index in meters and meters[bar_index] != current_meter:
                 raise ValueError("Inconsistent meter between piano staves")
-            if bar_index in keys and keys[bar_index] != current_key:
-                raise ValueError("Inconsistent key between piano staves")
             meters[bar_index] = current_meter
-            keys[bar_index] = current_key
+            # Different written key signatures per staff are legal in
+            # imported scores; don't silently force them to agree.
+            keys.setdefault(bar_index, {})[hand] = current_key
             clefs.setdefault(bar_index, {})[hand] = current_clef.copy()
     for bar_index in range(count):
         measures.append(ScoreMeasure(first_bar + bar_index, grid[bar_index],
