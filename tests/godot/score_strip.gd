@@ -95,6 +95,19 @@ func run() -> void:
           "missing measured systems must return an explicit error")
     check(not str(helper.build(original, no_pages).get("error", "")).is_empty(),
           "missing score pages must return an explicit error")
+    # A single extra-wide Verovio system needs far more pixels than the
+    # former 5200px page cap; ordinary multi-page pieces retain that cap.
+    var quality = load("res://score_quality.gd")
+    var quality_system := {"page":0, "staff_lines":[.20, .225, .25, .275, .30,
+        .425, .45, .475, .50, .525]}
+    var long_layout := {"systems":[quality_system],
+        "widths":[8000], "heights":[1200], "continuous_score":true}
+    var old_layout: Dictionary = long_layout.duplicate(true)
+    old_layout["continuous_score"] = false
+    var sharp_width: int = quality.png_width(long_layout, 500.0)
+    var old_width: int = quality.png_width(old_layout, 500.0)
+    check(sharp_width > old_width and sharp_width <= 12000,
+        "One-system notation requests higher source resolution without unbounded texture size")
     # A one-system lesson must retain full image height, not the SVG
     # notehead-origin staff box. Otherwise high ledger notes and long stems
     # disappear BEFORE the Godot viewport can fit their bounding ink.
