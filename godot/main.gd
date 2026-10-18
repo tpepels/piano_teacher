@@ -28,6 +28,7 @@ const ActionButton := preload("res://action_button.gd")
 const LibraryRow := preload("res://library_row.gd")
 const GameInputIndicator := preload("res://game_input_indicator.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
+const TimelinePreview := preload("res://score_timeline_preview.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 
 var current_screen := "practice"
@@ -179,6 +180,13 @@ var last_state_tick := 0
 var last_playhead_strike_beat := -INF
 var last_playhead_strike_transport := -1
 var visual_transport_clock = VisualTransportClock.new()
+# The experiment is opt-in: the legacy engraving remains the default.
+var timeline_preview_enabled := false
+var timeline_preview: Control
+var timeline_model_request: HTTPRequest
+var timeline_model_pending := false
+var timeline_model_revision := -1
+var timeline_model_retry_after_ms := 0
 var state_request_started_ms := 0
 var last_audio_transport_id := -1
 var follow_system_key := ""
@@ -249,6 +257,9 @@ func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
+    timeline_preview_enabled = (
+        OS.get_environment("PIANO_TEACHER_TIMELINE_PREVIEW") == "1" or
+        OS.get_cmdline_user_args().has("--timeline-preview"))
     # Apply one device-independent Window scale before creating the controls.
     # Do not enlarge fonts and controls a second time in the layouts.
     _configure_ui_scaling()
@@ -275,6 +286,8 @@ func _ready() -> void:
     state_request = _new_request(_on_state)
     score_request = _new_request(_on_score)
     layout_request = _new_request(_on_layout)
+    if timeline_preview_enabled:
+        timeline_model_request = _new_request(_on_timeline_model)
     # Verovio can take longer to engrave a dense MIDI score on the first run.
     # Do not abandon the request after the generic five-second timeout.
     layout_request.timeout = 90.0
@@ -1286,6 +1299,15 @@ func _build_interface() -> void:
     practice_note_feedback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     practice_note_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_note_feedback_panel.add_child(practice_note_feedback_label)
+    if timeline_preview_enabled:
+        # Diagnostic overlay deliberately covers ALL original note/rail art.
+        # It has no MIDI or audio output and leaves the existing engine active.
+        timeline_preview = TimelinePreview.new()
+        timeline_preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        timeline_preview.visible = false
+        score_frame.add_child(timeline_preview)
+        if not timeline_preview.set_density_from_env():
+            push_warning("Phase B density: " + str(timeline_preview.notice))
     hint_keyboard = HintKeyboard.new()
     score_region.add_child(hint_keyboard)
     practice_progress = ProgressBar.new()
@@ -2270,6 +2292,11 @@ func _toggle_fullscreen() -> void:
     _on_fullscreen_toggle(enabled)
 
 func _poll() -> void:
+    if timeline_preview_enabled and bool(last_state.get("loaded", false)) \
+            and timeline_model_revision != revision \
+            and not timeline_model_pending \
+            and Time.get_ticks_msec() >= timeline_model_retry_after_ms:
+        _request_timeline_model()
     if not state_pending and not action_pending:
         state_pending = true
         state_request_started_ms = Time.get_ticks_msec()
@@ -2347,6 +2374,11 @@ func _process(_delta: float) -> void:
             print("PHASE8B_LISTEN_SOFTWARE_SYNC:",
                 JSON.stringify(demo_player.sync_report()))
     _update_count_in()
+    # Frame-accurate Phase B projection uses the SAME clock as score and
+    # count-in. No Verovio X positions or per-note speed correction.
+    if timeline_preview_enabled and timeline_preview != null \
+            and bool(last_state.get("loaded", false)):
+        timeline_preview.present(last_state, _transport_beat_now())
     # The stage's lighting follows exactly the musical beat used by the
     # moving Verovio notation. Preview/Listen use a neutral pulse; neither
     # this visual beat nor its glow can create grading events.
@@ -2649,6 +2681,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     last_state_tick = int((started_ms + received_ms) / 2.0)
     visual_transport_clock.accept(parsed, last_state_tick, received_ms)
     if not bool(parsed.get("loaded", false)):
+        if timeline_preview != null:
+            timeline_preview.visible = false
         game_input_indicator.present(parsed)
         game_stage.present(parsed)
         game_streak.present({})
@@ -2926,6 +2960,11 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var new_revision := int(parsed.get("revision", 0))
     if new_revision != revision:
         revision = new_revision
+        if timeline_preview != null:
+            timeline_preview.clear_score()
+            timeline_preview.visible = true
+            timeline_model_revision = -1
+            timeline_model_retry_after_ms = 0
         layout_revision = -1
         score_layout = {}
         living_chords.clear()
@@ -3377,6 +3416,42 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     _refresh_score_status()
     if str(last_state.get("phase", "")) == "loading" and int(last_state.get("awaiting_score_revision", -1)) == revision:
         _send_action({"action": "score_ready", "revision": revision})
+
+func _request_timeline_model() -> void:
+    if timeline_model_request == null or timeline_model_pending \
+            or not bool(last_state.get("loaded", false)):
+        return
+    timeline_model_pending = true
+    var error: Error = timeline_model_request.request(URL + "/score/model")
+    if error != OK:
+        timeline_model_pending = false
+        timeline_model_retry_after_ms = Time.get_ticks_msec() + 2000
+        if timeline_preview != null:
+            timeline_preview.notice = "Cannot load semantic score"
+            timeline_preview.queue_redraw()
+
+
+func _on_timeline_model(_result: int, code: int,
+        _headers: PackedStringArray, body: PackedByteArray) -> void:
+    timeline_model_pending = false
+    if not timeline_preview_enabled or timeline_preview == null:
+        return
+    var candidate: Variant = JSON.parse_string(body.get_string_from_utf8())
+    if code == 200 and candidate is Dictionary:
+        # Ignore a stale response after a lesson/hand/variant transition.
+        if int(candidate.get("revision", -1)) != revision:
+            return
+        if timeline_preview.load_score(candidate):
+            timeline_model_revision = revision
+            timeline_preview.visible = true
+            print("PHASE_B_MODEL_READY: ", revision,
+                " NOTES: ", timeline_preview.timeline.notes.size(),
+                " DENSITY: ", timeline_preview.timeline.pixels_per_beat)
+            return
+    timeline_model_retry_after_ms = Time.get_ticks_msec() + 2000
+    timeline_preview.notice = "Score model unavailable; retrying"
+    timeline_preview.queue_redraw()
+
 
 func _send_action(command: Dictionary) -> void:
     var requested: String = str(command.get("action", ""))
