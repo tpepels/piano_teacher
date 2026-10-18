@@ -36,6 +36,8 @@ def test_smoke_requires_moving_visible_cursor_and_scheduled_count_in_clicks():
 
 
 def test_score_motion_during_lead_is_an_acceptance_gate():
-    assert "await_condition(moving_lead_in_observed" in SMOKE
+    assert "lambda log: moving_lead_in_observed(" in SMOKE
+    assert 'count_in_beats=float(started["count_in_beats"])' in SMOKE
+    assert "minimum_samples = 2 if short else 3" in SMOKE
     assert "PHASE0_LEAD_BEAT:" in SCENE
     assert "target_x = viewport.x * 0.42 - note_x * displayed_width" in SCENE
