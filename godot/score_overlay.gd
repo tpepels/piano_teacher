@@ -113,17 +113,19 @@ func _draw_preparation() -> void:
     # behind the timing line. All preparation ink is transparent.
     if show_preparation_staff:
         preload("res://staff_continuity.gd").draw_rules(self, lines, margin_left, first_x, "both")
-    # The continuous staff already spans the lead-in. Delineate ONE empty
-    # count-in bar using two ordinary barlines, without copied clefs, rests,
-    # duplicate rails or an opaque mask. This bar moves with the same score
-    # canvas as the notes from the first negative beat onward.
+    # The continuous staff is already painted once by StaffContinuity.
+    # A separate right-hand barline ended inside the actual first-measure
+    # clefs and barline ink, producing the overlap seen during count-in.
+    # Leave only the OUTER entry boundary in genuinely empty staff space;
+    # the existing engraved music owns every symbol near the first note.
     if lines.size() < 10:
         return
     if not show_preparation_header and not show_preparation_staff:
-        var bar_end: float = first_x - gap * 1.3
-        for x in [left, bar_end]:
-            draw_line(Vector2(x, lines[0]), Vector2(x, lines[9]),
-                Color(Design.SCORE_INK, .53), 1.4, true)
+        var safe_entry: float = minf(left, first_x - gap * 10.0)
+        draw_line(Vector2(safe_entry, lines[0]), Vector2(safe_entry, lines[4]),
+            Color(Design.SCORE_INK, .36), 1.1, true)
+        draw_line(Vector2(safe_entry, lines[5]), Vector2(safe_entry, lines[9]),
+            Color(Design.SCORE_INK, .36), 1.1, true)
         return
     if show_preparation_header:
         _draw_preparation_clef("right", left - gap * 7.0, lines, 0, gap)
