@@ -115,10 +115,17 @@ func open_review(report: Dictionary) -> void:
         content.add_child(repeat_button)
     if sections.size() > 15:
         section_list.add_child(_line("%d additional sections not shown here." % (sections.size()-15), 16, true))
-    var viewport: Vector2 = get_tree().root.size
-    popup_centered(Vector2i(
+    # A freshly populated AcceptDialog can open at the unconstrained
+    # content height on its first popup (over 2000 px in the headless/HiDPI
+    # regression). Clamp the Window itself; the inner ScrollContainer owns
+    # any longer issue list. Use logical viewport size after content scaling.
+    var viewport: Vector2 = get_tree().root.get_visible_rect().size
+    var target := Vector2i(
         int(maxf(300.0, minf(720.0, viewport.x - 32.0))),
-        int(maxf(300.0, minf(650.0, viewport.y - 32.0)))))
+        int(maxf(300.0, minf(650.0, viewport.y - 32.0))))
+    max_size = target
+    popup_centered(target)
+    size = target
 
 
 func _repeat_section(first_bar: int, last_bar: int) -> void:
