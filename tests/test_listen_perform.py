@@ -66,9 +66,9 @@ def test_listen_is_audible_exact_full_variant_and_cannot_grade_midi(lesson, bpm)
     now[0] += 3
     e.control('demo_ready', token=demo['token'], revision=loading['revision'])
     listening = e.state()
-    assert listening['phase'] == 'playing' and listening['running']
-    assert listening['clock_beat'] == pytest.approx(0)
-    assert listening['count_in_beats'] == 0 and listening['demo']['ready']
+    assert listening['phase'] == 'count_in' and listening['running']
+    assert listening['clock_beat'] == pytest.approx(-listening['count_in_beats'])
+    assert listening['count_in_beats'] > 0 and listening['demo']['ready']
     assert e.recorder is None and not e.auto and not listening['preview_only']
     send(e, now, now[0]+.1, 90)
     send(e, now, now[0]+.2, 90, False)
@@ -101,7 +101,8 @@ def test_listen_both_readiness_gates_freeze_during_pause_and_stale_acks_never_st
     now[0] += 100
     assert e.state()['phase'] == 'paused' and not e.state()['running']
     e.control('resume')
-    assert e.state()['phase'] == 'playing' and e.state()['clock_beat'] == pytest.approx(0)
+    assert e.state()['phase'] == 'count_in'
+    assert e.state()['clock_beat'] == pytest.approx(-e.state()['count_in_beats'])
     now[0] += .75
     beat = e.state()['clock_beat']
     e.control('pause')
@@ -367,7 +368,7 @@ def test_listen_without_piano_remains_audible_and_never_grades(lesson):
     e, now, _ = lesson(120, connected=False)
     e.control('listen')
     state = acknowledge(e)
-    assert state['phase'] == 'playing' and state['demo']['audio_available']
+    assert state['phase'] == 'count_in' and state['demo']['audio_available']
     send(e, now, now[0]+.1, 60)
     assert e.recorder is None and e.pending_result is None and not e.plan.mastered
     now[0] = e.run_at+state['demo']['duration_seconds']+.01
@@ -437,3 +438,21 @@ def test_return_from_listen_waits_for_pianist_instead_of_auto_start(lesson):
     assert not engine.state()["running"]
     engine.start()
     assert engine.state()["phase"] == "count_in"
+
+def test_listen_starts_with_moving_negative_beat_and_no_audio_trim(lesson):
+    e, now, _ = lesson(80)
+    e.control("listen")
+    state = acknowledge(e)
+    assert state["phase"] == "count_in"
+    assert state["count_in_beats"] > 0
+    assert state["clock_beat"] < 0
+    now[0] = e.run_at - .12
+    before = e.state()
+    assert before["clock_beat"] < 0
+    now[0] = e.run_at + .02
+    first = e.state()
+    assert first["phase"] == "playing"
+    assert 0 <= first["clock_beat"] < .1
+    assert e.demo["ready"]
+    assert e.recorder is None and e.pending_result is None
+
