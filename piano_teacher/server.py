@@ -1800,10 +1800,15 @@ class PracticeEngine:
         # Source SVG and note geometry stay resolution-independent.
         # Godot requests an appropriately dense PNG for the actual staff
         # size; the default preserves compatibility with existing clients.
-        if not 600 <= width <= 7200:
+        if not 600 <= width <= 12000:
             raise ValueError("Invalid engraving image width")
         with self.lock:
             score = self.engraving()
+            # Large PNGs are reserved for a single, freshly engraved
+            # practice system. Multi-page scores keep their old safe cap.
+            if width > 7200 and not bool(getattr(score, "layout", {}).get(
+                    "continuous_score", False)):
+                raise ValueError("Invalid engraving image width")
             if not 0 <= page < len(score.pages):
                 raise ValueError("Invalid score page")
             key = (page, width)
