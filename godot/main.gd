@@ -29,6 +29,7 @@ const LibraryRow := preload("res://library_row.gd")
 const GameInputIndicator := preload("res://game_input_indicator.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const TimelinePreview := preload("res://score_timeline_preview.gd")
+const NativeNotation := preload("res://score_native_notation.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 
 var current_screen := "practice"
@@ -182,6 +183,7 @@ var last_playhead_strike_transport := -1
 var visual_transport_clock = VisualTransportClock.new()
 # The experiment is opt-in: the legacy engraving remains the default.
 var timeline_preview_enabled := false
+var native_notation_enabled := false
 var timeline_preview: Control
 var timeline_model_request: HTTPRequest
 var timeline_model_pending := false
@@ -257,7 +259,10 @@ func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
-    timeline_preview_enabled = (
+    native_notation_enabled = (
+        OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" or
+        OS.get_cmdline_user_args().has("--native-notation"))
+    timeline_preview_enabled = (native_notation_enabled or
         OS.get_environment("PIANO_TEACHER_TIMELINE_PREVIEW") == "1" or
         OS.get_cmdline_user_args().has("--timeline-preview"))
     # Apply one device-independent Window scale before creating the controls.
@@ -1302,7 +1307,8 @@ func _build_interface() -> void:
     if timeline_preview_enabled:
         # Diagnostic overlay deliberately covers ALL original note/rail art.
         # It has no MIDI or audio output and leaves the existing engine active.
-        timeline_preview = TimelinePreview.new()
+        timeline_preview = (NativeNotation.new() if native_notation_enabled
+            else TimelinePreview.new())
         timeline_preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         timeline_preview.visible = false
         score_frame.add_child(timeline_preview)
@@ -3447,6 +3453,14 @@ func _on_timeline_model(_result: int, code: int,
             print("PHASE_B_MODEL_READY: ", revision,
                 " NOTES: ", timeline_preview.timeline.notes.size(),
                 " DENSITY: ", timeline_preview.timeline.pixels_per_beat)
+            return
+        if native_notation_enabled and not str(timeline_preview.failure_reason).is_empty():
+            # Phase C must never show incomplete or incorrect notation.
+            # Leave the existing Verovio engraving visible underneath.
+            timeline_preview.visible = false
+            timeline_model_revision = revision
+            push_warning("Native notation fallback: " +
+                str(timeline_preview.failure_reason))
             return
     timeline_model_retry_after_ms = Time.get_ticks_msec() + 2000
     timeline_preview.notice = "Score model unavailable; retrying"
