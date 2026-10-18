@@ -165,7 +165,7 @@ class LearningPlan:
     @property
     def hands(self) -> tuple[str, ...]:
         if self.warmup:
-            return ("left", "right", "both")
+            return ("right", "left", "both")
         if self.exercise.kind != "learn":
             return ("both",)
         available = {n.hand for n in self.exercise.phrase.notes}
@@ -220,7 +220,7 @@ class LearningPlan:
             for index, ex in enumerate(self.exercises):
                 if ex.kind in ("learn", "warmup"):
                     available = {note.hand for note in ex.phrase.notes}
-                    individual = tuple(hand for hand in (("left", "right") if self.warmup else ("right", "left")) if hand in available)
+                    individual = tuple(hand for hand in ("right", "left") if hand in available)
                     hands = individual + (("both",) if len(individual) > 1 else ())
                 else:
                     hands = ("both",)
