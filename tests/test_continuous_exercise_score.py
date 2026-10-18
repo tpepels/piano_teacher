@@ -98,10 +98,10 @@ def test_continuous_spacing_is_independent_of_bpm():
 def test_note_spacing_constant_can_be_tuned_without_changing_tempo(monkeypatch):
     xml = build_lesson_score(_exercise()).musicxml
     _, original = space_for_continuous_reading(xml, 44)
-    monkeypatch.setattr(reading_spacing, "NOTE_SPACING", 0.06)
+    monkeypatch.setattr(reading_spacing, "NOTE_SPACING", 0.14)
     _, compact = space_for_continuous_reading(xml, 44)
     _, compact_fast = space_for_continuous_reading(xml, 120)
-    assert compact["spacingLinear"] == 0.06
+    assert compact["spacingLinear"] == 0.14
     assert compact["pageWidth"] > original["pageWidth"]
     assert compact_fast == compact
 
@@ -134,3 +134,41 @@ def test_skip_next_lesson_control_stays_visible_in_practice():
     assert 'practice_skip_button.visible = bool(parsed.get("loaded", false))' in source
     assert '"reason": "Learner skipped to the next lesson from the practice screen"' in source
     assert 'practice_skip_button.disabled = not bool(parsed.get("skip_available", false))' in source
+
+
+def test_short_notes_have_more_even_per_beat_scroll_speed(monkeypatch):
+    """Measure actual Verovio note positions: no imaginary timing offsets."""
+    pytest.importorskip("verovio")
+    pytest.importorskip("music21")
+    from piano_teacher.music import Note, Phrase
+
+    # 1/4-beat attacks are affected most by Verovio's minimum symbol width.
+    # Alternate fast and slow rhythm to detect the camera accelerations.
+    phrase_notes = []
+    for measure in range(8):
+        start = measure * 4
+        for beat, duration in ((0, .25), (.25, .25), (.5, .25),
+                               (.75, .25), (1, 1), (2, 1), (3, 1)):
+            phrase_notes.append(Note(start + beat, start + beat + duration,
+                                     60 + int(beat * 4) % 6, 0, 0, "right"))
+    phrase = Phrase(1, 1, 8, 0, 32, tuple(phrase_notes))
+    notation = build_lesson_score(phrase)
+    def rates(spacing):
+        monkeypatch.setattr(reading_spacing, "NOTE_SPACING", spacing)
+        engraved = render_layout(notation, 1, 8, "right",
+                                 total_beats=32, bpm=80, continuous=True)
+        assert engraved.layout["continuous_score"]
+        points = engraved.layout["anchors"]
+        result = []
+        for previous, following in zip(points, points[1:]):
+            delta = float(following["beat"]) - float(previous["beat"])
+            dx = float(following["x"]) - float(previous["x"])
+            if .20 < delta <= 1.01 and dx > 0:
+                result.append(dx / delta)
+        assert len(result) >= 15
+        return max(result) / min(result)
+    legacy = rates(.03)
+    tuned = rates(.095)
+    assert tuned <= legacy + 1e-6, (
+        "Increasing rhythmic space must not increase speed jumps: "
+        f"{legacy:.3f} -> {tuned:.3f}")
