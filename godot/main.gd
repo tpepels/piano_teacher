@@ -3369,8 +3369,17 @@ func _send_action(command: Dictionary) -> void:
         feedback_label.visible = true
         return
     last_control_action = requested
-    feedback_label.text = "Working · " + requested.replace("_", " ")
+    var verb: String = {
+        "listen": "Preparing piano audio", "practice": "Returning to practice",
+        "start": "Starting count-in", "pause": "Pausing",
+        "resume": "Resuming", "restart": "Restarting the passage",
+        "skip_stage": "Loading next lesson", "stop": "Stopping"
+    }.get(requested, "Applying " + requested.replace("_", " "))
+    feedback_label.text = verb + "…"
     feedback_label.visible = true
+    if practice_playback_banner != null:
+        practice_playback_banner.text = verb + "…"
+        practice_playback_banner.visible = true
     _send_post("/control", command)
 
 func _flush_transport_action() -> void:
@@ -3393,6 +3402,8 @@ func _send_post(path: String, payload: Dictionary) -> void:
 
 func _on_action(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     action_pending = false
+    if last_post_path == "/control" and practice_playback_banner != null:
+        practice_playback_banner.visible = false
     var path := last_post_path
     var resume_saved: bool = path == "/library/open" and library_resume_requested
     if path == "/library/open":
