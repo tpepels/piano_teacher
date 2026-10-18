@@ -11,10 +11,12 @@ from xml.etree import ElementTree as ET
 # this one value if the app needs denser or more open notation.
 NOTE_SPACING = 0.03
 
-# Ratio between rhythmic note values. Smaller values reduce the difference
-# between the width of a short note and a sustained note; Verovio retains
-# enough collision clearance for chords, accidentals, flags and ties.
-RHYTHM_SPACING = 0.45
+# Preserve a fixed musical-time axis under the stationary playhead.
+# A value of 1.0 makes rhythmic duration proportional to engraved distance.
+# Lower values would make isolated notes look more equally spaced, but they
+# would also force the scrolling score to accelerate/decelerate between notes
+# to hit the correct beats. That reintroduces the tempo wobble.
+RHYTHM_SPACING = 1.0
 
 
 def _measure_lengths(root: ET.Element) -> list[float]:
