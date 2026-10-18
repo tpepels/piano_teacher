@@ -274,8 +274,12 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
         "beat_unit": "quarter",
         "active_hand": hand,
         "staff_order": list(HANDS),
-        "measures": [asdict(m) for m in measures],
-        "notes": [asdict(note) for note in notes],
+        # Return genuine JSON value types, not Python tuples that change
+        # shape when the HTTP layer serializes the payload.
+        "measures": [{**asdict(m), "meter": list(m.meter)} for m in measures],
+        "notes": [{**asdict(note), "spelling": (
+            list(note.spelling) if note.spelling is not None else None)}
+            for note in notes],
         "notation_events": [asdict(symbol) for symbol in symbols],
         "active_note_ids": [note.id for note in notes
                             if hand == "both" or hand == note.hand],
