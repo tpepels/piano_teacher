@@ -741,6 +741,10 @@ class PracticeEngine:
             raise ValueError("Open a piece first")
         from .demo import DemoAudioCache
         self._stop()
+        # Listen's WAV is rendered from the beginning of the active phrase.
+        # Reset a previous seek/recovery location so the moving notation
+        # also starts at the first note of that exact same phrase.
+        self.play_from_beat = 0.0
         self.mode = "listen"
         self.teaching = None
         self.guided_range = None
