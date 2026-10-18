@@ -31,6 +31,7 @@ def test_native_mode_is_opt_in_and_unsupported_music_reverts_to_legacy():
     assert 'timeline.screen_x(' in native
     assert 'timeline.model.get("notation_events",[])' in native
     assert 'draw_colored_polygon(' in native
-    assert "Verovio" not in native
+    assert 'preload("res://score_strip.gd")' not in native
+    assert 'preload("res://score_motion_curve.gd")' not in native
     assert 'MIN_ATTACK_SEPARATION' in geometry
     assert 'supported(model: Dictionary)' in geometry
