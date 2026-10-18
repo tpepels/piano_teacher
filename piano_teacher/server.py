@@ -1773,8 +1773,16 @@ class PracticeEngine:
                                             time_signatures=p.piece.time_signatures,
                                             key_signatures=p.piece.key_signatures,
                                             clef_changes=p.piece.clef_changes)
+                # Short lessons are freshly engraved as a continuous system.
+                # This avoids raster-copying printed Verovio lines together.
+                # Large works retain paginated rendering to bound GPU memory.
+                compact_exercise = (
+                    phrase.last_bar - phrase.first_bar + 1 <= 12
+                    and phrase.end - phrase.start <= 48
+                )
                 layout = render_layout(notation,phrase.first_bar,phrase.last_bar,p.hand,
-                                       total_beats=phrase.end - phrase.start, bpm=p.bpm)
+                                       total_beats=phrase.end - phrase.start, bpm=p.bpm,
+                                       continuous=compact_exercise)
                 require_lesson_alignment(phrase, layout.layout, p.hand)
                 self._layout_cache = layout
                 self._page_png.clear()
