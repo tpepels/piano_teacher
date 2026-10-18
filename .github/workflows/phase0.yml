@@ -31,6 +31,11 @@ jobs:
           path: /tmp/piano-user-midi-visual
           if-no-files-found: warn
           retention-days: 14
+      - name: Real practice UI with the three reported MIDI files
+        run: |
+          .venv/bin/python scripts/smoke_godot.py --file 'midi/Ala_–_Joep_Beving.midi'
+          .venv/bin/python scripts/smoke_godot.py --file 'midi/Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi'
+          .venv/bin/python scripts/smoke_godot.py --file 'midi/Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi'
       - name: Audit real score scrolling velocity
         run: .venv/bin/python scripts/audit_scroll_velocity.py
       - name: Real rendering and HTTP integration
