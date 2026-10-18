@@ -196,8 +196,11 @@ static func beam_groups(model: Dictionary) -> Array:
     for key in lanes:
         var measure: Dictionary = measures.get(int(lanes[key]["measure"]), {})
         var length: float = beat_group_length(measure.get("meter", []))
+        var conventional_grouping: bool = length > 0.0
         if length <= 0.0:
-            continue
+            # Even an irregular meter can contain an explicitly grouped
+            # MusicXML tuplet. Do not guess beams for its other notes.
+            length = 1.0
         var ordered: Array = lanes[key]["events"]
         ordered.sort_custom(func(a, b): return float(a["beat"]) < float(b["beat"]))
         var current: Array = []
@@ -209,7 +212,9 @@ static func beam_groups(model: Dictionary) -> Array:
             var duration: float = float(event.get("duration_beats", 0.0))
             var short: bool = str(event.get("kind", "")) == "note" and \
                 beam_level(str(event.get("note_type", ""))) > 0 and \
-                duration > 0.0 and duration <= .75
+                duration > 0.0 and duration <= .75 and \
+                (conventional_grouping or tuplet_membership.has(
+                    str(event.get("id", ""))))
             var unit: int = int(floor((at-begin+.000001)/length))
             # Notes may end on the next group boundary but not cross it.
             var stays: bool = at+duration <= begin+float(unit+1)*length+.00001
