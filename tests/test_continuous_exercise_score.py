@@ -116,10 +116,13 @@ def test_verovio_score_positions_are_unchanged_at_different_tempos():
     assert earlier.layout["continuous_score"] and later.layout["continuous_score"]
     assert earlier.layout["widths"] == pytest.approx(later.layout["widths"])
     assert earlier.layout["heights"] == pytest.approx(later.layout["heights"])
-    left = [(a["beat"], a["x"]) for a in earlier.layout["anchors"]]
-    right = [(a["beat"], a["x"]) for a in later.layout["anchors"]]
-    assert len(left) == len(right)
-    assert left == pytest.approx(right, abs=1e-5)
+    before = earlier.layout["anchors"]
+    after = later.layout["anchors"]
+    assert len(before) == len(after)
+    assert [a["beat"] for a in before] == pytest.approx(
+        [a["beat"] for a in after], abs=1e-7)
+    assert [a["x"] for a in before] == pytest.approx(
+        [a["x"] for a in after], abs=1e-5)
     assert earlier.layout["attack_map"] == later.layout["attack_map"]
 
 
