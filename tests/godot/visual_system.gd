@@ -64,9 +64,12 @@ func _verify() -> void:
         "Real music tiles use approved stone titles and slate metadata")
     var title_face: Font = row.title_label.get_theme_font("font")
     var detail_face: Font = row.detail_label.get_theme_font("font")
-    check(title_face.get_font_name().to_lower().contains("serif")
-        and title_face.get_font_name() != detail_face.get_font_name(),
-        "Music titles resolve to an available serif face distinct from interface metadata")
+    # A headless runner can silently substitute its fallback face. Verify
+    # the explicitly configured serif font resource, not installed fonts.
+    check(title_face is SystemFont and
+        (title_face as SystemFont).font_names.has("Noto Serif") and
+        title_face != detail_face,
+        "Music titles request the shared serif face, distinct from metadata")
     row.set_entry("A very long music title", "MIDI · imported", "warning")
     check(row.get_meta("library_title") == "A very long music title" and
         row.title_label.get_theme_color("font_color") == Design.AMBER and
