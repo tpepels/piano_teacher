@@ -113,7 +113,12 @@ func _draw_preparation() -> void:
     # behind the timing line. All preparation ink is transparent.
     if show_preparation_staff:
         preload("res://staff_continuity.gd").draw_rules(self, lines, margin_left, first_x, "both")
-    if lines.size() < 10:
+    # In the continuous-score practice view, the real grand staff already
+    # extends under the negative-beat lead-in. The preparation header/staff
+    # are disabled there: don't paint extra rest rows on top of the sheet.
+    # The dedicated count-in indicator communicates the remaining beats.
+    if lines.size() < 10 or (not show_preparation_header and
+            not show_preparation_staff):
         return
     if show_preparation_header:
         _draw_preparation_clef("right", left - gap * 7.0, lines, 0, gap)
