@@ -3237,10 +3237,15 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     # standard until the unwarped geometry has its own musical-time camera.
     # PIANO_TEACHER_NATIVE_SCORE=1 ./run.sh enables source-ink preview.
     var native_ink_preview: bool = OS.get_environment("PIANO_TEACHER_NATIVE_SCORE") == "1"
-    if native_ink_preview:
+    var continuous_engraving: bool = bool(source_layout.get("continuous_score", false))
+    # A single Verovio system needs no page-to-page copy, glyph stretching,
+    # crop-splicing or fake measure-line segments. The backend has already
+    # engraved a complete fresh passage at the selected practice tempo.
+    if native_ink_preview and not continuous_engraving:
         print("NATIVE_SCORE_PREVIEW: source pixels unchanged; motion still experimental")
     var strip: Dictionary = ScoreStrip.build(
-        source_layout, page_images, should_defer, native_ink_preview)
+        source_layout, page_images, should_defer,
+        native_ink_preview or continuous_engraving)
     if strip.has("error") or strip["tiles"].is_empty():
         _score_failed(str(strip.get("error", "No staff systems were found in the engraving")))
         return
