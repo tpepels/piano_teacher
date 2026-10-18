@@ -56,14 +56,24 @@ CURSOR_RE = re.compile(
 LEAD_RE = re.compile(r"PHASE0_LEAD_BEAT:([-0-9.]+) CONTENT_X:([-0-9.]+) CURSOR_X:([-0-9.]+) VISIBLE:(true|false)")
 
 
-def moving_lead_in_observed(log: str) -> bool:
-    samples = [(float(beat),float(x),float(beam))
-               for beat,x,beam,show in LEAD_RE.findall(log) if show == "true"]
-    if len(samples) < 3 or samples[-1][0] - samples[0][0] < .5:
+def moving_lead_in_observed(log: str, *, count_in_beats: float = 3.0) -> bool:
+    """Allow genuine 1/8 pickups: their entire lead spans only half a beat.
+
+    The ordinary count-in still needs three ordered samples and 20px travel.
+    A short pickup needs two samples and proportionately less travel, but
+    must still advance against a stationary cursor. No silent test skip.
+    """
+    samples = [(float(beat), float(x), float(beam))
+               for beat, x, beam, show in LEAD_RE.findall(log) if show == "true"]
+    short = count_in_beats < 1.0
+    minimum_samples = 2 if short else 3
+    minimum_span = min(.5, count_in_beats * .35)
+    minimum_pixels = 8 if short else 20
+    if len(samples) < minimum_samples or samples[-1][0] - samples[0][0] < minimum_span:
         return False
-    return (all(samples[i][0] > samples[i-1][0] for i in range(1,len(samples)))
-            and max(x for _,x,_ in samples) - min(x for _,x,_ in samples) >= 20
-            and max(b for _,_,b in samples) - min(b for _,_,b in samples) <= 30)
+    return (all(samples[i][0] > samples[i-1][0] for i in range(1, len(samples)))
+            and max(x for _, x, _ in samples) - min(x for _, x, _ in samples) >= minimum_pixels
+            and max(b for _, _, b in samples) - min(b for _, _, b in samples) <= 30)
 
 
 def cursor_samples(log: str) -> list[tuple[float, float, float]]:
@@ -163,7 +173,10 @@ def run(file: Path | None = None) -> int:
                     raise RuntimeError("Backend did not load the MIDI fixture")
                 # Headless runs should not request a physical fullscreen window.
                 api("/settings", {"fullscreen": False})
-                api("/control", {"action": "tempo", "bpm": 240})
+                # Real MIDI files can have an eighth-note pickup (0.5 beat).
+                # At forced 240 BPM that is only 125ms, shorter than one
+                # normal state poll; the visual smoke would miss count-in.
+                api("/control", {"action": "tempo", "bpm": 80 if file else 240})
                 godot_process = subprocess.Popen(
                     [godot, "--headless", "--resolution", "1536x960", "--path", str(ROOT / "godot"),
                      "--", "--phase0-smoke"],
@@ -214,8 +227,11 @@ def run(file: Path | None = None) -> int:
                     godot_process, ui_log, timeout=5,
                     description="engraved noteheads actually visible while playing")
                 print("PASS played notes remain visible in the Godot panel", flush=True)
-                await_condition(moving_lead_in_observed,godot_process,ui_log,
-                                timeout=6,description="count-in musical movement")
+                await_condition(
+                    lambda log: moving_lead_in_observed(
+                        log, count_in_beats=float(started["count_in_beats"])),
+                    godot_process, ui_log,
+                    timeout=6, description="count-in musical movement")
                 print("PASS count-in score moves under a stable timing line", flush=True)
                 await_condition(lambda log: log.count("PHASE0_CLICK:count_in") >= 2,
                                 godot_process, ui_log, timeout=6,
