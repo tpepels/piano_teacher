@@ -91,3 +91,40 @@ def space_for_reading(xml: str, bpm: float) -> tuple[str, dict]:
         "breaks": "encoded",
         "pageWidth": page_width,
     }
+
+
+def space_for_continuous_reading(xml: str, bpm: float) -> tuple[str, dict]:
+    """Engrave one practice exercise as ONE continuous Verovio system.
+
+    Every note, rest, barline, accidental and staff is laid out afresh by
+    Verovio from the exercise's MusicXML. No printed systems are later
+    stretched, spliced, or pasted together by Godot. Long works continue to
+    use the ordinary multi-system renderer instead.
+    """
+    if not math.isfinite(bpm) or bpm <= 0:
+        raise ValueError("Practice tempo must be a positive, finite BPM")
+    root = ET.fromstring(xml)
+    lengths = _measure_lengths(root)
+    if not lengths:
+        raise ValueError("Practice score contains no measures")
+    linear = min(1.0, 4.0 / bpm)
+    # Keep the native note glyph sizes: reserve enough horizontal room for
+    # every quarter beat, clefs/meters and per-measure barline clearance.
+    # Unlike the previous reading_spacing mode, no internal page/system
+    # cast-off is inserted at ANY measure.
+    page_width = max(2200, math.ceil(
+        1200 + sum(2560.0 * linear * length + 100 for length in lengths)))
+    for part in root.findall("part"):
+        for measure in part.findall("measure"):
+            for instruction in list(measure.findall("print")):
+                instruction.attrib.pop("new-system", None)
+                instruction.attrib.pop("new-page", None)
+                if not instruction.attrib and len(instruction) == 0:
+                    measure.remove(instruction)
+    return ET.tostring(root, encoding="unicode"), {
+        "spacingLinear": linear,
+        "spacingNonLinear": 1.0,
+        "noJustification": True,
+        "breaks": "none",
+        "pageWidth": page_width,
+    }
