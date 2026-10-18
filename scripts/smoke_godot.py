@@ -240,7 +240,15 @@ def run(file: Path | None = None) -> int:
                 await_condition(moving_cursor_observed, godot_process, ui_log,
                                 timeout=10, description="visible moving timing line")
                 print("PASS Godot timing beam moves in musical time", flush=True)
-                deadline = time.monotonic() + 12
+                # The real imported exercise may contain 8+ measures.
+                # At the slower tempo needed to observe a 1/8 count-in, a
+                # fixed 12s playback timeout is invalid (Ala can take 18s).
+                beats_remaining = max(0.0,
+                    float(started.get("duration_beats", 0.0)) -
+                    float(started.get("play_from_beat", 0.0)))
+                expected_seconds = beats_remaining * 60.0 / max(
+                    1.0, float(started["bpm"]))
+                deadline = time.monotonic() + min(90.0, expected_seconds + 12.0)
                 while time.monotonic() < deadline:
                     state = api("/state", timeout=2)
                     if not state["running"]:
@@ -249,7 +257,9 @@ def run(file: Path | None = None) -> int:
                         break
                     time.sleep(.1)
                 else:
-                    raise RuntimeError("Timing preview did not finish at the selected BPM")
+                    raise RuntimeError(
+                        f"Timing preview did not finish after {expected_seconds:.1f}s "
+                        f"estimated at {started['bpm']} BPM; last state: {state.get('phase')}")
                 transcript = ui_log.read_text(errors="replace")
                 if any(error in transcript for error in
                        ("SCRIPT ERROR", "Parse Error:", "Failed to load script", "ERROR:")):
