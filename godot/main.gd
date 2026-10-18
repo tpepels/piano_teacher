@@ -1151,7 +1151,7 @@ func _build_interface() -> void:
     practice_stage_bar.add_theme_constant_override("v_separation", 6)
     practice_stage_bar.visible = false
     practice_layout.add_child(practice_stage_bar)
-    for hand in ["left", "right", "both"]:
+    for hand in ["right", "left", "both"]:
         var stage_label := _label("", 12, MUTED)
         stage_label.custom_minimum_size = Vector2(140, 26)
         stage_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -3359,13 +3359,18 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         _send_action({"action": "score_ready", "revision": revision})
 
 func _send_action(command: Dictionary) -> void:
+    var requested: String = str(command.get("action", ""))
     if action_pending:
-        # Navigation intent must survive an in-flight Start or Resume. Keep
-        # just the latest pause/stop intent, rather than queuing stale clicks.
-        if str(command.get("action", "")) in ["pause", "stop"]:
-            pending_transport_action = str(command["action"])
+        # Avoid an apparently dead button: the user sees precisely which
+        # operation is still pending, rather than silently dropping clicks.
+        if requested in ["pause", "stop"]:
+            pending_transport_action = requested
+        feedback_label.text = "Please wait · finishing " + last_control_action
+        feedback_label.visible = true
         return
-    last_control_action = str(command.get("action", ""))
+    last_control_action = requested
+    feedback_label.text = "Working · " + requested.replace("_", " ")
+    feedback_label.visible = true
     _send_post("/control", command)
 
 func _flush_transport_action() -> void:
@@ -3384,6 +3389,7 @@ func _send_post(path: String, payload: Dictionary) -> void:
     if err != OK:
         action_pending = false
         feedback_label.text = "Cannot reach practice engine"
+        feedback_label.visible = true
 
 func _on_action(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     action_pending = false
