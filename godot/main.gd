@@ -3436,7 +3436,7 @@ func _on_timeline_model(_result: int, code: int,
     timeline_model_pending = false
     if not timeline_preview_enabled or timeline_preview == null:
         return
-    var candidate: Variant = JSON.parse_string(body.get_string_from_utf8())
+    var candidate: Variant = _decode_json(body)
     if code == 200 and candidate is Dictionary:
         # Ignore a stale response after a lesson/hand/variant transition.
         if int(candidate.get("revision", -1)) != revision:
