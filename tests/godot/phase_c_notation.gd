@@ -1,0 +1,143 @@
+extends SceneTree
+
+var failures: Array[String] = []
+
+func check(condition: bool, message: String) -> void:
+    if not condition:
+        failures.append(message)
+        print("PHASE_C_FAIL: ", message)
+
+func approx(a: float, b: float, tolerance: float = .0001) -> bool:
+    return absf(a - b) <= tolerance
+
+func _initialize() -> void:
+    call_deferred("run")
+
+func _score() -> Dictionary:
+    var right_clef := {"sign":"G", "line":2, "octave_change":0}
+    var left_clef := {"sign":"F", "line":4, "octave_change":0}
+    var measures := [
+        {"number":1, "start_beat":0.0, "end_beat":3.0,
+            "meter":[3,4], "keys":{"right":0,"left":-1},
+            "clefs":{"right":right_clef,"left":left_clef}},
+        {"number":2, "start_beat":3.0, "end_beat":7.0,
+            "meter":[4,4], "keys":{"right":0,"left":-1},
+            "clefs":{"right":right_clef,"left":left_clef}}]
+    var symbols: Array = []
+    var attack_specs := [
+        ["n1", 0.0, 1.0, "right", "E", 4, "quarter", false, false, false, ""],
+        ["n2", .25, .25, "right", "G", 5, "16th", false, false, false, "sharp"],
+        ["n3", 1.0, .5, "right", "C", 6, "eighth", false, false, false, ""],
+        ["n4", 2.5, .5, "left", "G", 2, "eighth", true, false, false, ""],
+        ["n5", 3.0, 1.0, "left", "G", 2, "quarter", false, true, false, ""],
+        ["n6", 4.0, 1.0, "right", "C", 4, "quarter", false, false, false, ""],
+        ["n7", 4.0, 1.0, "right", "E", 4, "quarter", false, false, true, ""],
+        ["n8", 5.0, 2.0, "left", "C", 3, "half", false, false, false, ""]]
+    for row in attack_specs:
+        var source: String = str(row[0])
+        if source == "n5":
+            source = "n4"
+        symbols.append({"id":str(row[0]), "source_id":source,
+            "kind":"note","staff":str(row[3]),"voice":"1",
+            "measure":1 if float(row[1]) < 3.0 else 2,
+            "beat":float(row[1]),"duration_beats":float(row[2]),
+            "note_type":str(row[6]),"dots":0, "chord":bool(row[9]),
+            "tie_start":bool(row[7]),"tie_stop":bool(row[8]),
+            "is_attack":source==str(row[0]),
+            "accidental":str(row[10]),
+            "time_modification":null,
+            "spelling":{"step":str(row[4]),"octave":int(row[5]),"alter":0}})
+    symbols.append({"id":"rest:RH:1","source_id":null,
+        "kind":"rest","staff":"right","voice":"2","measure":1,
+        "beat":1.5,"duration_beats":.5, "note_type":"eighth",
+        "dots":0,"chord":false,"tie_start":false,"tie_stop":false,
+        "is_attack":false,"accidental":null,"time_modification":null,
+        "spelling":null})
+    var notes: Array = []
+    for symbol in symbols:
+        if symbol.kind == "note" and bool(symbol.is_attack):
+            notes.append({"id":symbol.source_id,
+                "onset_beats":symbol.beat,
+                "duration_beats":symbol.duration_beats,
+                "hand":symbol.staff,
+                "midi_pitch":64})
+    return {"schema":"piano-teacher-score-model-v1",
+        "revision":17,"beat_unit":"quarter","duration_beats":7.0,
+        "measures":measures,"notes":notes,
+        "notation_events":symbols, "active_hand":"both",
+        "active_note_ids":notes.map(func(n):return n.id)}
+
+func run() -> void:
+    var Geometry = load("res://score_notation_geometry.gd")
+    var Renderer = load("res://score_native_notation.gd")
+    var Timeline = load("res://score_timeline.gd")
+    check(Geometry != null and Renderer != null and Timeline != null,
+        "All Phase C scripts parse")
+    if Geometry == null or Renderer == null or Timeline == null:
+        quit(1)
+        return
+    var model: Dictionary = _score()
+    check(Geometry.supported(model).is_empty(),
+        "Ordinary notes, chords, stems, ties and eighth rests are supported")
+    check(Geometry.staff_step({"step":"E","octave":4},{"sign":"G","line":2}) == 0,
+        "Treble E4 is bottom line")
+    check(Geometry.staff_step({"step":"G","octave":4},{"sign":"G","line":2}) == 2,
+        "Treble G4 is second line")
+    check(Geometry.staff_step({"step":"G","octave":2},{"sign":"F","line":4}) == 0,
+        "Bass G2 is bottom line")
+    check(Geometry.staff_step({"step":"C","octave":4},{"sign":"C","line":3}) == 4,
+        "Alto clef C4 is third line")
+    check(approx(Geometry.note_y(0,160.0,12.0),160.0),
+        "Correct bottom-line note height")
+    var renderer = Renderer.new()
+    get_root().add_child(renderer)
+    renderer.size = Vector2(1150,440)
+    check(renderer.set_density(96.0), "User density accepted")
+    check(renderer.load_score(model), "Native renderer accepts complete symbolic model")
+    check(renderer.native_ready, "No raster or SVG is necessary")
+    check(renderer.timeline.pixels_per_beat > 96.0,
+        "Tightly spaced sixteenth note selects fixed whole-piece density")
+    var density: float = renderer.timeline.pixels_per_beat
+    check(approx(renderer.timeline.x_at_beat(.25),density*.25),
+        "Source attacks retain quarter-beat geometry")
+    check(approx(renderer.timeline.x_at_beat(7.0),density*7.0),
+        "Measure lengths retain exact quarter units")
+    renderer.present({"bpm":40, "running":true,"paused":false,
+        "count_in_beats":3.0,"play_from_beat":0.0,"hand":"both",
+        "transport_id":4},-3.0)
+    var anchor_x: float = renderer.timeline.screen_x(0.0,
+        renderer.clock_beat,1150.0*.42,0.0)
+    check(approx(anchor_x,1150.0*.42+3.0*density),
+        "Count-in uses the same score camera as the first note")
+    for tempo in [40.0,80.0,120.0]:
+        renderer.present({"bpm":tempo,"running":true,"paused":false,
+            "count_in_beats":3.0,"play_from_beat":0.0,
+            "hand":"right","transport_id":5},-.15)
+        var before: float = renderer.timeline.screen_x(1.0,
+            renderer.clock_beat,1150.0*.42,0.0)
+        renderer.present({"bpm":tempo,"running":true,"paused":false,
+            "count_in_beats":3.0,"play_from_beat":0.0,
+            "hand":"right","transport_id":5},.25)
+        var after: float = renderer.timeline.screen_x(1.0,
+            renderer.clock_beat,1150.0*.42,0.0)
+        check(approx(before-after,.4*density),
+            "No tempo change at first note, %.0f BPM" % tempo)
+        check(approx(renderer.timeline.pixels_per_beat,density),
+            "BPM never changes selected glyph spacing")
+    var old: Dictionary = model.duplicate(true)
+    old["notation_events"][0]["time_modification"] = {"actual":3,"normal":2}
+    check(not renderer.load_score(old),"Unimplemented tuplet rejects native renderer")
+    check(not renderer.native_ready,
+        "Rejecting a score cannot leave stale native noteheads")
+    check(not renderer.failure_reason.is_empty(),
+        "Fallback provides a concrete reason")
+    var dense: Dictionary = model.duplicate(true)
+    dense["notation_events"][1]["beat"] = .001
+    check(not renderer.load_score(dense),
+        "Impossible collision must request Verovio fallback, not per-note speedups")
+    check(renderer.load_score(model), "Recovery after fallback is supported")
+    renderer.clear_score()
+    check(not renderer.native_ready and not renderer.timeline.has_score(),
+        "New lesson clears the old native scene")
+    print("PHASE_C_NOTATION_FAILURES:", failures.size())
+    quit(0 if failures.is_empty() else 1)
