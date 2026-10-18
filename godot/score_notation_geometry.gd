@@ -184,6 +184,14 @@ static func beam_groups(model: Dictionary) -> Array:
         if bool(event.get("chord", false)):
             continue
         lanes[key]["events"].append(event)
+    var tuplet_membership: Dictionary = {}
+    var serial := 0
+    for group in tuplet_groups(model):
+        var events: Array = group.get("events", [])
+        if events.size() >= 2:
+            for event in events:
+                tuplet_membership[str(event.get("id", ""))] = serial
+            serial += 1
     var output: Array = []
     for key in lanes:
         var measure: Dictionary = measures.get(int(lanes[key]["measure"]), {})
@@ -193,7 +201,7 @@ static func beam_groups(model: Dictionary) -> Array:
         var ordered: Array = lanes[key]["events"]
         ordered.sort_custom(func(a, b): return float(a["beat"]) < float(b["beat"]))
         var current: Array = []
-        var current_group := -1
+        var current_group := ""
         var previous_end := -INF
         var begin: float = float(measure.get("start_beat", 0.0))
         for event in ordered:
@@ -205,14 +213,19 @@ static func beam_groups(model: Dictionary) -> Array:
             var unit: int = int(floor((at-begin+.000001)/length))
             # Notes may end on the next group boundary but not cross it.
             var stays: bool = at+duration <= begin+float(unit+1)*length+.00001
-            var consecutive: bool = absf(at-previous_end) <= .00001
+            var grouping: String = ("tuplet:" + str(tuplet_membership[
+                str(event.get("id", ""))]) if tuplet_membership.has(
+                str(event.get("id", ""))) else "meter:" + str(unit))
+            if grouping.begins_with("tuplet:"):
+                stays = true
+            var consecutive: bool = absf(at-previous_end) <= .0001
             if not short or not stays or (not current.is_empty() and \
-                    (unit != current_group or not consecutive)):
+                    (grouping != current_group or not consecutive)):
                 _beam_finish(current, output)
                 current = []
             if short and stays:
                 current.append(event)
-                current_group = unit
+                current_group = grouping
                 previous_end = at+duration
             else:
                 previous_end = -INF
