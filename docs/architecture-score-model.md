@@ -143,20 +143,30 @@ grand staff during viewport resizing. The existing HUD remains above the
 native score. MIDI/Listen still use the existing Python lesson engine and
 its authoritative visual transport.
 
-**Explicit limitations:** automatic beaming, complex tuplet notation,
-32nd/64th note glyphs, double-dotted rhythms, advanced multi-voice
-collision/layout, octave signs and high-quality SMuFL clef/music fonts are
-not yet supported. Unsupported score models or extremely dense rhythms
-automatically leave the legacy Verovio engraving visible for the entire
-exercise. This is not a complete MusicXML engraver, and the primitive
-clef outlines still need typographic polishing.
+**C2 additions:** conventional eighth/sixteenth groups are beamed
+directly in Godot, with common stem direction, secondary sixteenth beams and
+individual hooks. Grouping respects staff, voice, rests and measure boundaries:
+quarter-beat groups in regular meters, dotted-quarter groups in 6/8, 9/8 and
+12/8. No unsupported meter receives guessed beam groupings. Key signatures
+place each accidental at a clef-relative staff step, and seconds in chords
+receive local notehead displacements. These are *glyph corrections only*;
+none change musical time or the linear scroll camera.
+
+**Remaining limitations:** complex tuplets, 32nd/64th notes, double dots,
+cross-staff beams, advanced independent-voice collision/layout, full octave
+signs and a polished SMuFL music-font pipeline are not supported yet.
+The renderer currently uses native vector primitives for clefs and symbols,
+rather than shipping an external binary font. Dense/impossible rhythmic
+spacing and unrepresentable symbols still fall back to the full Verovio
+engraving. This is not yet a complete MusicXML engraver.
 
 Use the legacy app by omitting `PIANO_TEACHER_NATIVE_NOTATION`. The previous
 Phase B marker-only preview is still available separately via
 `PIANO_TEACHER_TIMELINE_PREVIEW=1` when native mode is off.
 
-Phase C2 should improve symbol typography, beaming, and per-voice collision
-handling *before* making native mode the default. Phase D can attach notehead
+Further C iterations should improve SMuFL typography, automatic cross-voice
+collision handling and unsupported expressive notation *before* native mode
+is considered as the default. Phase D can attach notehead
 feedback to these native semantic coordinates rather than the old SVG map.
 This strict separation avoids the earlier regressions in the main GUI.
 
