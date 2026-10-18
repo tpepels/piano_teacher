@@ -159,8 +159,17 @@ the **whole exercise's** pixels-per-beat scale before playback (e.g., a
 They never alter the speed partway through the passage. This specifically
 resolves the native fallback warning `Unsupported music value: 32nd`.
 
-**Remaining limitations:** complex tuplets, 128th notes, double dots,
-cross-staff beams, advanced independent-voice collision/layout, full octave
+**Phase C3 follow-up:** the ScoreModel now preserves MusicXML tuplet
+start/stop markers and exact actual:normal time ratios, while Godot paints
+numbered tuplet brackets without altering the source beat positions. Native
+notation also displays two separate augmentation dots on notes and rests.
+Explicit grouped tuplets (e.g., 3:2 and 5:4) can beam across ordinary beat
+boundaries; unsupported or malformed timing ratios still fall back safely.
+Unconventional one-note ratios are labelled with both numbers (e.g., 7:5)
+rather than silently showing an incorrect rhythm.
+
+**Remaining limitations:** nested/cross-staff tuplets, complex independent
+voice collisions, 128th notes, more than two augmentation dots, full octave
 signs and a polished SMuFL music-font pipeline are not supported yet.
 The renderer currently uses native vector primitives for clefs and symbols,
 rather than shipping an external binary font. Dense/impossible rhythmic
