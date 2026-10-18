@@ -7,8 +7,20 @@ extends RefCounted
 const DEFERRED_MIN_SYSTEMS := 8
 const TempoStrip := preload("res://tempo_strip.gd")
 
+# Render original Verovio ink without the destructive tempo-strip image
+# surgery.  Optional while existing callers exercise the legacy renderer.
+# The app uses this mode until clean native/vector notation is implemented.
 static func build(layout: Dictionary, pages: Array[Image],
-        defer_textures: bool = false) -> Dictionary:
+        defer_textures: bool = false,
+        native_engraving: bool = false) -> Dictionary:
+    if native_engraving:
+        # Preserve caller-owned layout and source IDs.  No cropping at repeated
+        # headers, no staff-only splices, no resampling or sparse fake-width
+        # textures: stems, barlines and noteheads stay byte-for-byte native.
+        layout = layout.duplicate(true)
+        layout["strip_trim_repeated_headers"] = false
+        layout["strip_time_proportional"] = false
+        layout["native_engraving"] = true
     var source_systems: Array = layout.get("systems", []).duplicate(true)
     if source_systems.is_empty():
         return _failure("The engraving has no measured staff systems")
@@ -264,7 +276,11 @@ static func build(layout: Dictionary, pages: Array[Image],
         # duplicated line weights remain visible. Keep any column containing
         # non-staff ink unchanged: real notes, ties, clefs and barlines are
         # never reconstructed or erased.
-        if proportional:
+        if proportional or native_engraving:
+            # Even in native mode isolate the five staff rules: Godot draws
+            # these continuously beneath the real glyph layer.  The routine
+            # preserves any column containing genuine musical ink, including
+            # vertical barlines and stems.
             mapping["rail_pixels_replaced"] = _extract_isolated_staff_rules(
                 image, mapping)
         # Verovio's score raster is monochrome engraving with alpha.
@@ -283,6 +299,7 @@ static func build(layout: Dictionary, pages: Array[Image],
         if not id.is_empty() and not source_system_by_note_id.has(id):
             source_system_by_note_id[id] = str(source_note.get("system", ""))
     flat["strip_note_system_index"] = source_system_by_note_id
+    flat["native_engraving"] = native_engraving
     flat["pages"] = 1
     flat["widths"] = [size.x]
     flat["heights"] = [size.y]
