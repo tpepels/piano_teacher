@@ -95,6 +95,33 @@ func run() -> void:
           "missing measured systems must return an explicit error")
     check(not str(helper.build(original, no_pages).get("error", "")).is_empty(),
           "missing score pages must return an explicit error")
+    # A one-system lesson must retain full image height, not the SVG
+    # notehead-origin staff box. Otherwise high ledger notes and long stems
+    # disappear BEFORE the Godot viewport can fit their bounding ink.
+    var high_ink := Image.create(100, 100, false, Image.FORMAT_RGBA8)
+    high_ink.fill(Color.TRANSPARENT)
+    high_ink.fill_rect(Rect2i(45, 2, 9, 8), Color.BLACK)
+    var high_lines: Array = [.30, .35, .40, .45, .50,
+        .60, .65, .70, .75, .80]
+    var high_layout := {"continuous_score":true,
+        "strip_time_proportional":false, "strip_trim_repeated_headers":false,
+        "pages":1, "widths":[100], "heights":[100], "beats":4.0,
+        "notes":[], "anchors":[{"beat":0.0, "page":0, "system":"only",
+            "x":.5, "y":.4, "ink_left":.45}],
+        "systems":[{"page":0, "system":"only", "left":0.0, "right":1.0,
+            "top":.28, "bottom":.82, "staff_lines":high_lines,
+            "start_beat":0.0, "end_beat":4.0}]}
+    var high_pages: Array[Image] = [high_ink]
+    var high_strip: Dictionary = helper.build(high_layout, high_pages, false, true)
+    check(not high_strip.has("error"),
+        "A continuous lesson with extreme ledger notes builds")
+    if not high_strip.has("error"):
+        var source_crop: Rect2 = high_strip.mappings[0].crop
+        check(source_crop.position.y == 0.0 and source_crop.size.y == 100.0,
+            "Continuous ink crop retains the full original vertical page")
+        var high_tile: Image = high_strip.tiles[0].texture.get_image()
+        check(high_tile.get_pixel(49, 4).a > .9,
+            "High note ink stays visible above the measured staff box")
     # Phase 7.7a: only loose raster staff rails may disappear at
     # joins; a real vertical measure barline must survive untouched.
     var synthetic := Image.create(80, 70, false, Image.FORMAT_RGBA8)
