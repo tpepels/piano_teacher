@@ -873,6 +873,18 @@ these judgments or milestones. Phase transitions ease into view once, and
 the active transport button uses a 13Hz idle pulse rather than an unbounded
 60Hz redraw loop. No new timers, note grading or sound engines are added.
 
+## Rhythm-game response, moodboard animation pass
+
+The dark, high-contrast practice stage keeps the engraved score dominant.
+Visual beat ripples follow the existing backend-driven musical clock at
+the fixed playhead; they cannot shift score timing or grant note success.
+Transport keys respond with stronger, short press/hover light and then
+sleep when idle. MIDI-triggered coaching cards enter with a small overshoot
+and note-colored token rather than a web-style rectangular toast. Earned
+progress leaves a short light trail below the staff, while ungraded preview
+retains its distinct blue treatment. All effects are drawn on existing
+Godot controls, with no GPU particle emitters or fullscreen postprocessing.
+
 ## Music selection and start-point usability
 
 The music drawer shows two-line, fully clickable rows with clear titles

@@ -79,9 +79,9 @@ func _draw() -> void:
     var color := AMBER if action_kind == "retry" else BLUE if action_kind == "listen" else TEAL
     if disabled:
         color = DIM
-    var glow := .13 * hover_phase + .11 * release_flash
+    var glow := .18 * hover_phase + .22 * release_flash
     if live and not disabled:
-        glow += .08 + .055 * (1.0 + sin(activity_time * 3.3))
+        glow += .10 + .07 * (1.0 + sin(activity_time * 3.3))
     var mid := Vector2(35.0, size.y * .5)
     # Subtle inset above and raised lower lip. The StyleBox owns shadows,
     # border, hover, and depressed depth; this overlay contains no fake UI.

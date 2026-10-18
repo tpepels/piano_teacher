@@ -32,6 +32,10 @@ var beat_in_bar := 0
 var beats_per_bar := 4
 var score_preview := false
 var impact_age := 0.0
+# Transient, musically-sourced playhead flash. It never advances timing or
+# grants a grade; the backend/extrapolated beat is the sole authority.
+var beat_ripple := 0.0
+var last_beat_number := -1
 # One-shot result wave, keyed to the actual assessed take. Repeated /state
 # polling cannot restart the animation or manufacture progress.
 var last_result_key := ""
@@ -118,6 +122,12 @@ func sync_beat(beat: float, meter: int, preview: bool) -> void:
     var next_meter: int = clampi(meter, 1, 12)
     var next_fraction: float = fposmod(beat, 1.0)
     var next_bar: int = posmod(int(floor(beat)), next_meter)
+    var beat_number: int = int(floor(beat))
+    if beat_number != last_beat_number:
+        # At song start, prime the pulse without a congratulatory impact.
+        beat_ripple = 1.0 if last_beat_number >= 0 and beat_number > last_beat_number \
+            and beat_number-last_beat_number <= 2 else 0.0
+        last_beat_number = beat_number
     # Store the latest clock each frame; redraw on metrical changes or at
     # the stage's 20 Hz ambient cadence in _process. Previously every
     # ~0.018 beat triggered another redraw, defeating the frame cap.
@@ -156,6 +166,9 @@ func _process(delta: float) -> void:
         redraw = true
     if milestone_light > .001:
         milestone_light = maxf(0.0, milestone_light - delta * 1.7)
+        redraw = true
+    if beat_ripple > .001:
+        beat_ripple = maxf(0.0, beat_ripple - delta * 4.8)
         redraw = true
     if preview_energy > .001:
         preview_energy = maxf(0.0, preview_energy - delta * 1.15)
@@ -223,10 +236,21 @@ func _draw() -> void:
             Color(pulse_tone, ambient * (1.0 - spread) * .48))
     if transport_active:
         var x: float = center.x
+        # Beat ripple is a short, metronome-sourced arrival cue. The clear
+        # central line remains anchored at 42%, never easing after the note.
+        var flash: float = beat_ripple * beat_ripple
         draw_line(Vector2(x, h * .17), Vector2(x, h * .83),
-            Color(pulse_tone, .035 + .085 * beat_attack), 28.0, true)
+            Color(pulse_tone, .035 + .085 * beat_attack + flash * .1),
+            23.0 + flash * 7.0, true)
         draw_line(Vector2(x, h * .26), Vector2(x, h * .74),
-            Color(pulse_tone, .09 + .16 * beat_attack), 7.0, true)
+            Color(pulse_tone, .09 + .16 * beat_attack + flash * .25),
+            5.0 + flash * 2.0, true)
+        var ripple_width: float = minf(42.0, 18.0 + (1.0 - beat_ripple) * 31.0)
+        if flash > .006:
+            for direction in [-1.0, 1.0]:
+                var xx: float = x + direction * ripple_width
+                draw_line(Vector2(xx, h * .32), Vector2(xx, h * .68),
+                    Color(pulse_tone, flash * .14), 1.5, true)
         # A restrained metrical pulse below the score: no busy grid across
         # the notation and no duplicate click track.
         var gap: float = minf(17.0, maxf(7.0, w * .019))
@@ -285,6 +309,14 @@ func _draw() -> void:
                 Color(result_tone, energy * (.28 - .07 * arc)), 1.6, true)
             draw_arc(center, radius, PI * 1.11, PI * 1.89, 48,
                 Color(result_tone, energy * (.28 - .07 * arc)), 1.6, true)
+    # A small trail follows ONLY backend-confirmed progress. A clean take
+    # produces a warmer light; preview never manufactures milestones.
+    if progress_spark > .001 and shown_progress > .001:
+        var progress_head: float = clampf(shown_progress,0.0,1.0)
+        var left_trail: float = w * maxf(0.0, progress_head - .08 * progress_spark)
+        var right_trail: float = w * progress_head
+        draw_line(Vector2(left_trail, h-32.0),Vector2(right_trail,h-32.0),
+            Color(Design.SCORE_PROGRESS, progress_spark * .21), 3.0, true)
     # Moodboard: five separated progress measures below the score, not a
     # thin anonymous browser-style loading bar. The backend is authoritative.
     draw_line(Vector2(1, 1), Vector2(w-1, 1), Color("#ADC3B4", .36), 1.0)
