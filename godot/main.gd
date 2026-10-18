@@ -15,6 +15,7 @@ const ScoreOverlay := preload("res://score_overlay.gd")
 const NoteReactions := preload("res://note_reactions.gd")
 const ChallengeFlow := preload("res://challenge_flow.gd")
 const LivingScore := preload("res://living_score.gd")
+const ScoreMotionCurve := preload("res://score_motion_curve.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
 const GameBackdrop := preload("res://game_backdrop.gd")
 const GameStage := preload("res://game_stage.gd")
@@ -2542,6 +2543,10 @@ func _beat_width_at(beat: float) -> float:
         else:
             high = middle
     var index: int = clampi(low - 1, 0, points.size() - 2)
+    if bool(score_layout.get("continuous_score", false)):
+        var slope: float = ScoreMotionCurve.velocity(points, index, beat)
+        if slope > .000001:
+            return slope
     for offset in range(index, mini(index + 3, points.size() - 1)):
         var left: Dictionary = points[offset]
         var right: Dictionary = points[offset + 1]
@@ -2578,8 +2583,14 @@ func _position_at_beat(beat: float) -> Dictionary:
         if continuous or (int(left.get("page", 0)) == int(right.get("page", 0)) and str(left.get("system", "")) == str(right.get("system", ""))):
             var span: float = float(right.get("beat", 0.0)) - float(left.get("beat", 0.0))
             if span > 0:
-                var fraction: float = clampf((beat - float(left.get("beat", 0.0))) / span, 0.0, 1.0)
-                position["x"] = lerpf(float(left["x"]), float(right["x"]), fraction)
+                if bool(score_layout.get("continuous_score", false)):
+                    # Native ink never moves independently. Smooth the CAMERA
+                    # derivative across short notes; each note still crosses
+                    # the stationary playhead at its exact source beat.
+                    position["x"] = ScoreMotionCurve.position(points, at, beat)
+                else:
+                    var fraction: float = clampf((beat - float(left.get("beat", 0.0))) / span, 0.0, 1.0)
+                    position["x"] = lerpf(float(left["x"]), float(right["x"]), fraction)
     return position
 
 func _on_state(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, sample_started_ms: int = -1) -> void:
