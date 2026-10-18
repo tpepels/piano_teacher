@@ -67,8 +67,17 @@ def source_exercise(filename: str, hand: str, bars: int = 2):
     )
     # Matches e.g. Ala 44/110, Autumn Leaves 76/190, Chopin 24/60.
     bpm = max(1, round(piece.bpm * .4))
+    # Match PracticeEngine.engraving(): only compact exercises use one
+    # Verovio system. Longer real MIDI passages use the legacy multipage
+    # renderer and *must* exercise the production strip's warp/join path.
+    compact_exercise = bars <= 12 and end <= 48
     engraving = render_layout(exercise, 1, bars, hand,
-                              total_beats=end, bpm=bpm, continuous=True)
+                              total_beats=end, bpm=bpm,
+                              continuous=compact_exercise)
+    if not compact_exercise:
+        assert not engraving.layout["continuous_score"], (
+            "Long MIDI regression unexpectedly bypassed the production strip"
+        )
     require_lesson_alignment(phrase, engraving.layout, hand)
     assert len(engraving.pages) == int(engraving.layout["pages"])
     assert len(engraving.layout["notes"]) == len(exercise.note_bindings), (
