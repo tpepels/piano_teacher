@@ -49,14 +49,16 @@ def _name(filename: str) -> str:
     return re.sub(r"[^a-zA-Z0-9]+", "-", Path(filename).stem).strip("-").lower()
 
 
-def source_exercise(filename: str, hand: str):
-    """Use the exact two-bar practice passage and the application's 40% tempo."""
+def source_exercise(filename: str, hand: str, bars: int = 2):
+    """Use original source measures at the application's 40% practice tempo."""
     piece, _ = import_piece(MIDI_DIR / filename)
-    assert len(piece.bar_boundaries) >= 3, f"{filename}: missing two-bar grid"
-    end = piece.bar_boundaries[2]
+    assert len(piece.bar_boundaries) >= bars + 1, (
+        f"{filename}: missing requested {bars}-bar source grid"
+    )
+    end = piece.bar_boundaries[bars]
     notes = tuple(n for n in piece.notes if 0 <= n.start < end)
-    assert notes, f"{filename}: no notes in the first two measures"
-    phrase = Phrase(1, 1, 2, 0, end, notes)
+    assert notes, f"{filename}: no notes in the first {bars} measures"
+    phrase = Phrase(1, 1, bars, 0, end, notes)
     exercise = build_lesson_score(
         phrase, boundaries=piece.bar_boundaries,
         time_signatures=piece.time_signatures,
@@ -65,7 +67,7 @@ def source_exercise(filename: str, hand: str):
     )
     # Matches e.g. Ala 44/110, Autumn Leaves 76/190, Chopin 24/60.
     bpm = max(1, round(piece.bpm * .4))
-    engraving = render_layout(exercise, 1, 2, hand,
+    engraving = render_layout(exercise, 1, bars, hand,
                               total_beats=end, bpm=bpm, continuous=True)
     require_lesson_alignment(phrase, engraving.layout, hand)
     assert len(engraving.pages) == int(engraving.layout["pages"])
@@ -179,13 +181,14 @@ def write_comparison(input_dir: Path, output_dir: Path, report: dict,
     comparison.save(output_dir / "comparison.png")
 
 
-def run_one(filename: str, hand: str, out: Path, godot: str) -> dict:
-    identifier = _name(filename) + "-" + hand
+def run_one(filename: str, hand: str, out: Path, godot: str,
+            bars: int = 2) -> dict:
+    identifier = _name(filename) + "-" + hand + f"-{bars}bars"
     folder = out / identifier
     source_dir, strip_dir = folder / "verovio", folder / "godot"
     source_dir.mkdir(parents=True, exist_ok=True)
     strip_dir.mkdir(parents=True, exist_ok=True)
-    piece, phrase, exercise, engraving, bpm = source_exercise(filename, hand)
+    piece, phrase, exercise, engraving, bpm = source_exercise(filename, hand, bars)
     (source_dir / "score.musicxml").write_text(exercise.musicxml)
     (source_dir / "layout.json").write_text(
         json.dumps(engraving.layout, indent=2) + "\n")
@@ -203,7 +206,7 @@ def run_one(filename: str, hand: str, out: Path, godot: str) -> dict:
     report = json.loads((strip_dir / "godot-strip-report.json").read_text())
     pixels = check_native_ink(source_dir, strip_dir, report)
     write_comparison(source_dir, strip_dir, report, f"{Path(filename).stem} / {hand}")
-    return {"file": filename, "hand": hand, "bpm": bpm,
+    return {"file": filename, "hand": hand, "bars": bars, "bpm": bpm,
             "source_notes": len(phrase.notes), "engraved_glyphs": len(engraving.layout["notes"]),
             "pages": len(engraving.pages), "continuous": report["continuous_score"],
             "pixels": pixels,
@@ -218,23 +221,28 @@ def main(argv=None) -> int:
     godot = shutil.which("godot") or shutil.which("godot4")
     if not godot:
         parser.error("Godot 4 executable is required for actual strip regression")
-    cases = [(f, h) for f, h in CASES if not args.only or
+    cases = [(f, h, 2) for f, h in CASES if not args.only or
              args.only.casefold() in f.casefold()]
+    # A 2-bar compact system cannot exercise the older printed-system
+    # stitching/warping path. Add deliberately non-compact 13-bar passages
+    # for the three MIDI files in the reported visual regressions.
+    cases += [(f, h, 13) for f, h in CASES[:3] if not args.only or
+              args.only.casefold() in f.casefold()]
     if not cases:
         parser.error("No MIDI cases match --only")
     args.out.mkdir(parents=True, exist_ok=True)
     results, errors = [], []
-    for file, hand in cases:
+    for file, hand, bars in cases:
         try:
-            info = run_one(file, hand, args.out, godot)
+            info = run_one(file, hand, args.out, godot, bars)
             results.append(info)
-            print(f"PASS {file}: {info['source_notes']} notes; "
+            print(f"PASS {file} ({bars} bars): {info['source_notes']} notes; "
                   f"{info['pixels']['verified_non_staff_pixels']} pixels checked",
                   flush=True)
         except Exception as exc:
-            errors.append({"file": file, "error": str(exc),
+            errors.append({"file": file, "bars": bars, "error": str(exc),
                            "traceback": traceback.format_exc()})
-            print(f"FAIL {file}: {exc}", file=sys.stderr, flush=True)
+            print(f"FAIL {file} ({bars} bars): {exc}", file=sys.stderr, flush=True)
     (args.out / "report.json").write_text(json.dumps(
         {"passed": len(results), "failed": len(errors),
          "results": results, "failures": errors}, indent=2) + "\n")
