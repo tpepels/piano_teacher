@@ -77,3 +77,26 @@ def test_practice_screen_has_fullscreen_exit_and_direct_source_score():
     assert 'var rail_exit := _button("Exit", _exit_app' in source
     assert 'source_layout.get("continuous_score", false)' in source
     assert "native_ink_preview or continuous_engraving" in source
+
+
+def test_continuous_spacing_shows_more_upcoming_music_at_slow_tempo():
+    # The pre-fix reading slope was 4/BPM: extremely sparse notes sat off
+    # screen at 44 BPM. A compact engraver should spend under half that
+    # horizontal budget while still reacting to the selected tempo.
+    xml = build_lesson_score(_exercise()).musicxml
+    _, slow = space_for_continuous_reading(xml, 44)
+    _, faster = space_for_continuous_reading(xml, 80)
+    assert slow["spacingLinear"] < (4 / 44) * .52
+    assert 0 < faster["spacingLinear"] < slow["spacingLinear"]
+    assert slow["pageWidth"] > faster["pageWidth"]
+    assert slow["breaks"] == faster["breaks"] == "none"
+
+
+def test_skip_next_lesson_control_stays_visible_in_practice():
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "godot" / "main.gd"
+              ).read_text(encoding="utf-8")
+    assert 'practice_skip_button = _button("Skip → Next lesson"' in source
+    assert 'practice_skip_button.visible = bool(parsed.get("loaded", false))' in source
+    assert '"reason": "Learner skipped to the next lesson from the practice screen"' in source
+    assert 'practice_skip_button.disabled = not bool(parsed.get("skip_available", false))' in source
