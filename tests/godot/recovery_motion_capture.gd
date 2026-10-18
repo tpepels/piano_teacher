@@ -1,5 +1,7 @@
 extends SceneTree
 
+const Design := preload("res://practice_theme.gd")
+
 # Desktop raster capture with a backend-derived clock. Saves every frame and
 # its projection, so motion can be inspected as video and measured separately.
 class FixtureApp extends "res://main.gd":
@@ -79,7 +81,8 @@ func run() -> void:
             var best := 1.0
             for x in range(maxi(0,roundi(expected_x)-35), mini(pixels.get_width(),roundi(expected_x)+36)):
                 var color: Color = pixels.get_pixel(x,line_y)
-                var distance: float = absf(color.r-.514) + absf(color.g-.945) + absf(color.b-.776)
+                var distance: float = absf(color.r - Design.SCORE_ACCENT.r) \
+                    + absf(color.g - Design.SCORE_ACCENT.g) + absf(color.b - Design.SCORE_ACCENT.b)
                 if distance < best:
                     best = distance
                     line_x = x

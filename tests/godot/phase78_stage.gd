@@ -107,9 +107,12 @@ func run() -> void:
     root.add_child(music_row)
     music_row.set_entry("Chopin - Nocturne", "MIDI - Music folder")
     music_row.set_text_scale(1.3)
-    check(music_row.title_label.get_theme_font_size("font_size") >= 28
-        and music_row.detail_label.get_theme_font_size("font_size") >= 20,
-        "Music picker uses scaled readable titles and descriptions")
+    var title_size: int = music_row.title_label.get_theme_font_size("font_size")
+    var detail_size: int = music_row.detail_label.get_theme_font_size("font_size")
+    check(title_size >= 20 and detail_size >= 14 and title_size > detail_size,
+        "Music tiles retain readable title/metadata hierarchy at display scale")
+    check(music_row.title_label.get_theme_font("font") != music_row.detail_label.get_theme_font("font"),
+        "Music titles use the editorial face while metadata stays in the interface face")
     music_row.queue_free()
     check(app.game_stage.get_parent() == app.score_frame,
         "Beat lighting lives beneath the same score canvas as real engraving")

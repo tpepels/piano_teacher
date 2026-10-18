@@ -24,13 +24,15 @@ func wait_for(predicate: Callable,description: String,seconds: float = 25.0) -> 
     return true
 
 func imported_row() -> Button:
-    for row in app.library_rows.get_children():
+    for row in app.library_rows.find_children("*", "Button", true, false):
         if row is Button and str(row.get_meta("library_title", "")).begins_with("Imported"):
             return row
     return null
 
 func press(text: String) -> void:
     for button in app.find_children("*","Button",true,false):
+        if text == "Practice" and app.current_screen != "practice" and not app.navigation_rail.is_ancestor_of(button):
+            continue
         if button.is_visible_in_tree() and button.text == text and not button.disabled:
             button.pressed.emit()
             return
@@ -185,8 +187,7 @@ func run() -> void:
     app.device_menu.hide()
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device","")) == "Journey test piano","MIDI input selected in real menu")
     await capture("02-settings")
-    press("← Back")
-    press("Music")
+    press("Library")
     await wait_for(func(): return app.current_screen == "library" and not app.library_pending and imported_row() != null,"user MIDI listed")
     await capture("03-library")
     (imported_row()).pressed.emit()
@@ -200,7 +201,7 @@ func run() -> void:
     app.tempo_setting.value = 80
     press("Apply tempo")
     await wait_for(func(): return not app.action_pending and int(app.last_state.get("target_bpm",0)) == 80,"chosen target acknowledged")
-    press("← Back")
+    press("Practice")
     await wait_for(func(): return score_ready() and phase() == "guided_wait","guided revision ready")
     check(sheet() != null,"Learning app integrates a real Pause sheet")
     print("LEARNING_UI_STAGE:input-ready")

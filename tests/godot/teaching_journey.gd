@@ -27,13 +27,15 @@ func wait_for(predicate: Callable, description: String, seconds: float = 20.0) -
     return true
 
 func imported_row() -> Button:
-    for row in app.library_rows.get_children():
+    for row in app.library_rows.find_children("*", "Button", true, false):
         if row is Button and str(row.get_meta("library_title", "")).begins_with("Imported"):
             return row
     return null
 
 func press(text: String) -> void:
     for button in app.find_children("*", "Button", true, false):
+        if text == "Practice" and app.current_screen != "practice" and not app.navigation_rail.is_ancestor_of(button):
+            continue
         if button.text == text and button.is_visible_in_tree() and not button.disabled:
             button.pressed.emit()
             return
@@ -141,8 +143,7 @@ func run() -> void:
     app.device_menu.hide()
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device", "")) == "Journey test piano",
         "normal UI MIDI selection")
-    press("← Back")
-    press("Music")
+    press("Library")
     await wait_for(func(): return app.current_screen == "library" and not app.library_pending \
         and imported_row() != null, "imported file in normal library")
     var piece_button := imported_row()

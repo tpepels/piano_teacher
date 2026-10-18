@@ -30,7 +30,7 @@ func _verify() -> void:
     var shader: ShaderMaterial = Design.notation_material()
     check(Design.STAGE.get_luminance() < .25 and
         Design.SCORE_INK.get_luminance() > .8 and
-        Design.FOREST.get_luminance() < .1,
+        Design.FOREST.get_luminance() < .25,
         "Sheet must retain contrasting luminous notation on a dark stage")
     check(shader.shader.code.contains("vec3(0.918, 0.957, 0.929)"),
         "Engraved raster receives luminous high-resolution ink")

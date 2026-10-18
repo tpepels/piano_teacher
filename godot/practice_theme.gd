@@ -2,42 +2,50 @@ extends RefCounted
 
 # Piano Teacher visual system. Screens describe *meaning*, not their own
 # independent colors or borders. Keep static drawing cheap on HiDPI displays.
-const FOREST := Color("#0E191C")
-const STAGE := Color("#192F30")
+const FOREST := Color("#1E3A34")
+const PINE := Color("#2E4D46")
+const CHARCOAL := Color("#2D3532")
+const SAGE := Color("#5B7068")
+const SLATE := Color("#8B9A92")
+const STONE := Color("#C4CDC6")
+const SECONDARY_INK := Color("#AEBAB2")
+const STAGE := Color("#1B2925")
 const SCORE_INK := Color("#EAF4ED")
 const SCORE_MUTED := Color("#A0B9AD")
 const STAFF_INK := Color.WHITE
 const STAFF_MUTED := Color("#81918B")
-const SCORE_ACCENT := Color("#83F1C6")
-const SCORE_PROGRESS := Color("#82CBAA")
-const PINE := Color("#204840")
-const PANEL := Color("#1A2C2C")
-const PANEL_RAISED := Color("#203634")
-const PANEL_RECESSED := Color("#142626")
-const SAGE := Color("#5C8F7E")
-const SLATE := Color("#ADC4B8")
-const STONE := Color("#E1EEE5")
-const TEAL := Color("#7BE8C0")
-const MINT := Color("#A5FFDB")
+const SCORE_ACCENT := Color("#76B79E")
+const SCORE_PROGRESS := SCORE_ACCENT
+const PANEL := CHARCOAL
+const PANEL_RAISED := PINE
+const PANEL_RECESSED := Color("#23322D")
+const TEAL := SCORE_ACCENT
+const MINT := TEAL
 const BLUE := Color("#9DCAFF")
 const AMBER := Color("#F2CB92")
 const CORAL := Color("#FFA5A0")
-const BORDER := Color("#658F81")
-const FOCUS := Color("#EFFCF5")
+const BORDER := SAGE
+const FOCUS := Color("#EDF1EA")
 
 # A consistent scale for cards, modal interiors and form layout.
 const SPACE_TIGHT := 6
 const SPACE_SMALL := 10
 const SPACE_NORMAL := 16
 const SPACE_SECTION := 24
-const RADIUS_INPUT := 10
-const RADIUS_CARD := 14
-const RADIUS_MODAL := 18
+const RADIUS_INPUT := 6
+const RADIUS_CARD := 9
+const RADIUS_MODAL := 11
 
 static func font(weight: int = 400) -> SystemFont:
     var result := SystemFont.new()
     result.font_names = PackedStringArray(["Inter", "Noto Sans", "DejaVu Sans"])
     result.font_weight = weight
+    return result
+
+static func title_font() -> SystemFont:
+    var result := SystemFont.new()
+    result.font_names = PackedStringArray(["Noto Serif", "DejaVu Serif"])
+    result.font_weight = 400
     return result
 
 static func surface(color: Color, radius: int = RADIUS_INPUT) -> StyleBoxFlat:
@@ -58,17 +66,14 @@ static func card_surface() -> StyleBoxFlat:
     return bordered_surface(PANEL, RADIUS_CARD)
 
 static func drawer_surface() -> StyleBoxFlat:
-    var box := bordered_surface(PANEL, RADIUS_CARD, .48)
+    var box := bordered_surface(FOREST, RADIUS_CARD, .55)
     box.set_content_margin_all(3)
     return box
 
 static func modal_surface() -> StyleBoxFlat:
     var box := bordered_surface(PANEL_RAISED, RADIUS_MODAL, .72)
-    box.set_border_width_all(2)
+    box.set_border_width_all(1)
     box.set_content_margin_all(5)
-    box.shadow_size = 12
-    box.shadow_color = Color.BLACK
-    box.shadow_offset = Vector2(0, 6)
     return box
 
 static func stage_surface() -> StyleBoxFlat:
@@ -77,28 +82,22 @@ static func stage_surface() -> StyleBoxFlat:
 static func role_accent(role: String) -> Color:
     match role:
         "primary", "choice", "play", "practice":
-            return MINT
-        "settings", "listen":
-            return BLUE
-        "review", "retry":
-            return AMBER
+            return TEAL
         "danger":
             return CORAL
         "library":
             return STONE
         _:
-            return SLATE
+            return SECONDARY_INK
 
 static func role_fill(role: String, selected: bool = false) -> Color:
     match role:
         "primary", "play":
-            return Color("#286E60")
+            return PINE
         "choice":
-            return Color("#286E60") if selected else PANEL_RECESSED
-        "settings", "listen":
-            return Color("#253C4C")
-        "review", "retry":
-            return Color("#3A3029")
+            return PINE if selected else PANEL_RECESSED
+        "settings", "listen", "review", "retry":
+            return PANEL_RECESSED
         "danger":
             return Color("#39292B")
         "library":
@@ -118,12 +117,12 @@ static func create() -> Theme:
         theme.set_color("font_hover_color", control, FOCUS)
         theme.set_color("font_focus_color", control, STONE)
         theme.set_color("font_pressed_color", control, STONE)
-        theme.set_color("font_disabled_color", control, Color(SLATE, .52))
-    theme.set_color("font_placeholder_color", "LineEdit", Color(SLATE, .73))
+        theme.set_color("font_disabled_color", control, SLATE)
+    theme.set_color("font_placeholder_color", "LineEdit", SECONDARY_INK)
     theme.set_color("caret_color", "LineEdit", MINT)
     theme.set_color("selection_color", "LineEdit", Color(TEAL, .28))
     theme.set_color("font_selected_color", "LineEdit", FOCUS)
-    theme.set_color("font_readonly_color", "LineEdit", SLATE)
+    theme.set_color("font_readonly_color", "LineEdit", SECONDARY_INK)
 
     # Clear interaction affordances for fields without website-like neon
     # rings. Every form uses the same fill, spacing, focus and error states.

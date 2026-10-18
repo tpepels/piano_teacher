@@ -4,11 +4,7 @@ extends Button
 # Lesson Path, Settings and the practice stage.
 # Button.pressed remains the only action; drawing is decoration only.
 const Design := preload("res://practice_theme.gd")
-const SAGE := Design.SLATE
 const MINT := Design.MINT
-const BLUE := Design.BLUE
-const AMBER := Design.AMBER
-const CORAL := Design.CORAL
 var action_role := "secondary"
 var is_selected := false
 
@@ -46,34 +42,26 @@ func _background() -> Color:
 
 
 func _has_symbol() -> bool:
-    return action_role != "secondary"
+    return action_role in ["navigation", "utility", "listen", "settings", "review", "danger", "library"]
 
 func _skin() -> void:
     var accent: Color = _accent()
     var background: Color = _background()
     var flat := action_role in ["navigation", "utility", "library"]
     var important := action_role == "primary" or (action_role == "choice" and is_selected)
-    var rounded := Design.RADIUS_CARD + 1 if important else (
-        Design.RADIUS_INPUT + 2 if not flat else Design.RADIUS_INPUT)
     var normal := StyleBoxFlat.new()
-    normal.bg_color = Color(background, .62) if action_role == "library" else background
-    normal.set_corner_radius_all(rounded)
-    normal.set_border_width_all(2 if important else 1)
-    normal.border_color = Color(accent, .94 if important else .55 if not flat else .20)
-    normal.content_margin_left = 48 if _has_symbol() else 18
-    normal.content_margin_right = 17
-    normal.content_margin_top = 12
-    normal.content_margin_bottom = 12
-    if important:
-        normal.shadow_size = 5
-        normal.shadow_color = Color(accent, .24)
-        normal.shadow_offset = Vector2(0, 2)
+    normal.bg_color = background
+    normal.set_corner_radius_all(Design.RADIUS_INPUT)
+    normal.set_border_width_all(1)
+    normal.border_color = Color(accent, .66) if important else Color(Design.BORDER, .5)
+    normal.content_margin_left = 36 if _has_symbol() else 14
+    normal.content_margin_right = 14
+    normal.content_margin_top = 8
+    normal.content_margin_bottom = 8
     add_theme_stylebox_override("normal", normal)
     var hover := normal.duplicate() as StyleBoxFlat
-    hover.bg_color = background.lightened(.14) if not flat else Color("#2C4842", .9)
-    hover.border_color = Color(accent, .94)
-    hover.shadow_size = 8 if important else 3
-    hover.shadow_color = Color(accent, .23)
+    hover.bg_color = background.lightened(.06)
+    hover.border_color = Color(accent, .72) if important else Color(Design.SLATE, .65)
     add_theme_stylebox_override("hover", hover)
     var pressed := normal.duplicate() as StyleBoxFlat
     pressed.bg_color = background.darkened(.13)
@@ -82,10 +70,9 @@ func _skin() -> void:
     add_theme_stylebox_override("pressed", pressed)
     add_theme_stylebox_override("hover_pressed", pressed)
     var disabled_style := normal.duplicate() as StyleBoxFlat
-    disabled_style.bg_color = (background if action_role == "choice" and
-        is_selected else Color("#182725", .6))
+    disabled_style.bg_color = background if action_role == "choice" and is_selected else Design.PANEL_RECESSED
     disabled_style.border_color = (Color(MINT, .83) if action_role == "choice" and
-        is_selected else Color("#667B72", .2))
+        is_selected else Color(Design.BORDER, .3))
     disabled_style.shadow_size = 0
     add_theme_stylebox_override("disabled", disabled_style)
     var focus := normal.duplicate() as StyleBoxFlat
@@ -96,7 +83,7 @@ func _skin() -> void:
     add_theme_stylebox_override("focus", focus)
     var ink := Design.FOCUS if important else Design.STONE
     if flat:
-        ink = Design.SLATE
+        ink = Design.SECONDARY_INK
     if action_role == "danger":
         ink = Design.CORAL
     add_theme_color_override("font_color", ink)
@@ -105,7 +92,7 @@ func _skin() -> void:
     add_theme_color_override("font_hover_pressed_color", Design.FOCUS)
     add_theme_color_override("font_focus_color", Design.FOCUS)
     add_theme_color_override("font_disabled_color",
-        MINT if action_role == "choice" and is_selected else Color("#718B80"))
+        MINT if action_role == "choice" and is_selected else Design.SLATE)
     add_theme_color_override("icon_normal_color", accent)
 
 func _draw() -> void:
@@ -114,16 +101,14 @@ func _draw() -> void:
     var accent: Color = _accent()
     var alpha := 1.0 if action_role == "choice" and is_selected else .32 if disabled else 1.0
     accent.a *= alpha
-    var center := Vector2(23.0, size.y*.5)
-    var radius := 14.0 if action_role in ["primary", "choice"] else 12.5
-    draw_circle(center, radius, Color(accent, .14 if not disabled else .06))
+    var center := Vector2(18.0, size.y*.5)
     match action_role:
         "primary":
             draw_line(center+Vector2(-6, 0),center+Vector2(6, 0),accent,2.4,true)
             draw_line(center+Vector2(1,-5),center+Vector2(6,0),accent,2.4,true)
             draw_line(center+Vector2(1,5),center+Vector2(6,0),accent,2.4,true)
         "navigation":
-            var backward := text.begins_with("←") or text in ["Close","Back"]
+            var backward := text.begins_with("←") or text in ["Close", "Back", "Practice", "Previous passage"]
             var direction := -1.0 if backward else 1.0
             draw_line(center+Vector2(-direction*5,0),center+Vector2(direction*5,0),accent,1.9,true)
             draw_line(center+Vector2(direction*1,-4),center+Vector2(direction*5,0),accent,1.9,true)

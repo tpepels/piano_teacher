@@ -4,9 +4,7 @@ extends Button
 # Input goes through Button.pressed; this script never advances the lesson.
 const Design := preload("res://practice_theme.gd")
 const TEAL := Design.MINT
-const AMBER := Design.AMBER
-const BLUE := Design.BLUE
-const DIM := Color("#64847A")
+const DIM := Design.SLATE
 
 var action_kind := "play"
 var live := false
@@ -69,60 +67,49 @@ func _process(delta: float) -> void:
         live_redraw_elapsed = 0.0
     if animating:
         # The button's layout slot and its keyboard focus remain unchanged.
-        var scale_factor := 1.0 + .013 * hover_phase - .033 * press_phase + .008 * release_flash
+        var scale_factor := 1.0 + .004 * hover_phase - .012 * press_phase
         scale = Vector2.ONE * scale_factor
         queue_redraw()
 
 func _draw() -> void:
     if size.x < 100 or size.y < 35:
         return
-    var color := AMBER if action_kind == "retry" else BLUE if action_kind == "listen" else TEAL
+    var color := TEAL if action_kind in ["play", "pause", "practice"] else Design.STONE
     if disabled:
         color = DIM
-    var glow := .13 * hover_phase + .11 * release_flash
-    if live and not disabled:
-        glow += .08 + .055 * (1.0 + sin(activity_time * 3.3))
-    var mid := Vector2(35.0, size.y * .5)
-    # Subtle inset above and raised lower lip. The StyleBox owns shadows,
-    # border, hover, and depressed depth; this overlay contains no fake UI.
-    draw_line(Vector2(15, 7), Vector2(size.x - 15, 7),
-        Color("#FFFFFF", .06 + .075 * hover_phase), 1.0, true)
-    draw_line(Vector2(15, size.y - 6), Vector2(size.x - 15, size.y - 6),
-        Color(color, .16 + glow), 2.0, true)
-    draw_circle(mid, 23.0, Color(color, .045 + glow * .13))
-    draw_circle(mid, 17.0, Color(color, .065 + glow * .20))
-    draw_line(Vector2(66, 16), Vector2(66, size.y - 16),
-        Color(color, .17 + glow * .25), 1.0, true)
+    var mid := Vector2(25.0, size.y * .5)
+    # An unframed icon and label retain the physical control's hierarchy.
+    # No medallion, glowing lip or decorative divider competes with the score.
     match action_kind:
         "pause":
-            draw_rect(Rect2(mid.x - 6, mid.y - 9, 4.2, 18), color)
-            draw_rect(Rect2(mid.x + 2, mid.y - 9, 4.2, 18), color)
+            draw_rect(Rect2(mid.x - 5, mid.y - 7, 3.2, 14), color)
+            draw_rect(Rect2(mid.x + 2, mid.y - 7, 3.2, 14), color)
         "retry":
-            draw_arc(mid, 9, -.5 * PI, 1.23 * PI, 40, color, 2.6, true)
+            draw_arc(mid, 7, -.5 * PI, 1.23 * PI, 28, color, 1.8, true)
             draw_colored_polygon(PackedVector2Array([
-                mid + Vector2(-11, -9), mid + Vector2(-10, 1),
-                mid + Vector2(-1, -6)]), color)
+                mid + Vector2(-8, -7), mid + Vector2(-8, 0),
+                mid + Vector2(-1, -5)]), color)
         "listen":
-            draw_circle(mid + Vector2(-7, 0), 3.2, color)
-            draw_arc(mid + Vector2(-6, 0), 7.3, -.37 * PI, .37 * PI, 28, color, 2.2, true)
-            draw_arc(mid + Vector2(-6, 0), 12.0, -.37 * PI, .37 * PI, 28, color, 2.2, true)
+            draw_circle(mid + Vector2(-5, 0), 2.2, color)
+            draw_arc(mid + Vector2(-5, 0), 5.5, -.37 * PI, .37 * PI, 20, color, 1.6, true)
+            draw_arc(mid + Vector2(-5, 0), 9.0, -.37 * PI, .37 * PI, 24, color, 1.6, true)
         "practice":
-            draw_line(mid + Vector2(-9, 0), mid + Vector2(9, 0), color, 2.5, true)
-            draw_line(mid + Vector2(-9, 0), mid + Vector2(-1, -7), color, 2.5, true)
-            draw_line(mid + Vector2(-9, 0), mid + Vector2(-1, 7), color, 2.5, true)
+            draw_line(mid + Vector2(-7, 0), mid + Vector2(7, 0), color, 1.8, true)
+            draw_line(mid + Vector2(-7, 0), mid + Vector2(-1, -5), color, 1.8, true)
+            draw_line(mid + Vector2(-7, 0), mid + Vector2(-1, 5), color, 1.8, true)
         _:
             draw_colored_polygon(PackedVector2Array([
-                mid + Vector2(-5, -9), mid + Vector2(10, 0),
-                mid + Vector2(-5, 9)]), color)
+                mid + Vector2(-4, -7), mid + Vector2(8, 0),
+                mid + Vector2(-4, 7)]), color)
     var font: Font = get_theme_font("font")
     var font_size: int = get_theme_font_size("font_size")
-    var available: float = maxf(32.0, size.x - 86.0)
+    var available: float = maxf(32.0, size.x - 60.0)
     while font_size > 12 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT,
             -1, font_size).x > available:
         font_size -= 1
-    var ink := Design.FOCUS if not disabled else Design.SAGE
+    var ink := Design.FOCUS if not disabled else Design.SLATE
     var label_width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-    var label_x := 76.0 + maxf(0.0, (available - label_width) * .5)
+    var label_x := 46.0 + maxf(0.0, (available - label_width) * .5)
     var baseline := (size.y + font.get_ascent(font_size) - font.get_descent(font_size)) * .5
     draw_string(font, Vector2(label_x, baseline), text,
         HORIZONTAL_ALIGNMENT_LEFT, available, font_size, ink)

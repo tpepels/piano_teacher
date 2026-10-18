@@ -2,16 +2,15 @@ extends "res://action_button.gd"
 
 const Palette := preload("res://practice_theme.gd")
 
-# One fully-clickable, focusable music row. Both lines belong to the same
-# button, rather than squeezing title, format, location and BPM onto one line.
-# Static labels add no per-frame animations or GPU effects.
+# One focusable music tile, using real catalog text and a neutral piano mark.
+# Both labels belong to the same button; the mark never implies album art.
 var title_label: Label
 var detail_label: Label
 var text_scale := 1.0
 
 func _init() -> void:
     super._init()
-    custom_minimum_size = Vector2(0, 92)
+    custom_minimum_size = Vector2(0, 115)
     size_flags_horizontal = Control.SIZE_EXPAND_FILL
     clip_text = false
 
@@ -23,13 +22,14 @@ func _ready() -> void:
     content.name = "MusicRowContent"
     content.mouse_filter = Control.MOUSE_FILTER_IGNORE
     content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    content.add_theme_constant_override("margin_left", 58)
+    content.add_theme_constant_override("margin_left", 86)
     content.add_theme_constant_override("margin_right", 16)
     content.add_theme_constant_override("margin_top", 18)
-    content.add_theme_constant_override("margin_bottom", 14)
+    content.add_theme_constant_override("margin_bottom", 18)
     add_child(content)
     var lines := VBoxContainer.new()
     lines.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    lines.alignment = BoxContainer.ALIGNMENT_CENTER
     lines.add_theme_constant_override("separation", 8)
     content.add_child(lines)
     title_label = Label.new()
@@ -37,7 +37,8 @@ func _ready() -> void:
     title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     title_label.clip_text = true
     title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-    title_label.add_theme_font_size_override("font_size", roundi(22.0 * text_scale))
+    title_label.add_theme_font_override("font", Palette.title_font())
+    title_label.add_theme_font_size_override("font_size", roundi(20.0 * text_scale))
     title_label.add_theme_color_override("font_color", Palette.STONE)
     lines.add_child(title_label)
     detail_label = Label.new()
@@ -45,19 +46,26 @@ func _ready() -> void:
     detail_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     detail_label.clip_text = true
     detail_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-    detail_label.add_theme_font_size_override("font_size", roundi(16.0 * text_scale))
+    detail_label.add_theme_font_size_override("font_size", roundi(14.0 * text_scale))
     detail_label.add_theme_color_override("font_color", Palette.SLATE)
     lines.add_child(detail_label)
+    set_text_scale(text_scale)
+    if has_meta("library_title"):
+        _update_labels()
 
 # Library entries are created after the main responsive-font pass. Apply
 # the same display scale explicitly, without shrinking to the Button theme.
 func set_text_scale(scale_factor: float) -> void:
     text_scale = clampf(scale_factor, 1.0, 1.75)
-    custom_minimum_size.y = 86.0 * text_scale
     if title_label == null or detail_label == null:
         return
-    title_label.add_theme_font_size_override("font_size", roundi(22.0 * text_scale))
-    detail_label.add_theme_font_size_override("font_size", roundi(16.0 * text_scale))
+    title_label.add_theme_font_size_override("font_size", roundi(20.0 * text_scale))
+    detail_label.add_theme_font_size_override("font_size", roundi(14.0 * text_scale))
+    # Keep the compact tile height until actual enlarged font metrics need
+    # more room; viewport scaling alone must not create oversized cards.
+    custom_minimum_size.y = maxf(115.0,
+        title_label.get_line_height() + detail_label.get_line_height() + 44.0)
+    queue_redraw()
 
 func set_entry(title: String, detail: String, status: String = "") -> void:
     configure("library")
@@ -77,11 +85,34 @@ func set_entry(title: String, detail: String, status: String = "") -> void:
     tooltip_text = title + "\n" + detail
     if title_label == null:
         return
-    title_label.text = title
-    detail_label.text = detail
+    _update_labels()
+
+func _update_labels() -> void:
+    title_label.text = str(get_meta("library_title", ""))
+    detail_label.text = str(get_meta("library_detail", ""))
+    var status: String = str(get_meta("library_status", ""))
     if status == "error":
         title_label.add_theme_color_override("font_color", Palette.CORAL)
     elif status == "warning":
         title_label.add_theme_color_override("font_color", Palette.AMBER)
     else:
         title_label.add_theme_color_override("font_color", Palette.STONE)
+
+func _draw() -> void:
+    # Replace ActionButton's small left icon with a quiet, shared instrument
+    # mark. No superclass _draw call: the two glyphs must not overlap.
+    if size.x < 90.0 or size.y < 60.0:
+        return
+    var top: float = (size.y - 54.0) * .5
+    var frame := Rect2(18.0, top, 50.0, 54.0)
+    var face := Palette.bordered_surface(Palette.PANEL_RECESSED, 7, .25)
+    draw_style_box(face, frame)
+    var keyboard := Rect2(27.0, top + 13.0, 32.0, 29.0)
+    draw_rect(keyboard, Color(Palette.STONE, .78))
+    var key_width: float = keyboard.size.x / 4.0
+    for key in range(1, 4):
+        var x: float = keyboard.position.x + key_width * key
+        draw_line(Vector2(x, keyboard.position.y),
+            Vector2(x, keyboard.end.y), Color(Palette.PANEL_RECESSED, .8), 1.0)
+        if key != 3:
+            draw_rect(Rect2(x - 2.5, keyboard.position.y, 5.0, 17.0), Palette.PANEL_RECESSED)

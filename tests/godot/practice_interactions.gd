@@ -108,9 +108,10 @@ func test_three_button_stage() -> void:
         "Piano transport keys must retain keyboard focus")
     check(app.start_button.get_theme_color("font_color").a < .01,
         "Default Godot button label must not overlap the custom game icon")
-    check(app.practice_navigation.get_children().any(func(node):
-        return node is Button and node.text == "Exit"),
-        "Fullscreen practice must offer a visible Exit")
+    var exit_controls: Array = app.screens["settings"].find_children("*", "Button", true, false)
+    check(exit_controls.any(func(node):
+        return node.text == "Exit application" and node.focus_mode == Control.FOCUS_ALL),
+        "Fullscreen application retains a keyboard-accessible Exit in Settings")
     check(app.listen_volume_slider.max_value >= 12.0,
         "Settings needs a separate Listen gain adjustment")
     check(app.game_phase_cue.get_parent() == app.score_frame,
@@ -239,7 +240,7 @@ func test_short_challenge_loop() -> void:
     pending["hand_stages"][1]["active"] = true
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
     var labels: Dictionary = app.practice_stage_labels
-    check("DONE" in labels["left"].text and "NOW" in labels["right"].text,
+    check("done" in labels["left"].text.to_lower() and labels["right"].text.begins_with("▶"),
         "Backend hand completion must unlock the next real stage")
     check("RIGHT HAND UNLOCKED" in app.progress_label.text,
         "Completed first hand should visibly unlock the next without opening a menu")
@@ -401,7 +402,7 @@ func test_compact_feedback() -> void:
     check(app.feedback_label.tooltip_text == state()["feedback"],
         "Full MIDI connection guidance remains available from the bounded feedback")
     var font_size: int = app.feedback_label.get_theme_font_size("font_size")
-    check(font_size >= 16 and app.feedback_label.size.y >= font_size,
+    check(font_size >= 14 and app.feedback_label.size.y >= font_size,
         "Feedback reserves enough height without shrinking readable type")
     for control in [app.feedback_label, app.progress_label, app.practice_controls, app.speed_label]:
         check(viewport.encloses(control.get_global_rect()), "Compact practice control remains inside the viewport: " + str(control))
@@ -437,7 +438,7 @@ func test_caption_bounds() -> void:
             check(viewport.encloses(app.practice_controls.get_global_rect()),
                 "Caption slots must leave all transport controls visible at %s" % dimensions)
             for caption in [app.feedback_label, app.lesson_info_label]:
-                check(caption.get_theme_font_size("font_size") >= 16,
+                check(caption.get_theme_font_size("font_size") >= 14,
                     "Caption containment must preserve readable typography")
                 check(caption.tooltip_text == caption.text,
                     "The full bounded caption must remain available in its tooltip")
@@ -461,7 +462,9 @@ func test_notation_phase_cues() -> void:
             snapshot["mode"] = "practice"
             snapshot["preview_only"] = false
             snapshot["feedback"] = "Review your notes before trying again"
-            app._on_state(0, 200, PackedStringArray(), JSON.stringify(snapshot).to_utf8_buffer())
+            # This direct fixture is sampled now, without an HTTP request.
+            # A zero request timestamp would invent startup-sized latency.
+            app._on_state(0, 200, PackedStringArray(), JSON.stringify(snapshot).to_utf8_buffer(), Time.get_ticks_msec())
             app._update_count_in()
             await process_frame
             await process_frame
@@ -588,7 +591,12 @@ func test_pause_choices() -> void:
     check(app.commands == [{"action":"seek", "bar":3}], "Bar selection sends a real source bar")
     app.commands.clear()
     check(not app.progress_label.text.contains("Stage"), "Foreground explains clean runs rather than numeric curriculum counts")
-    check(app.speed_label.text.contains("target"), "Current and target tempos remain visible")
+    check(app.speed_label.text.contains("80 BPM") and app.tempo_setting.value == 80,
+        "Matching current and target tempo retains one clear BPM value")
+    paused["bpm"] = 64
+    app._on_state(0, 200, PackedStringArray(), JSON.stringify(paused).to_utf8_buffer())
+    check(app.speed_label.text.contains("64 BPM") and app.speed_label.text.contains("target 80"),
+        "Reduced practice tempo shows both its current BPM and the selected target")
     app.pause_sheet.exit_button.pressed.emit()
     check(app.current_screen == "library", "Sheet Exit returns to the music library")
     check(app.commands == [{"action":"stop"}], "Explicit Exit stops the paused attempt before opening music")

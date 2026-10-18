@@ -69,13 +69,22 @@ func note_position(note: Dictionary) -> Vector2:
         / app.score_crop_size * app.score_content.size
     return app.score_content.get_global_transform_with_canvas() * local
 
-func local_ink(frame: Image, position: Vector2) -> Dictionary:
+func local_ink(frame: Image, position: Vector2, staff_gap := Vector2.ZERO) -> Dictionary:
     # Glyph coordinates locate the left edge of a notehead. Remove long
     # horizontal/vertical rules before counting compact contrasting ink;
     # thick staff lines and the timing beam cannot stand in for a notehead.
-    var region := Rect2i(int(position.x) + 2, int(position.y) - 7, 24, 15)
-    if not Rect2i(Vector2i.ZERO, frame.get_size()).encloses(region):
+    # Include background around even a large filled notehead. A tiny ROI can
+    # take the note itself as its median background and mistake its filled
+    # rows/columns for staff rules. Match the actual rendered staff geometry.
+    var frame_bounds := Rect2i(Vector2i.ZERO, frame.get_size())
+    if not frame_bounds.has_point(Vector2i(floori(position.x), floori(position.y))):
         return {"pixels": 0, "rows": 0, "columns": 0}
+    var width: int = mini(frame.get_width(), maxi(40, ceili(staff_gap.x * 2.25)))
+    var height: int = mini(frame.get_height(), maxi(31, ceili(staff_gap.y * 1.5)))
+    var region := Rect2i(clampi(floori(position.x - maxf(3.0, staff_gap.x * .16)),
+            0, frame.get_width() - width),
+        clampi(floori(position.y - height * .5), 0, frame.get_height() - height),
+        width, height)
     var red: Array[float] = []
     var green: Array[float] = []
     var blue: Array[float] = []
@@ -98,7 +107,12 @@ func local_ink(frame: Image, position: Vector2) -> Dictionary:
             var color := frame.get_pixel(x, y)
             var contrast: float = maxf(absf(color.r - background.r),
                 maxf(absf(color.g - background.g), absf(color.b - background.b)))
-            if contrast >= 0.15:
+            # Engraved glyphs and text are neutral white/grey. A coloured
+            # next-note halo must not prove that the underlying glyph exists;
+            # relative chroma also excludes its darker antialiased edges.
+            var brightest: float = maxf(color.r, maxf(color.g, color.b))
+            var chroma: float = brightest - minf(color.r, minf(color.g, color.b))
+            if contrast >= 0.15 and chroma <= .16 and chroma <= brightest * .20:
                 mask[Vector2i(x, y)] = true
                 row_counts[y] = int(row_counts.get(y, 0)) + 1
                 column_counts[x] = int(column_counts.get(x, 0)) + 1
@@ -121,6 +135,9 @@ func check_ink_detector() -> void:
     var frame := Image.create(64, 64, false, Image.FORMAT_RGBA8)
     var position := Vector2(16, 32)
     frame.fill(Color("#1E3A34"))
+    frame.fill_rect(Rect2i(0, 32, 64, 1), Color.WHITE)
+    check(not has_note_ink(local_ink(frame, position)), "A thin staff rule cannot count as a notehead")
+    frame.fill(Color("#1E3A34"))
     frame.fill_rect(Rect2i(0, 31, 64, 3), Color.WHITE)
     check(not has_note_ink(local_ink(frame, position)), "A thick staff rule cannot count as a notehead")
     frame.fill_rect(Rect2i(24, 0, 3, 64), Color.WHITE)
@@ -132,6 +149,45 @@ func check_ink_detector() -> void:
             if pow((x-27.0)/8.0, 2) + pow((y-32.0)/6.0, 2) < 1.0:
                 frame.set_pixel(x, y, Color.WHITE)
     check(has_note_ink(local_ink(frame, position)), "Compact notehead ink remains detectable across a staff rule")
+    frame = Image.create(128, 128, false, Image.FORMAT_RGBA8)
+    position = Vector2(32, 64)
+    for hollow in [false, true]:
+        frame.fill(Color("#1E3A34"))
+        frame.fill_rect(Rect2i(0, 63, 128, 3), Color.WHITE)
+        for y in range(51, 78):
+            for x in range(31, 70):
+                var radius: float = pow((x-50.0)/18.0, 2) + pow((y-64.0)/12.0, 2)
+                if radius < 1.0 and (not hollow or radius > .55):
+                    frame.set_pixel(x, y, Color.WHITE)
+        check(has_note_ink(local_ink(frame, position, Vector2(28, 28))),
+            "Large %s notehead remains detectable across a staff rule" % ("hollow" if hollow else "filled"))
+        frame.fill_rect(Rect2i(48, 0, 3, 128), Color.WHITE)
+        check(has_note_ink(local_ink(frame, position, Vector2(28, 28))),
+            "Large %s notehead remains detectable across crossed rules" % ("hollow" if hollow else "filled"))
+    frame = Image.create(192, 192, false, Image.FORMAT_RGBA8)
+    position = Vector2(32, 96)
+    for gap in [12.0, 28.0, 44.0]:
+        frame.fill(Color("#1E3A34"))
+        var thickness: int = maxi(1, roundi(gap * .12))
+        for line in range(-1, 2):
+            frame.fill_rect(Rect2i(0, 96 + roundi(line * gap), 192, thickness), Color.WHITE)
+        frame.fill_rect(Rect2i(48, 0, thickness, 192), Color.WHITE)
+        check(not has_note_ink(local_ink(frame, position, Vector2(gap, gap))),
+            "Staff and timing rules cannot count as a notehead at gap %s" % gap)
+    frame = Image.create(128, 128, false, Image.FORMAT_RGBA8)
+    position = Vector2(32, 64)
+    for opacity in [1.0, .3]:
+        var background := Color("#1E3A34")
+        frame.fill(background)
+        frame.fill_rect(Rect2i(0, 63, 128, 3), Color.WHITE)
+        frame.fill_rect(Rect2i(48, 0, 3, 128), Color.WHITE)
+        for y in range(43, 86):
+            for x in range(20, 81):
+                var radius: float = pow((x-50.0)/28.0, 2) + pow((y-64.0)/18.0, 2)
+                if radius > .70 and radius < 1.0:
+                    frame.set_pixel(x, y, background.lerp(Color("#C8AC7C"), opacity))
+        check(not has_note_ink(local_ink(frame, position, Vector2(28, 28))),
+            "A golden halo without its actual notehead cannot count as glyph ink at opacity %s" % opacity)
 
 func write_samples() -> void:
     var output := FileAccess.open(folder + "/samples.json", FileAccess.WRITE)
@@ -165,7 +221,8 @@ func capture(bpm: int, label: String) -> Dictionary:
         "%d BPM %s: timing line stays fixed" % [bpm, label])
     check(app.score_content.size.distance_to(baseline_size) < 0.5,
         "%d BPM %s: notation scale stays stable" % [bpm, label])
-    var ink := local_ink(frame, position)
+    var staff_gap: Vector2 = app.score_overlay.staff_gap_fraction * app.score_content.size.y * pixel_scale
+    var ink := local_ink(frame, position, staff_gap)
     var paused_modal: bool = app.pause_sheet.is_visible_in_tree()
     var modal_ink: Dictionary = {}
     if paused_modal:
@@ -185,7 +242,7 @@ func capture(bpm: int, label: String) -> Dictionary:
             var point: Vector2 = note_position(candidate) * pixel_scale
             if panel.grow(-25.0).has_point(point):
                 visible_note = true
-                var pixels := local_ink(frame, point)
+                var pixels := local_ink(frame, point, staff_gap)
                 visible_ink = visible_ink or has_note_ink(pixels)
         check(visible_ink or (not visible_note and app.rendered_clock < 0.0),
             "%d BPM %s: visible notation contains actual notehead pixels" % [bpm,label])

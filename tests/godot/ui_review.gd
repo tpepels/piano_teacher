@@ -116,7 +116,7 @@ func run() -> void:
     await wait_for(func(): return not app.library_pending)
     await capture("library-recent-800x600")
     var continued := false
-    for row in app.library_rows.get_children():
+    for row in app.library_rows.find_children("*", "Button", true, false):
         if str(row.get_meta("library_detail", "")).begins_with("Continue from saved place"):
             row.pressed.emit()
             continued = true

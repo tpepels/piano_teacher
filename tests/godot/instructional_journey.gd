@@ -27,13 +27,15 @@ func wait_for(predicate: Callable, description: String, seconds: float = 25.0) -
     return true
 
 func imported_row() -> Button:
-    for row in app.library_rows.get_children():
+    for row in app.library_rows.find_children("*", "Button", true, false):
         if row is Button and str(row.get_meta("library_title", "")).begins_with("Imported"):
             return row
     return null
 
 func press(text: String) -> void:
     for button in app.find_children("*", "Button", true, false):
+        if text == "Practice" and app.current_screen != "practice" and not app.navigation_rail.is_ancestor_of(button):
+            continue
         if button.text == text and button.is_visible_in_tree() and not button.disabled:
             button.pressed.emit()
             return
@@ -157,7 +159,7 @@ func finish_earned_modes() -> void:
     await wait_for(func(): return not app.apply_tempo_button.disabled,"tempo control is available after pending transport")
     app.apply_tempo_button.pressed.emit()
     await wait_for(func(): return not app.action_pending and int(app.last_state.get("bpm",0)) == 240,"ordinary Apply target sets current example tempo")
-    press("← Back")
+    press("Practice")
     await wait_for(func(): return score_ready() and not app.action_pending,"earned original score and controls ready")
     press("Listen")
     await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "listen" \
@@ -220,8 +222,7 @@ func run() -> void:
     app.device_menu.hide()
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device", "")) == "Journey test piano",
         "input selected through visible MIDI menu")
-    press("← Back")
-    press("Music")
+    press("Library")
     await wait_for(func(): return app.current_screen == "library" and not app.library_pending \
         and imported_row() != null, "temporary user file listed")
     var piece := imported_row()
@@ -239,7 +240,7 @@ func run() -> void:
     app.apply_tempo_button.pressed.emit()
     await wait_for(func(): return not app.action_pending and int(app.last_state.get("target_bpm", 0)) == 240,
         "chosen target tempo remains authoritative")
-    press("← Back")
+    press("Practice")
     await wait_for(func(): return score_ready() and phase() == "guided_wait", "new guided engraving ready")
     await capture("01-learn-ready", 0)
     print("INSTRUCTIONAL_STAGE:wrong-ready")

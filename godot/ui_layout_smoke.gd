@@ -43,8 +43,8 @@ func _check_actions(container: Control, viewport: Vector2, label: String) -> voi
 
 func _library_entries(rows: Control) -> Array[Button]:
     var entries: Array[Button] = []
-    for child in rows.get_children():
-        if child is Button and child.has_meta("library_title"):
+    for child in rows.find_children("*", "Button", true, false):
+        if child.has_meta("library_title"):
             entries.append(child as Button)
     return entries
 
@@ -125,7 +125,7 @@ func _run() -> void:
     var rows: VBoxContainer = scene.get("library_rows")
     var music_rows: Array[Button] = _library_entries(rows)
     _check(music_rows.size() == 1,
-        "One score requires exactly one focusable full-width library action")
+        "One score requires exactly one focusable music tile")
     if music_rows.size() == 1:
         var item: Button = music_rows[0]
         _check(item.get_node_or_null("MusicRowContent") != null and
@@ -142,7 +142,7 @@ func _run() -> void:
             JSON.stringify({"started": true, "running": true,
                 "checked": 2, "total": 10, "ok": 2, "warning": 0,
                 "error": 0, "items": {}}).to_utf8_buffer())
-        _check(item.get_parent() == rows,
+        _check(rows.is_ancestor_of(item),
             "Checking another music file must not replace existing library rows")
     scene.call("_navigate", "practice")
     var cue: Control = scene.get("game_phase_cue")
@@ -179,15 +179,15 @@ func _run() -> void:
     var reset_face := retry.get_theme_stylebox("normal") as StyleBoxFlat
     var play_face := primary.get_theme_stylebox("normal") as StyleBoxFlat
     var listen_face := listen.get_theme_stylebox("normal") as StyleBoxFlat
-    _check(reset_face.bg_color != play_face.bg_color and
-        reset_face.bg_color != listen_face.bg_color and
-        listen_face.bg_color != play_face.bg_color,
-        "Play, Retry and Listen must have distinguishable base colours")
+    _check(reset_face.bg_color == listen_face.bg_color and
+        play_face.bg_color != reset_face.bg_color,
+        "Play has the single accent while Retry and Listen share neutral faces")
     _check(str(browse_button.get_meta("ui_button_role", "")) == "primary",
         "Choose music must use the primary action rather than a utility skin")
     var nav: Control = scene.get("practice_settings_button")
-    _check(str(nav.get_meta("ui_button_role", "")) == "utility",
-        "Navigation must not have the same visual priority as transport")
+    _check(str(nav.get_meta("ui_button_role", "")) == "settings"
+        and nav.get_theme_stylebox("normal").bg_color != play_face.bg_color,
+        "Settings navigation stays neutral while Play holds the accent")
     _check((scene.get("practice_settings_button") as Button).focus_mode ==
         Control.FOCUS_ALL, "Navigation must stay keyboard accessible")
     _check(not (scene.get("practice_progress") as ProgressBar).visible,
@@ -269,9 +269,9 @@ func _run() -> void:
     var library_root: Control = pages["library"]
     var overlay: Control = scene.get("overlay_root")
     var drawer: Control = scene.get("overlay_drawer")
-    _check(overlay.visible, "Browse library must be a visible in-context drawer")
+    _check(overlay.visible, "Library must be a visible dedicated view")
     _check(pages["practice"].visible,
-        "Music library must not replace or blank the sheet music")
+        "Library navigation must keep the existing practice scene mounted")
     _check(drawer.get_global_rect().end.x <= viewport.x + 2.0,
         "Music drawer escapes right edge of the window")
     _check(drawer.get_global_rect().position.x >= -2.0,
@@ -279,7 +279,20 @@ func _run() -> void:
     _check(drawer.size.x <= viewport.x + 2.0,
         "Music drawer cannot exceed available window width")
     _check(library_root.is_ancestor_of(scene.get("library_search")),
-        "Music search remains inside the library drawer")
+        "Music search remains inside the library content")
+    var rail: Control = scene.get("navigation_rail")
+    _check(rail != null and _in_viewport(rail, viewport),
+        "The shared navigation rail remains fully inside the window")
+    var destinations: Dictionary = scene.get("screen_navigation")
+    for destination in ["library", "settings", "lesson"]:
+        _check(destinations.has(destination), "Sidebar is missing destination " + destination)
+        if destinations.has(destination):
+            var destination_button: Button = destinations[destination]
+            _check(destination_button.is_visible_in_tree() and _in_viewport(destination_button, viewport)
+                and destination_button.focus_mode == Control.FOCUS_ALL,
+                "Sidebar destination remains visible and keyboard accessible: " + destination)
+            _check(bool(destination_button.get("is_selected")) == (destination == "library"),
+                "Sidebar selection reflects the current Library view")
     var filter_timer: Timer = scene.get("library_filter_timer")
     _check(filter_timer != null and filter_timer.one_shot and
         absf(filter_timer.wait_time - .12) < .001,
@@ -287,15 +300,15 @@ func _run() -> void:
     var short_buttons := 0
     for control in library_root.find_children("*", "Button", true, false):
         var button := control as Button
-        if button.text in ["Close", "Settings", "Refresh", "Check files",
+        if button.text in ["Refresh", "Check files",
                 "Checking…", "Recheck files"]:
             short_buttons += 1
             _check(not button.clip_text, "Library short control clips text: " + button.text)
             _check(_in_viewport(button, viewport), "Library short control outside window: " + button.text)
             _check(button.size.x + 1.0 >= button.get_combined_minimum_size().x,
                 "Library short control narrower than its text: " + button.text)
-    _check(short_buttons == 4,
-        "Expected Close, Settings, Refresh and file-check actions in any valid status")
+    _check(short_buttons == 2,
+        "Library keeps Refresh and file-check actions alongside the shared sidebar")
     _check(str((scene.get("library_health_button") as Button).get_meta(
         "ui_button_role", "")) == "settings",
         "Library diagnostics require a distinguishable inspection action")
@@ -339,6 +352,34 @@ func _run() -> void:
     scene.call("_on_library_health", 0, 200, PackedStringArray(),
         JSON.stringify(diagnostics).to_utf8_buffer())
     _check(health_button.disabled, "File check should not restart while still scanning")
+    # Validate the real card grid, not just a configured column count. Wide
+    # views show two tiles per row; compact views retain a single readable tile.
+    scene.set("library_info", {"warmups": [], "pieces": [
+        {"id": "a.mid", "title": "First piece", "format": "MIDI"},
+        {"id": "b.mid", "title": "Second piece", "format": "MIDI"},
+        {"id": "c.mid", "title": "Third piece", "format": "MIDI"}]})
+    scene.call("_populate_library")
+    for frame in range(6):
+        await process_frame
+    var tiles := _library_entries(library_items)
+    _check(tiles.size() == 3, "Card layout must retain all actual music entries")
+    if tiles.size() == 3:
+        var first: Rect2 = tiles[0].get_global_rect()
+        var second: Rect2 = tiles[1].get_global_rect()
+        var third: Rect2 = tiles[2].get_global_rect()
+        if viewport.x >= 1100.0:
+            _check(absf(first.position.y - second.position.y) < 2.0
+                and second.position.x >= first.end.x - 1.0
+                and third.position.y >= first.end.y - 1.0,
+                "Desktop library must display two nonoverlapping tiles per row")
+        else:
+            _check(second.position.y >= first.end.y - 1.0
+                and third.position.y >= second.end.y - 1.0,
+                "Compact library must stack complete readable music tiles")
+        for tile in tiles:
+            _check(tile.get_global_rect().position.x >= library_root.get_global_rect().position.x - 1.0
+                and tile.get_global_rect().end.x <= library_root.get_global_rect().end.x + 1.0,
+                "Music tile must fit the dedicated content area")
     scene.call("_navigate", "practice")
     await process_frame
     await process_frame
@@ -412,12 +453,30 @@ func _run() -> void:
     var stage_labels: Dictionary = scene.get("practice_stage_labels")
     _check(ribbon.visible == (viewport.y >= 750.0),
         "Hand progression must stay visible on tall windows and collapse on compact windows")
-    _check("DONE" in stage_labels["left"].text
-        and "NOW" in stage_labels["right"].text
-        and "LOCKED" in stage_labels["both"].text,
+    _check("done" in stage_labels["left"].text.to_lower()
+        and stage_labels["right"].text.begins_with("▶")
+        and "locked" in stage_labels["both"].text.to_lower(),
         "The hand progression does not show completed, current and locked stages")
     scene.call("_update_hand_stages", {"hand_stages": []})
     _check(not ribbon.visible, "Hand ribbon should disappear when no hand course exists")
+
+    # Stage chips describe the current exercise and hand, not every level
+    # that appears anywhere else in the course. Numbers stay consecutive.
+    scene.set("last_state", {"title": "Current piece", "lesson_level": "original"})
+    scene.call("_navigate", "lesson")
+    scene.call("_on_lesson", 0, 200, PackedStringArray(), JSON.stringify({
+        "current_step": 2, "completed_steps": 0, "total_steps": 4, "steps": [
+            {"number": 1, "exercise": 1, "hand": "right", "level": "skeleton", "first_bar": 1, "last_bar": 2},
+            {"number": 2, "exercise": 2, "hand": "right", "level": "original", "first_bar": 3, "last_bar": 4},
+            {"number": 3, "exercise": 1, "hand": "right", "level": "outline", "first_bar": 1, "last_bar": 2},
+            {"number": 4, "exercise": 2, "hand": "left", "level": "skeleton", "first_bar": 3, "last_bar": 4}]
+        }).to_utf8_buffer())
+    await process_frame
+    var levels: Dictionary = scene.get("lesson_stage_labels")
+    _check(levels["original"].is_visible_in_tree() and levels["original"].text == "1. Original"
+        and not levels["skeleton"].visible and not levels["outline"].visible,
+        "Lesson stages must show only the current exercise/hand's available Original as stage 1")
+    scene.call("_navigate", "practice")
 
     # Review both missed chord pitches and the *played* wrong note.
     # Test actual dialog controls and section retry widgets, not a static label.

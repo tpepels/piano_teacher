@@ -33,8 +33,8 @@ func check(ok: bool, message: String) -> void:
 
 func entries(app: FixtureApp) -> Array[Button]:
     var result: Array[Button] = []
-    for child in app.library_rows.get_children():
-        if child is Button:
+    for child in app.library_rows.find_children("*", "Button", true, false):
+        if child.has_meta("library_title"):
             result.append(child)
     return result
 

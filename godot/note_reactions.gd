@@ -1,13 +1,14 @@
 extends Control
 
-# 7.7b - Resonance. Large, time-bounded MIDI-only note impacts. The effect
-# is painted behind Verovio's own notation so a particle cannot erase pitch,
-# fingering, note duration, or an accidental. No child nodes or random timers.
+# Brief, glyph-aligned feedback behind the original Verovio notation.
+# Colour distinguishes assessed MIDI from neutral, ungraded preview without
+# particles, expanding halos or additional pitch glyphs.
 const Ink := preload("res://notehead_ink.gd")
-const HIT := Color("#82F5C8")
-const TIMING := Color("#F2C980")
-const ERROR := Color("#FF9F98")
-const PREVIEW := Color("#9ECAFF")
+const Design := preload("res://practice_theme.gd")
+const HIT := Design.SCORE_ACCENT
+const TIMING := Design.AMBER
+const ERROR := Design.CORAL
+const PREVIEW := Design.SLATE
 const MAX_VISIBLE_HITS := 16
 const PARTICLE_COUNT := 16
 const HIT_DURATION_MS := 450
@@ -25,11 +26,9 @@ var staff_lines: Array = []
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
     focus_mode = Control.FOCUS_NONE
-    # Light accumulates naturally when three notes of a chord are struck;
-    # unlike opaque sprites, the actual white engraved ink stays untouched.
+    # Gentle pigment stays beneath the actual engraved notehead.
     var bloom_material := CanvasItemMaterial.new()
-    # The moodboard's ivory score needs pigment rather than additive light:
-    # ADD makes mint-white particles disappear on a pale background.
+    # Normal blending keeps preview neutral on the charcoal score surface.
     bloom_material.blend_mode = CanvasItemMaterial.BLEND_MODE_MIX
     material = bloom_material
 
@@ -62,71 +61,24 @@ static func impact_reach(gap: float, progress: float) -> float:
 
 func _success_impact(center: Vector2, progress: float, gap: float,
         radii: Vector2, tone: Color) -> void:
-    var fade: float = pow(1.0 - progress, 1.08)
-    var attack: float = pow(1.0 - clampf(progress * 4.4, 0.0, 1.0), 1.2)
-    var reach: float = impact_reach(gap, progress)
-    # A broad soft halo, bright central attack and two expanding rings.
-    # This must read as an actual piano strike from across the room.
-    draw_circle(center, gap * (3.75 + progress * 1.3),
-        Color(tone, .12 * fade))
-    draw_circle(center, gap * (2.45 + progress * 1.2),
-        Color(tone, .15 * fade + .10 * attack))
-    draw_circle(center, gap * 1.48,
-        Color(tone, .22 * fade + .40 * attack))
-    draw_circle(center, gap * .68, Color.WHITE * Color(1, 1, 1,
-        .36 * attack))
-    draw_polyline(Ink.ellipse(center, reach, reach * .66),
-        Color(tone, .34 * fade), 3.5, true)
-    draw_polyline(Ink.ellipse(center, radii.x * (1.65 + progress * 2.0),
-        radii.y * (1.65 + progress * 2.0)),
-        Color(tone, .81 * fade), 2.7, true)
-
-    # Sixteen sparks, initially luminous and moving away from the real
-    # notehead. No separate particle emitters or per-frame allocations.
-    for index in range(PARTICLE_COUNT):
-        var endpoint: Vector2 = particle_endpoint(
-            center, gap, progress, index)
-        var ray: Vector2 = (endpoint - center).normalized()
-        var radius: float = maxf(1.3, gap * (.10 + .036 * float(index % 3))) * fade
-        if radius <= .16:
-            continue
-        draw_line(endpoint - ray * (gap * (.56 + .46 * progress)), endpoint,
-            Color(tone, .64 * fade), maxf(1.0, radius * .72), true)
-        draw_circle(endpoint, radius + gap * .12,
-            Color(tone, .22 * fade))
-        draw_circle(endpoint, radius, Color(tone, fade))
+    var fade: float = pow(1.0 - progress, 1.4)
+    var preview: bool = tone == PREVIEW
+    var outline: Vector2 = radii * (1.10 + progress * .06)
+    draw_polyline(Ink.ellipse(center, outline.x, outline.y),
+        Color(tone, fade * (.32 if preview else .62)),
+        1.0 if preview else 1.5, true)
 
 func _error_impact(center: Vector2, progress: float,
         gap: float) -> void:
-    # Clear but unmistakably NOT a reward: six short coral ticks, no
-    # white attack flash, green halo, or success particles.
-    var fade: float = pow(1.0 - progress, 1.6)
-    draw_circle(center, gap * (1.15 + progress * .9),
-        Color(ERROR, .12 * fade))
-    for index in range(6):
-        var endpoint: Vector2 = particle_endpoint(center, gap,
-            .18 + .42 * progress, index, 6)
-        var ray: Vector2 = (endpoint - center).normalized()
-        draw_line(endpoint - ray * gap * .46, endpoint,
-            Color(ERROR, fade * .66), 2.0, true)
+    var fade: float = pow(1.0 - progress, 1.5)
+    var radii: Vector2 = Ink.radii(gap) * 1.14
+    draw_polyline(Ink.ellipse(center, radii.x, radii.y),
+        Color(ERROR, .66 * fade), 1.5, true)
 
-# A brief halo across the genuine measured staff lines. It stays behind the
-# raster and only starts after a graded, physical MIDI note-on event.
-func _staff_resonance(center: Vector2, gap: float,
-        tone: Color, remaining: float) -> void:
-    if staff_lines.is_empty():
-        return
-    var extent: float = gap * (3.4 + 2.1 * (1.0 - remaining))
-    for normalized in staff_lines:
-        var y: float = (float(normalized) - crop_origin.y) / crop_size.y * size.y
-        if absf(y - center.y) > gap * 4.5:
-            continue
-        draw_line(Vector2(center.x - extent, y),
-            Vector2(center.x + extent, y),
-            Color(tone, .19 * remaining), 5.0, true)
-        draw_line(Vector2(center.x - extent, y),
-            Vector2(center.x + extent, y),
-            Color(tone, .64 * remaining), 1.5, true)
+func _staff_resonance(_center: Vector2, _gap: float,
+        _tone: Color, _remaining: float) -> void:
+    # Retained for callers; assessed feedback is confined to the real note.
+    pass
 
 func _draw() -> void:
     if hit_pulses.is_empty() and wrong_ghosts.is_empty() and preview_pulses.is_empty():
@@ -147,8 +99,8 @@ func _draw() -> void:
         _success_impact(position, 1.0 - remaining, gap, radii, tone)
         _staff_resonance(position, gap, tone, remaining)
 
-    # Blue-white preview impacts follow real metrical onsets and do not
-    # imply success. They are separate from judged green MIDI pulses.
+    # A thin slate contour follows real preview onsets. It cannot be
+    # mistaken for the coloured response to a judged MIDI attack.
     for index in range(maxi(0, preview_pulses.size() - MAX_VISIBLE_HITS),
             preview_pulses.size()):
         var preview: Dictionary = preview_pulses[index]

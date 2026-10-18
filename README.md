@@ -4,10 +4,13 @@ An offline Linux piano teacher built with Godot 4 and Python. Import your own
 MIDI or MusicXML, learn simplified passages, restore the original notes, then
 connect the passages into a complete performance. All progress stays local.
 
-The interface follows `moodboard.png`: a forest-green application shell,
-a dark charcoal score stage with luminous engraved notation, a crisp teal timing line, and a five-part
-segmented progress rail. The MIDI clock, grade and CPU budget remain separate
-from these presentation effects.
+The interface follows `moodboard.png`: forest, pine and charcoal surfaces,
+serif music titles, white active staves, a restrained teal timing line and a
+five-part progress rail. Library, Lesson Path and Settings share a dedicated
+sidebar layout. The library uses real file metadata, with two columns on wide
+windows and a single column on smaller screens. Lesson stages reflect the
+levels available for the current passage and hand. Python owns the musical
+clock and assessment throughout navigation.
 
 ## Install and launch
 
@@ -71,7 +74,7 @@ for it to become ready, and stops it when Godot closes. Port 8765 must be free;
 it will refuse to connect a new window to an older backend. Optional Godot
 arguments can be passed through, for example `./run.sh --windowed`.
 
-Use **Browse library** to choose music from `~/Music/Piano Teacher`. Settings
+Use **Music** to choose music from `~/Music/Piano Teacher`. Settings
 can select another folder; its subfolders are scanned automatically. Supported
 formats are `.mid`, `.midi`, `.musicxml`, `.xml` and `.mxl`. The library displays
 real filename and format metadata; files are never moved or rewritten.
@@ -82,7 +85,7 @@ verify actual input activity. A saved available device reconnects automatically.
 
 ## Built-in warm-ups
 
-**Browse library → Built-in warm-ups** includes six original beginner studies.
+**Music → Built-in warm-ups** includes six original beginner studies.
 No downloads or personal-music files are required. All studies now use **half
 notes (two beats)** instead of difficult irregular ties; the 3/4 classical
 study also uses one quarter note per measure. The Hanon-inspired and jazz
@@ -292,15 +295,13 @@ automatic recovery, slowdowns and full-passage mastery rules are
 unchanged. The interface still offers only **Retry, Play/Pause and
 Listen** during normal playing.
 
-### Settings drawer and screenshot regression
+### Settings layout and screenshot regression
 
-Settings now uses a properly anchored contextual drawer with a
-full-width music-folder field, wrap-safe Browse/Save and piano-device
-buttons, and a wrap-safe tempo row. Long option labels are shortened,
-with their explanations still accessible as tooltips. This prevents
-controls extending off the window at 1536×960 and smaller display
-sizes. The Godot geometry test checks the actual fields and button
-rectangles rather than merely verifying the outer drawer.
+Settings groups MIDI input, the music folder, tempo, Listen volume and display
+preferences in a dedicated view. Folder controls align horizontally on wide
+windows and stack on smaller ones. The content scrolls on short displays;
+the navigation rail remains available. Godot checks the actual field and button
+bounds at 1536×960, 1280×800, 1024×768 and 800×600.
 
 ## Living sheet music (Phase 7.4)
 
@@ -405,7 +406,7 @@ doesn't require finding another mode menu. Returning from Listen waits at
 Ready for the next physical piano note or Play; score rendering never
 silently starts the new attempt. The mode selector, hand settings,
 persistent hints, passage navigation and Stop live in the **Lesson Path**
-drawer; keyboard shortcuts remain available: **Space** Play/Pause, **R**
+view; keyboard shortcuts remain available: **Space** Play/Pause, **R**
 Retry, **L** Listen/Practice, **S** Stop, and arrow keys Previous/Next.
 
 An ordinary Pause leaves the notes, feedback and Resume control visible
@@ -428,28 +429,20 @@ fresh-key-only retry logic. Hardware-specific latency remains for Phase 8.
 The acoustic grand-piano samples for Listen are planned for Phase 7.3;
 the existing synthetic audio is not yet replaced.
 
-## Game-like interface: Phase 7.1 (practice-first navigation)
+## Practice-first navigation
 
-The application starts directly on the practice stage, rather than
-showing a separate Home menu. Until a piece is loaded, the score area
-offers a large **Choose music** action. While a piece is open,
-**Choose music**, **Lesson path** and **Settings** appear as an
-in-context drawer over the existing sheet music. Clicking outside the
-drawer, Close/Back, or returning to practice dismisses it.
+The application starts on the practice stage. Until a piece is loaded,
+**Choose music** opens the library. **Music**, **Path** and **Settings** open
+dedicated views with a shared navigation rail; **Practice** or Escape returns
+to the score. The score stays mounted behind these views.
 
-Opening a drawer during playback requests **Pause**, not Stop. The
-existing transport ID, score and progress remain intact; returning to
-the stage does not silently restart it. A quick library selection made
-during the asynchronous pause is queued rather than discarded.
-Selecting a different imported piece still presents the existing
-starting-measure selector. The legacy Home page is no longer in the
-normal navigation route.
+Opening another view during playback requests Pause. The existing transport
+ID, score and progress remain intact, and returning does not silently restart
+the attempt. A library selection made during the asynchronous pause is queued.
+Selecting a different imported piece presents the starting-measure selector.
 
-This subphase establishes the persistent playing surface. The reduced
-transport and piano-key-first flow are Phase 7.2; sampled grand piano
-audio for Listen is Phase 7.3. Existing scoring rules and MIDI input
-timing remain unchanged. Verify the drawer at multiple window sizes via
-`./scripts/check_godot.sh` and the actual interaction regression suite.
+Verify all window sizes with `./scripts/check_godot.sh`, and use the desktop
+checks to inspect rendered screens and actual notation movement.
 
 ## End-to-end library verification (Phase 6)
 
@@ -489,7 +482,7 @@ verified when you run the command on that collection.
 
 ## Library Health - Phase 5
 
-Open **Browse library → Check files** to inspect your MIDI and MusicXML
+Open **Music → Check files** to inspect your MIDI and MusicXML
 imports before choosing a piece. This check runs **in the background**;
 the normal music library stays responsive, and no instrument is required.
 
@@ -856,38 +849,29 @@ use their original callback and accessibility text.
 
 ## Unified visual system
 
-Practice, the music drawer, settings, lesson path and starting-point panel
-reuse one design system in `godot/practice_theme.gd`: stage and surface
-colors, border treatments, a common font stack and explicit semantic colors
-for play/success, listen/configuration, retry/warning and stop/error.
-Form fields, cards, drawers, transport buttons, library entries and HUD
-now derive styles from these shared tokens rather than independent colors.
-The backdrop uses fewer static drawing bands. This pass adds no
-continuously running animation and does not affect notation or MIDI timing.
+All views reuse `godot/practice_theme.gd`: the moodboard's forest, pine,
+charcoal, sage, slate and stone palette, serif titles, sans-serif controls,
+small rounded borders and one teal action accent. Retry and Listen share a
+neutral surface; Play is emphasized. White active staves and muted inactive
+hands remain legible against the dark score. The backdrop is a flat forest
+surface, with no decorative light bursts around the music.
 
-## Moodboard game-feel - event-driven coaching
+## Note feedback
 
-The ivory score, forest-green controls and five-step progress rail share one
-palette and interaction rhythm. Graded, fresh MIDI attacks can show a compact
-`RIGHT ON TIME`, `A LITTLE EARLY`, `A LITTLE LATE`, or `TRY THAT NOTE`
-coaching card at the edge of the score. Chord notes arriving within 115ms
-coalesce into one message. The note-impact card lasts under 0.7 seconds,
-redraws only while active and is cleared on switching into an ungraded
-preview. Confirmed fifth-of-exercise milestones create a short champagne
-glint along the segmented progress rail. Preview and Listen cannot earn
-these judgments or milestones. Phase transitions ease into view once, and
-the active transport button uses a 13Hz idle pulse rather than an unbounded
-60Hz redraw loop. No new timers, note grading or sound engines are added.
+Fresh, graded MIDI attacks produce small fading notehead contours and brief
+coaching text. Preview and Listen remain ungraded. The five-part progress rail
+shows actual backend progress with muted remaining segments. The timing line
+uses the same backend clock as the moving notation.
 
 ## Music selection and start-point usability
 
-The music drawer shows two-line, fully clickable rows with clear titles
-above subdued format, tempo and location information. Full metadata remains
-in tooltips. Search has a clear control and **Ctrl+F** or **/** shortcut.
-Starting a MIDI file offers Beginning, Middle and End jumps alongside
-the exact measure spinner and slider. Enter confirms the panel once,
-Escape returns to the music drawer, and an open mode menu retains Enter.
-There is no new continuously running animation.
+The library shows clickable music tiles in two columns on wide windows and
+one column on smaller windows. Serif titles sit above real format, tempo and
+folder metadata; full details remain in tooltips. Recently opened music comes
+first, then personal files and built-in warm-ups. Search supports **Ctrl+F**
+or **/**. Starting a MIDI file offers Beginning, Middle and End jumps alongside
+the exact measure spinner and slider. Enter confirms once; Escape returns to
+the library, and an open mode menu retains Enter.
 
 ## Performance pass - stable notation and lightweight animation
 
