@@ -69,7 +69,12 @@ func _draw() -> void:
     var alpha: float = fade*minf(1.0, entry*2.0)
     if alpha <= .001:
         return
-    var rect := Rect2(Vector2((1.0-entry)*15.0, 1.0), size-Vector2(18, 5))
+    # Quick overshoot and settle rather than a flat notification slide.
+    # This remains a brief local effect, not a fullscreen animation.
+    var overshoot: float = sin(PI * minf(1.0, t/.33)) * 3.0
+    var lift: float = (1.0-entry)*11.0 - overshoot
+    var rect := Rect2(Vector2((1.0-entry)*18.0, 1.0 + lift),
+        size-Vector2(18, 5))
     var radius: float = minf(13.0, rect.size.y*.26)
     var paper := Color("#203D3A", alpha*.96)
     draw_rect(Rect2(rect.position.x+radius, rect.position.y,
@@ -84,15 +89,22 @@ func _draw() -> void:
     # without covering the score or creating a bright full-screen flash.
     draw_line(rect.position+Vector2(5, 9),Vector2(rect.position.x+5,rect.end.y-9),
         Color(tone,alpha*.95),4.0,true)
+    # Small leading impact token echoes the note reaction without spawning
+    # particles or hiding any musical symbols.
+    var token := rect.position + Vector2(19, rect.size.y*.47)
+    var burst: float = pow(1.0 - minf(1.0, t/.33), 1.7)
+    draw_circle(token, 7.0 + 6.0 * burst, Color(tone,.13*alpha*burst))
+    draw_arc(token, 5.2 + burst*6.0, 0, TAU, 24,
+        Color(tone,.73*alpha), 1.8, true)
     var font: Font = get_theme_font("font")
     var main_size := 19
     var small_size := 14
     var baseline := rect.position.y + 24.0
-    draw_string(font,Vector2(rect.position.x+20,baseline),message,
-        HORIZONTAL_ALIGNMENT_LEFT,maxf(10.0,rect.size.x-33),main_size,
+    draw_string(font,Vector2(rect.position.x+36,baseline),message,
+        HORIZONTAL_ALIGNMENT_LEFT,maxf(10.0,rect.size.x-49),main_size,
         Color("#EBF9EF",alpha))
-    draw_string(font,Vector2(rect.position.x+20,baseline+18),subtext,
-        HORIZONTAL_ALIGNMENT_LEFT,maxf(10.0,rect.size.x-33),small_size,
+    draw_string(font,Vector2(rect.position.x+36,baseline+18),subtext,
+        HORIZONTAL_ALIGNMENT_LEFT,maxf(10.0,rect.size.x-49),small_size,
         Color("#B3D6C5",alpha))
     # Small expressive sparkle at the top edge, not sixteen independent
     # full-screen particle nodes.

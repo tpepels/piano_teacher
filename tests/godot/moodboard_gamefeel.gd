@@ -46,7 +46,15 @@ func _verify() -> void:
     stage.present(advance)
     check(stage.progress_spark >= .99 and stage.impact_energy == 0.0,
         "Real backend progress gives one short visual highlight, not fake MIDI success")
+    stage.sync_beat(4.05, 4, true)
+    check(stage.last_beat_number == 4 and stage.beat_ripple == 0.0,
+        "First musical beat primes the visual state without fake impacts")
+    stage.sync_beat(5.01, 4, true)
+    check(stage.beat_ripple > .99 and stage.impact_energy == 0.0,
+        "A true transport beat adds a visual pulse, not a graded success")
     stage._process(.16)
+    check(stage.beat_ripple < 1.0 and stage.beat_ripple > 0.0,
+        "Beat ripple eases out promptly without an independent clock")
     check(stage.progress_spark < 1.0 and stage.progress_spark > .0
         and stage.shown_progress > .08 and stage.shown_progress <= .38,
         "Earned progress moves forward and fades without jumps")

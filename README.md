@@ -863,6 +863,18 @@ coaching text. Preview and Listen remain ungraded. The five-part progress rail
 shows actual backend progress with muted remaining segments. The timing line
 uses the same backend clock as the moving notation.
 
+## Rhythm-game response, moodboard animation pass
+
+The dark, high-contrast practice stage keeps the engraved score dominant.
+Visual beat ripples follow the existing backend-driven musical clock at
+the fixed playhead; they cannot shift score timing or grant note success.
+Transport keys respond with stronger, short press/hover light and then
+sleep when idle. MIDI-triggered coaching cards enter with a small overshoot
+and note-colored token rather than a web-style rectangular toast. Earned
+progress leaves a short light trail below the staff, while ungraded preview
+retains its distinct blue treatment. All effects are drawn on existing
+Godot controls, with no GPU particle emitters or fullscreen postprocessing.
+
 ## Music selection and start-point usability
 
 The library shows clickable music tiles in two columns on wide windows and
