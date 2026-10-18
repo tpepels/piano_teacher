@@ -107,7 +107,12 @@ def space_for_continuous_reading(xml: str, bpm: float) -> tuple[str, dict]:
     lengths = _measure_lengths(root)
     if not lengths:
         raise ValueError("Practice score contains no measures")
-    linear = min(1.0, 4.0 / bpm)
+    # The previous four-second reading budget spread sparse half/whole
+    # notes across almost the whole viewport at 40-50 BPM. Keep the
+    # tempo-dependent spacing (required for recovery) but reduce its slope
+    # for short, continuously engraved exercises. Verovio still provides
+    # native collision clearance for accidentals, stems, and beams.
+    linear = min(1.0, 1.8 / bpm)
     # Keep the native note glyph sizes: reserve enough horizontal room for
     # every quarter beat, clefs/meters and per-measure barline clearance.
     # Unlike the previous reading_spacing mode, no internal page/system
