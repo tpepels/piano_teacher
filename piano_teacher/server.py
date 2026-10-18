@@ -28,6 +28,7 @@ from .raster import rasterize_score
 from .recovery import check_rolling_two_bar_window, check_two_bar_window
 from .music import Phrase, source_note_id, note_name
 from .lesson_score import build_lesson_score
+from .score_model import build_score_model
 from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
@@ -1775,6 +1776,26 @@ class PracticeEngine:
                     feedback=feedback, feedback_marks=self._guided_marks(teaching), feedback_unmapped=0)
             return result
 
+    def semantic_score(self) -> dict:
+        """Phase A: source-accurate notation contract, without Verovio/SVG.
+
+        Built from the same immutable active Phrase used for MIDI grading.
+        It does NOT depend on the legacy engraving cache or selected BPM.
+        """
+        with self.lock:
+            if self.plan is None:
+                raise ValueError("No piece loaded")
+            p = self.plan
+            phrase = self.display_phrase()
+            notation = build_lesson_score(
+                phrase, boundaries=p.piece.bar_boundaries,
+                time_signatures=p.piece.time_signatures,
+                key_signatures=p.piece.key_signatures,
+                clef_changes=p.piece.clef_changes)
+            return build_score_model(
+                notation, boundaries=p.piece.bar_boundaries,
+                hand=p.hand, revision=self.score_revision)
+
     def engraving(self) -> EngravedScore:
         with self.lock:
             if not self.plan:
@@ -1913,6 +1934,8 @@ class Handler(BaseHTTPRequestHandler):
                         self.wfile.write(block)
             elif route=="/score/layout":
                 self._json(200,self.engine.geometry())
+            elif route=="/score/model":
+                self._json(200,self.engine.semantic_score())
             elif route in ("/score.svg", "/score.png"):
                 from urllib.parse import parse_qs
                 query=parse_qs(urlsplit(self.path).query)
