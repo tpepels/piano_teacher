@@ -1,6 +1,6 @@
 # Architecture decision A — Semantic ScoreModel (October 2026)
 
-Status: **Phase A implemented; renderer migration NOT started.**
+Status: **Phases A and B implemented; renderer migration NOT started.**
 
 ## Why
 
@@ -64,21 +64,57 @@ every notation segment must point to a real source note; MusicXML segment
 durations and offset within measures are checked. Corrupt mismatches raise
 errors instead of silently producing a plausible but incorrect lesson.
 
-## Phase B — not implemented
+## Phase B — fixed musical timeline implemented as an opt-in diagnostic
 
-Introduce an independent `TransportClock` with exact beat origin and tempo;
-on the Godot side, use one user-tunable `pixels_per_beat` and a constant
-velocity. The visual position is `x(note) = lead + note.onset_beats *
-pixels_per_beat`, and the camera offset follows the same constant directly.
+The pure `godot/score_timeline.gd` is the mathematical contract. It consumes
+`/score/model` directly, never imports Verovio's X positions, and has no
+internal timer. The already existing `VisualTransportClock` is the SINGLE
+frontend presentation clock; its authoritative snapshots still come from
+the Python transport used by the MIDI grader and Listen.
 
-A preliminary collision pass should choose a **fixed scale for the whole
-passage** before playback if notation glyphs cannot fit at the desired scale.
-It may not accelerate between individual attacks to compensate for spacing.
-Count-in must occupy negative beats on the same axis, not be extrapolated
-from Verovio's first two noteheads.
+- Constant `DEFAULT_PIXELS_PER_BEAT = 96` (valid range: 24–480).
+- `x(note) = onset_beats * pixels_per_beat`, `camera_x =
+  (play_from_beat + clock_beat) * pixels_per_beat`.
+- Fixed playhead: `screen_x = playhead_x + x(note) - camera_x`.
+- Frame velocity: `pixels_per_beat * bpm / 60`, independent of note duration,
+  tempo changes in notated XML, and measure boundaries.
+- Count-in is one continuous negative-beat interval relative to
+  `play_from_beat`, ending exactly at zero without a different bar width.
+- Pause, seek, retry and BPM changes come only from authoritative transport
+  transitions; this module never seeks sound, grades MIDI or re-times notes.
 
-Phase C will draw notation from this model using a music font and preserve the
-old Verovio path as a fallback until symbol coverage is sufficient.
+### Try the prototype
+
+Run after updating the checkout:
+
+```sh
+PIANO_TEACHER_TIMELINE_PREVIEW=1 PIANO_TEACHER_PIXELS_PER_BEAT=96 ./run.sh
+```
+
+Change only `96` to `72`, `120` or `144` to tune horizontal
+density. The preview is an **overlaid diagnostic with simple note markers and
+duration bars**. It is deliberately NOT the Phase C sheet music renderer;
+there are no drawn clefs, flags, beams, ties, etc. The legacy score remains
+the default without the flag. Only the preview's visible score changes.
+
+A semantic score is fetched asynchronously from `/score/model` whenever
+the exercise revision changes. A response from a previous revision is
+discarded. The preview continues to use the same transport and playing
+controls. There is no new backend service or second time source.
+
+The old Verovio camera and count-in logic remain untouched in the default
+view until Phase C can draw notation from this timeline. Fitting dense
+polyphonic symbols may require a one-time *whole-passsage* global scale
+increase or collision indication in Phase C; it must never introduce
+between-note speed changes.
+
+Acceptance tests:
+`tests/test_phase_b_timeline.py` and
+`tests/godot/phase_b_timeline.gd` exercise musical onsets, mixed meters,
+negative lead-in, pause, seek, and precise 40/80/120 BPM fixed velocity.
+
+Phase C will use this semantic timeline to draw SMuFL notation in Godot,
+preserving Verovio as a fallback until coverage is sufficient.
 
 ## Compatibility
 
