@@ -49,7 +49,7 @@ def test_renderer_uses_only_required_variant_not_original(tmp_path,monkeypatch):
     e.plan=LearningPlan(piece())
     e.score=object() # Source object would fail if passed to renderer.
     try:
-        def fake_renderer(notation,first,last,hand,*,total_beats,bpm):
+        def fake_renderer(notation,first,last,hand,*,total_beats,bpm,continuous=False):
             assert isinstance(notation,LessonScore)
             assert notation.phrase.notes==e.plan.active_phrase.notes
             assert len(notation.phrase.notes)==2 and total_beats==8
