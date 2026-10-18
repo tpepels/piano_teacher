@@ -196,3 +196,70 @@ static func stem_up(group: Array, model: Dictionary) -> bool:
         var clef: Dictionary = m.get("clefs", {}).get(str(event.get("staff", "right")), {})
         total += float(staff_step(event.get("spelling", {}), clef))
     return total/float(group.size()) < 4.0
+
+
+# Key signatures use the circle-of-fifths order. Their steps are measured
+# against each clef, never repeated at one arbitrary y like a text label.
+static func signature_steps(clef: Dictionary, fifths: int) -> Array:
+    var sharps: Array = [
+        {"step":"F","octave":5}, {"step":"C","octave":5},
+        {"step":"G","octave":5}, {"step":"D","octave":5},
+        {"step":"A","octave":4}, {"step":"E","octave":5},
+        {"step":"B","octave":4}]
+    var flats: Array = [
+        {"step":"B","octave":4}, {"step":"E","octave":5},
+        {"step":"A","octave":4}, {"step":"D","octave":5},
+        {"step":"G","octave":4}, {"step":"C","octave":5},
+        {"step":"F","octave":4}]
+    var pitches: Array = sharps if fifths > 0 else flats
+    var result: Array = []
+    for i in range(mini(7, absi(fifths))):
+        var written: Dictionary = pitches[i].duplicate()
+        var step: int = staff_step(written, clef)
+        # Shift each symbol by octaves to live near the staff. This
+        # preserves correct letter placement across G/F/C clefs.
+        while step > 10:
+            step -= 7
+        while step < 0:
+            step += 7
+        result.append(step)
+    return result
+
+static func chord_offsets(events: Array, gap: float) -> Dictionary:
+    # Engraved unisons/seconds must never be placed on top of each other.
+    # This is a glyph-only horizontal offset: the musical beat and scroll
+    # camera remain untouched. Alternating sides centres the whole chord.
+    var lanes: Dictionary = {}
+    for event in events:
+        if not event is Dictionary or str(event.get("kind", "")) != "note":
+            continue
+        var name: String = str(event.get("staff",""))+"|"+ \
+            str(event.get("voice","1"))+"|"+str(event.get("measure",0))+"|"+ \
+            str(snappedf(float(event.get("beat", 0.0)), .000001))
+        if not lanes.has(name):
+            lanes[name] = []
+        lanes[name].append(event)
+    var result: Dictionary = {}
+    for key in lanes:
+        var chord: Array = lanes[key]
+        if chord.size() < 2:
+            continue
+        chord.sort_custom(func(a,b):
+            return diatonic_index(a.get("spelling",{})) < \
+                diatonic_index(b.get("spelling",{})))
+        for i in range(1,chord.size()):
+            var previous: int = diatonic_index(chord[i-1].get("spelling",{}))
+            var current: int = diatonic_index(chord[i].get("spelling",{}))
+            if current-previous == 1:
+                # Alternate each close neighbour, avoid sustained drift
+                # when three or more adjacent pitches form a cluster.
+                var old_id: String = str(chord[i-1].get("id",""))
+                var new_id: String = str(chord[i].get("id",""))
+                var old_offset: float = float(result.get(old_id,0.0))
+                var width: float = gap*.75
+                if absf(old_offset) < .001:
+                    result[old_id] = -width
+                    result[new_id] = width
+                else:
+                    result[new_id] = -old_offset
+    return result
