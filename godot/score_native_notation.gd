@@ -51,7 +51,28 @@ func _staff_center(hand: String) -> float:
     return size.y * (.34 if hand == "right" else .69)
 
 func _gap() -> float:
-    return clampf(size.y * .034, 8.5, 17.0)
+    # Reserve actual room for ledger notes ABOVE and BELOW both staves.
+    # The former raster crop clipped high notes because it only knew staff
+    # rails, not the extreme noteheads. Fit the full semantic pitch range
+    # once per frame/viewport, uniformly for both hands.
+    var gap: float = clampf(size.y * .034, 8.5, 17.0)
+    if timeline.model.is_empty():
+        return gap
+    for event in timeline.model.get("notation_events", []):
+        if not event is Dictionary or str(event.get("kind", "")) != "note":
+            continue
+        var staff: String = str(event.get("staff", "right"))
+        var clef: Dictionary = _clef_for(staff, _measure_for(event))
+        var step: int = Geometry.staff_step(event.get("spelling", {}), clef)
+        var factor: float = 2.0 - float(step)*.5
+        var center: float = _staff_center(staff)
+        if factor < -.001:
+            gap = minf(gap, (center-32.0) / -factor)
+        elif factor > .001:
+            gap = minf(gap, (size.y-32.0-center) / factor)
+    # A note that truly cannot fit is still drawn deterministically; the
+    # score is not cropped, and no horizontal position can change.
+    return maxf(5.0, gap)
 
 func _clef_for(staff: String, measure: Dictionary) -> Dictionary:
     var clefs: Dictionary = measure.get("clefs", {})
