@@ -113,12 +113,17 @@ func _draw_preparation() -> void:
     # behind the timing line. All preparation ink is transparent.
     if show_preparation_staff:
         preload("res://staff_continuity.gd").draw_rules(self, lines, margin_left, first_x, "both")
-    # In the continuous-score practice view, the real grand staff already
-    # extends under the negative-beat lead-in. The preparation header/staff
-    # are disabled there: don't paint extra rest rows on top of the sheet.
-    # The dedicated count-in indicator communicates the remaining beats.
-    if lines.size() < 10 or (not show_preparation_header and
-            not show_preparation_staff):
+    # The continuous staff already spans the lead-in. Delineate ONE empty
+    # count-in bar using two ordinary barlines, without copied clefs, rests,
+    # duplicate rails or an opaque mask. This bar moves with the same score
+    # canvas as the notes from the first negative beat onward.
+    if lines.size() < 10:
+        return
+    if not show_preparation_header and not show_preparation_staff:
+        var bar_end: float = first_x - gap * 1.3
+        for x in [left, bar_end]:
+            draw_line(Vector2(x, lines[0]), Vector2(x, lines[9]),
+                Color(Design.SCORE_INK, .53), 1.4, true)
         return
     if show_preparation_header:
         _draw_preparation_clef("right", left - gap * 7.0, lines, 0, gap)
