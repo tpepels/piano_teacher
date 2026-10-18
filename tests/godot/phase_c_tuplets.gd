@@ -103,9 +103,9 @@ func run() -> void:
             "transport_id":4,"hand":"right"},-.5)
         check(absf(player.timeline.pixels_per_beat-density) < .001,
             "Tuplets never alter horizontal spacing based on BPM")
-        check(absf((player.timeline.screen_x(2.0,-.5,500.0,0.0)
-                -player.timeline.screen_x(0.0,-.5,500.0,0.0))
-                -2.0*density) < .001,
+        check(absf(player.timeline.screen_x(2.0,-.5,500.0,0.0)
+            -player.timeline.screen_x(0.0,-.5,500.0,0.0)
+            -2.0*density) < .001,
             "Triplet grouping never changes the musical time axis")
     var arbitrary: Dictionary = model.duplicate(true)
     arbitrary["notation_events"][0]["time_modification"] = {
