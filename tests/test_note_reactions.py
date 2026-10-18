@@ -39,18 +39,9 @@ func run() -> void:
     assert(bounds.size.x > bounds.size.y)
     assert(bounds.size.x < 40 and bounds.size.y < 30)
 
-    # The brighter sixteen-spark burst must stay deterministic and
-    # wide enough to be visibly different from the older tiny green ring.
-    assert(Effects.PARTICLE_COUNT == 16)
-    assert(Effects.MAX_VISIBLE_HITS == 16)
-    var at: Vector2 = Effects.particle_endpoint(
-        Vector2(160, 90), 20.0, .45, 7)
-    assert(at == Effects.particle_endpoint(Vector2(160, 90), 20.0, .45, 7),
-        "Particles must not jitter on repeated redraws")
-    assert(at.distance_to(Vector2(160, 90)) > 30.0,
-        "Visible particles must escape the small notehead circle")
-    assert(Effects.impact_reach(20.0, .5) > 60.0,
-        "Impact halo must be conspicuous at ordinary notation scale")
+    # The original notation owns the noteheads. The short pulse is exactly
+    # anchored at their SVG coordinates, without particle motion or replicas.
+    assert(Effects.MAX_VISIBLE_HITS <= 16)
     var app := FixtureApp.new()
     root.add_child(app)
     await process_frame
@@ -95,8 +86,8 @@ func run() -> void:
         "Score reaction underlay must own the live pulse array")
     assert(app.score_overlay.hit_pulses[0].x == .32)
     assert(app.score_overlay.hit_pulses[1].x == .58)
-    # Phase 7.7 extends the audiovisual hit reaction to 450 ms.
-    assert(app.score_overlay.hit_pulses[0].duration_ms == 450)
+    # A quick light pulse replaces the former 450ms fireworks.
+    assert(app.score_overlay.hit_pulses[0].duration_ms == 220)
     assert(app.score_overlay.hit_pulses[0].note_id == "na",
         "A scored note must override its pending gold outline")
     assert(app.score_overlay.hit_pulses[1].note_id == "nc")
