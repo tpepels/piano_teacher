@@ -28,9 +28,10 @@ func run() -> void:
     if Stage == null or CountIn == null:
         quit(1)
         return
-    check(Design.STAGE.get_luminance() < .22 and
-        Design.SCORE_INK.get_luminance() > .70,
-        "Dark stage must have contrasting luminous notation ink")
+    check(Design.STAGE.get_luminance() > .8 and
+        Design.SCORE_INK.get_luminance() < .25 and
+        Design.FOREST.get_luminance() < .1,
+        "Moodboard light score must have dark notation against forest shell")
     var stage = Stage.new()
     root.add_child(stage)
     stage.size = Vector2(1200, 650)
