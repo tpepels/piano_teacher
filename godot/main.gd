@@ -904,6 +904,9 @@ func _mount_overlays() -> void:
     spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
     navigation_rail.add_child(spacer)
     navigation_rail.add_child(_button("Practice", func(): _navigate("practice"), false, "navigation"))
+    var rail_exit := _button("Exit", _exit_app, false, "danger")
+    rail_exit.tooltip_text = "Close Piano Teacher (Ctrl+Q)"
+    navigation_rail.add_child(rail_exit)
     var pages := Control.new()
     pages.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     pages.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -1107,6 +1110,9 @@ func _build_interface() -> void:
     practice_navigation.add_child(path_button)
     practice_settings_button = _button("Settings", func(): _navigate("settings"), false, "settings")
     practice_navigation.add_child(practice_settings_button)
+    var practice_exit := _button("Exit", _exit_app, false, "danger")
+    practice_exit.tooltip_text = "Close Piano Teacher (Ctrl+Q)"
+    practice_navigation.add_child(practice_exit)
 
     practice_header = HBoxContainer.new()
     practice_header.add_theme_constant_override("separation", 20)
