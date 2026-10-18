@@ -1,4 +1,4 @@
-"""Tempo-dependent notation changes only after the preceding feedback is read."""
+"""Tempo changes keep notation geometry and wait for score/feedback handoff."""
 import pytest
 
 from piano_teacher import server
@@ -35,7 +35,7 @@ def note_spacing(layout):
     return (second["x"] - first["x"]) * layout["widths"][page] / staff_gap
 
 
-def test_recovery_keeps_old_feedback_then_waits_for_new_spacing_and_retries_same_chunk(harness):
+def test_recovery_keeps_old_feedback_then_waits_for_new_score_and_retries_same_chunk(harness):
     e, now = harness
     original = e.engraving()
     revision = e.score_revision
@@ -60,8 +60,9 @@ def test_recovery_keeps_old_feedback_then_waits_for_new_spacing_and_retries_same
     assert loading["revision"] == revision + 1
     assert loading["awaiting_score_revision"] == revision + 1
     assert loading["recovery_beat"] == 8
-    widened = e.engraving()
-    assert note_spacing(widened.layout) > note_spacing(original.layout)
+    revised = e.engraving()
+    # Recovery changes transport BPM, never printed horizontal distances.
+    assert note_spacing(revised.layout) == pytest.approx(note_spacing(original.layout), rel=.001)
     # Rendering time cannot consume the retry's count-in or queue revisions.
     now[0] += 120
     assert e.state()["phase"] == "loading"
@@ -75,10 +76,10 @@ def test_recovery_keeps_old_feedback_then_waits_for_new_spacing_and_retries_same
     assert restarted["transport_id"] == transport + 1
     assert restarted["recovery_beat"] is None
     assert 0 < restarted["countdown"] <= 4
-    assert e.engraving() is widened
+    assert e.engraving() is revised
 
 
-def test_clean_tempo_restore_waits_for_spacing_without_advancing_lesson(harness):
+def test_clean_tempo_restore_waits_for_score_without_advancing_lesson(harness):
     e, now = harness
     e.plan.bpm = 72
     original = e.engraving()
@@ -99,7 +100,7 @@ def test_clean_tempo_restore_waits_for_spacing_without_advancing_lesson(harness)
     assert waiting["revision"] == revision + 1
     assert waiting["awaiting_score_revision"] == revision + 1
     restored = e.engraving()
-    assert note_spacing(restored.layout) < note_spacing(original.layout)
+    assert note_spacing(restored.layout) == pytest.approx(note_spacing(original.layout), rel=.001)
     e.control("score_ready", revision=revision + 1)
     assert e.state()["phase"] == "count_in"
     assert e.state()["play_from_beat"] == 0
@@ -110,13 +111,14 @@ def test_cache_follows_actual_bpm_and_restart_keeps_fresh_clock(harness):
     original = e.engraving()
     # Recovery can change actual tempo without changing the selected target.
     e.plan.bpm = 72
-    widened = e.engraving()
-    assert note_spacing(widened.layout) > note_spacing(original.layout)
+    revised = e.engraving()
+    # Recovery changes transport BPM, never printed horizontal distances.
+    assert note_spacing(revised.layout) == pytest.approx(note_spacing(original.layout), rel=.001)
     assert e.plan.target_bpm == 80
     e.start()
     now[0] = e.run_at + 1
     e.control("restart")
-    assert e.engraving() is widened
+    assert e.engraving() is revised
     assert e.state()["phase"] == "count_in"
     assert e.state()["countdown"] == pytest.approx(10 / 3)
 
