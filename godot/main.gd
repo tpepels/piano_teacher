@@ -224,6 +224,7 @@ var review_sheet: AcceptDialog
 var pause_sheet: Control
 var advanced_pause_open := false
 var skip_stage_button: Button
+var practice_skip_button: Button
 var placement_button: Button
 var apply_tempo_button: Button
 var ui_scale := 1.0
@@ -1342,6 +1343,15 @@ func _build_interface() -> void:
     listen_button = _transport_button("Listen", _listen_or_return_to_practice, "listen")
     listen_button.tooltip_text = "Hear this passage, or return to practice · L"
     controls.add_child(listen_button)
+    # Explicitly advance to the next lesson without granting mastery.
+    # Keep the three transport controls unchanged; this is a secondary,
+    # labeled navigation action rather than another transport mode.
+    practice_skip_button = _button("Skip → Next lesson", _skip_current_lesson,
+        false, "navigation")
+    practice_skip_button.tooltip_text = "Go to the next lesson without earning mastery"
+    practice_skip_button.disabled = true
+    practice_skip_button.visible = false
+    controls.add_child(practice_skip_button)
     # Keyboard and Lesson Path retain Stop, passage navigation and mode
     # choices, without competing with the three routine controls.
     stop_button = _button("Stop attempt", func(): _send_action({"action": "stop"}), false, "danger")
@@ -2680,6 +2690,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var learner: Dictionary = parsed.get("learner", {}) if parsed.get("learner") is Dictionary else {}
     placement_button.visible = bool(parsed.get("placement_available", false))
     skip_stage_button.disabled = not bool(parsed.get("skip_available", false))
+    practice_skip_button.visible = bool(parsed.get("loaded", false))
+    practice_skip_button.disabled = not bool(parsed.get("skip_available", false)) or action_pending
     mode_choice.select(0 if learning else 2 if str(parsed.get("mode", "")) == "perform" else 1)
     if str(parsed.get("mode", "")) == "listen":
         mode_choice.text = "Listen"
@@ -3481,6 +3493,13 @@ func _open_advanced_pause() -> void:
 func _toggle_pause() -> void:
     if _has_active_transport() or (str(last_state.get("mode", "practice")) == "learn" and str(last_state.get("phase", "")) in ["guided_wait", "paused"]):
         _send_action({"action": "resume" if bool(last_state.get("paused", false)) else "pause"})
+
+func _skip_current_lesson() -> void:
+    if action_pending or not bool(last_state.get("skip_available", false)):
+        return
+    _send_action({"action": "skip_stage",
+        "reason": "Learner skipped to the next lesson from the practice screen"})
+
 
 func _restart_practice() -> void:
     if score_view.texture != null and layout_revision == revision:
