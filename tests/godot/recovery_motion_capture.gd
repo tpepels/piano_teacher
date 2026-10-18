@@ -75,8 +75,9 @@ func run() -> void:
             var pixels: Image = root.get_texture().get_image()
             if not checking:
                 pixels.save_png(output + "/%d-%03d.png" % [bpm, frame])
-            var expected_x: float = app.score_frame.global_position.x + app.score_frame.size.x * .42
-            var line_y: int = roundi(app.score_frame.get_global_rect().get_center().y)
+            var pixel_scale := Vector2(pixels.get_size()) / root.get_visible_rect().size
+            var expected_x: float = (app.score_frame.global_position.x + app.score_frame.size.x * .42) * pixel_scale.x
+            var line_y: int = roundi(app.score_frame.get_global_rect().get_center().y * pixel_scale.y)
             var line_x := -1
             var best := 1.0
             for x in range(maxi(0,roundi(expected_x)-35), mini(pixels.get_width(),roundi(expected_x)+36)):
@@ -89,7 +90,8 @@ func run() -> void:
             samples.append({"bpm":bpm, "frame":frame, "seconds":elapsed,
                 "beat":beat, "x":app.score_content.position.x,
                 "expected_line_x":expected_x, "rendered_line_x":line_x, "line_color_error":best,
-                "width":root.size.x, "height":root.size.y})
+                "width":pixels.get_width(), "height":pixels.get_height(),
+                "pixel_scale":[pixel_scale.x, pixel_scale.y]})
             if best > .35 or absf(float(line_x) - expected_x) > 2.0:
                 failures += 1
                 print("PLAYHEAD_PIXEL_FAIL:", bpm, "/", frame, " line=", line_x, " expected=", expected_x, " color_error=", best)

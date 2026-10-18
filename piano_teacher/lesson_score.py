@@ -409,6 +409,12 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
     work = ET.SubElement(root, "work")
     ET.SubElement(work, "work-title").text = " "
     partlist = ET.SubElement(root, "part-list")
+    # The two generated hand parts belong to one piano grand staff. Without
+    # this group Verovio engraves separate barlines, leaving a gap between
+    # the hands even though the opening system line connects them.
+    piano_group = ET.SubElement(partlist, "part-group", type="start", number="1")
+    ET.SubElement(piano_group, "group-symbol").text = "brace"
+    ET.SubElement(piano_group, "group-barline").text = "yes"
     # The practice HUD already identifies the active hand. Verovio's
     # full-size Right/Left hand labels used to consume a large strip of score
     # space and make the clefs look like labels on a magnified PDF.
@@ -416,6 +422,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
         scorepart = ET.SubElement(partlist, "score-part", id=ident)
         ET.SubElement(scorepart, "part-name").text = " "
         ET.SubElement(scorepart, "part-abbreviation").text = " "
+    ET.SubElement(partlist, "part-group", type="stop", number="1")
     bindings, counts, staff_clefs = {}, {}, {}
     for hand, ident in (("right", "RH"), ("left", "LH")):
         part = ET.SubElement(root, "part", id=ident)

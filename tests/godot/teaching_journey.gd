@@ -82,7 +82,9 @@ func capture(label: String) -> Dictionary:
                     if color.r > .5 and color.g > .5 and color.b > .45:
                         ink += 1
         entry["notehead_ink"] = ink
-        check(ink >= 8 or (str(app.last_state.get("phase", "")) == "count_in" and position.x > app.score_frame.get_global_rect().end.x), "Real notehead pixels remain visible or approach from beyond the count-in: " + label)
+        check(ink >= 8 or (str(app.last_state.get("phase", "")) == "count_in"
+            and position.x > app.score_frame.get_global_rect().end.x * pixel_scale.x),
+            "Real notehead pixels remain visible or approach from beyond the count-in: " + label)
     if label == "wrong-note-hint":
         var keyboard: Control = app.hint_keyboard
         check(keyboard.is_visible_in_tree(), "Wrong input reveals contextual keyboard")

@@ -54,7 +54,7 @@ func run() -> void:
         app.overlay_drawer.modulate.a = 1.0
         var drawer: Rect2 = app.overlay_drawer.get_global_rect()
         print("DRAWER:", page, " ", drawer)
-        check(drawer.position.x >= -1 and drawer.end.x <= root.size.x + 1,
+        check(drawer.position.x >= -1 and drawer.end.x <= root.get_visible_rect().size.x + 1,
             page + " drawer fits the window")
         var content: Control = app.screens[page]
         var clip: Rect2 = content.get_global_rect()
@@ -91,7 +91,7 @@ func run() -> void:
     app._show_open_picker({"title":"Imported MIDI", "piece_last_bar":77, "selected_start_bar":1})
     for frame in range(8):
         await process_frame
-    check(app.open_panel.get_global_rect().position.x >= 0 and app.open_panel.get_global_rect().end.x <= root.size.x,
+    check(app.open_panel.get_global_rect().position.x >= 0 and app.open_panel.get_global_rect().end.x <= root.get_visible_rect().size.x,
         "Starting point fits horizontally")
     if args.size() > 1 and DisplayServer.get_name() != "headless":
         RenderingServer.force_draw()

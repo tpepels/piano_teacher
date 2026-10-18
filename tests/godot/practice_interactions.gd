@@ -432,7 +432,7 @@ func test_caption_bounds() -> void:
                 expected = score_rect
             check(score_rect.is_equal_approx(expected),
                 "Caption changes must not move or resize notation at %s during %s: %s vs %s" % [dimensions, phase, score_rect, expected])
-            var viewport := Rect2(Vector2.ZERO, Vector2(dimensions))
+            var viewport := root.get_visible_rect()
             check(score_rect.size.y >= 135.0 and viewport.encloses(score_rect),
                 "Captions leave a usable notation region at %s" % dimensions)
             check(viewport.encloses(app.practice_controls.get_global_rect()),
@@ -759,14 +759,15 @@ func test_handsfree_midi_start_and_readability() -> void:
     await process_frame
     await process_frame
     app._update_responsive_layout()
-    check(app.ui_scale >= 1.5, "Fullscreen UI uses readable scale")
-    check(app.progress_label.get_theme_font_size("font_size") >= 22,
-        "Progress labels are readable at high resolution")
-    check(app.start_button.get_theme_font_size("font_size") >= 22,
-        "Start button remains readable at high resolution")
-    check(app.hint_keyboard.custom_minimum_size.y >= 145,
-        "Piano hint diagram scales with text instead of staying microscopic")
-    check(app.practice_controls.get_global_rect().end.x <= root.size.x + 1,
+    var physical_scale: float = root.content_scale_factor
+    check(physical_scale >= 1.5, "Fullscreen UI uses native window scaling")
+    check(app.progress_label.get_theme_font_size("font_size") * physical_scale >= 22,
+        "Progress labels retain readable physical pixel size at high resolution")
+    check(app.start_button.get_theme_font_size("font_size") * physical_scale >= 22,
+        "Start button retains readable physical pixel size at high resolution")
+    check(app.hint_keyboard.custom_minimum_size.y * physical_scale >= 145,
+        "Piano hint diagram scales with native window content")
+    check(app.practice_controls.get_global_rect().end.x <= root.get_visible_rect().size.x + 1,
         "Scaled controls remain inside the full-size window")
 
 func run() -> void:

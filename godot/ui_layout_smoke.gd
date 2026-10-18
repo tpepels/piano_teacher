@@ -68,7 +68,7 @@ func _run() -> void:
     scene.call("_navigate", "practice")
     await process_frame
     await process_frame
-    var viewport: Vector2 = root.size
+    var viewport: Vector2 = root.get_visible_rect().size
     _check(str(scene.get("current_screen")) == "practice",
         "Phase 7.1 must open directly on the practice stage")
     _check(not (scene.get("overlay_root") as Control).visible,

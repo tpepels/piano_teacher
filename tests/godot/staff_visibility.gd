@@ -96,10 +96,11 @@ func run() -> void:
     await create_timer(.25).timeout
     RenderingServer.force_draw()
     var modal_frame := root.get_texture().get_image()
-    var rail_y: int = roundi(app.score_content.global_position.y \
-        + float(app.score_layout.systems[0].staff_lines[0]) * app.score_content.size.y)
+    var modal_scale := Vector2(modal_frame.get_size()) / root.get_visible_rect().size
+    var rail_y: int = roundi((app.score_content.global_position.y \
+        + float(app.score_layout.systems[0].staff_lines[0]) * app.score_content.size.y) * modal_scale.y)
     var leaking := 0
-    for x in range(400, 740):
+    for x in range(roundi(400 * modal_scale.x), mini(modal_frame.get_width(), roundi(740 * modal_scale.x))):
         var color := modal_frame.get_pixel(x, rail_y)
         if minf(color.r, minf(color.g, color.b)) >= .97:
             leaking += 1

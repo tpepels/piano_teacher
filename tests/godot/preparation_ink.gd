@@ -59,15 +59,16 @@ func run() -> void:
         var prepared: Image = await frame()
         prepared.save_png(folder + "/prepared-%.0f.png" % onset)
         var anchor: Dictionary = app._position_at_beat(onset)
-        var first: Vector2 = app.score_content.global_position + Vector2(float(anchor.x), float(anchor.top)) * app.score_content.size
-        var left: float = app.score_content.global_position.x + float(anchor.ink_left) * app.score_content.size.x
-        var bottom: float = app.score_content.global_position.y + float(anchor.bottom) * app.score_content.size.y
+        var pixel_scale := Vector2(original.get_size()) / root.get_visible_rect().size
+        var first: Vector2 = (app.score_content.global_position + Vector2(float(anchor.x), float(anchor.top)) * app.score_content.size) * pixel_scale
+        var left: float = (app.score_content.global_position.x + float(anchor.ink_left) * app.score_content.size.x) * pixel_scale.x
+        var bottom: float = (app.score_content.global_position.y + float(anchor.bottom) * app.score_content.size.y) * pixel_scale.y
         var expected := 0
         var retained := 0
         for y in range(maxi(0, floori(first.y)), mini(original.get_height(), ceili(bottom))):
             var staff_line := false
             for line in app.score_overlay.lead_staff_lines:
-                var staff_y: float = app.score_content.global_position.y + float(line) * app.score_content.size.y
+                var staff_y: float = (app.score_content.global_position.y + float(line) * app.score_content.size.y) * pixel_scale.y
                 if absf(float(y) - staff_y) < 2.0:
                     staff_line = true
             if staff_line:

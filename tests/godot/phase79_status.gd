@@ -141,7 +141,7 @@ func run() -> void:
             " text=", label_width)
         check(indicator.size.x - 32.0 >= ceilf(label_width),
             "Complete MIDI status must fit its real font at %s" % dimensions)
-        check(indicator.get_global_rect().end.x <= float(dimensions.x),
+        check(indicator.get_global_rect().end.x <= root.get_visible_rect().size.x,
             "Readable MIDI status must remain inside the viewport at %s" % dimensions)
     # A different installed/theme font must invalidate the intrinsic width,
     # while changing status alone must not make the tempo column jump.
@@ -163,7 +163,7 @@ func run() -> void:
     await process_frame
     check(app.practice_controls.get_child_count() == 3,
         "New gaming cues must not introduce a fourth transport button")
-    check(app.score_frame.get_global_rect().end.x <= 1026.0,
+    check(app.score_frame.get_global_rect().end.x <= root.get_visible_rect().size.x + 2.0,
         "The music stage must not overflow a normal laptop viewport")
     print("PHASE79_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)
