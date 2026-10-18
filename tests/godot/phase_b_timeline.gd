@@ -65,7 +65,7 @@ func run() -> void:
             "running":true, "paused":false, "clock_beat":-2.5}
         var initial := 100000
         clock.accept(state, initial, initial)
-        var previous_x := timeline.screen_x(4.0, clock.now(initial),
+        var previous_x: float = timeline.screen_x(4.0, clock.now(initial),
             playhead, 3.0)
         for tick in range(1, 301):
             var time_ms: int = initial + tick * 20
