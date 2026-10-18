@@ -1232,6 +1232,17 @@ func _build_interface() -> void:
     note_reactions.hit_pulses = score_overlay.hit_pulses
     note_reactions.preview_pulses = score_overlay.preview_pulses
     note_reactions.wrong_ghosts = score_overlay.wrong_ghosts
+    if timeline_preview_enabled:
+        # Native notation sits above the legacy raster but BELOW the real
+        # count-in, error and transport overlays. The first Phase C trial
+        # must not hide essential game controls while it draws the score.
+        timeline_preview = (NativeNotation.new() if native_notation_enabled
+            else TimelinePreview.new())
+        timeline_preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        timeline_preview.visible = false
+        score_frame.add_child(timeline_preview)
+        if not timeline_preview.set_density_from_env():
+            push_warning("Native score density: " + str(timeline_preview.notice))
     # Score status must live inside the score panel: feedback_label is replaced
     # by regular state polling and cannot hold engraving errors reliably.
     score_status_panel = CenterContainer.new()
@@ -1304,16 +1315,6 @@ func _build_interface() -> void:
     practice_note_feedback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
     practice_note_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_note_feedback_panel.add_child(practice_note_feedback_label)
-    if timeline_preview_enabled:
-        # Diagnostic overlay deliberately covers ALL original note/rail art.
-        # It has no MIDI or audio output and leaves the existing engine active.
-        timeline_preview = (NativeNotation.new() if native_notation_enabled
-            else TimelinePreview.new())
-        timeline_preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-        timeline_preview.visible = false
-        score_frame.add_child(timeline_preview)
-        if not timeline_preview.set_density_from_env():
-            push_warning("Phase B density: " + str(timeline_preview.notice))
     hint_keyboard = HintKeyboard.new()
     score_region.add_child(hint_keyboard)
     practice_progress = ProgressBar.new()
