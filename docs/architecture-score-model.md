@@ -152,7 +152,14 @@ place each accidental at a clef-relative staff step, and seconds in chords
 receive local notehead displacements. These are *glyph corrections only*;
 none change musical time or the linear scroll camera.
 
-**Remaining limitations:** complex tuplets, 32nd/64th notes, double dots,
+**C2 follow-up:** native 32nd and 64th notes/rests are now supported
+with three/four flag strokes or beam levels. Short rhythmic values can raise
+the **whole exercise's** pixels-per-beat scale before playback (e.g., a
+1/64-note interval with 25 px glyph clearance requires 400 px/beat).
+They never alter the speed partway through the passage. This specifically
+resolves the native fallback warning `Unsupported music value: 32nd`.
+
+**Remaining limitations:** complex tuplets, 128th notes, double dots,
 cross-staff beams, advanced independent-voice collision/layout, full octave
 signs and a polished SMuFL music-font pipeline are not supported yet.
 The renderer currently uses native vector primitives for clefs and symbols,
