@@ -240,7 +240,10 @@ func _paint_clef(x: float, center: float, sign: String,
                 -PI*.64, PI*.64, 16, ink, 2.1, true)
 
 func _paint_note(event: Dictionary, x: float,
-        gap: float, ink: Color, beam_stem: Dictionary = {}) -> void:
+        gap: float, ink: Color, beam_stem: Dictionary = {},
+        head_offset: float = 0.0) -> void:
+    # Only local glyph separation: the source beat is unchanged.
+    x += head_offset
     var staff: String = str(event.get("staff", "right"))
     var measure: Dictionary = _measure_for(event)
     var clef: Dictionary = _clef_for(staff, measure)
@@ -268,7 +271,8 @@ func _paint_note(event: Dictionary, x: float,
         _paint_accidental(x,y,accidental,ink,gap)
     drawn_noteheads[str(event.get("id", ""))] = Vector2(x,y)
 
-func _beam_layout(gap: float, clock: float, playhead_x: float) -> Dictionary:
+func _beam_layout(gap: float, clock: float, playhead_x: float,
+        head_offsets: Dictionary = {}) -> Dictionary:
     # Build one set of stem tips and polygons for the complete score.
     # Their screen X changes only through the common, linear timeline.
     var stems: Dictionary = {}
@@ -288,7 +292,9 @@ func _beam_layout(gap: float, clock: float, playhead_x: float) -> Dictionary:
         for event in group:
             var x: float = timeline.screen_x(float(event.get("beat", 0.0)),
                 clock, playhead_x, play_from_beat)
-            var stem_x: float = x+(gap*.61 if up else -gap*.61)
+            var stem_x: float = x + float(head_offsets.get(
+                str(event.get("id", "")), 0.0)) + \
+                (gap*.61 if up else -gap*.61)
             var id: String = str(event.get("id", ""))
             stems[id] = {"up":up, "tip_y":tip}
             members.append({"x":stem_x, "tip_y":tip,
@@ -421,8 +427,22 @@ func _draw() -> void:
             draw_line(Vector2(x,center-2*gap),Vector2(x,center+2*gap),
                 boundary_tint,1.3,true)
             var clef: Dictionary = _clef_for(staff,measure)
+            var signatures: Dictionary = measure.get("keys",{})
+            var signature: int = int(signatures.get(staff,0))
+            var previous_keys: Dictionary = previous_measure.get("keys",{})
+            var key_changed: bool = signature != int(previous_keys.get(staff,999))
             if previous_measure.is_empty() or _clef_for(staff,previous_measure) != clef:
-                _paint_clef(x-53.0,center,str(clef.get("sign","G")),gap,_ink(staff))
+                _paint_clef(x-86.0-float(absi(signature))*14.0,
+                    center,str(clef.get("sign","G")),gap,_ink(staff))
+            if key_changed and signature != 0:
+                var steps: Array = Geometry.signature_steps(clef, signature)
+                for i in range(steps.size()):
+                    var glyph_x: float = x-39.0-float(steps.size()-i)*14.0
+                    var glyph_y: float = Geometry.note_y(int(steps[i]),
+                        center+2.0*gap,gap)
+                    _paint_accidental(glyph_x,glyph_y,
+                        "sharp" if signature > 0 else "flat",
+                        _ink(staff),gap)
             if previous_measure.is_empty() or previous_measure.get("meter",[]) != measure.get("meter",[]):
                 var meter: Array = measure.get("meter",[4,4])
                 if meter.size() >= 2:
@@ -430,15 +450,6 @@ func _draw() -> void:
                         HORIZONTAL_ALIGNMENT_LEFT,-1,14,_ink(staff))
                     draw_string(font,Vector2(x-30.0,center+gap*1.2),str(meter[1]),
                         HORIZONTAL_ALIGNMENT_LEFT,-1,14,_ink(staff))
-            var signatures: Dictionary = measure.get("keys",{})
-            var signature: int = int(signatures.get(staff,0))
-            var previous_keys: Dictionary = previous_measure.get("keys",{})
-            if signature != int(previous_keys.get(staff,999)):
-                if signature != 0:
-                    var symbol: String = "♯" if signature > 0 else "♭"
-                    draw_string(font,Vector2(x-42.0,center-gap*.38),
-                        symbol.repeat(absi(signature)),
-                        HORIZONTAL_ALIGNMENT_LEFT,-1,15,_ink(staff))
         if x >= 0.0 and x <= size.x:
             draw_string(font,Vector2(x+5.0,_staff_center("right")-gap*3.0),
                 str(measure.get("number","")),
@@ -448,7 +459,10 @@ func _draw() -> void:
     # layout pass or per-note acceleration, including chord tones and rests.
     visible_symbols = 0
     drawn_noteheads.clear()
-    var beam_data: Dictionary = _beam_layout(gap, camera_clock, playhead_x)
+    var head_offsets: Dictionary = Geometry.chord_offsets(
+        timeline.model.get("notation_events", []), gap)
+    var beam_data: Dictionary = _beam_layout(gap, camera_clock,
+        playhead_x, head_offsets)
     var beam_stems: Dictionary = beam_data.get("stems", {})
     var visible_events: Array = []
     for event in timeline.model.get("notation_events",[]):
@@ -464,7 +478,8 @@ func _draw() -> void:
         var ink: Color = _ink(staff)
         if str(event.get("kind","")) == "note":
             _paint_note(event,x,gap,ink,
-                beam_stems.get(str(event.get("id", "")), {}))
+                beam_stems.get(str(event.get("id", "")), {}),
+                float(head_offsets.get(str(event.get("id", "")), 0.0)))
         else:
             var voice: String = str(event.get("voice","1"))
             var rest_y: float = _staff_center(staff)+(
