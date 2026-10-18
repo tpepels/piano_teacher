@@ -169,6 +169,33 @@ def test_real_score_model_preserves_32nd_and_64th_musicxml_events():
                for e in model["notation_events"] if e["kind"] == "note")
 
 
+def test_tuplet_boundaries_survive_musicxml_to_semantic_score():
+    """Groups must come from explicit MusicXML, never be guessed by Godot."""
+    notes = tuple(
+        Note(i / 3, (i + 1) / 3, 72 + i * 2, 0, 0, "right",
+             f"triplet{i}")
+        for i in range(3)
+    )
+    phrase = Phrase(1, 1, 1, 0, 4, notes)
+    score = build_lesson_score(phrase, boundaries=(0, 4),
+                               time_signatures=((0, 4, 4),))
+    model = build_score_model(score, boundaries=(0, 4))
+    symbols = sorted((event for event in model["notation_events"]
+                      if event["source_id"] in {n.source_id for n in notes}),
+                     key=lambda event: event["beat"])
+    assert len(symbols) == 3
+    assert all(e["time_modification"] == {"actual": 3, "normal": 2}
+               for e in symbols)
+    assert symbols[0]["tuplet_marks"][0]["type"] == "start"
+    assert symbols[0]["tuplet_marks"][0]["show_number"] == "actual"
+    assert symbols[1]["tuplet_marks"] == []
+    assert symbols[2]["tuplet_marks"][0]["type"] == "stop"
+    assert [e["beat"] for e in symbols] == pytest.approx(
+        [0, 1/3, 2/3], abs=1/10080)
+    assert all(e["duration_beats"] == pytest.approx(1/3, abs=1/10080)
+               for e in symbols)
+
+
 def test_missing_or_duplicated_engraved_source_binding_is_rejected():
     phrase, boundaries, meters = fixture()
     notation = build_lesson_score(phrase, boundaries=boundaries,
