@@ -3,8 +3,10 @@ extends RefCounted
 # The practice score uses the real grand-staff geometry rather than a
 # fixed zoom or the whitespace surrounding a rasterized Verovio page.
 const MAX_PNG_WIDTH := 5200
+const MAX_CONTINUOUS_PNG_WIDTH := 12000
 const MIN_PNG_WIDTH := 2000
 const MAX_PAGE_PIXELS := 10000000
+const MAX_CONTINUOUS_PIXELS := 16000000
 
 static func staff_gap(viewport_height: float, lines: Array) -> float:
     if lines.size() < 2:
@@ -37,15 +39,23 @@ static func png_width(layout: Dictionary, viewport_height: float) -> int:
         return MIN_PNG_WIDTH
     # Rasterize ABOVE the actual requested staff pixel size, then let Godot
     # downsample instead of enlarging a fixed 2000px image into blurry ink.
-    var requested: float = staff_gap(viewport_height, lines) * 1.18 / (
+    # One long Verovio system is often much wider than a printed page.
+    # A 5200-pixel PNG then gets upscaled 2-3x on a large practice stage,
+    # softening noteheads. Request enough ORIGINAL SVG raster pixels for
+    # 1.4x supersampling, while bounding the source surface allocation.
+    var continuous: bool = bool(layout.get("continuous_score", false))
+    var sampling: float = 1.4 if continuous else 1.18
+    var requested: float = staff_gap(viewport_height, lines) * sampling / (
         gap_fraction * aspect)
     var tallest_aspect: float = aspect
     for i in range(mini(widths.size(), heights.size())):
         tallest_aspect = maxf(tallest_aspect,
             float(heights[i]) / maxf(1.0, float(widths[i])))
     # Keep the whole PNG bounded for long multi-page piano lessons.
-    var safe_width: int = mini(MAX_PNG_WIDTH,
-        maxi(MIN_PNG_WIDTH, int(floor(sqrt(float(MAX_PAGE_PIXELS) /
+    var width_limit: int = MAX_CONTINUOUS_PNG_WIDTH if continuous else MAX_PNG_WIDTH
+    var pixel_limit: int = MAX_CONTINUOUS_PIXELS if continuous else MAX_PAGE_PIXELS
+    var safe_width: int = mini(width_limit,
+        maxi(MIN_PNG_WIDTH, int(floor(sqrt(float(pixel_limit) /
             maxf(.01, tallest_aspect))))))
     # Changing window size only changes the raster resolution in coarse
     # 200px steps. A normal camera frame never triggers a score reload.
