@@ -14,6 +14,8 @@ var failure_reason := ""
 var visible_symbols := 0
 var drawn_noteheads: Dictionary = {}
 var selected_density := 0.0
+var beam_groups: Array = []
+var beamed_note_ids: Dictionary = {}
 
 func clear_score() -> void:
     super.clear_score()
@@ -21,6 +23,8 @@ func clear_score() -> void:
     failure_reason = ""
     visible_symbols = 0
     drawn_noteheads.clear()
+    beam_groups.clear()
+    beamed_note_ids.clear()
 
 func load_score(candidate: Dictionary) -> bool:
     native_ready = false
@@ -42,6 +46,8 @@ func load_score(candidate: Dictionary) -> bool:
         notice = failure_reason
         return false
     selected_density = density
+    beam_groups = Geometry.beam_groups(timeline.model)
+    beamed_note_ids = Geometry.beamed_ids(beam_groups)
     failure_reason = ""
     native_ready = true
     queue_redraw()
@@ -234,7 +240,7 @@ func _paint_clef(x: float, center: float, sign: String,
                 -PI*.64, PI*.64, 16, ink, 2.1, true)
 
 func _paint_note(event: Dictionary, x: float,
-        gap: float, ink: Color) -> void:
+        gap: float, ink: Color, beam_stem: Dictionary = {}) -> void:
     var staff: String = str(event.get("staff", "right"))
     var measure: Dictionary = _measure_for(event)
     var clef: Dictionary = _clef_for(staff, measure)
@@ -242,7 +248,7 @@ func _paint_note(event: Dictionary, x: float,
     var bottom: float = _staff_center(staff) + gap*2.0
     var y: float = Geometry.note_y(step, bottom, gap)
     var kind: String = str(event.get("note_type", "quarter"))
-    var stem_up: bool = step < 4
+    var stem_up: bool = bool(beam_stem.get("up", step < 4))
     var ink_center := Vector2(x,y)
     _paint_ledger(x, y, step, bottom, gap, ink)
     var solid: bool = kind not in ["half","whole"]
@@ -250,9 +256,10 @@ func _paint_note(event: Dictionary, x: float,
     # Multiple chord pitches have distinct noteheads but one common stem.
     if kind != "whole" and not bool(event.get("chord", false)):
         var stem_x: float = x+(gap*.61 if stem_up else -gap*.61)
-        var tip_y: float = y+(-gap*3.25 if stem_up else gap*3.25)
+        var tip_y: float = float(beam_stem.get("tip_y",
+            y+(-gap*3.25 if stem_up else gap*3.25)))
         draw_line(Vector2(stem_x,y), Vector2(stem_x,tip_y), ink, 1.65, true)
-        if kind in ["eighth","16th"]:
+        if kind in ["eighth","16th"] and beam_stem.is_empty():
             _paint_flag(stem_x,tip_y,stem_up,2 if kind=="16th" else 1,ink,gap)
     if int(event.get("dots", 0)) > 0:
         draw_circle(Vector2(x+gap*.93, y-gap*.3), 2.4, ink)
@@ -260,6 +267,85 @@ func _paint_note(event: Dictionary, x: float,
     if not accidental.is_empty() and accidental != "null":
         _paint_accidental(x,y,accidental,ink,gap)
     drawn_noteheads[str(event.get("id", ""))] = Vector2(x,y)
+
+func _beam_layout(gap: float, clock: float, playhead_x: float) -> Dictionary:
+    # Build one set of stem tips and polygons for the complete score.
+    # Their screen X changes only through the common, linear timeline.
+    var stems: Dictionary = {}
+    var drawn_groups: Array = []
+    for group in beam_groups:
+        if group.size() < 2:
+            continue
+        var up: bool = Geometry.stem_up(group, timeline.model)
+        var y_min := INF
+        var y_max := -INF
+        for event in group:
+            var y: float = _event_y(event, gap)
+            y_min = minf(y_min, y)
+            y_max = maxf(y_max, y)
+        var tip: float = (y_min - gap*3.25 if up else y_max + gap*3.25)
+        var members: Array = []
+        for event in group:
+            var x: float = timeline.screen_x(float(event.get("beat", 0.0)),
+                clock, playhead_x, play_from_beat)
+            var stem_x: float = x+(gap*.61 if up else -gap*.61)
+            var id: String = str(event.get("id", ""))
+            stems[id] = {"up":up, "tip_y":tip}
+            members.append({"x":stem_x, "tip_y":tip,
+                "note_type":str(event.get("note_type", "eighth"))})
+        drawn_groups.append({"members":members,
+            "staff":str(group[0].get("staff", "right")),
+            "up":up, "tip_y":tip})
+    return {"stems":stems, "groups":drawn_groups}
+
+
+func _beam_rectangle(a: float, b: float, y: float,
+        thickness: float, ink: Color) -> void:
+    if b <= a:
+        return
+    draw_colored_polygon(PackedVector2Array([
+        Vector2(a, y), Vector2(b, y),
+        Vector2(b, y+thickness), Vector2(a, y+thickness)]), ink)
+
+
+func _paint_beams(data: Dictionary, gap: float) -> void:
+    # Main bar always joins every member in a group. Sixteenth notes get
+    # secondary bars; an isolated sixteenth gets a short hook, never a flag
+    # laid on top of an existing beam.
+    for group in data.get("groups", []):
+        var members: Array = group.get("members", [])
+        if members.size() < 2:
+            continue
+        var first: Dictionary = members[0]
+        var last: Dictionary = members[-1]
+        if float(last["x"]) < -40.0 or float(first["x"]) > size.x+40.0:
+            continue
+        var ink: Color = _ink(str(group.get("staff", "right")))
+        var up: bool = bool(group.get("up", true))
+        var first_y: float = float(group.get("tip_y", 0.0))
+        var sign: float = 1.0 if up else -1.0
+        var thick: float = gap*.39
+        _beam_rectangle(float(first["x"]), float(last["x"]),
+            first_y, sign*thick, ink)
+        var second_y: float = first_y+sign*gap*.65
+        for i in range(members.size()):
+            if str(members[i].get("note_type", "")) != "16th":
+                continue
+            var x0: float = float(members[i]["x"])
+            if i+1 < members.size() and \
+                    str(members[i+1].get("note_type", "")) == "16th":
+                _beam_rectangle(x0, float(members[i+1]["x"]),
+                    second_y, sign*thick, ink)
+            elif i == 0 or str(members[i-1].get("note_type", "")) != "16th":
+                var hook_dir: float = -1.0 if i == members.size()-1 else 1.0
+                var available: float = (x0-float(members[i-1]["x"])
+                    if hook_dir < 0.0 else float(members[i+1]["x"])-x0)
+                var width: float = minf(gap*1.3, available*.5)
+                if hook_dir < 0.0:
+                    _beam_rectangle(x0-width, x0,second_y,sign*thick,ink)
+                else:
+                    _beam_rectangle(x0,x0+width,second_y,sign*thick,ink)
+
 
 func _paint_ties(visible_events: Array, playhead_x: float,
         clock: float, gap: float) -> void:
@@ -362,6 +448,8 @@ func _draw() -> void:
     # layout pass or per-note acceleration, including chord tones and rests.
     visible_symbols = 0
     drawn_noteheads.clear()
+    var beam_data: Dictionary = _beam_layout(gap, camera_clock, playhead_x)
+    var beam_stems: Dictionary = beam_data.get("stems", {})
     var visible_events: Array = []
     for event in timeline.model.get("notation_events",[]):
         if not event is Dictionary:
@@ -375,7 +463,8 @@ func _draw() -> void:
         var staff: String = str(event.get("staff","right"))
         var ink: Color = _ink(staff)
         if str(event.get("kind","")) == "note":
-            _paint_note(event,x,gap,ink)
+            _paint_note(event,x,gap,ink,
+                beam_stems.get(str(event.get("id", "")), {}))
         else:
             var voice: String = str(event.get("voice","1"))
             var rest_y: float = _staff_center(staff)+(
@@ -383,6 +472,7 @@ func _draw() -> void:
             _paint_rest(x,rest_y,str(event.get("note_type","quarter")),
                 int(event.get("dots",0)),ink,gap)
         visible_symbols += 1
+    _paint_beams(beam_data, gap)
     _paint_ties(visible_events,playhead_x,camera_clock,gap)
     draw_line(Vector2(playhead_x,_staff_center("right")-gap*3.8),
         Vector2(playhead_x,_staff_center("left")+gap*3.7),
