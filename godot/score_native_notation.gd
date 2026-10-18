@@ -16,6 +16,7 @@ var drawn_noteheads: Dictionary = {}
 var selected_density := 0.0
 var beam_groups: Array = []
 var beamed_note_ids: Dictionary = {}
+var notation_tuplets: Array = []
 
 func clear_score() -> void:
     super.clear_score()
@@ -25,6 +26,7 @@ func clear_score() -> void:
     drawn_noteheads.clear()
     beam_groups.clear()
     beamed_note_ids.clear()
+    notation_tuplets.clear()
 
 func load_score(candidate: Dictionary) -> bool:
     native_ready = false
@@ -48,6 +50,7 @@ func load_score(candidate: Dictionary) -> bool:
     selected_density = density
     beam_groups = Geometry.beam_groups(timeline.model)
     beamed_note_ids = Geometry.beamed_ids(beam_groups)
+    notation_tuplets = Geometry.tuplet_groups(timeline.model)
     failure_reason = ""
     native_ready = true
     queue_redraw()
@@ -188,6 +191,71 @@ func _paint_flag(stem_x: float, tip_y: float,
         points.append(Vector2(stem_x+direction*10.0, origin+direction*gap*1.0))
         draw_polyline(points, ink, 2.2, true)
 
+func _paint_rhythm_dots(x: float, y: float, dots: int,
+        ink: Color, gap: float) -> void:
+    # Each dot is a separate articulation of the notated duration.
+    # Never stretch a notehead or shift musical time to fit them.
+    for index in range(dots):
+        draw_circle(Vector2(x+gap*1.05+float(index)*gap*.63,
+            y-gap*.24), maxf(1.65,gap*.18), ink)
+
+
+func _paint_tuplet_brackets(clock: float, playhead_x: float,
+        gap: float) -> void:
+    var font: Font = ThemeDB.fallback_font
+    for group in notation_tuplets:
+        var events: Array = group.get("events", [])
+        if events.is_empty():
+            continue
+        var first: Dictionary = events[0]
+        var last: Dictionary = events[-1]
+        var x0: float = timeline.screen_x(float(first.get("beat", 0.0)),
+            clock,playhead_x,play_from_beat)-gap*.8
+        var x1: float = timeline.screen_x(float(last.get("beat", 0.0)),
+            clock,playhead_x,play_from_beat)+gap*1.25
+        if x1 < -50.0 or x0 > size.x+50.0:
+            continue
+        # A single irregular event still shows its ACTUAL duration ratio.
+        if x1-x0 < gap*4.0:
+            var middle: float = (x0+x1)*.5
+            x0 = middle-gap*2.0
+            x1 = middle+gap*2.0
+        var staff: String = str(group.get("staff", "right"))
+        var up: bool = staff == "right"
+        var y: float = _staff_center(staff)-gap*3.4 if up else \
+            _staff_center(staff)+gap*3.4
+        for event in events:
+            if str(event.get("kind", "")) == "note":
+                var head_y: float = _event_y(event,gap)
+                if up:
+                    y = minf(y,head_y-gap*3.0)
+                else:
+                    y = maxf(y,head_y+gap*3.0)
+        y = clampf(y, 22.0, size.y-22.0)
+        var label: String = Geometry.tuplet_label(group)
+        var font_size := 13
+        var middle: float = (x0+x1)*.5
+        var half_label: float = font.get_string_size(label,
+            HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x*.5
+        var ink: Color = _ink(staff)
+        var gap_to_label: float = half_label+5.0
+        var line_y: float = y+3.0 if up else y-5.0
+        var bracket: bool = str(group.get("bracket","yes")) != "no" or \
+            events.size() == 1
+        if bracket:
+            if middle-gap_to_label > x0:
+                draw_line(Vector2(x0,line_y),Vector2(middle-gap_to_label,line_y),
+                    ink,1.3,true)
+            if x1 > middle+gap_to_label:
+                draw_line(Vector2(middle+gap_to_label,line_y),
+                    Vector2(x1,line_y),ink,1.3,true)
+            var drop: float = gap*.42 if up else -gap*.42
+            draw_line(Vector2(x0,line_y),Vector2(x0,line_y+drop),ink,1.3,true)
+            draw_line(Vector2(x1,line_y),Vector2(x1,line_y+drop),ink,1.3,true)
+        draw_string(font,Vector2(middle-half_label,y+4.0),
+            label,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,ink)
+
+
 func _paint_rest(x: float, y: float,
         note_type: String, dots: int, ink: Color, gap: float) -> void:
     match note_type:
@@ -206,8 +274,7 @@ func _paint_rest(x: float, y: float,
                 Vector2(x-4.0, y+gap*.86), ink, 2.0, true)
             for index in range(flags):
                 draw_circle(Vector2(x+3.0, y-gap*(.7-index*.5)), 3.0, ink)
-    if dots > 0:
-        draw_circle(Vector2(x+13.0,y-gap*.12), 2.3, ink)
+    _paint_rhythm_dots(x,y,dots,ink,gap)
 
 func _paint_clef(x: float, center: float, sign: String,
         gap: float, ink: Color) -> void:
@@ -265,8 +332,7 @@ func _paint_note(event: Dictionary, x: float,
         if Geometry.beam_level(kind) > 0 and beam_stem.is_empty():
             _paint_flag(stem_x, tip_y, stem_up,
                 Geometry.beam_level(kind), ink, gap)
-    if int(event.get("dots", 0)) > 0:
-        draw_circle(Vector2(x+gap*.93, y-gap*.3), 2.4, ink)
+    _paint_rhythm_dots(x,y,int(event.get("dots",0)),ink,gap)
     var accidental: String = str(event.get("accidental", ""))
     if not accidental.is_empty() and accidental != "null":
         _paint_accidental(x,y,accidental,ink,gap)
@@ -497,6 +563,7 @@ func _draw() -> void:
         visible_symbols += 1
     _paint_beams(beam_data, gap)
     _paint_ties(visible_events,playhead_x,camera_clock,gap)
+    _paint_tuplet_brackets(camera_clock,playhead_x,gap)
     draw_line(Vector2(playhead_x,_staff_center("right")-gap*3.8),
         Vector2(playhead_x,_staff_center("left")+gap*3.7),
         PREVIEW_LIGHT,2.0,true)
