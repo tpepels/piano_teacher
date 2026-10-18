@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 from .score_geometry import layout_from_pages, parse_svg_geometry
 from .lesson_score import LessonScore
-from .reading_spacing import space_for_reading
+from .reading_spacing import space_for_reading, space_for_continuous_reading
 
 from .music import Note, Piece, _bar_boundaries, _phrases, load_midi
 
@@ -161,7 +161,8 @@ class EngravedScore:
 
 
 def render_layout(notation: object, first: int, last: int, hand: str = "both",
-                  *, total_beats: float, bpm: float | None = None) -> EngravedScore:
+                  *, total_beats: float, bpm: float | None = None,
+                  continuous: bool = False) -> EngravedScore:
     """Render *all* score pages and bind their noteheads to Verovio qstamps.
 
     The returned layout has exact engraved onset anchors, page/system IDs, and
@@ -176,7 +177,8 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
         raise RuntimeError("Engraving requires verovio and music21: pip install -e '.[godot]'") from exc
     if isinstance(notation, LessonScore):
         return _engrave_xml(notation.musicxml, hand, total_beats, bpm=bpm,
-                            note_bindings=notation.note_bindings, staff_clefs=notation.staff_clefs)
+                            note_bindings=notation.note_bindings, staff_clefs=notation.staff_clefs,
+                            continuous=continuous)
     sc = copy.deepcopy(notation)
     if not list(sc.recurse().getElementsByClass(stream.Measure)):
         sc.makeMeasures(inPlace=True)
@@ -215,7 +217,7 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     if not list(out.parts):
         raise ValueError(f"No notation found for measures {first}-{last}")
     xml = GeneralObjectExporter(out).parse().decode("utf-8")
-    return _engrave_xml(xml, hand, total_beats, bpm=bpm)
+    return _engrave_xml(xml, hand, total_beats, bpm=bpm, continuous=continuous)
 
 
 def _can_remove_repeated_system_headers(xml: str, note_bindings: dict | None) -> bool:
@@ -254,7 +256,8 @@ def _can_remove_repeated_system_headers(xml: str, note_bindings: dict | None) ->
 
 def _engrave_xml(xml: str, hand: str, total_beats: float,
                  *, bpm: float | None = None, note_bindings: dict | None = None,
-                 staff_clefs: dict | None = None) -> EngravedScore:
+                 staff_clefs: dict | None = None,
+                 continuous: bool = False) -> EngravedScore:
     import verovio
     if note_bindings is not None:
         import xml.etree.ElementTree as ET
@@ -280,13 +283,24 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
                "svgViewBox": True, "smuflTextFont": "embedded",
                "svgBoundingBoxes": True, "svgContentBoundingBoxes": True}
     if bpm is not None:
-        xml, spacing = space_for_reading(xml, bpm)
+        xml, spacing = (space_for_continuous_reading(xml, bpm)
+                        if continuous else space_for_reading(xml, bpm))
         options.update(spacing)
     if not toolkit.setOptions(options):
         raise RuntimeError("Verovio rejected its engraving options")
     if not toolkit.loadData(xml):
         raise ValueError("Verovio could not engrave this passage")
     pages = _svg_pages(toolkit)
+    if continuous:
+        # A continuous exercise must consist of precisely one newly engraved
+        # staff system. Never silently show a multi-system raster collage.
+        # If Verovio cannot satisfy this (complex imports/format changes),
+        # use the proven standard renderer for this specific exercise.
+        systems = sum(len(parse_svg_geometry(page).staff_systems) for page in pages)
+        if len(pages) != 1 or systems != 1:
+            return _engrave_xml(xml, hand, total_beats, bpm=bpm,
+                note_bindings=note_bindings, staff_clefs=staff_clefs,
+                continuous=False)
     gaps = []
     for page in pages:
         for system in parse_svg_geometry(page).staff_systems.values():
@@ -329,11 +343,13 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
     pitches = _pitches_from_verovio(toolkit, events)
     layout = layout_from_pages(list(pages), events, total_beats, pitches=pitches,
                                note_bindings=note_bindings)
-    layout["strip_trim_repeated_headers"] = _can_remove_repeated_system_headers(
-        xml, note_bindings)
+    layout["strip_trim_repeated_headers"] = (False if continuous else
+        _can_remove_repeated_system_headers(xml, note_bindings))
+    layout["continuous_score"] = continuous
     # Keeping a genuine clef/key/meter change must not disable the temporal
     # layout. Header safety and equal musical beat spacing are independent.
-    layout["strip_time_proportional"] = bpm is not None or layout["strip_trim_repeated_headers"]
+    layout["strip_time_proportional"] = (
+        not continuous and (bpm is not None or layout["strip_trim_repeated_headers"]))
     if staff_clefs is not None:
         layout['staff_clefs'] = staff_clefs
     # Geometry consumes the native event bounds; diagnostic rectangles never
