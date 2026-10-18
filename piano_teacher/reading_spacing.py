@@ -6,6 +6,17 @@ import math
 from xml.etree import ElementTree as ET
 
 
+# Horizontal density of freshly engraved exercise scores. Independent of BPM.
+# Larger values spread the notes farther apart. Start around 0.03; tune
+# this one value if the app needs denser or more open notation.
+NOTE_SPACING = 0.03
+
+# Ratio between rhythmic note values. Smaller values reduce the difference
+# between the width of a short note and a sustained note; Verovio retains
+# enough collision clearance for chords, accidentals, flags and ties.
+RHYTHM_SPACING = 0.45
+
+
 def _measure_lengths(root: ET.Element) -> list[float]:
     """Read actual voice durations, including pickups, backups and chords."""
     lengths: list[float] = []
@@ -107,12 +118,12 @@ def space_for_continuous_reading(xml: str, bpm: float) -> tuple[str, dict]:
     lengths = _measure_lengths(root)
     if not lengths:
         raise ValueError("Practice score contains no measures")
-    # The previous four-second reading budget spread sparse half/whole
-    # notes across almost the whole viewport at 40-50 BPM. Keep the
-    # tempo-dependent spacing (required for recovery) but reduce its slope
-    # for short, continuously engraved exercises. Verovio still provides
-    # native collision clearance for accidentals, stems, and beams.
-    linear = min(1.0, 1.8 / bpm)
+    # The score's horizontal density is independent of practice tempo.
+    # BPM controls the transport clock; changing tempo must not re-space
+    # half/whole/quarter-note glyphs or move upcoming notes off-screen.
+    # Keep NOTE_SPACING small; Verovio's collision detection provides the
+    # additional space needed around dense chords and accidentals.
+    linear = NOTE_SPACING
     # Keep the native note glyph sizes: reserve enough horizontal room for
     # every quarter beat, clefs/meters and per-measure barline clearance.
     # Unlike the previous reading_spacing mode, no internal page/system
@@ -128,7 +139,7 @@ def space_for_continuous_reading(xml: str, bpm: float) -> tuple[str, dict]:
                     measure.remove(instruction)
     return ET.tostring(root, encoding="unicode"), {
         "spacingLinear": linear,
-        "spacingNonLinear": 1.0,
+        "spacingNonLinear": RHYTHM_SPACING,
         "noJustification": True,
         "breaks": "none",
         "pageWidth": page_width,
