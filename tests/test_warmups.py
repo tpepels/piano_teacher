@@ -97,14 +97,14 @@ def test_open_builtin_starts_at_full_perform_without_adaptive_stages(tmp_path):
         assert engine.is_builtin_warmup
         assert engine.mode == "practice"
         assert engine.plan.exercise.kind == "warmup"
-        assert engine.plan.hands == ("left", "right", "both")
-        assert engine.plan.hand == "left"
+        assert engine.plan.hands == ("right", "left", "both")
+        assert engine.plan.hand == "right"
         assert engine.plan.bpm == engine.plan.target_bpm == 68
         assert len(engine.plan.active_phrase.notes) < len(engine.plan.piece.notes)
         assert engine.state()["warmup"] is True
         assert engine.library_listing()["last_piece"] == PREFIX + "chords"
         with pytest.raises(ValueError, match="three clean"):
-            engine.control("hand", hand="right")
+            engine.control("hand", hand="left")
         assert not engine.state()["placement_available"]
         assert not engine.state()["skip_available"]
         with pytest.raises(ValueError, match="three clean"):
@@ -115,7 +115,7 @@ def test_open_builtin_starts_at_full_perform_without_adaptive_stages(tmp_path):
         assert engine.preview_only and engine.mode == "practice"
         engine.control("stop")
         engine.control("start")
-        assert engine.mode == "practice" and engine.plan.hand == "left"
+        assert engine.mode == "practice" and engine.plan.hand == "right"
         engine.control("stop")
         engine.control("practice")
         assert engine.state()["phase"] == "ready"
@@ -148,11 +148,11 @@ def test_warmup_progression_requires_three_clean_runs_and_persists(tmp_path):
         piece = load_midi(materialize(PREFIX + warmup.slug, tmp_path / "sources"))
         plan = LearningPlan(piece, warmup=True)
         assert len(plan.lesson_steps) == 3
-        assert [step.hand for step in plan.lesson_steps] == ["left", "right", "both"]
+        assert [step.hand for step in plan.lesson_steps] == ["right", "left", "both"]
         assert plan.lesson_steps[0].required_notes > 0
         assert plan.active_phrase.end == piece.bar_boundaries[-1]
         assert plan.start_bpm == piece.bpm
-        for hand in ("left", "right", "both"):
+        for hand in ("right", "left", "both"):
             assert plan.hand == hand
             required = len(plan.active_phrase.notes)
             assert required > 0
@@ -177,7 +177,7 @@ def test_warmup_persists_next_hand_and_clean_streak(tmp_path):
         for _ in range(3):
             assert a.plan.apply_result(correct=len(a.plan.active_phrase.notes),
                                        total=len(a.plan.active_phrase.notes))
-        assert a.plan.hand == "right"
+        assert a.plan.hand == "left"
         a.plan.streak = 2
         a._save()
     finally:
@@ -185,7 +185,7 @@ def test_warmup_persists_next_hand_and_clean_streak(tmp_path):
     b = PracticeEngine(db, enable_midi=False)
     try:
         b.load_library(PREFIX + "chords")
-        assert b.plan.hand == "right" and b.plan.streak == 2
+        assert b.plan.hand == "left" and b.plan.streak == 2
         assert b.plan.lesson_steps[0].key in b.plan.mastered
         assert not b.plan.lesson_steps[1].key in b.plan.mastered
         assert not b.plan.lesson_steps[2].key in b.plan.mastered
@@ -202,7 +202,7 @@ def test_preview_does_not_unlock_hands(tmp_path):
         engine.start()
         engine.run_at = 0  # Let the normal engine clock finish the preview.
         engine._update()
-        assert engine.plan.hand == "left" and not engine.plan.mastered
+        assert engine.plan.hand == "right" and not engine.plan.mastered
         assert engine.plan.streak == 0
     finally:
         engine.db.close()
