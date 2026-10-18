@@ -137,6 +137,47 @@ func run() -> void:
     unsupported["measures"][1]["meter"] = [7,8]
     check(Geometry.beam_groups(unsupported).size() < groups.size(),
         "Irregular grouping is not guessed")
+    # Regression: 32nd/64th events must remain native and use 3/4 beams.
+    var tiny: Dictionary = score.duplicate(true)
+    tiny["notation_events"] = [
+        note("s0",0.0,.125,"right","1",1,"32nd"),
+        note("s1",.125,.125,"right","1",1,"32nd"),
+        note("s2",.25,.25,"right","1",1,"16th"),
+        note("s3",.5,.5,"right","1",1,"eighth"),
+        note("t0",1.0,.0625,"right","1",1,"64th"),
+        note("t1",1.0625,.0625,"right","1",1,"64th"),
+        note("t2",1.125,.125,"right","1",1,"32nd"),
+        note("t3",1.25,.25,"right","1",1,"16th"),
+        note("t4",1.5,.5,"right","1",1,"eighth")]
+    tiny["notes"] = []
+    for event in tiny["notation_events"]:
+        tiny["notes"].append({"id":event["id"],"onset_beats":event["beat"],
+            "duration_beats":event["duration_beats"],
+            "midi_pitch":67,"hand":"right"})
+    check(Geometry.beam_level("32nd") == 3 and Geometry.beam_level("64th") == 4,
+        "Three-level 32nd and four-level 64th notation values")
+    check(Geometry.supported(tiny).is_empty(),
+        "Ordinary 32nd/64th notes no longer trigger native fallback")
+    var tiny_groups: Array = Geometry.beam_groups(tiny)
+    check(tiny_groups.size() == 2 and tiny_groups[0].size() == 4
+        and tiny_groups[1].size() == 5,
+        "Short note groups retain exact quarter-beat boundaries")
+    check(renderer.load_score(tiny), "Load 32nd and 64th lesson natively")
+    check(absf(renderer.timeline.pixels_per_beat-400.0) < .01,
+        "Dense sixteenth-of-a-beat onsets select one scale before playback")
+    var fixed: float = renderer.timeline.pixels_per_beat
+    for tempo in [40.0, 80.0, 120.0]:
+        renderer.present({"bpm":tempo,"running":true,"paused":false,
+            "count_in_beats":4.0,"play_from_beat":0.0,
+            "transport_id":9,"hand":"right"},-.25)
+        check(absf(renderer.timeline.screen_x(.0625,-.25,580.0,0.0)
+            -renderer.timeline.screen_x(0.0,-.25,580.0,0.0)
+            -.0625*fixed) < .001,
+            "32nd/64th timing remains fixed at %.0f BPM" % tempo)
+    var still_unsupported: Dictionary = tiny.duplicate(true)
+    still_unsupported["notation_events"][0]["note_type"] = "128th"
+    check(not renderer.load_score(still_unsupported),
+        "Truly unsupported rhythmic values still trigger fallback")
     renderer.clear_score()
     check(renderer.beam_groups.is_empty() and renderer.beamed_note_ids.is_empty(),
         "Changing lessons discards previously cached beams")
