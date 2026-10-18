@@ -3227,8 +3227,11 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         return
     var should_defer: bool = source_layout.get("systems", []).size() >= \
         ScoreStrip.DEFERRED_MIN_SYSTEMS
+    # Phase 1: use undistorted source engraving until the new in-app
+    # notation renderer is ready.  Generated PNG glyphs must never be
+    # spliced/stretched to manufacture time-proportional layout.
     var strip: Dictionary = ScoreStrip.build(
-        source_layout, page_images, should_defer)
+        source_layout, page_images, should_defer, true)
     if strip.has("error") or strip["tiles"].is_empty():
         _score_failed(str(strip.get("error", "No staff systems were found in the engraving")))
         return
