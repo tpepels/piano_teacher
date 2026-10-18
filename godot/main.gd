@@ -3266,9 +3266,10 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         score_content.add_child(tile)
         score_content.move_child(tile, score_overlay.get_index())
         score_tiles.append(tile)
-    # Preserve glyph columns in the raster, then unify their staff-rule cores.
-    # Ordinary child order keeps these below feedback and every modal drawer.
-    score_content.move_child(staff_continuity, score_overlay.get_index() - 1)
+    # Continuous staff rails provide a transparent underlay where tile rules
+    # have been stripped. NEVER render them over the engraved raster: that
+    # doubles horizontal staff lines and paints through noteheads and stems.
+    score_content.move_child(staff_continuity, 0)
     if not deferred_tile_mode:
         resident_tile_begin = 0
         resident_tile_end = score_tiles.size()
