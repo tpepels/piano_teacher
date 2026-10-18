@@ -36,6 +36,9 @@ var impact_age := 0.0
 # vertical playhead line, avoiding two nearly overlapping strikes.
 var beat_ripple := 0.0
 var last_beat_number := -1
+var measure_boundaries: Array = []
+var play_from_beat := 0.0
+var progress_end_beat := 1.0
 # One-shot result wave, keyed to the actual assessed take. Repeated /state
 # polling cannot restart the animation or manufacture progress.
 var last_result_key := ""
@@ -60,6 +63,13 @@ func set_staff_band(first_line_fraction: float, last_line_fraction: float) -> vo
 func present(state: Dictionary) -> void:
     var next_phase: String = str(state.get("phase", "ready"))
     var next_progress: float = clampf(float(state.get("progress", 0.0)), 0.0, 1.0)
+    var incoming: Array = state.get("measure_boundaries", [])
+    if incoming.size() >= 2 and incoming != measure_boundaries:
+        measure_boundaries = incoming.duplicate()
+        queue_redraw()
+    play_from_beat = float(state.get("play_from_beat", 0.0))
+    progress_end_beat = maxf(play_from_beat + .001,
+        float(state.get("duration_beats", 1.0)))
     var next_active: bool = next_phase in ["playing", "count_in"] and (
         bool(state.get("running", false)) and not bool(state.get("paused", false)))
     var result: Variant = state.get("take_result")
@@ -133,6 +143,16 @@ func sync_beat(beat: float, meter: int, preview: bool) -> void:
     var structural_change: bool = next_bar != beat_in_bar or \
         next_meter != beats_per_bar or preview != score_preview
     beat_fraction = next_fraction
+    # The practice progress rail follows the same extrapolated beat as the
+    # notation; HTTP polling and smoothing cannot delay its measure fill.
+    if measure_boundaries.size() >= 2:
+        var absolute_beat := play_from_beat + maxf(0.0, beat)
+        var exact_progress := clampf((absolute_beat - play_from_beat) /
+            (progress_end_beat - play_from_beat), 0.0, 1.0)
+        if absf(shown_progress - exact_progress) > .0001:
+            shown_progress = exact_progress
+            progress = exact_progress
+            queue_redraw()
     beat_in_bar = next_bar
     beats_per_bar = next_meter
     score_preview = preview
@@ -234,27 +254,29 @@ func _draw() -> void:
                 flag.position.y + 15.0), text, HORIZONTAL_ALIGNMENT_LEFT,
                 -1, font_size, Design.STONE)
 
-    # The moodboard's five quiet progress measures remain readable beneath
-    # the score. Remaining music is sage, rather than bright notation ink.
-    var slots := 5
+    # Segments represent actual source measures, including pickup measures
+    # and mixed meters. They never use a decorative fixed 5-slot subdivision.
     var inset: float = clampf(w * .045, 15.0, 58.0)
-    var spacing: float = 7.0
-    var rail_width: float = maxf(1.0, w - inset * 2.0)
-    var segment: float = maxf(1.0, (rail_width - spacing * float(slots-1)) / float(slots))
     var track_y: float = h - 20.0
+    var rail_width: float = maxf(1.0, w - inset * 2.0)
     var fill_tone: Color = Design.SCORE_PROGRESS
-    # A confirmed take may gently tint its rail, without washing the music
-    # in colour or sending a celebration across the staff.
     if result_wave > .001:
         fill_tone = fill_tone.lerp(result_tone, result_wave * .18)
-    for i in range(slots):
-        var left: float = inset + float(i) * (segment + spacing)
-        var amount: float = clampf(shown_progress * float(slots) - float(i), 0.0, 1.0)
-        draw_rect(Rect2(left, track_y, segment, 7.0), Color(Design.SAGE, .58), true)
-        if amount > .0001:
-            draw_rect(Rect2(left, track_y, segment * amount, 7.0),
-                Color(fill_tone, .84 + progress_spark * .08), true)
-        if i == milestone_slot and milestone_light > .001:
-            draw_line(Vector2(left, track_y + 1.0),
-                Vector2(left + segment, track_y + 1.0),
-                Color(Design.SCORE_PROGRESS, milestone_light * .22), 1.0, true)
+    var start_beat: float = float(measure_boundaries[0]) if measure_boundaries.size() >= 2 else 0.0
+    var end_beat: float = float(measure_boundaries[-1]) if measure_boundaries.size() >= 2 else 1.0
+    var duration: float = maxf(.001, end_beat - start_beat)
+    var count: int = measure_boundaries.size() - 1 if measure_boundaries.size() >= 2 else 1
+    var gap: float = minf(7.0, rail_width / float(maxi(1, count)) * .12)
+    var total_gaps: float = gap * float(count-1)
+    var usable: float = maxf(1.0, rail_width-total_gaps)
+    var played: float = start_beat + shown_progress * duration
+    for i in range(count):
+        var left_beat: float = float(measure_boundaries[i]) if measure_boundaries.size() >= 2 else 0.0
+        var right_beat: float = float(measure_boundaries[i+1]) if measure_boundaries.size() >= 2 else 1.0
+        var segment_x: float = inset + (left_beat-start_beat)/duration * usable + gap*i
+        var segment_width: float = maxf(1.0, (right_beat-left_beat)/duration * usable)
+        var filled: float = clampf((played-left_beat) / maxf(.001, right_beat-left_beat), 0.0, 1.0)
+        draw_rect(Rect2(segment_x, track_y, segment_width, 7.0), Color(Design.SAGE, .58), true)
+        if filled > 0.0:
+            draw_rect(Rect2(segment_x, track_y, segment_width * filled, 7.0),
+                Color(fill_tone, .84), true)
