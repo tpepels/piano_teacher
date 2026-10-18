@@ -269,7 +269,7 @@ func _draw() -> void:
     var gap: float = minf(7.0, rail_width / float(maxi(1, count)) * .12)
     var total_gaps: float = gap * float(count-1)
     var usable: float = maxf(1.0, rail_width-total_gaps)
-    var played: float = start_beat + shown_progress * duration
+    var played: float = play_from_beat + shown_progress * (progress_end_beat - play_from_beat)
     for i in range(count):
         var left_beat: float = float(measure_boundaries[i]) if measure_boundaries.size() >= 2 else 0.0
         var right_beat: float = float(measure_boundaries[i+1]) if measure_boundaries.size() >= 2 else 1.0
