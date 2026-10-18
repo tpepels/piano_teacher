@@ -5,7 +5,5 @@ __pycache__/
 playtest-results/
 *.py[cod]
 *.egg-info/
-*.mid
-*.midi
 !tests/fixtures/musical_fidelity/*.mid
 
