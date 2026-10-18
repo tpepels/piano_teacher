@@ -70,15 +70,17 @@ func synchronize(state: Dictionary, visual_beat: float = NAN) -> void:
         var bpm: float = maxf(1.0, float(state.get("bpm", 60)))
         var beat: float = visual_beat if is_finite(visual_beat) else float(
             state.get("clock_beat", 0.0))
-        var target_s: float = maxf(0.0, beat * 60.0 / bpm)
+        # The lead-in moves the sheet and the playhead, but the WAV starts
+        # on the downbeat. Never seek ahead during first start: doing that
+        # irreversibly cuts the first piano attack after HTTP/audio latency.
+        if not started and beat < 0.0:
+            return
         if not started:
-            # Align the sound with the extrapolated visible score clock,
-            # not the earlier snapshot timestamp returned by HTTP.
-            last_start_offset_s = minf(target_s,
-                maxf(0.0, player.stream.get_length() - .05))
-            player.play(last_start_offset_s)
+            last_start_offset_s = 0.0
+            player.play(0.0)
             started = true
             sync_monitor.reset_pending()
+            last_sync_probe_ms = Time.get_ticks_msec()
         player.stream_paused = bool(state.get("paused", false))
         if bool(state.get("paused", false)):
             sync_monitor.reset_pending()
