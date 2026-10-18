@@ -12,3 +12,5 @@ res://score_strip.gd
 res://staff_continuity.gd
 res://tempo_strip.gd
 res://visual_transport_clock.gd
+res://game_impact_callout.gd
+res://review_sheet.gd
