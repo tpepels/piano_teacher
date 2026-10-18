@@ -2,7 +2,11 @@ extends RefCounted
 # Deterministic engraving-independent geometry for Phase C.
 # No texture, Verovio resource, frame clock or audio timing dependency.
 const STEPS := {"C":0, "D":1, "E":2, "F":3, "G":4, "A":5, "B":6}
-const SUPPORTED := ["whole", "half", "quarter", "eighth", "16th"]
+const SUPPORTED := ["whole", "half", "quarter", "eighth", "16th", "32nd", "64th"]
+const BEAM_LEVELS := {"eighth":1, "16th":2, "32nd":3, "64th":4}
+
+static func beam_level(note_type: String) -> int:
+    return int(BEAM_LEVELS.get(note_type, 0))
 const HEAD_HALF_WIDTH := 9.2
 const MIN_ATTACK_SEPARATION := 25.0
 
@@ -164,7 +168,7 @@ static func beam_groups(model: Dictionary) -> Array:
             var at: float = float(event.get("beat", -1.0))
             var duration: float = float(event.get("duration_beats", 0.0))
             var short: bool = str(event.get("kind", "")) == "note" and \
-                str(event.get("note_type", "")) in ["eighth", "16th"] and \
+                beam_level(str(event.get("note_type", ""))) > 0 and \
                 duration > 0.0 and duration <= .75
             var unit: int = int(floor((at-begin+.000001)/length))
             # Notes may end on the next group boundary but not cross it.
