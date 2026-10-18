@@ -1,6 +1,6 @@
 # Architecture decision A — Semantic ScoreModel (October 2026)
 
-Status: **Phases A and B implemented; renderer migration NOT started.**
+Status: **Phases A and B complete; Phase C native renderer opt-in, fallback retained.**
 
 ## Why
 
@@ -115,6 +115,50 @@ negative lead-in, pause, seek, and precise 40/80/120 BPM fixed velocity.
 
 Phase C will use this semantic timeline to draw SMuFL notation in Godot,
 preserving Verovio as a fallback until coverage is sufficient.
+
+## Phase C1 — native vector notation is opt-in
+
+The new `godot/score_native_notation.gd` directly consumes
+`ScoreModel.notation_events` and the Phase B `ScoreTimeline`.
+No Verovio, SVG, raster tile, external music font or page/slice composition
+is needed to paint the practice notes in native mode.
+
+Start after a clean pull:
+
+```bash
+PIANO_TEACHER_NATIVE_NOTATION=1 PIANO_TEACHER_PIXELS_PER_BEAT=96 ./run.sh
+```
+
+Change `96` to test another preferred density. Collision clearance may
+choose a larger scale **once for the entire exercise** at load time, never
+between notes or at the onset. The timeline, count-in, playhead, and all
+notation events use exactly the same musical quarter-beat axis.
+
+Implemented in the first opt-in renderer: two continuously drawn five-line
+staves, default G/F and explicit C clefs, clef changes, meter labels,
+key-signature indication, voice-aware rests, ledger lines, oval noteheads,
+stems, eighth/sixteenth flags, accidentals, dots, chords, ties, and a single
+stationary timing line. High/low semantic note extents are used to fit the
+grand staff during viewport resizing. The existing HUD remains above the
+native score. MIDI/Listen still use the existing Python lesson engine and
+its authoritative visual transport.
+
+**Explicit limitations:** automatic beaming, complex tuplet notation,
+32nd/64th note glyphs, double-dotted rhythms, advanced multi-voice
+collision/layout, octave signs and high-quality SMuFL clef/music fonts are
+not yet supported. Unsupported score models or extremely dense rhythms
+automatically leave the legacy Verovio engraving visible for the entire
+exercise. This is not a complete MusicXML engraver, and the primitive
+clef outlines still need typographic polishing.
+
+Use the legacy app by omitting `PIANO_TEACHER_NATIVE_NOTATION`. The previous
+Phase B marker-only preview is still available separately via
+`PIANO_TEACHER_TIMELINE_PREVIEW=1` when native mode is off.
+
+Phase C2 should improve symbol typography, beaming, and per-voice collision
+handling *before* making native mode the default. Phase D can attach notehead
+feedback to these native semantic coordinates rather than the old SVG map.
+This strict separation avoids the earlier regressions in the main GUI.
 
 ## Compatibility
 
