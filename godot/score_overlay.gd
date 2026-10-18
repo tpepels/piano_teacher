@@ -226,60 +226,31 @@ func _draw() -> void:
         draw_polyline(Ink.ellipse(center, extent.x, extent.y),
             Color("#C65450", remaining * .92), 1.8, true)
 
-    # Bold, outside-the-ink notehead flash. The lower layer carries the
-    # sixteen-particle burst; this bright rim stays readable above even
-    # opaque staff ink. It never triggers merely on playhead crossing.
+    # A short light pulse, exactly centred on the real engraved notehead.
+    # No fireworks, particle trails, expanding rings or simulated glyphs.
+    # The pulse peaks in the first 60 ms and fades within 220 ms.
     for hit in hit_pulses + preview_pulses:
         if int(hit.get("page", -1)) != active_page:
             continue
-        var duration: float = maxf(1.0, float(hit.get("duration_ms", 450)))
+        var duration: float = maxf(1.0, float(hit.get("duration_ms", 220)))
         var remaining: float = clampf(float(int(hit.get("until_ms", 0)) - now_ms) /
             duration, 0.0, 1.0)
         if remaining <= 0.0:
             continue
-        var progress: float = 1.0 - remaining
-        var attack: float = 1.0 - clampf(progress * 3.8, 0.0, 1.0)
+        var phase: float = 1.0 - remaining
+        var flash: float = (1.0 - smoothstep(.05, 1.0, phase))
         var focus: Vector2 = _sheet_xy(float(hit.get("x", 0.0)),
             float(hit.get("y", 0.0)))
-        var tone: Color = (Color("#477BA9") if str(hit.get("status", "")) == "preview"
-            else Color("#168864") if str(hit.get("status", "")) == "on_time"
-            else Color("#B7832F"))
-        var extent: Vector2 = radii * (1.55 + progress * 1.65)
-        draw_polyline(Ink.ellipse(focus, extent.x * 1.27,
-            extent.y * 1.27), Color(tone, (.12 + .24 * attack) * remaining),
-            4.0, true)
-        draw_polyline(Ink.ellipse(focus, extent.x, extent.y),
-            Color(tone, (.90 + .10 * attack) * remaining),
-            2.75, true)
-        # Front-layer sparks: the raster score otherwise hides most of the
-        # existing particles drawn behind opaque engraved PNG tiles. These
-        # start well outside the notehead, so the pitch remains readable.
-        # Preview uses blue; assessed success uses bright mint.
-        # Eight distinct comet trails, not sixteen equally prominent
-        # spokes. Ease outward quickly, linger, then dissolve. This keeps
-        # the notehead readable and halves foreground particle overdraw.
-        var travel: float = 1.0 - pow(remaining, 2.4)
-        for particle in range(0, Effects.PARTICLE_COUNT, 2):
-            var endpoint: Vector2 = Effects.particle_endpoint(
-                focus, gap, travel, particle)
-            var radial: Vector2 = (endpoint - focus).normalized()
-            var brightness: float = pow(remaining, 1.45)
-            var tip_radius: float = maxf(1.1, gap * .095) * brightness
-            draw_line(endpoint - radial * gap * (.34 + .18 * progress),
-                endpoint, Color(tone, .82 * brightness),
-                1.55 + .25 * attack, true)
-            draw_circle(endpoint, tip_radius, Color(tone, .94 * brightness))
-        # Short four-point glint outside the ellipse: a much more visible
-        # confirmation than the old hairline green circle.
-        if attack > .0:
-            for direction in [Vector2.LEFT, Vector2.RIGHT,
-                    Vector2.UP, Vector2.DOWN]:
-                var edge: Vector2 = focus + direction * gap * 1.5
-                draw_line(edge, edge + direction * gap * (.5 + .35 * progress),
-                    Color(tone, attack * .84), 2.0, true)
+        var tone: Color = (Color("#99BED5") if str(hit.get("status", "")) == "preview"
+            else Color("#A9FFE2") if str(hit.get("status", "")) == "on_time"
+            else Color("#E6C994"))
+        # The diffuse halo is only one notehead wide; no moving particles.
+        var head: Vector2 = radii * (1.04 + .13 * sin(minf(1.0, phase * 5.0) * PI))
+        draw_polyline(Ink.ellipse(focus, head.x * 1.28, head.y * 1.28),
+            Color(tone, .20 * flash), maxf(2.5, gap * .22), true)
+        draw_polyline(Ink.ellipse(focus, head.x, head.y),
+            Color(tone, .9 * flash), 2.2, true)
 
-    # The particle glow is drawn by NoteReactions *behind* the actual
-    # raster tiles. Nothing here paints over correct notes.
     if showing and not guided_active and not cursor.is_empty() and int(cursor.get("page", -1)) == active_page:
         var x: float = float(cursor.get("x", 0.0))
         var top: float = float(cursor.get("top", 0.0))
