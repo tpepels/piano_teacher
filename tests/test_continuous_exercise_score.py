@@ -9,7 +9,8 @@ import pytest
 
 from piano_teacher.lesson_score import build_lesson_score
 from piano_teacher.music import Note, Phrase
-from piano_teacher.reading_spacing import space_for_continuous_reading
+from piano_teacher import reading_spacing
+from piano_teacher.reading_spacing import NOTE_SPACING, RHYTHM_SPACING, space_for_continuous_reading
 from piano_teacher.score import render_layout
 
 
@@ -79,17 +80,47 @@ def test_practice_screen_has_fullscreen_exit_and_direct_source_score():
     assert "native_ink_preview or continuous_engraving" in source
 
 
-def test_continuous_spacing_shows_more_upcoming_music_at_slow_tempo():
-    # The pre-fix reading slope was 4/BPM: extremely sparse notes sat off
-    # screen at 44 BPM. A compact engraver should spend under half that
-    # horizontal budget while still reacting to the selected tempo.
+def test_continuous_spacing_is_independent_of_bpm():
+    # Editing a transport BPM must never change Verovio's horizontal
+    # note density or alter the visibility of upcoming notes.
     xml = build_lesson_score(_exercise()).musicxml
-    _, slow = space_for_continuous_reading(xml, 44)
-    _, faster = space_for_continuous_reading(xml, 80)
-    assert slow["spacingLinear"] < (4 / 44) * .52
-    assert 0 < faster["spacingLinear"] < slow["spacingLinear"]
-    assert slow["pageWidth"] > faster["pageWidth"]
-    assert slow["breaks"] == faster["breaks"] == "none"
+    variants = [space_for_continuous_reading(xml, bpm)
+                for bpm in (30, 44, 80, 120)]
+    assert all(xml == variants[0][0] for xml, _ in variants)
+    assert all(options == variants[0][1] for _, options in variants)
+    for _, options in variants:
+        assert options["spacingLinear"] == NOTE_SPACING
+        assert options["spacingNonLinear"] == RHYTHM_SPACING
+        assert options["noJustification"] is True
+        assert options["breaks"] == "none"
+
+
+def test_note_spacing_constant_can_be_tuned_without_changing_tempo(monkeypatch):
+    xml = build_lesson_score(_exercise()).musicxml
+    _, original = space_for_continuous_reading(xml, 44)
+    monkeypatch.setattr(reading_spacing, "NOTE_SPACING", 0.06)
+    _, compact = space_for_continuous_reading(xml, 44)
+    _, compact_fast = space_for_continuous_reading(xml, 120)
+    assert compact["spacingLinear"] == 0.06
+    assert compact["pageWidth"] > original["pageWidth"]
+    assert compact_fast == compact
+
+
+def test_verovio_score_positions_are_unchanged_at_different_tempos():
+    pytest.importorskip("verovio")
+    pytest.importorskip("music21")
+    phrase = _exercise()
+    notation = build_lesson_score(phrase)
+    earlier = render_layout(notation, 1, 8, "right", total_beats=24, bpm=44, continuous=True)
+    later = render_layout(notation, 1, 8, "right", total_beats=24, bpm=120, continuous=True)
+    assert earlier.layout["continuous_score"] and later.layout["continuous_score"]
+    assert earlier.layout["widths"] == pytest.approx(later.layout["widths"])
+    assert earlier.layout["heights"] == pytest.approx(later.layout["heights"])
+    left = [(a["beat"], a["x"]) for a in earlier.layout["anchors"]]
+    right = [(a["beat"], a["x"]) for a in later.layout["anchors"]]
+    assert len(left) == len(right)
+    assert left == pytest.approx(right, abs=1e-5)
+    assert earlier.layout["attack_map"] == later.layout["attack_map"]
 
 
 def test_skip_next_lesson_control_stays_visible_in_practice():
