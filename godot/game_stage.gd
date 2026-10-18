@@ -209,7 +209,7 @@ func _draw() -> void:
     var band_bottom: float = minf(h - 8.0, staff_band_bottom * h + 26.0)
     if band_bottom > band_top:
         draw_rect(Rect2(0, band_top, w, band_bottom - band_top),
-            Color(Design.SAGE, .046))
+            Color(Design.SAGE, .05))
         draw_line(Vector2(0, band_top), Vector2(w, band_top),
             Color(Design.TEAL, .13), 1.0)
         draw_line(Vector2(0, band_bottom), Vector2(w, band_bottom),
@@ -330,7 +330,7 @@ func _draw() -> void:
         var left: float = inset + float(i) * (segment + spacing)
         var amount: float = clampf(shown_progress * float(slots) - float(i), 0.0, 1.0)
         draw_rect(Rect2(left, track_y, segment, 7.0),
-            Color("#DDE7DF"), true)
+            Color("#C5D5C8"), true)
         if amount > .0001:
             draw_rect(Rect2(left, track_y, segment * amount, 7.0),
                 Color(Design.SCORE_PROGRESS, .89 + progress_spark * .1), true)

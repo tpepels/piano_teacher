@@ -3,9 +3,9 @@ extends RefCounted
 # Piano Teacher visual system. Screens describe *meaning*, not their own
 # independent colors or borders. Keep static drawing cheap on HiDPI displays.
 const FOREST := Color("#0E191C")
-const STAGE := Color("#192F30")
-const SCORE_INK := Color("#EAF4ED")
-const SCORE_MUTED := Color("#A0B9AD")
+const STAGE := Color("#F0F4E8")
+const SCORE_INK := Color("#263D34")
+const SCORE_MUTED := Color("#71857B")
 const SCORE_ACCENT := Color("#83F1C6")
 const SCORE_PROGRESS := Color("#82CBAA")
 const PINE := Color("#204840")
@@ -162,7 +162,7 @@ render_mode unshaded;
 void fragment() {
     vec4 sample_color = texture(TEXTURE, UV);
     float ink = 1.0 - dot(sample_color.rgb, vec3(0.2126, 0.7152, 0.0722));
-    COLOR = vec4(vec3(0.918, 0.957, 0.929), sample_color.a * ink);
+    COLOR = vec4(vec3(0.149, 0.239, 0.204), sample_color.a * ink);
 }
 """
     var material := ShaderMaterial.new()

@@ -18,7 +18,7 @@ func _draw() -> void:
         return
     # Match the bright engraved rule color at the safe raster seams.
     # A dimmer underlay leaves visibly chopped staff endpoints.
-    var ink := Color("#9DB8A9", 0.74)
+    var ink := Color("#647E70", 0.68)
     for normalized in staff_lines:
         var y: float = float(normalized) * size.y
         if y < 0.0 or y > size.y:
