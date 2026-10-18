@@ -1312,6 +1312,16 @@ func _build_interface() -> void:
     challenge_bar.add_child(progress_label)
     game_streak = GameStreak.new()
     challenge_bar.add_child(game_streak)
+    # Navigation is deliberately outside the three transport buttons.
+    # The progress row directly below the score gives Skip a stable,
+    # immediately visible location without changing the control cluster.
+    practice_skip_button = _button("Skip → Next lesson", _skip_current_lesson,
+        false, "navigation")
+    practice_skip_button.tooltip_text = "Go to the next lesson without earning mastery"
+    practice_skip_button.disabled = true
+    practice_skip_button.visible = false
+    practice_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_END
+    challenge_bar.add_child(practice_skip_button)
     feedback_label = _label("Ready", 14, MUTED)
     feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1343,15 +1353,6 @@ func _build_interface() -> void:
     listen_button = _transport_button("Listen", _listen_or_return_to_practice, "listen")
     listen_button.tooltip_text = "Hear this passage, or return to practice · L"
     controls.add_child(listen_button)
-    # Explicitly advance to the next lesson without granting mastery.
-    # Keep the three transport controls unchanged; this is a secondary,
-    # labeled navigation action rather than another transport mode.
-    practice_skip_button = _button("Skip → Next lesson", _skip_current_lesson,
-        false, "navigation")
-    practice_skip_button.tooltip_text = "Go to the next lesson without earning mastery"
-    practice_skip_button.disabled = true
-    practice_skip_button.visible = false
-    controls.add_child(practice_skip_button)
     # Keyboard and Lesson Path retain Stop, passage navigation and mode
     # choices, without competing with the three routine controls.
     stop_button = _button("Stop attempt", func(): _send_action({"action": "stop"}), false, "danger")
