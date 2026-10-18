@@ -93,9 +93,10 @@ func run() -> void:
     var first_rails: Array = app.score_layout["systems"][0].get("staff_lines", [])
     check(app.staff_continuity.staff_lines == first_rails,
         "The same horizontal staff continues underneath every engraved tile")
-    check(app.staff_continuity.size.distance_to(app.score_content.size) < 2.0,
-        "Continuous staff shares the real scroll and zoom transform: %s vs %s" % [
-            str(app.staff_continuity.size), str(app.score_content.size)])
+    check(app.staff_continuity.size.distance_to(app.score_content.size) < 2.0 \
+        and absf(app.staff_continuity.global_position.y - app.score_content.global_position.y) < .1 \
+        and absf(app.staff_continuity.viewport_width - app.score_frame.size.x) < .1,
+        "Viewport-wide staff shares the engraved vertical transform")
     if first_rails.size() >= 2:
         var displayed_gap: float = absf(float(first_rails[1]) - float(first_rails[0])) * app.score_content.size.y
         check(displayed_gap >= 18.0,

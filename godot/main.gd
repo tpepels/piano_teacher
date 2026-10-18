@@ -471,10 +471,7 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     var displayed_height: float = image.y * scale
     if score_content.size.distance_to(Vector2(displayed_width, displayed_height)) > .1:
         score_content.size = Vector2(displayed_width, displayed_height)
-    if staff_continuity.position != Vector2.ZERO:
-        staff_continuity.position = Vector2.ZERO
-    # Rebuilding a very long rail canvas every 60-Hz camera tick wastes
-    # work; the rules are static until the score is resized or replaced.
+    staff_continuity.set_hand(str(last_state.get("hand", "both")))
     if staff_continuity.size.distance_to(score_content.size) > .1:
         staff_continuity.size = score_content.size
         staff_continuity.queue_redraw()
@@ -502,6 +499,9 @@ func _layout_moving_score(delta: float = 0.0) -> void:
         target_y = notation_top + (notation_height - (ink_bottom-ink_top)*displayed_height)*.5 \
             - ink_top*displayed_height
     var target := Vector2(target_x, target_y)
+    # Ten short rules cover the visible viewport, including the empty lead-in.
+    # Use the same camera transform as the notes, without a separate timebase.
+    staff_continuity.set_viewport_span(-target_x, viewport.x)
     if game_stage != null and not systems.is_empty():
         var band_rails: Array = systems[0].get("staff_lines", [])
         if band_rails.size() >= 2:
@@ -1258,8 +1258,9 @@ func _build_interface() -> void:
     score_content.add_child(score_view)
     score_overlay = ScoreOverlay.new()
     # The Verovio strip already includes its genuine opening clefs/meter.
-    # Count-in adds staff/rests only, never a second copy of that context.
+    # Count-in adds rests; StaffContinuity owns the rules across the lead-in.
     score_overlay.show_preparation_header = false
+    score_overlay.show_preparation_staff = false
     score_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
     score_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_content.add_child(score_overlay)
@@ -3173,6 +3174,9 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         score_content.add_child(tile)
         score_content.move_child(tile, score_overlay.get_index())
         score_tiles.append(tile)
+    # Preserve glyph columns in the raster, then unify their staff-rule cores.
+    # Ordinary child order keeps these below feedback and every modal drawer.
+    score_content.move_child(staff_continuity, score_overlay.get_index() - 1)
     if not deferred_tile_mode:
         resident_tile_begin = 0
         resident_tile_end = score_tiles.size()

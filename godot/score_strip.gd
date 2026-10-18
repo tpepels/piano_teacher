@@ -258,7 +258,7 @@ static func build(layout: Dictionary, pages: Array[Image],
             joined.blit_rect(image, Rect2i(Vector2i.ZERO,image.get_size()),
                 Vector2i(tempo_gap,0))
             image = joined
-        # The background StaffContinuity layer must own *all* uninterrupted
+        # The StaffContinuity layer must own *all* uninterrupted
         # horizontal rules, not just nine pixels at each tile edge. Otherwise
         # rasterized staff segments end abruptly at every system join and the
         # duplicated line weights remain visible. Keep any column containing
@@ -572,7 +572,7 @@ static func _longest_staff_only_run(image: Image, x0: int, x1: int,
 
 # A printed staff system contains long horizontal lines which can overlap
 # or end abruptly when multiple systems are reassembled as a scroll. The
-# continuous, full-width staff lives behind the raster tiles. Extract only
+# continuous, full-width staff unifies rule cores above the raster tiles. Extract only
 # isolated horizontal rule pixels from the source tiles, so that line weight
 # is consistent everywhere (not only in the 9-pixel joining gutters).
 #

@@ -23,6 +23,7 @@ var crop_size := Vector2.ONE
 var lead_first: Dictionary = {}
 var lead_width_px := 0.0
 var lead_staff_lines: Array = []
+var show_preparation_staff := true
 var lead_beats := 0.0
 var lead_meter: Array = [4, 4]
 var preparation_clefs: Dictionary = {}
@@ -110,9 +111,8 @@ func _draw_preparation() -> void:
     # No opaque starting rectangle. The old mask covered the actual score
     # as it scrolled underneath and looked like a dark square that lagged
     # behind the timing line. All preparation ink is transparent.
-    var ink := Color(Design.SCORE_MUTED, .64)
-    for sy in lines:
-        draw_line(Vector2(margin_left, sy), Vector2(first_x, sy), ink, 1.1, true)
+    if show_preparation_staff:
+        preload("res://staff_continuity.gd").draw_rules(self, lines, margin_left, first_x, "both")
     if lines.size() < 10:
         return
     if show_preparation_header:
