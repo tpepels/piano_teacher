@@ -140,6 +140,35 @@ def test_independent_staff_key_signatures_are_not_lost():
     assert model["measures"][0]["keys"] == {"right": 2, "left": -1}
 
 
+def test_real_score_model_preserves_32nd_and_64th_musicxml_events():
+    """The live Python model must expose the short rhythmic values
+    consumed by native Godot, not an inferred Verovio pixel layout."""
+    events = (
+        Note(0.0, .125, 72, 0, 0, "right", "short32a"),
+        Note(.125, .25, 74, 0, 0, "right", "short32b"),
+        Note(.25, .3125, 76, 0, 0, "right", "short64a"),
+        Note(.3125, .375, 77, 0, 0, "right", "short64b"),
+        Note(.375, .5, 79, 0, 0, "right", "short32c"),
+    )
+    phrase = Phrase(1, 1, 1, 0, 4, events)
+    notation = build_lesson_score(
+        phrase, boundaries=(0, 4), time_signatures=((0, 4, 4),))
+    model = build_score_model(notation, boundaries=(0, 4))
+    typed = {e["source_id"]: (e["note_type"], e["beat"])
+             for e in model["notation_events"]
+             if e["kind"] == "note" and e["is_attack"]}
+    assert typed == {
+        "short32a": ("32nd", 0),
+        "short32b": ("32nd", .125),
+        "short64a": ("64th", .25),
+        "short64b": ("64th", .3125),
+        "short32c": ("32nd", .375),
+    }
+    assert {n["id"] for n in model["notes"]} == set(typed)
+    assert all(e["time_modification"] is None
+               for e in model["notation_events"] if e["kind"] == "note")
+
+
 def test_missing_or_duplicated_engraved_source_binding_is_rejected():
     phrase, boundaries, meters = fixture()
     notation = build_lesson_score(phrase, boundaries=boundaries,
