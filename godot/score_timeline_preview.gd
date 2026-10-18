@@ -29,6 +29,13 @@ func _init() -> void:
     focus_mode = Control.FOCUS_NONE
     set_process(false)
 
+func clear_score() -> void:
+    var density: float = timeline.pixels_per_beat
+    timeline = Timeline.new()
+    timeline.set_density(density)
+    notice = "Waiting for /score/model"
+    queue_redraw()
+
 func load_score(candidate: Dictionary) -> bool:
     if not timeline.load_model(candidate):
         notice = timeline.last_error
