@@ -69,6 +69,7 @@ class ScoreSymbol:
     is_attack: bool
     accidental: str | None
     time_modification: dict | None
+    tuplet_marks: tuple[dict, ...]
 
 
 def _int(element: ET.Element, name: str, default: int | None = None) -> int:
@@ -210,13 +211,23 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                     "normal": _int(modification, "normal-notes")}
                     if modification is not None else None)
                 tie_types = {tie.get("type") for tie in child.findall("tie")}
+                # Preserve MusicXML's explicit group limits. The native
+                # renderer must not guess grouping from duration ratios:
+                # unusual MIDI timings can also have time-modification.
+                tuplet_marks = tuple({
+                    "type": tag.get("type"),
+                    "number": tag.get("number", "1"),
+                    "bracket": tag.get("bracket", "no"),
+                    "show_number": tag.get("show-number", "actual"),
+                } for tag in child.findall("notations/tuplet"))
                 symbols.append(ScoreSymbol(
                     identifier, source_id, hand, child.findtext("voice", "1"),
                     number, at_beat, round(duration_ticks / divisions, 8),
                     "rest" if rest else "note", pitch, spelling,
                     child.findtext("type"), len(child.findall("dot")), chord,
                     "start" in tie_types, "stop" in tie_types,
-                    is_attack, child.findtext("accidental"), time_modification))
+                    is_attack, child.findtext("accidental"), time_modification,
+                    tuplet_marks))
             if current_meter is None:
                 raise ValueError("No meter for a source measure")
             if cursor != ticks_in_bar:
@@ -280,7 +291,9 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
         "notes": [{**asdict(note), "spelling": (
             list(note.spelling) if note.spelling is not None else None)}
             for note in notes],
-        "notation_events": [asdict(symbol) for symbol in symbols],
+        "notation_events": [{**asdict(symbol), "tuplet_marks": [
+            dict(mark) for mark in symbol.tuplet_marks]}
+            for symbol in symbols],
         "active_note_ids": [note.id for note in notes
                             if hand == "both" or hand == note.hand],
     }
