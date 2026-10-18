@@ -259,9 +259,17 @@ func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
-    native_notation_enabled = (
+    # Retire the hand-painted Phase C renderer from the user-facing launch.
+    # The old flag is intentionally accepted but now displays Verovio ink;
+    # only an explicitly named diagnostic can still enable the old experiment.
+    var retired_native_flag: bool = (
         OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" or
         OS.get_cmdline_user_args().has("--native-notation"))
+    native_notation_enabled = (
+        OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION_EXPERIMENTAL") == "1" or
+        OS.get_cmdline_user_args().has("--native-notation-experimental"))
+    if retired_native_flag:
+        push_warning("The hand-drawn native notation renderer is retired. Using Verovio engraving; remove PIANO_TEACHER_NATIVE_NOTATION=1 from the launch command.")
     timeline_preview_enabled = (native_notation_enabled or
         OS.get_environment("PIANO_TEACHER_TIMELINE_PREVIEW") == "1" or
         OS.get_cmdline_user_args().has("--timeline-preview"))
