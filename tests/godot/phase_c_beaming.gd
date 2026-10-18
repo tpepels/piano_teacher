@@ -82,6 +82,22 @@ func run() -> void:
     var lookup: Dictionary = Geometry.beamed_ids(groups)
     check(lookup.has("a") and lookup.has("c") and not lookup.has("chord_c"),
         "Chord tone shares leader's beam without a duplicate stem")
+    check(Geometry.signature_steps(clefs["right"],3).size() == 3,
+        "Three-sharp key signature produces three individually positioned signs")
+    check(Geometry.signature_steps(clefs["right"],-2) == [4,7],
+        "B-flat and E-flat have real diatonic staff positions")
+    check(Geometry.signature_steps(clefs["left"],-2) != [4,7],
+        "Bass clef key signature is not copied from the treble staff")
+    var close_chord: Array = [
+        note("c4", 0.0, 1.0, "right", "1", 1, "quarter"),
+        note("d4", 0.0, 1.0, "right", "1", 1, "quarter",true)]
+    close_chord[0]["spelling"] = {"step":"C","octave":4}
+    close_chord[1]["spelling"] = {"step":"D","octave":4}
+    var shifts: Dictionary = Geometry.chord_offsets(close_chord,12.0)
+    check(shifts.has("c4") and shifts.has("d4"),
+        "Adjacent chord seconds gain local collision-free glyph positions")
+    check(absf(float(shifts["c4"])-float(shifts["d4"])) >= 17.0,
+        "Adjacent noteheads must not visually overlap at ordinary scale")
     var renderer = Native.new()
     get_root().add_child(renderer)
     renderer.size = Vector2(1360, 460)
