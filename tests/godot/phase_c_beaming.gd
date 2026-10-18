@@ -28,6 +28,12 @@ func run() -> void:
     if Geometry == null or Native == null:
         quit(1)
         return
+    check(absf(Geometry.beat_group_length([3,8])-1.5) < .0001,
+        "3/8 uses a single dotted-quarter group")
+    check(absf(Geometry.beat_group_length([2,2])-2.0) < .0001,
+        "2/2 uses half-note pulse instead of quarter group")
+    check(absf(Geometry.beat_group_length([4,16])-.5) < .0001,
+        "4/16 retains eighth-note grouping")
     var clefs := {"right":{"sign":"G","line":2},
                    "left":{"sign":"F","line":4}}
     var events: Array = [
