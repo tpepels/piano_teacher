@@ -35,5 +35,6 @@ def test_opt_in_app_uses_existing_visual_transport_clock_not_engraving_x():
     assert 'PIANO_TEACHER_PIXELS_PER_BEAT' in timeline
     assert 'return beat * pixels_per_beat' in timeline
     assert 'return pixels_per_beat * bpm / 60.0' in timeline
-    assert 'camera_clock, from)' in prototype
+    assert 'timeline.screen_x(' in prototype
+    assert 'playhead_x, from)' in prototype
     assert 'Verovio' not in prototype
