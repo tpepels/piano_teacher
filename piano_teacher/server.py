@@ -800,8 +800,22 @@ class PracticeEngine:
         self.awaiting_score_revision = None
         self.transport_id += 1
         self.running = True
-        self.run_at = time.monotonic()
-        self.feedback = "Listen to this example"
+        # Listen also needs a real, visible lead-in. Starting the transport
+        # immediately at zero allowed HTTP/audio buffer latency to skip the
+        # first piano attack. The PCM remains untrimmed and begins at beat 0.
+        phrase = self.plan.active_phrase
+        grid = phrase_grid(phrase, self.plan.piece.bar_boundaries)
+        self.count_in_bar_beats = grid[1] - grid[0]
+        meter = next(((num, den) for beat, num, den in
+            sorted(self.plan.piece.time_signatures, reverse=True)
+            if beat <= phrase.start + 1e-7), None)
+        self.count_in_meter = list(meter) if meter is not None else [
+            max(1, round(self.count_in_bar_beats)), 4]
+        if meter is not None:
+            self.count_in_bar_beats = meter[0] * 4 / meter[1]
+        self.count_in_beats = lead_in_beats(self.count_in_bar_beats, self.plan.bpm)
+        self.run_at = time.monotonic() + self.count_in_beats * 60 / self.plan.bpm
+        self.feedback = "Count in, then listen"
 
     def _prepare_perform(self, *, scope: str = "current"):
         if self.plan is None:
@@ -1631,15 +1645,14 @@ class PracticeEngine:
             variant=p.active_variant
             hand_stages = []
             if ex.kind in ("learn", "warmup"):
-                for hand in (("left", "right", "both") if self.is_builtin_warmup
-                             else ("right", "left", "both")):
+                for hand in ("right", "left", "both"):
                     steps = [step for step in p.lesson_steps
                              if step.exercise_index == p.index and step.hand == hand]
                     if not steps:
                         continue
                     finished = all(step.key in p.mastered for step in steps)
                     available = hand in p.hands
-                    locked = (self.is_builtin_warmup and hand != "left"
+                    locked = (self.is_builtin_warmup and hand != "right"
                               and not all(previous["complete"] for previous in hand_stages))
                     hand_stages.append({"hand": hand, "active": hand == p.hand,
                                         "complete": finished, "locked": locked,
@@ -1686,6 +1699,8 @@ class PracticeEngine:
                         phrase_grid(p.active_phrase, p.piece.bar_boundaries),
                         self.open_from_beat, p.active_phrase.first_bar)),
                     "hand_stages":hand_stages,
+                    "measure_boundaries":list(phrase_grid(
+                        p.active_phrase, p.piece.bar_boundaries)),
                     "import_warnings": list(p.piece.import_warnings),
                     "lesson_step":p.lesson_step_number,"lesson_steps":len(p.lesson_steps),
                     "lesson_steps_mastered":p.lesson_steps_mastered,
