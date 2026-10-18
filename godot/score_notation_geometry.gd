@@ -102,3 +102,97 @@ static func event_positions(model: Dictionary, density: float) -> Dictionary:
         if event is Dictionary:
             result[str(event.get("id", ""))] = float(event.get("beat", 0.0))*density
     return result
+
+
+# C2: conventional beaming is a semantic grouping, never a scroll operation.
+# Only group unambiguous beats: ordinary meters by quarter beat and 6/8,
+# 9/8, 12/8 by dotted-quarter beat. Ambiguous irregular meters leave flags.
+static func beat_group_length(meter: Array) -> float:
+    if meter.size() < 2:
+        return 0.0
+    var numerator: int = int(meter[0])
+    var denominator: int = int(meter[1])
+    if denominator == 8 and numerator in [6, 9, 12]:
+        return 1.5
+    if denominator in [2, 4, 8, 16] and numerator in [2, 3, 4]:
+        return 1.0
+    return 0.0
+
+static func _beam_finish(group: Array, output: Array) -> void:
+    if group.size() >= 2:
+        output.append(group.duplicate())
+
+static func beam_groups(model: Dictionary) -> Array:
+    # Sequence by staff, voice and bar. Rests, unbeamable durations, ties
+    # and gaps break groups; chord tones share the leader's beam/stem.
+    var lanes: Dictionary = {}
+    var measures: Dictionary = {}
+    for measure in model.get("measures", []):
+        if measure is Dictionary:
+            measures[int(measure.get("number", 0))] = measure
+    for event in model.get("notation_events", []):
+        if not event is Dictionary:
+            continue
+        var staff: String = str(event.get("staff", ""))
+        var voice: String = str(event.get("voice", "1"))
+        var number: int = int(event.get("measure", 0))
+        var key: String = staff + "|" + voice + "|" + str(number)
+        if not lanes.has(key):
+            lanes[key] = {"measure":number, "events":[]}
+        if bool(event.get("chord", false)):
+            continue
+        lanes[key]["events"].append(event)
+    var output: Array = []
+    for key in lanes:
+        var measure: Dictionary = measures.get(int(lanes[key]["measure"]), {})
+        var length: float = beat_group_length(measure.get("meter", []))
+        if length <= 0.0:
+            continue
+        var ordered: Array = lanes[key]["events"]
+        ordered.sort_custom(func(a, b): return float(a["beat"]) < float(b["beat"]))
+        var current: Array = []
+        var current_group := -1
+        var previous_end := -INF
+        var begin: float = float(measure.get("start_beat", 0.0))
+        for event in ordered:
+            var at: float = float(event.get("beat", -1.0))
+            var duration: float = float(event.get("duration_beats", 0.0))
+            var short: bool = str(event.get("kind", "")) == "note" and \
+                str(event.get("note_type", "")) in ["eighth", "16th"] and \
+                duration > 0.0 and duration <= .75
+            var unit: int = int(floor((at-begin+.000001)/length))
+            # Notes may end on the next group boundary but not cross it.
+            var stays: bool = at+duration <= begin+float(unit+1)*length+.00001
+            var consecutive: bool = absf(at-previous_end) <= .00001
+            if not short or not stays or (not current.is_empty() and \
+                    (unit != current_group or not consecutive)):
+                _beam_finish(current, output)
+                current = []
+            if short and stays:
+                current.append(event)
+                current_group = unit
+                previous_end = at+duration
+            else:
+                previous_end = -INF
+        _beam_finish(current, output)
+    return output
+
+static func beamed_ids(groups: Array) -> Dictionary:
+    var lookup: Dictionary = {}
+    for group in groups:
+        for event in group:
+            lookup[str(event.get("id", ""))] = true
+    return lookup
+
+static func stem_up(group: Array, model: Dictionary) -> bool:
+    if group.is_empty():
+        return true
+    var measure_by_number: Dictionary = {}
+    for measure in model.get("measures", []):
+        measure_by_number[int(measure.get("number", 0))] = measure
+    var total := 0.0
+    for event in group:
+        var m: Dictionary = measure_by_number.get(int(event.get("measure", 0)), {})
+        var clef: Dictionary = m.get("clefs", {}).get(str(event.get("staff", "right")), {})
+        total += float(staff_step(event.get("spelling", {}), clef))
+    return total/float(group.size()) < 4.0
