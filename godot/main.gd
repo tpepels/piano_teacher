@@ -3227,11 +3227,14 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         return
     var should_defer: bool = source_layout.get("systems", []).size() >= \
         ScoreStrip.DEFERRED_MIN_SYSTEMS
-    # Phase 1: use undistorted source engraving until the new in-app
-    # notation renderer is ready.  Generated PNG glyphs must never be
-    # spliced/stretched to manufacture time-proportional layout.
+    # Phase 1 A/B diagnostic: keep constant-velocity practice as the
+    # standard until the unwarped geometry has its own musical-time camera.
+    # PIANO_TEACHER_NATIVE_SCORE=1 ./run.sh enables source-ink preview.
+    var native_ink_preview: bool = OS.get_environment("PIANO_TEACHER_NATIVE_SCORE") == "1"
+    if native_ink_preview:
+        print("NATIVE_SCORE_PREVIEW: source pixels unchanged; motion still experimental")
     var strip: Dictionary = ScoreStrip.build(
-        source_layout, page_images, should_defer, true)
+        source_layout, page_images, should_defer, native_ink_preview)
     if strip.has("error") or strip["tiles"].is_empty():
         _score_failed(str(strip.get("error", "No staff systems were found in the engraving")))
         return
