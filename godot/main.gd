@@ -3024,8 +3024,8 @@ func _preview_note_arrivals(groups: Array) -> void:
                 "page": int(note.get("page", 0)),
                 "x": float(note.get("x", 0.0)),
                 "y": float(note.get("y", 0.0)),
-                "duration_ms": 620,
-                "until_ms": now_ms + 620,
+                "duration_ms": 220,
+                "until_ms": now_ms + 220,
                 "status": "preview"
             })
     game_stage.preview_react()
@@ -3105,7 +3105,7 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                 note_reactions.queue_redraw()
                 break
             continue
-        if status not in ["on_time", "early", "late"] or age > .42:
+        if status not in ["on_time", "early", "late"] or age > .22:
             continue
         var note_id: String = str(mapping.get(source, ""))
         if note_id.is_empty():
@@ -3118,8 +3118,8 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                     "y": float(note.get("y", 0.0)),
                     "status": status,
                     "note_id": note_id,
-                    "duration_ms": 450,
-                    "until_ms": Time.get_ticks_msec() + maxi(1, 450 - int(age * 1000.0))
+                    "duration_ms": 220,
+                    "until_ms": Time.get_ticks_msec() + maxi(1, 220 - int(age * 1000.0))
                 })
                 if score_overlay.hit_pulses.size() > 32:
                     score_overlay.hit_pulses.pop_front()
