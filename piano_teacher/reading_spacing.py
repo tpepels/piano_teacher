@@ -7,9 +7,13 @@ from xml.etree import ElementTree as ET
 
 
 # Horizontal density of freshly engraved exercise scores. Independent of BPM.
-# Larger values spread the notes farther apart. Start around 0.03; tune
-# this one value if the app needs denser or more open notation.
-NOTE_SPACING = 0.03
+# Larger values spread the notes farther apart. A higher proportional
+# component prevents Verovio's minimum symbol-clearance from compressing a
+# quarter beat almost as much as a full beat. That collision floor previously
+# forced Godot's exact-onset camera to accelerate abruptly over short notes.
+# Tune this one constant, independent of tempo; 0.03 was too compressed
+# for eighth/sixteenth-note sequences.
+NOTE_SPACING = 0.095
 
 # Preserve a fixed musical-time axis under the stationary playhead.
 # A value of 1.0 makes rhythmic duration proportional to engraved distance.
