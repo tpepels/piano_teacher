@@ -86,31 +86,10 @@ func _draw() -> void:
     var now_ms: int = Time.get_ticks_msec()
     var gap: float = maxf(5.0, staff_gap_fraction * size.y)
     var radii: Vector2 = Ink.radii(gap)
-    for index in range(maxi(0, hit_pulses.size() - MAX_VISIBLE_HITS),
-            hit_pulses.size()):
-        var hit: Dictionary = hit_pulses[index]
-        if int(hit.get("page", -1)) != active_page:
-            continue
-        var remaining: float = _remaining(hit, now_ms, HIT_DURATION_MS)
-        if remaining <= 0.0:
-            continue
-        var position: Vector2 = _sheet_position(hit)
-        var tone: Color = HIT if str(hit.get("status", "")) == "on_time" else TIMING
-        _success_impact(position, 1.0 - remaining, gap, radii, tone)
-        _staff_resonance(position, gap, tone, remaining)
-
-    # A thin slate contour follows real preview onsets. It cannot be
-    # mistaken for the coloured response to a judged MIDI attack.
-    for index in range(maxi(0, preview_pulses.size() - MAX_VISIBLE_HITS),
-            preview_pulses.size()):
-        var preview: Dictionary = preview_pulses[index]
-        if int(preview.get("page", -1)) != active_page:
-            continue
-        var remaining: float = _remaining(preview, now_ms, 620)
-        if remaining > 0.0:
-            var center: Vector2 = _sheet_position(preview)
-            _success_impact(center, 1.0 - remaining, gap, radii, PREVIEW)
-            _staff_resonance(center, gap, PREVIEW, remaining)
+    # Successful and preview notes use a single short, glyph-aligned light
+    # pulse in ScoreOverlay (foreground). Rendering another halo behind the
+    # raster doubled the glow and made it appear detached from the notehead.
+    # This canvas retains only red correction contours for wrong notes.
     for index in range(maxi(0, wrong_ghosts.size() - MAX_VISIBLE_HITS),
             wrong_ghosts.size()):
         var wrong: Dictionary = wrong_ghosts[index]
