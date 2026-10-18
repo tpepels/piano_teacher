@@ -6,6 +6,19 @@ import math
 from xml.etree import ElementTree as ET
 
 
+# Horizontal density of freshly engraved exercise scores. Independent of BPM.
+# Larger values spread the notes farther apart. Start around 0.03; tune
+# this one value if the app needs denser or more open notation.
+NOTE_SPACING = 0.03
+
+# Preserve a fixed musical-time axis under the stationary playhead.
+# A value of 1.0 makes rhythmic duration proportional to engraved distance.
+# Lower values would make isolated notes look more equally spaced, but they
+# would also force the scrolling score to accelerate/decelerate between notes
+# to hit the correct beats. That reintroduces the tempo wobble.
+RHYTHM_SPACING = 1.0
+
+
 def _measure_lengths(root: ET.Element) -> list[float]:
     """Read actual voice durations, including pickups, backups and chords."""
     lengths: list[float] = []
@@ -107,12 +120,12 @@ def space_for_continuous_reading(xml: str, bpm: float) -> tuple[str, dict]:
     lengths = _measure_lengths(root)
     if not lengths:
         raise ValueError("Practice score contains no measures")
-    # The previous four-second reading budget spread sparse half/whole
-    # notes across almost the whole viewport at 40-50 BPM. Keep the
-    # tempo-dependent spacing (required for recovery) but reduce its slope
-    # for short, continuously engraved exercises. Verovio still provides
-    # native collision clearance for accidentals, stems, and beams.
-    linear = min(1.0, 1.8 / bpm)
+    # The score's horizontal density is independent of practice tempo.
+    # BPM controls the transport clock; changing tempo must not re-space
+    # half/whole/quarter-note glyphs or move upcoming notes off-screen.
+    # Keep NOTE_SPACING small; Verovio's collision detection provides the
+    # additional space needed around dense chords and accidentals.
+    linear = NOTE_SPACING
     # Keep the native note glyph sizes: reserve enough horizontal room for
     # every quarter beat, clefs/meters and per-measure barline clearance.
     # Unlike the previous reading_spacing mode, no internal page/system
@@ -128,7 +141,7 @@ def space_for_continuous_reading(xml: str, bpm: float) -> tuple[str, dict]:
                     measure.remove(instruction)
     return ET.tostring(root, encoding="unicode"), {
         "spacingLinear": linear,
-        "spacingNonLinear": 1.0,
+        "spacingNonLinear": RHYTHM_SPACING,
         "noJustification": True,
         "breaks": "none",
         "pageWidth": page_width,
