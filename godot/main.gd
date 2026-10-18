@@ -247,6 +247,9 @@ func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
+    # Apply one device-independent Window scale before creating the controls.
+    # Do not enlarge fonts and controls a second time in the layouts.
+    _configure_ui_scaling()
     ui_scale = _readable_ui_scale()
     _build_interface()
     demo_player = preload("res://demo_player.gd").new()
@@ -264,6 +267,8 @@ func _ready() -> void:
     click_player.volume_db = -5.0
     add_child(click_player)
     resized.connect(_update_responsive_layout)
+    if not get_window().size_changed.is_connected(_update_responsive_layout):
+        get_window().size_changed.connect(_update_responsive_layout)
     _update_responsive_layout()
     state_request = _new_request(_on_state)
     score_request = _new_request(_on_score)
@@ -610,11 +615,24 @@ func _http_failure(code: int, body: PackedByteArray) -> String:
         return "Practice engine unavailable. Start Piano Teacher with ./run.sh"
     return "Practice engine request failed (HTTP %d)" % code
 
+func _configure_ui_scaling() -> void:
+    # Godot must scale the *whole* interface once: text, drawing, music,
+    # hit targets and popup placement. Scaling only individual font overrides
+    # left score and controls at unrelated sizes on large/HiDPI displays.
+    var window: Window = get_window()
+    if window == null:
+        return
+    var physical := Vector2(window.size)
+    var factor: float = maxf(1.0, minf(physical.x / 1280.0,
+        physical.y / 800.0))
+    if absf(window.content_scale_factor - factor) > .001:
+        window.content_scale_factor = factor
+
+
 func _readable_ui_scale() -> float:
-    # Pixel fonts stayed tiny at 2048x1280 fullscreen. Increase the interface
-    # text and touch targets with the actual window size, not the score zoom.
-    # At 800x600 use the existing compact layout instead of shrinking type.
-    return clampf(minf(size.x / 1150.0, size.y / 760.0), 1.0, 1.75)
+    # Layout dimensions are logical pixels after Window content scaling.
+    # Multiplying these again by screen resolution causes double scaling.
+    return 1.0
 
 func _ui_font(base: int) -> int:
     return maxi(14, int(round(float(base) * ui_scale)))
@@ -912,8 +930,7 @@ func _resize_overlay_drawer() -> void:
         library_heading.vertical = size.x < 1100.0
         library_path_label.visible = size.y >= 700.0
         library_search.tooltip_text = library_path_label.text + "\nCtrl+F or / to search"
-    if folder_controls != null:
-        folder_controls.vertical = size.x < 1100.0
+    # Folder controls always stack; only their actions wrap horizontally.
     for grid in library_grids:
         grid.columns = 2 if size.x >= 1100.0 else 1
 
@@ -1481,6 +1498,7 @@ func _resize_caption_slots() -> void:
 
 
 func _update_responsive_layout() -> void:
+    _configure_ui_scaling()
     ui_scale = _readable_ui_scale()
     theme.default_font_size = _ui_font(16)
     _resize_ui_fonts(self)
@@ -1591,7 +1609,9 @@ func _build_settings_screen() -> void:
 
     var music := _section("Music library")
     content.add_child(music)
-    folder_controls = BoxContainer.new()
+    # A fixed vertical arrangement prevents Browse/Save from crowding the
+    # folder path on narrower logical viewports and fullscreen displays.
+    folder_controls = VBoxContainer.new()
     folder_controls.add_theme_constant_override("separation", 8)
     music.add_child(folder_controls)
     folder_edit = LineEdit.new()
@@ -1600,8 +1620,9 @@ func _build_settings_screen() -> void:
     folder_edit.placeholder_text = "~/Music/Piano Teacher"
     folder_edit.text_submitted.connect(func(_text: String): _save_folder())
     folder_controls.add_child(folder_edit)
-    var folder_actions := HBoxContainer.new()
-    folder_actions.add_theme_constant_override("separation", 10)
+    var folder_actions := HFlowContainer.new()
+    folder_actions.add_theme_constant_override("h_separation", 10)
+    folder_actions.add_theme_constant_override("v_separation", 6)
     folder_controls.add_child(folder_actions)
     folder_actions.add_child(_button("Choose folder…", _browse_folder, false, "navigation"))
     folder_actions.add_child(_button("Save folder", _save_folder, false, "secondary"))
