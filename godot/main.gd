@@ -2325,6 +2325,15 @@ func _process(_delta: float) -> void:
         score_overlay.queue_redraw()
         note_reactions.queue_redraw()
     apply_tempo_button.disabled = action_pending
+    # Start Listen WAV on the actual negative-to-zero beat crossing at
+    # frame rate, not on the next 150ms HTTP state poll. This preserves the
+    # first note AND keeps its attack aligned with the engraved notehead.
+    if demo_player != null and str(last_state.get("mode", "")) == "listen" \
+            and bool(last_state.get("running", false)) \
+            and not bool(last_state.get("paused", false)) \
+            and bool(demo_player.get("loaded")) \
+            and not bool(demo_player.get("started")):
+        demo_player.synchronize(last_state, _transport_beat_now())
     # Continuous Listen drift measurements are display/audio only and
     # never feed back into the MIDI grading or the Python transport.
     if demo_player != null and str(last_state.get("mode", "")) == "listen" \
