@@ -21,6 +21,16 @@ jobs:
         run: |
           .venv/bin/python -m pytest -q
           ./scripts/check_godot.sh
+      - name: Compare user's seven MIDI files with original Verovio engravings
+        run: .venv/bin/python scripts/check_user_midi_visual_regression.py --out /tmp/piano-user-midi-visual
+      - name: Upload real MIDI visual comparison images and pixel report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: original-verovio-vs-godot-score-strip
+          path: /tmp/piano-user-midi-visual
+          if-no-files-found: warn
+          retention-days: 14
       - name: Audit real score scrolling velocity
         run: .venv/bin/python scripts/audit_scroll_velocity.py
       - name: Real rendering and HTTP integration
