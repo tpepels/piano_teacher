@@ -15,13 +15,14 @@ def test_fullscreen_layout_has_adaptive_margins_and_stackable_cards():
     # Settings now uses a fixed vertical folder field with wrap-safe actions.
     # The previous window-wide threshold forced a horizontal row inside a
     # narrow drawer, hiding Browse/Save on the user's 1536x960 screen.
-    assert 'var folder_row := VBoxContainer.new()' in SCRIPT
+    assert 'folder_controls = VBoxContainer.new()' in SCRIPT
     assert 'var folder_actions := HFlowContainer.new()' in SCRIPT
-    assert 'overlay_drawer.offset_left = - drawer_width' in SCRIPT
+    assert 'overlay_drawer.offset_left = inset' in SCRIPT
     assert 'margin_left' in SCRIPT and 'margin_right' in SCRIPT
-    assert 'folder_edit.custom_minimum_size = Vector2(0, 48)' in SCRIPT
-    assert 'home_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED' in SCRIPT
-    assert 'settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED' in SCRIPT
+    assert 'folder_edit.custom_minimum_size = Vector2(0, 40)' in SCRIPT
+    assert 'scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED' in SCRIPT
+    assert 'func _configure_ui_scaling() -> void:' in SCRIPT
+    assert 'window.content_scale_factor = factor' in SCRIPT
 
 
 def test_long_song_names_cannot_force_controls_wider():
