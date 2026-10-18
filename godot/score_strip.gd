@@ -156,6 +156,14 @@ static func build(layout: Dictionary, pages: Array[Image],
                             splice_right = safe_run.y
         var top: int = maxi(0, int(floor(float(system.top) * source_size.y)))
         var bottom: int = mini(image.get_height(), int(ceil(float(system.bottom) * source_size.y)))
+        if bool(layout.get("continuous_score", false)) and source_systems.size() == 1:
+            # The measured staff box uses notehead origins, not the full
+            # vertical extents of stems, flags, ledgers or high/low notes.
+            # A freshly engraved one-system lesson can safely retain the
+            # entire page height; later _layout_moving_score() fits its
+            # measured ink, including these outlying symbols, to the stage.
+            top = 0
+            bottom = image.get_height()
         if right <= left or bottom <= top:
             return _failure("An engraved staff system has invalid bounds")
         var crop := Rect2i(left, top, right-left, bottom-top)
