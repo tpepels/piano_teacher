@@ -201,7 +201,7 @@ func _paint_rest(x: float, y: float,
                 Vector2(x-4.0,y+gap*.88), Vector2(x+2.0,y+gap*.70)])
             draw_polyline(points, ink, 2.9, true)
         _:
-            var flags: int = 2 if note_type == "16th" else 1
+            var flags: int = Geometry.beam_level(note_type)
             draw_line(Vector2(x+3.0, y-gap*.85),
                 Vector2(x-4.0, y+gap*.86), ink, 2.0, true)
             for index in range(flags):
@@ -262,8 +262,9 @@ func _paint_note(event: Dictionary, x: float,
         var tip_y: float = float(beam_stem.get("tip_y",
             y+(-gap*3.25 if stem_up else gap*3.25)))
         draw_line(Vector2(stem_x,y), Vector2(stem_x,tip_y), ink, 1.65, true)
-        if kind in ["eighth","16th"] and beam_stem.is_empty():
-            _paint_flag(stem_x,tip_y,stem_up,2 if kind=="16th" else 1,ink,gap)
+        if Geometry.beam_level(kind) > 0 and beam_stem.is_empty():
+            _paint_flag(stem_x, tip_y, stem_up,
+                Geometry.beam_level(kind), ink, gap)
     if int(event.get("dots", 0)) > 0:
         draw_circle(Vector2(x+gap*.93, y-gap*.3), 2.4, ink)
     var accidental: String = str(event.get("accidental", ""))
@@ -315,9 +316,10 @@ func _beam_rectangle(a: float, b: float, y: float,
 
 
 func _paint_beams(data: Dictionary, gap: float) -> void:
-    # Main bar always joins every member in a group. Sixteenth notes get
-    # secondary bars; an isolated sixteenth gets a short hook, never a flag
-    # laid on top of an existing beam.
+    # The first beam joins the entire group. Additional beams at levels
+    # 2/3/4 respectively encode 16th/32nd/64th values. Each level either
+    # joins adjacent eligible notes or paints a short isolated hook.
+    # All layers use the exact same source-beat positions and stem tips.
     for group in data.get("groups", []):
         var members: Array = group.get("members", [])
         if members.size() < 2:
@@ -333,25 +335,31 @@ func _paint_beams(data: Dictionary, gap: float) -> void:
         var thick: float = gap*.39
         _beam_rectangle(float(first["x"]), float(last["x"]),
             first_y, sign*thick, ink)
-        var second_y: float = first_y+sign*gap*.65
-        for i in range(members.size()):
-            if str(members[i].get("note_type", "")) != "16th":
-                continue
-            var x0: float = float(members[i]["x"])
-            if i+1 < members.size() and \
-                    str(members[i+1].get("note_type", "")) == "16th":
-                _beam_rectangle(x0, float(members[i+1]["x"]),
-                    second_y, sign*thick, ink)
-            elif i == 0 or str(members[i-1].get("note_type", "")) != "16th":
-                var hook_dir: float = -1.0 if i == members.size()-1 else 1.0
-                var available: float = (x0-float(members[i-1]["x"])
-                    if hook_dir < 0.0 else float(members[i+1]["x"])-x0)
-                var width: float = minf(gap*1.3, available*.5)
-                if hook_dir < 0.0:
-                    _beam_rectangle(x0-width, x0,second_y,sign*thick,ink)
-                else:
-                    _beam_rectangle(x0,x0+width,second_y,sign*thick,ink)
-
+        for level in range(2, 5):
+            var beam_y: float = first_y + sign*gap*.65*float(level-1)
+            for i in range(members.size()):
+                var amount: int = Geometry.beam_level(
+                    str(members[i].get("note_type", "")))
+                if amount < level:
+                    continue
+                var x0: float = float(members[i]["x"])
+                var prior: bool = i > 0 and Geometry.beam_level(
+                    str(members[i-1].get("note_type", ""))) >= level
+                var following: bool = i+1 < members.size() and \
+                    Geometry.beam_level(
+                    str(members[i+1].get("note_type", ""))) >= level
+                if following:
+                    _beam_rectangle(x0, float(members[i+1]["x"]),
+                        beam_y, sign*thick, ink)
+                elif not prior:
+                    var left_hook: bool = i == members.size()-1
+                    var nearby: float = (x0-float(members[i-1]["x"])
+                        if left_hook else float(members[i+1]["x"])-x0)
+                    var hook: float = minf(gap*1.3, nearby*.50)
+                    if left_hook:
+                        _beam_rectangle(x0-hook, x0, beam_y, sign*thick, ink)
+                    else:
+                        _beam_rectangle(x0, x0+hook, beam_y, sign*thick, ink)
 
 func _paint_ties(visible_events: Array, playhead_x: float,
         clock: float, gap: float) -> void:
