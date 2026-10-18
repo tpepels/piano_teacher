@@ -63,7 +63,7 @@ func run() -> void:
                 "duration_beats":event["duration_beats"],
                 "midi_pitch":67,"hand":event["staff"]})
     var groups: Array = Geometry.beam_groups(score)
-    check(groups.size() == 6, "Two groups in 4/4, two in 6/8, plus isolated voices")
+    check(groups.size() == 5, "Three groups in 4/4 and two in compound 6/8")
     var by_first: Dictionary = {}
     for group in groups:
         by_first[str(group[0]["id"])] = group.map(func(e):return e["id"])
