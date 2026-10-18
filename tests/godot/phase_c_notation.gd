@@ -124,6 +124,28 @@ func run() -> void:
             "No tempo change at first note, %.0f BPM" % tempo)
         check(approx(renderer.timeline.pixels_per_beat,density),
             "BPM never changes selected glyph spacing")
+    # Very high and low notes must fit in the ACTUAL native canvas.
+    # Scaling changes only vertical glyph spacing, never the time axis.
+    var extremes: Dictionary = model.duplicate(true)
+    for symbol in extremes["notation_events"]:
+        if str(symbol.get("id", "")) == "n3":
+            symbol["spelling"] = {"step":"C","octave":8,"alter":0}
+        if str(symbol.get("id", "")) == "n8":
+            symbol["spelling"] = {"step":"C","octave":1,"alter":0}
+    check(renderer.load_score(extremes),"Extreme ledger notes remain supported")
+    var fitted_gap: float = renderer._gap()
+    var highest: float = INF
+    var lowest: float = -INF
+    for symbol in extremes["notation_events"]:
+        if str(symbol.get("kind","")) == "note":
+            var y: float = renderer._event_y(symbol,fitted_gap)
+            highest = minf(highest,y)
+            lowest = maxf(lowest,y)
+    check(highest >= 31.0 and lowest <= renderer.size.y-31.0,
+        "Native resize keeps both very high and low ledger notes in view")
+    check(approx(renderer.timeline.pixels_per_beat,density),
+        "Vertical resizing cannot affect horizontal musical time")
+    check(renderer.load_score(model),"Restore ordinary notation for fallback test")
     var old: Dictionary = model.duplicate(true)
     old["notation_events"][0]["time_modification"] = {"actual":3,"normal":2}
     check(not renderer.load_score(old),"Unimplemented tuplet rejects native renderer")
