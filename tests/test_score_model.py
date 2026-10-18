@@ -124,9 +124,20 @@ def test_cross_bar_pitch_spelling_and_key_changes_survive():
         time_signatures=meters,
         key_signatures=(KeySignature(0, 0), KeySignature(3, 2)))
     model = build_score_model(notation, boundaries=boundaries)
-    assert [m["key_fifths"] for m in model["measures"]] == [0, 2]
+    assert [m["keys"] for m in model["measures"]] == [
+        {"right": 0, "left": 0}, {"right": 2, "left": 2}]
     assert all(e["spelling"]["step"] in "CDEFGAB" for e in
                model["notation_events"] if e["kind"] == "note")
+
+
+def test_independent_staff_key_signatures_are_not_lost():
+    phrase, boundaries, meters = fixture()
+    notation = build_lesson_score(phrase, boundaries=boundaries,
+        time_signatures=meters,
+        key_signatures=(KeySignature(0, 2, "right"),
+                        KeySignature(0, -1, "left")))
+    model = build_score_model(notation, boundaries=boundaries)
+    assert model["measures"][0]["keys"] == {"right": 2, "left": -1}
 
 
 def test_missing_or_duplicated_engraved_source_binding_is_rejected():
