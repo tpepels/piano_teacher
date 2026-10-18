@@ -32,6 +32,10 @@ var beat_in_bar := 0
 var beats_per_bar := 4
 var score_preview := false
 var impact_age := 0.0
+# A transient beat arrival cue. The real score overlay owns the ONLY
+# vertical playhead line, avoiding two nearly overlapping strikes.
+var beat_ripple := 0.0
+var last_beat_number := -1
 # One-shot result wave, keyed to the actual assessed take. Repeated /state
 # polling cannot restart the animation or manufacture progress.
 var last_result_key := ""
@@ -118,6 +122,11 @@ func sync_beat(beat: float, meter: int, preview: bool) -> void:
     var next_meter: int = clampi(meter, 1, 12)
     var next_fraction: float = fposmod(beat, 1.0)
     var next_bar: int = posmod(int(floor(beat)), next_meter)
+    var beat_number: int = int(floor(beat))
+    if beat_number != last_beat_number:
+        beat_ripple = 1.0 if last_beat_number >= 0 and beat_number > last_beat_number \
+            and beat_number - last_beat_number <= 2 else 0.0
+        last_beat_number = beat_number
     # Store the latest clock each frame; redraw on metrical changes or at
     # the stage's 20 Hz ambient cadence in _process. Previously every
     # ~0.018 beat triggered another redraw, defeating the frame cap.
@@ -157,6 +166,9 @@ func _process(delta: float) -> void:
     if milestone_light > .001:
         milestone_light = maxf(0.0, milestone_light - delta * 1.7)
         redraw = true
+    if beat_ripple > .001:
+        beat_ripple = maxf(0.0, beat_ripple - delta * 4.8)
+        redraw = true
     if preview_energy > .001:
         preview_energy = maxf(0.0, preview_energy - delta * 1.15)
         redraw = true
@@ -187,18 +199,19 @@ func _draw() -> void:
     var h: float = size.y
     if w < 1 or h < 1:
         return
-    # Keep the notation on one calm surface. Its real score overlay owns the
-    # precise timing line; this narrow underlay adds only a restrained edge.
+    # Only ScoreOverlay paints the precise vertical timing line. The stage
+    # must not draw a second line behind it, especially during count-in.
     draw_rect(Rect2(0, 0, w, h), Design.STAGE)
     if transport_active or phase == "paused":
         var x: float = w * .42
         var top: float = maxf(8.0, staff_band_top * h - 18.0)
         var bottom: float = minf(h - 32.0, staff_band_bottom * h + 18.0)
-        if bottom > top:
-            draw_line(Vector2(x, top), Vector2(x, bottom),
-                Color(Design.SCORE_ACCENT, .065), 6.0, true)
-            draw_line(Vector2(x, top), Vector2(x, bottom),
-                Color(Design.SCORE_ACCENT, .20), 1.0, true)
+        # The only timing line is drawn by score_overlay.gd at the exact
+        # projected beat. Retain a small beat cue outside the staff instead.
+        if beat_ripple > .001:
+            draw_circle(Vector2(x, maxf(8.0, top - 9.0)),
+                2.0 + beat_ripple * 3.0,
+                Color(Design.SCORE_ACCENT, beat_ripple * .32))
         if transport_active and staff_band_top * h >= 40.0:
             # A small reference label matches the moodboard, without a
             # travelling effect or an opaque banner across the notation.
