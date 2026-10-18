@@ -112,10 +112,16 @@ static func beat_group_length(meter: Array) -> float:
         return 0.0
     var numerator: int = int(meter[0])
     var denominator: int = int(meter[1])
-    if denominator == 8 and numerator in [6, 9, 12]:
+    if denominator == 8 and numerator in [3, 6, 9, 12]:
         return 1.5
-    if denominator in [2, 4, 8, 16] and numerator in [2, 3, 4]:
+    if denominator == 2 and numerator in [2, 3, 4]:
+        return 2.0
+    if denominator == 4 and numerator in [2, 3, 4]:
         return 1.0
+    if denominator == 8 and numerator in [2, 4]:
+        return 1.0
+    if denominator == 16 and numerator in [2, 4]:
+        return .5
     return 0.0
 
 static func _beam_finish(group: Array, output: Array) -> void:
