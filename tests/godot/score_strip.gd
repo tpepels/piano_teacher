@@ -248,6 +248,36 @@ func run() -> void:
         check(connected_segments[0].image.get_data() == connected_ink.get_data(),
             "Connected notation retains every original pixel without independent boundary resampling")
     var strip: Dictionary = helper.build(original, pages)
+    # Phase 1 checkpoint: real Verovio PNGs must remain unspliced, not
+    # horizontally warped.  This is the mode used by the practice screen.
+    var native_strip: Dictionary = helper.build(original, pages, false, true)
+    check(not native_strip.has("error"), "native notation must build successfully")
+    if not native_strip.has("error"):
+        check(bool(native_strip.layout.get("native_engraving", false)),
+            "practice notation exposes the source-ink mode for diagnostics")
+        check(native_strip.tiles.size() == original.systems.size(),
+            "native mode keeps exactly one untouched glyph crop per source system")
+        check(not bool(original.get("native_engraving", false)),
+            "native mode must not mutate the caller's authoritative layout")
+        for mapping in native_strip.mappings:
+            check(mapping.get("tempo_warp", []).is_empty() and
+                int(mapping.get("tempo_gap", 0)) == 0 and
+                int(mapping.get("entry_padding", 0)) == 0,
+                "native glyph tiles have no independent time warp or inserted gaps")
+            check(int(mapping.get("splice_left", -1)) == -1 and
+                int(mapping.get("splice_right", -1)) == -1 and
+                not bool(mapping.get("trimmed_header", false)),
+                "native notation cannot splice staff or chop a repeated header")
+        for i in range(native_strip.tiles.size()):
+            var mapping: Dictionary = native_strip.mappings[i]
+            var tile: Dictionary = native_strip.tiles[i]
+            check(absf(tile.rect.size.x - mapping.crop.size.x) <= .01,
+                "source notation tile width must never be stretched")
+        for note in original.get("notes", []):
+            var mapped_note: Dictionary = helper.map_point(note, native_strip.layout)
+            check(mapped_note.get("page", -1) == 0 and
+                is_finite(float(mapped_note.get("x", NAN))),
+                "native musical note positions remain available for the MIDI overlay")
     # Phase 8I: compare deferred CPU-packed tiles to the same real
     # Verovio engraving built with eager texture upload.
     var deferred: Dictionary = helper.build(original, pages, true)
