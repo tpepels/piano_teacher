@@ -52,7 +52,7 @@ def test_layout_cached_until_score_revision_changes(tmp_path, monkeypatch):
     engine.plan = LearningPlan(fixture_piece())
     engine.score = object()
     calls = []
-    def fake_render(score, first, last, hand, *, total_beats, bpm):
+    def fake_render(score, first, last, hand, *, total_beats, bpm, continuous=False):
         calls.append((first,last,hand,total_beats,bpm))
         return EngravedScore(("<svg>page 1</svg>","<svg>page 2</svg>"),
                              {"pages":2,"anchors":[{"beat":0,"x":.1}],"beats":total_beats,
