@@ -53,6 +53,21 @@ func run() -> void:
     check(not stage.score_preview and stage.beat_in_bar == 1
         and stage.beats_per_bar == 4,
         "Moving light respects the active musical meter")
+    stage.present({"phase":"playing", "running":true, "preview_only":true,
+        "transport_id":9, "play_from_beat":0.0, "duration_beats":14.0,
+        "measure_boundaries":[0.0, 3.0, 6.0, 10.0, 14.0],
+        "progress":0.0})
+    stage.sync_beat(6.0, 4, true)
+    check(stage.measure_boundaries.size() == 5
+        and absf(stage.shown_progress - 6.0 / 14.0) < .002,
+        "Four displayed rail segments use real mixed-meter bar lengths")
+    stage.present({"phase":"playing", "running":true, "preview_only":true,
+        "transport_id":10, "play_from_beat":6.0, "duration_beats":14.0,
+        "measure_boundaries":[0.0, 3.0, 6.0, 10.0, 14.0],
+        "progress":0.0})
+    stage.sync_beat(2.0, 4, true)
+    check(absf(stage.shown_progress - .25) < .002,
+        "Seeking into later bars keeps progress aligned with actual notes")
     stage.react("on_time")
     check(stage.impact_age == 0.0 and stage.impact_energy > .3
         and stage.impact_tone == Design.MINT,
