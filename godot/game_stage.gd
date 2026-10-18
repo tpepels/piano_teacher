@@ -232,28 +232,6 @@ func _draw() -> void:
             draw_circle(Vector2(x, maxf(8.0, top - 9.0)),
                 2.0 + beat_ripple * 3.0,
                 Color(Design.SCORE_ACCENT, beat_ripple * .32))
-        if transport_active and staff_band_top * h >= 40.0:
-            # A small reference label matches the moodboard, without a
-            # travelling effect or an opaque banner across the notation.
-            var flag_width := 78.0
-            var flag_height := 22.0
-            var flag_x: float = clampf(x - flag_width * .5, 5.0,
-                maxf(5.0, w - flag_width - 5.0))
-            var flag_y := 4.0
-            var flag := Rect2(flag_x, flag_y, flag_width, flag_height)
-            var body := StyleBoxFlat.new()
-            body.bg_color = Color(Design.PINE, .96)
-            body.set_corner_radius_all(7)
-            draw_style_box(body, flag)
-            var font: Font = ThemeDB.fallback_font
-            var text: String = "Follow" if score_preview else "Play here"
-            var font_size := 12
-            var ink_width: float = font.get_string_size(text,
-                HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-            draw_string(font, Vector2(flag.get_center().x - ink_width * .5,
-                flag.position.y + 15.0), text, HORIZONTAL_ALIGNMENT_LEFT,
-                -1, font_size, Design.STONE)
-
     # Segments represent actual source measures, including pickup measures
     # and mixed meters. They never use a decorative fixed 5-slot subdivision.
     var inset: float = clampf(w * .045, 15.0, 58.0)
