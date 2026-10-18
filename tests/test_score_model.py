@@ -176,7 +176,11 @@ def test_http_semantic_endpoint_is_json_and_does_not_trigger_png(tmp_path):
             assert response.headers.get_content_type() == "application/json"
             payload = json.load(response)
         assert payload["schema"] == SCHEMA
-        assert len(payload["notes"]) == 5
+        # The active learning variant may be a two-note skeleton, not the
+        # full imported piece. Never leak eliminated tones into the renderer.
+        assert len(payload["notes"]) == len(engine.display_phrase().notes)
+        assert {n["id"] for n in payload["notes"]} == {
+            n.source_id for n in engine.display_phrase().notes}
         assert engine._layout_cache is None
     finally:
         httpd.shutdown()
