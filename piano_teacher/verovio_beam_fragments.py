@@ -150,6 +150,26 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             # Reject page-spanning or mistaken template geometry.
             if (right-left) > span*2.2:
                 continue
+            # Locate the Verovio beam edge at both stem attachment points.
+            # These offsets let Godot finish each native stem exactly on the
+            # REAL exported beam polygon, rather than a guessed line.
+            beam_centre = (top+bottom)*.5
+            up = beam_centre < y0*rgba.height
+            edges = []
+            for note_x in (x0,x1):
+                stem_x = note_x*rgba.width + (.54 if up else -.54)*staff_space
+                px = round(stem_x)
+                sample = []
+                for col in range(max(0,px-3),min(rgba.width,px+4)):
+                    for row in range(top,bottom):
+                        if alpha.getpixel((col,row)) > 50:
+                            sample.append(row)
+                if not sample:
+                    break
+                edge_y = min(sample) if up else max(sample)
+                edges.append((edge_y-y0*rgba.height)*250/staff_space)
+            if len(edges) != 2:
+                continue
             crop = rgba.crop(bbox)
             white = Image.new("RGBA",crop.size,(255,255,255,255))
             white.putalpha(crop.getchannel("A"))
@@ -165,7 +185,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             output["|".join(ids)] = {
                 "source":"verovio-engraved-beam","units_per_space":250,
                 "bounds":bounds, "span":intrinsic_span,
-                "note_ids":list(ids),
+                "note_ids":list(ids), "stem_up":up, "tip_offsets":edges,
                 "png_base64":base64.b64encode(buffer.getvalue()).decode(),
             }
         except (KeyError,ValueError,TypeError,ET.ParseError,RuntimeError,
