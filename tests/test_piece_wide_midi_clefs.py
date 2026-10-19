@@ -86,4 +86,4 @@ def test_actual_practice_engine_delivers_stable_clefs_to_verovio(tmp_path):
     assert len(engraved.layout.get("notes", [])) > 0
     # The semantic timeline and visual engraver must agree on their clefs.
     model = engine.semantic_score()
-    assert model.get("staff_clefs", {})["left"]["sign"] == "F"
+    assert model["measures"][0]["clefs"]["left"]["sign"] == "F"
