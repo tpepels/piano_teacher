@@ -23,12 +23,14 @@ def test_native_mode_is_opt_in_and_unsupported_music_reverts_to_legacy():
     app = (ROOT / "godot" / "main.gd").read_text()
     native = (ROOT / "godot" / "score_native_notation.gd").read_text()
     geometry = (ROOT / "godot" / "score_notation_geometry.gd").read_text()
-    # The old user-facing flag must not opt into hand-drawn notation again.
+    # Resume development of the existing native engine. The original
+    # public flag must select it; the separate raster experiment is opt-in.
+    assert 'PIANO_TEACHER_NATIVE_NOTATION") == "1"' in app
+    assert 'OS.get_cmdline_user_args().has("--native-notation")' in app
     assert 'PIANO_TEACHER_NATIVE_NOTATION_EXPERIMENTAL' in app
-    assert 'OS.get_cmdline_user_args().has("--native-notation-experimental")' in app
-    assert 'var retired_native_flag: bool =' in app
-    assert 'if retired_native_flag:' in app
-    assert 'Using Verovio engraving' in app
+    assert 'PIANO_TEACHER_EXACT_VEROVIO_GRID") == "1"' in app
+    assert 'not native_notation_enabled' in app
+    assert 'var retired_native_flag' not in app
     assert 'timeline_preview = (NativeNotation.new() if native_notation_enabled' in app
     assert 'timeline_model_request.request(URL + "/score/model")' in app
     assert 'timeline_preview.visible = false' in app
