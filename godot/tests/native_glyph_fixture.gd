@@ -53,3 +53,16 @@ static func chord_catalogue() -> Dictionary:
         "bounds":[-20.0,-200.0,120.0,250.0],
         "head_positions":[[0.0,0.0],[0.0,-250.0]],
         "png_base64":encoded}}
+
+
+# Test-only beam mask: production beams are extracted from the actual
+# score SVG with their two original note identities and stem-tip offsets.
+static func beam_catalogue() -> Dictionary:
+    var image := Image.create(8,3,false,Image.FORMAT_RGBA8)
+    image.fill(Color.WHITE)
+    return {"d|e":{
+        "source":"verovio-engraved-beam","units_per_space":250,
+        "bounds":[100.0,-860.0,600.0,85.0],
+        "span":650.0,"stem_up":true,
+        "note_ids":["d","e"],"tip_offsets":[-860.0,-860.0],
+        "png_base64":Marshalls.raw_to_base64(image.save_png_to_buffer())}}
