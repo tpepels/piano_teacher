@@ -27,6 +27,7 @@ def test_native_godot_atlas_is_authentic_and_covers_notation_symbols():
     atlas = native_glyphs()
     assert set(atlas) == set(_NATIVE_CODES)
     assert len(atlas) >= 35
+    assert atlas["repeat_dot"]["code"] == "E044"
     font = {entry["font"] for entry in atlas.values()}
     assert len(font) == 1
     for name, item in atlas.items():
