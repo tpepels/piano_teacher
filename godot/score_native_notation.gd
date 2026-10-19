@@ -507,6 +507,9 @@ func _draw() -> void:
         var x: float = timeline.screen_x(at,camera_clock,
             playhead_x,play_from_beat)
         var boundary_tint: Color = Color(DIM_INK,.70)
+        # Opening Verovio glyphs occupy PRE-ROLL space. Moving those
+        # ornaments left leaves note beat 0 exactly on the time grid.
+        var header_shift: float = 50.0 if previous_measure.is_empty() else 0.0
         for staff in ["right","left"]:
             var center: float = _staff_center(staff)
             draw_line(Vector2(x,center-2*gap),Vector2(x,center+2*gap),
@@ -517,12 +520,12 @@ func _draw() -> void:
             var previous_keys: Dictionary = previous_measure.get("keys",{})
             var key_changed: bool = signature != int(previous_keys.get(staff,999))
             if previous_measure.is_empty() or _clef_for(staff,previous_measure) != clef:
-                _paint_clef(x-86.0-float(absi(signature))*14.0,
+                _paint_clef(x-86.0-header_shift-float(absi(signature))*14.0,
                     center,str(clef.get("sign","G")),gap,_ink(staff))
             if key_changed and signature != 0:
                 var steps: Array = Geometry.signature_steps(clef, signature)
                 for i in range(steps.size()):
-                    var glyph_x: float = x-39.0-float(steps.size()-i)*14.0
+                    var glyph_x: float = x-39.0-header_shift-float(steps.size()-i)*14.0
                     var glyph_y: float = Geometry.note_y(int(steps[i]),
                         center+2.0*gap,gap)
                     _paint_accidental(glyph_x,glyph_y,
@@ -531,9 +534,9 @@ func _draw() -> void:
             if previous_measure.is_empty() or previous_measure.get("meter",[]) != measure.get("meter",[]):
                 var meter: Array = measure.get("meter",[4,4])
                 if meter.size() >= 2:
-                    _paint_meter_number(int(meter[0]), x-gap*1.6,
+                    _paint_meter_number(int(meter[0]), x-gap*1.6-header_shift,
                         center-gap*.95, _ink(staff), gap)
-                    _paint_meter_number(int(meter[1]), x-gap*1.6,
+                    _paint_meter_number(int(meter[1]), x-gap*1.6-header_shift,
                         center+gap*.8, _ink(staff), gap)
         if x >= 0.0 and x <= size.x:
             draw_string(font,Vector2(x+5.0,_staff_center("right")-gap*3.0),
