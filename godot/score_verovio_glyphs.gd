@@ -158,7 +158,9 @@ func paint_tie(canvas: CanvasItem, x0: float, x1: float, y: float,
         gap: float, down: bool, ink: Color) -> bool:
     # Stretch only Verovio's original tie contour, never any notehead or
     # other notation. The endpoints remain locked to the native beat grid.
-    var direction: String = "down" if down else "up"
+    # The requested bow faces DOWN when the note's stem points UP.
+    # Atlas keys denote the SOURCE stem direction, not the bow side.
+    var direction: String = "up" if down else "down"
     var texture: Texture2D = tie_textures.get(direction)
     if texture == null:
         return false
