@@ -31,7 +31,7 @@ def test_reopening_source_and_engraving_skips_parsing_and_rasterization(
     def unexpected(*args, **kwargs):
         raise AssertionError("Warm cache unexpectedly recomputed source or score")
 
-    monkeypatch.setattr(score, "import_piece", unexpected)
+    monkeypatch.setattr(server, "import_piece", unexpected)
     monkeypatch.setattr(server, "render_layout", unexpected)
     monkeypatch.setattr(server, "rasterize_score", unexpected)
     again = PracticeEngine(directory, enable_midi=False)
