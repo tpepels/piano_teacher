@@ -126,6 +126,21 @@ jobs:
           xvfb-run -a -s "-screen 0 1600x1000x24" \
             .venv/bin/python scripts/check_user_midi_desktop.py \
             --native --only Ala --out /tmp/piano-native-desktop
+      - name: Verify native Chopin pickup meter geometry with real Godot pixels
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            .venv/bin/python scripts/check_user_midi_desktop.py \
+            --native --only Chopin --out /tmp/piano-native-chopin
+      - name: Upload native Chopin pickup engraving evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-chopin-pickup-meter-captures
+          path: /tmp/piano-native-chopin
+          if-no-files-found: warn
+          retention-days: 14
       - name: Upload native Godot notation evidence
         if: always()
         uses: actions/upload-artifact@v4
