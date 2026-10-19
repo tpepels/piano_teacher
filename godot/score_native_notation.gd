@@ -55,8 +55,7 @@ func clear_score() -> void:
     cached_offsets_gap = -1.0
 
 func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
-        tie_items: Dictionary = {}) -> bool:
-    # All musical ink comes from the backend's engraved Verovio artwork.
+        tie_items: Dictionary = {}, chord_items: Dictionary = {}) -> bool:
     if not glyphs.load_font(items):
         failure_reason = glyphs.error
         return false
@@ -64,6 +63,9 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         failure_reason = glyphs.error
         return false
     if not glyphs.load_tie_templates(tie_items):
+        failure_reason = glyphs.error
+        return false
+    if not glyphs.load_chord_templates(chord_items):
         failure_reason = glyphs.error
         return false
     failure_reason = ""
@@ -425,6 +427,70 @@ func _chord_extents(event: Dictionary, gap: float,
         "up":sum_step/float(maxi(1,members.size())) < 4.0}
 
 
+# Chord sprites are keyed by their diatonic interval signature, which is
+# invariant under octave transposition. Godot places only Verovio ink.
+func _chord_template_key(event: Dictionary) -> String:
+    var notes: Array = chord_members.get(str(event.get("id","")),[])
+    if notes.size() < 2 or notes.size() > 5:
+        return ""
+    var leader: int = Geometry.diatonic_index(event.get("spelling",{}))
+    if leader < 0:
+        return ""
+    var differences: Array[int] = []
+    for head in notes:
+        if str(head.get("note_type","")) != str(event.get("note_type","")):
+            return ""
+        differences.append(Geometry.diatonic_index(
+            head.get("spelling",{}))-leader)
+    differences.sort()
+    var names: PackedStringArray = []
+    for value in differences:
+        names.append(str(value))
+    var extents: Dictionary = _chord_extents(event,1.0)
+    var direction: String = "up" if bool(extents["up"]) else "down"
+    return "%s|%s|%s" % [
+        str(event.get("note_type","quarter")),direction,",".join(names)]
+
+
+func _paint_engraved_chord(event: Dictionary, x: float,
+        gap: float, ink: Color) -> Array:
+    var key: String = _chord_template_key(event)
+    if key.is_empty() or not glyphs.has_chord(key) or \
+            beamed_note_ids.has(str(event.get("id",""))):
+        return []
+    var group: Array = chord_members.get(str(event.get("id","")),[])
+    var heads: Array = glyphs.chord_heads(key)
+    if heads.size() != group.size():
+        return []
+    var sorted_heads: Array = group.duplicate()
+    sorted_heads.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+        return Geometry.diatonic_index(a.get("spelling",{})) < \
+            Geometry.diatonic_index(b.get("spelling",{})))
+    var anchor: float = _event_y(event,gap)
+    if not glyphs.paint_chord(self,key,x,anchor,gap,ink):
+        return []
+    var painted: Array = []
+    for i in range(sorted_heads.size()):
+        var current: Dictionary = sorted_heads[i]
+        var offset: Array = heads[i]
+        var head_x: float = x+float(offset[0])*gap/250.0
+        var head_y: float = anchor+float(offset[1])*gap/250.0
+        var staff: String = str(current.get("staff","right"))
+        var clef: Dictionary = _clef_for(staff,_measure_for(current))
+        var step: int = Geometry.staff_step(
+            current.get("spelling",{}),clef)
+        _paint_ledger(head_x,head_y,step,_staff_center(staff)+gap*2.0,
+            gap,ink)
+        _paint_rhythm_dots(head_x,head_y,int(current.get("dots",0)),ink,gap)
+        var accidental: String = str(current.get("accidental",""))
+        if not accidental.is_empty() and accidental != "null":
+            _paint_accidental(head_x,head_y,accidental,ink,gap)
+        var id: String = str(current.get("id",""))
+        drawn_noteheads[id] = Vector2(head_x,head_y)
+        painted.append(id)
+    return painted
+
+
 func _paint_note(event: Dictionary, x: float,
         gap: float, ink: Color, beam_stem: Dictionary = {},
         head_offset: float = 0.0) -> void:
@@ -778,13 +844,22 @@ func _draw() -> void:
     var beam_data: Dictionary = _beam_layout(gap, camera_clock,
         playhead_x, head_offsets)
     var beam_stems: Dictionary = beam_data.get("stems", {})
+    var compound_ids: Dictionary = {}
     for event in _visible_events(left, right):
+        if compound_ids.has(str(event.get("id",""))):
+            continue
         var at: float = float(event.get("beat", 0.0))
         var x: float = timeline.screen_x(at,camera_clock,
             playhead_x,play_from_beat)
         var staff: String = str(event.get("staff","right"))
         var ink: Color = _ink(staff)
         if str(event.get("kind","")) == "note":
+            var members: Array = _paint_engraved_chord(event,x,gap,ink)
+            if not members.is_empty():
+                for id in members:
+                    compound_ids[id] = true
+                visible_symbols += members.size()
+                continue
             _paint_note(event,x,gap,ink,
                 beam_stems.get(str(event.get("id", "")), {}),
                 float(head_offsets.get(str(event.get("id", "")), 0.0)))
