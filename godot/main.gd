@@ -3230,7 +3230,9 @@ func _request_layout() -> void:
         return
     layout_pending = true
     requested_layout_revision = revision
-    if layout_request.request(URL + "/score/layout") != OK:
+    var score_url: String = URL + ("/score/layout?native=1"
+        if native_notation_enabled else "/score/layout")
+    if layout_request.request(score_url) != OK:
         layout_pending = false
         _score_failed("Cannot request score geometry from the practice engine")
 
