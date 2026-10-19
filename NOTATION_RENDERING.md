@@ -157,6 +157,38 @@ library, this revision moves two more kinds of ink to real Verovio exports:
 These templates reuse the installed Verovio contours, not a newly
 hand-constructed glyph or copied font file.
 
+### Source-accurate multi-anchor Verovio beam extraction
+
+Beam construction is being migrated away from native Godot polygons.
+
+- `piano_teacher/verovio_beam_fragments.py` uses the lesson's already
+  rendered Verovio SVG pages as the **single engraving source**. It extracts
+  only `g.beam` ink, omitting original noteheads and staff rules. No second
+  engraving pass and no synthetic beam shape is required.
+- Every contained note ID is matched to the semantic score, with one source
+  notehead X/Y anchor and one measured stem tip per note. A group with
+  ambiguous or inconsistent IDs, a chord, duplicate beat, or cross-measure
+  mismatch is rejected instead of being stretched into incorrect notation.
+- The beam mask is cached by score layout identity and extraction version,
+  and transferred through `/score/layout?native=1`. Godot holds it as a
+  reusable `ImageTexture`.
+- The native compositor **warps X piecewise between adjacent real notehead
+  anchors**. For example, a three-note tuplet/beam has three anchors on
+  the native time axis, so its middle note cannot drift when Verovio's
+  printed horizontal spacing differs. Y retains the original staff-space
+  proportions. Original Verovio beam ink and measured stem tips replace
+  the native beam polygons when all source IDs match.
+- Groups without a matched source fragment retain their existing native
+  geometry pending support. The independent beat positions, count-in and
+  scroll model have not changed.
+- Explicit regression tests cover graphics isolation (no copied notehead
+  or staff ink), two- and three-anchor matching, stem-tip measurements and
+  persistent disk-cache reuse.
+
+**Still to migrate:** compound beamed chords, tuplet bracket/label ink and
+more complex slur geometry. These should follow the same source-identity
+and multi-anchor contract rather than adding more guessed Godot shapes.
+
 ### Short-pickup time-signature collisions (2026-10-19)
 
 Some imported performances, including Chopin's Nocturne Op. 9 No. 2,
