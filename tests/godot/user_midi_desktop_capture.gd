@@ -71,12 +71,9 @@ func _capture(label: String) -> void:
         "score_width": app.score_content.size.x,
         "beat_camera": load("res://score_beat_camera.gd").prepare(app.score_layout),
         "exact_ink_grid": bool(app.score_layout.get("exact_ink_grid", false)),
-        "native_ready": app.timeline_preview != null and
-            bool(app.timeline_preview.get("native_ready")) if
+        "native_ready": _native_notation_ready() if
             OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" else false,
-        "native_failure": str(app.timeline_preview.get("failure_reason")) if
-            OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" and
-            app.timeline_preview != null else "",
+        "native_failure": _native_failure(),
         "exact_ink_grid_reason": str(app.score_layout.get("exact_ink_grid_reason", "")),
         "current_hand": str(app.last_state.get("hand", "")),
         "transport_phase": str(app.last_state.get("phase", "")),
@@ -169,6 +166,13 @@ func _audit_all_screens() -> void:
     root.size = Vector2i(1536, 960)
     await create_timer(.12).timeout
     app._navigate("practice")
+
+
+func _native_failure() -> String:
+    if OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") != "1" or \
+            app.timeline_preview == null:
+        return ""
+    return str(app.timeline_preview.get("failure_reason"))
 
 
 func _native_notation_ready() -> bool:
