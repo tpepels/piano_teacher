@@ -3257,9 +3257,10 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
         var chord_catalog: Dictionary = parsed.get("native_chord_templates", {})
         var beam_catalog: Dictionary = parsed.get("native_beam_fragments", {})
         var tuplet_catalog: Dictionary = parsed.get("native_tuplet_fragments", {})
+        var slur_catalog: Dictionary = parsed.get("native_slur_fragments", {})
         if not timeline_preview.set_verovio_glyphs(
                 glyph_catalog, note_catalog, tie_catalog, chord_catalog,
-                beam_catalog, tuplet_catalog):
+                beam_catalog, tuplet_catalog, slur_catalog):
             push_warning("Native Verovio glyph fallback: " +
                 str(timeline_preview.failure_reason))
         elif not timeline_model_pending and bool(last_state.get("loaded", false)):
@@ -3273,6 +3274,7 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
     parsed.erase("native_chord_templates")
     parsed.erase("native_beam_fragments")
     parsed.erase("native_tuplet_fragments")
+    parsed.erase("native_slur_fragments")
     cached_bounds.clear()
     cached_bounds_revision = -1
     score_layout = parsed
