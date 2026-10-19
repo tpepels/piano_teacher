@@ -96,6 +96,36 @@ must not run when native notation is selected.
   beam positioning and tapered ties. Graphical checks still require real
   desktop captures and visual review.
 
+### Complete pre-engraved Verovio note templates (2026-10-19)
+
+The original glyph atlas was not enough: single notes were still being
+assembled from a head texture and a custom Godot line, with another glyph for
+the flag. Standalone notes are now **actually engraved by Verovio once** as
+complete head + stem + flag units in `piano_teacher/verovio_note_templates.py`.
+Thirteen fixed templates cover whole, half, quarter, eighth, sixteenth,
+32nd and 64th notes (up/down direction where a stem exists).
+
+Each template is extracted from Verovio's original note SVG group, rasterized
+to a transparent tinted PNG and given precise notehead-centred bounds in
+Verovio staff-space units. Its individual PNG is reused for every note of the
+same duration and stem direction, regardless of pitch or lesson. The manifest
+is cached persistently using `PreprocessingCache`, keyed by the source
+font, Verovio version and `TEMPLATE_VERSION`. On reopening the application,
+the backend reads those assets from disk instead of re-engraving the templates.
+
+Native Godot receives the manifest via `/score/layout?native=1`; ordinary
+raster lessons do not request or pay for it. A native score cannot activate
+until both the original glyph atlas and the complete-note template atlas are
+loaded. This avoids silently reverting to synthetic standalone stems/flags.
+`score_verovio_glyphs.gd` loads the template PNGs as `ImageTexture` only
+once; `score_native_notation.gd` positions each at its **unchanged** source
+beat. Dots and accidentals are still independent genuine Verovio glyphs.
+
+Chords, shared-stem chords, beamed groups and ties need variable geometries
+depending on actual pitches and note intervals, so they are not yet baked into
+fixed templates. They retain native Godot geometry and must be audited
+separately. There is no full-sheet Verovio SVG scrolling or new speed curve.
+
 ### Short-pickup time-signature collisions (2026-10-19)
 
 Some imported performances, including Chopin's Nocturne Op. 9 No. 2,
