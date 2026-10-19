@@ -3333,6 +3333,11 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var strip: Dictionary = ScoreStrip.build(
         source_layout, page_images, should_defer,
         native_ink_preview or continuous_engraving)
+    if not strip.has("error"):
+        var spacing_fallback: String = str(
+            strip["layout"].get("strip_timing_fallback", ""))
+        if not spacing_fallback.is_empty():
+            push_warning("Verovio score spacing fallback: " + spacing_fallback)
     if strip.has("error") or strip["tiles"].is_empty():
         _score_failed(str(strip.get("error", "No staff systems were found in the engraving")))
         return
