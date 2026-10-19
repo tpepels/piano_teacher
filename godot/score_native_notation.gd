@@ -327,7 +327,8 @@ func _stem_attachment(note_type: String, gap: float, up: bool) -> float:
     # The musical anchor is the centred original Verovio notehead. Derive
     # its edge from that glyph's actual metrics rather than a hand-estimated
     # constant. The font asset includes 12 units of transparent padding.
-    var name: String = "head_half" if note_type == "half" else "head_black"
+    var name: String = ("head_whole" if note_type == "whole" else
+        "head_half" if note_type == "half" else "head_black")
     var box: Array = glyphs.bounds.get(name, [])
     var half_width: float = gap*.61
     if box.size() == 4 and float(box[2]) > 24.0:
@@ -543,6 +544,43 @@ func _paint_beams(data: Dictionary, gap: float) -> void:
                         _beam_segment(x0,y0,x0+hook,y0+slope*hook,
                             sign*thick,ink)
 
+# An engraved tie has a tapered filled contour. Return its native
+# Godot polygon: endpoints sit just OUTSIDE the actual Verovio noteheads.
+# No Verovio page X coordinates or pre-rendered SVG are involved.
+func _tie_shape(first: Dictionary, last: Dictionary,
+        x0: float, x1: float, gap: float) -> PackedVector2Array:
+    var first_x: float = x0+float(cached_head_offsets.get(
+        str(first.get("id", "")),0.0))
+    var last_x: float = x1+float(cached_head_offsets.get(
+        str(last.get("id", "")),0.0))
+    var start: float = first_x+absf(_stem_attachment(
+        str(first.get("note_type", "quarter")),gap,true))+gap*.17
+    var finish: float = last_x-absf(_stem_attachment(
+        str(last.get("note_type", "quarter")),gap,true))-gap*.17
+    if finish <= start+gap*.7:
+        return PackedVector2Array()
+    var first_y: float = _event_y(first,gap)
+    var last_y: float = _event_y(last,gap)
+    # Ties normally arch away from the stem. High notes have stems down,
+    # so the ties run above the noteheads instead of through their stems.
+    var direction: float = 1.0 if bool(_chord_extents(first,gap)["up"]) else -1.0
+    var bow: float = clampf((finish-start)*.034,gap*.42,gap*1.15)
+    var width: float = maxf(.8,gap*.09)
+    var upper := PackedVector2Array()
+    var lower := PackedVector2Array()
+    for index in range(25):
+        var t: float = float(index)/24.0
+        var base: float = lerpf(first_y,last_y,t)+direction*gap*.58
+        var arch: float = 4.0*t*(1.0-t)*bow
+        var taper: float = sin(PI*t)*width
+        var x: float = lerpf(start,finish,t)
+        upper.append(Vector2(x,base+direction*(arch+taper)))
+        lower.append(Vector2(x,base+direction*arch))
+    for index in range(lower.size()-1,-1,-1):
+        upper.append(lower[index])
+    return upper
+
+
 func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
     # Build tie connectivity once on load, not O(all notes) every frame.
     for pair in tie_pairs:
@@ -554,17 +592,10 @@ func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
             clock,playhead_x,play_from_beat)
         if x1 < -20.0 or x0 > size.x+20.0 or x1 <= x0+3.0:
             continue
-        var baseline: float = _event_y(event,gap)+gap*.55
-        # Fixed-height shallow curves look like straight wires across long
-        # measures. Increase their arch with visible span but cap it in
-        # staff-space units so short and long ties remain readable.
-        var bow: float = clampf((x1-x0)*.035,gap*.45,gap*1.25)
-        var points := PackedVector2Array()
-        for step in range(21):
-            var t: float = float(step)/20.0
-            points.append(Vector2(lerpf(x0+6.0,x1-6.0,t),
-                baseline+sin(t*PI)*bow))
-        draw_polyline(points,_ink(str(event.get("staff", "right"))),1.4,true)
+        var contour: PackedVector2Array = _tie_shape(previous,event,
+            x0,x1,gap)
+        if contour.size() >= 3:
+            draw_colored_polygon(contour,_ink(str(event.get("staff", "right"))))
 
 # Binary-search into pre-sorted MusicXML events. Work is proportional
 # to what the pianist can actually see, not to the whole imported MIDI.
