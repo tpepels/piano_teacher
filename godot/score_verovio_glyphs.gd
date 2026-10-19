@@ -36,6 +36,8 @@ var bounds: Dictionary = {}
 var font_name := ""
 var note_textures: Dictionary = {}
 var note_bounds: Dictionary = {}
+var tie_textures: Dictionary = {}
+var tie_metadata: Dictionary = {}
 var error := ""
 
 func ready() -> bool:
@@ -117,6 +119,58 @@ func load_note_templates(items: Dictionary) -> bool:
     note_textures = new_textures
     note_bounds = new_bounds
     error = ""
+    return true
+
+
+func ties_ready() -> bool:
+    return tie_textures.size() == 2
+
+
+func load_tie_templates(items: Dictionary) -> bool:
+    if ties_ready():
+        return true
+    var atlas := {}
+    var metrics := {}
+    for direction in ["up","down"]:
+        var item: Dictionary = items.get(direction,{})
+        var dimensions: Array = item.get("bounds",[])
+        if str(item.get("source","")) != "verovio-engraved-tie" or \
+                int(item.get("units_per_space",0)) != 250 or \
+                dimensions.size() != 4 or float(item.get("span",0.0)) <= 0.0:
+            error = "Missing genuine Verovio tie contour: " + direction
+            return false
+        var img := Image.new()
+        if img.load_png_from_buffer(Marshalls.base64_to_raw(
+                str(item.get("png_base64","")))) != OK or img.is_empty():
+            error = "Invalid genuine Verovio tie image: " + direction
+            return false
+        atlas[direction] = ImageTexture.create_from_image(img)
+        metrics[direction] = {"bounds":dimensions.duplicate(),
+            "span":float(item["span"])}
+    tie_textures = atlas
+    tie_metadata = metrics
+    return true
+
+
+func paint_tie(canvas: CanvasItem, x0: float, x1: float, y: float,
+        gap: float, down: bool, ink: Color) -> bool:
+    # Stretch only Verovio's original tie contour, never any notehead or
+    # other notation. The endpoints remain locked to the native beat grid.
+    var direction: String = "down" if down else "up"
+    var texture: Texture2D = tie_textures.get(direction)
+    if texture == null:
+        return false
+    var item: Dictionary = tie_metadata[direction]
+    var span_px: float = float(item["span"])*gap/250.0
+    if span_px < .001 or x1 <= x0:
+        return false
+    var factor: float = (x1-x0)/span_px
+    var box: Array = item["bounds"]
+    var dest := Rect2(x0+float(box[0])*gap/250.0*factor,
+        y+float(box[1])*gap/250.0,
+        float(box[2])*gap/250.0*factor,
+        float(box[3])*gap/250.0)
+    canvas.draw_texture_rect(texture,dest,false,ink)
     return true
 
 
