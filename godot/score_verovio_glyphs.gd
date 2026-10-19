@@ -46,6 +46,8 @@ var beam_textures: Dictionary = {}
 var beam_metadata: Dictionary = {}
 var tuplet_textures: Dictionary = {}
 var tuplet_metadata: Dictionary = {}
+var slur_textures: Dictionary = {}
+var slur_metadata: Dictionary = {}
 var error := ""
 
 func ready() -> bool:
@@ -445,6 +447,75 @@ func paint_tuplet(canvas: CanvasItem, name: String, x0: float, x1: float,
                 canvas.draw_texture_rect_region(source,
                     Rect2(center,top_y,right_x-center,height),
                     Rect2(left_pixel,0.0,img_width-left_pixel,img_height),ink)
+    return true
+
+
+func load_slur_fragments(items: Dictionary) -> bool:
+    var loaded: Dictionary = {}
+    var metrics: Dictionary = {}
+    for name in items:
+        var item: Dictionary = items[name]
+        var rect: Array = item.get("bounds",[])
+        var note_ids: Array = item.get("note_ids",[])
+        if str(item.get("source","")) != "verovio-engraved-slur" or \
+                int(item.get("units_per_space",0)) != 250 or \
+                rect.size() != 4 or note_ids.size() != 2 or \
+                float(item.get("span",0.0)) <= 0:
+            error = "Invalid original Verovio slur "+str(name)
+            return false
+        var img := Image.new()
+        if img.load_png_from_buffer(Marshalls.base64_to_raw(
+                str(item.get("png_base64","")))) != OK or img.is_empty():
+            error = "Unreadable original Verovio slur "+str(name)
+            return false
+        loaded[str(name)] = ImageTexture.create_from_image(img)
+        metrics[str(name)] = item.duplicate(true)
+    slur_textures = loaded
+    slur_metadata = metrics
+    return true
+
+
+func slur_keys() -> Array:
+    return slur_metadata.keys()
+
+
+func slur_note_ids(name: String) -> Array:
+    return slur_metadata[name].get("note_ids",[]) if \
+        slur_metadata.has(name) else []
+
+
+func paint_slur(canvas: CanvasItem, name: String,
+        x0: float, y0: float, x1: float, y1: float,
+        gap: float, ink: Color) -> bool:
+    var tex: Texture2D = slur_textures.get(name)
+    if tex == null or x1<=x0:
+        return false
+    var data: Dictionary = slur_metadata[name]
+    var span: float = float(data["span"])
+    if span <= 0.0:
+        return false
+    var b: Array = data["bounds"]
+    var units: float = gap/250.0
+    var change: float = (y1-y0)-float(data.get("original_end_y",0.0))*units
+    var xx0: float = x0+float(b[0])*(x1-x0)/span
+    var xx1: float = x0+(float(b[0])+float(b[2]))*(x1-x0)/span
+    var top: float = y0+float(b[1])*units
+    var bottom: float = top+float(b[3])*units
+    var left_shift: float = change*float(b[0])/span
+    var right_shift: float = change*(float(b[0])+float(b[2]))/span
+    # Apply an affine transform to Verovio's ORIGINAL slur texture:
+    # x is anchored to the two musical beats, y slopes towards each
+    # actual pitch. No polygonal approximation of a music symbol occurs.
+    canvas.draw_polygon(PackedVector2Array([
+        Vector2(xx0,top+left_shift),
+        Vector2(xx1,top+right_shift),
+        Vector2(xx1,bottom+right_shift),
+        Vector2(xx0,bottom+left_shift)]),
+        PackedColorArray([ink,ink,ink,ink]),
+        PackedVector2Array([Vector2.ZERO,
+            Vector2(float(tex.get_width()),0.0),
+            Vector2(float(tex.get_width()),float(tex.get_height())),
+            Vector2(0.0,float(tex.get_height()))]),tex)
     return true
 
 
