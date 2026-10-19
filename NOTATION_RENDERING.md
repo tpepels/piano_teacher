@@ -96,6 +96,25 @@ must not run when native notation is selected.
   beam positioning and tapered ties. Graphical checks still require real
   desktop captures and visual review.
 
+### Short-pickup time-signature collisions (2026-10-19)
+
+Some imported performances, including Chopin's Nocturne Op. 9 No. 2,
+contain a short `1/8` opening measure immediately followed by `12/8`.
+A constant pixels-per-beat camera leaves too little pre-measure space to
+draw both conventional meter stacks beside the noteheads. The native
+renderer now caches each measure's preceding note onset and identifies
+tight meter changes. On these exceptional boundaries it paints authentic
+Verovio meter digits once in an upper annotation lane, rather than two
+overlapping copies through both staves. The meter remains visible even
+during left-hand-only practice. It does **not** insert horizontal pixel
+space, move a source onset, change BPM or reintroduce Verovio page images.
+
+Long ties were also reduced from the detached-looking arches in the user
+captures: their endpoint alignment is now closer to each notehead and their
+maximum bow is limited. Tests cover the 1/8→12/8 close-boundary case,
+its unchanged exact half-beat X spacing, and real native Chopin screen
+captures in CI.
+
 ### Reopening a piece: versioned preprocessing cache
 
 Imported MIDI/MusicXML data and validated Verovio score layouts are stored
