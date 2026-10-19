@@ -108,7 +108,7 @@ func run() -> void:
     get_root().add_child(renderer)
     renderer.size = Vector2(1360, 460)
     check(renderer.set_verovio_glyphs(
-        load("res://tests/godot/verovio_glyph_test_fixture.gd").catalogue()),
+        load("res://tests/native_glyph_fixture.gd").catalogue()),
         "Unit test has Verovio-shaped placeholder textures")
     check(renderer.load_score(score), "Native loads grouped rhythms")
     check(renderer.beam_groups.size() == groups.size(),
