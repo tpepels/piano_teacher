@@ -4,9 +4,23 @@
 
 Continue the existing **native Godot notation engine** in
 `godot/score_native_notation.gd`. Do not replace it with a different
-Verovio rendering architecture. Native music is rendered by Godot from
-the backend's semantic `/score/model`: both staves, noteheads, rests,
-accidentals, clefs, meters, ledger lines, beams and ties. The musical
+Verovio rendering architecture. Native Godot lays out the continuous score using the backend's
+semantic `/score/model` and draws **genuine Verovio glyph shapes**
+from the installed Leipzig/Bravura font. Godot must not approximate clefs,
+noteheads, rests, flags, dots, accidentals or time-signature digits with
+custom polygons, arcs, circles, or UI fonts.
+
+The architecture is:
+- Python `notation_symbols.native_glyphs()` extracts individual original
+  Verovio glyph SVG paths, bounds and font-space origins.
+- `/score/layout` carries that glyph manifest separately from the source
+  page geometry.
+- `godot/score_verovio_glyphs.gd` imports each glyph only once as a native
+  `ImageTexture`, preserving its original silhouette and origin.
+- `godot/score_native_notation.gd` positions these genuine glyph assets on
+  the musical-time axis using Godot draw calls. The staff rules, stems,
+  beams and ties are native structural lines; their spacing stays native.
+  **No full Verovio page image** is used in native mode. The musical
 clock, not Verovio page geometry, owns every horizontal position.
 
 The original user-visible switch is restored:
@@ -40,6 +54,12 @@ must not run when native notation is selected.
 ### Implemented in this increment
 
 - The original native launch switch is enabled again.
+- Replaced hand-drawn noteheads, clefs, rests, accidentals, flags, dots and
+  meter numerals with separately cached **Verovio font artwork**.
+- The glyph atlas is mandatory. Missing/unparseable glyph data triggers
+  full-passage fallback instead of rendering imitated shapes.
+- The user MIDI screenshot tests require the actual native renderer to be
+  active and retain the authentic glyph cache during count-in and playback.
 - `ScoreNativeNotation` indexes measures and sorts note events once.
 - Grand-staff vertical fitting and chord offsets are cached for a given
   viewport height, instead of rescanning the entire piece every frame.
@@ -59,7 +79,11 @@ must not run when native notation is selected.
 - Test all seven imported real MIDI files, including explicit fallback
   reasons for unsupported notation and hand changes.
 - Profile CPU/frame pacing on the actual Arch Linux laptop and MIDI keyboard.
+- Compare glyph placement, stem attachment, header clearance,
+  tuplet labels and tied-note geometry against Verovio screenshots.
 - Improve visual notation details without changing the working time axis.
+- Long-term: fetch the cached glyph atlas separately from individual page
+  layout responses to avoid sending the full font manifest each lesson.
 - Make native mode the default only after end-to-end acceptance on the
   provided MIDI corpus. No claim of completion until then.
 
