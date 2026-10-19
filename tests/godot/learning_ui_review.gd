@@ -103,6 +103,15 @@ func capture(label: String) -> Dictionary:
             "Starting-measure dialog must not fill the whole screen vertically in " + label)
         check(viewport.encloses(modal),
             "Starting-measure dialog must stay inside viewport in " + label)
+        var actions: Control = app.find_child("StartPickerActions", true, false)
+        check(actions != null, "Starting-measure modal must have a fixed action footer")
+        if actions != null:
+            check(actions.is_visible_in_tree() and viewport.encloses(actions.get_global_rect()),
+                "Cancel/Open music must be visible without scrolling in " + label)
+            for button in actions.get_children():
+                check(button is Button and button.is_visible_in_tree()
+                    and viewport.encloses(button.get_global_rect()),
+                    "Starting-measure action must fit the viewport in " + label)
     if app.current_screen == "practice" and not app.open_picker.visible:
         entry["score_height"] = app.score_frame.size.y
         check(app.score_frame.size.y >= 135,"Notation retains readable height in "+label)
