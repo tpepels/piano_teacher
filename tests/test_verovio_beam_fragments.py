@@ -102,3 +102,40 @@ def test_three_note_beam_has_every_original_musical_anchor(monkeypatch):
     assert 0 < result["head_offsets"][1] < result["head_offsets"][2]
     # The native renderer will map three original image anchors to the
     # three independent timestamps (0, .25, .5), not stretch the whole PNG.
+
+
+def test_two_real_musicxml_eighths_produce_native_verovio_beam():
+    """A real Verovio wheel must export the SVG classes we extract."""
+    import verovio
+    from piano_teacher.score import _create_verovio_toolkit
+
+    notation = """<score-partwise version="4.0"><work><work-title> </work-title></work>
+      <movement-title> </movement-title><part-list>
+      <score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+      <part id="P1"><measure number="1"><attributes><divisions>10080</divisions>
+      <time><beats>4</beats><beat-type>4</beat-type></time>
+      <clef><sign>G</sign><line>2</line></clef></attributes>
+      <note id="n1"><pitch><step>G</step><octave>4</octave></pitch>
+      <duration>5040</duration><type>eighth</type><stem>up</stem>
+      <beam number="1">begin</beam></note>
+      <note id="n2"><pitch><step>B</step><octave>4</octave></pitch>
+      <duration>5040</duration><type>eighth</type><stem>up</stem>
+      <beam number="1">end</beam></note>
+      <note><rest/><duration>30240</duration><type>half</type><dot/></note>
+      </measure></part></score-partwise>"""
+    toolkit = _create_verovio_toolkit(verovio)
+    assert toolkit.setOptions({"inputFrom":"xml","scale":48,"pageWidth":900,
+                               "pageHeight":650,"svgViewBox":True,
+                               "svgBoundingBoxes":True,
+                               "svgContentBoundingBoxes":True})
+    assert toolkit.loadData(notation)
+    page = toolkit.renderToSVG(1)
+    from piano_teacher.score_geometry import parse_svg_geometry
+    page_geometry = parse_svg_geometry(page)
+    assert {"n1","n2"}.issubset(page_geometry.elements)
+    result = extract_beam_fragments([page], MODEL)
+    assert "n1|n2" in result, (
+        "Genuine Verovio beam group could not be detached as a graphic")
+    assert result["n1|n2"]["note_ids"] == ["n1","n2"]
+    assert len(result["n1|n2"]["head_offsets"]) == 2
+    assert len(result["n1|n2"]["tip_offsets"]) == 2
