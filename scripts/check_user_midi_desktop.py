@@ -19,7 +19,7 @@ import sys
 import time
 from urllib.request import Request, urlopen
 
-from scripts.check_user_midi_visual_regression import CASES, ROOT, MIDI_DIR, _name
+from check_user_midi_visual_regression import CASES, ROOT, MIDI_DIR, _name
 
 
 HOST = "http://127.0.0.1:8765"
