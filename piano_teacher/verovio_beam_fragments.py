@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 2
+VERSION = 3
 MAX_FRAGMENTS = 120
 
 
@@ -99,34 +99,46 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
     # cannot be attached safely to this model without a full multi-anchor map.
     events = {e.get("id"):e for e in model.get("notation_events",[])
               if e.get("kind")=="note" and e.get("id")}
-    eligible: dict[tuple[str,...],str] = {}
+    eligible: dict[tuple[str,...],tuple[str,tuple[str,...],tuple[tuple[str,...],...]]] = {}
     for page in svgs:
         root = ET.fromstring(page)
         for node in root.iter():
             if "beam" not in _classes(node):
                 continue
-            ids = _note_ids(node)
-            if not 2 <= len(ids) <= 16 or any(i not in events for i in ids):
+            full_ids = _note_ids(node)
+            if not 2 <= len(full_ids) <= 24 or any(i not in events for i in full_ids):
                 continue
-            members = [events[i] for i in ids]
-            if (any(e.get("chord") for e in members) or
-                    any((e.get("staff"),e.get("voice"),e.get("measure")) !=
-                        (members[0].get("staff"),members[0].get("voice"),
-                         members[0].get("measure")) for e in members) or
-                    any(float(a["beat"]) >= float(b["beat"]) for a,b
-                        in zip(members,members[1:]))):
+            full = [events[i] for i in full_ids]
+            if any((e.get("staff"),e.get("voice"),e.get("measure")) !=
+                   (full[0].get("staff"),full[0].get("voice"),
+                    full[0].get("measure")) for e in full):
                 continue
-            eligible[ids] = page
+            attacks = []
+            chord_ids = []
+            for event in full:
+                if event.get("chord"):
+                    if not chord_ids or float(events[chord_ids[-1][0]]["beat"]) != float(event["beat"]):
+                        break
+                    chord_ids[-1].append(str(event["id"]))
+                else:
+                    attacks.append(event)
+                    chord_ids.append([str(event["id"])])
+            else:
+                ids = tuple(str(event["id"]) for event in attacks)
+                if (2 <= len(ids) <= 16 and
+                    all(float(a["beat"]) < float(b["beat"])
+                        for a,b in zip(attacks,attacks[1:]))):
+                    eligible[ids] = page,full_ids,tuple(tuple(g) for g in chord_ids)
             if len(eligible) >= MAX_FRAGMENTS:
                 break
         if len(eligible) >= MAX_FRAGMENTS:
             break
     if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
         print("VEROVIO_BEAM_CANDIDATES:",len(eligible),
-              [(ids, len(svg)) for ids,svg in eligible.items()])
+              [(ids, len(pair[0])) for ids,pair in eligible.items()])
     output = {}
     page_geometry = {}
-    for ids,page in eligible.items():
+    for ids,(page,full_ids,chord_ids) in eligible.items():
         try:
             if page not in page_geometry:
                 page_geometry[page] = parse_svg_geometry(page)
@@ -148,7 +160,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
                     print("VEROVIO_BEAM_MISSING_STAFF:",ids,lines)
                 continue
-            filtered = _filter_beam_svg(page,ids)
+            filtered = _filter_beam_svg(page,full_ids)
             if filtered is None:
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
                     print("VEROVIO_BEAM_NO_STANDALONE_SHAPE:",ids)
@@ -174,13 +186,18 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
                     print("VEROVIO_BEAM_TOO_WIDE:",ids,right-left,span)
                 continue
-            # Locate the Verovio beam edge at both stem attachment points.
+            # Locate the original Verovio beam edge at each stem attachment.
             # These offsets let Godot finish each native stem exactly on the
             # REAL exported beam polygon, rather than a guessed line.
             beam_centre = (top+bottom)*.5
             up = beam_centre < y0*rgba.height
             edges = []
-            for note_x,note_y,_ in anchors:
+            for index,(note_x,note_y,_) in enumerate(anchors):
+                # Beamed chords attach to the outermost actual Verovio
+                # notehead. The leader may be an inner chord tone.
+                source_heads = [geom.elements[id] for id in chord_ids[index]]
+                reference_y = (max(head[1] for head in source_heads) if up
+                               else min(head[1] for head in source_heads))
                 stem_x = note_x*rgba.width + (.54 if up else -.54)*staff_space
                 px = round(stem_x)
                 sample = []
@@ -201,7 +218,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 if not sample:
                     break
                 edge_y = min(sample) if up else max(sample)
-                edges.append((edge_y-note_y*rgba.height)*250/staff_space)
+                edges.append((edge_y-reference_y*rgba.height)*250/staff_space)
             if len(edges) != len(anchors):
                 if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
                     print("VEROVIO_BEAM_STEM_EDGE_MISSING:",
@@ -222,7 +239,8 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             output["|".join(ids)] = {
                 "source":"verovio-engraved-beam","units_per_space":250,
                 "bounds":bounds, "span":intrinsic_span,
-                "note_ids":list(ids), "stem_up":up, "tip_offsets":edges,
+                "note_ids":list(ids), "chord_note_ids":[list(g) for g in chord_ids],
+                "stem_up":up, "tip_offsets":edges,
                 "head_offsets":[(x-x0)*rgba.width*250/staff_space
                                 for x,_,_ in anchors],
                 "png_base64":base64.b64encode(buffer.getvalue()).decode(),
