@@ -105,7 +105,8 @@ func run() -> void:
             "bounds": [0.0,0.0,2.0,2.0],
             "svg": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2" width="2" height="2"><path d="M0 0L2 0L2 2L0 2Z" fill="white"/></svg>'
         }
-    check(renderer.set_verovio_glyphs(sample_glyphs),
+    check(renderer.set_verovio_glyphs(sample_glyphs,
+        load("res://tests/native_glyph_fixture.gd").note_catalogue()),
         "Load SVG glyphs into cached Godot ImageTextures")
     check(renderer.glyphs.ready(), "Native glyph assets are resident")
     check(renderer.set_density(96.0), "User density accepted")
