@@ -305,6 +305,18 @@ func _paint_meter_number(value: int, x: float, y: float,
             start + float(digit)*advance, y, gap, ink, true)
 
 
+func _stem_attachment(note_type: String, gap: float, up: bool) -> float:
+    # The musical anchor is the centred original Verovio notehead. Derive
+    # its edge from that glyph's actual metrics rather than a hand-estimated
+    # constant. The font asset includes 12 units of transparent padding.
+    var name: String = "head_half" if note_type == "half" else "head_black"
+    var box: Array = glyphs.bounds.get(name, [])
+    var half_width: float = gap*.61
+    if box.size() == 4 and float(box[2]) > 24.0:
+        half_width = (float(box[2])*.5-12.0)*gap/250.0
+    return half_width if up else -half_width
+
+
 func _paint_note(event: Dictionary, x: float,
         gap: float, ink: Color, beam_stem: Dictionary = {},
         head_offset: float = 0.0) -> void:
@@ -318,7 +330,6 @@ func _paint_note(event: Dictionary, x: float,
     var y: float = Geometry.note_y(step, bottom, gap)
     var kind: String = str(event.get("note_type", "quarter"))
     var stem_up: bool = bool(beam_stem.get("up", step < 4))
-    var ink_center := Vector2(x,y)
     _paint_ledger(x, y, step, bottom, gap, ink)
     var solid: bool = kind not in ["half","whole"]
     glyphs.paint(self, "head_black" if solid else (
@@ -326,7 +337,7 @@ func _paint_note(event: Dictionary, x: float,
         x, y, gap, ink, true)
     # Multiple chord pitches have distinct noteheads but one common stem.
     if kind != "whole" and not bool(event.get("chord", false)):
-        var stem_x: float = x+(gap*.61 if stem_up else -gap*.61)
+        var stem_x: float = x+_stem_attachment(kind,gap,stem_up)
         var tip_y: float = float(beam_stem.get("tip_y",
             y+(-gap*3.25 if stem_up else gap*3.25)))
         draw_line(Vector2(stem_x,y), Vector2(stem_x,tip_y), ink, 1.65, true)
@@ -363,7 +374,7 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
                 clock, playhead_x, play_from_beat)
             var stem_x: float = x + float(head_offsets.get(
                 str(event.get("id", "")), 0.0)) + \
-                (gap*.61 if up else -gap*.61)
+                _stem_attachment(str(event.get("note_type", "eighth")),gap,up)
             members.append({
                 "id":str(event.get("id", "")), "x":stem_x,
                 "head_y":_event_y(event, gap),
@@ -543,17 +554,24 @@ func _draw() -> void:
         var boundary_tint: Color = Color(DIM_INK,.70)
         # Opening Verovio glyphs occupy PRE-ROLL space. Moving those
         # ornaments left leaves note beat 0 exactly on the time grid.
-        var header_shift: float = 50.0 if previous_measure.is_empty() else 0.0
+        var opening: bool = not timeline.measures.is_empty() and \
+            int(measure.get("number", -1)) == \
+            int(timeline.measures[0].get("number", -2))
+        var header_shift: float = 50.0 if opening else 0.0
         for staff in ["right","left"]:
             var center: float = _staff_center(staff)
-            draw_line(Vector2(x,center-2*gap),Vector2(x,center+2*gap),
-                boundary_tint,1.3,true)
+            # At the opening, x is the first PLAYABLE beat, not a place
+            # for a barline through the first notehead/stem. Only actual
+            # subsequent bar boundaries are drawn at their musical beats.
+            if not opening:
+                draw_line(Vector2(x,center-2*gap),Vector2(x,center+2*gap),
+                    boundary_tint,1.3,true)
             var clef: Dictionary = _clef_for(staff,measure)
             var signatures: Dictionary = measure.get("keys",{})
             var signature: int = int(signatures.get(staff,0))
             var previous_keys: Dictionary = previous_measure.get("keys",{})
             var key_changed: bool = signature != int(previous_keys.get(staff,999))
-            if previous_measure.is_empty() or _clef_for(staff,previous_measure) != clef:
+            if opening or _clef_for(staff,previous_measure) != clef:
                 _paint_clef(x-86.0-header_shift-float(absi(signature))*14.0,
                     center,str(clef.get("sign","G")),gap,_ink(staff))
             if key_changed and signature != 0:
@@ -565,7 +583,7 @@ func _draw() -> void:
                     _paint_accidental(glyph_x,glyph_y,
                         "sharp" if signature > 0 else "flat",
                         _ink(staff),gap)
-            if previous_measure.is_empty() or previous_measure.get("meter",[]) != measure.get("meter",[]):
+            if opening or previous_measure.get("meter",[]) != measure.get("meter",[]):
                 var meter: Array = measure.get("meter",[4,4])
                 if meter.size() >= 2:
                     _paint_meter_number(int(meter[0]), x-gap*1.6-header_shift,
