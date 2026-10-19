@@ -126,7 +126,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             if not all(i in geom.elements for i in ids):
                 continue
             x0,y0,system = geom.elements[ids[0]]
-            x1,_,other_system = geom.elements[ids[1]]
+            x1,y1,other_system = geom.elements[ids[1]]
             if other_system != system or x1 <= x0:
                 continue
             lines = geom.staff_systems[system]["staff_lines"]
@@ -156,7 +156,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             beam_centre = (top+bottom)*.5
             up = beam_centre < y0*rgba.height
             edges = []
-            for note_x in (x0,x1):
+            for note_x,note_y in ((x0,y0),(x1,y1)):
                 stem_x = note_x*rgba.width + (.54 if up else -.54)*staff_space
                 px = round(stem_x)
                 sample = []
@@ -167,7 +167,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 if not sample:
                     break
                 edge_y = min(sample) if up else max(sample)
-                edges.append((edge_y-y0*rgba.height)*250/staff_space)
+                edges.append((edge_y-note_y*rgba.height)*250/staff_space)
             if len(edges) != 2:
                 continue
             crop = rgba.crop(bbox)
