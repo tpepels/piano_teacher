@@ -60,6 +60,7 @@ func _capture(label: String) -> void:
         "score_frame": [bounds.position.x, bounds.position.y,
                         bounds.size.x, bounds.size.y],
         "staff_rows": rows.size(),
+        "staff_clefs": app.score_layout.get("staff_clefs", {}),
         "note_count": app.score_layout.get("notes", []).size(),
         "glyph_tile_count": app.score_tiles.size(),
         "score_width": app.score_content.size.x,
@@ -73,6 +74,12 @@ func _capture(label: String) -> void:
         errors.append("Practice sheet must dominate the desktop viewport")
     if rows.size() != 10:
         errors.append("Both five-line piano staves must be present: " + str(rows.size()))
+    if folder.get_file().begins_with("ala-"):
+        var clefs: Dictionary = app.score_layout.get("staff_clefs", {})
+        var right: Dictionary = clefs.get("right", {})
+        var left: Dictionary = clefs.get("left", {})
+        if str(right.get("sign", "")) != "G" or str(left.get("sign", "")) != "F":
+            errors.append("Ala piano grand staff requires G clef over F clef")
     if int(info.note_count) <= 0 or int(info.glyph_tile_count) <= 0:
         errors.append("Real practice notation has no measured notes or tiles")
     print("MIDI_DESKTOP_FRAME:", label, " size=", image.get_size(),
