@@ -481,11 +481,15 @@ func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
         if x1 < -20.0 or x0 > size.x+20.0 or x1 <= x0+3.0:
             continue
         var baseline: float = _event_y(event,gap)+gap*.55
+        # Fixed-height shallow curves look like straight wires across long
+        # measures. Increase their arch with visible span but cap it in
+        # staff-space units so short and long ties remain readable.
+        var bow: float = clampf((x1-x0)*.035,gap*.45,gap*1.25)
         var points := PackedVector2Array()
         for step in range(21):
             var t: float = float(step)/20.0
             points.append(Vector2(lerpf(x0+6.0,x1-6.0,t),
-                baseline+sin(t*PI)*gap*.62))
+                baseline+sin(t*PI)*bow))
         draw_polyline(points,_ink(str(event.get("staff", "right"))),1.4,true)
 
 # Binary-search into pre-sorted MusicXML events. Work is proportional
