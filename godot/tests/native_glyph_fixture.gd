@@ -84,3 +84,13 @@ static func tuplet_catalogue() -> Dictionary:
             "units_per_space":250,
             "bounds":[-5.0,-890.0,510.0,15.0],
             "png_base64":Marshalls.raw_to_base64(bars.save_png_to_buffer())}}}
+
+
+static func slur_catalogue() -> Dictionary:
+    var image := Image.create(30,6,false,Image.FORMAT_RGBA8)
+    image.fill(Color.WHITE)
+    return {"n1|n3":{
+        "source":"verovio-engraved-slur","units_per_space":250,
+        "note_ids":["n1","n3"],"bounds":[12.0,-430.0,600.0,100.0],
+        "span":625.0,"original_end_y":-180.0,
+        "png_base64":Marshalls.raw_to_base64(image.save_png_to_buffer())}}
