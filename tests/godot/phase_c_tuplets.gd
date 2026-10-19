@@ -97,11 +97,16 @@ func run() -> void:
         load("res://tests/native_glyph_fixture.gd").catalogue(),
         load("res://tests/native_glyph_fixture.gd").note_catalogue(),
         load("res://tests/native_glyph_fixture.gd").tie_catalogue(),
-        load("res://tests/native_glyph_fixture.gd").chord_catalogue()),
+        load("res://tests/native_glyph_fixture.gd").chord_catalogue(),
+        {},load("res://tests/native_glyph_fixture.gd").tuplet_catalogue()),
         "Unit test has Verovio-shaped placeholder textures")
     check(player.load_score(model),"Native renderer accepts 5:4, 3:2, double dots")
     check(player.native_ready and player.notation_tuplets.size() == 2,
-        "Tuples are cached as semantic groups, never SVG locations")
+        "Tuplets retain the original semantic source grouping")
+    check(player.glyphs.has_tuplet("three0|three1|three2",true),
+        "Actual original Verovio tuplet number and bracket sprites are loaded")
+    check(not player.glyphs.has_tuplet("five0|five1|five2|five3|five4",true),
+        "Unavailable engraving does not generate a fake Verovio bracket")
     var density: float = player.timeline.pixels_per_beat
     for bpm in [40.0,80.0,120.0]:
         player.present({"bpm":bpm,"running":true,"paused":false,
