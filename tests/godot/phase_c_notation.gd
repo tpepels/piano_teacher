@@ -145,6 +145,28 @@ func run() -> void:
         check(tie[12].y > renderer._event_y(
             model["notation_events"][3],staff_gap),
             "Up-stem note uses a tie below its glyph rather than crossing stem")
+    # Chopin fixture has a very short 1/8 pickup directly before 12/8.
+    # Both time signatures must remain legible without moving any note X.
+    var pickup: Dictionary = model.duplicate(true)
+    pickup["measures"][0]["end_beat"] = .5
+    pickup["measures"][0]["meter"] = [1,8]
+    pickup["measures"][1]["start_beat"] = .5
+    pickup["measures"][1]["meter"] = [12,8]
+    for event in pickup["notation_events"]:
+        event["measure"] = 1 if float(event["beat"]) < .5 else 2
+    check(renderer.load_score(pickup),
+        "Native renderer accepts 1/8 pickup followed by 12/8")
+    var pickup_gap: float = renderer._gap()
+    check(renderer._meter_is_crowded(pickup["measures"][1],
+        pickup["measures"][0],pickup_gap),
+        "Close meter change uses a dedicated upper-staff annotation lane")
+    check(not renderer._meter_is_crowded(pickup["measures"][0],
+        {},pickup_gap), "Opening meter stays in conventional staff position")
+    check(approx(renderer.timeline.screen_x(.5,0.0,480.0,0.0)-
+        renderer.timeline.screen_x(0.0,0.0,480.0,0.0),
+        renderer.timeline.pixels_per_beat*.5),
+        "Floating time signature never changes note position or speed")
+    check(renderer.load_score(model),"Restore baseline notation after meter test")
     check(renderer.timeline.pixels_per_beat > 96.0,
         "Tightly spaced sixteenth note selects fixed whole-piece density")
     var density: float = renderer.timeline.pixels_per_beat
