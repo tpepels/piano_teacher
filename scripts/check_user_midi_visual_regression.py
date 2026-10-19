@@ -139,7 +139,8 @@ def check_native_ink(source_dir: Path, strip_dir: Path, report: dict) -> dict:
 
 
 def _ink_panel(images: list[tuple[Image.Image, tuple[float, float]]],
-               canvas_width: float, canvas_height: float, title: str) -> Image.Image:
+               canvas_width: float, canvas_height: float, title: str,
+               rail_rows: list[float] | None = None) -> Image.Image:
     """Make a human-readable comparison, not a pixel-difference pass condition."""
     color = (26, 43, 38)
     width, height = 1480, 340
@@ -151,6 +152,14 @@ def _ink_panel(images: list[tuple[Image.Image, tuple[float, float]]],
     scale = min(1430 / canvas_width, 275 / canvas_height)
     x_pad = 22
     y_pad = 45 + max(0, (275 - canvas_height * scale) / 2)
+    # The real Godot renderer removes isolated staff-rule ink from every
+    # tile, then draws one continuous grand staff underneath the sprites.
+    # Comparison screenshots must include that layer or falsely show a
+    # score without a notenbalk (the former misleading comparison bug).
+    for rail in rail_rows or []:
+        py = round(y_pad + rail * scale)
+        pen.line(((x_pad, py), (round(x_pad + canvas_width * scale), py)),
+                 fill=(121, 154, 143), width=1)
     for img, (x, y) in images:
         pix = img.convert("RGBA")
         # Treat source ink's opacity as the compositing mask, so both
@@ -182,8 +191,13 @@ def write_comparison(input_dir: Path, output_dir: Path, report: dict,
         img = Image.open(output_dir / info["file"])
         render_tiles.append((img.copy(), tuple(info["rect"][:2])))
         img.close()
+    rails = []
+    if strip["tiles"]:
+        first = strip["tiles"][0]
+        rails = [first["rect"][1] + float(row) for row in first["staff_rows"]]
     dst_panel = _ink_panel(render_tiles, strip["width"], strip["height"],
-                           f"GODOT SCORE STRIP  ·  {label}")
+                           f"GODOT SCORE STRIP WITH STAFF RULES  ·  {label}",
+                           rail_rows=rails)
     comparison = Image.new("RGB", (1480, 700), (26, 43, 38))
     comparison.paste(ref_panel, (0, 0))
     comparison.paste(dst_panel, (0, 354))
