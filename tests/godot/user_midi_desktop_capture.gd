@@ -78,6 +78,20 @@ func _capture(label: String) -> void:
     print("MIDI_DESKTOP_FRAME:", label, " size=", image.get_size(),
         " notes=", info.note_count, " tiles=", info.glyph_tile_count)
 
+func _notation_ready() -> bool:
+    return app.score_view.texture != null and \
+        app.rendered_revision == app.revision and \
+        not app.score_layout.get("notes", []).is_empty() and \
+        app.score_tiles.size() > 0 and \
+        app.score_frame.is_visible_in_tree()
+
+func _is_counting() -> bool:
+    return str(app.last_state.get("phase", "")) == "count_in" and \
+        bool(app.last_state.get("running", false))
+
+func _is_playing() -> bool:
+    return str(app.last_state.get("phase", "")) == "playing"
+
 func _run() -> void:
     var args: PackedStringArray = OS.get_cmdline_user_args()
     if args.size() != 1:
@@ -94,28 +108,20 @@ func _run() -> void:
     await process_frame
     await process_frame
     app._navigate("practice")
-    var ready: bool = await _wait_until(func() -> bool:
-        return app.score_view.texture != null and
-            app.rendered_revision == app.revision and
-            not app.score_layout.get("notes", []).is_empty() and
-            app.score_tiles.size() > 0 and
-            app.score_frame.is_visible_in_tree(),
-        100.0, "real notation in practice stage")
+    var ready: bool = await _wait_until(
+        Callable(self, "_notation_ready"), 100.0, "real notation in practice stage")
     if ready:
         await _capture("ready")
         var started: Dictionary = await _api("/control", {"action": "start"})
         if str(started.get("phase", "")) != "count_in":
             errors.append("Expected MIDI-less count-in from real engine")
         else:
-            var counting: bool = await _wait_until(func() -> bool:
-                return str(app.last_state.get("phase", "")) == "count_in" and
-                    bool(app.last_state.get("running", false)),
-                8.0, "count-in state")
+            var counting: bool = await _wait_until(
+                Callable(self, "_is_counting"), 8.0, "count-in state")
             if counting:
                 await _capture("count-in")
-            var playing: bool = await _wait_until(func() -> bool:
-                return str(app.last_state.get("phase", "")) == "playing",
-                16.0, "playing state")
+            var playing: bool = await _wait_until(
+                Callable(self, "_is_playing"), 16.0, "playing state")
             if playing:
                 await create_timer(.25).timeout
                 await _capture("playing")
