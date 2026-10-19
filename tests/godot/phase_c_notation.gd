@@ -171,6 +171,11 @@ func run() -> void:
     check(renderer._terminal_barline_geometry(0.0,480.0,
         staff_gap)["style"] == "light-light",
         "Explicit right-hand ending style remains a double terminal bar")
+    var contradiction: Dictionary = styled.duplicate(true)
+    contradiction["measures"][1]["left_barline"] = {
+        "style":"light-light","repeat":""}
+    check(Geometry.supported(contradiction).contains("Conflicting"),
+        "Incompatible barline styles on the same boundary trigger fallback")
     check(renderer.load_score(model),
         "Restore source model after barline style tests")
     check(renderer.chord_members.has("n6") and
