@@ -110,37 +110,30 @@ passage* rather than mix hand-drawn and engraved symbols.
 
 ## Phase 1 implementation status (2026-10-19)
 
-### Implemented: strict clock-locked camera over existing Verovio ink
+The next renderer increment is **in progress**.
 
-`godot/score_beat_camera.gd` measures the *actual* projected note/rest
-anchors returned by `ScoreStrip`. Only if every distinct onset belongs to
-one affine `x = origin + beat * source_pixels_per_beat` time axis within
-2 native raster pixels may the app use the new camera. The camera then
-moves the existing cached tiles directly from the authoritative Python
-clock beat (including count-in and seek offsets), at a fixed 42% playhead.
-It changes only the parent canvas translation, never notes or their timing.
-No easing, per-event interpolation, mid-measure speed correction, or BPM-
-dependent image scaling is applied.
+- `godot/score_exact_spacing.gd` is a conservative, real-Verovio-raster
+  adapter for a single continuous two-hand staff. It scans source ink
+  once and inserts transparent columns only where a complete vertical
+  cut intersects no non-staff musical ink. It never stretches, resamples
+  or redraws original pixels; connected beams/slurs/ties force a full
+  passage fallback instead of corrupting music.
+- `godot/score_beat_camera.gd` is a **pure validation library**, checking
+  whether the resulting engraved anchors lie within 2 source pixels of
+  one `x = origin + beat * pixels_per_beat` axis. It is **not currently
+  installed as the production camera**, because that integration was
+  reverted during visual CI debugging.
+- Godot still uses the established cursor-following movement. When the
+  exact adapter succeeds, it sees proportionally placed Verovio
+  noteheads; if it fails, the original native Verovio score is retained.
+  Actual source/MIDI acceptance and pixel tests, not a synthetic camera
+  test alone, decide which passages the adapter supports.
+- The difficult portions of Ala, Chopin and imported jazz may contain
+  connected engraving across adjacent beats and therefore legitimately
+  fall back. New code must not hide or sever those connections to force
+  a linear layout.
 
-For unsupported/not-yet-aligned scores (including extreme ornament
-intervals, duplicate onsets with different engraved positions and natural
-non-proportional single-system Verovio layouts), the prior camera is used
-for the complete passage. The source score is not partially translated.
-The per-passage reason is recorded in `score_beat_grid` and exported by
-the real desktop MIDI diagnostics. Validate with
-`tests/godot/score_beat_camera.gd` and the actual source SVG/Godot corpus.
-
-### Not yet implemented: source-glyph-group re-layout
-
-The initial camera still receives tiles prepared by the existing
-`ScoreStrip` raster pipeline. This means Verovio is still the engraving
-engine, but printed score strips can still contain horizontal bitmap
-spacing adjustments and the safety fallback may not achieve uniform speed.
-
-The next Phase 1 increment must extract SVG groups with stable source IDs,
-including beam/tie/slur groups that span multiple notes; translate complete
-glyph groups against a common time axis without resampling ink; preserve
-measure-level clefs/key/time signatures; and compare resulting symbol
-pixels against original Verovio. Activate it only after demonstrating
-no broken links and constant camera motion on real MIDI, including Ala,
-Autumn Leaves and Chopin. Do not report Phase 1 as complete until then.
+**Remaining Phase 1:** implement a source-identity-preserving vector/SVG
+*group* adapter for beam/tie/slur groups crossing time boundaries, with
+full-score glyph-level pixel regression. Do not call Phase 1 complete
+before real MIDI examples pass both identity and constant-motion audits.
