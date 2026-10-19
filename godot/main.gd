@@ -1775,14 +1775,29 @@ func _build_lesson_screen() -> void:
     content.add_child(lesson_summary)
     lesson_description = _label("", 16, MUTED)
     content.add_child(lesson_description)
-    var activity := HFlowContainer.new()
-    activity.add_theme_constant_override("h_separation", 12)
-    activity.add_theme_constant_override("v_separation", 8)
+    # FlowContainer inside an expanding, vertically scrolling VBox can
+    # calculate a near-zero width for its Label during a resize. The label
+    # then wraps to one letter per line and forces the entire activity
+    # section (including OptionButton) to become hundreds of pixels tall.
+    # These three small controls fit in a single bounded horizontal row.
+    var activity := HBoxContainer.new()
+    activity.name = "LessonActivityRow"
+    activity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    activity.add_theme_constant_override("separation", 14)
     content.add_child(activity)
     var activity_caption := _label("Activity", 17, MUTED)
+    activity_caption.name = "LessonActivityCaption"
+    activity_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
+    activity_caption.custom_minimum_size.x = 90
     activity_caption.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    activity_caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     activity.add_child(activity_caption)
+    mode_choice.custom_minimum_size = Vector2(220, 44)
+    mode_choice.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    mode_choice.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     activity.add_child(mode_choice)
+    hints_toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    hints_toggle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     activity.add_child(hints_toggle)
     var passage_nav := HFlowContainer.new()
     passage_nav.add_theme_constant_override("h_separation", 10)
