@@ -189,9 +189,11 @@ func run() -> void:
     var first_beam: Dictionary = tilted["groups"][0]
     var members: Array = first_beam["members"]
     check(members.size() == 3,"Every source group retains its three beats")
-    for member in members:
-        check(absf(float(member["tip_y"])-float(member["head_y"])+
-            860.0*gap/250.0) < .01,
+    var original_tips: Array = renderer.glyphs.beam_tips("a|b|c")
+    for i in range(members.size()):
+        var member: Dictionary = members[i]
+        check(absf(float(member["tip_y"])-float(member["head_y"])-
+            float(original_tips[i])*gap/250.0) < .01,
             "Source Verovio stem tip is preserved without custom beam slope")
     var moved: Dictionary = renderer._beam_layout(gap,.75,580.0)
     var shifted: Array = moved["groups"][0]["members"]
