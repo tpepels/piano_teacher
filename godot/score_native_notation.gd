@@ -27,6 +27,7 @@ var notation_tuplets: Array = []
 var measure_by_number: Dictionary = {}
 var ordered_events: Array = []
 var tie_pairs: Array = []
+var slur_pairs: Array = []
 var previous_attack_before_measure: Dictionary = {}
 var cached_staff_gap := -1.0
 var cached_gap_height := -1.0
@@ -48,6 +49,7 @@ func clear_score() -> void:
     measure_by_number.clear()
     ordered_events.clear()
     tie_pairs.clear()
+    slur_pairs.clear()
     previous_attack_before_measure.clear()
     cached_staff_gap = -1.0
     cached_gap_height = -1.0
@@ -57,7 +59,8 @@ func clear_score() -> void:
 func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         tie_items: Dictionary = {}, chord_items: Dictionary = {},
         beam_items: Dictionary = {},
-        tuplet_items: Dictionary = {}) -> bool:
+        tuplet_items: Dictionary = {},
+        slur_items: Dictionary = {}) -> bool:
     if not glyphs.load_font(items):
         failure_reason = glyphs.error
         return false
@@ -74,6 +77,9 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         failure_reason = glyphs.error
         return false
     if not glyphs.load_tuplet_fragments(tuplet_items):
+        failure_reason = glyphs.error
+        return false
+    if not glyphs.load_slur_fragments(slur_items):
         failure_reason = glyphs.error
         return false
     failure_reason = ""
@@ -139,6 +145,18 @@ func load_score(candidate: Dictionary) -> bool:
             unfinished[source_id] = event
         else:
             unfinished.erase(source_id)
+    slur_pairs.clear()
+    var by_id: Dictionary = {}
+    for event in ordered_events:
+        if str(event.get("kind","")) == "note":
+            by_id[str(event.get("id",""))] = event
+    for key in glyphs.slur_keys():
+        var ids: Array = glyphs.slur_note_ids(str(key))
+        if ids.size() == 2 and by_id.has(str(ids[0])) and by_id.has(str(ids[1])):
+            var first: Dictionary = by_id[str(ids[0])]
+            var last: Dictionary = by_id[str(ids[1])]
+            if float(first.get("beat",0.0)) < float(last.get("beat",0.0)):
+                slur_pairs.append({"key":str(key),"first":first,"last":last})
     cached_staff_gap = -1.0
     cached_gap_height = -1.0
     cached_offsets_gap = -1.0
@@ -787,6 +805,25 @@ func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
 
 # Binary-search into pre-sorted MusicXML events. Work is proportional
 # to what the pianist can actually see, not to the whole imported MIDI.
+func _paint_slurs(playhead_x: float,clock: float,gap: float) -> void:
+    for pair in slur_pairs:
+        var first: Dictionary = pair["first"]
+        var last: Dictionary = pair["last"]
+        var x0: float = timeline.screen_x(float(first.get("beat",0.0)),
+            clock,playhead_x,play_from_beat)
+        var x1: float = timeline.screen_x(float(last.get("beat",0.0)),
+            clock,playhead_x,play_from_beat)
+        if x0 > size.x+50.0 or x1 < -50.0:
+            continue
+        x0 += float(cached_head_offsets.get(str(first.get("id","")),0.0))
+        x1 += float(cached_head_offsets.get(str(last.get("id","")),0.0))
+        if x1 <= x0:
+            continue
+        glyphs.paint_slur(self,str(pair["key"]),x0,_event_y(first,gap),
+            x1,_event_y(last,gap),gap,
+            _ink(str(first.get("staff","right"))))
+
+
 func _visible_events(left: float, right: float) -> Array:
     var begin := 0
     var end := ordered_events.size()
@@ -934,6 +971,7 @@ func _draw() -> void:
         visible_symbols += 1
     _paint_beams(beam_data, gap)
     _paint_ties(playhead_x,camera_clock,gap)
+    _paint_slurs(playhead_x,camera_clock,gap)
     _paint_tuplet_brackets(camera_clock,playhead_x,gap)
     draw_line(Vector2(playhead_x,_staff_center("right")-gap*3.8),
         Vector2(playhead_x,_staff_center("left")+gap*3.7),
