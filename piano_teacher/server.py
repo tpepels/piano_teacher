@@ -347,7 +347,8 @@ class PracticeEngine:
     def load(self, path: str, *, warmup: bool = False):
         source = Path(path).expanduser().resolve()
         fingerprint = hashlib.sha256(source.read_bytes()).hexdigest()
-        piece, score = self.preprocessing.load_import(source, fingerprint)
+        piece, score = self.preprocessing.load_import(
+            source, fingerprint, importer=import_piece)
         with self.lock:
             self._stop()
             self._reset_trouble()
