@@ -134,6 +134,17 @@ func run() -> void:
         model["notation_events"][5],staff_gap)
     check(float(chord["top_y"]) < float(chord["bottom_y"]) and
         bool(chord["up"]), "Chord stem covers top and bottom real glyph heads")
+    var tie: PackedVector2Array = renderer._tie_shape(
+        model["notation_events"][3],model["notation_events"][4],
+        160.0,330.0,staff_gap)
+    check(tie.size() == 50,
+        "Native tie is a closed tapered contour between two notehead edges")
+    if tie.size() == 50:
+        check(tie[0].x > 160.0 and tie[24].x < 330.0,
+            "Tie endpoints clear the authentic Verovio head widths")
+        check(tie[12].y > renderer._event_y(
+            model["notation_events"][3],staff_gap),
+            "Up-stem note uses a tie below its glyph rather than crossing stem")
     check(renderer.timeline.pixels_per_beat > 96.0,
         "Tightly spaced sixteenth note selects fixed whole-piece density")
     var density: float = renderer.timeline.pixels_per_beat
