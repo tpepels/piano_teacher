@@ -111,6 +111,29 @@ func run() -> void:
     check(renderer.set_density(96.0), "User density accepted")
     check(renderer.load_score(model), "Native renderer accepts complete symbolic model")
     check(renderer.native_ready, "No raster or SVG is necessary")
+    # Actual piano barlines span both staves and clear the following notehead.
+    # The first visible source measure must never produce a fake barline.
+    var staff_gap: float = renderer._gap()
+    check(renderer._barline_geometry(model["measures"][0], 0.0, 480.0,
+        staff_gap).is_empty(), "Opening clef/meter has no invented barline")
+    var joined: Dictionary = renderer._barline_geometry(
+        model["measures"][1], 0.0, 480.0, staff_gap)
+    check(not joined.is_empty(), "Later measure has a barline")
+    if not joined.is_empty():
+        check(approx(float(joined["top"]),renderer._staff_center("right")-
+            2.0*staff_gap) and
+            approx(float(joined["bottom"]),renderer._staff_center("left")+
+            2.0*staff_gap), "Barline connects all ten piano staff rules")
+        check(approx(float(joined["x"]),
+            renderer.timeline.screen_x(3.0,0.0,480.0,0.0)-
+            staff_gap*1.35), "Barline clears first note without moving onset")
+    check(renderer.chord_members.has("n6") and
+        renderer.chord_members["n6"].size() == 2,
+        "Two simultaneous right-hand notes use one MusicXML chord leader")
+    var chord: Dictionary = renderer._chord_extents(
+        model["notation_events"][5],staff_gap)
+    check(float(chord["top_y"]) < float(chord["bottom_y"]) and
+        bool(chord["up"]), "Chord stem covers top and bottom real glyph heads")
     check(renderer.timeline.pixels_per_beat > 96.0,
         "Tightly spaced sixteenth note selects fixed whole-piece density")
     var density: float = renderer.timeline.pixels_per_beat
