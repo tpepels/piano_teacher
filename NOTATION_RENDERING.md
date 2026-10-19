@@ -240,6 +240,37 @@ remain at their exact semantic onset, without inventing extra notation.
 A missing explicit multi-note tuplet or source-matched slur causes fallback
 to the full Verovio score.
 
+### Source-preserving vertical bars (2026-10-19)
+
+The native compositor no longer treats every vertical boundary as one thin
+line. `Piece.barlines` retains the **original imported MusicXML** location,
+style and repeat direction, including after source-cache serialization.
+`build_lesson_score` restores these definitions at the exact source measure
+start/end in both hand parts. The renderer derives the boundary between
+adjacent measures from the previous right and current left marks.
+
+- Regular bars are one thin stroke, light-light bars are two thin strokes,
+  light-heavy bars are a thin/thick pair, and heavy-light is the reverse.
+  Heavy-heavy, heavy, dashed, dotted, and no-barline styles also have their
+  own rules; unsupported short/tick and volta endings are explicitly
+  rejected rather than rendered inaccurately.
+- A simultaneous backward/forward repeat forms one double-sided boundary
+  with repeat dots on both sides. The four repeat dots on the two piano
+  staves come from the installed Verovio SMuFL `repeatDot` E044 font
+  asset. Only the variable-length structural bar rules are Godot primitives,
+  as SMuFL recommends for barlines.
+- The **final right-side barline** is drawn at the end of the last measure,
+  which previously had no matching following measure and was omitted.
+  The first barline is drawn only if explicitly present (e.g. a starting
+  repeat). Every stroke spans the full grand staff rather than splitting
+  at the gap between hands.
+- All X coordinates are computed from the same semantic quarter-beat
+  camera as the rest of the exercise. No inserted beat, variable scrolling
+  speed or per-measure time stretching is allowed.
+- Contradictory RH/LH marks, opposing explicit styles at a boundary and
+  out-of-contract MusicXML barline types fail clearly rather than inventing
+  another notation meaning.
+
 ### Short-pickup time-signature collisions (2026-10-19)
 
 Some imported performances, including Chopin's Nocturne Op. 9 No. 2,
