@@ -3253,7 +3253,9 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
     if native_notation_enabled and timeline_preview != null:
         var glyph_catalog: Dictionary = parsed.get("native_glyphs", {})
         var note_catalog: Dictionary = parsed.get("native_note_templates", {})
-        if not timeline_preview.set_verovio_glyphs(glyph_catalog, note_catalog):
+        var tie_catalog: Dictionary = parsed.get("native_tie_templates", {})
+        if not timeline_preview.set_verovio_glyphs(
+                glyph_catalog, note_catalog, tie_catalog):
             push_warning("Native Verovio glyph fallback: " +
                 str(timeline_preview.failure_reason))
         elif not timeline_model_pending and bool(last_state.get("loaded", false)):
@@ -3263,6 +3265,7 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
             _request_timeline_model()
     parsed.erase("native_glyphs")
     parsed.erase("native_note_templates")
+    parsed.erase("native_tie_templates")
     cached_bounds.clear()
     cached_bounds_revision = -1
     score_layout = parsed
