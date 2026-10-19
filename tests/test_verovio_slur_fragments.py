@@ -70,8 +70,6 @@ def test_extract_only_genuine_slur_and_reuse_cache(tmp_path,monkeypatch):
 def test_ambiguous_slurs_refuse_to_guess(monkeypatch):
     import piano_teacher.score_geometry as geometry
     monkeypatch.setattr(geometry,"parse_svg_geometry",fake_geometry)
-    ambiguous=SVG.replace("</svg>",
-                          SVG.split("<g class=")[1].join([]) if False else "</svg>")
     doubled=SVG.replace("</svg>",
         '<g class="slur" id="another">'
         '<path d="M100 142Q260 108 420 142Q260 120 100 142"/></g></svg>')
