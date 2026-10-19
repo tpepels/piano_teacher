@@ -89,9 +89,21 @@ static func supported(model: Dictionary) -> String:
             notes_seen[key] = true
         if str(event.get("staff", "")) not in ["right", "left"]:
             return "Unsupported staff"
+    var previous_right: Variant = null
     for measure in model.get("measures", []):
         if not measure is Dictionary:
             return "Invalid measure"
+        var opening: Variant = measure.get("left_barline")
+        if previous_right is Dictionary and opening is Dictionary:
+            var old_style: String = str(previous_right.get("style","regular"))
+            var old_repeat: String = str(previous_right.get("repeat",""))
+            var new_repeat: String = str(opening.get("repeat",""))
+            var paired: bool = old_repeat == "backward" and \
+                new_repeat == "forward"
+            if not paired and old_style not in ["regular","none"] and \
+                    opening != previous_right:
+                return "Conflicting source barline styles at one measure boundary"
+        previous_right = measure.get("right_barline")
         for side in ["left_barline","right_barline"]:
             var descriptor: Variant = measure.get(side)
             if descriptor == null:
