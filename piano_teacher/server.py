@@ -1935,14 +1935,14 @@ class PracticeEngine:
             # Never fail the entire /score/layout response for optional art.
             try:
                 layout["native_tie_templates"] = tie_templates(self.preprocessing)
-            except (RuntimeError,ValueError,KeyError) as exc:
-                print("VEROVIO_TIE_TEMPLATE_UNAVAILABLE:", exc)
+            except Exception as exc:
+                print("VEROVIO_TIE_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
                 layout["native_tie_templates"] = {}
             try:
                 layout["native_chord_templates"] = chord_templates(
                     self.semantic_score(), self.preprocessing)
-            except (RuntimeError,ValueError,KeyError) as exc:
-                print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", exc)
+            except Exception as exc:
+                print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
                 layout["native_chord_templates"] = {}
         return layout
 
