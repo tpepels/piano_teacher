@@ -326,6 +326,21 @@ def _readable_clef(notes, explicit, hand):
     return {'sign':best,'line':2 if best == 'G' else 4,'octave_change':0}
 
 
+def infer_piece_clefs(notes) -> dict:
+    """Choose stable piano clefs using the *whole piece*, not a lesson slice.
+
+    Imported MIDI normally contains notes, not clefs. The left hand of Ala
+    plays C4-G4 in the opening exercise but spends much of the piece below
+    middle C; a per-phrase guess incorrectly switches it to treble. A single
+    piece-wide choice keeps one predictable reading system throughout the
+    practice route. Explicit source MusicXML clef changes still take priority.
+    """
+    return {
+        hand: _readable_clef([n for n in notes if n.hand == hand], None, hand)
+        for hand in ("right", "left")
+    }
+
+
 def _spelling(note, fifths):
     if note.spelling is not None:
         return note.spelling
@@ -402,7 +417,8 @@ def _phrase_lanes(phrase, hand, grid=()):
 
 def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                        time_signatures: tuple[tuple[float, int, int], ...] = (),
-                       key_signatures=(), clef_changes=()) -> LessonScore:
+                       key_signatures=(), clef_changes=(),
+                       default_clefs: dict | None = None) -> LessonScore:
     """Create notation from the source measure grid, not averaged bars."""
     identities = [source_note_id(note,index) for index,note in enumerate(phrase.notes)]
     if len(set(identities)) != len(identities):
@@ -463,7 +479,15 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             active_key = next((key for key in reversed(keys) if key.beat <= source_beat+1e-7),None)
             active_clef = next((clef for clef in reversed(clefs) if clef.beat <= source_beat+1e-7),None)
             key_value = (active_key.fifths,active_key.mode) if active_key else None
-            chosen_clef = _readable_clef([note for note in phrase.notes if note.hand == hand], active_clef, hand)
+            # A short practice phrase can sit in a different register from
+            # the rest of the piano part. Reuse the piece-wide MIDI default
+            # instead of jumping clefs between lessons. Source clefs override.
+            if active_clef is None and default_clefs is not None and hand in default_clefs:
+                chosen_clef = default_clefs[hand].copy()
+            else:
+                chosen_clef = _readable_clef(
+                    [note for note in phrase.notes if note.hand == hand],
+                    active_clef, hand)
             if b == 0:
                 staff_clefs[hand] = chosen_clef
             if b == 0 or (beats, beat_type) != last_meter or key_value != last_key or chosen_clef != last_clef:
