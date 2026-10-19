@@ -53,6 +53,8 @@ func _run() -> void:
             continue
         var tiles: Array = result.tiles
         var mappings: Array = result.mappings
+        var beat_grid: Dictionary = load("res://score_beat_camera.gd").prepare(
+            result.layout)
         check(tiles.size() == mappings.size() and
             tiles.size() >= original.get("systems", []).size(),
             mode + ": lost an engraved system")
@@ -67,6 +69,7 @@ func _run() -> void:
         var output := {"tiles": [], "notes": [], "width": float(result.size.x),
             "height": float(result.size.y),
             "native": bool(result.layout.get("native_engraving", false)),
+            "beat_camera": beat_grid,
             "timing_fallback": str(result.layout.get("strip_timing_fallback", "")),
             "proportional": bool(result.layout.get("strip_time_proportional", false))}
         for i in range(tiles.size()):
