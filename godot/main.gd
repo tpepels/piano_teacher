@@ -3490,6 +3490,12 @@ func _request_timeline_model() -> void:
     if timeline_model_request == null or timeline_model_pending \
             or not bool(last_state.get("loaded", false)):
         return
+    # The semantic model may arrive before /score/layout. Wait for the
+    # authentic Verovio glyphs instead of reporting a false native fallback.
+    # _on_layout requests the model once the font atlas is actually ready.
+    if native_notation_enabled and (timeline_preview == null or \
+            not timeline_preview.glyphs.ready()):
+        return
     timeline_model_pending = true
     var error: Error = timeline_model_request.request(URL + "/score/model")
     if error != OK:
