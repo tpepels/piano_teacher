@@ -22,6 +22,7 @@ static func build(layout: Dictionary, pages: Array[Image],
         # headers, no staff-only splices, no resampling or sparse fake-width
         # textures: stems, barlines and noteheads stay byte-for-byte native.
         layout["strip_trim_repeated_headers"] = false
+        layout["strip_trim_safe_starts"] = []
         layout["strip_time_proportional"] = false
         layout["native_engraving"] = true
     var source_systems: Array = layout.get("systems", []).duplicate(true)
@@ -52,7 +53,7 @@ static func build(layout: Dictionary, pages: Array[Image],
         var left: int = maxi(0, int(floor(minf(.02, float(system.left)) * source_size.x)))
         var right: int = mini(image.get_width(), int(ceil((float(system.right) + .02) * source_size.x)))
         var trimmed_header := false
-        if not mappings.is_empty() and bool(layout.get("strip_trim_repeated_headers", false)):
+        if not mappings.is_empty() and _may_trim_reprinted_header(layout, system):
             # The backend has verified this generated two-hand lesson has no
             # subsequent clef, meter, key or navigation changes. Discard the
             # *reprinted* system header, which otherwise becomes a huge
@@ -100,8 +101,9 @@ static func build(layout: Dictionary, pages: Array[Image],
         var trimmed_tail := false
         var splice_left := -1
         var splice_right := -1
-        if bool(layout.get("strip_trim_repeated_headers", false)) \
-                and source_systems.find(system) < source_systems.size() - 1:
+        if source_systems.find(system) < source_systems.size() - 1 \
+                and _may_trim_reprinted_header(
+                    layout, source_systems[source_systems.find(system) + 1]):
             # A tie crossing the upcoming system boundary may extend past
             # this barline. Keep its full original trailing region.
             var following: Dictionary = source_systems[source_systems.find(system) + 1]
@@ -186,7 +188,8 @@ static func build(layout: Dictionary, pages: Array[Image],
     # extension, without stretching any existing note, accidental or barline.
     # Only proven repeated headers may be cropped. Genuine context changes
     # remain engraved, independently of the requested temporal spacing.
-    if bool(layout.get("strip_trim_repeated_headers", false)):
+    if bool(layout.get("strip_trim_repeated_headers", false)) or \
+            not layout.get("strip_trim_safe_starts", []).is_empty():
         width = _pad_short_system_joins(layout, mappings)
     var proportional: bool = bool(layout.get("strip_time_proportional",
         layout.get("strip_trim_repeated_headers", false)))
@@ -781,6 +784,18 @@ static func visible_tile_range(tiles: Array, content_x: float, scale: float,
         else:
             high = mid
     return Vector2i(first, low)
+
+
+static func _may_trim_reprinted_header(layout: Dictionary, system: Dictionary) -> bool:
+    if bool(layout.get("native_engraving", false)):
+        return false
+    if bool(layout.get("strip_trim_repeated_headers", false)):
+        return true
+    var beat: float = float(system.get("start_beat", -INF))
+    for known in layout.get("strip_trim_safe_starts", []):
+        if absf(float(known) - beat) < .00001:
+            return true
+    return false
 
 
 static func _failure(message: String) -> Dictionary:
