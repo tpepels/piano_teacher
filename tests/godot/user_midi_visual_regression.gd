@@ -41,6 +41,7 @@ func _run() -> void:
     var helper = load("res://score_strip.gd")
     var report := {"cases": {}, "source_note_count": original.get("notes", []).size(),
         "continuous_score": bool(original.get("continuous_score", false))}
+    var untouched_strip: Dictionary = {}
     for mode in ["native", "production"]:
         # Exactly the same native setting as main.gd during ordinary playback:
         # fresh continuous exercises use native glyphs, other pieces use
@@ -51,6 +52,8 @@ func _run() -> void:
         if result.has("error"):
             check(false, mode + ": " + str(result.error))
             continue
+        if mode == "native":
+            untouched_strip = result
         var tiles: Array = result.tiles
         var mappings: Array = result.mappings
         var beat_grid: Dictionary = load("res://score_beat_camera.gd").prepare(
@@ -114,6 +117,65 @@ func _run() -> void:
         check(mapped_ids.size() == original.get("notes", []).size(),
             mode + ": different number of projected notes")
         report.cases[mode] = output
+    # A short lesson has one native Verovio system. Exercise Phase 1's
+    # actual candidate layout against the same source pixels/IDs, regardless
+    # of whether this specific passage can safely be represented on a grid.
+    if bool(original.get("continuous_score", false)) and not untouched_strip.is_empty():
+        var exact: Dictionary = load("res://score_exact_spacing.gd").reflow(
+            untouched_strip)
+        var enabled: bool = bool(exact["layout"].get("exact_ink_grid", false))
+        var audit: Dictionary = load("res://score_beat_camera.gd").prepare(
+            exact["layout"])
+        if enabled:
+            check(bool(audit.get("enabled", false)),
+                "Exact Verovio layout failed to validate the transport beat grid")
+            var native_notes: Array = untouched_strip["layout"]["notes"]
+            var translated_notes: Array = exact["layout"]["notes"]
+            check(native_notes.size() == translated_notes.size(),
+                "Exact grid lost a Verovio source note")
+            var source_pixels: Image = (
+                untouched_strip["tiles"][0]["texture"] as Texture2D).get_image()
+            var new_pixels: Image = (
+                exact["tiles"][0]["texture"] as Texture2D).get_image()
+            for k in range(mini(native_notes.size(), 80)):
+                var before: Dictionary = native_notes[k]
+                var after: Dictionary = translated_notes[k]
+                check(str(before.get("id", "")) == str(after.get("id", "")),
+                    "Exact Verovio group translation changed a source note ID")
+                check(absf(float(before.get("y", 0.0)) -
+                    float(after.get("y", 0.0))) < .000001,
+                    "Lossless horizontal Verovio translation changed pitch height")
+                var source_x: int = roundi(float(before.get("x", 0.0)) *
+                    source_pixels.get_width())
+                var output_x: int = roundi(float(after.get("x", 0.0)) *
+                    new_pixels.get_width())
+                var center_y: int = roundi(float(before.get("y", 0.0)) *
+                    source_pixels.get_height())
+                for dy in range(-3, 4):
+                    for dx in range(-3, 4):
+                        var px: Vector2i = Vector2i(source_x + dx, center_y + dy)
+                        var moved: Vector2i = Vector2i(output_x + dx, center_y + dy)
+                        if Rect2i(Vector2i.ZERO, source_pixels.get_size()).has_point(px) \
+                                and Rect2i(Vector2i.ZERO, new_pixels.get_size()).has_point(moved):
+                            var ink: Color = source_pixels.get_pixelv(px)
+                            var preserved: Color = new_pixels.get_pixelv(moved)
+                            check(absf(ink.a - preserved.a) < .025 and
+                                absf(ink.r - preserved.r) < .025,
+                                "Verovio notehead pixel was resampled by Phase 1")
+            check(new_pixels.save_png(out_dir.path_join("exact-tile-0.png")) == OK,
+                "Cannot save actual exact-grid Verovio evidence")
+        else:
+            # The entire score is left alone if one beam/tie/slur blocks the
+            # grid. Never mix partial warps with unchanged Verovio notation.
+            check(exact["size"] == untouched_strip["size"],
+                "Unsafe Verovio fallback resized its musical score")
+        report["exact_ink_grid"] = {
+            "enabled": enabled,
+            "reason": str(exact["layout"].get("exact_ink_grid_reason", "")),
+            "source_note_count": exact["layout"].get("notes", []).size(),
+            "camera": audit,
+            "added_pixels": exact["layout"].get("exact_ink_grid_added_pixels", 0)
+        }
     var report_path: String = out_dir.path_join("godot-strip-report.json")
     var result_file: FileAccess = FileAccess.open(report_path, FileAccess.WRITE)
     if result_file == null:
