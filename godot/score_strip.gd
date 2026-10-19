@@ -311,6 +311,8 @@ static func build(layout: Dictionary, pages: Array[Image],
             source_system_by_note_id[id] = str(source_note.get("system", ""))
     flat["strip_note_system_index"] = source_system_by_note_id
     flat["native_engraving"] = native_engraving
+    flat["strip_time_proportional"] = proportional and str(
+        layout.get("strip_timing_fallback", "")).is_empty()
     # Surface fallback to UI/debug/acceptance instead of claiming the scroll
     # remains fully time-proportional when a pathological passage cannot fit.
     flat["strip_timing_fallback"] = layout.get("strip_timing_fallback", "")
