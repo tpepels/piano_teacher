@@ -241,10 +241,13 @@ func load_beam_fragments(items: Dictionary) -> bool:
         var box: Array = item.get("bounds",[])
         var anchors: Array = item.get("note_ids",[])
         var tips: Array = item.get("tip_offsets",[])
+        var offsets: Array = item.get("head_offsets",[])
         if str(item.get("source","")) != "verovio-engraved-beam" or \
                 int(item.get("units_per_space",0)) != 250 or \
-                box.size() != 4 or tips.size() != 2 or \
-                anchors.size() != 2 or float(item.get("span",0.0)) <= 0:
+                box.size() != 4 or anchors.size() < 2 or \
+                tips.size() != anchors.size() or \
+                offsets.size() != anchors.size() or \
+                float(item.get("span",0.0)) <= 0:
             error = "Invalid extracted Verovio beam: "+str(name)
             return false
         var image := Image.new()
@@ -256,6 +259,7 @@ func load_beam_fragments(items: Dictionary) -> bool:
         metrics[str(name)] = {
             "bounds":box.duplicate(), "span":float(item["span"]),
             "tip_offsets":tips.duplicate(),
+            "head_offsets":offsets.duplicate(),
             "stem_up":bool(item.get("stem_up",true))}
     beam_textures = loaded
     beam_metadata = metrics
@@ -272,22 +276,60 @@ func beam_tips(name: String) -> Array:
 
 
 func paint_beam(canvas: CanvasItem, name: String,
-        x0: float, x1: float, y0: float, gap: float, ink: Color) -> bool:
+        heads: Array, y0: float, gap: float, ink: Color) -> bool:
     var texture: Texture2D = beam_textures.get(name)
-    if texture == null or x1 <= x0:
+    if texture == null or heads.size() < 2:
         return false
     var data: Dictionary = beam_metadata[name]
-    var width: float = float(data["span"])*gap/250.0
-    if width < .001:
+    var offsets: Array = data["head_offsets"]
+    if offsets.size() != heads.size():
         return false
-    var scale_x: float = (x1-x0)/width
     var box: Array = data["bounds"]
-    var destination := Rect2(
-        x0+float(box[0])*gap/250.0*scale_x,
-        y0+float(box[1])*gap/250.0,
-        float(box[2])*gap/250.0*scale_x,
-        float(box[3])*gap/250.0)
-    canvas.draw_texture_rect(texture,destination,false,ink)
+    var width: float = float(box[2])
+    if width <= 0.0:
+        return false
+    var texture_width: float = float(texture.get_width())
+    var texture_height: float = float(texture.get_height())
+    var pixel_per_unit: float = texture_width/width
+    var base_y: float = y0+float(box[1])*gap/250.0
+    var ink_height: float = float(box[3])*gap/250.0
+    # Piecewise affine X mapping: every original Verovio notehead centre
+    # maps to its independent native source-beat X, not only the endpoints.
+    # The original beam contours and their vertical thickness stay intact.
+    var anchors_px: Array = []
+    for offset in offsets:
+        anchors_px.append((float(offset)-float(box[0]))*pixel_per_unit)
+    for i in range(heads.size()-1):
+        var original_a: float = float(anchors_px[i])
+        var original_b: float = float(anchors_px[i+1])
+        if original_b <= original_a+.01 or \
+                float(heads[i+1]) <= float(heads[i]):
+            return false
+        var src_a: float = clampf(original_a,0.0,texture_width)
+        var src_b: float = clampf(original_b,0.0,texture_width)
+        if src_b <= src_a:
+            continue
+        var t0: float = (src_a-original_a)/(original_b-original_a)
+        var t1: float = (src_b-original_a)/(original_b-original_a)
+        var dst_a: float = lerpf(float(heads[i]),float(heads[i+1]),t0)
+        var dst_b: float = lerpf(float(heads[i]),float(heads[i+1]),t1)
+        canvas.draw_texture_rect_region(texture,
+            Rect2(dst_a,base_y,dst_b-dst_a,ink_height),
+            Rect2(src_a,0.0,src_b-src_a,texture_height),ink)
+    # End caps are fixed-size Verovio artwork, not stretched with tempo.
+    var left_width: float = clampf(float(anchors_px[0]),0.0,texture_width)
+    if left_width > .01:
+        var left_dst: float = left_width*gap*width/(250.0*texture_width)
+        canvas.draw_texture_rect_region(texture,
+            Rect2(float(heads[0])-left_dst,base_y,left_dst,ink_height),
+            Rect2(0.0,0.0,left_width,texture_height),ink)
+    var last_px: float = clampf(float(anchors_px[-1]),0.0,texture_width)
+    if last_px < texture_width-.01:
+        var last_dst: float = (texture_width-last_px)*gap*width/ \
+            (250.0*texture_width)
+        canvas.draw_texture_rect_region(texture,
+            Rect2(float(heads[-1]),base_y,last_dst,ink_height),
+            Rect2(last_px,0.0,texture_width-last_px,texture_height),ink)
     return true
 
 
