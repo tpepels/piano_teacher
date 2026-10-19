@@ -98,15 +98,16 @@ func run() -> void:
         load("res://tests/native_glyph_fixture.gd").note_catalogue(),
         load("res://tests/native_glyph_fixture.gd").tie_catalogue(),
         load("res://tests/native_glyph_fixture.gd").chord_catalogue(),
-        {},load("res://tests/native_glyph_fixture.gd").tuplet_catalogue()),
+        load("res://tests/native_glyph_fixture.gd").beam_catalogue(),
+        load("res://tests/native_glyph_fixture.gd").tuplet_catalogue()),
         "Unit test has Verovio-shaped placeholder textures")
     check(player.load_score(model),"Native renderer accepts 5:4, 3:2, double dots")
     check(player.native_ready and player.notation_tuplets.size() == 2,
         "Tuplets retain the original semantic source grouping")
     check(player.glyphs.has_tuplet("three0|three1|three2",true),
         "Actual original Verovio tuplet number and bracket sprites are loaded")
-    check(not player.glyphs.has_tuplet("five0|five1|five2|five3|five4",true),
-        "Unavailable engraving does not generate a fake Verovio bracket")
+    check(player.glyphs.has_tuplet("five0|five1|five2|five3|five4",true),
+        "Source-matched quintuplet graphic is required for native practice")
     var density: float = player.timeline.pixels_per_beat
     for bpm in [40.0,80.0,120.0]:
         player.present({"bpm":bpm,"running":true,"paused":false,
@@ -135,6 +136,13 @@ func run() -> void:
     check(not player.load_score(over_dotted),
         "Triple dot keeps safe fallback until supported")
     check(player.load_score(model),"Valid tuplets recover after fallback")
+    var source_missing: Dictionary = player.glyphs.tuplet_textures.duplicate()
+    player.glyphs.tuplet_textures.erase("five0|five1|five2|five3|five4")
+    check(not player.load_score(model),
+        "Missing authentic quintuplet triggers full-source Verovio fallback")
+    player.glyphs.tuplet_textures = source_missing
+    check(player.load_score(model),
+        "Source-engraved tuplets recover once real ink is available")
     player.clear_score()
     check(player.notation_tuplets.is_empty(),
         "Changing lessons drops earlier tuplet brackets")

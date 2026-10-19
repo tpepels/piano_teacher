@@ -28,6 +28,8 @@ def test_beaming_uses_semantic_beat_and_never_verovio_x():
     assert "static func beam_groups(model: Dictionary)" in geometry
     assert "static func beat_group_length(meter: Array)" in geometry
     assert "func _paint_beams(data: Dictionary, gap: float)" in renderer
-    assert "Geometry.beam_groups(timeline.model)" in renderer
+    assert "beam_groups = source_beams.get(\"groups\",[])" in renderer
+    assert "glyphs.beam_metadata" in renderer
+    assert "Geometry.beam_groups(timeline.model)" not in renderer
     assert 'timeline.screen_x(float(event.get("beat", 0.0))' in renderer
     assert 'score_motion_curve.gd' not in renderer

@@ -46,7 +46,8 @@ def test_native_mode_is_opt_in_and_unsupported_music_reverts_to_legacy():
     assert 'glyphs.paint(self, "rest_" + note_type' in native
     assert 'glyphs.paint(self, name' in native
     assert 'func _paint_ellipse(' not in native
-    assert 'func _paint_flag(' in native
+    assert 'func _paint_flag(' not in native
+    assert 'glyphs.paint_note_stem(' in native
     assert 'draw_arc(' not in native
     assert 'draw_circle(' not in native
     assert 'def native_glyphs' in (ROOT / "piano_teacher/notation_symbols.py").read_text()
@@ -56,7 +57,8 @@ def test_native_mode_is_opt_in_and_unsupported_music_reverts_to_legacy():
     assert 'note_templates(self.preprocessing)' in (
         ROOT / "piano_teacher/server.py").read_text()
     assert 'str(int(measure.get("number", 0)))' in native
-    assert 'draw_colored_polygon(' in native
+    assert 'func _beam_segment(' not in native
+    assert 'glyphs.paint_beam(' in native
     assert 'preload("res://score_strip.gd")' not in native
     assert 'preload("res://score_motion_curve.gd")' not in native
     assert 'MIN_ATTACK_SEPARATION' in geometry

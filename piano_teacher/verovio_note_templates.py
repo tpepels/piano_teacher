@@ -20,7 +20,7 @@ from PIL import Image
 KINDS = ("whole", "half", "quarter", "eighth", "16th", "32nd", "64th")
 BEATS = {"whole": 4, "half": 2, "quarter": 1, "eighth": 0.5,
          "16th": 0.25, "32nd": 0.125, "64th": 0.0625}
-TEMPLATE_VERSION = 1
+TEMPLATE_VERSION = 2
 XML_DIVISIONS = 10080
 
 
@@ -80,6 +80,26 @@ def _only_note_svg(svg: str) -> str:
     return ET.tostring(root, encoding="unicode")
 
 
+def _only_stem_svg(note_svg: str) -> str:
+    """Retain only Verovio's original note stem, not a drawn approximation."""
+    root = ET.fromstring(note_svg)
+    def prune(node: ET.Element) -> bool:
+        if "stem" in node.get("class", "").split():
+            return True
+        if node.tag.rsplit("}", 1)[-1] in {"defs", "style"}:
+            return True
+        found = False
+        for child in list(node):
+            if prune(child):
+                found = True
+            else:
+                node.remove(child)
+        return found
+    if not prune(root):
+        raise ValueError("Verovio did not export an individual stem group")
+    return ET.tostring(root, encoding="unicode")
+
+
 def _render_template(toolkit, kind: str, direction: str,
                      head_center_units: float) -> dict:
     import cairosvg
@@ -133,17 +153,42 @@ def _render_template(toolkit, kind: str, direction: str,
         raise RuntimeError("Verovio note sprite has invalid anchor geometry")
     if bounds[2] > 1200 or bounds[3] > 2200:
         raise RuntimeError("Stray staff or clef ink entered Verovio note sprite")
-    return {
+    result = {
         "source": "verovio-engraved-note",
         "bounds": bounds, "units_per_space": 250,
         "png_base64": base64.b64encode(file.getvalue()).decode("ascii"),
     }
+    if kind != "whole":
+        stem_svg = _only_stem_svg(filtered)
+        stem_png = cairosvg.svg2png(bytestring=stem_svg.encode("utf-8"),
+                                   output_width=1800)
+        with Image.open(BytesIO(stem_png)) as decoded:
+            stem_image = decoded.convert("RGBA")
+        ink = stem_image.getchannel("A").getbbox()
+        if ink is None:
+            raise RuntimeError("Verovio exported an empty individual stem")
+        sx0, sy0, sx1, sy1 = ink
+        cropped = stem_image.crop(ink)
+        white_stem = Image.new("RGBA",cropped.size,(255,255,255,255))
+        white_stem.putalpha(cropped.getchannel("A"))
+        stem_bytes = BytesIO()
+        white_stem.save(stem_bytes, format="PNG", optimize=True)
+        result["stem_only"] = {
+            "source": "verovio-engraved-note-stem",
+            "units_per_space": 250,
+            "bounds": [(sx0-head_center_x)*250.0/staff_space,
+                       (sy0-head_origin_y)*250.0/staff_space,
+                       (sx1-sx0)*250.0/staff_space,
+                       (sy1-sy0)*250.0/staff_space],
+            "png_base64": base64.b64encode(stem_bytes.getvalue()).decode("ascii"),
+        }
+    return result
 
 
 def _validate(items: dict) -> bool:
     if not isinstance(items, dict) or set(items) != set(keys()):
         return False
-    for item in items.values():
+    for name, item in items.items():
         if (not isinstance(item, dict)
                 or item.get("source") != "verovio-engraved-note"
                 or item.get("units_per_space") != 250
@@ -151,6 +196,15 @@ def _validate(items: dict) -> bool:
                 or len(item["png_base64"]) < 80
                 or len(item.get("bounds", [])) != 4):
             return False
+        if name != "whole":
+            stem = item.get("stem_only")
+            if (not isinstance(stem, dict)
+                    or stem.get("source") != "verovio-engraved-note-stem"
+                    or stem.get("units_per_space") != 250
+                    or len(stem.get("bounds", [])) != 4
+                    or not isinstance(stem.get("png_base64"), str)
+                    or len(stem["png_base64"]) < 80):
+                return False
     return True
 
 

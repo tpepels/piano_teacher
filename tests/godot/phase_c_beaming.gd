@@ -53,6 +53,7 @@ func run() -> void:
         note("l", 5.5,.50,"right","1",2),
         note("m", 6.0,.50,"right","1",2),
         note("n", 6.5,.50,"right","1",2)]
+    events[3]["spelling"] = {"step":"B","octave":4,"alter":0}
     var measures := [
         {"number":1,"start_beat":0.0,"end_beat":4.0,
             "meter":[4,4],"clefs":clefs,"keys":{"right":0,"left":0}},
@@ -113,7 +114,7 @@ func run() -> void:
         load("res://tests/native_glyph_fixture.gd").tie_catalogue(),
         load("res://tests/native_glyph_fixture.gd").chord_catalogue(),
         load("res://tests/native_glyph_fixture.gd").beam_catalogue()),
-        "Unit test has Verovio-shaped placeholder textures")
+        "Unit test has all source-matched Verovio beam textures")
     check(renderer.load_score(score), "Native loads grouped rhythms")
     check(renderer.beam_groups.size() == groups.size(),
         "Native renderer caches semantic beam plan per lesson")
@@ -175,53 +176,33 @@ func run() -> void:
     for identifier in beam_before["stems"]:
         check(beam_before["stems"][identifier] == beam_after["stems"][identifier],
             "All grouped noteheads share exactly the same time axis")
-    # Engraving regression: non-flat melodic contours need sloped native
-    # beams, with secondary layers and every stem attached to the beam.
-    # This changes only Y geometry, never the musical X coordinate.
+    # Ink follows original Verovio offsets rather than fabricating a slope.
+    # Altering the pitches may change the Y positions, but the extracted
+    # tip offset at each attack remains exactly the one in the source atlas.
     var contour: Dictionary = score.duplicate(true)
     for event in contour["notation_events"]:
-        match str(event.get("id", "")):
-            "a":
-                event["spelling"] = {"step":"E","octave":4}
-            "b":
-                event["spelling"] = {"step":"G","octave":4}
-            "c":
-                event["spelling"] = {"step":"B","octave":4}
-    check(renderer.load_score(contour), "Native loads melodic beam contours")
+        if str(event.get("id","")) == "a":
+            event["spelling"] = {"step":"E","octave":4}
+    check(renderer.load_score(contour),"Native loads source-engraved beam contours")
     var gap: float = renderer._gap()
-    var tilted: Dictionary = renderer._beam_layout(gap, .25, 580.0)
+    var tilted: Dictionary = renderer._beam_layout(gap,.25,580.0)
     var first_beam: Dictionary = tilted["groups"][0]
     var members: Array = first_beam["members"]
-    check(members.size() == 3, "Three noteheads share a contoured beam")
-    check(float(members[0]["tip_y"]) > float(members[-1]["tip_y"]),
-        "Ascending melody raises native beam towards the last note")
-    check(absf(float(members[0]["tip_y"])-float(members[-1]["tip_y"])) <=
-        gap*.75+.001, "Beam angle is capped to three-quarter staff space")
-    for event in renderer.beam_groups[0]:
-        var stem: Dictionary = tilted["stems"][str(event["id"])]
-        var extent: float = absf(renderer._event_y(event,gap)-float(stem["tip_y"]))
-        check(extent >= gap*3.25-.01,
-            "Every tilted stem retains the minimum clearance")
-    var moved: Dictionary = renderer._beam_layout(gap, .75, 580.0)
+    check(members.size() == 3,"Every source group retains its three beats")
+    var original_tips: Array = renderer.glyphs.beam_tips("a|b|c")
+    for i in range(members.size()):
+        var member: Dictionary = members[i]
+        check(absf(float(member["tip_y"])-float(member["head_y"])-
+            float(original_tips[i])*gap/250.0) < .01,
+            "Source Verovio stem tip is preserved without custom beam slope")
+    var moved: Dictionary = renderer._beam_layout(gap,.75,580.0)
     var shifted: Array = moved["groups"][0]["members"]
     for i in range(members.size()):
         check(absf(float(shifted[i]["tip_y"])-float(members[i]["tip_y"])) < .001,
-            "Scrolling moves beams horizontally without vertical wobble")
+            "Scrolling moves source beam horizontally without vertical wobble")
         check(absf(float(shifted[i]["x"])-float(members[i]["x"]) +
             .5*renderer.timeline.pixels_per_beat) < .001,
             "Stem anchors track the original beat at constant speed")
-    for event in contour["notation_events"]:
-        match str(event.get("id", "")):
-            "a":
-                event["spelling"] = {"step":"B","octave":4}
-            "c":
-                event["spelling"] = {"step":"E","octave":4}
-    check(renderer.load_score(contour), "Reversed contour remains supported")
-    var descending: Dictionary = renderer._beam_layout(renderer._gap(),.25,580.0)
-    check(float(descending["groups"][0]["members"][0]["tip_y"]) <
-        float(descending["groups"][0]["members"][-1]["tip_y"]),
-        "Descending melody lowers the native beam")
-
     var rest_score: Dictionary = score.duplicate(true)
     rest_score["notation_events"].insert(1, {
         "id":"rest1","kind":"rest","staff":"right","voice":"1",

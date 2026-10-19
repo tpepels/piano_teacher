@@ -29,6 +29,11 @@ static func note_catalogue() -> Dictionary:
             "units_per_space": 250, "bounds":[-1.5,-1.5,3.0,3.0],
             "png_base64":encoded
         }
+        if name != "whole":
+            entries[name]["stem_only"] = {
+                "source":"verovio-engraved-note-stem",
+                "units_per_space":250,"bounds":[0.0,-300.0,2.0,300.0],
+                "png_base64":encoded}
     return entries
 
 
@@ -49,7 +54,7 @@ static func chord_catalogue() -> Dictionary:
     image.fill(Color.WHITE)
     var encoded: String = Marshalls.raw_to_base64(image.save_png_to_buffer())
     var atlas: Dictionary = {}
-    for pattern in ["quarter|up|0,2","eighth|up|0,2"]:
+    for pattern in ["quarter|up|0,2","eighth|up|0,2","eighth|up|0,3"]:
         atlas[pattern] = {
             "source":"verovio-engraved-chord","units_per_space":250,
             "bounds":[-20.0,-200.0,120.0,250.0],
@@ -69,13 +74,32 @@ static func chord_catalogue() -> Dictionary:
 static func beam_catalogue() -> Dictionary:
     var image := Image.create(8,3,false,Image.FORMAT_RGBA8)
     image.fill(Color.WHITE)
-    return {"d|e":{
-        "source":"verovio-engraved-beam","units_per_space":250,
-        "bounds":[100.0,-860.0,600.0,85.0],
-        "span":650.0,"stem_up":true,
-        "note_ids":["d","e"],"tip_offsets":[-860.0,-860.0],
-        "head_offsets":[0.0,650.0],
-        "png_base64":Marshalls.raw_to_base64(image.save_png_to_buffer())}}
+    var result: Dictionary = {}
+    # Test-only textures, with ALL actual source note IDs present in the
+    # fixture. In production these masks come exclusively from Verovio SVG.
+    var groups: Array = [
+        ["a","b","c"],["d","e"],["f","g"],
+        ["i","j","k"],["l","m","n"],
+        ["five0","five1","five2","five3","five4"],
+        ["three0","three1","three2"],
+        ["s0","s1","s2","s3"],["t0","t1","t2","t3","t4"]]
+    for ids in groups:
+        var key: String = "|".join(PackedStringArray(ids))
+        var offsets: Array = []
+        var tips: Array = []
+        for i in range(ids.size()):
+            offsets.append(float(i)*250.0)
+            # A beamed chord with higher additional heads needs the
+            # original longer source stem at that attack.
+            tips.append(-1500.0 if ids[0] == "a" and i == 2 else -860.0)
+        result[key] = {
+            "source":"verovio-engraved-beam","units_per_space":250,
+            "bounds":[100.0,-860.0,600.0,85.0],
+            "span":float(ids.size()-1)*250.0,"stem_up":true,
+            "note_ids":ids,"tip_offsets":tips,
+            "head_offsets":offsets,
+            "png_base64":Marshalls.raw_to_base64(image.save_png_to_buffer())}
+    return result
 
 
 static func tuplet_catalogue() -> Dictionary:
@@ -83,7 +107,7 @@ static func tuplet_catalogue() -> Dictionary:
     digits.fill(Color.WHITE)
     var bars := Image.create(20,2,false,Image.FORMAT_RGBA8)
     bars.fill(Color.WHITE)
-    return {"three0|three1|three2":{
+    var entries: Dictionary = {"three0|three1|three2":{
         "source":"verovio-engraved-tuplet",
         "note_ids":["three0","three1","three2"],"span":500.0,
         "number":{"source":"verovio-tuplet-number",
@@ -93,6 +117,11 @@ static func tuplet_catalogue() -> Dictionary:
             "units_per_space":250,
             "bounds":[-5.0,-890.0,510.0,15.0],
             "png_base64":Marshalls.raw_to_base64(bars.save_png_to_buffer())}}}
+    entries["five0|five1|five2|five3|five4"] = entries[
+        "three0|three1|three2"].duplicate(true)
+    entries["five0|five1|five2|five3|five4"]["note_ids"] = [
+        "five0","five1","five2","five3","five4"]
+    return entries
 
 
 static func slur_catalogue() -> Dictionary:
