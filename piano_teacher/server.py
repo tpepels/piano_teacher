@@ -1926,10 +1926,13 @@ class PracticeEngine:
         if native_notes:
             from .verovio_note_templates import note_templates
             from .verovio_tie_templates import tie_templates
-            # Native clients receive genuine reusable note AND tie artwork.
-            # Raster readers do not pay the one-time engraving cost.
+            from .verovio_chord_templates import chord_templates
+            # Variable chord patterns are pre-engraved individually and
+            # reused via a disk cache; unsupported patterns remain native.
             layout["native_note_templates"] = note_templates(self.preprocessing)
             layout["native_tie_templates"] = tie_templates(self.preprocessing)
+            layout["native_chord_templates"] = chord_templates(
+                self.semantic_score(), self.preprocessing)
         return layout
 
     def lesson_overview(self) -> dict:
