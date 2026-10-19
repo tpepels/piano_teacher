@@ -42,3 +42,14 @@ static func tie_catalogue() -> Dictionary:
             "units_per_space":250, "bounds":[0.0,-10.0,80.0,12.0],
             "span":80.0, "png_base64":encoded}
     return output
+
+
+static func chord_catalogue() -> Dictionary:
+    var image := Image.create(4,8,false,Image.FORMAT_RGBA8)
+    image.fill(Color.WHITE)
+    var encoded: String = Marshalls.raw_to_base64(image.save_png_to_buffer())
+    return {"quarter|up|0,2":{
+        "source":"verovio-engraved-chord", "units_per_space":250,
+        "bounds":[-20.0,-200.0,120.0,250.0],
+        "head_positions":[[0.0,0.0],[0.0,-250.0]],
+        "png_base64":encoded}}
