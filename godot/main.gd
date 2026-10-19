@@ -9,7 +9,6 @@ const PAPER := Design.FOREST
 const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
 const ScoreStrip := preload("res://score_strip.gd")
-const ScoreBeatCamera := preload("res://score_beat_camera.gd")
 const ScoreExactSpacing := preload("res://score_exact_spacing.gd")
 const ScoreQuality := preload("res://score_quality.gd")
 const StaffContinuity := preload("res://staff_continuity.gd")
@@ -144,8 +143,6 @@ var layout_revision := -1
 var requested_layout_revision := -1
 var layout_pending := false
 var score_layout: Dictionary = {}
-# Validated once after every Verovio raster build; never rescanned per frame.
-var score_beat_grid: Dictionary = {}
 var living_chords: Array = []
 var source_layout: Dictionary = {}
 var page_images: Array[Image] = []
@@ -532,15 +529,7 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     var target_x: float = viewport.x * 0.5 - midpoint_x * displayed_width
     if score_layout.has("strip_size") and not score_layout.get("notes", []).is_empty():
         target_x = viewport.x * 0.04
-    if bool(score_beat_grid.get("enabled", false)) and bool(last_state.get("loaded", false)):
-        # Phase 1: fixed playhead at 42%, including the negative count-in.
-        # The selected transport clock is the ONLY moving coordinate; no
-        # per-note easing, interpolation or reset at a measure boundary.
-        target_x = ScoreBeatCamera.camera_x(
-            score_beat_grid, _transport_beat_now(),
-            float(last_state.get("play_from_beat", 0.0)),
-            viewport.x * 0.42, scale)
-    elif score_overlay.showing and not score_overlay.cursor.is_empty():
+    if score_overlay.showing and not score_overlay.cursor.is_empty():
         var note_x: float = (float(score_overlay.cursor.get("x", 0.0))
             - score_crop_origin.x) / maxf(score_crop_size.x, 0.00001)
         target_x = viewport.x * 0.42 - note_x * displayed_width
@@ -3435,14 +3424,6 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
         resident_tile_end = score_tiles.size()
         resident_tile_bytes = score_tile_upload_bytes
     score_layout = strip["layout"]
-    score_beat_grid = ScoreBeatCamera.prepare(score_layout)
-    if bool(score_beat_grid.get("enabled", false)):
-        print("VEROVIO_BEAT_CAMERA: active, source-px/beat=",
-            score_beat_grid.get("pixels_per_beat", 0.0),
-            " max-error=", score_beat_grid.get("max_error_px", 0.0))
-    elif phase0_smoke_mode:
-        print("VEROVIO_BEAT_CAMERA: fallback ",
-            score_beat_grid.get("reason", "unknown"))
     cached_bounds.clear()
     cached_bounds_revision = -1
     var rail_groups: Array = score_layout.get("systems", [])
