@@ -113,7 +113,8 @@ passage* rather than mix hand-drawn and engraved symbols.
 The next renderer increment is **in progress**.
 
 - `godot/score_exact_spacing.gd` is a conservative, real-Verovio-raster
-  adapter for a single continuous two-hand staff. It scans source ink
+  adapter for a single continuous two-hand staff, currently opt-in via
+  `PIANO_TEACHER_EXACT_VEROVIO_GRID=1 ./run.sh` (normal launch unchanged). It scans source ink
   once and inserts transparent columns only where a complete vertical
   cut intersects no non-staff musical ink. It never stretches, resamples
   or redraws original pixels; connected beams/slurs/ties force a full
