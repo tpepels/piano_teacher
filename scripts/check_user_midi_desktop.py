@@ -47,10 +47,14 @@ def api(route: str, data: dict) -> dict:
         return json.load(response)
 
 
-def run_one(filename: str, out: Path, godot: str) -> dict:
-    folder = out / _name(filename)
+def run_one(filename: str, out: Path, godot: str, *, native: bool = False) -> dict:
+    folder = out / (_name(filename) + ("-native" if native else ""))
     folder.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
+    if native:
+        env["PIANO_TEACHER_NATIVE_NOTATION"] = "1"
+        # Raster-based time-grid work must not alter the native score test.
+        env["PIANO_TEACHER_EXACT_VEROVIO_GRID"] = "0"
     env["PYTHONPATH"] = str(ROOT)
     env["HOME"] = str(folder)
     for key, path in (("XDG_DATA_HOME", "data"),
@@ -109,6 +113,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=Path("/tmp/piano-midi-desktop"))
     parser.add_argument("--only", help="Case-insensitive substring in filename")
+    parser.add_argument("--native", action="store_true",
+                        help="Capture and require the original pure-Godot native renderer")
     parser.add_argument("--require-exact-ink-grid", action="store_true",
                         help="Fail unless the opt-in Verovio pixel-preserving adapter activates")
     args = parser.parse_args()
@@ -128,7 +134,14 @@ def main() -> int:
     results, failures = [], []
     for filename in cases:
         try:
-            outcome = run_one(filename, args.out, godot)
+            outcome = run_one(filename, args.out, godot, native=args.native)
+            if args.native:
+                for frame in outcome["frames"]:
+                    if frame["screen"] == "practice":
+                        assert frame.get("native_ready", False), (
+                            f"{filename}: native renderer was not active in "
+                            f"{frame['frame']}: {frame.get('native_failure', '')}"
+                        )
             if args.require_exact_ink_grid:
                 practice_frames = [frame for frame in outcome["frames"]
                                    if frame.get("screen") == "practice"]
