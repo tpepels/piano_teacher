@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 1
+VERSION = 2
 MAX_FRAGMENTS = 140
 
 
@@ -220,12 +220,12 @@ def tuplet_fragments(svgs,model,cache=None,identity="") -> dict:
         cache is not None and identity) else None
     if key:
         stored=cache.read_json("verovio-tuplets",key)
-        if (isinstance(stored,dict) and all(
+        if (isinstance(stored,dict) and stored and all(
                 isinstance(v,dict) and
                 v.get("source")=="verovio-engraved-tuplet" and
                 isinstance(v.get("number"),dict) for v in stored.values())):
             return stored
     results=extract_tuplets(svgs,model)
-    if key:
+    if key and results:
         cache.write_json("verovio-tuplets",key,results)
     return results
