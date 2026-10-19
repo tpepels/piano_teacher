@@ -27,6 +27,7 @@ var notation_tuplets: Array = []
 var measure_by_number: Dictionary = {}
 var ordered_events: Array = []
 var tie_pairs: Array = []
+var previous_attack_before_measure: Dictionary = {}
 var cached_staff_gap := -1.0
 var cached_gap_height := -1.0
 var cached_head_offsets: Dictionary = {}
@@ -47,6 +48,7 @@ func clear_score() -> void:
     measure_by_number.clear()
     ordered_events.clear()
     tie_pairs.clear()
+    previous_attack_before_measure.clear()
     cached_staff_gap = -1.0
     cached_gap_height = -1.0
     cached_head_offsets.clear()
@@ -93,6 +95,19 @@ func load_score(candidate: Dictionary) -> bool:
     ordered_events.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
         return float(a.get("beat", 0.0)) < float(b.get("beat", 0.0)))
     chord_members = Geometry.chord_members(ordered_events)
+    # Cache the preceding attack for every measure once. Tight meter
+    # changes must be relocated out of the ink; no per-frame note scan.
+    previous_attack_before_measure.clear()
+    var scan := 0
+    var last_attack := -INF
+    for measure in timeline.measures:
+        var boundary: float = float(measure.get("start_beat", 0.0))
+        while scan < ordered_events.size() and \
+                float(ordered_events[scan].get("beat",0.0)) < boundary-.0001:
+            if str(ordered_events[scan].get("kind","")) == "note":
+                last_attack = float(ordered_events[scan].get("beat",0.0))
+            scan += 1
+        previous_attack_before_measure[int(measure.get("number",0))] = last_attack
     tie_pairs.clear()
     var unfinished: Dictionary = {}
     for event in ordered_events:
@@ -182,6 +197,41 @@ func _barline_geometry(measure: Dictionary, clock: float,
         clock, playhead_x, play_from_beat) - gap*1.35
     return {"x":x, "top":_staff_center("right")-2.0*gap,
         "bottom":_staff_center("left")+2.0*gap}
+
+
+# Meter changes need room to the LEFT of the next attack. A short
+# pickup (e.g. Chopin 1/8 -> 12/8) has no such room on a fixed beat grid.
+# Keep the music clock immutable and engrave that exceptional meter in an
+# upper annotation lane instead of stacking numbers over the noteheads.
+func _meter_is_crowded(measure: Dictionary, previous: Dictionary,
+        gap: float) -> bool:
+    if previous.is_empty() or previous.get("meter", []) == measure.get("meter", []):
+        return false
+    var at: float = float(measure.get("start_beat", 0.0))
+    var previous_start: float = float(previous.get("start_beat", 0.0))
+    var advance: float = timeline.pixels_per_beat
+    if (at-previous_start)*advance < gap*7.0:
+        return true
+    var last_attack: float = float(previous_attack_before_measure.get(
+        int(measure.get("number", 0)), -INF))
+    return is_finite(last_attack) and \
+        (at-last_attack)*advance < gap*6.0
+
+
+func _paint_meter_above_staff(measure: Dictionary, x: float,
+        gap: float) -> void:
+    var meter: Array = measure.get("meter", [4,4])
+    if meter.size() < 2:
+        return
+    # Actual Verovio time-signature digit textures, scaled together and
+    # arranged ABOVE the upper five lines, not GUI text or invented glyphs.
+    var center: float = _staff_center("right")
+    var origin: float = x-gap*1.75
+    var space: float = gap*.72
+    _paint_meter_number(int(meter[0]),origin,center-gap*4.50,
+        _ink("right"),space)
+    _paint_meter_number(int(meter[1]),origin,center-gap*3.05,
+        _ink("right"),space)
 
 
 func _paint_ledger(x: float, y: float, step: int,
@@ -564,13 +614,15 @@ func _tie_shape(first: Dictionary, last: Dictionary,
     # Ties normally arch away from the stem. High notes have stems down,
     # so the ties run above the noteheads instead of through their stems.
     var direction: float = 1.0 if bool(_chord_extents(first,gap)["up"]) else -1.0
-    var bow: float = clampf((finish-start)*.034,gap*.42,gap*1.15)
-    var width: float = maxf(.8,gap*.09)
+    # Put endpoints on the outer edge of the head, not a full half-space
+    # above it. Large bows previously looked detached from the note.
+    var bow: float = clampf((finish-start)*.025,gap*.32,gap*.78)
+    var width: float = maxf(.8,gap*.095)
     var upper := PackedVector2Array()
     var lower := PackedVector2Array()
     for index in range(25):
         var t: float = float(index)/24.0
-        var base: float = lerpf(first_y,last_y,t)+direction*gap*.58
+        var base: float = lerpf(first_y,last_y,t)+direction*gap*.25
         var arch: float = 4.0*t*(1.0-t)*bow
         var taper: float = sin(PI*t)*width
         var x: float = lerpf(start,finish,t)
@@ -660,6 +712,8 @@ func _draw() -> void:
             int(measure.get("number", -1)) == \
             int(timeline.measures[0].get("number", -2))
         var header_shift: float = 50.0 if opening else 0.0
+        var crowded_meter: bool = _meter_is_crowded(
+            measure, previous_measure, gap)
         var barline: Dictionary = _barline_geometry(measure,
             camera_clock, playhead_x, gap)
         if not barline.is_empty() and float(barline["x"]) >= -2.0 and \
@@ -686,15 +740,22 @@ func _draw() -> void:
                     _paint_accidental(glyph_x,glyph_y,
                         "sharp" if signature > 0 else "flat",
                         _ink(staff),gap)
-            if opening or previous_measure.get("meter",[]) != measure.get("meter",[]):
+            if (opening or previous_measure.get("meter",[]) !=
+                    measure.get("meter",[])) and not crowded_meter:
                 var meter: Array = measure.get("meter",[4,4])
                 if meter.size() >= 2:
                     _paint_meter_number(int(meter[0]), x-gap*1.6-header_shift,
                         center-gap*.95, _ink(staff), gap)
                     _paint_meter_number(int(meter[1]), x-gap*1.6-header_shift,
                         center+gap*.8, _ink(staff), gap)
-        if x >= 0.0 and x <= size.x:
-            draw_string(font,Vector2(x+5.0,_staff_center("right")-gap*3.0),
+        if crowded_meter:
+            _paint_meter_above_staff(measure,x,gap)
+        # Bar numbers are small annotations, never part of the notehead
+        # stream. No redundant opening number or number beside a floated
+        # meter change (both collide with ledger notes in Chopin).
+        if not opening and not crowded_meter and x >= 0.0 and x <= size.x:
+            draw_string(font,Vector2(x+gap*.4,
+                _staff_center("right")-gap*4.3),
                 str(int(measure.get("number", 0))),
                 HORIZONTAL_ALIGNMENT_LEFT,-1,11,DIM_INK)
         previous_measure = measure
