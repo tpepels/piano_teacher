@@ -40,6 +40,8 @@ var tie_textures: Dictionary = {}
 var tie_metadata: Dictionary = {}
 var chord_textures: Dictionary = {}
 var chord_metadata: Dictionary = {}
+var beam_textures: Dictionary = {}
+var beam_metadata: Dictionary = {}
 var error := ""
 
 func ready() -> bool:
@@ -227,6 +229,66 @@ func chord_heads(key: String) -> Array:
     if not chord_metadata.has(key):
         return []
     return chord_metadata[key]["head_positions"]
+
+
+func load_beam_fragments(items: Dictionary) -> bool:
+    # An optional atlas extracted from THIS LESSON's actual Verovio SVG,
+    # keyed by the two original note IDs. Never accept invented artwork.
+    var loaded: Dictionary = {}
+    var metrics: Dictionary = {}
+    for name in items:
+        var item: Dictionary = items[name]
+        var box: Array = item.get("bounds",[])
+        var anchors: Array = item.get("note_ids",[])
+        var tips: Array = item.get("tip_offsets",[])
+        if str(item.get("source","")) != "verovio-engraved-beam" or \
+                int(item.get("units_per_space",0)) != 250 or \
+                box.size() != 4 or tips.size() != 2 or \
+                anchors.size() != 2 or float(item.get("span",0.0)) <= 0:
+            error = "Invalid extracted Verovio beam: "+str(name)
+            return false
+        var image := Image.new()
+        if image.load_png_from_buffer(Marshalls.base64_to_raw(
+                str(item.get("png_base64","")))) != OK or image.is_empty():
+            error = "Unreadable extracted Verovio beam: "+str(name)
+            return false
+        loaded[str(name)] = ImageTexture.create_from_image(image)
+        metrics[str(name)] = {
+            "bounds":box.duplicate(), "span":float(item["span"]),
+            "tip_offsets":tips.duplicate(),
+            "stem_up":bool(item.get("stem_up",true))}
+    beam_textures = loaded
+    beam_metadata = metrics
+    return true
+
+
+func has_beam(name: String, up: bool) -> bool:
+    return beam_textures.has(name) and \
+        bool(beam_metadata[name]["stem_up"]) == up
+
+
+func beam_tips(name: String) -> Array:
+    return beam_metadata[name]["tip_offsets"] if beam_metadata.has(name) else []
+
+
+func paint_beam(canvas: CanvasItem, name: String,
+        x0: float, x1: float, y0: float, gap: float, ink: Color) -> bool:
+    var texture: Texture2D = beam_textures.get(name)
+    if texture == null or x1 <= x0:
+        return false
+    var data: Dictionary = beam_metadata[name]
+    var width: float = float(data["span"])*gap/250.0
+    if width < .001:
+        return false
+    var scale_x: float = (x1-x0)/width
+    var box: Array = data["bounds"]
+    var destination := Rect2(
+        x0+float(box[0])*gap/250.0*scale_x,
+        y0+float(box[1])*gap/250.0,
+        float(box[2])*gap/250.0*scale_x,
+        float(box[3])*gap/250.0)
+    canvas.draw_texture_rect(texture,destination,false,ink)
+    return true
 
 
 func paint_note(canvas: CanvasItem, kind: String, up: bool,
