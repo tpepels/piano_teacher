@@ -54,7 +54,7 @@ static func chord_catalogue() -> Dictionary:
     image.fill(Color.WHITE)
     var encoded: String = Marshalls.raw_to_base64(image.save_png_to_buffer())
     var atlas: Dictionary = {}
-    for pattern in ["quarter|up|0,2","eighth|up|0,2"]:
+    for pattern in ["quarter|up|0,2","eighth|up|0,2","eighth|up|0,3"]:
         atlas[pattern] = {
             "source":"verovio-engraved-chord","units_per_space":250,
             "bounds":[-20.0,-200.0,120.0,250.0],
