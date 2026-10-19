@@ -146,3 +146,17 @@ def test_two_real_musicxml_eighths_produce_native_verovio_beam(monkeypatch):
     assert result["n1|n2"]["note_ids"] == ["n1","n2"]
     assert len(result["n1|n2"]["head_offsets"]) == 2
     assert len(result["n1|n2"]["tip_offsets"]) == 2
+
+
+def test_diagnostic_svg_bounding_boxes_do_not_create_fake_notes():
+    # Verovio's real svgBoundingBoxes output uses e.g. class="note
+    # content-bounding-box" alongside each genuine note.
+    from piano_teacher.verovio_beam_fragments import _note_ids
+    group = ET.fromstring('''<g class="beam">
+      <g class="note" id="n1"/>
+      <g class="note content-bounding-box" id="cbbox-n1"/>
+      <g class="note bounding-box" id="bbox-n1"/>
+      <g class="note" id="n2"/>
+      <g class="note content-bounding-box" id="cbbox-n2"/>
+    </g>''')
+    assert _note_ids(group) == ("n1","n2")
