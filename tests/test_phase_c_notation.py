@@ -51,7 +51,7 @@ def test_native_mode_is_opt_in_and_unsupported_music_reverts_to_legacy():
     assert 'draw_circle(' not in native
     assert 'def native_glyphs' in (ROOT / "piano_teacher/notation_symbols.py").read_text()
     assert 'parsed.get("native_glyphs", {})' in app
-    assert 'set_verovio_glyphs(glyph_catalog, note_catalog)' in app
+    assert 'glyph_catalog, note_catalog, tie_catalog)' in app
     assert 'glyphs.paint_note(self, kind, normal_up, x, y, gap, ink)' in native
     assert 'note_templates(self.preprocessing)' in (
         ROOT / "piano_teacher/server.py").read_text()
