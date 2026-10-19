@@ -1921,8 +1921,12 @@ class PracticeEngine:
 
     def geometry(self) -> dict:
         from .notation_symbols import native_glyphs, preparation_symbols
+        from .verovio_note_templates import note_templates
+        # Asset generation is versioned and written to disk. It does not
+        # depend on lesson, hand, BPM or the Godot render frame.
         return {**self.engraving().layout, "symbols": preparation_symbols(),
-                "native_glyphs": native_glyphs()}
+                "native_glyphs": native_glyphs(),
+                "native_note_templates": note_templates(self.preprocessing)}
 
     def lesson_overview(self) -> dict:
         """Full readable curriculum, with unique per-hand/per-level progress."""
