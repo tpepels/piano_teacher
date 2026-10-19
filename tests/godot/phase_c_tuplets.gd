@@ -94,7 +94,8 @@ func run() -> void:
     get_root().add_child(player)
     player.size = Vector2(1280,470)
     check(player.set_verovio_glyphs(
-        load("res://tests/native_glyph_fixture.gd").catalogue()),
+        load("res://tests/native_glyph_fixture.gd").catalogue(),
+        load("res://tests/native_glyph_fixture.gd").note_catalogue()),
         "Unit test has Verovio-shaped placeholder textures")
     check(player.load_score(model),"Native renderer accepts 5:4, 3:2, double dots")
     check(player.native_ready and player.notation_tuplets.size() == 2,
