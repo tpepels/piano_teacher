@@ -27,7 +27,7 @@ from .warmups import is_warmup
 from .raster import rasterize_score
 from .recovery import check_rolling_two_bar_window, check_two_bar_window
 from .music import Phrase, source_note_id, note_name
-from .lesson_score import build_lesson_score
+from .lesson_score import build_lesson_score, infer_piece_clefs
 from .score_model import build_score_model
 from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats, preparation_meter
@@ -1797,7 +1797,8 @@ class PracticeEngine:
                 phrase, boundaries=p.piece.bar_boundaries,
                 time_signatures=p.piece.time_signatures,
                 key_signatures=p.piece.key_signatures,
-                clef_changes=p.piece.clef_changes)
+                clef_changes=p.piece.clef_changes,
+                default_clefs=infer_piece_clefs(p.piece.notes))
             return build_score_model(
                 notation, boundaries=p.piece.bar_boundaries,
                 hand=p.hand, revision=self.score_revision)
@@ -1818,7 +1819,8 @@ class PracticeEngine:
                 notation=build_lesson_score(phrase, boundaries=p.piece.bar_boundaries,
                                             time_signatures=p.piece.time_signatures,
                                             key_signatures=p.piece.key_signatures,
-                                            clef_changes=p.piece.clef_changes)
+                                            clef_changes=p.piece.clef_changes,
+                                            default_clefs=infer_piece_clefs(p.piece.notes))
                 # Short lessons are freshly engraved as a continuous system.
                 # This avoids raster-copying printed Verovio lines together.
                 # Large works retain paginated rendering to bound GPU memory.
