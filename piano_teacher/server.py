@@ -22,6 +22,7 @@ from .practice import Recorder, evaluate
 from .score import import_piece, render_layout, EngravedScore
 from .feedback import project_assessment
 from .library import ScoreLibrary
+from .preprocessing_cache import PreprocessingCache
 from .library_health import LibraryHealth
 from .warmups import is_warmup
 from .raster import rasterize_score
@@ -96,6 +97,7 @@ class PracticeEngine:
         self._layout_cache: EngravedScore | None = None
         self._layout_revision = -1
         self._layout_bpm: float | None = None
+        self._layout_cache_key: str | None = None
         self._page_png: dict[tuple[int, int], bytes] = {}
         self.next_at = 0.0
         self.awaiting_score_revision: int | None = None
@@ -119,6 +121,7 @@ class PracticeEngine:
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
         data_dir.mkdir(parents=True, exist_ok=True)
         self._data_dir = data_dir
+        self.preprocessing = PreprocessingCache(data_dir / "preprocessed")
         self.db = sqlite3.connect(data_dir / "progress.db", check_same_thread=False)
         self.db.execute("CREATE TABLE IF NOT EXISTS sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER, target_bpm INTEGER)")
         columns={row[1] for row in self.db.execute("PRAGMA table_info(sessions)")}
@@ -342,7 +345,9 @@ class PracticeEngine:
         return self.midi_port is not None and not getattr(self.midi_port, "closed", False)
 
     def load(self, path: str, *, warmup: bool = False):
-        piece, score = import_piece(path)
+        source = Path(path).expanduser().resolve()
+        fingerprint = hashlib.sha256(source.read_bytes()).hexdigest()
+        piece, score = self.preprocessing.load_import(source, fingerprint)
         with self.lock:
             self._stop()
             self._reset_trouble()
@@ -350,7 +355,11 @@ class PracticeEngine:
             self.source = str(Path(path).resolve())
             self.is_builtin_warmup = warmup
             self.open_from_beat = 0.0
-            self.fingerprint = hashlib.sha256(Path(path).read_bytes()).hexdigest()
+            self.fingerprint = fingerprint
+            self._layout_cache = None
+            self._layout_revision = -1
+            self._layout_cache_key = None
+            self._page_png.clear()
             self.plan = LearningPlan(piece, warmup=warmup)
             self.mode = "practice"
             self.teaching = None
@@ -1828,10 +1837,41 @@ class PracticeEngine:
                     phrase.last_bar - phrase.first_bar + 1 <= 12
                     and phrase.end - phrase.start <= 48
                 )
-                layout = render_layout(notation,phrase.first_bar,phrase.last_bar,p.hand,
-                                       total_beats=phrase.end - phrase.start, bpm=p.bpm,
-                                       continuous=compact_exercise)
-                require_lesson_alignment(phrase, layout.layout, p.hand)
+                # Cache by immutable source bytes, curriculum stage, rendered
+                # phrase, hand, BPM and engraver version, not ephemeral revision.
+                # Never share one stage's PNG/geometry with another.
+                self._layout_cache_key = self.preprocessing.key(
+                    "engraving", self.fingerprint, p.identity,
+                    phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
+                    p.hand, p.bpm, compact_exercise,
+                    tuple((n.source_id, n.start, n.end, n.pitch, n.hand)
+                          for n in phrase.notes))
+                cached = self.preprocessing.read_json("engraving", self._layout_cache_key)
+                layout = None
+                if cached is not None:
+                    try:
+                        pages = cached["pages"]
+                        geometry = cached["layout"]
+                        if (not isinstance(pages, list) or not pages or
+                                not all(isinstance(page, str) for page in pages) or
+                                not isinstance(geometry, dict)):
+                            raise ValueError("Invalid preprocessed score")
+                        candidate = EngravedScore(tuple(pages), geometry)
+                        require_lesson_alignment(phrase, candidate.layout, p.hand)
+                        layout = candidate
+                        print("PREPROCESS_ENGRAVING_CACHE_HIT:",
+                              phrase.first_bar, phrase.last_bar, p.bpm)
+                    except (TypeError, ValueError, KeyError, AssertionError):
+                        layout = None
+                if layout is None:
+                    layout = render_layout(notation,phrase.first_bar,phrase.last_bar,p.hand,
+                                           total_beats=phrase.end - phrase.start, bpm=p.bpm,
+                                           continuous=compact_exercise)
+                    require_lesson_alignment(phrase, layout.layout, p.hand)
+                    self.preprocessing.write_json("engraving", self._layout_cache_key,
+                                                  {"pages": list(layout.pages),
+                                                   "layout": layout.layout})
+                    self.preprocessing.prune()
                 self._layout_cache = layout
                 self._page_png.clear()
                 self._layout_revision=self.score_revision
@@ -1861,14 +1901,21 @@ class PracticeEngine:
                 raise ValueError("Invalid score page")
             key = (page, width)
             if key not in self._page_png:
-                # Keep only one resolution per page so changing window size
-                # between lessons cannot accumulate multiple large PNGs.
+                # Keep only one resolution per page in process memory.
                 for cached in list(self._page_png):
                     if cached[0] == page:
                         del self._page_png[cached]
-                self._page_png[key] = (
-                    rasterize_score(score.pages[page]) if width == 2000
-                    else rasterize_score(score.pages[page], width=width))
+                png_key = (self.preprocessing.key("png", self._layout_cache_key,
+                           page, width) if self._layout_cache_key else None)
+                png = self.preprocessing.read_png(png_key) if png_key else None
+                if png is None:
+                    png = (rasterize_score(score.pages[page]) if width == 2000
+                           else rasterize_score(score.pages[page], width=width))
+                    if png_key:
+                        self.preprocessing.write_png(png_key, png)
+                else:
+                    print("PREPROCESS_PNG_CACHE_HIT:", page, width)
+                self._page_png[key] = png
             return self._page_png[key]
 
     def geometry(self) -> dict:
