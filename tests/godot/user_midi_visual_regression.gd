@@ -54,11 +54,21 @@ func _run() -> void:
         var tiles: Array = result.tiles
         var mappings: Array = result.mappings
         check(tiles.size() == mappings.size() and
-            tiles.size() == original.get("systems", []).size(),
-            mode + ": unexpected number of engraved systems")
+            tiles.size() >= original.get("systems", []).size(),
+            mode + ": lost an engraved system")
+        # Sparse/ornament-heavy imported MIDI must not allocate a virtual
+        # million-pixel score in order to keep all noteheads on a single
+        # tempo-derived axis. Preserve the original engraving if too dense.
+        var source_pixels_wide := 0.0
+        for mapping in mappings:
+            source_pixels_wide += float(mapping.crop.size.x)
+        check(result.size.x <= source_pixels_wide * 8.0,
+            mode + ": pathological full-score width: " + str(result.size.x))
         var output := {"tiles": [], "notes": [], "width": float(result.size.x),
             "height": float(result.size.y),
-            "native": bool(result.layout.get("native_engraving", false))}
+            "native": bool(result.layout.get("native_engraving", false)),
+            "timing_fallback": str(result.layout.get("strip_timing_fallback", "")),
+            "proportional": bool(result.layout.get("strip_time_proportional", false))}
         for i in range(tiles.size()):
             var mapping: Dictionary = mappings[i]
             var tile: Dictionary = tiles[i]
