@@ -202,7 +202,18 @@ func _missing_source_engraving() -> String:
         for event in group.get("events",[]):
             if str(event.get("kind","")) == "note":
                 ids.append(str(event.get("id","")))
-        if ids.size() < 2 or not glyphs.has_tuplet("|".join(ids),false):
+        # Unmarked one-note time modifications describe MIDI duration only:
+        # Verovio has no corresponding bracket/number in the MusicXML.
+        # Do not invent one, nor disable the genuine native score.
+        if ids.size() < 2:
+            var explicitly_marked := false
+            for event in group.get("events",[]):
+                if not event.get("tuplet_marks",[]).is_empty():
+                    explicitly_marked = true
+            if explicitly_marked:
+                return "Unmatched explicit Verovio tuplet: "+("|".join(ids))
+            continue
+        if not glyphs.has_tuplet("|".join(ids),false):
             return "Missing engraved Verovio tuplet: "+("|".join(ids))
     for leader_id in chord_members:
         var event: Dictionary = {}
@@ -389,11 +400,17 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
         if events.size() < 2:
             continue
         var ids := PackedStringArray()
+        var note_events: Array = []
         for event in events:
             if str(event.get("kind","")) == "note":
                 ids.append(str(event.get("id","")))
-        var first: Dictionary = events[0]
-        var last: Dictionary = events[-1]
+                note_events.append(event)
+        if note_events.size() < 2:
+            continue
+        # Verovio's image is anchored to actual noteheads, not rests that
+        # precede/follow them within the MusicXML tuplet.
+        var first: Dictionary = note_events[0]
+        var last: Dictionary = note_events[-1]
         var x0: float = timeline.screen_x(
             float(first.get("beat",0.0)),clock,playhead_x,play_from_beat)
         var x1: float = timeline.screen_x(
