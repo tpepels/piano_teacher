@@ -10,6 +10,7 @@ const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
 const ScoreStrip := preload("res://score_strip.gd")
 const ScoreBeatCamera := preload("res://score_beat_camera.gd")
+const ScoreExactSpacing := preload("res://score_exact_spacing.gd")
 const ScoreQuality := preload("res://score_quality.gd")
 const StaffContinuity := preload("res://staff_continuity.gd")
 const ScoreOverlay := preload("res://score_overlay.gd")
@@ -3368,6 +3369,21 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var strip: Dictionary = ScoreStrip.build(
         source_layout, page_images, should_defer,
         native_ink_preview or continuous_engraving)
+    # Phase 1: only one-system continuous Verovio music is eligible for
+    # source-pixel-preserving insertion of truly empty beat-grid gaps.
+    # Connected music ink is never resized or cut. Failure returns the
+    # original Verovio raster for the *entire* practice passage.
+    if continuous_engraving and not native_ink_preview and \
+            OS.get_environment("PIANO_TEACHER_EXACT_VEROVIO_GRID") != "0" \
+            and not strip.has("error"):
+        strip = ScoreExactSpacing.reflow(strip)
+        if bool(strip["layout"].get("exact_ink_grid", false)):
+            print("VEROVIO_EXACT_GRID: active, safe cuts=",
+                strip["layout"].get("exact_ink_grid_cuts", 0),
+                " inserted pixels=", strip["layout"].get("exact_ink_grid_added_pixels", 0))
+        elif phase0_smoke_mode:
+            print("VEROVIO_EXACT_GRID: fallback ",
+                strip["layout"].get("exact_ink_grid_reason", "unknown"))
     if not strip.has("error"):
         var spacing_fallback: String = str(
             strip["layout"].get("strip_timing_fallback", ""))
