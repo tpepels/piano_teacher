@@ -108,12 +108,16 @@ func run() -> void:
     check(renderer.set_verovio_glyphs(sample_glyphs,
         load("res://tests/native_glyph_fixture.gd").note_catalogue(),
         load("res://tests/native_glyph_fixture.gd").tie_catalogue(),
-        load("res://tests/native_glyph_fixture.gd").chord_catalogue()),
+        load("res://tests/native_glyph_fixture.gd").chord_catalogue(),
+        {},{},load("res://tests/native_glyph_fixture.gd").slur_catalogue()),
         "Load SVG glyphs into cached Godot ImageTextures")
     check(renderer.glyphs.ready(), "Native glyph assets are resident")
     check(renderer.set_density(96.0), "User density accepted")
     check(renderer.load_score(model), "Native renderer accepts complete symbolic model")
     check(renderer.native_ready, "No raster or SVG is necessary")
+    check(renderer.slur_pairs.size()==1 and
+        renderer.glyphs.slur_note_ids("n1|n3")==["n1","n3"],
+        "An original Verovio slur binds to its two music-source note IDs")
     # Actual piano barlines span both staves and clear the following notehead.
     # The first visible source measure must never produce a fake barline.
     var staff_gap: float = renderer._gap()
