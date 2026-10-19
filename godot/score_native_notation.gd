@@ -589,7 +589,7 @@ func _draw() -> void:
                         HORIZONTAL_ALIGNMENT_LEFT,-1,14,_ink(staff))
         if x >= 0.0 and x <= size.x:
             draw_string(font,Vector2(x+5.0,_staff_center("right")-gap*3.0),
-                str(measure.get("number","")),
+                str(int(measure.get("number", 0))),
                 HORIZONTAL_ALIGNMENT_LEFT,-1,11,DIM_INK)
         previous_measure = measure
     # All symbols carry their original source onset; NO separate horizontal
