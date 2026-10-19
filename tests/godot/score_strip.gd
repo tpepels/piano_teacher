@@ -372,6 +372,9 @@ func run() -> void:
     if bool(original.get("strip_trim_repeated_headers", false)) and original.systems.size() > 1:
         var with_headers: Dictionary = original.duplicate(true)
         with_headers["strip_trim_repeated_headers"] = false
+        # Explicitly disable the newer per-system safe-header policy too:
+        # this is the *untrimmed* source baseline, not another trimmed strip.
+        with_headers["strip_trim_safe_starts"] = []
         var baseline: Dictionary = helper.build(with_headers, pages)
         check(not baseline.has("error"), "untrimmed control strip must render")
         check(baseline.tiles.size() == strip.tiles.size(),
