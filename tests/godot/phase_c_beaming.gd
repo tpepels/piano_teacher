@@ -113,6 +113,19 @@ func run() -> void:
     check(renderer.load_score(score), "Native loads grouped rhythms")
     check(renderer.beam_groups.size() == groups.size(),
         "Native renderer caches semantic beam plan per lesson")
+    var all_chord_heads: Dictionary = score.duplicate(true)
+    for item in all_chord_heads["notation_events"]:
+        if str(item.get("id","")) == "chord_c":
+            item["spelling"] = {"step":"C","octave":5}
+    check(renderer.load_score(all_chord_heads),"Beamed chord notation is supported")
+    var beamed_gap: float = renderer._gap()
+    var compound: Dictionary = renderer._beam_layout(beamed_gap,.25,580.0)
+    var beam_tip: float = float(compound["stems"]["c"]["tip_y"])
+    var lower_bound: float = renderer._event_y(
+        all_chord_heads["notation_events"][3],beamed_gap) - beamed_gap*3.25
+    check(beam_tip <= lower_bound + .01,
+        "Beam stems clear highest member of a chord, not only its leader")
+    check(renderer.load_score(score),"Restore baseline beam notation")
     check(renderer.set_density(112.0),"Density remains configurable")
     var clock := .75
     var offset := 0.0
