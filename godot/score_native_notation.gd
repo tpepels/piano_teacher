@@ -629,22 +629,25 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
                 if up else float(member["bottom_y"])+gap*3.25)
             var candidate: float = required-rise*t
             origin = minf(origin, candidate) if up else maxf(origin, candidate)
-        # For exactly two notes, reuse the beam pixels from the real
-        # Verovio exercise SVG and its measured stem endpoints.
-        # Longer beam groups need multi-anchor piecewise warping; they
-        # deliberately retain native geometry until that is implemented.
+        # Every note has an independent native-time X anchor. The genuine
+        # Verovio beam image is cut into intervals at those anchors, so no
+        # interior note drifts when BPM or screen density changes.
         var art_key: String = ""
         var art_tips: Array = []
-        if members.size() == 2:
-            var candidate: String = str(members[0]["id"])+"|"+str(members[1]["id"])
-            if glyphs.has_beam(candidate,up):
+        var identifiers := PackedStringArray()
+        for member in members:
+            identifiers.append(str(member["id"]))
+        var candidate: String = "|".join(identifiers)
+        if glyphs.has_beam(candidate,up):
+            var offsets: Array = glyphs.beam_tips(candidate)
+            if offsets.size() == members.size():
                 art_key = candidate
-                art_tips = glyphs.beam_tips(candidate)
+                art_tips = offsets
         for index in range(members.size()):
             var member: Dictionary = members[index]
             var t: float = (float(member["x"])-left_x)/width if width > .01 else 0.0
             var tip: float = origin+rise*t
-            if art_tips.size() == 2:
+            if art_tips.size() == members.size():
                 tip = float(member["head_y"])+float(art_tips[index])*gap/250.0
             member["tip_y"] = tip
             members[index] = member
@@ -681,10 +684,13 @@ func _paint_beams(data: Dictionary, gap: float) -> void:
         var ink: Color = _ink(str(group.get("staff", "right")))
         var up: bool = bool(group.get("up", true))
         var art_key: String = str(group.get("art_key",""))
-        if not art_key.is_empty() and glyphs.paint_beam(
-                self,art_key,float(first["head_x"]),float(last["head_x"]),
-                float(first["head_y"]),gap,ink):
-            continue
+        if not art_key.is_empty():
+            var anchors: Array = []
+            for member in members:
+                anchors.append(float(member["head_x"]))
+            if glyphs.paint_beam(self,art_key,anchors,
+                    float(first["head_y"]),gap,ink):
+                continue
         var sign: float = 1.0 if up else -1.0
         var thick: float = gap*.39
         var slope: float = (float(last["tip_y"])-float(first["tip_y"])) / \
