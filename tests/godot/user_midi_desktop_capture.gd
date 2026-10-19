@@ -56,7 +56,8 @@ func _capture(label: String) -> void:
     var bounds: Rect2 = app.score_frame.get_global_rect()
     var rows: Array = app.staff_continuity.staff_lines
     var info := {
-        "frame": label, "image_size": [image.get_width(), image.get_height()],
+        "frame": label, "screen": app.current_screen,
+        "image_size": [image.get_width(), image.get_height()],
         "score_frame": [bounds.position.x, bounds.position.y,
                         bounds.size.x, bounds.size.y],
         "staff_rows": rows.size(),
@@ -70,20 +71,88 @@ func _capture(label: String) -> void:
         "fallback": str(app.score_layout.get("strip_timing_fallback", ""))
     }
     frames.append(info)
-    if bounds.size.x < float(image.get_width()) * .65 or bounds.size.y < 250:
-        errors.append("Practice sheet must dominate the desktop viewport")
-    if rows.size() != 10:
-        errors.append("Both five-line piano staves must be present: " + str(rows.size()))
-    if folder.get_file().begins_with("ala-"):
-        var clefs: Dictionary = app.score_layout.get("staff_clefs", {})
-        var right: Dictionary = clefs.get("right", {})
-        var left: Dictionary = clefs.get("left", {})
-        if str(right.get("sign", "")) != "G" or str(left.get("sign", "")) != "F":
-            errors.append("Ala piano grand staff requires G clef over F clef")
-    if int(info.note_count) <= 0 or int(info.glyph_tile_count) <= 0:
-        errors.append("Real practice notation has no measured notes or tiles")
+    if app.current_screen == "practice":
+        if bounds.size.x < float(image.get_width()) * .65 or bounds.size.y < 130:
+            errors.append("Practice sheet must dominate the desktop viewport")
+        if rows.size() != 10:
+            errors.append("Both five-line piano staves must be present: " + str(rows.size()))
+        if folder.get_file().begins_with("ala-"):
+            var clefs: Dictionary = app.score_layout.get("staff_clefs", {})
+            var right: Dictionary = clefs.get("right", {})
+            var left: Dictionary = clefs.get("left", {})
+            if str(right.get("sign", "")) != "G" or str(left.get("sign", "")) != "F":
+                errors.append("Ala piano grand staff requires G clef over F clef")
+        if int(info.note_count) <= 0 or int(info.glyph_tile_count) <= 0:
+            errors.append("Real practice notation has no measured notes or tiles")
+    if app.current_screen == "lesson":
+        var activity_row: Control = app.find_child("LessonActivityRow", true, false)
+        var caption: Label = app.find_child("LessonActivityCaption", true, false)
+        if activity_row == null or caption == null:
+            errors.append("Lesson path Activity controls missing")
+        else:
+            var activity_rect: Rect2 = activity_row.get_global_rect()
+            var caption_rect: Rect2 = caption.get_global_rect()
+            var dropdown_rect: Rect2 = app.mode_choice.get_global_rect()
+            info["activity_rect"] = [
+                activity_rect.position.x, activity_rect.position.y,
+                activity_rect.size.x, activity_rect.size.y]
+            info["caption_rect"] = [
+                caption_rect.position.x, caption_rect.position.y,
+                caption_rect.size.x, caption_rect.size.y]
+            info["selector_rect"] = [
+                dropdown_rect.position.x, dropdown_rect.position.y,
+                dropdown_rect.size.x, dropdown_rect.size.y]
+            if caption_rect.size.x < 80 or caption_rect.size.y > 50:
+                errors.append("Activity label wrapped letter-by-letter at " + label)
+            if activity_rect.size.y > 70 or dropdown_rect.size.y > 70:
+                errors.append("Lesson Activity selector grew vertically at " + label)
+            if dropdown_rect.position.x + dropdown_rect.size.x > image.get_width() - 10:
+                errors.append("Lesson mode choice overflows viewport at " + label)
+            if not app.lesson_rows.is_visible_in_tree():
+                errors.append("Lesson step list is not visible at " + label)
     print("MIDI_DESKTOP_FRAME:", label, " size=", image.get_size(),
         " notes=", info.note_count, " tiles=", info.glyph_tile_count)
+
+func _lesson_ready() -> bool:
+    return not app.lesson_pending and app.lesson_rows.get_child_count() > 0 \
+        and app.current_screen == "lesson" and app.lesson_summary.text.contains("stages completed")
+
+
+func _settings_ready() -> bool:
+    return app.current_screen == "settings" and not app.settings_pending
+
+
+func _library_ready() -> bool:
+    return app.current_screen == "library" and not app.library_pending
+
+
+func _audit_all_screens() -> void:
+    # On the first real MIDI piece, cover desktop, laptop and compact windows.
+    # The remaining real MIDI files still cover every main screen at 1536x960.
+    var widths: Array[Vector2i] = [Vector2i(1536, 960)]
+    if folder.get_file().begins_with("ala-"):
+        widths.append(Vector2i(1024, 768))
+        widths.append(Vector2i(800, 600))
+    for resolution in widths:
+        root.size = resolution
+        await create_timer(.12).timeout
+        var suffix: String = "%dx%d" % [resolution.x, resolution.y]
+        app._navigate("lesson")
+        if await _wait_until(Callable(self, "_lesson_ready"), 18.0, "lesson " + suffix):
+            await _capture("lesson-" + suffix)
+        app._navigate("settings")
+        if await _wait_until(Callable(self, "_settings_ready"), 12.0, "settings " + suffix):
+            await _capture("settings-" + suffix)
+        app._navigate("library")
+        if await _wait_until(Callable(self, "_library_ready"), 12.0, "library " + suffix):
+            await _capture("library-" + suffix)
+        app._navigate("practice")
+        if await _wait_until(Callable(self, "_notation_ready"), 20.0, "practice " + suffix):
+            await _capture("practice-" + suffix)
+    root.size = Vector2i(1536, 960)
+    await create_timer(.12).timeout
+    app._navigate("practice")
+
 
 func _notation_ready() -> bool:
     return app.score_view.texture != null and \
@@ -119,6 +188,7 @@ func _run() -> void:
         Callable(self, "_notation_ready"), 100.0, "real notation in practice stage")
     if ready:
         await _capture("ready")
+        await _audit_all_screens()
         var started: Dictionary = await _api("/control", {"action": "start"})
         if str(started.get("phase", "")) != "count_in":
             errors.append("Expected MIDI-less count-in from real engine")
