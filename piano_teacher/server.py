@@ -1919,14 +1919,16 @@ class PracticeEngine:
                 self._page_png[key] = png
             return self._page_png[key]
 
-    def geometry(self) -> dict:
+    def geometry(self, *, native_notes: bool = False) -> dict:
         from .notation_symbols import native_glyphs, preparation_symbols
-        from .verovio_note_templates import note_templates
-        # Asset generation is versioned and written to disk. It does not
-        # depend on lesson, hand, BPM or the Godot render frame.
-        return {**self.engraving().layout, "symbols": preparation_symbols(),
-                "native_glyphs": native_glyphs(),
-                "native_note_templates": note_templates(self.preprocessing)}
+        layout = {**self.engraving().layout, "symbols": preparation_symbols(),
+                  "native_glyphs": native_glyphs()}
+        if native_notes:
+            from .verovio_note_templates import note_templates
+            # Only the native client requests this persistent atlas. Regular
+            # raster users must not wait for 13 one-time Verovio engravings.
+            layout["native_note_templates"] = note_templates(self.preprocessing)
+        return layout
 
     def lesson_overview(self) -> dict:
         """Full readable curriculum, with unique per-hand/per-level progress."""
@@ -1994,7 +1996,10 @@ class Handler(BaseHTTPRequestHandler):
                     while block := audio_file.read(65536):
                         self.wfile.write(block)
             elif route=="/score/layout":
-                self._json(200,self.engine.geometry())
+                from urllib.parse import parse_qs
+                native = parse_qs(urlsplit(self.path).query).get(
+                    "native", ["0"])[0] == "1"
+                self._json(200,self.engine.geometry(native_notes=native))
             elif route=="/score/model":
                 self._json(200,self.engine.semantic_score())
             elif route in ("/score.svg", "/score.png"):
