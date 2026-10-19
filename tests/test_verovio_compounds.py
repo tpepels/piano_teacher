@@ -65,6 +65,14 @@ def test_chord_sprite_is_actual_verovio_compound_and_reusable(tmp_path,monkeypat
     assert list(atlas)==["quarter|down|0,2"]
     sprite=atlas["quarter|down|0,2"]
     _valid_sprite(sprite,"verovio-engraved-chord")
+    assert sprite["heads_only"]["source"]=="verovio-engraved-chord-heads"
+    assert len(sprite["heads_only"]["bounds"])==4
+    import base64
+    from io import BytesIO
+    with Image.open(BytesIO(base64.b64decode(
+            sprite["heads_only"]["png_base64"]))) as head_bitmap:
+        assert head_bitmap.getchannel("A").getbbox() is not None
+    assert sprite["heads_only"]["bounds"][3] < sprite["bounds"][3]
     assert len(sprite["head_positions"])==2
     assert sprite["head_positions"][0][1]>sprite["head_positions"][1][1]
     monkeypatch.setattr(chords,"_render",lambda *_:(_ for _ in ()).throw(
