@@ -54,17 +54,23 @@ func clear_score() -> void:
     cached_head_offsets.clear()
     cached_offsets_gap = -1.0
 
-func set_verovio_glyphs(items: Dictionary) -> bool:
-    var success: bool = glyphs.load_font(items)
-    if not success:
+func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {}) -> bool:
+    # Only the backend's authentic individual Verovio engravings are used
+    # for standalone notes. A partial atlas is not a valid native score.
+    if not glyphs.load_font(items):
         failure_reason = glyphs.error
-    return success
+        return false
+    if not glyphs.load_note_templates(note_items):
+        failure_reason = glyphs.error
+        return false
+    failure_reason = ""
+    return true
 
 
 func load_score(candidate: Dictionary) -> bool:
     native_ready = false
-    if not glyphs.ready():
-        failure_reason = "Authentic Verovio font atlas is not loaded"
+    if not glyphs.ready() or not glyphs.note_ready():
+        failure_reason = "Authentic Verovio complete note atlas is not loaded"
         notice = failure_reason
         return false
     failure_reason = Geometry.supported(candidate)
@@ -429,6 +435,25 @@ func _paint_note(event: Dictionary, x: float,
     var y: float = Geometry.note_y(step, bottom, gap)
     var kind: String = str(event.get("note_type", "quarter"))
     _paint_ledger(x, y, step, bottom, gap, ink)
+    # Simple notes are complete Verovio-engraved sprites: no Godot stem,
+    # flag or notehead assembly. Composite chords and beam groups have
+    # variable geometry and are handled separately below.
+    var isolated: bool = not bool(event.get("chord", false)) and \
+        beam_stem.is_empty() and \
+        chord_members.get(str(event.get("id", "")), [event]).size() == 1
+    if isolated:
+        var normal_up: bool = step < 4
+        if not glyphs.paint_note(self, kind, normal_up, x, y, gap, ink):
+            # Atlas validation happens on load; missing artwork must never
+            # silently revert to imitated musical ink.
+            push_warning("Missing authentic Verovio note template: " + kind)
+            return
+        _paint_rhythm_dots(x,y,int(event.get("dots",0)),ink,gap)
+        var accidental_name: String = str(event.get("accidental", ""))
+        if not accidental_name.is_empty() and accidental_name != "null":
+            _paint_accidental(x,y,accidental_name,ink,gap)
+        drawn_noteheads[str(event.get("id", ""))] = Vector2(x,y)
+        return
     var solid: bool = kind not in ["half","whole"]
     glyphs.paint(self, "head_black" if solid else (
         "head_whole" if kind == "whole" else "head_half"),
