@@ -56,7 +56,8 @@ func clear_score() -> void:
 
 func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         tie_items: Dictionary = {}, chord_items: Dictionary = {},
-        beam_items: Dictionary = {}) -> bool:
+        beam_items: Dictionary = {},
+        tuplet_items: Dictionary = {}) -> bool:
     if not glyphs.load_font(items):
         failure_reason = glyphs.error
         return false
@@ -70,6 +71,9 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         failure_reason = glyphs.error
         return false
     if not glyphs.load_beam_fragments(beam_items):
+        failure_reason = glyphs.error
+        return false
+    if not glyphs.load_tuplet_fragments(tuplet_items):
         failure_reason = glyphs.error
         return false
     failure_reason = ""
@@ -303,6 +307,23 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
             continue
         var first: Dictionary = events[0]
         var last: Dictionary = events[-1]
+        var source_note_ids := PackedStringArray()
+        for event in events:
+            if str(event.get("kind","")) == "note":
+                source_note_ids.append(str(event.get("id","")))
+        var label_key: String = "|".join(source_note_ids)
+        var first_x: float = timeline.screen_x(
+            float(first.get("beat",0.0)),clock,playhead_x,play_from_beat)
+        var last_x: float = timeline.screen_x(
+            float(last.get("beat",0.0)),clock,playhead_x,play_from_beat)
+        var source_bracket: bool = str(group.get("bracket","yes")) != "no" or \
+            events.size() == 1
+        if source_note_ids.size() > 1 and \
+                glyphs.has_tuplet(label_key,source_bracket):
+            if glyphs.paint_tuplet(self,label_key,first_x,last_x,
+                    _event_y(first,gap),gap,
+                    _ink(str(group.get("staff","right")))):
+                continue
         var x0: float = timeline.screen_x(float(first.get("beat", 0.0)),
             clock,playhead_x,play_from_beat)-gap*.8
         var x1: float = timeline.screen_x(float(last.get("beat", 0.0)),
