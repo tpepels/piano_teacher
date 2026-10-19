@@ -102,6 +102,24 @@ func run() -> void:
         "Source attacks retain quarter-beat geometry")
     check(approx(renderer.timeline.x_at_beat(7.0),density*7.0),
         "Measure lengths retain exact quarter units")
+    # Phase 1 performance: one viewport scans only nearby onsets, and
+    # immutable measure lookups and staff fitting survive unchanged frames.
+    check(renderer.measure_by_number.size() == model["measures"].size(),
+        "Native measure geometry indexed once at lesson load")
+    var first_gap: float = renderer._gap()
+    check(approx(renderer._gap(),first_gap) and
+        approx(renderer.cached_staff_gap,first_gap),
+        "Native grand-staff vertical fitting reused across frames")
+    var nearby: Array = renderer._visible_events(0.0, 1.0)
+    check(not nearby.is_empty() and nearby.size() < renderer.ordered_events.size(),
+        "Viewport culls off-screen native noteheads")
+    check(renderer.frame_scanned_events == nearby.size(),
+        "Viewport budget counts only notation actually scanned")
+    var empty_view: Array = renderer._visible_events(100.0,101.0)
+    check(empty_view.is_empty() and renderer.frame_scanned_events == 0,
+        "Off-screen native passage performs no note rendering work")
+    check(renderer._measure_for(model["notation_events"][0]).get("number",0) == 1,
+        "Source note measure lookup remains stable with cached dictionary")
     renderer.present({"bpm":40, "running":true,"paused":false,
         "count_in_beats":3.0,"play_from_beat":0.0,"hand":"both",
         "transport_id":4},-3.0)
