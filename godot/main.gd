@@ -260,17 +260,14 @@ func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
-    # Retire the hand-painted Phase C renderer from the user-facing launch.
-    # The old flag is intentionally accepted but now displays Verovio ink;
-    # only an explicitly named diagnostic can still enable the old experiment.
-    var retired_native_flag: bool = (
-        OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" or
-        OS.get_cmdline_user_args().has("--native-notation"))
+    # Phase 1: keep working on the native Godot score engine. The original
+    # PIANO_TEACHER_NATIVE_NOTATION launch option selects it again; unsupported
+    # imported notation falls back safely to the established score display.
     native_notation_enabled = (
+        OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" or
+        OS.get_cmdline_user_args().has("--native-notation") or
         OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION_EXPERIMENTAL") == "1" or
         OS.get_cmdline_user_args().has("--native-notation-experimental"))
-    if retired_native_flag:
-        push_warning("The hand-drawn native notation renderer is retired. Using Verovio engraving; remove PIANO_TEACHER_NATIVE_NOTATION=1 from the launch command.")
     timeline_preview_enabled = (native_notation_enabled or
         OS.get_environment("PIANO_TEACHER_TIMELINE_PREVIEW") == "1" or
         OS.get_cmdline_user_args().has("--timeline-preview"))
@@ -3358,12 +3355,11 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var strip: Dictionary = ScoreStrip.build(
         source_layout, page_images, should_defer,
         native_ink_preview or continuous_engraving)
-    # Phase 1: only one-system continuous Verovio music is eligible for
-    # source-pixel-preserving insertion of truly empty beat-grid gaps.
-    # Connected music ink is never resized or cut. Failure returns the
-    # original Verovio raster for the *entire* practice passage.
+    # The alternative raster reflow is isolated as an explicit diagnostic.
+    # It is NOT the native notation engine, and must not silently replace it.
     if continuous_engraving and not native_ink_preview and \
-            OS.get_environment("PIANO_TEACHER_EXACT_VEROVIO_GRID") != "0" \
+            not native_notation_enabled and \
+            OS.get_environment("PIANO_TEACHER_EXACT_VEROVIO_GRID") == "1" \
             and not strip.has("error"):
         strip = ScoreExactSpacing.reflow(strip)
         if bool(strip["layout"].get("exact_ink_grid", false)):
