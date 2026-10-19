@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 2
+VERSION = 3
 MAX_PATTERNS = 32
 _STEPS = {"C":0,"D":1,"E":2,"F":3,"G":4,"A":5,"B":6}
 _LETTERS = "CDEFGAB"
@@ -146,6 +146,25 @@ def _only_original_chord_heads(svg: str) -> str:
     return ET.tostring(root,encoding="unicode")
 
 
+def _only_original_chord_stems(svg: str) -> str:
+    """Extract original Verovio stem ink, not a synthetic rectangle."""
+    root=ET.fromstring(svg)
+    def prune(node):
+        if "stem" in node.get("class","").split():
+            return True
+        if node.tag.rsplit("}",1)[-1] in {"defs","style"}:
+            return True
+        retained=False
+        for child in list(node):
+            if prune(child):
+                retained=True
+            else:
+                node.remove(child)
+        return retained
+    prune(root)
+    return ET.tostring(root,encoding="unicode")
+
+
 def _render(toolkit,pattern: str) -> dict:
     import cairosvg
     from .score_geometry import parse_svg_geometry
@@ -172,6 +191,10 @@ def _render(toolkit,pattern: str) -> dict:
     with Image.open(BytesIO(cairosvg.svg2png(
             bytestring=heads_svg.encode(),output_width=1600))) as image:
         heads_rgba=image.convert("RGBA")
+    with Image.open(BytesIO(cairosvg.svg2png(
+            bytestring=_only_original_chord_stems(filtered).encode(),
+            output_width=1600))) as image:
+        stems_rgba=image.convert("RGBA")
     bbox=rgba.getchannel("A").getbbox()
     if not bbox:
         raise ValueError("Empty genuine chord sprite")
@@ -215,6 +238,19 @@ def _render(toolkit,pattern: str) -> dict:
             "bounds":[(hx-note_x)*250/staff,(hy-note_y)*250/staff,
                       (hr-hx)*250/staff,(hb-hy)*250/staff],
             "png_base64":base64.b64encode(head_bytes.getvalue()).decode("ascii")}
+    stem_bbox=stems_rgba.getchannel("A").getbbox()
+    if stem_bbox:
+        sx,sy,sr,sb=stem_bbox
+        cut=stems_rgba.crop(stem_bbox)
+        white_stem=Image.new("RGBA",cut.size,(255,255,255,255))
+        white_stem.putalpha(cut.getchannel("A"))
+        stem_bytes=BytesIO()
+        white_stem.save(stem_bytes,format="PNG",optimize=True)
+        result["stem_only"]={
+            "source":"verovio-engraved-chord-stem",
+            "bounds":[(sx-note_x)*250/staff,(sy-note_y)*250/staff,
+                      (sr-sx)*250/staff,(sb-sy)*250/staff],
+            "png_base64":base64.b64encode(stem_bytes.getvalue()).decode("ascii")}
     return result
 
 
