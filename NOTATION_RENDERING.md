@@ -108,6 +108,39 @@ passage* rather than mix hand-drawn and engraved symbols.
 - `PIANO_TEACHER_TIMELINE_PREVIEW=1 ./run.sh`: non-engraved timing diagnostic;
   not a presentation mode.
 
-The separate Vero-vio/Godot glyph timeline is **specified here, not yet
-implemented**. Do not mark it complete until the visual and timing
-acceptance tests above are actually executed.
+## Phase 1 implementation status (2026-10-19)
+
+### Implemented: strict clock-locked camera over existing Verovio ink
+
+`godot/score_beat_camera.gd` measures the *actual* projected note/rest
+anchors returned by `ScoreStrip`. Only if every distinct onset belongs to
+one affine `x = origin + beat * source_pixels_per_beat` time axis within
+2 native raster pixels may the app use the new camera. The camera then
+moves the existing cached tiles directly from the authoritative Python
+clock beat (including count-in and seek offsets), at a fixed 42% playhead.
+It changes only the parent canvas translation, never notes or their timing.
+No easing, per-event interpolation, mid-measure speed correction, or BPM-
+dependent image scaling is applied.
+
+For unsupported/not-yet-aligned scores (including extreme ornament
+intervals, duplicate onsets with different engraved positions and natural
+non-proportional single-system Verovio layouts), the prior camera is used
+for the complete passage. The source score is not partially translated.
+The per-passage reason is recorded in `score_beat_grid` and exported by
+the real desktop MIDI diagnostics. Validate with
+`tests/godot/score_beat_camera.gd` and the actual source SVG/Godot corpus.
+
+### Not yet implemented: source-glyph-group re-layout
+
+The initial camera still receives tiles prepared by the existing
+`ScoreStrip` raster pipeline. This means Verovio is still the engraving
+engine, but printed score strips can still contain horizontal bitmap
+spacing adjustments and the safety fallback may not achieve uniform speed.
+
+The next Phase 1 increment must extract SVG groups with stable source IDs,
+including beam/tie/slur groups that span multiple notes; translate complete
+glyph groups against a common time axis without resampling ink; preserve
+measure-level clefs/key/time signatures; and compare resulting symbol
+pixels against original Verovio. Activate it only after demonstrating
+no broken links and constant camera motion on real MIDI, including Ala,
+Autumn Leaves and Chopin. Do not report Phase 1 as complete until then.
