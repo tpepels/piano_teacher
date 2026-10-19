@@ -42,6 +42,8 @@ var chord_textures: Dictionary = {}
 var chord_metadata: Dictionary = {}
 var chord_heads_textures: Dictionary = {}
 var chord_heads_bounds: Dictionary = {}
+var chord_stem_textures: Dictionary = {}
+var chord_stem_bounds: Dictionary = {}
 var beam_textures: Dictionary = {}
 var beam_metadata: Dictionary = {}
 var tuplet_textures: Dictionary = {}
@@ -193,6 +195,8 @@ func load_chord_templates(items: Dictionary) -> bool:
     var metrics := {}
     var loaded_heads: Dictionary = {}
     var heads_dimensions: Dictionary = {}
+    var loaded_stems: Dictionary = {}
+    var stem_dimensions: Dictionary = {}
     for key in items:
         var item: Dictionary = items[key]
         var bounds: Array = item.get("bounds",[])
@@ -221,10 +225,23 @@ func load_chord_templates(items: Dictionary) -> bool:
                 return false
             loaded_heads[str(key)] = ImageTexture.create_from_image(heads_image)
             heads_dimensions[str(key)] = heads["bounds"]
+        var stem: Dictionary = item.get("stem_only",{})
+        if str(stem.get("source","")) == "verovio-engraved-chord-stem" and \
+                stem.get("bounds",[]).size() == 4:
+            var stem_image := Image.new()
+            if stem_image.load_png_from_buffer(Marshalls.base64_to_raw(
+                    str(stem.get("png_base64","")))) != OK or \
+                    stem_image.is_empty():
+                error = "Invalid original Verovio compound stem: "+str(key)
+                return false
+            loaded_stems[str(key)] = ImageTexture.create_from_image(stem_image)
+            stem_dimensions[str(key)] = stem["bounds"]
     chord_textures = loaded
     chord_metadata = metrics
     chord_heads_textures = loaded_heads
     chord_heads_bounds = heads_dimensions
+    chord_stem_textures = loaded_stems
+    chord_stem_bounds = stem_dimensions
     return true
 
 
@@ -259,6 +276,25 @@ func paint_chord_heads(canvas: CanvasItem,key: String,
     canvas.draw_texture_rect(sprite,
         Rect2(x+float(b[0])*gap/250.0,y+float(b[1])*gap/250.0,
               float(b[2])*gap/250.0,float(b[3])*gap/250.0),false,ink)
+    return true
+
+
+func has_chord_stem(key: String) -> bool:
+    return chord_stem_textures.has(key)
+
+
+func paint_chord_stem(canvas: CanvasItem,key: String,
+        x: float,anchor_y: float,tip_y: float,gap: float,ink: Color) -> bool:
+    var source: Texture2D = chord_stem_textures.get(key)
+    if source == null or absf(anchor_y-tip_y)<1.0:
+        return false
+    var bounds: Array = chord_stem_bounds[key]
+    var unit: float = gap/250.0
+    # Keep Verovio's ORIGINAL stem width/caps/shape; change ONLY its
+    # longitudinal distance to the endpoint measured on the source beam.
+    canvas.draw_texture_rect(source,Rect2(
+        x+float(bounds[0])*unit,minf(anchor_y,tip_y),
+        float(bounds[2])*unit,absf(anchor_y-tip_y)),false,ink)
     return true
 
 
