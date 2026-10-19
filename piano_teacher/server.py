@@ -1925,9 +1925,11 @@ class PracticeEngine:
                   "native_glyphs": native_glyphs()}
         if native_notes:
             from .verovio_note_templates import note_templates
-            # Only the native client requests this persistent atlas. Regular
-            # raster users must not wait for 13 one-time Verovio engravings.
+            from .verovio_tie_templates import tie_templates
+            # Native clients receive genuine reusable note AND tie artwork.
+            # Raster readers do not pay the one-time engraving cost.
             layout["native_note_templates"] = note_templates(self.preprocessing)
+            layout["native_tie_templates"] = tie_templates(self.preprocessing)
         return layout
 
     def lesson_overview(self) -> dict:
