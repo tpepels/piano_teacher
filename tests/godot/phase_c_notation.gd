@@ -92,6 +92,22 @@ func run() -> void:
     var renderer = Renderer.new()
     get_root().add_child(renderer)
     renderer.size = Vector2(1150,440)
+    check(not renderer.load_score(model),
+        "Native notes never render without an authenticated Verovio glyph atlas")
+    # Synthetic 2x2 SVG paths below are a UNIT-TEST DOUBLE for placement and
+    # transport math; real MIDI desktop tests require actual installed
+    # Verovio glyphs from Python's notation_symbols.native_glyphs().
+    var atlas_script = load("res://score_verovio_glyphs.gd")
+    var sample_glyphs: Dictionary = {}
+    for name in atlas_script.REQUIRED:
+        sample_glyphs[name] = {
+            "source": "verovio", "font": "TestOnly", "units_per_space": 250,
+            "bounds": [0.0,0.0,2.0,2.0],
+            "svg": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2" width="2" height="2"><path d="M0 0L2 0L2 2L0 2Z" fill="white"/></svg>'
+        }
+    check(renderer.set_verovio_glyphs(sample_glyphs),
+        "Load SVG glyphs into cached Godot ImageTextures")
+    check(renderer.glyphs.ready(), "Native glyph assets are resident")
     check(renderer.set_density(96.0), "User density accepted")
     check(renderer.load_score(model), "Native renderer accepts complete symbolic model")
     check(renderer.native_ready, "No raster or SVG is necessary")
