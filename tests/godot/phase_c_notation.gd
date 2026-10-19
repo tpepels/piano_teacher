@@ -136,17 +136,18 @@ func run() -> void:
         model["notation_events"][5],staff_gap)
     check(float(chord["top_y"]) < float(chord["bottom_y"]) and
         bool(chord["up"]), "Chord stem covers top and bottom real glyph heads")
-    var tie: PackedVector2Array = renderer._tie_shape(
+    var tie: Dictionary = renderer._tie_placement(
         model["notation_events"][3],model["notation_events"][4],
         160.0,330.0,staff_gap)
-    check(tie.size() == 50,
-        "Native tie is a closed tapered contour between two notehead edges")
-    if tie.size() == 50:
-        check(tie[0].x > 160.0 and tie[24].x < 330.0,
-            "Tie endpoints clear the authentic Verovio head widths")
-        check(tie[12].y > renderer._event_y(
-            model["notation_events"][3],staff_gap),
-            "Up-stem note uses a tie below its glyph rather than crossing stem")
+    check(not tie.is_empty() and renderer.glyphs.ties_ready(),
+        "Native ties require actual cached Verovio contour textures")
+    if not tie.is_empty():
+        check(approx(float(tie["x0"]),160.0) and
+            approx(float(tie["x1"]),330.0),
+            "Verovio contour anchors follow both original note onsets")
+        check(bool(tie["down"]) and approx(float(tie["y"]),
+            renderer._event_y(model["notation_events"][3],staff_gap)),
+            "Tie direction and staff height are semantically derived")
     # Chopin fixture has a very short 1/8 pickup directly before 12/8.
     # Both time signatures must remain legible without moving any note X.
     var pickup: Dictionary = model.duplicate(true)
