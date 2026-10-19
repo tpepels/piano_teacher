@@ -22,6 +22,7 @@ def test_preparation_symbols_have_real_visible_outlines_and_staff_units():
 
 def test_native_godot_atlas_is_authentic_and_covers_notation_symbols():
     from piano_teacher.notation_symbols import _NATIVE_CODES, native_glyphs
+    from piano_teacher.raster import rasterize_score
 
     atlas = native_glyphs()
     assert set(atlas) == set(_NATIVE_CODES)
