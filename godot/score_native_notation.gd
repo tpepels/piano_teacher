@@ -28,6 +28,8 @@ var measure_by_number: Dictionary = {}
 var ordered_events: Array = []
 var tie_pairs: Array = []
 var slur_pairs: Array = []
+var expected_slur_pairs: Array = []
+var slur_extraction_complete := true
 var previous_attack_before_measure: Dictionary = {}
 var cached_staff_gap := -1.0
 var cached_gap_height := -1.0
@@ -60,7 +62,8 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         tie_items: Dictionary = {}, chord_items: Dictionary = {},
         beam_items: Dictionary = {},
         tuplet_items: Dictionary = {},
-        slur_items: Dictionary = {}) -> bool:
+        slur_items: Dictionary = {},
+        required_slurs: Array = [], slurs_complete: bool = true) -> bool:
     if not glyphs.load_font(items):
         failure_reason = glyphs.error
         return false
@@ -82,6 +85,8 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
     if not glyphs.load_slur_fragments(slur_items):
         failure_reason = glyphs.error
         return false
+    expected_slur_pairs = required_slurs.duplicate(true)
+    slur_extraction_complete = slurs_complete
     failure_reason = ""
     return true
 
@@ -173,6 +178,10 @@ func load_score(candidate: Dictionary) -> bool:
             var last: Dictionary = by_id[str(ids[1])]
             if float(first.get("beat",0.0)) < float(last.get("beat",0.0)):
                 slur_pairs.append({"key":str(key),"first":first,"last":last})
+    failure_reason = _missing_source_engraving()
+    if not failure_reason.is_empty():
+        notice = failure_reason
+        return false
     cached_staff_gap = -1.0
     cached_gap_height = -1.0
     cached_offsets_gap = -1.0
@@ -181,6 +190,51 @@ func load_score(candidate: Dictionary) -> bool:
     native_ready = true
     queue_redraw()
     return true
+
+# Only native compositor fragments with unambiguous original Verovio ink.
+# Missing engraving falls back to the existing full Verovio score, rather than
+# drawing approximate beams, stems, chord shapes, tuplets or omitted slurs.
+func _missing_source_engraving() -> String:
+    if not slur_extraction_complete:
+        return "Source Verovio slur extraction failed"
+    for group in notation_tuplets:
+        var ids := PackedStringArray()
+        for event in group.get("events",[]):
+            if str(event.get("kind","")) == "note":
+                ids.append(str(event.get("id","")))
+        if ids.size() < 2 or not glyphs.has_tuplet("|".join(ids),false):
+            return "Missing engraved Verovio tuplet: "+("|".join(ids))
+    for leader_id in chord_members:
+        var event: Dictionary = {}
+        for candidate in chord_members[leader_id]:
+            if str(candidate.get("id","")) == str(leader_id):
+                event = candidate
+                break
+        if event.is_empty():
+            return "Missing original chord leader: "+str(leader_id)
+        var key: String = _chord_template_key(event)
+        if key.is_empty() or not glyphs.has_chord(key):
+            return "Missing engraved Verovio chord: "+str(leader_id)
+        if beamed_note_ids.has(str(leader_id)) and ( \
+                not glyphs.has_chord_heads(key) or \
+                not glyphs.has_chord_stem(key)):
+            return "Missing Verovio beamed chord components: "+str(leader_id)
+    for group in beam_groups:
+        var ids := PackedStringArray()
+        for event in group:
+            ids.append(str(event.get("id","")))
+        var key: String = "|".join(ids)
+        if not glyphs.beam_textures.has(key):
+            return "Missing original Verovio beam: "+key
+    for pair in expected_slur_pairs:
+        if not pair is Array or pair.size() != 2:
+            return "Invalid original Verovio slur identity"
+        var key: String = str(pair[0])+"|"+str(pair[1])
+        if not glyphs.slur_metadata.has(key) or \
+                glyphs.slur_note_ids(key) != pair:
+            return "Missing original Verovio slur: "+key
+    return ""
+
 
 func _staff_center(hand: String) -> float:
     return size.y * (.34 if hand == "right" else .69)
@@ -318,12 +372,6 @@ func _paint_accidental(x: float, y: float,
         glyphs.paint(self, name, x - gap*1.15, y, gap, ink, true)
 
 
-func _paint_flag(stem_x: float, tip_y: float,
-        up: bool, count: int, ink: Color, gap: float) -> void:
-    var name: String = "flag_%s_%d" % ["up" if up else "down", count]
-    glyphs.paint(self, name, stem_x, tip_y, gap, ink)
-
-
 func _paint_rhythm_dots(x: float, y: float, dots: int,
         ink: Color, gap: float) -> void:
     for index in range(dots):
@@ -334,87 +382,27 @@ func _paint_rhythm_dots(x: float, y: float, dots: int,
 
 func _paint_tuplet_brackets(clock: float, playhead_x: float,
         gap: float) -> void:
-    var font: Font = ThemeDB.fallback_font
+    # Authentic separated Verovio number/bracket masks only. Every group
+    # was validated on lesson load; no Godot-drawn ratio, digit or hook.
     for group in notation_tuplets:
-        var events: Array = group.get("events", [])
-        if events.is_empty():
+        var events: Array = group.get("events",[])
+        if events.size() < 2:
             continue
-        var first: Dictionary = events[0]
-        var last: Dictionary = events[-1]
-        var source_note_ids := PackedStringArray()
+        var ids := PackedStringArray()
         for event in events:
             if str(event.get("kind","")) == "note":
-                source_note_ids.append(str(event.get("id","")))
-        var label_key: String = "|".join(source_note_ids)
-        var first_x: float = timeline.screen_x(
+                ids.append(str(event.get("id","")))
+        var first: Dictionary = events[0]
+        var last: Dictionary = events[-1]
+        var x0: float = timeline.screen_x(
             float(first.get("beat",0.0)),clock,playhead_x,play_from_beat)
-        var last_x: float = timeline.screen_x(
+        var x1: float = timeline.screen_x(
             float(last.get("beat",0.0)),clock,playhead_x,play_from_beat)
-        var source_bracket: bool = str(group.get("bracket","yes")) != "no" or \
-            events.size() == 1
-        if source_note_ids.size() > 1 and \
-                glyphs.has_tuplet(label_key,source_bracket):
-            if glyphs.paint_tuplet(self,label_key,first_x,last_x,
-                    _event_y(first,gap),gap,
-                    _ink(str(group.get("staff","right")))):
-                continue
-        var x0: float = timeline.screen_x(float(first.get("beat", 0.0)),
-            clock,playhead_x,play_from_beat)-gap*.8
-        var x1: float = timeline.screen_x(float(last.get("beat", 0.0)),
-            clock,playhead_x,play_from_beat)+gap*1.25
         if x1 < -50.0 or x0 > size.x+50.0:
             continue
-        # A single irregular event still shows its ACTUAL duration ratio.
-        if x1-x0 < gap*4.0:
-            var middle: float = (x0+x1)*.5
-            x0 = middle-gap*2.0
-            x1 = middle+gap*2.0
-        var staff: String = str(group.get("staff", "right"))
-        var up: bool = staff == "right"
-        var y: float = _staff_center(staff)-gap*3.4 if up else \
-            _staff_center(staff)+gap*3.4
-        for event in events:
-            if str(event.get("kind", "")) == "note":
-                var head_y: float = _event_y(event,gap)
-                if up:
-                    y = minf(y,head_y-gap*3.0)
-                else:
-                    y = maxf(y,head_y+gap*3.0)
-        y = clampf(y, 22.0, size.y-22.0)
-        var label: String = Geometry.tuplet_label(group)
-        var font_size := 13
-        var middle: float = (x0+x1)*.5
-        var half_label: float = font.get_string_size(label,
-            HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x*.5
-        var ink: Color = _ink(staff)
-        var gap_to_label: float = half_label+5.0
-        var line_y: float = y+3.0 if up else y-5.0
-        var bracket: bool = str(group.get("bracket","yes")) != "no" or \
-            events.size() == 1
-        if bracket:
-            if middle-gap_to_label > x0:
-                draw_line(Vector2(x0,line_y),Vector2(middle-gap_to_label,line_y),
-                    ink,1.3,true)
-            if x1 > middle+gap_to_label:
-                draw_line(Vector2(middle+gap_to_label,line_y),
-                    Vector2(x1,line_y),ink,1.3,true)
-            var drop: float = gap*.42 if up else -gap*.42
-            draw_line(Vector2(x0,line_y),Vector2(x0,line_y+drop),ink,1.3,true)
-            draw_line(Vector2(x1,line_y),Vector2(x1,line_y+drop),ink,1.3,true)
-        if label.is_valid_int() and label.length() <= 2:
-            # Tuplet number glyphs use the same real Verovio font atlas as
-            # the time signature, at a smaller local visual size.
-            var tuplet_space: float = gap*.54
-            var digit_step: float = tuplet_space*1.15
-            for index in range(label.length()):
-                glyphs.paint(self, "time_" + label[index],
-                    middle + (float(index) - float(label.length()-1)*.5)*digit_step,
-                    y+gap*.18, tuplet_space, ink, true)
-        else:
-            # Irregular explicit ratios such as 7:5 contain punctuation,
-            # which is typographic text, not a custom-drawn music glyph.
-            draw_string(font,Vector2(middle-half_label,y+4.0),
-                label,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,ink)
+        glyphs.paint_tuplet(self,"|".join(ids),x0,x1,
+            _event_y(first,gap),gap,
+            _ink(str(group.get("staff","right"))))
 
 
 func _paint_rest(x: float, y: float,
@@ -608,26 +596,11 @@ func _paint_note(event: Dictionary, x: float,
     glyphs.paint(self, "head_black" if solid else (
         "head_whole" if kind == "whole" else "head_half"),
         x, y, gap, ink, true)
-    # MusicXML chord members keep their separate real glyphs, but only
-    # the leading event gets a stem spanning the COMPLETE chord pitch range.
-    if kind != "whole" and not bool(event.get("chord", false)):
-        var chord: Dictionary = _chord_extents(event,gap,cached_head_offsets)
-        var stem_up: bool = bool(beam_stem.get("up",chord["up"]))
-        var anchor_y: float = float(chord["bottom_y"] if stem_up else chord["top_y"])
-        var anchor_offset: float = float(chord[
-            "bottom_offset" if stem_up else "top_offset"])
-        var stem_x: float = x-head_offset+anchor_offset+ \
-            _stem_attachment(kind,gap,stem_up)
-        var tip_y: float = (float(chord["top_y"])-gap*3.25 if stem_up else
-            float(chord["bottom_y"])+gap*3.25)
-        if not beam_stem.is_empty():
-            stem_x = float(beam_stem.get("x",stem_x))
-            tip_y = float(beam_stem.get("tip_y",tip_y))
-        draw_line(Vector2(stem_x,anchor_y),Vector2(stem_x,tip_y),
-            ink,1.65,true)
-        if Geometry.beam_level(kind) > 0 and beam_stem.is_empty():
-            _paint_flag(stem_x,tip_y,stem_up,
-                Geometry.beam_level(kind),ink,gap)
+    # Beamed single-note attacks use an actual Verovio stem alpha mask;
+    # the separate source beam determines its endpoint and stem direction.
+    if not beam_stem.is_empty() and not bool(event.get("chord",false)):
+        glyphs.paint_note_stem(self,kind,bool(beam_stem["up"]),
+            x,y,float(beam_stem["tip_y"]),gap,ink)
     _paint_rhythm_dots(x,y,int(event.get("dots",0)),ink,gap)
     var accidental: String = str(event.get("accidental", ""))
     if not accidental.is_empty() and accidental != "null":
@@ -665,6 +638,12 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
                     head.get("spelling", {}),clef))
                 counted += 1
         var up: bool = sum_steps/float(maxi(1,counted)) < 4.0
+        var group_ids := PackedStringArray()
+        for event in group:
+            group_ids.append(str(event.get("id","")))
+        var source_key: String = "|".join(group_ids)
+        if glyphs.beam_metadata.has(source_key):
+            up = bool(glyphs.beam_metadata[source_key].get("stem_up",up))
         var members: Array = []
         for event in group:
             var x: float = timeline.screen_x(float(event.get("beat", 0.0)),
@@ -682,119 +661,45 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
                 "bottom_y":float(chord["bottom_y"]),
                 "note_type":str(event.get("note_type", "eighth"))
             })
-        # Conventional beams follow the overall melodic contour, but a
-        # shallow cap prevents steep diagonals on wide intervals.
-        var left_x: float = float(members[0]["x"])
-        var right_x: float = float(members[-1]["x"])
-        var width: float = right_x-left_x
-        var rise: float = clampf(
-            float(members[-1]["head_y"])-float(members[0]["head_y"]),
-            -gap*.75, gap*.75) if width > .01 else 0.0
-        # Move the complete tilted beam clear of EVERY notehead, not only
-        # the endpoints. Every stem retains at least 3.25 staff spaces.
-        var origin: float = INF if up else -INF
-        for member in members:
-            var t: float = (float(member["x"])-left_x)/width if width > .01 else 0.0
-            var required: float = (float(member["top_y"])-gap*3.25
-                if up else float(member["bottom_y"])+gap*3.25)
-            var candidate: float = required-rise*t
-            origin = minf(origin, candidate) if up else maxf(origin, candidate)
-        # Every note has an independent native-time X anchor. The genuine
-        # Verovio beam image is cut into intervals at those anchors, so no
-        # interior note drifts when BPM or screen density changes.
-        var art_key: String = ""
-        var art_tips: Array = []
-        var identifiers := PackedStringArray()
-        for member in members:
-            identifiers.append(str(member["id"]))
-        var candidate: String = "|".join(identifiers)
-        if glyphs.has_beam(candidate,up):
-            var offsets: Array = glyphs.beam_tips(candidate)
-            if offsets.size() == members.size():
-                art_key = candidate
-                art_tips = offsets
+        # The source image supplies the entire beam contour and each
+        # measured stem tip. The compositor never estimates a slope.
+        var art_key: String = source_key
+        var art_tips: Array = glyphs.beam_tips(art_key)
+        if art_tips.size() != members.size():
+            continue
         for index in range(members.size()):
             var member: Dictionary = members[index]
-            var t: float = (float(member["x"])-left_x)/width if width > .01 else 0.0
-            var tip: float = origin+rise*t
-            if art_tips.size() == members.size():
-                tip = float(member["head_y"])+float(art_tips[index])*gap/250.0
+            var tip: float = float(member["head_y"])+ \
+                float(art_tips[index])*gap/250.0
             member["tip_y"] = tip
             members[index] = member
             stems[str(member["id"])] = {"up":up, "tip_y":tip,
                 "x":float(member["x"])}
         drawn_groups.append({"members":members,
             "staff":str(group[0].get("staff", "right")),
-            "up":up, "tip_y":origin,"art_key":art_key})
+            "up":up, "art_key":art_key})
     return {"stems":stems, "groups":drawn_groups}
 
 
-func _beam_segment(x0: float, y0: float, x1: float, y1: float,
-        thickness: float, ink: Color) -> void:
-    if x1 <= x0:
-        return
-    draw_colored_polygon(PackedVector2Array([
-        Vector2(x0, y0), Vector2(x1, y1),
-        Vector2(x1, y1+thickness), Vector2(x0, y0+thickness)]), ink)
-
-
 func _paint_beams(data: Dictionary, gap: float) -> void:
-    # Main and secondary beams follow exactly the same capped slope;
-    # short hooks also follow that line rather than floating horizontally.
-    for group in data.get("groups", []):
-        var members: Array = group.get("members", [])
+    # There is no primitive-polygon fallback: load_score() already checked
+    # that each expected multi-note group has genuine Verovio beam ink.
+    for group in data.get("groups",[]):
+        var members: Array = group.get("members",[])
         if members.size() < 2:
             continue
         var first: Dictionary = members[0]
         var last: Dictionary = members[-1]
-        var left_x: float = float(first["x"])
-        var right_x: float = float(last["x"])
-        if right_x < -40.0 or left_x > size.x+40.0 or right_x <= left_x:
+        if float(last["head_x"]) < -40.0 or \
+                float(first["head_x"]) > size.x+40.0:
             continue
-        var ink: Color = _ink(str(group.get("staff", "right")))
-        var up: bool = bool(group.get("up", true))
-        var art_key: String = str(group.get("art_key",""))
-        if not art_key.is_empty():
-            var anchors: Array = []
-            for member in members:
-                anchors.append(float(member["head_x"]))
-            if glyphs.paint_beam(self,art_key,anchors,
-                    float(first["head_y"]),gap,ink):
-                continue
-        var sign: float = 1.0 if up else -1.0
-        var thick: float = gap*.39
-        var slope: float = (float(last["tip_y"])-float(first["tip_y"])) / \
-            (right_x-left_x)
-        _beam_segment(left_x,float(first["tip_y"]),right_x,
-            float(last["tip_y"]),sign*thick,ink)
-        for level in range(2, 5):
-            var offset: float = sign*gap*.65*float(level-1)
-            for i in range(members.size()):
-                var amount: int = Geometry.beam_level(
-                    str(members[i].get("note_type", "")))
-                if amount < level:
-                    continue
-                var x0: float = float(members[i]["x"])
-                var y0: float = float(members[i]["tip_y"])+offset
-                var prior: bool = i > 0 and Geometry.beam_level(
-                    str(members[i-1].get("note_type", ""))) >= level
-                var following: bool = i+1 < members.size() and \
-                    Geometry.beam_level(
-                    str(members[i+1].get("note_type", ""))) >= level
-                if following:
-                    _beam_segment(x0,y0,float(members[i+1]["x"]),
-                        float(members[i+1]["tip_y"])+offset,sign*thick,ink)
-                elif not prior:
-                    var left_hook: bool = i == members.size()-1
-                    var nearby: float = (x0-float(members[i-1]["x"])
-                        if left_hook else float(members[i+1]["x"])-x0)
-                    var hook: float = minf(gap*1.3, nearby*.50)
-                    if left_hook:
-                        _beam_segment(x0-hook,y0-slope*hook,x0,y0,
-                            sign*thick,ink)
-                    else:
-                        _beam_segment(x0,y0,x0+hook,y0+slope*hook,
-                            sign*thick,ink)
+        var anchors: Array = []
+        for member in members:
+            anchors.append(float(member["head_x"]))
+        glyphs.paint_beam(self,str(group["art_key"]),anchors,
+            float(first["head_y"]),gap,
+            _ink(str(group.get("staff","right"))))
+
 
 # Only the original Verovio-rendered tie contours are permitted.
 # The source noteheads determine the start, end and staff-space vertical

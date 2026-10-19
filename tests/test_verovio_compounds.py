@@ -90,3 +90,18 @@ def test_native_compound_code_has_no_drawn_tie_path():
     assert "func _tie_shape(" not in source
     assert "glyphs.paint_tie(self" in source
     assert "glyphs.paint_chord(self" in source
+
+
+def test_native_renderer_never_draws_imitated_beams_stems_or_tuplets():
+    from pathlib import Path
+    source=(Path(__file__).resolve().parents[1] /
+            "godot/score_native_notation.gd").read_text()
+    assert "func _beam_segment(" not in source
+    assert "func _paint_flag(" not in source
+    assert "draw_line(Vector2(stem_x,anchor_y)" not in source
+    tuplet=source.split("func _paint_tuplet_brackets(")[1].split(
+        "func _paint_rest(")[0]
+    assert "draw_line(" not in tuplet
+    assert "draw_string(" not in tuplet
+    assert "glyphs.paint_tuplet(" in tuplet
+    assert "glyphs.paint_note_stem(" in source

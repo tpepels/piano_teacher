@@ -1973,7 +1973,8 @@ class PracticeEngine:
                       type(exc).__name__,exc)
                 layout["native_tuplet_fragments"] = {}
             try:
-                from .verovio_slur_fragments import slur_fragments
+                from .verovio_slur_fragments import (
+                    slur_fragments, slur_pairs_from_xml)
                 p=self.plan
                 if p is None:
                     raise ValueError("No piece loaded")
@@ -1983,6 +1984,14 @@ class PracticeEngine:
                     key_signatures=p.piece.key_signatures,
                     clef_changes=p.piece.clef_changes,
                     default_clefs=infer_piece_clefs(p.piece.notes))
+                expected = slur_pairs_from_xml(notation.musicxml)
+                available = {str(e["id"]) for e in
+                             native_model.get("notation_events",[])
+                             if e.get("kind")=="note" and e.get("id")}
+                layout["native_required_slur_pairs"] = [
+                    list(pair) for pair in expected
+                    if pair[0] in available and pair[1] in available]
+                layout["native_slurs_complete"] = True
                 layout["native_slur_fragments"] = slur_fragments(
                     source_score.pages,notation.musicxml,
                     native_model,self.preprocessing,
@@ -1991,6 +2000,8 @@ class PracticeEngine:
                 print("VEROVIO_SLUR_FRAGMENTS_UNAVAILABLE:",
                       type(exc).__name__,exc)
                 layout["native_slur_fragments"] = {}
+                layout["native_required_slur_pairs"] = []
+                layout["native_slurs_complete"] = False
         return layout
 
     def lesson_overview(self) -> dict:
