@@ -10,8 +10,8 @@ else
   exit 1
 fi
 "$GODOT" --headless --path godot --check-only --script res://main.gd
-# Phase 1's clock-locked camera must be exact even at negative count-in beats.
-"$GODOT" --headless --path godot --script "$PWD/tests/godot/score_beat_camera.gd"
+# The clocked production camera was reverted; retain the source-pixel
+# integrity and explicit complete-passage fallback regression.
 "$GODOT" --headless --path godot --script "$PWD/tests/godot/score_exact_spacing.gd"
 # Layout is executable Godot behavior, not a Python-only geometry simulation.
 bash scripts/check_phase2_ui.sh
