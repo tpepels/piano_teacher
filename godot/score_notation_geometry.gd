@@ -285,6 +285,36 @@ static func signature_steps(clef: Dictionary, fifths: int) -> Array:
         result.append(step)
     return result
 
+static func chord_members(events: Array) -> Dictionary:
+    # A MusicXML chord has exactly one unmarked onset followed by notes with
+    # chord=true at the SAME beat, staff and voice. Keep the entire pitch range
+    # associated with that leader; only the leader may draw its shared stem.
+    var lanes: Dictionary = {}
+    for event in events:
+        if not event is Dictionary or str(event.get("kind", "")) != "note":
+            continue
+        var key: String = str(event.get("staff", ""))+"|"+ \
+            str(event.get("voice", "1"))+"|"+ \
+            str(event.get("measure", 0))+"|"+ \
+            str(snappedf(float(event.get("beat", 0.0)), .000001))
+        if not lanes.has(key):
+            lanes[key] = []
+        lanes[key].append(event)
+    var result: Dictionary = {}
+    for key in lanes:
+        var notes: Array = lanes[key]
+        if notes.size() < 2:
+            continue
+        var leader: Dictionary = {}
+        for note in notes:
+            if not bool(note.get("chord", false)):
+                leader = note
+                break
+        if not leader.is_empty():
+            result[str(leader.get("id", ""))] = notes
+    return result
+
+
 static func chord_offsets(events: Array, gap: float) -> Dictionary:
     # Engraved unisons/seconds must never be placed on top of each other.
     # This is a glyph-only horizontal offset: the musical beat and scroll
