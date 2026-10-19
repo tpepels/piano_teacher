@@ -65,6 +65,7 @@ func _capture(label: String) -> void:
         "note_count": app.score_layout.get("notes", []).size(),
         "glyph_tile_count": app.score_tiles.size(),
         "score_width": app.score_content.size.x,
+        "beat_camera": app.score_beat_grid.duplicate(true),
         "current_hand": str(app.last_state.get("hand", "")),
         "transport_phase": str(app.last_state.get("phase", "")),
         "clock_beat": app._transport_beat_now(),
@@ -72,6 +73,17 @@ func _capture(label: String) -> void:
     }
     frames.append(info)
     if app.current_screen == "practice":
+        if bool(app.score_beat_grid.get("enabled", false)):
+            if float(app.score_beat_grid.get("max_error_px", INF)) > 2.0:
+                errors.append("Unsafe Verovio anchors reached the fixed camera at " + label)
+            var beat: float = float(info.clock_beat) + float(
+                app.last_state.get("play_from_beat", 0.0))
+            var projected: float = float(app.score_beat_grid["origin_px"]) + \
+                beat * float(app.score_beat_grid["pixels_per_beat"])
+            var camera_x: float = app.score_frame.size.x * .42 - projected * (
+                app.score_content.size.x / maxf(1.0, app.score_overlay.image_size.x))
+            if absf(app.score_content.position.x - camera_x) > 3.0:
+                errors.append("Fixed Verovio camera drifted from the clock at " + label)
         if bounds.size.x < float(image.get_width()) * .65 or bounds.size.y < 130:
             errors.append("Practice sheet must dominate the desktop viewport")
         if rows.size() != 10:
