@@ -110,7 +110,8 @@ func run() -> void:
     check(renderer.set_verovio_glyphs(
         load("res://tests/native_glyph_fixture.gd").catalogue(),
         load("res://tests/native_glyph_fixture.gd").note_catalogue(),
-        load("res://tests/native_glyph_fixture.gd").tie_catalogue()),
+        load("res://tests/native_glyph_fixture.gd").tie_catalogue(),
+        load("res://tests/native_glyph_fixture.gd").chord_catalogue()),
         "Unit test has Verovio-shaped placeholder textures")
     check(renderer.load_score(score), "Native loads grouped rhythms")
     check(renderer.beam_groups.size() == groups.size(),
