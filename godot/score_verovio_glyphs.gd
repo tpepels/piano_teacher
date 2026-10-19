@@ -10,6 +10,7 @@ extends RefCounted
 const REQUIRED := [
     "clef_g", "clef_f", "clef_c",
     "head_whole", "head_half", "head_black", "augmentation_dot",
+    "repeat_dot",
     "rest_whole", "rest_half", "rest_quarter", "rest_eighth",
     "rest_16th", "rest_32nd", "rest_64th",
     "acc_flat", "acc_natural", "acc_sharp",
