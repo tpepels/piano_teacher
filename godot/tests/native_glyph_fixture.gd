@@ -67,3 +67,20 @@ static func beam_catalogue() -> Dictionary:
         "note_ids":["d","e"],"tip_offsets":[-860.0,-860.0],
         "head_offsets":[0.0,650.0],
         "png_base64":Marshalls.raw_to_base64(image.save_png_to_buffer())}}
+
+
+static func tuplet_catalogue() -> Dictionary:
+    var digits := Image.create(5,6,false,Image.FORMAT_RGBA8)
+    digits.fill(Color.WHITE)
+    var bars := Image.create(20,2,false,Image.FORMAT_RGBA8)
+    bars.fill(Color.WHITE)
+    return {"three0|three1|three2":{
+        "source":"verovio-engraved-tuplet",
+        "note_ids":["three0","three1","three2"],"span":500.0,
+        "number":{"source":"verovio-tuplet-number",
+            "units_per_space":250,"bounds":[220.0,-940.0,60.0,70.0],
+            "png_base64":Marshalls.raw_to_base64(digits.save_png_to_buffer())},
+        "bracket":{"source":"verovio-tuplet-bracket",
+            "units_per_space":250,
+            "bounds":[-5.0,-890.0,510.0,15.0],
+            "png_base64":Marshalls.raw_to_base64(bars.save_png_to_buffer())}}}
