@@ -1808,7 +1808,8 @@ class PracticeEngine:
                 time_signatures=p.piece.time_signatures,
                 key_signatures=p.piece.key_signatures,
                 clef_changes=p.piece.clef_changes,
-                default_clefs=infer_piece_clefs(p.piece.notes))
+                default_clefs=infer_piece_clefs(p.piece.notes),
+                barlines=p.piece.barlines)
             return build_score_model(
                 notation, boundaries=p.piece.bar_boundaries,
                 hand=p.hand, revision=self.score_revision)
@@ -1830,7 +1831,8 @@ class PracticeEngine:
                                             time_signatures=p.piece.time_signatures,
                                             key_signatures=p.piece.key_signatures,
                                             clef_changes=p.piece.clef_changes,
-                                            default_clefs=infer_piece_clefs(p.piece.notes))
+                                            default_clefs=infer_piece_clefs(p.piece.notes),
+                                            barlines=p.piece.barlines)
                 # Short lessons are freshly engraved as a continuous system.
                 # This avoids raster-copying printed Verovio lines together.
                 # Large works retain paginated rendering to bound GPU memory.
@@ -1989,7 +1991,8 @@ class PracticeEngine:
                     time_signatures=p.piece.time_signatures,
                     key_signatures=p.piece.key_signatures,
                     clef_changes=p.piece.clef_changes,
-                    default_clefs=infer_piece_clefs(p.piece.notes))
+                    default_clefs=infer_piece_clefs(p.piece.notes),
+                    barlines=p.piece.barlines)
                 expected = slur_pairs_from_xml(notation.musicxml)
                 available = {str(e["id"]) for e in
                              native_model.get("notation_events",[])
