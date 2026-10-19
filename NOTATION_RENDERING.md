@@ -73,6 +73,29 @@ must not run when native notation is selected.
 - The graphical MIDI test can capture the native rendering of Ala
   using `scripts/check_user_midi_desktop.py --native --only Ala`.
 
+### Native grand-staff engraving corrections (2026-10-19)
+
+- Measure separators form one continuous rule from the upper staff's top
+  line to the lower staff's bottom line, instead of two disconnected fragments.
+  Each is placed 1.35 staff spaces *before* the next source measure's onset,
+  without moving any event or transport clock position.
+- No artificial count-in barline appears ahead of the opening Verovio
+  clef, key signature and meter. The first source note remains on its
+  exact beat, and existing staff rules stay continuous.
+- The single stem of an ordinary chord starts at the appropriate outer
+  notehead and spans all chord pitches. Beamed chord stems use the same
+  pitch extrema, real Verovio notehead bounds and one shared beam axis.
+- Ties now have a tapered, native filled curve anchored outside the
+  actual Verovio glyphs. Their curvature goes away from the notehead's
+  stem direction; a long tie is no longer a thin straight-looking wire.
+- Staves, barlines, stems, beams and ties remain structural native Godot
+  geometry. These aren't independent font glyphs; Verovio contributes
+  the actual clefs, noteheads, flags, rests, dots and accidentals.
+  No raster pages and no typography-based horizontal scroll are introduced.
+- Numerical geometry tests cover connected barlines, chords, beat-preserving
+  beam positioning and tapered ties. Graphical checks still require real
+  desktop captures and visual review.
+
 ### Reopening a piece: versioned preprocessing cache
 
 Imported MIDI/MusicXML data and validated Verovio score layouts are stored
