@@ -127,15 +127,21 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 page_geometry[page] = parse_svg_geometry(page)
             geom = page_geometry[page]
             if not all(i in geom.elements for i in ids):
+                if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
+                    print("VEROVIO_BEAM_MISSING_ANCHORS:",ids)
                 continue
             anchors = [geom.elements[i] for i in ids]
             x0,y0,system = anchors[0]
             x1 = anchors[-1][0]
             if (any(e[2] != system for e in anchors) or
                     any(a[0] >= b[0] for a,b in zip(anchors,anchors[1:]))):
+                if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
+                    print("VEROVIO_BEAM_INVALID_ORDER:",ids,anchors)
                 continue
             lines = geom.staff_systems[system]["staff_lines"]
             if len(lines) < 5:
+                if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
+                    print("VEROVIO_BEAM_MISSING_STAFF:",ids,lines)
                 continue
             filtered = _filter_beam_svg(page,ids)
             if filtered is None:
@@ -148,14 +154,20 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             alpha = rgba.getchannel("A")
             bbox = alpha.getbbox()
             if bbox is None:
+                if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
+                    print("VEROVIO_BEAM_EMPTY_IMAGE:",ids)
                 continue
             staff_space = (lines[1]-lines[0])*rgba.height
             span = (x1-x0)*rgba.width
             if not 4 < staff_space < 300 or span < 4:
+                if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
+                    print("VEROVIO_BEAM_BAD_SCALE:",ids,staff_space,span)
                 continue
             left,top,right,bottom = bbox
             # Reject page-spanning or mistaken template geometry.
             if (right-left) > span*2.2:
+                if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
+                    print("VEROVIO_BEAM_TOO_WIDE:",ids,right-left,span)
                 continue
             # Locate the Verovio beam edge at both stem attachment points.
             # These offsets let Godot finish each native stem exactly on the
