@@ -166,6 +166,21 @@ func _ink(staff: String) -> Color:
 
 
 
+# One continuous grand-staff barline, displaced slightly left of the
+# next measure's attack. This is engraving clearance, not a new time axis.
+# The opening header is not preceded by an invented moving barline.
+func _barline_geometry(measure: Dictionary, clock: float,
+        playhead_x: float, gap: float) -> Dictionary:
+    if timeline.measures.is_empty() or \
+            int(measure.get("number", -1)) == \
+            int(timeline.measures[0].get("number", -2)):
+        return {}
+    var x: float = timeline.screen_x(float(measure.get("start_beat", 0.0)),
+        clock, playhead_x, play_from_beat) - gap*1.35
+    return {"x":x, "top":_staff_center("right")-2.0*gap,
+        "bottom":_staff_center("left")+2.0*gap}
+
+
 func _paint_ledger(x: float, y: float, step: int,
         bottom: float, gap: float, ink: Color) -> void:
     if step < 0:
@@ -537,16 +552,9 @@ func _draw() -> void:
             var y: float = center+(float(line_index)-2.0)*gap
             draw_line(Vector2(0,y),Vector2(size.x,y),
                 Color(ink,.34),1.3,true)
-    # Negative-count measure shares the same timeline and boundary at 0.
-    if count_in_beats > 0.0:
-        var first: float = timeline.count_in_start(play_from_beat,count_in_beats)
-        var x: float = timeline.screen_x(first,camera_clock,
-            playhead_x,play_from_beat)
-        if x >= 0.0 and x <= size.x:
-            for staff in ["right","left"]:
-                var center: float = _staff_center(staff)
-                draw_line(Vector2(x,center-2*gap),Vector2(x,center+2*gap),
-                    Color(DIM_INK,.72),1.25,true)
+    # The count-in runs on the same clock, but its leading boundary is
+    # intentionally NOT a printed barline: it sits before the clef/header
+    # and used to look like an orphaned vertical rule in the score.
     var previous_measure: Dictionary = {}
     for measure in timeline.measures:
         var at: float = float(measure.get("start_beat",0.0))
@@ -562,14 +570,15 @@ func _draw() -> void:
             int(measure.get("number", -1)) == \
             int(timeline.measures[0].get("number", -2))
         var header_shift: float = 50.0 if opening else 0.0
+        var barline: Dictionary = _barline_geometry(measure,
+            camera_clock, playhead_x, gap)
+        if not barline.is_empty() and float(barline["x"]) >= -2.0 and \
+                float(barline["x"]) <= size.x+2.0:
+            draw_line(Vector2(float(barline["x"]),float(barline["top"])),
+                Vector2(float(barline["x"]),float(barline["bottom"])),
+                boundary_tint,1.3,true)
         for staff in ["right","left"]:
             var center: float = _staff_center(staff)
-            # At the opening, x is the first PLAYABLE beat, not a place
-            # for a barline through the first notehead/stem. Only actual
-            # subsequent bar boundaries are drawn at their musical beats.
-            if not opening:
-                draw_line(Vector2(x,center-2*gap),Vector2(x,center+2*gap),
-                    boundary_tint,1.3,true)
             var clef: Dictionary = _clef_for(staff,measure)
             var signatures: Dictionary = measure.get("keys",{})
             var signature: int = int(signatures.get(staff,0))
