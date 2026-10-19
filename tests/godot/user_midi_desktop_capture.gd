@@ -71,6 +71,12 @@ func _capture(label: String) -> void:
         "score_width": app.score_content.size.x,
         "beat_camera": load("res://score_beat_camera.gd").prepare(app.score_layout),
         "exact_ink_grid": bool(app.score_layout.get("exact_ink_grid", false)),
+        "native_ready": app.timeline_preview != null and
+            bool(app.timeline_preview.get("native_ready")) if
+            OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" else false,
+        "native_failure": str(app.timeline_preview.get("failure_reason")) if
+            OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" and
+            app.timeline_preview != null else "",
         "exact_ink_grid_reason": str(app.score_layout.get("exact_ink_grid_reason", "")),
         "current_hand": str(app.last_state.get("hand", "")),
         "transport_phase": str(app.last_state.get("phase", "")),
@@ -165,6 +171,13 @@ func _audit_all_screens() -> void:
     app._navigate("practice")
 
 
+func _native_notation_ready() -> bool:
+    return app.timeline_preview != null and \
+        bool(app.timeline_preview.get("native_ready")) and \
+        app.timeline_preview.visible and \
+        app.timeline_model_revision == app.revision
+
+
 func _notation_ready() -> bool:
     return app.score_view.texture != null and \
         app.rendered_revision == app.revision and \
@@ -197,6 +210,13 @@ func _run() -> void:
     app._navigate("practice")
     var ready: bool = await _wait_until(
         Callable(self, "_notation_ready"), 100.0, "real notation in practice stage")
+    if ready and OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1":
+        ready = await _wait_until(Callable(self, "_native_notation_ready"),
+            55.0, "pure Godot notation ready")
+        if not ready:
+            errors.append("Native semantic renderer unavailable: " + str(
+                app.timeline_preview.get("failure_reason") if
+                app.timeline_preview != null else "missing timeline"))
     if ready:
         await _capture("ready")
         await _audit_all_screens()
