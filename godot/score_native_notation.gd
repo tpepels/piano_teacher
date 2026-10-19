@@ -17,6 +17,17 @@ var selected_density := 0.0
 var beam_groups: Array = []
 var beamed_note_ids: Dictionary = {}
 var notation_tuplets: Array = []
+# Immutable musical structure is indexed ONCE when a passage changes.
+# Each frame then visits only visible onsets, beams and ties.
+var measure_by_number: Dictionary = {}
+var ordered_events: Array = []
+var tie_pairs: Array = []
+var cached_staff_gap := -1.0
+var cached_gap_height := -1.0
+var cached_head_offsets: Dictionary = {}
+var cached_offsets_gap := -1.0
+var frame_scanned_events := 0
+var frame_visible_beam_groups := 0
 
 func clear_score() -> void:
     super.clear_score()
@@ -27,6 +38,13 @@ func clear_score() -> void:
     beam_groups.clear()
     beamed_note_ids.clear()
     notation_tuplets.clear()
+    measure_by_number.clear()
+    ordered_events.clear()
+    tie_pairs.clear()
+    cached_staff_gap = -1.0
+    cached_gap_height = -1.0
+    cached_head_offsets.clear()
+    cached_offsets_gap = -1.0
 
 func load_score(candidate: Dictionary) -> bool:
     native_ready = false
@@ -51,6 +69,28 @@ func load_score(candidate: Dictionary) -> bool:
     beam_groups = Geometry.beam_groups(timeline.model)
     beamed_note_ids = Geometry.beamed_ids(beam_groups)
     notation_tuplets = Geometry.tuplet_groups(timeline.model)
+    measure_by_number.clear()
+    for measure in timeline.measures:
+        measure_by_number[int(measure.get("number", -1))] = measure
+    ordered_events = timeline.model.get("notation_events", []).duplicate()
+    ordered_events.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+        return float(a.get("beat", 0.0)) < float(b.get("beat", 0.0)))
+    tie_pairs.clear()
+    var unfinished: Dictionary = {}
+    for event in ordered_events:
+        if str(event.get("kind", "")) != "note":
+            continue
+        var source_id: String = str(event.get("source_id", ""))
+        if bool(event.get("tie_stop", false)) and unfinished.has(source_id):
+            tie_pairs.append({"first": unfinished[source_id], "last": event})
+        if bool(event.get("tie_start", false)):
+            unfinished[source_id] = event
+        else:
+            unfinished.erase(source_id)
+    cached_staff_gap = -1.0
+    cached_gap_height = -1.0
+    cached_offsets_gap = -1.0
+    cached_head_offsets.clear()
     failure_reason = ""
     native_ready = true
     queue_redraw()
@@ -60,6 +100,8 @@ func _staff_center(hand: String) -> float:
     return size.y * (.34 if hand == "right" else .69)
 
 func _gap() -> float:
+    if cached_staff_gap > 0.0 and absf(cached_gap_height - size.y) < .001:
+        return cached_staff_gap
     # Reserve actual room for ledger notes ABOVE and BELOW both staves.
     # The former raster crop clipped high notes because it only knew staff
     # rails, not the extreme noteheads. Fit the full semantic pitch range
@@ -67,8 +109,8 @@ func _gap() -> float:
     var gap: float = clampf(size.y * .034, 8.5, 17.0)
     if timeline.model.is_empty():
         return gap
-    for event in timeline.model.get("notation_events", []):
-        if not event is Dictionary or str(event.get("kind", "")) != "note":
+    for event in ordered_events:
+        if str(event.get("kind", "")) != "note":
             continue
         var staff: String = str(event.get("staff", "right"))
         var clef: Dictionary = _clef_for(staff, _measure_for(event))
@@ -81,7 +123,9 @@ func _gap() -> float:
             gap = minf(gap, (size.y-32.0-center) / factor)
     # A note that truly cannot fit is still drawn deterministically; the
     # score is not cropped, and no horizontal position can change.
-    return maxf(5.0, gap)
+    cached_staff_gap = maxf(5.0, gap)
+    cached_gap_height = size.y
+    return cached_staff_gap
 
 func _clef_for(staff: String, measure: Dictionary) -> Dictionary:
     var clefs: Dictionary = measure.get("clefs", {})
@@ -91,10 +135,7 @@ func _clef_for(staff: String, measure: Dictionary) -> Dictionary:
 
 func _measure_for(event: Dictionary) -> Dictionary:
     var number: int = int(event.get("measure", -1))
-    for measure in timeline.measures:
-        if int(measure.get("number", -1)) == number:
-            return measure
-    return timeline.measures[0]
+    return measure_by_number.get(number, timeline.measures[0])
 
 func _event_y(event: Dictionary, gap: float) -> float:
     var staff: String = str(event.get("staff", "right"))
@@ -344,9 +385,17 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
     # Their screen X changes only through the common, linear timeline.
     var stems: Dictionary = {}
     var drawn_groups: Array = []
+    frame_visible_beam_groups = 0
     for group in beam_groups:
         if group.size() < 2:
             continue
+        var first_x: float = timeline.screen_x(
+            float(group[0].get("beat", 0.0)), clock, playhead_x, play_from_beat)
+        var last_x: float = timeline.screen_x(
+            float(group[-1].get("beat", 0.0)), clock, playhead_x, play_from_beat)
+        if last_x < -60.0 or first_x > size.x + 60.0:
+            continue
+        frame_visible_beam_groups += 1
         var up: bool = Geometry.stem_up(group, timeline.model)
         var y_min := INF
         var y_max := -INF
@@ -427,31 +476,24 @@ func _paint_beams(data: Dictionary, gap: float) -> void:
                     else:
                         _beam_rectangle(x0, x0+hook, beam_y, sign*thick, ink)
 
-func _paint_ties(visible_events: Array, playhead_x: float,
-        clock: float, gap: float) -> void:
-    var waiting: Dictionary = {}
-    for event in timeline.model.get("notation_events", []):
-        if not event is Dictionary or str(event.get("kind", "")) != "note":
+func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
+    # Build tie connectivity once on load, not O(all notes) every frame.
+    for pair in tie_pairs:
+        var previous: Dictionary = pair["first"]
+        var event: Dictionary = pair["last"]
+        var x0: float = timeline.screen_x(float(previous.get("beat", 0.0)),
+            clock,playhead_x,play_from_beat)
+        var x1: float = timeline.screen_x(float(event.get("beat", 0.0)),
+            clock,playhead_x,play_from_beat)
+        if x1 < -20.0 or x0 > size.x+20.0 or x1 <= x0+3.0:
             continue
-        var source: String = str(event.get("source_id", ""))
-        if bool(event.get("tie_stop", false)) and waiting.has(source):
-            var previous: Dictionary = waiting[source]
-            var x0: float = timeline.screen_x(float(previous.get("beat", 0.0)),
-                clock,playhead_x,play_from_beat)
-            var x1: float = timeline.screen_x(float(event.get("beat", 0.0)),
-                clock,playhead_x,play_from_beat)
-            if x1 >= -20.0 and x0 <= size.x+20.0 and x1 > x0+3.0:
-                var baseline: float = _event_y(event,gap)+gap*.55
-                var points := PackedVector2Array()
-                for step in range(21):
-                    var t: float = float(step)/20.0
-                    points.append(Vector2(lerpf(x0+6.0,x1-6.0,t),
-                        baseline+sin(t*PI)*gap*.62))
-                draw_polyline(points,_ink(str(event.get("staff", "right"))),1.4,true)
-        if bool(event.get("tie_start", false)):
-            waiting[source] = event
-        else:
-            waiting.erase(source)
+        var baseline: float = _event_y(event,gap)+gap*.55
+        var points := PackedVector2Array()
+        for step in range(21):
+            var t: float = float(step)/20.0
+            points.append(Vector2(lerpf(x0+6.0,x1-6.0,t),
+                baseline+sin(t*PI)*gap*.62))
+        draw_polyline(points,_ink(str(event.get("staff", "right"))),1.4,true)
 
 func _draw() -> void:
     if size.x < 100.0 or size.y < 100.0:
@@ -533,19 +575,30 @@ func _draw() -> void:
     # layout pass or per-note acceleration, including chord tones and rests.
     visible_symbols = 0
     drawn_noteheads.clear()
-    var head_offsets: Dictionary = Geometry.chord_offsets(
-        timeline.model.get("notation_events", []), gap)
+    if cached_offsets_gap < 0.0 or absf(cached_offsets_gap-gap) > .001:
+        cached_head_offsets = Geometry.chord_offsets(ordered_events, gap)
+        cached_offsets_gap = gap
+    var head_offsets: Dictionary = cached_head_offsets
     var beam_data: Dictionary = _beam_layout(gap, camera_clock,
         playhead_x, head_offsets)
     var beam_stems: Dictionary = beam_data.get("stems", {})
-    var visible_events: Array = []
-    for event in timeline.model.get("notation_events",[]):
-        if not event is Dictionary:
-            continue
-        var at: float = float(event.get("beat",0.0))
-        if at < left-.25 or at > right+.25:
-            continue
-        visible_events.append(event)
+    # Lower bound: events are beat-sorted once on load. Keep the viewport
+    # bounded even if a 2-hour MIDI transcription has thousands of notes.
+    var begin := 0
+    var end := ordered_events.size()
+    while begin < end:
+        var middle: int = (begin + end) >> 1
+        if float(ordered_events[middle].get("beat", 0.0)) < left-.25:
+            begin = middle + 1
+        else:
+            end = middle
+    frame_scanned_events = 0
+    for index in range(begin, ordered_events.size()):
+        var event: Dictionary = ordered_events[index]
+        var at: float = float(event.get("beat", 0.0))
+        if at > right+.25:
+            break
+        frame_scanned_events += 1
         var x: float = timeline.screen_x(at,camera_clock,
             playhead_x,play_from_beat)
         var staff: String = str(event.get("staff","right"))
@@ -562,15 +615,16 @@ func _draw() -> void:
                 int(event.get("dots",0)),ink,gap)
         visible_symbols += 1
     _paint_beams(beam_data, gap)
-    _paint_ties(visible_events,playhead_x,camera_clock,gap)
+    _paint_ties(playhead_x,camera_clock,gap)
     _paint_tuplet_brackets(camera_clock,playhead_x,gap)
     draw_line(Vector2(playhead_x,_staff_center("right")-gap*3.8),
         Vector2(playhead_x,_staff_center("left")+gap*3.7),
         PREVIEW_LIGHT,2.0,true)
-    # The diagnostic may be enabled alongside feedback for comparison.
-    var phase: String = "COUNT-IN" if camera_clock < 0.0 and running else \
-        "PAUSED" if paused else "PLAYING" if running else "READY"
-    draw_string(font,Vector2(14.0,22.0),
-        "NATIVE SCORE · %s · %.0f px/beat · %.0f BPM" % [
-            phase,timeline.pixels_per_beat,bpm],
-        HORIZONTAL_ALIGNMENT_LEFT,-1,12,DIM_INK)
+    # Never put engineering telemetry on top of the actual lesson.
+    if OS.get_environment("PIANO_TEACHER_NATIVE_DIAGNOSTICS") == "1":
+        var phase: String = "COUNT-IN" if camera_clock < 0.0 and running else \
+            "PAUSED" if paused else "PLAYING" if running else "READY"
+        draw_string(font,Vector2(14.0,22.0),
+            "NATIVE · %s · %.0f px/beat · %.0f BPM · %d events" % [
+                phase,timeline.pixels_per_beat,bpm,frame_scanned_events],
+            HORIZONTAL_ALIGNMENT_LEFT,-1,12,DIM_INK)
