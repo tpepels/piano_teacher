@@ -10,6 +10,8 @@ import mido
 import pytest
 
 from scripts.check_user_midi_visual_regression import CASES, MIDI_DIR
+from piano_teacher.lesson_timing import preparation_meter, lead_in_beats
+from piano_teacher.score import import_piece
 
 
 def test_seven_original_midi_files_are_present():
@@ -57,3 +59,21 @@ def test_real_midi_meters_and_tempos_are_not_silently_rewritten(
         assert any(meter == (131, 4) for _, meter in signatures), (
             "Retain the source anomaly as a documented import-repair regression"
         )
+
+
+def test_chopin_pickup_prepares_with_following_measure_not_half_a_beat():
+    piece, _ = import_piece(MIDI_DIR / "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi")
+    assert piece.time_signatures[0] == (0.0, 1, 8)
+    assert piece.time_signatures[1] == (0.5, 12, 8)
+    meter = preparation_meter((1, 8), piece.time_signatures, 0.0)
+    assert meter == (12, 8)
+    assert lead_in_beats(meter[0] * 4 / meter[1], 24) >= 1.0
+    # The score remains faithful to the real imported pickup measure.
+    assert piece.bar_boundaries[1] == pytest.approx(0.5)
+
+
+def test_pickup_meter_only_changes_immediate_short_preparation():
+    assert preparation_meter((3, 4), ((0.0, 3, 4),), 0.0) == (3, 4)
+    assert preparation_meter((1, 8), ((0.0, 1, 8),), 0.0) == (1, 8)
+    assert preparation_meter((1, 8), ((0.0, 1, 8), (20.0, 4, 4)), 0.0) == (1, 8)
+    assert preparation_meter((1, 8), ((0.0, 1, 8), (0.5, 4, 4)), 0.0) == (4, 4)
