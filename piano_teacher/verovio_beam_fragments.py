@@ -14,6 +14,7 @@ import base64
 from io import BytesIO
 import copy
 import math
+import os
 import xml.etree.ElementTree as ET
 
 from PIL import Image
@@ -115,6 +116,9 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 break
         if len(eligible) >= MAX_FRAGMENTS:
             break
+    if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
+        print("VEROVIO_BEAM_CANDIDATES:",len(eligible),
+              [(ids, len(svg)) for ids,svg in eligible.items()])
     output = {}
     page_geometry = {}
     for ids,page in eligible.items():
@@ -135,6 +139,8 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 continue
             filtered = _filter_beam_svg(page,ids)
             if filtered is None:
+                if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
+                    print("VEROVIO_BEAM_NO_STANDALONE_SHAPE:",ids)
                 continue
             png = cairosvg.svg2png(bytestring=filtered.encode(),output_width=1600)
             with Image.open(BytesIO(png)) as decoded:
@@ -161,15 +167,28 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 stem_x = note_x*rgba.width + (.54 if up else -.54)*staff_space
                 px = round(stem_x)
                 sample = []
-                for col in range(max(0,px-3),min(rgba.width,px+4)):
-                    for row in range(top,bottom):
-                        if alpha.getpixel((col,row)) > 50:
-                            sample.append(row)
+                # Verovio's stem attachment differs from the centre of
+                # its notehead. Scan a full space around the approximate
+                # edge, preferring the nearest actual beam pixel.
+                for distance in range(round(staff_space*1.1)+1):
+                    columns = (px-distance,px+distance) if distance else (px,)
+                    for col in columns:
+                        if col < 0 or col >= rgba.width:
+                            continue
+                        sample = [row for row in range(top,bottom)
+                                  if alpha.getpixel((col,row)) > 50]
+                        if sample:
+                            break
+                    if sample:
+                        break
                 if not sample:
                     break
                 edge_y = min(sample) if up else max(sample)
                 edges.append((edge_y-note_y*rgba.height)*250/staff_space)
             if len(edges) != len(anchors):
+                if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
+                    print("VEROVIO_BEAM_STEM_EDGE_MISSING:",
+                          ids,len(edges),len(anchors))
                 continue
             crop = rgba.crop(bbox)
             white = Image.new("RGBA",crop.size,(255,255,255,255))
@@ -192,9 +211,11 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 "png_base64":base64.b64encode(buffer.getvalue()).decode(),
             }
         except (KeyError,ValueError,TypeError,ET.ParseError,RuntimeError,
-                OverflowError):
+                OverflowError) as exc:
+            if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
+                print("VEROVIO_BEAM_FAILED:",ids,type(exc).__name__,exc)
             # A missing/ambiguous contour is not a licence to reposition any
-            # notes. Keep the existing group renderer for that pair.
+            # notes. Keep the existing group renderer for that passage.
             continue
     return output
 
