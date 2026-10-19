@@ -495,6 +495,27 @@ func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
                 baseline+sin(t*PI)*gap*.62))
         draw_polyline(points,_ink(str(event.get("staff", "right"))),1.4,true)
 
+# Binary-search into pre-sorted MusicXML events. Work is proportional
+# to what the pianist can actually see, not to the whole imported MIDI.
+func _visible_events(left: float, right: float) -> Array:
+    var begin := 0
+    var end := ordered_events.size()
+    while begin < end:
+        var middle: int = (begin + end) >> 1
+        if float(ordered_events[middle].get("beat", 0.0)) < left-.25:
+            begin = middle + 1
+        else:
+            end = middle
+    var results: Array = []
+    for index in range(begin, ordered_events.size()):
+        var event: Dictionary = ordered_events[index]
+        if float(event.get("beat", 0.0)) > right+.25:
+            break
+        results.append(event)
+    frame_scanned_events = results.size()
+    return results
+
+
 func _draw() -> void:
     if size.x < 100.0 or size.y < 100.0:
         return
@@ -582,23 +603,8 @@ func _draw() -> void:
     var beam_data: Dictionary = _beam_layout(gap, camera_clock,
         playhead_x, head_offsets)
     var beam_stems: Dictionary = beam_data.get("stems", {})
-    # Lower bound: events are beat-sorted once on load. Keep the viewport
-    # bounded even if a 2-hour MIDI transcription has thousands of notes.
-    var begin := 0
-    var end := ordered_events.size()
-    while begin < end:
-        var middle: int = (begin + end) >> 1
-        if float(ordered_events[middle].get("beat", 0.0)) < left-.25:
-            begin = middle + 1
-        else:
-            end = middle
-    frame_scanned_events = 0
-    for index in range(begin, ordered_events.size()):
-        var event: Dictionary = ordered_events[index]
+    for event in _visible_events(left, right):
         var at: float = float(event.get("beat", 0.0))
-        if at > right+.25:
-            break
-        frame_scanned_events += 1
         var x: float = timeline.screen_x(at,camera_clock,
             playhead_x,play_from_beat)
         var staff: String = str(event.get("staff","right"))
