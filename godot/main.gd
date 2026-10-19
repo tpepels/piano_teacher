@@ -3250,7 +3250,8 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
     # Godot textures. Layout XML/SVG pages are never used as glyph artwork.
     if native_notation_enabled and timeline_preview != null:
         var glyph_catalog: Dictionary = parsed.get("native_glyphs", {})
-        if not timeline_preview.set_verovio_glyphs(glyph_catalog):
+        var note_catalog: Dictionary = parsed.get("native_note_templates", {})
+        if not timeline_preview.set_verovio_glyphs(glyph_catalog, note_catalog):
             push_warning("Native Verovio glyph fallback: " +
                 str(timeline_preview.failure_reason))
         elif not timeline_model_pending and bool(last_state.get("loaded", false)):
@@ -3259,6 +3260,7 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
             timeline_model_revision = -1
             _request_timeline_model()
     parsed.erase("native_glyphs")
+    parsed.erase("native_note_templates")
     cached_bounds.clear()
     cached_bounds_revision = -1
     score_layout = parsed
