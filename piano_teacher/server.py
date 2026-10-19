@@ -1930,9 +1930,20 @@ class PracticeEngine:
             # Variable chord patterns are pre-engraved individually and
             # reused via a disk cache; unsupported patterns remain native.
             layout["native_note_templates"] = note_templates(self.preprocessing)
-            layout["native_tie_templates"] = tie_templates(self.preprocessing)
-            layout["native_chord_templates"] = chord_templates(
-                self.semantic_score(), self.preprocessing)
+            # The backend's raster notation must remain available even if
+            # the installed Verovio version changes its compound SVG markup.
+            # Never fail the entire /score/layout response for optional art.
+            try:
+                layout["native_tie_templates"] = tie_templates(self.preprocessing)
+            except (RuntimeError,ValueError,KeyError) as exc:
+                print("VEROVIO_TIE_TEMPLATE_UNAVAILABLE:", exc)
+                layout["native_tie_templates"] = {}
+            try:
+                layout["native_chord_templates"] = chord_templates(
+                    self.semantic_score(), self.preprocessing)
+            except (RuntimeError,ValueError,KeyError) as exc:
+                print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", exc)
+                layout["native_chord_templates"] = {}
         return layout
 
     def lesson_overview(self) -> dict:
