@@ -133,13 +133,15 @@ class PreprocessingCache:
         if data.startswith(b"\x89PNG\r\n\x1a\n"):
             self._write("png", key, "png", data)
 
-    def load_import(self, source: Path, fingerprint: str):
+    def load_import(self, source: Path, fingerprint: str, *, importer=None):
         """Return (Piece, original score). The runtime uses only Piece.
 
         On a cached MusicXML load the optional original music21 score is None.
         Lesson notation is rebuilt from the canonical Piece in both paths.
         """
-        from .score import import_piece
+        if importer is None:
+            from .score import import_piece
+            importer = import_piece
 
         key = self.key("source", fingerprint, source.name)
         cached = self.read_json("source", key)
@@ -150,7 +152,7 @@ class PreprocessingCache:
                 return piece, None
             except (TypeError, ValueError, KeyError, AttributeError):
                 pass
-        piece, score = import_piece(source)
+        piece, score = importer(source)
         self.write_json("source", key, asdict(piece))
         return piece, score
 
