@@ -40,6 +40,8 @@ var tie_textures: Dictionary = {}
 var tie_metadata: Dictionary = {}
 var chord_textures: Dictionary = {}
 var chord_metadata: Dictionary = {}
+var chord_heads_textures: Dictionary = {}
+var chord_heads_bounds: Dictionary = {}
 var beam_textures: Dictionary = {}
 var beam_metadata: Dictionary = {}
 var tuplet_textures: Dictionary = {}
@@ -187,6 +189,8 @@ func load_chord_templates(items: Dictionary) -> bool:
     # the existing per-glyph renderer. Never substitute fake sprite ink.
     var loaded := {}
     var metrics := {}
+    var loaded_heads: Dictionary = {}
+    var heads_dimensions: Dictionary = {}
     for key in items:
         var item: Dictionary = items[key]
         var bounds: Array = item.get("bounds",[])
@@ -204,8 +208,21 @@ func load_chord_templates(items: Dictionary) -> bool:
         loaded[str(key)] = ImageTexture.create_from_image(img)
         metrics[str(key)] = {
             "bounds":bounds.duplicate(), "head_positions":positions.duplicate(true)}
+        var heads: Dictionary = item.get("heads_only",{})
+        if str(heads.get("source","")) == "verovio-engraved-chord-heads" and \
+                heads.get("bounds",[]).size() == 4:
+            var heads_image := Image.new()
+            if heads_image.load_png_from_buffer(Marshalls.base64_to_raw(
+                    str(heads.get("png_base64","")))) != OK or \
+                    heads_image.is_empty():
+                error = "Invalid Verovio compound heads: "+str(key)
+                return false
+            loaded_heads[str(key)] = ImageTexture.create_from_image(heads_image)
+            heads_dimensions[str(key)] = heads["bounds"]
     chord_textures = loaded
     chord_metadata = metrics
+    chord_heads_textures = loaded_heads
+    chord_heads_bounds = heads_dimensions
     return true
 
 
@@ -224,6 +241,22 @@ func paint_chord(canvas: CanvasItem, key: String,
             y+float(box[1])*gap/250.0,
             float(box[2])*gap/250.0,
             float(box[3])*gap/250.0),false,ink)
+    return true
+
+
+func has_chord_heads(key: String) -> bool:
+    return chord_heads_textures.has(key)
+
+
+func paint_chord_heads(canvas: CanvasItem,key: String,
+        x: float,y: float,gap: float,ink: Color) -> bool:
+    var sprite: Texture2D = chord_heads_textures.get(key)
+    if sprite == null:
+        return false
+    var b: Array = chord_heads_bounds[key]
+    canvas.draw_texture_rect(sprite,
+        Rect2(x+float(b[0])*gap/250.0,y+float(b[1])*gap/250.0,
+              float(b[2])*gap/250.0,float(b[3])*gap/250.0),false,ink)
     return true
 
 
