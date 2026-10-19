@@ -147,6 +147,22 @@ func run() -> void:
         "Completed original Verovio chord ink is resident and can be reused")
     check(renderer.glyphs.chord_heads("quarter|up|0,2").size() == 2,
         "Each head keeps its exact original relative Verovio anchor")
+    var unordered: Dictionary = model.duplicate(true)
+    unordered["notation_events"].reverse()
+    check(renderer.load_score(unordered),
+        "Reversed equal-time MusicXML events can still be painted")
+    var leader_pos := -1
+    var follower_pos := -1
+    for i in range(renderer.ordered_events.size()):
+        var identifier: String = str(renderer.ordered_events[i].get("id",""))
+        if identifier == "n6":
+            leader_pos = i
+        if identifier == "n7":
+            follower_pos = i
+    check(leader_pos >= 0 and follower_pos > leader_pos,
+        "Verovio chord leader always precedes displaced child notes")
+    check(renderer.load_score(model),
+        "Restore notation after unstable chord ordering regression")
     var tie: Dictionary = renderer._tie_placement(
         model["notation_events"][3],model["notation_events"][4],
         160.0,330.0,staff_gap)

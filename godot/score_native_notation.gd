@@ -118,7 +118,23 @@ func load_score(candidate: Dictionary) -> bool:
         measure_by_number[int(measure.get("number", -1))] = measure
     ordered_events = timeline.model.get("notation_events", []).duplicate()
     ordered_events.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-        return float(a.get("beat", 0.0)) < float(b.get("beat", 0.0)))
+        var beat_a: float = float(a.get("beat", 0.0))
+        var beat_b: float = float(b.get("beat", 0.0))
+        if absf(beat_a-beat_b) > .000001:
+            return beat_a < beat_b
+        # A chord leader MUST be painted before any child at this beat.
+        # sort_custom does not promise stable ordering of equal keys.
+        var lane_a: String = str(a.get("staff",""))+"|"+ \
+            str(a.get("voice","1"))+"|"+str(a.get("measure",0))
+        var lane_b: String = str(b.get("staff",""))+"|"+ \
+            str(b.get("voice","1"))+"|"+str(b.get("measure",0))
+        if lane_a != lane_b:
+            return lane_a < lane_b
+        var child_a: bool = bool(a.get("chord",false))
+        var child_b: bool = bool(b.get("chord",false))
+        if child_a != child_b:
+            return not child_a
+        return str(a.get("id","")) < str(b.get("id","")))
     chord_members = Geometry.chord_members(ordered_events)
     # Cache the preceding attack for every measure once. Tight meter
     # changes must be relocated out of the ink; no per-frame note scan.

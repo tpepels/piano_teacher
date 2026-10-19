@@ -94,3 +94,28 @@ def test_real_verovio_source_slur_export():
             for el in ET.fromstring(svg).iter()
             if "slur" in el.get("class","")][:20])
     assert "a|c" in slurs
+
+
+def test_identical_slur_numbers_in_two_voices_do_not_overwrite_each_other():
+    # MusicXML slur number 1 is reused legitimately in simultaneous voices.
+    xml='''<score-partwise><part id="P1"><measure number="1">
+      <note id="a"><voice>1</voice><notations><slur type="start" number="1"/></notations></note>
+      <note id="b"><voice>2</voice><notations><slur type="start" number="1"/></notations></note>
+      <note id="c"><voice>1</voice><notations><slur type="stop" number="1"/></notations></note>
+      <note id="d"><voice>2</voice><notations><slur type="stop" number="1"/></notations></note>
+    </measure></part></score-partwise>'''
+    assert slur_pairs_from_xml(xml)==(("a","c"),("b","d"))
+
+
+def test_slur_with_correct_start_but_wrong_end_pitch_is_rejected(monkeypatch):
+    import piano_teacher.score_geometry as geometry
+    monkeypatch.setattr(geometry,"parse_svg_geometry",fake_geometry)
+    # Both shapes have the same left/right X and a plausible top bound.
+    # Only the first ends near the MusicXML stop note at y=200.
+    wrong='''<g class="slur" id="other">
+      <path d="M100 142 Q260 140 420 290 Q260 170 100 142"
+      fill="#111"/></g>'''
+    competing=SVG.replace("</svg>",wrong+"</svg>")
+    result=extract_slurs([competing],PART,MODEL)
+    assert list(result)==["a|c"]
+    assert result["a|c"]["source"]=="verovio-engraved-slur"

@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 1
+VERSION = 2
 
 
 def slur_pairs_from_xml(musicxml: str) -> tuple[tuple[str,str], ...]:
@@ -27,13 +27,16 @@ def slur_pairs_from_xml(musicxml: str) -> tuple[tuple[str,str], ...]:
                 identifier=note.get("id")
                 if not identifier:
                     continue
+                # Slur numbers are local to a voice/staff, not a part.
+                # Two simultaneous voices may both use number="1".
+                lane=(note.findtext("staff","1"),note.findtext("voice","1"))
                 for mark in note.findall("notations/slur"):
-                    number=mark.get("number","1")
+                    key=(*lane,mark.get("number","1"))
                     kind=mark.get("type")
                     if kind=="start":
-                        started[number]=identifier
-                    elif kind=="stop" and number in started:
-                        first=started.pop(number)
+                        started[key]=identifier
+                    elif kind=="stop" and key in started:
+                        first=started.pop(key)
                         if first != identifier:
                             pairs.append((first,identifier))
     # Multiple slurs between identical endpoints cannot be distinguished
@@ -92,13 +95,24 @@ def extract_slurs(svgs, musicxml: str, model: dict) -> dict:
             accepted=[]
             for rgba,rect in candidates:
                 left,top,right,bottom=rect
-                # The slur's endpoints must be near BOTH actual source note
-                # positions. Reject page-wide decorations and nearby ties.
+                pxspace=space*rgba.height
+                # Check both engraved endpoints, not just the overall
+                # bounding box: a different voice may share the same X
+                # interval yet curve towards another final pitch.
                 if (abs(left/rgba.width-x0)>space*2.6 or
                         abs(right/rgba.width-x1)>space*2.6 or
-                        min(abs(top/rgba.height-y0),
-                            abs(bottom/rgba.height-y0))>space*7.0 or
-                        (right-left)/rgba.width<space*.5):
+                        (right-left)/rgba.width<space*.5 or pxspace<=4):
+                    continue
+                edge=max(2,min(int(pxspace*.8),int((right-left)*.08)))
+                alpha=rgba.getchannel("A")
+                start_box=alpha.crop((left,top,left+edge,bottom)).getbbox()
+                end_box=alpha.crop((right-edge,top,right,bottom)).getbbox()
+                if start_box is None or end_box is None:
+                    continue
+                start_y=top+(start_box[1]+start_box[3])*.5
+                end_y=top+(end_box[1]+end_box[3])*.5
+                if (abs(start_y-y0*rgba.height)>pxspace*7.0 or
+                        abs(end_y-y1*rgba.height)>pxspace*7.0):
                     continue
                 accepted.append((rgba,rect))
             if len(accepted)!=1:
