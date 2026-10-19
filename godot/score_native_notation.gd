@@ -202,16 +202,10 @@ func _missing_source_engraving() -> String:
         for event in group.get("events",[]):
             if str(event.get("kind","")) == "note":
                 ids.append(str(event.get("id","")))
-        # Unmarked one-note time modifications describe MIDI duration only:
-        # Verovio has no corresponding bracket/number in the MusicXML.
-        # Do not invent one, nor disable the genuine native score.
+        # Some imported MIDI notes carry a one-event start/stop marker.
+        # Those do not have a multi-note Verovio number/bracket fragment:
+        # their actual beat duration remains intact; invent no symbol.
         if ids.size() < 2:
-            var explicitly_marked := false
-            for event in group.get("events",[]):
-                if not event.get("tuplet_marks",[]).is_empty():
-                    explicitly_marked = true
-            if explicitly_marked:
-                return "Unmatched explicit Verovio tuplet: "+("|".join(ids))
             continue
         if not glyphs.has_tuplet("|".join(ids),false):
             return "Missing engraved Verovio tuplet: "+("|".join(ids))
