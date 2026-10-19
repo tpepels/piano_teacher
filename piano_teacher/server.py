@@ -1921,9 +1921,13 @@ class PracticeEngine:
 
     def geometry(self, *, native_notes: bool = False) -> dict:
         from .notation_symbols import native_glyphs, preparation_symbols
-        layout = {**self.engraving().layout, "symbols": preparation_symbols(),
+        source_score = self.engraving()
+        layout = {**source_score.layout, "symbols": preparation_symbols(),
                   "native_glyphs": native_glyphs()}
         if native_notes:
+            # Build the identity-preserving model once for all fragment
+            # extractors, rather than reparsing the lesson four times.
+            native_model = self.semantic_score()
             from .verovio_note_templates import note_templates
             from .verovio_tie_templates import tie_templates
             from .verovio_chord_templates import chord_templates
@@ -1940,7 +1944,7 @@ class PracticeEngine:
                 layout["native_tie_templates"] = {}
             try:
                 layout["native_chord_templates"] = chord_templates(
-                    self.semantic_score(), self.preprocessing)
+                    native_model, self.preprocessing)
             except Exception as exc:
                 print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
                 layout["native_chord_templates"] = {}
@@ -1949,9 +1953,8 @@ class PracticeEngine:
             # leaving the Godot transport in complete control of timing.
             try:
                 from .verovio_beam_fragments import beam_fragments
-                score = self.engraving()
                 layout["native_beam_fragments"] = beam_fragments(
-                    score.pages, self.semantic_score(), self.preprocessing,
+                    source_score.pages, native_model, self.preprocessing,
                     self._layout_cache_key or "")
                 if layout["native_beam_fragments"]:
                     print("VEROVIO_NATIVE_BEAMS:",
@@ -1963,7 +1966,7 @@ class PracticeEngine:
             try:
                 from .verovio_tuplet_fragments import tuplet_fragments
                 layout["native_tuplet_fragments"] = tuplet_fragments(
-                    self.engraving().pages, self.semantic_score(),
+                    source_score.pages, native_model,
                     self.preprocessing, self._layout_cache_key or "")
             except Exception as exc:
                 print("VEROVIO_TUPLET_FRAGMENTS_UNAVAILABLE:",
@@ -1981,8 +1984,8 @@ class PracticeEngine:
                     clef_changes=p.piece.clef_changes,
                     default_clefs=infer_piece_clefs(p.piece.notes))
                 layout["native_slur_fragments"] = slur_fragments(
-                    self.engraving().pages,notation.musicxml,
-                    self.semantic_score(),self.preprocessing,
+                    source_score.pages,notation.musicxml,
+                    native_model,self.preprocessing,
                     self._layout_cache_key or "")
             except Exception as exc:
                 print("VEROVIO_SLUR_FRAGMENTS_UNAVAILABLE:",
