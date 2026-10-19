@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Install dependencies
-        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
+        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid
       - uses: actions/checkout@v4
       - name: Install application
         run: |
@@ -36,21 +36,6 @@ jobs:
           .venv/bin/python scripts/smoke_godot.py --file 'midi/Ala_–_Joep_Beving.midi'
           .venv/bin/python scripts/smoke_godot.py --file 'midi/Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi'
           .venv/bin/python scripts/smoke_godot.py --file 'midi/Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi'
-      - name: Capture actual practice windows for Ala, Autumn Leaves and Chopin
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: |
-          xvfb-run -a -s "-screen 0 1600x1000x24" \
-            .venv/bin/python scripts/check_user_midi_desktop.py \
-            --out /tmp/piano-midi-desktop
-      - name: Upload rendered Godot desktop screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: real-midi-godot-practice-screenshots
-          path: /tmp/piano-midi-desktop
-          if-no-files-found: warn
-          retention-days: 14
       - name: Audit real score scrolling velocity
         run: .venv/bin/python scripts/audit_scroll_velocity.py
       - name: Real rendering and HTTP integration
@@ -82,3 +67,31 @@ jobs:
         run: .venv/bin/python scripts/smoke_godot.py
       - name: Generated lesson end-to-end Godot rehearsal
         run: .venv/bin/python scripts/smoke_adaptive_godot.py
+
+  desktop-screenshots:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 10
+    steps:
+      - name: Install graphical test dependencies
+        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
+      - uses: actions/checkout@v4
+      - name: Install application
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e '.[godot,test]'
+      - name: Capture actual practice windows for user MIDI
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            .venv/bin/python scripts/check_user_midi_desktop.py \
+            --out /tmp/piano-midi-desktop
+      - name: Upload rendered Godot desktop screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-midi-godot-practice-screenshots
+          path: /tmp/piano-midi-desktop
+          if-no-files-found: warn
+          retention-days: 14
