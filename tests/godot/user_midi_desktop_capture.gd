@@ -47,6 +47,10 @@ func _capture(label: String) -> void:
     # opaque loading panel or a canvas before the raster textures arrive.
     await process_frame
     await process_frame
+    # Sample the same clock used to draw the frame, not one taken after
+    # PNG encoding (which may take 20-50ms on a software-rendered CI GPU).
+    app._layout_moving_score()
+    var capture_beat: float = app._transport_beat_now()
     RenderingServer.force_draw()
     var image: Image = root.get_texture().get_image()
     var path: String = folder.path_join(label + ".png")
@@ -66,9 +70,11 @@ func _capture(label: String) -> void:
         "glyph_tile_count": app.score_tiles.size(),
         "score_width": app.score_content.size.x,
         "beat_camera": app.score_beat_grid.duplicate(true),
+        "exact_ink_grid": bool(app.score_layout.get("exact_ink_grid", false)),
+        "exact_ink_grid_reason": str(app.score_layout.get("exact_ink_grid_reason", "")),
         "current_hand": str(app.last_state.get("hand", "")),
         "transport_phase": str(app.last_state.get("phase", "")),
-        "clock_beat": app._transport_beat_now(),
+        "clock_beat": capture_beat,
         "fallback": str(app.score_layout.get("strip_timing_fallback", ""))
     }
     frames.append(info)
@@ -82,7 +88,15 @@ func _capture(label: String) -> void:
                 beat * float(app.score_beat_grid["pixels_per_beat"])
             var camera_x: float = app.score_frame.size.x * .42 - projected * (
                 app.score_content.size.x / maxf(1.0, app.score_overlay.image_size.x))
-            if absf(app.score_content.position.x - camera_x) > 3.0:
+            # The screenshot starts after the preceding idle frame, and
+            # Godot's 30/60 FPS rendering and CPU PNG capture are not one
+            # atomic transport tick. Bound the frame-age error in pixels
+            # using the actual BPM and native score scale.
+            var px_per_second: float = float(
+                app.score_beat_grid["pixels_per_beat"]) * (
+                app.score_content.size.x / maxf(1.0, app.score_overlay.image_size.x)
+                ) * float(app.last_state.get("bpm", 60)) / 60.0
+            if absf(app.score_content.position.x - camera_x) > maxf(3.0, px_per_second * .08):
                 errors.append("Fixed Verovio camera drifted from the clock at " + label)
         if bounds.size.x < float(image.get_width()) * .65 or bounds.size.y < 130:
             errors.append("Practice sheet must dominate the desktop viewport")
