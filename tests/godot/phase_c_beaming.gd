@@ -111,11 +111,29 @@ func run() -> void:
         load("res://tests/native_glyph_fixture.gd").catalogue(),
         load("res://tests/native_glyph_fixture.gd").note_catalogue(),
         load("res://tests/native_glyph_fixture.gd").tie_catalogue(),
-        load("res://tests/native_glyph_fixture.gd").chord_catalogue()),
+        load("res://tests/native_glyph_fixture.gd").chord_catalogue(),
+        load("res://tests/native_glyph_fixture.gd").beam_catalogue()),
         "Unit test has Verovio-shaped placeholder textures")
     check(renderer.load_score(score), "Native loads grouped rhythms")
     check(renderer.beam_groups.size() == groups.size(),
         "Native renderer caches semantic beam plan per lesson")
+    check(renderer.glyphs.has_beam("d|e",true),
+        "Two-note Verovio beam fragment is loaded by original note identities")
+    var beam_ink: Dictionary = renderer._beam_layout(renderer._gap(),0.0,580.0)
+    var genuine: Dictionary = {}
+    for compound_group in beam_ink["groups"]:
+        if str(compound_group.get("art_key","")) == "d|e":
+            genuine = compound_group
+    check(not genuine.is_empty(),
+        "Native engine prefers actual Verovio beam ink over hand-built beams")
+    if not genuine.is_empty():
+        var pair: Array = genuine["members"]
+        var note_tip: float = float(pair[0]["head_y"])-860.0*renderer._gap()/250.0
+        check(absf(float(pair[0]["tip_y"])-note_tip) < .01,
+            "Stem tip aligns to original Verovio beam contour measurement")
+        check(absf(float(pair[1]["head_x"])-float(pair[0]["head_x"])-
+            (float(pair[1]["x"])-float(pair[0]["x"]))) < .01,
+            "Beam spacing tracks exact source beats, not Verovio page X")
     var all_chord_heads: Dictionary = score.duplicate(true)
     for item in all_chord_heads["notation_events"]:
         if str(item.get("id","")) == "chord_c":
