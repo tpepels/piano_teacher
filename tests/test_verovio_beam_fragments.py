@@ -104,7 +104,8 @@ def test_three_note_beam_has_every_original_musical_anchor(monkeypatch):
     # three independent timestamps (0, .25, .5), not stretch the whole PNG.
 
 
-def test_two_real_musicxml_eighths_produce_native_verovio_beam():
+def test_two_real_musicxml_eighths_produce_native_verovio_beam(monkeypatch):
+    monkeypatch.setenv("PIANO_TEACHER_BEAM_DEBUG","1")
     """A real Verovio wheel must export the SVG classes we extract."""
     import verovio
     from piano_teacher.score import _create_verovio_toolkit
@@ -134,6 +135,12 @@ def test_two_real_musicxml_eighths_produce_native_verovio_beam():
     page_geometry = parse_svg_geometry(page)
     assert {"n1","n2"}.issubset(page_geometry.elements)
     result = extract_beam_fragments([page], MODEL)
+    if "n1|n2" not in result:
+        print("SOURCE_BEAM_CLASSES:", [
+            (el.get("class",""),el.get("id",""))
+            for el in ET.fromstring(page).iter()
+            if ("beam" in el.get("class","").lower()
+                or "note" in el.get("class","").split())][:20])
     assert "n1|n2" in result, (
         "Genuine Verovio beam group could not be detached as a graphic")
     assert result["n1|n2"]["note_ids"] == ["n1","n2"]
