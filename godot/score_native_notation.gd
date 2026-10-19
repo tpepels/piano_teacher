@@ -54,13 +54,16 @@ func clear_score() -> void:
     cached_head_offsets.clear()
     cached_offsets_gap = -1.0
 
-func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {}) -> bool:
-    # Only the backend's authentic individual Verovio engravings are used
-    # for standalone notes. A partial atlas is not a valid native score.
+func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
+        tie_items: Dictionary = {}) -> bool:
+    # All musical ink comes from the backend's engraved Verovio artwork.
     if not glyphs.load_font(items):
         failure_reason = glyphs.error
         return false
     if not glyphs.load_note_templates(note_items):
+        failure_reason = glyphs.error
+        return false
+    if not glyphs.load_tie_templates(tie_items):
         failure_reason = glyphs.error
         return false
     failure_reason = ""
@@ -69,8 +72,8 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {}) -> bool:
 
 func load_score(candidate: Dictionary) -> bool:
     native_ready = false
-    if not glyphs.ready() or not glyphs.note_ready():
-        failure_reason = "Authentic Verovio complete note atlas is not loaded"
+    if not glyphs.ready() or not glyphs.note_ready() or not glyphs.ties_ready():
+        failure_reason = "Authentic Verovio symbol, note or tie atlas is not loaded"
         notice = failure_reason
         return false
     failure_reason = Geometry.supported(candidate)
@@ -621,60 +624,38 @@ func _paint_beams(data: Dictionary, gap: float) -> void:
                         _beam_segment(x0,y0,x0+hook,y0+slope*hook,
                             sign*thick,ink)
 
-# An engraved tie has a tapered filled contour. Return its native
-# Godot polygon: endpoints sit just OUTSIDE the actual Verovio noteheads.
-# No Verovio page X coordinates or pre-rendered SVG are involved.
-func _tie_shape(first: Dictionary, last: Dictionary,
-        x0: float, x1: float, gap: float) -> PackedVector2Array:
-    var first_x: float = x0+float(cached_head_offsets.get(
-        str(first.get("id", "")),0.0))
-    var last_x: float = x1+float(cached_head_offsets.get(
-        str(last.get("id", "")),0.0))
-    var start: float = first_x+absf(_stem_attachment(
-        str(first.get("note_type", "quarter")),gap,true))+gap*.17
-    var finish: float = last_x-absf(_stem_attachment(
-        str(last.get("note_type", "quarter")),gap,true))-gap*.17
-    if finish <= start+gap*.7:
-        return PackedVector2Array()
-    var first_y: float = _event_y(first,gap)
-    var last_y: float = _event_y(last,gap)
-    # Ties normally arch away from the stem. High notes have stems down,
-    # so the ties run above the noteheads instead of through their stems.
-    var direction: float = 1.0 if bool(_chord_extents(first,gap)["up"]) else -1.0
-    # Put endpoints on the outer edge of the head, not a full half-space
-    # above it. Large bows previously looked detached from the note.
-    var bow: float = clampf((finish-start)*.025,gap*.32,gap*.78)
-    var width: float = maxf(.8,gap*.095)
-    var upper := PackedVector2Array()
-    var lower := PackedVector2Array()
-    for index in range(25):
-        var t: float = float(index)/24.0
-        var base: float = lerpf(first_y,last_y,t)+direction*gap*.25
-        var arch: float = 4.0*t*(1.0-t)*bow
-        var taper: float = sin(PI*t)*width
-        var x: float = lerpf(start,finish,t)
-        upper.append(Vector2(x,base+direction*(arch+taper)))
-        lower.append(Vector2(x,base+direction*arch))
-    for index in range(lower.size()-1,-1,-1):
-        upper.append(lower[index])
-    return upper
+# Only the original Verovio-rendered tie contours are permitted.
+# The source noteheads determine the start, end and staff-space vertical
+# position. Godot never produces its own bow paths or tapered polygons.
+func _tie_placement(first: Dictionary, last: Dictionary,
+        x0: float, x1: float, gap: float) -> Dictionary:
+    var left: float = x0+float(cached_head_offsets.get(
+        str(first.get("id","")),0.0))
+    var right: float = x1+float(cached_head_offsets.get(
+        str(last.get("id","")),0.0))
+    if right-left <= gap*1.2:
+        return {}
+    var upward_stem: bool = bool(_chord_extents(first,gap)["up"])
+    return {"x0":left, "x1":right, "y":_event_y(first,gap),
+        "down":upward_stem}
 
 
 func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
-    # Build tie connectivity once on load, not O(all notes) every frame.
     for pair in tie_pairs:
         var previous: Dictionary = pair["first"]
         var event: Dictionary = pair["last"]
-        var x0: float = timeline.screen_x(float(previous.get("beat", 0.0)),
+        var x0: float = timeline.screen_x(float(previous.get("beat",0.0)),
             clock,playhead_x,play_from_beat)
-        var x1: float = timeline.screen_x(float(event.get("beat", 0.0)),
+        var x1: float = timeline.screen_x(float(event.get("beat",0.0)),
             clock,playhead_x,play_from_beat)
-        if x1 < -20.0 or x0 > size.x+20.0 or x1 <= x0+3.0:
+        if x1 < -20.0 or x0 > size.x+20.0:
             continue
-        var contour: PackedVector2Array = _tie_shape(previous,event,
-            x0,x1,gap)
-        if contour.size() >= 3:
-            draw_colored_polygon(contour,_ink(str(event.get("staff", "right"))))
+        var place: Dictionary = _tie_placement(previous,event,x0,x1,gap)
+        if not place.is_empty():
+            glyphs.paint_tie(self,float(place["x0"]),float(place["x1"]),
+                float(place["y"]),gap,bool(place["down"]),
+                _ink(str(event.get("staff","right"))))
+
 
 # Binary-search into pre-sorted MusicXML events. Work is proportional
 # to what the pianist can actually see, not to the whole imported MIDI.
