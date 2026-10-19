@@ -1,13 +1,12 @@
-"""Extract two-note beam *ink* from the score's real Verovio SVG pages.
+"""Extract multi-note beam *ink* from the score's real Verovio SVG pages.
 
 Unlike synthesizing beams in Godot, this uses the existing, source-accurate
 Verovio engraving. Only the <g class="beam">'s graphical children are kept:
 notes, noteheads, stems and unrelated page decorations are excluded.
 
-A fragment has two named notehead anchors and is horizontally remapped to
-the SAME two source beats on the native timeline. Groups with intermediate
-anchors need piecewise remapping and are deliberately left to the previous
-renderer until that is implemented.
+Each fragment has every named notehead anchor. Godot draws its image in
+pieces between adjacent anchors, so intermediate note positions cannot drift
+or inherit Verovio's horizontal page spacing.
 """
 from __future__ import annotations
 
@@ -32,7 +31,7 @@ def _note_ids(group: ET.Element) -> tuple[str, ...]:
                  if "note" in _classes(node) and node.get("id"))
 
 
-def _filter_beam_svg(svg: str, selected: tuple[str, str]) -> str | None:
+def _filter_beam_svg(svg: str, selected: tuple[str, ...]) -> str | None:
     """Leave original beam ink and required SVG <defs>, not individual notes."""
     root = ET.fromstring(svg)
     candidate = next((node for node in root.iter()
@@ -82,11 +81,10 @@ def _filter_beam_svg(svg: str, selected: tuple[str, str]) -> str | None:
 
 def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                            model: dict) -> dict:
-    """Return native-timeline-ready beam-only masks indexed by note pair IDs.
+    """Return source-accurate beam masks with an anchor for EVERY note.
 
-    Deliberately conservative: only beams with two note attacks, no chord
-    siblings, and matching semantic source groups are eligible. No changed
-    event identity or tempo-dependent note coordinate is ever returned.
+    Chords, duplicate-time events and ambiguous groups remain in the existing
+    renderer. No tempo-dependent page positions replace source-beat timing.
     """
     import cairosvg
     from .score_geometry import parse_svg_geometry
@@ -95,21 +93,22 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
     # cannot be attached safely to this model without a full multi-anchor map.
     events = {e.get("id"):e for e in model.get("notation_events",[])
               if e.get("kind")=="note" and e.get("id")}
-    eligible: dict[tuple[str,str],str] = {}
+    eligible: dict[tuple[str,...],str] = {}
     for page in svgs:
         root = ET.fromstring(page)
         for node in root.iter():
             if "beam" not in _classes(node):
                 continue
             ids = _note_ids(node)
-            if len(ids) != 2 or any(i not in events for i in ids):
+            if not 2 <= len(ids) <= 16 or any(i not in events for i in ids):
                 continue
-            a,b = (events[ids[0]],events[ids[1]])
-            if (a.get("staff") != b.get("staff") or
-                    a.get("voice") != b.get("voice") or
-                    a.get("measure") != b.get("measure") or
-                    a.get("chord") or b.get("chord") or
-                    float(a["beat"]) >= float(b["beat"])):
+            members = [events[i] for i in ids]
+            if (any(e.get("chord") for e in members) or
+                    any((e.get("staff"),e.get("voice"),e.get("measure")) !=
+                        (members[0].get("staff"),members[0].get("voice"),
+                         members[0].get("measure")) for e in members) or
+                    any(float(a["beat"]) >= float(b["beat"]) for a,b
+                        in zip(members,members[1:]))):
                 continue
             eligible[ids] = page
             if len(eligible) >= MAX_FRAGMENTS:
@@ -125,9 +124,11 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             geom = page_geometry[page]
             if not all(i in geom.elements for i in ids):
                 continue
-            x0,y0,system = geom.elements[ids[0]]
-            x1,y1,other_system = geom.elements[ids[1]]
-            if other_system != system or x1 <= x0:
+            anchors = [geom.elements[i] for i in ids]
+            x0,y0,system = anchors[0]
+            x1 = anchors[-1][0]
+            if (any(e[2] != system for e in anchors) or
+                    any(a[0] >= b[0] for a,b in zip(anchors,anchors[1:]))):
                 continue
             lines = geom.staff_systems[system]["staff_lines"]
             if len(lines) < 5:
@@ -156,7 +157,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             beam_centre = (top+bottom)*.5
             up = beam_centre < y0*rgba.height
             edges = []
-            for note_x,note_y in ((x0,y0),(x1,y1)):
+            for note_x,note_y,_ in anchors:
                 stem_x = note_x*rgba.width + (.54 if up else -.54)*staff_space
                 px = round(stem_x)
                 sample = []
@@ -168,7 +169,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                     break
                 edge_y = min(sample) if up else max(sample)
                 edges.append((edge_y-note_y*rgba.height)*250/staff_space)
-            if len(edges) != 2:
+            if len(edges) != len(anchors):
                 continue
             crop = rgba.crop(bbox)
             white = Image.new("RGBA",crop.size,(255,255,255,255))
@@ -186,6 +187,8 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 "source":"verovio-engraved-beam","units_per_space":250,
                 "bounds":bounds, "span":intrinsic_span,
                 "note_ids":list(ids), "stem_up":up, "tip_offsets":edges,
+                "head_offsets":[(x-x0)*rgba.width*250/staff_space
+                                for x,_,_ in anchors],
                 "png_base64":base64.b64encode(buffer.getvalue()).decode(),
             }
         except (KeyError,ValueError,TypeError,ET.ParseError,RuntimeError,
@@ -204,7 +207,9 @@ def beam_fragments(svgs, model, cache=None, cache_identity="") -> dict:
         if isinstance(stored,dict) and all(
                 isinstance(v,dict) and
                 v.get("source")=="verovio-engraved-beam" and
-                len(v.get("note_ids",[]))==2 for v in stored.values()):
+                2 <= len(v.get("note_ids",[])) <= 16 and
+                len(v.get("head_offsets",[]))==len(v.get("note_ids",[]))
+                for v in stored.values()):
             return stored
     result=extract_beam_fragments(svgs,model)
     if key:
