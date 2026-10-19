@@ -195,8 +195,13 @@ def write_comparison(input_dir: Path, output_dir: Path, report: dict,
     if strip["tiles"]:
         first = strip["tiles"][0]
         rails = [first["rect"][1] + float(row) for row in first["staff_rows"]]
-    dst_panel = _ink_panel(render_tiles, strip["width"], strip["height"],
-                           f"GODOT SCORE STRIP WITH STAFF RULES  ·  {label}",
+    # Do not shrink an entire 60,000px score into a 1,480px thumbnail.
+    # A pianist sees a local camera window, not the full scroll strip;
+    # compare a readable initial window while keeping every tile as
+    # machine-readable artifact for later offscreen/seek regression.
+    visible_width = min(float(strip["width"]), 3600.0)
+    dst_panel = _ink_panel(render_tiles, visible_width, strip["height"],
+                           f"GODOT SCORE VIEWPORT, FIRST {visible_width:.0f} SOURCE PX  ·  {label}",
                            rail_rows=rails)
     comparison = Image.new("RGB", (1480, 700), (26, 43, 38))
     comparison.paste(ref_panel, (0, 0))
