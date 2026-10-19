@@ -189,6 +189,46 @@ Beam construction is being migrated away from native Godot polygons.
 more complex slur geometry. These should follow the same source-identity
 and multi-anchor contract rather than adding more guessed Godot shapes.
 
+### Source-engraved tuplets, beamed chords and slurs (2026-10-19)
+
+The same Verovio-as-engraver/Godot-as-timeline-compositor contract now covers
+three additional classes of musical geometry:
+
+- **Tuplets:** the extractor reads explicit MusicXML tuplet groups and
+  pairs them with source Verovio `tupletNum` and `tupletBracket` groups.
+  On Verovio releases that place graphics outside the actual note hierarchy,
+  it checks the original bracket endpoints and number centre against source
+  head anchors; ambiguous matches are rejected. The bracket image is split
+  at its centre and fitted between two independent beat positions; the
+  original numeral is painted at its original size, without X stretching.
+- **Beamed chords:** multiple notes in the same source chord count as ONE
+  attack for beam spacing. The `chord_note_ids` metadata retains all chord
+  members. Verovio's displaced notehead image and original stem artwork
+  are cached as independent masks in addition to the full isolated chord.
+  The chord head positions, a single stem and the actual beam contour are
+  composed on the native beat axis, using the source-measured beam endpoint.
+  Unsupported/incomplete patterns keep the older compound rendering.
+- **Slurs:** only explicit MusicXML start/stop IDs may create a slur. A
+  matching original Verovio `slur` graphic is accepted only if its pixel
+  endpoints match the two source notes on one system unambiguously. Godot
+  places the genuine mask between independent native time positions and
+  tilts it to the difference between the two actual pitch positions, rather
+  than approximating a Bézier curve. Cross-system and ambiguous slurs are
+  deliberately rejected.
+- Assets are keyed by the source engraving/cache identity and generation
+  version. Artworks are transferred through the native layout endpoint and
+  stripped from the temporary layout dictionary immediately after loading.
+  None of these assets controls tempo, note timing or horizontal camera speed.
+- Geometry-level fixtures, real Verovio integration tests and headless Godot
+  tests cover the source-identity and rendering contracts. Desktop visual
+  captures remain necessary for artistic quality.
+
+The historical Godot tuplet drawing and compound beam routines currently
+remain as **limited fallbacks** when a source fragment cannot be extracted.
+Their remaining calls should be removed only after actual score coverage
+is sufficient and validated; never replace missing Verovio shapes with
+silently invented geometry.
+
 ### Short-pickup time-signature collisions (2026-10-19)
 
 Some imported performances, including Chopin's Nocturne Op. 9 No. 2,
