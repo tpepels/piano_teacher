@@ -147,6 +147,21 @@ func run() -> void:
     check(beam_tip <= lower_bound + .01,
         "Beam stems clear highest member of a chord, not only its leader")
     check(renderer.load_score(score),"Restore baseline beam notation")
+    var source_chord: Dictionary = score.duplicate(true)
+    for attack in source_chord["notation_events"]:
+        if str(attack.get("id",""))=="chord_c":
+            attack["spelling"]={"step":"B","octave":4}
+    check(renderer.load_score(source_chord),
+        "Native accepts a shared-beam Verovio chord interval signature")
+    var original_key: String = renderer._chord_template_key(
+        source_chord["notation_events"][2])
+    check(original_key=="eighth|up|0,2" and
+        renderer.glyphs.has_chord_heads(original_key) and
+        renderer.glyphs.has_chord_stem(original_key),
+        "A beamed chord has separate authentic Verovio head and stem ink")
+    check(renderer._beam_layout(renderer._gap(),0.0,580.0)["stems"].has("c"),
+        "Beamed Verovio chord keeps its single native musical attack")
+    check(renderer.load_score(score),"Restore baseline after chord compound")
     check(renderer.set_density(112.0),"Density remains configurable")
     var clock := .75
     var offset := 0.0
