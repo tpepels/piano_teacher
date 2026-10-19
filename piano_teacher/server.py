@@ -1872,8 +1872,9 @@ class PracticeEngine:
             return self._page_png[key]
 
     def geometry(self) -> dict:
-        from .notation_symbols import preparation_symbols
-        return {**self.engraving().layout, "symbols": preparation_symbols()}
+        from .notation_symbols import native_glyphs, preparation_symbols
+        return {**self.engraving().layout, "symbols": preparation_symbols(),
+                "native_glyphs": native_glyphs()}
 
     def lesson_overview(self) -> dict:
         """Full readable curriculum, with unique per-hand/per-level progress."""
