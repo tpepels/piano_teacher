@@ -42,6 +42,8 @@ var chord_textures: Dictionary = {}
 var chord_metadata: Dictionary = {}
 var beam_textures: Dictionary = {}
 var beam_metadata: Dictionary = {}
+var tuplet_textures: Dictionary = {}
+var tuplet_metadata: Dictionary = {}
 var error := ""
 
 func ready() -> bool:
@@ -330,6 +332,86 @@ func paint_beam(canvas: CanvasItem, name: String,
         canvas.draw_texture_rect_region(texture,
             Rect2(float(heads[-1]),base_y,last_dst,ink_height),
             Rect2(last_px,0.0,texture_width-last_px,texture_height),ink)
+    return true
+
+
+func load_tuplet_fragments(items: Dictionary) -> bool:
+    var prepared: Dictionary = {}
+    var descriptions: Dictionary = {}
+    for key in items:
+        var data: Dictionary = items[key]
+        var numeral: Dictionary = data.get("number",{})
+        if str(data.get("source","")) != "verovio-engraved-tuplet" or \
+                float(data.get("span",0.0)) <= 0.0:
+            error = "Invalid Verovio tuplet group "+str(key)
+            return false
+        var number_img := Image.new()
+        if str(numeral.get("source","")) != "verovio-tuplet-number" or \
+                numeral.get("bounds",[]).size() != 4 or \
+                number_img.load_png_from_buffer(Marshalls.base64_to_raw(
+                    str(numeral.get("png_base64","")))) != OK:
+            error = "Missing original Verovio tuplet numeral "+str(key)
+            return false
+        var artwork: Dictionary = {
+            "number":ImageTexture.create_from_image(number_img)}
+        var bracket: Variant = data.get("bracket")
+        if bracket is Dictionary and not bracket.is_empty():
+            var bracket_image := Image.new()
+            if str(bracket.get("source","")) != "verovio-tuplet-bracket" or \
+                    bracket.get("bounds",[]).size() != 4 or \
+                    bracket_image.load_png_from_buffer(Marshalls.base64_to_raw(
+                        str(bracket.get("png_base64","")))) != OK:
+                error = "Invalid original Verovio tuplet bracket "+str(key)
+                return false
+            artwork["bracket"] = ImageTexture.create_from_image(bracket_image)
+        prepared[str(key)] = artwork
+        descriptions[str(key)] = data
+    tuplet_textures = prepared
+    tuplet_metadata = descriptions
+    return true
+
+
+func has_tuplet(name: String, requires_bracket: bool) -> bool:
+    return tuplet_textures.has(name) and (not requires_bracket or \
+        tuplet_textures[name].has("bracket"))
+
+
+func paint_tuplet(canvas: CanvasItem, name: String, x0: float, x1: float,
+        y0: float, gap: float, ink: Color) -> bool:
+    if not tuplet_textures.has(name) or x1 <= x0:
+        return false
+    var info: Dictionary = tuplet_metadata[name]
+    var textures: Dictionary = tuplet_textures[name]
+    var number: Dictionary = info["number"]
+    var nb: Array = number["bounds"]
+    var unit: float = gap/250.0
+    var center: float = (x0+x1)*.5
+    canvas.draw_texture_rect(textures["number"],
+        Rect2(center-float(nb[2])*unit*.5, y0+float(nb[1])*unit,
+            float(nb[2])*unit,float(nb[3])*unit),false,ink)
+    if textures.has("bracket"):
+        var bracket: Dictionary = info["bracket"]
+        var box: Array = bracket["bounds"]
+        var source: Texture2D = textures["bracket"]
+        var img_width: float = float(source.get_width())
+        var img_height: float = float(source.get_height())
+        var midpoint: float = float(info["span"])*.5
+        var left_pixel: float = clampf(
+            (midpoint-float(box[0]))/float(box[2])*img_width,
+            0.0,img_width)
+        if left_pixel > .1 and left_pixel < img_width-.1:
+            var left_x: float = x0+float(box[0])*unit
+            var right_x: float = x1+(
+                float(box[0])+float(box[2])-float(info["span"]))*unit
+            var top_y: float = y0+float(box[1])*unit
+            var height: float = float(box[3])*unit
+            if center > left_x and right_x > center:
+                canvas.draw_texture_rect_region(source,
+                    Rect2(left_x,top_y,center-left_x,height),
+                    Rect2(0.0,0.0,left_pixel,img_height),ink)
+                canvas.draw_texture_rect_region(source,
+                    Rect2(center,top_y,right_x-center,height),
+                    Rect2(left_pixel,0.0,img_width-left_pixel,img_height),ink)
     return true
 
 
