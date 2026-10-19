@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 1
+VERSION = 2
 MAX_PATTERNS = 32
 _STEPS = {"C":0,"D":1,"E":2,"F":3,"G":4,"A":5,"B":6}
 _LETTERS = "CDEFGAB"
@@ -127,6 +127,25 @@ def _extract_chord(svg: str, ids: set[str]) -> str:
     return ET.tostring(root,encoding="unicode")
 
 
+def _only_original_chord_heads(svg: str) -> str:
+    """Keep Verovio's chord notehead ink and collisions, omitting stems.
+
+    The original SVG coordinates and notehead displacement are unchanged.
+    This can be overlaid on an independently positioned source beam.
+    """
+    root=ET.fromstring(svg)
+    omitted={"stem","flag","beam","dots","dot","accid","artic",
+             "tie","slur","tuplet","bounding-box","content-bounding-box"}
+    def visit(parent):
+        for child in list(parent):
+            if set(child.get("class","").split()) & omitted:
+                parent.remove(child)
+            else:
+                visit(child)
+    visit(root)
+    return ET.tostring(root,encoding="unicode")
+
+
 def _render(toolkit,pattern: str) -> dict:
     import cairosvg
     from .score_geometry import parse_svg_geometry
@@ -146,6 +165,13 @@ def _render(toolkit,pattern: str) -> dict:
     with Image.open(BytesIO(cairosvg.svg2png(
             bytestring=filtered.encode(),output_width=1600))) as image:
         rgba=image.convert("RGBA")
+    # A second asset contains ONLY the complete, displaced original
+    # Verovio chord heads, with stems/flags removed. Beamed attacks use
+    # this asset so the source Verovio beam can be rendered separately.
+    heads_svg=_only_original_chord_heads(filtered)
+    with Image.open(BytesIO(cairosvg.svg2png(
+            bytestring=heads_svg.encode(),output_width=1600))) as image:
+        heads_rgba=image.convert("RGBA")
     bbox=rgba.getchannel("A").getbbox()
     if not bbox:
         raise ValueError("Empty genuine chord sprite")
@@ -173,9 +199,23 @@ def _render(toolkit,pattern: str) -> dict:
     if not all(math.isfinite(v) for v in box+[
             coordinate for pos in positions for coordinate in pos]):
         raise ValueError("Nonfinite Verovio chord geometry")
-    return {"source":"verovio-engraved-chord","bounds":box,
+    result={"source":"verovio-engraved-chord","bounds":box,
             "units_per_space":250,"head_positions":positions,
             "png_base64":base64.b64encode(stream.getvalue()).decode("ascii")}
+    head_bbox=heads_rgba.getchannel("A").getbbox()
+    if head_bbox:
+        hx,hy,hr,hb=head_bbox
+        cropped=heads_rgba.crop(head_bbox)
+        head_ink=Image.new("RGBA",cropped.size,(255,255,255,255))
+        head_ink.putalpha(cropped.getchannel("A"))
+        head_bytes=BytesIO()
+        head_ink.save(head_bytes,format="PNG",optimize=True)
+        result["heads_only"]={
+            "source":"verovio-engraved-chord-heads",
+            "bounds":[(hx-note_x)*250/staff,(hy-note_y)*250/staff,
+                      (hr-hx)*250/staff,(hb-hy)*250/staff],
+            "png_base64":base64.b64encode(head_bytes.getvalue()).decode("ascii")}
+    return result
 
 
 def chord_templates(model: dict,cache=None) -> dict:
