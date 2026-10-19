@@ -139,37 +139,74 @@ def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
             if "tuplet" not in classes(group) or classes(group) & {
                     "bounding-box","content-bounding-box"}:
                 continue
-            ids=source_ids(group)
-            if ids not in desired or len(output)>=MAX_FRAGMENTS:
-                continue
-            if not all(i in geom.elements for i in ids):
-                continue
-            x0,y0,sys=geom.elements[ids[0]]
-            x1,_,end_sys=geom.elements[ids[-1]]
-            if sys != end_sys or x1<=x0:
-                continue
-            staff=geom.staff_systems[sys]["staff_lines"]
-            if len(staff)<5:
-                continue
+            if len(output)>=MAX_FRAGMENTS:
+                break
             # Separate the genuine number and bracket ink: the number is
             # never deformed by later horizontal beat-spacing changes.
             number_nodes=[node for node in group.iter()
-                          if "tupletNum" in classes(node)]
+                          if "tupletNum" in classes(node)
+                          and not classes(node) & {"bounding-box","content-bounding-box"}]
             bracket_nodes=[node for node in group.iter()
-                           if "tupletBracket" in classes(node)]
+                           if "tupletBracket" in classes(node)
+                           and not classes(node) & {"bounding-box","content-bounding-box"}]
             if len(number_nodes)!=1:
                 continue
-            try:
-                numeral=crop_art(isolate(root,number_nodes[0]),
-                    staff[1]-staff[0],(x0,y0),"verovio-tuplet-number")
-                bracket=(crop_art(isolate(root,bracket_nodes[0]),
-                    staff[1]-staff[0],(x0,y0),"verovio-tuplet-bracket")
-                    if len(bracket_nodes)==1 else None)
-            except (ValueError,RuntimeError,ET.ParseError,OverflowError):
+            contained=source_ids(group)
+            candidates=[]
+            # Verovio 5.x can place the tuplet graphic BESIDE the note
+            # groups, so source IDs are sometimes absent from the tuplet
+            # subtree. Match the original bracket endpoints instead.
+            for ids in desired:
+                if contained and contained != ids:
+                    continue
+                if "|".join(ids) in output or not all(
+                        note in geom.elements for note in ids):
+                    continue
+                anchors=[geom.elements[note] for note in ids]
+                x0,y0,sys=anchors[0]
+                x1,_,syslast=anchors[-1]
+                if sys != syslast or x1<=x0 or any(
+                        a[0]>=b[0] or b[2]!=sys
+                        for a,b in zip(anchors,anchors[1:])):
+                    continue
+                staff=geom.staff_systems[sys]["staff_lines"]
+                if len(staff)<5:
+                    continue
+                space=staff[1]-staff[0]
+                if not 0 < space < 1:
+                    continue
+                try:
+                    numeric=crop_art(isolate(root,number_nodes[0]),
+                        space,(x0,y0),"verovio-tuplet-number")
+                    bracket=(crop_art(isolate(root,bracket_nodes[0]),
+                        space,(x0,y0),"verovio-tuplet-bracket")
+                        if len(bracket_nodes)==1 else None)
+                except (ValueError,RuntimeError,ET.ParseError,OverflowError):
+                    continue
+                if numeric is None:
+                    continue
+                number_box=numeric["bounds"]
+                # In source staff-space units. The Verovio numeral is
+                # centred in the same rhythmic group even when no note
+                # nodes are descendants of its graphics group.
+                number_mid=number_box[0]+number_box[2]*.5
+                distance=abs(number_mid-(x1-x0)*125/space)
+                if not contained and distance > 500:
+                    continue
+                if bracket is not None and not contained:
+                    bounds=bracket["bounds"]
+                    left=bounds[0]
+                    right=bounds[0]+bounds[2]
+                    span=(x1-x0)*250/space
+                    if abs(left)>620 or abs(right-span)>620:
+                        continue
+                candidates.append((ids,x0,y0,space,numeric,bracket))
+            # An ambiguous overlap is never converted into a graphical
+            # guess. Those groups retain the earlier safe fallback.
+            if len(candidates)!=1:
                 continue
-            if numeral is None:
-                continue
-            span=(x1-x0)*250/(staff[1]-staff[0])
+            ids,x0,y0,space,numeral,bracket=candidates[0]
+            span=(geom.elements[ids[-1]][0]-x0)*250/space
             if span<=0 or not math.isfinite(span):
                 continue
             output["|".join(ids)]={
