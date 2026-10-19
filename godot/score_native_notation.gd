@@ -496,12 +496,14 @@ func _chord_template_key(event: Dictionary) -> String:
 
 
 func _paint_engraved_chord(event: Dictionary, x: float,
-        gap: float, ink: Color) -> Array:
+        gap: float, ink: Color, beam_stem: Dictionary = {}) -> Array:
     var key: String = _chord_template_key(event)
     if key.is_empty() or not glyphs.has_chord(key):
         return []
     var beamed: bool = beamed_note_ids.has(str(event.get("id","")))
-    if beamed and not glyphs.has_chord_heads(key):
+    if beamed and (beam_stem.is_empty() or \
+            not glyphs.has_chord_heads(key) or \
+            not glyphs.has_chord_stem(key)):
         return []
     var group: Array = chord_members.get(str(event.get("id","")),[])
     var heads: Array = glyphs.chord_heads(key)
@@ -526,6 +528,14 @@ func _paint_engraved_chord(event: Dictionary, x: float,
         # Ledger rules must be UNDER the authentic filled noteheads.
         _paint_ledger(head_x,head_y,step,_staff_center(staff)+gap*2.0,
             gap,ink)
+    if beamed:
+        var extrema: Dictionary = _chord_extents(event,gap,cached_head_offsets)
+        var stem_up: bool = bool(beam_stem.get("up",true))
+        var from_y: float = float(extrema[
+            "bottom_y" if stem_up else "top_y"])
+        if not glyphs.paint_chord_stem(self,key,x,from_y,
+                float(beam_stem["tip_y"]),gap,ink):
+            return []
     var painted_ok: bool = (glyphs.paint_chord_heads(
         self,key,x,anchor,gap,ink) if beamed else
         glyphs.paint_chord(self,key,x,anchor,gap,ink))
@@ -953,7 +963,8 @@ func _draw() -> void:
         var staff: String = str(event.get("staff","right"))
         var ink: Color = _ink(staff)
         if str(event.get("kind","")) == "note":
-            var members: Array = _paint_engraved_chord(event,x,gap,ink)
+            var members: Array = _paint_engraved_chord(event,x,gap,ink,
+                beam_stems.get(str(event.get("id",""))), {})
             if not members.is_empty():
                 for id in members:
                     compound_ids[id] = true
