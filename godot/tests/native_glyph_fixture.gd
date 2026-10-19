@@ -48,11 +48,20 @@ static func chord_catalogue() -> Dictionary:
     var image := Image.create(4,8,false,Image.FORMAT_RGBA8)
     image.fill(Color.WHITE)
     var encoded: String = Marshalls.raw_to_base64(image.save_png_to_buffer())
-    return {"quarter|up|0,2":{
-        "source":"verovio-engraved-chord", "units_per_space":250,
-        "bounds":[-20.0,-200.0,120.0,250.0],
-        "head_positions":[[0.0,0.0],[0.0,-250.0]],
-        "png_base64":encoded}}
+    var atlas: Dictionary = {}
+    for pattern in ["quarter|up|0,2","eighth|up|0,2"]:
+        atlas[pattern] = {
+            "source":"verovio-engraved-chord","units_per_space":250,
+            "bounds":[-20.0,-200.0,120.0,250.0],
+            "head_positions":[[0.0,0.0],[0.0,-250.0]],
+            "png_base64":encoded,
+            "heads_only":{"source":"verovio-engraved-chord-heads",
+                "bounds":[-20.0,-190.0,120.0,160.0],
+                "png_base64":encoded},
+            "stem_only":{"source":"verovio-engraved-chord-stem",
+                "bounds":[90.0,-800.0,6.0,790.0],
+                "png_base64":encoded}}
+    return atlas
 
 
 # Test-only beam mask: production beams are extracted from the actual
