@@ -107,7 +107,8 @@ func run() -> void:
         }
     check(renderer.set_verovio_glyphs(sample_glyphs,
         load("res://tests/native_glyph_fixture.gd").note_catalogue(),
-        load("res://tests/native_glyph_fixture.gd").tie_catalogue()),
+        load("res://tests/native_glyph_fixture.gd").tie_catalogue(),
+        load("res://tests/native_glyph_fixture.gd").chord_catalogue()),
         "Load SVG glyphs into cached Godot ImageTextures")
     check(renderer.glyphs.ready(), "Native glyph assets are resident")
     check(renderer.set_density(96.0), "User density accepted")
