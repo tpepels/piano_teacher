@@ -261,8 +261,20 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
             var drop: float = gap*.42 if up else -gap*.42
             draw_line(Vector2(x0,line_y),Vector2(x0,line_y+drop),ink,1.3,true)
             draw_line(Vector2(x1,line_y),Vector2(x1,line_y+drop),ink,1.3,true)
-        draw_string(font,Vector2(middle-half_label,y+4.0),
-            label,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,ink)
+        if label.is_valid_int() and label.length() <= 2:
+            # Tuplet number glyphs use the same real Verovio font atlas as
+            # the time signature, at a smaller local visual size.
+            var tuplet_space: float = gap*.54
+            var digit_step: float = tuplet_space*1.15
+            for index in range(label.length()):
+                glyphs.paint(self, "time_" + label[index],
+                    middle + (float(index) - float(label.length()-1)*.5)*digit_step,
+                    y+gap*.18, tuplet_space, ink, true)
+        else:
+            # Irregular explicit ratios such as 7:5 contain punctuation,
+            # which is typographic text, not a custom-drawn music glyph.
+            draw_string(font,Vector2(middle-half_label,y+4.0),
+                label,HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,ink)
 
 
 func _paint_rest(x: float, y: float,
