@@ -1960,6 +1960,15 @@ class PracticeEngine:
                 print("VEROVIO_BEAM_FRAGMENTS_UNAVAILABLE:",
                       type(exc).__name__,exc)
                 layout["native_beam_fragments"] = {}
+            try:
+                from .verovio_tuplet_fragments import tuplet_fragments
+                layout["native_tuplet_fragments"] = tuplet_fragments(
+                    self.engraving().pages, self.semantic_score(),
+                    self.preprocessing, self._layout_cache_key or "")
+            except Exception as exc:
+                print("VEROVIO_TUPLET_FRAGMENTS_UNAVAILABLE:",
+                      type(exc).__name__,exc)
+                layout["native_tuplet_fragments"] = {}
         return layout
 
     def lesson_overview(self) -> dict:
