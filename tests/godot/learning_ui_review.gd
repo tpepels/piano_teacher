@@ -94,7 +94,16 @@ func capture(label: String) -> Dictionary:
     var background := picture.get_pixel(5,5)
     check(background.r < .2 and background.g < .32 and background.b < .28,
         "Low-glare dark background in "+label)
-    if app.current_screen == "practice":
+    if app.open_picker.visible:
+        var modal: Rect2 = app.open_panel.get_global_rect()
+        entry["starting_measure_bounds"] = str(modal)
+        check(modal.size.x >= 280.0 and modal.size.x <= 680.0,
+            "Starting-measure dialog must have readable width in " + label)
+        check(modal.size.y <= viewport.size.y * .92,
+            "Starting-measure dialog must not fill the whole screen vertically in " + label)
+        check(viewport.encloses(modal),
+            "Starting-measure dialog must stay inside viewport in " + label)
+    if app.current_screen == "practice" and not app.open_picker.visible:
         entry["score_height"] = app.score_frame.size.y
         check(app.score_frame.size.y >= 135,"Notation retains readable height in "+label)
         check(viewport.encloses(app.practice_navigation.get_global_rect()),"Learning navigation fits actual viewport in "+label)
@@ -192,6 +201,10 @@ func run() -> void:
     await capture("03-library")
     (imported_row()).pressed.emit()
     await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
+    await capture("03b-starting-measure-1536x960")
+    await resize_to(Vector2i(800,600))
+    await capture("03c-starting-measure-800x600")
+    await resize_to(Vector2i(1536,960))
     app.open_mode.select(0)
     press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait","generated Learn opens")
