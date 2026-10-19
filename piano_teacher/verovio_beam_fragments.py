@@ -19,7 +19,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 1
+VERSION = 2
 MAX_FRAGMENTS = 120
 
 
@@ -225,7 +225,7 @@ def beam_fragments(svgs, model, cache=None, cache_identity="") -> dict:
            if cache is not None and cache_identity else None)
     if key:
         stored=cache.read_json("verovio-beams",key)
-        if isinstance(stored,dict) and all(
+        if isinstance(stored,dict) and stored and all(
                 isinstance(v,dict) and
                 v.get("source")=="verovio-engraved-beam" and
                 2 <= len(v.get("note_ids",[])) <= 16 and
@@ -233,6 +233,8 @@ def beam_fragments(svgs, model, cache=None, cache_identity="") -> dict:
                 for v in stored.values()):
             return stored
     result=extract_beam_fragments(svgs,model)
-    if key:
+    # Do not persist an empty atlas while a Verovio version might be
+    # missing an SVG class/shape. A corrected extractor must retry.
+    if key and result:
         cache.write_json("verovio-beams",key,result)
     return result
