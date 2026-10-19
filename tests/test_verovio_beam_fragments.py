@@ -5,6 +5,7 @@ from xml.etree import ElementTree as ET
 from piano_teacher.preprocessing_cache import PreprocessingCache
 from piano_teacher.verovio_beam_fragments import (
     _filter_beam_svg, beam_fragments, extract_beam_fragments,
+    expected_beam_groups,
 )
 
 
@@ -65,6 +66,13 @@ def test_original_two_anchors_and_measured_stem_tips(monkeypatch,tmp_path):
                             AssertionError("Versioned beam cache miss")))
     assert beam_fragments([SVG],MODEL,
                           PreprocessingCache(tmp_path),"same-score-revision")==first
+
+ 
+def test_source_beams_are_authoritative_not_inferred_from_meter():
+    assert expected_beam_groups([SVG], MODEL) == ["n1|n2"]
+    other = {"notation_events":[{**event, "id":"renamed"} if
+             event["id"] == "n2" else event for event in MODEL["notation_events"]]}
+    assert expected_beam_groups([SVG], other) == []
 
 
 def test_beam_mismatch_does_not_invent_a_symbol():

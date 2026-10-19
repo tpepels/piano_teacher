@@ -223,11 +223,22 @@ three additional classes of musical geometry:
   tests cover the source-identity and rendering contracts. Desktop visual
   captures remain necessary for artistic quality.
 
-The historical Godot tuplet drawing and compound beam routines currently
-remain as **limited fallbacks** when a source fragment cannot be extracted.
-Their remaining calls should be removed only after actual score coverage
-is sufficient and validated; never replace missing Verovio shapes with
-silently invented geometry.
+The native renderer now uses the source Verovio fragment catalogue as
+the authority for which notes are actually beamed. It no longer infers
+onscreen beams from the meter. Source beam identities and extracted masks
+are cross-checked: if Verovio engraved a beam whose graphic cannot be
+extracted, the native compositor refuses that score and the original full
+Verovio sheet is displayed instead of constructing another beam.
+
+Individual beamed note stems are extracted as separate alpha masks from
+real Verovio note templates, cached with a bumped atlas version, and
+extended only between their source notehead and measured beam tip. Godot
+no longer draws custom stem lines or beam polygons. Likewise, the old
+fallback for hand-drawn tuplet brackets and numerals has been removed.
+Single-event MIDI time modifications that have no multi-note bracket art
+remain at their exact semantic onset, without inventing extra notation.
+A missing explicit multi-note tuplet or source-matched slur causes fallback
+to the full Verovio score.
 
 ### Short-pickup time-signature collisions (2026-10-19)
 
