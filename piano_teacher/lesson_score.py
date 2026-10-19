@@ -244,6 +244,16 @@ def _write_tuplet_groups(measure):
                    and events[index+len(group)][3] == spec
                    and events[index+len(group)][1] == group[-1][1]+group[-1][2]):
                 group.append(events[index+len(group)])
+            if len(group) != spec[1]:
+                # Expressive MIDI routinely uses isolated 5:4 and 7:4
+                # durations (including rests) without a complete group.
+                # The input MusicXML already contains an invisible local
+                # start/stop pair to preserve Verovio's exact MIDI timemap.
+                # Do not turn that singleton into a visible fake quintuplet
+                # bracket/number. A visible n-tuplet requires n contiguous
+                # notes/rests of the same ratio and notation value.
+                index += len(group)
+                continue
             for element,*_ in group:
                 for notation in element.findall('./notations/tuplet'):
                     element.find('notations').remove(notation)
