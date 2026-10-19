@@ -137,6 +137,12 @@ func run() -> void:
         model["notation_events"][5],staff_gap)
     check(float(chord["top_y"]) < float(chord["bottom_y"]) and
         bool(chord["up"]), "Chord stem covers top and bottom real glyph heads")
+    check(renderer._chord_template_key(model["notation_events"][5]) ==
+        "quarter|up|0,2", "Exact chord interval/clef signature matches backend")
+    check(renderer.glyphs.has_chord("quarter|up|0,2"),
+        "Completed original Verovio chord ink is resident and can be reused")
+    check(renderer.glyphs.chord_heads("quarter|up|0,2").size() == 2,
+        "Each head keeps its exact original relative Verovio anchor")
     var tie: Dictionary = renderer._tie_placement(
         model["notation_events"][3],model["notation_events"][4],
         160.0,330.0,staff_gap)
