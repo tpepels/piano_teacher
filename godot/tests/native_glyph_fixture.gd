@@ -80,6 +80,8 @@ static func beam_catalogue() -> Dictionary:
     var groups: Array = [
         ["a","b","c"],["d","e"],["f","g"],
         ["i","j","k"],["l","m","n"],
+        ["five0","five1","five2","five3","five4"],
+        ["three0","three1","three2"],
         ["s0","s1","s2","s3"],["t0","t1","t2","t3","t4"]]
     for ids in groups:
         var key: String = "|".join(PackedStringArray(ids))
@@ -87,7 +89,9 @@ static func beam_catalogue() -> Dictionary:
         var tips: Array = []
         for i in range(ids.size()):
             offsets.append(float(i)*250.0)
-            tips.append(-860.0)
+            # A beamed chord with higher additional heads needs the
+            # original longer source stem at that attack.
+            tips.append(-1500.0 if ids[0] == "a" and i == 2 else -860.0)
         result[key] = {
             "source":"verovio-engraved-beam","units_per_space":250,
             "bounds":[100.0,-860.0,600.0,85.0],
