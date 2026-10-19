@@ -20,10 +20,22 @@ const REQUIRED := [
     "time_5", "time_6", "time_7", "time_8", "time_9",
 ]
 const RASTER_SCALE := 1.75
+# Noteheads, stems and flags rendered together by Verovio, not assembled
+# from native primitives at draw time. Beamed/chorded groups remain structural.
+const NOTE_TEMPLATES := [
+    "whole", "half_up", "half_down",
+    "quarter_up", "quarter_down",
+    "eighth_up", "eighth_down",
+    "16th_up", "16th_down",
+    "32nd_up", "32nd_down",
+    "64th_up", "64th_down",
+]
 
 var textures: Dictionary = {}
 var bounds: Dictionary = {}
 var font_name := ""
+var note_textures: Dictionary = {}
+var note_bounds: Dictionary = {}
 var error := ""
 
 func ready() -> bool:
@@ -70,6 +82,59 @@ func load_font(items: Dictionary) -> bool:
     font_name = common_font
     error = ""
     return true
+
+func note_ready() -> bool:
+    return note_textures.size() == NOTE_TEMPLATES.size()
+
+
+func load_note_templates(items: Dictionary) -> bool:
+    if note_ready():
+        return true
+    var new_textures: Dictionary = {}
+    var new_bounds: Dictionary = {}
+    for name in NOTE_TEMPLATES:
+        var item: Dictionary = items.get(name, {})
+        if str(item.get("source", "")) != "verovio-engraved-note" or \
+                int(item.get("units_per_space", 0)) != 250:
+            error = "Missing Verovio-engraved complete note " + name
+            return false
+        var coordinates: Array = item.get("bounds", [])
+        if coordinates.size() != 4 or float(coordinates[2]) <= 0.0 or \
+                float(coordinates[3]) <= 0.0:
+            error = "Invalid Verovio note dimensions: " + name
+            return false
+        var encoded: String = str(item.get("png_base64", ""))
+        if encoded.is_empty():
+            error = "Missing Verovio note image: " + name
+            return false
+        var bytes: PackedByteArray = Marshalls.base64_to_raw(encoded)
+        var note := Image.new()
+        if note.load_png_from_buffer(bytes) != OK or note.is_empty():
+            error = "Invalid authentic Verovio note image: " + name
+            return false
+        new_textures[name] = ImageTexture.create_from_image(note)
+        new_bounds[name] = coordinates.duplicate()
+    note_textures = new_textures
+    note_bounds = new_bounds
+    error = ""
+    return true
+
+
+func paint_note(canvas: CanvasItem, kind: String, up: bool,
+        x: float, y: float, gap: float, ink: Color) -> bool:
+    var name: String = ("whole" if kind == "whole"
+        else kind + ("_up" if up else "_down"))
+    var texture: Texture2D = note_textures.get(name)
+    if texture == null:
+        return false
+    var box: Array = note_bounds[name]
+    canvas.draw_texture_rect(texture,
+        Rect2(x+float(box[0])*gap/250.0,
+            y+float(box[1])*gap/250.0,
+            float(box[2])*gap/250.0,
+            float(box[3])*gap/250.0), false, ink)
+    return true
+
 
 # x,y are a glyph's musical anchor, not the top-left of a page.
 # A font-space unit is 1/250 of the current staff-space (line-to-line gap).
