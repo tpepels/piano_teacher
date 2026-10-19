@@ -78,9 +78,20 @@ def run_one(filename: str, out: Path, godot: str) -> dict:
                 raise AssertionError(f"Godot desktop capture failed for {filename}:\n{transcript[-8000:]}")
             report = json.loads((folder / "desktop-report.json").read_text())
             assert not report["errors"], report["errors"]
-            assert {x["frame"] for x in report["frames"]} == {"ready", "count-in", "playing"}
-            for frame in ("ready", "count-in", "playing"):
+            resolutions = ((1536, 960), (1024, 768), (800, 600)) if filename.startswith("Ala_") else ((1536, 960),)
+            expected = {"ready", "count-in", "playing"} | {
+                f"{screen}-{width}x{height}"
+                for width, height in resolutions
+                for screen in ("lesson", "library", "settings", "practice")
+            }
+            assert {x["frame"] for x in report["frames"]} == expected
+            for frame in expected:
                 assert (folder / (frame + ".png")).stat().st_size >= 10000
+            for item in report["frames"]:
+                if item["screen"] == "lesson":
+                    assert item["caption_rect"][2] >= 80, item
+                    assert item["activity_rect"][3] <= 70, item
+                    assert item["selector_rect"][3] <= 70, item
             print(f"PASS DESKTOP {filename}: {len(report['frames'])} captured frames",
                   flush=True)
             return {"filename": filename, "frames": report["frames"],
