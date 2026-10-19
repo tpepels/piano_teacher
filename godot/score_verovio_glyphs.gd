@@ -38,6 +38,8 @@ var note_textures: Dictionary = {}
 var note_bounds: Dictionary = {}
 var tie_textures: Dictionary = {}
 var tie_metadata: Dictionary = {}
+var chord_textures: Dictionary = {}
+var chord_metadata: Dictionary = {}
 var error := ""
 
 func ready() -> bool:
@@ -172,6 +174,57 @@ func paint_tie(canvas: CanvasItem, x0: float, x1: float, y: float,
         float(box[3])*gap/250.0)
     canvas.draw_texture_rect(texture,dest,false,ink)
     return true
+
+
+func load_chord_templates(items: Dictionary) -> bool:
+    # These are optional: unusually wide or ambiguous chord patterns use
+    # the existing per-glyph renderer. Never substitute fake sprite ink.
+    var loaded := {}
+    var metrics := {}
+    for key in items:
+        var item: Dictionary = items[key]
+        var bounds: Array = item.get("bounds",[])
+        var positions: Array = item.get("head_positions",[])
+        if str(item.get("source","")) != "verovio-engraved-chord" or \
+                int(item.get("units_per_space",0)) != 250 or \
+                bounds.size() != 4 or positions.size() < 2:
+            error = "Invalid Verovio chord sprite: " + str(key)
+            return false
+        var img := Image.new()
+        if img.load_png_from_buffer(Marshalls.base64_to_raw(
+                str(item.get("png_base64","")))) != OK or img.is_empty():
+            error = "Unreadable Verovio chord sprite: " + str(key)
+            return false
+        loaded[str(key)] = ImageTexture.create_from_image(img)
+        metrics[str(key)] = {
+            "bounds":bounds.duplicate(), "head_positions":positions.duplicate(true)}
+    chord_textures = loaded
+    chord_metadata = metrics
+    return true
+
+
+func has_chord(key: String) -> bool:
+    return chord_textures.has(key)
+
+
+func paint_chord(canvas: CanvasItem, key: String,
+        x: float, y: float, gap: float, ink: Color) -> bool:
+    var texture: Texture2D = chord_textures.get(key)
+    if texture == null:
+        return false
+    var box: Array = chord_metadata[key]["bounds"]
+    canvas.draw_texture_rect(texture,
+        Rect2(x+float(box[0])*gap/250.0,
+            y+float(box[1])*gap/250.0,
+            float(box[2])*gap/250.0,
+            float(box[3])*gap/250.0),false,ink)
+    return true
+
+
+func chord_heads(key: String) -> Array:
+    if not chord_metadata.has(key):
+        return []
+    return chord_metadata[key]["head_positions"]
 
 
 func paint_note(canvas: CanvasItem, kind: String, up: bool,
