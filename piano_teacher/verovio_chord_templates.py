@@ -14,7 +14,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 3
+VERSION = 4
 MAX_PATTERNS = 32
 _STEPS = {"C":0,"D":1,"E":2,"F":3,"G":4,"A":5,"B":6}
 _LETTERS = "CDEFGAB"
@@ -135,7 +135,8 @@ def _only_original_chord_heads(svg: str) -> str:
     """
     root=ET.fromstring(svg)
     omitted={"stem","flag","beam","dots","dot","accid","artic",
-             "tie","slur","tuplet","bounding-box","content-bounding-box"}
+             "tie","slur","tuplet","ledgerLines","ledgerLine","ledger",
+             "bounding-box","content-bounding-box"}
     def visit(parent):
         for child in list(parent):
             if set(child.get("class","").split()) & omitted:
