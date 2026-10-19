@@ -21,8 +21,8 @@ def test_preparation_symbols_have_real_visible_outlines_and_staff_units():
 
 
 def test_native_godot_atlas_is_authentic_and_covers_notation_symbols():
+    import cairosvg
     from piano_teacher.notation_symbols import _NATIVE_CODES, native_glyphs
-    from piano_teacher.raster import rasterize_score
 
     atlas = native_glyphs()
     assert set(atlas) == set(_NATIVE_CODES)
@@ -41,7 +41,8 @@ def test_native_godot_atlas_is_authentic_and_covers_notation_symbols():
     assert "class=\"system\"" not in atlas["clef_g"]["svg"]
     for name in ("head_black", "head_half", "head_whole",
                  "clef_g", "clef_f", "rest_quarter", "acc_sharp"):
-        png = Image.open(BytesIO(rasterize_score(atlas[name]["svg"], width=360)))
+        png = Image.open(BytesIO(cairosvg.svg2png(
+            bytestring=atlas[name]["svg"].encode("utf-8"), output_width=600)))
         assert png.convert("RGBA").getchannel("A").getbbox() is not None, name
 
 
