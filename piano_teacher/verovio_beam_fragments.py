@@ -85,6 +85,37 @@ def _filter_beam_svg(svg: str, selected: tuple[str, ...]) -> str | None:
     return ET.tostring(root, encoding="unicode")
 
 
+def expected_beam_groups(svgs, model: dict) -> list[str]:
+    """Enumerate genuine beam source groups, not meter-based guesses.
+
+    Extraction may reject or fail a group, but Godot must never silently
+    invent an alternative contour if Verovio did engrave a beam.
+    """
+    events={str(e["id"]):e for e in model.get("notation_events",[])
+            if e.get("kind")=="note" and e.get("id")}
+    found=set()
+    for page in svgs:
+        root=ET.fromstring(page)
+        for group in root.iter():
+            if "beam" not in _classes(group) or _classes(group) & {
+                    "bounding-box","content-bounding-box"}:
+                continue
+            source=_note_ids(group)
+            if len(source)<2 or any(i not in events for i in source):
+                continue
+            leaders=[events[i] for i in source if not events[i].get("chord")]
+            if len(leaders)<2:
+                continue
+            lane={(e.get("staff"),e.get("voice"),e.get("measure"))
+                  for e in leaders}
+            if len(lane)!=1 or any(
+                    float(a.get("beat",0))>=float(b.get("beat",0))
+                    for a,b in zip(leaders,leaders[1:])):
+                continue
+            found.add("|".join(str(e["id"]) for e in leaders))
+    return sorted(found)
+
+
 def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                            model: dict) -> dict:
     """Return source-accurate beam masks with an anchor for EVERY note.

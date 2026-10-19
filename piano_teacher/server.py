@@ -1952,7 +1952,11 @@ class PracticeEngine:
             # Verovio engraving. They retain the two real note identities,
             # leaving the Godot transport in complete control of timing.
             try:
-                from .verovio_beam_fragments import beam_fragments
+                from .verovio_beam_fragments import (
+                    beam_fragments, expected_beam_groups)
+                layout["native_required_beam_groups"] = expected_beam_groups(
+                    source_score.pages,native_model)
+                layout["native_beams_complete"] = True
                 layout["native_beam_fragments"] = beam_fragments(
                     source_score.pages, native_model, self.preprocessing,
                     self._layout_cache_key or "")
@@ -1963,6 +1967,8 @@ class PracticeEngine:
                 print("VEROVIO_BEAM_FRAGMENTS_UNAVAILABLE:",
                       type(exc).__name__,exc)
                 layout["native_beam_fragments"] = {}
+                layout["native_required_beam_groups"] = []
+                layout["native_beams_complete"] = False
             try:
                 from .verovio_tuplet_fragments import tuplet_fragments
                 layout["native_tuplet_fragments"] = tuplet_fragments(

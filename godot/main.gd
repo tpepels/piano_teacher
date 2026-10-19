@@ -3262,7 +3262,9 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
                 glyph_catalog, note_catalog, tie_catalog, chord_catalog,
                 beam_catalog, tuplet_catalog, slur_catalog,
                 parsed.get("native_required_slur_pairs",[]),
-                bool(parsed.get("native_slurs_complete",false))):
+                bool(parsed.get("native_slurs_complete",false)),
+                parsed.get("native_required_beam_groups",[]),
+                bool(parsed.get("native_beams_complete",false))):
             push_warning("Native Verovio glyph fallback: " +
                 str(timeline_preview.failure_reason))
         elif not timeline_model_pending and bool(last_state.get("loaded", false)):
@@ -3279,6 +3281,8 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
     parsed.erase("native_slur_fragments")
     parsed.erase("native_required_slur_pairs")
     parsed.erase("native_slurs_complete")
+    parsed.erase("native_required_beam_groups")
+    parsed.erase("native_beams_complete")
     cached_bounds.clear()
     cached_bounds_revision = -1
     score_layout = parsed

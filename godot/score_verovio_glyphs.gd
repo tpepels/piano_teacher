@@ -355,6 +355,7 @@ func load_beam_fragments(items: Dictionary) -> bool:
         loaded[str(name)] = ImageTexture.create_from_image(image)
         metrics[str(name)] = {
             "bounds":box.duplicate(), "span":float(item["span"]),
+            "note_ids":anchors.duplicate(),
             "tip_offsets":tips.duplicate(),
             "head_offsets":offsets.duplicate(),
             "stem_up":bool(item.get("stem_up",true))}

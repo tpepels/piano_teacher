@@ -30,6 +30,8 @@ var tie_pairs: Array = []
 var slur_pairs: Array = []
 var expected_slur_pairs: Array = []
 var slur_extraction_complete := true
+var expected_beam_groups: Array = []
+var beam_extraction_complete := true
 var previous_attack_before_measure: Dictionary = {}
 var cached_staff_gap := -1.0
 var cached_gap_height := -1.0
@@ -63,7 +65,8 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         beam_items: Dictionary = {},
         tuplet_items: Dictionary = {},
         slur_items: Dictionary = {},
-        required_slurs: Array = [], slurs_complete: bool = true) -> bool:
+        required_slurs: Array = [], slurs_complete: bool = true,
+        required_beams: Array = [], beams_complete: bool = true) -> bool:
     if not glyphs.load_font(items):
         failure_reason = glyphs.error
         return false
@@ -87,6 +90,8 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         return false
     expected_slur_pairs = required_slurs.duplicate(true)
     slur_extraction_complete = slurs_complete
+    expected_beam_groups = required_beams.duplicate(true)
+    beam_extraction_complete = beams_complete
     failure_reason = ""
     return true
 
@@ -115,7 +120,10 @@ func load_score(candidate: Dictionary) -> bool:
         notice = failure_reason
         return false
     selected_density = density
-    beam_groups = Geometry.beam_groups(timeline.model)
+    # Source-Verovio beam groups are authoritative. Inferring meter-based
+    # beams here incorrectly connected separately flagged Chopin notes.
+    var source_beams: Dictionary = _engraved_beam_groups(timeline.model)
+    beam_groups = source_beams.get("groups",[])
     beamed_note_ids = Geometry.beamed_ids(beam_groups)
     notation_tuplets = Geometry.tuplet_groups(timeline.model)
     measure_by_number.clear()
@@ -195,6 +203,11 @@ func load_score(candidate: Dictionary) -> bool:
 # Missing engraving falls back to the existing full Verovio score, rather than
 # drawing approximate beams, stems, chord shapes, tuplets or omitted slurs.
 func _missing_source_engraving() -> String:
+    if not beam_extraction_complete:
+        return "Source Verovio beam extraction failed"
+    for key in expected_beam_groups:
+        if not glyphs.beam_textures.has(str(key)):
+            return "Missing original Verovio beam: "+str(key)
     if not slur_extraction_complete:
         return "Source Verovio slur extraction failed"
     for group in notation_tuplets:
@@ -224,13 +237,6 @@ func _missing_source_engraving() -> String:
                 not glyphs.has_chord_heads(key) or \
                 not glyphs.has_chord_stem(key)):
             return "Missing Verovio beamed chord components: "+str(leader_id)
-    for group in beam_groups:
-        var ids := PackedStringArray()
-        for event in group:
-            ids.append(str(event.get("id","")))
-        var key: String = "|".join(ids)
-        if not glyphs.beam_textures.has(key):
-            return "Missing original Verovio beam: "+key
     for pair in expected_slur_pairs:
         if not pair is Array or pair.size() != 2:
             return "Invalid original Verovio slur identity"
@@ -239,6 +245,41 @@ func _missing_source_engraving() -> String:
                 glyphs.slur_note_ids(key) != pair:
             return "Missing original Verovio slur: "+key
     return ""
+
+
+func _engraved_beam_groups(model: Dictionary) -> Dictionary:
+    var notes: Dictionary = {}
+    for event in model.get("notation_events",[]):
+        if str(event.get("kind","")) == "note" and \
+                not bool(event.get("chord",false)):
+            notes[str(event.get("id",""))] = event
+    var output: Array = []
+    # Metadata is extracted from each original Verovio SVG beam group.
+    for key in glyphs.beam_metadata:
+        var data: Dictionary = glyphs.beam_metadata[key]
+        var ids: Array = data.get("note_ids",[])
+        var attacks: Array = []
+        for identifier in ids:
+            if notes.has(str(identifier)):
+                attacks.append(notes[str(identifier)])
+        if attacks.size() != ids.size() or attacks.size() < 2:
+            continue
+        var valid: bool = true
+        for index in range(1,attacks.size()):
+            if float(attacks[index]["beat"]) <= \
+                    float(attacks[index-1]["beat"]) or \
+                    str(attacks[index]["staff"]) != \
+                    str(attacks[0]["staff"]) or \
+                    str(attacks[index]["voice"]) != \
+                    str(attacks[0]["voice"]):
+                valid = false
+                break
+        if valid:
+            output.append(attacks)
+    output.sort_custom(func(a: Array,b: Array) -> bool:
+        return float(a[0].get("beat",0.0)) < \
+            float(b[0].get("beat",0.0)))
+    return {"groups":output}
 
 
 func _staff_center(hand: String) -> float:
