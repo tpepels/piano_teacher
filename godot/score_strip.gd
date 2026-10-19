@@ -13,11 +13,14 @@ const TempoStrip := preload("res://tempo_strip.gd")
 static func build(layout: Dictionary, pages: Array[Image],
         defer_textures: bool = false,
         native_engraving: bool = false) -> Dictionary:
+    # Build-time fallback flags and strip transforms are output metadata.
+    # Never mutate the original Verovio layout: different render modes are
+    # compared against the same source score in the MIDI regression corpus.
+    layout = layout.duplicate(true)
     if native_engraving:
         # Preserve caller-owned layout and source IDs.  No cropping at repeated
         # headers, no staff-only splices, no resampling or sparse fake-width
         # textures: stems, barlines and noteheads stay byte-for-byte native.
-        layout = layout.duplicate(true)
         layout["strip_trim_repeated_headers"] = false
         layout["strip_time_proportional"] = false
         layout["native_engraving"] = true
@@ -308,6 +311,9 @@ static func build(layout: Dictionary, pages: Array[Image],
             source_system_by_note_id[id] = str(source_note.get("system", ""))
     flat["strip_note_system_index"] = source_system_by_note_id
     flat["native_engraving"] = native_engraving
+    # Surface fallback to UI/debug/acceptance instead of claiming the scroll
+    # remains fully time-proportional when a pathological passage cannot fit.
+    flat["strip_timing_fallback"] = layout.get("strip_timing_fallback", "")
     flat["pages"] = 1
     flat["widths"] = [size.x]
     flat["heights"] = [size.y]
@@ -444,10 +450,26 @@ static func _equalize_beat_spacing(layout: Dictionary, mappings: Array) -> float
         velocities.append(maxf(0.0,
             (float(ordered[index+1].x)-float(ordered[index].x))/beats))
     velocities.sort()
-    # A single tempo-scaled pixels/beat unit for the entire score; choose
-    # enough clearance for Verovio's largest existing interval. Slower BPM
-    # already creates wider source engraving through reading_spacing.py.
-    var rate: float = maxf(1.0, velocities[-1])
+    # MIDI transcriptions can contain grace-note-like attacks only a few
+    # thousandths of a beat apart. The largest native interval / beat can
+    # then be 30x the normal reading density. Using that single outlier for
+    # the WHOLE passage expands 13 bars to a million-pixel logical strip
+    # and runs the raster warp for minutes. The scrolling game cannot
+    # represent that interval at constant speed without glyph collisions.
+    #
+    # Fail SAFE: retain native Verovio geometry for this passage, do not
+    # rewrite beams/notes or allocate an unbounded score. The main app's
+    # existing anchor clock still works; mark the fallback explicitly so
+    # the next glyph-timeline renderer can handle this case deliberately.
+    var median_rate: float = velocities[velocities.size() / 2]
+    var highest_rate: float = velocities[-1]
+    if highest_rate > maxf(1000.0, median_rate * 12.0):
+        layout["strip_timing_fallback"] = "Native Verovio spacing: extreme short-interval ratio %.1fx" % (
+            highest_rate / maxf(1.0, median_rate))
+        return float(mappings[-1].position.x) + _native_tile_width(mappings[-1])
+    # Equalize all ordinary beats using their real source geometry. Tempo
+    # alone never changes the glyph shapes.
+    var rate: float = maxf(1.0, highest_rate)
     var running_width := 0.0
     var previous_last_beat := -INF
     var previous_last_x := 0.0
