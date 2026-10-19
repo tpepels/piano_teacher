@@ -964,7 +964,7 @@ func _draw() -> void:
         var ink: Color = _ink(staff)
         if str(event.get("kind","")) == "note":
             var members: Array = _paint_engraved_chord(event,x,gap,ink,
-                beam_stems.get(str(event.get("id",""))), {})
+                beam_stems.get(str(event.get("id","")), {}))
             if not members.is_empty():
                 for id in members:
                     compound_ids[id] = true
