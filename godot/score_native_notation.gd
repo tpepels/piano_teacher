@@ -583,9 +583,9 @@ func _draw() -> void:
             if previous_measure.is_empty() or previous_measure.get("meter",[]) != measure.get("meter",[]):
                 var meter: Array = measure.get("meter",[4,4])
                 if meter.size() >= 2:
-                    draw_string(font,Vector2(x-30.0,center-2.0),str(meter[0]),
+                    draw_string(font,Vector2(x-30.0,center-2.0),str(int(meter[0])),
                         HORIZONTAL_ALIGNMENT_LEFT,-1,14,_ink(staff))
-                    draw_string(font,Vector2(x-30.0,center+gap*1.2),str(meter[1]),
+                    draw_string(font,Vector2(x-30.0,center+gap*1.2),str(int(meter[1])),
                         HORIZONTAL_ALIGNMENT_LEFT,-1,14,_ink(staff))
         if x >= 0.0 and x <= size.x:
             draw_string(font,Vector2(x+5.0,_staff_center("right")-gap*3.0),
