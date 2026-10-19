@@ -1944,6 +1944,19 @@ class PracticeEngine:
             except Exception as exc:
                 print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
                 layout["native_chord_templates"] = {}
+            # These fragments are cut directly from this lesson's original
+            # Verovio engraving. They retain the two real note identities,
+            # leaving the Godot transport in complete control of timing.
+            try:
+                from .verovio_beam_fragments import beam_fragments
+                score = self.engraving()
+                layout["native_beam_fragments"] = beam_fragments(
+                    score.pages, self.semantic_score(), self.preprocessing,
+                    self._layout_cache_key or "")
+            except Exception as exc:
+                print("VEROVIO_BEAM_FRAGMENTS_UNAVAILABLE:",
+                      type(exc).__name__,exc)
+                layout["native_beam_fragments"] = {}
         return layout
 
     def lesson_overview(self) -> dict:
