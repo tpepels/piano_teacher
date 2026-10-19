@@ -69,7 +69,7 @@ func _capture(label: String) -> void:
         "note_count": app.score_layout.get("notes", []).size(),
         "glyph_tile_count": app.score_tiles.size(),
         "score_width": app.score_content.size.x,
-        "beat_camera": app.score_beat_grid.duplicate(true),
+        "beat_camera": load("res://score_beat_camera.gd").prepare(app.score_layout),
         "exact_ink_grid": bool(app.score_layout.get("exact_ink_grid", false)),
         "exact_ink_grid_reason": str(app.score_layout.get("exact_ink_grid_reason", "")),
         "current_hand": str(app.last_state.get("hand", "")),
@@ -79,25 +79,10 @@ func _capture(label: String) -> void:
     }
     frames.append(info)
     if app.current_screen == "practice":
-        if bool(app.score_beat_grid.get("enabled", false)):
-            if float(app.score_beat_grid.get("max_error_px", INF)) > 2.0:
-                errors.append("Unsafe Verovio anchors reached the fixed camera at " + label)
-            var beat: float = float(info.clock_beat) + float(
-                app.last_state.get("play_from_beat", 0.0))
-            var projected: float = float(app.score_beat_grid["origin_px"]) + \
-                beat * float(app.score_beat_grid["pixels_per_beat"])
-            var camera_x: float = app.score_frame.size.x * .42 - projected * (
-                app.score_content.size.x / maxf(1.0, app.score_overlay.image_size.x))
-            # The screenshot starts after the preceding idle frame, and
-            # Godot's 30/60 FPS rendering and CPU PNG capture are not one
-            # atomic transport tick. Bound the frame-age error in pixels
-            # using the actual BPM and native score scale.
-            var px_per_second: float = float(
-                app.score_beat_grid["pixels_per_beat"]) * (
-                app.score_content.size.x / maxf(1.0, app.score_overlay.image_size.x)
-                ) * float(app.last_state.get("bpm", 60)) / 60.0
-            if absf(app.score_content.position.x - camera_x) > maxf(3.0, px_per_second * .08):
-                errors.append("Fixed Verovio camera drifted from the clock at " + label)
+        var camera_result: Dictionary = info["beat_camera"]
+        if bool(camera_result.get("enabled", false)) and \
+                float(camera_result.get("max_error_px", INF)) > 2.0:
+            errors.append("Unaligned real Verovio notes bypassed the exact-grid guard at " + label)
         if bounds.size.x < float(image.get_width()) * .65 or bounds.size.y < 130:
             errors.append("Practice sheet must dominate the desktop viewport")
         if rows.size() != 10:
