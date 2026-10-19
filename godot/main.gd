@@ -1441,7 +1441,14 @@ func _build_interface() -> void:
     start_scroll.name = "StartContentScroll"
     start_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     start_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-    _card_body(open_panel, 18).add_child(start_scroll)
+    start_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    # Keep primary modal actions outside its scrolling content: in an
+    # 800x600 window learners must not scroll to discover Open music/Cancel.
+    var picker_column := _stack(10)
+    picker_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    picker_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    _card_body(open_panel, 18).add_child(picker_column)
+    picker_column.add_child(start_scroll)
     var start_content := _stack(12)
     start_scroll.add_child(start_content)
     start_content.add_child(_label("CHOOSE A STARTING POINT", 14, ACCENT, true))
@@ -1496,8 +1503,10 @@ func _build_interface() -> void:
         "Learn starts with notes only. Practice uses the metronome and rhythm.", 14, MUTED)
     start_content.add_child(start_note)
     var start_actions := HBoxContainer.new()
+    start_actions.name = "StartPickerActions"
+    start_actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     start_actions.add_theme_constant_override("separation", 12)
-    start_content.add_child(start_actions)
+    picker_column.add_child(start_actions)
     var cancel_picker := _button("Cancel", _cancel_open_picker, false, "navigation")
     cancel_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     start_actions.add_child(cancel_picker)
