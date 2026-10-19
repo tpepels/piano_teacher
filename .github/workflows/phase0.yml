@@ -102,6 +102,23 @@ jobs:
           path: /tmp/piano-full-learning-ui
           if-no-files-found: warn
           retention-days: 14
+      - name: Prove lossless Phase 1 Verovio layout on real Chopin MIDI
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          PIANO_TEACHER_EXACT_VEROVIO_GRID: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            .venv/bin/python scripts/check_user_midi_desktop.py \
+            --only Chopin --require-exact-ink-grid \
+            --out /tmp/piano-phase1-exact-grid
+      - name: Upload Phase 1 experimental score frames
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase1-chopin-original-verovio-ink
+          path: /tmp/piano-phase1-exact-grid
+          if-no-files-found: warn
+          retention-days: 14
       - name: Upload rendered Godot desktop screenshots
         if: always()
         uses: actions/upload-artifact@v4
