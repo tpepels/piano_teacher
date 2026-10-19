@@ -73,6 +73,29 @@ must not run when native notation is selected.
 - The graphical MIDI test can capture the native rendering of Ala
   using `scripts/check_user_midi_desktop.py --native --only Ala`.
 
+### Reopening a piece: versioned preprocessing cache
+
+Imported MIDI/MusicXML data and validated Verovio score layouts are stored
+under `$XDG_DATA_HOME/piano-teacher/preprocessed/` (or
+`~/.local/share/piano-teacher/preprocessed/`). Rendered score PNGs are
+reused at the same requested resolution. Entries are keyed by source SHA-256,
+cache version, selected curriculum stage, notes, hand, first/last measure,
+and tempo; changing a file or switching exercises cannot silently reuse
+another exercise's engraving. The cache is bounded to 256 MiB and evicts
+oldest artifacts when a new engraving is generated.
+
+`piano_teacher/preprocessing_cache.py:CACHE_VERSION` is the explicit
+preprocessing-version switch. Increment it if the score importer, exercise
+generator or Verovio engraving algorithm changes. Cache files are
+compressed JSON or PNG, never deserialized Python objects; corruption
+or cache permission failures trigger a fresh computation.
+Use `PIANO_TEACHER_DISABLE_CACHE=1 ./run.sh` to bypass it for diagnostics.
+
+The native Verovio glyph atlas is currently delivered via `/score/layout`
+and cached in Godot after its first successful import. The semantic model
+does not load into native notation before those genuine glyph textures are
+available, preventing a false "font atlas is not loaded" fallback.
+
 ### Still to do
 
 - Confirm the CI graphical native MIDI capture and fix any failure.
