@@ -228,10 +228,12 @@ func _paint_meter_above_staff(measure: Dictionary, x: float,
     var center: float = _staff_center("right")
     var origin: float = x-gap*1.75
     var space: float = gap*.72
+    # Meter applies to BOTH staves and must remain readable while one
+    # of the hands is dimmed for separate-handed practice.
     _paint_meter_number(int(meter[0]),origin,center-gap*4.50,
-        _ink("right"),space)
+        NOTE_INK,space)
     _paint_meter_number(int(meter[1]),origin,center-gap*3.05,
-        _ink("right"),space)
+        NOTE_INK,space)
 
 
 func _paint_ledger(x: float, y: float, step: int,
