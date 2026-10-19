@@ -30,3 +30,15 @@ static func note_catalogue() -> Dictionary:
             "png_base64":encoded
         }
     return entries
+
+
+static func tie_catalogue() -> Dictionary:
+    var image := Image.create(4,2,false,Image.FORMAT_RGBA8)
+    image.fill(Color.WHITE)
+    var encoded: String = Marshalls.raw_to_base64(image.save_png_to_buffer())
+    var output: Dictionary = {}
+    for side in ["up","down"]:
+        output[side] = {"source":"verovio-engraved-tie",
+            "units_per_space":250, "bounds":[0.0,-10.0,80.0,12.0],
+            "span":80.0, "png_base64":encoded}
+    return output
