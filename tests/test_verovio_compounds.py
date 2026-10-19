@@ -73,6 +73,9 @@ def test_chord_sprite_is_actual_verovio_compound_and_reusable(tmp_path,monkeypat
             sprite["heads_only"]["png_base64"]))) as head_bitmap:
         assert head_bitmap.getchannel("A").getbbox() is not None
     assert sprite["heads_only"]["bounds"][3] < sprite["bounds"][3]
+    assert sprite["stem_only"]["source"]=="verovio-engraved-chord-stem"
+    assert sprite["stem_only"]["bounds"][2]>0
+    assert sprite["stem_only"]["bounds"][3]>0
     assert len(sprite["head_positions"])==2
     assert sprite["head_positions"][0][1]>sprite["head_positions"][1][1]
     monkeypatch.setattr(chords,"_render",lambda *_:(_ for _ in ()).throw(
