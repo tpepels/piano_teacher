@@ -3246,6 +3246,19 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
     if typeof(parsed) != TYPE_DICTIONARY or not parsed.has("anchors"):
         _score_failed("The engraving engine returned invalid note positions")
         return
+    # The original Verovio font glyphs are imported ONCE into native
+    # Godot textures. Layout XML/SVG pages are never used as glyph artwork.
+    if native_notation_enabled and timeline_preview != null:
+        var glyph_catalog: Dictionary = parsed.get("native_glyphs", {})
+        if not timeline_preview.set_verovio_glyphs(glyph_catalog):
+            push_warning("Native Verovio glyph fallback: " +
+                str(timeline_preview.failure_reason))
+        elif not timeline_model_pending and bool(last_state.get("loaded", false)):
+            # /score/model can arrive ahead of /score/layout. Retry its
+            # semantic parse now that the real glyph atlas is resident.
+            timeline_model_revision = -1
+            _request_timeline_model()
+    parsed.erase("native_glyphs")
     cached_bounds.clear()
     cached_bounds_revision = -1
     score_layout = parsed
