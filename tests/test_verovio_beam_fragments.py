@@ -160,3 +160,29 @@ def test_diagnostic_svg_bounding_boxes_do_not_create_fake_notes():
       <g class="note content-bounding-box" id="cbbox-n2"/>
     </g>''')
     assert _note_ids(group) == ("n1","n2")
+
+
+def test_verovio_beamed_chord_keeps_one_attack_and_all_pitches(monkeypatch):
+    import piano_teacher.score_geometry as geometry
+    svg=SVG.replace(
+        '<g class="note" id="n1"><circle cx="100" cy="100" r="8"/></g>',
+        '<g class="chord"><g class="note" id="n1">'
+        '<circle cx="100" cy="100" r="8"/></g>'
+        '<g class="note" id="n1upper">'
+        '<circle cx="100" cy="80" r="8"/></g></g>')
+    score={"notation_events":[
+        MODEL["notation_events"][0],
+        {**MODEL["notation_events"][0],"id":"n1upper",
+         "chord":True},
+        MODEL["notation_events"][1]]}
+    monkeypatch.setattr(geometry,"parse_svg_geometry",lambda _:SimpleNamespace(
+        elements={"n1":(.125,.50,"s1"),"n1upper":(.125,.45,"s1"),
+                  "n2":(.5,.5,"s1")},
+        staff_systems={"s1":{"staff_lines":[.35,.45,.55,.65,.75]}}))
+    fragment=extract_beam_fragments([svg],score)
+    assert list(fragment)==["n1|n2"]
+    item=fragment["n1|n2"]
+    assert item["note_ids"]==["n1","n2"]
+    assert item["chord_note_ids"]==[["n1","n1upper"],["n2"]]
+    assert len(item["tip_offsets"])==2
+    assert len(item["head_offsets"])==2
