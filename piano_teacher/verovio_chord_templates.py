@@ -87,13 +87,14 @@ def _xml(pattern: str) -> str:
         notes.append(f'<note id="c{i}">{extra}<pitch><step>{_LETTERS[step]}</step>'
                      f'<octave>{octave}</octave></pitch>'
                      f'<duration>{duration}</duration><type>{kind}</type>{stem}</note>')
+    notes_xml="".join(notes)
     return (f'<score-partwise version="4.0"><work><work-title> </work-title></work>'
             f'<movement-title> </movement-title><part-list><score-part id="P1">'
             f'<part-name>Piano</part-name></score-part></part-list>'
             f'<part id="P1"><measure number="1"><attributes>'
             f'<divisions>10080</divisions><time><beats>4</beats>'
             f'<beat-type>4</beat-type></time><clef><sign>G</sign>'
-            f'<line>2</line></clef></attributes>{''.join(notes)}</measure></part>'
+            f'<line>2</line></clef></attributes>{notes_xml}</measure></part>'
             f'</score-partwise>')
 
 
@@ -136,8 +137,10 @@ def _render(toolkit,pattern: str) -> dict:
     names={f"c{index}" for index in range(len(pattern.split("|")[2].split(",")))}
     if not names.issubset(g.elements):
         raise ValueError("Verovio chord notehead anchor IDs missing")
-    # The leader is the LOWEST source note in these normalized sprites.
-    anchor=g.elements["c0"]
+    # Normalization is relative to the actual MusicXML chord leader.
+    # It need not be the lowest note: preserve the zero-offset head.
+    offsets=[int(n) for n in pattern.split("|")[2].split(",")]
+    anchor=g.elements[f"c{offsets.index(0)}"]
     rails=g.staff_systems[anchor[2]]["staff_lines"]
     filtered=_extract_chord(svg,names)
     with Image.open(BytesIO(cairosvg.svg2png(
