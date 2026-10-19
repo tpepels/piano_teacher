@@ -1969,6 +1969,25 @@ class PracticeEngine:
                 print("VEROVIO_TUPLET_FRAGMENTS_UNAVAILABLE:",
                       type(exc).__name__,exc)
                 layout["native_tuplet_fragments"] = {}
+            try:
+                from .verovio_slur_fragments import slur_fragments
+                p=self.plan
+                if p is None:
+                    raise ValueError("No piece loaded")
+                notation=build_lesson_score(
+                    self.display_phrase(),boundaries=p.piece.bar_boundaries,
+                    time_signatures=p.piece.time_signatures,
+                    key_signatures=p.piece.key_signatures,
+                    clef_changes=p.piece.clef_changes,
+                    default_clefs=infer_piece_clefs(p.piece.notes))
+                layout["native_slur_fragments"] = slur_fragments(
+                    self.engraving().pages,notation.musicxml,
+                    self.semantic_score(),self.preprocessing,
+                    self._layout_cache_key or "")
+            except Exception as exc:
+                print("VEROVIO_SLUR_FRAGMENTS_UNAVAILABLE:",
+                      type(exc).__name__,exc)
+                layout["native_slur_fragments"] = {}
         return layout
 
     def lesson_overview(self) -> dict:
