@@ -30,7 +30,7 @@ from .music import Phrase, source_note_id, note_name
 from .lesson_score import build_lesson_score
 from .score_model import build_score_model
 from .lesson_validation import require_lesson_alignment
-from .lesson_timing import lead_in_beats
+from .lesson_timing import lead_in_beats, preparation_meter
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
 from .live_feedback import settled_assessment, expired_attack_misses
 from .live_input_view import LiveInputView
@@ -814,6 +814,10 @@ class PracticeEngine:
         meter = next(((num, den) for beat, num, den in
             sorted(self.plan.piece.time_signatures, reverse=True)
             if beat <= phrase.start + 1e-7), None)
+        # A 1/8 pickup belongs in the score but makes an unusably short
+        # count-in. Use the next complete measure solely for preparation.
+        meter = preparation_meter(
+            meter, self.plan.piece.time_signatures, phrase.start)
         self.count_in_meter = list(meter) if meter is not None else [
             max(1, round(self.count_in_bar_beats)), 4]
         if meter is not None:
@@ -1039,6 +1043,8 @@ class PracticeEngine:
             meter = next(((numerator, denominator) for beat, numerator, denominator
                           in sorted(self.plan.piece.time_signatures, reverse=True)
                           if beat <= source_beat + 1e-7), None)
+            meter = preparation_meter(
+                meter, self.plan.piece.time_signatures, source_beat)
             if meter is not None:
                 self.count_in_meter = list(meter)
                 self.count_in_bar_beats = meter[0] * 4 / meter[1]
