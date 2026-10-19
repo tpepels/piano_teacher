@@ -80,6 +80,12 @@ def source_exercise(filename: str, hand: str, bars: int = 2):
         )
     require_lesson_alignment(phrase, engraving.layout, hand)
     assert len(engraving.pages) == int(engraving.layout["pages"])
+    if bars >= 13 and filename.startswith("Chopin"):
+        safe_headers = engraving.layout["strip_trim_safe_starts"]
+        assert 6.5 in safe_headers and 0.5 not in safe_headers, (
+            "A genuine 1/8 -> 12/8 change must stay engraved, while later "
+            "printed-system clefs must not reappear in the continuous strip"
+        )
     assert len(engraving.layout["notes"]) == len(exercise.note_bindings), (
         f"{filename}: Verovio dropped or duplicated a source-bound note"
     )
@@ -232,6 +238,12 @@ def run_one(filename: str, hand: str, out: Path, godot: str,
     assert result.returncode == 0, f"{filename}: Godot failed: {result.stdout} {result.stderr}"
     assert "USER_MIDI_VISUAL_FAILURES:0" in result.stdout, result.stdout + result.stderr
     report = json.loads((strip_dir / "godot-strip-report.json").read_text())
+    if bars >= 13 and filename.startswith("Chopin"):
+        trims = [tile["trimmed_header"] for tile in report["cases"]["production"]["tiles"]]
+        assert len(trims) >= 3 and not trims[1] and trims[2], (
+            "Preserve the real 12/8 meter change, but remove duplicated "
+            "clefs at the next unchanged Verovio system start"
+        )
     pixels = check_native_ink(source_dir, strip_dir, report)
     write_comparison(source_dir, strip_dir, report, f"{Path(filename).stem} / {hand}")
     return {"file": filename, "hand": hand, "bars": bars, "bpm": bpm,
