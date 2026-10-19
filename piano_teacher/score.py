@@ -254,6 +254,48 @@ def _can_remove_repeated_system_headers(xml: str, note_bindings: dict | None) ->
     return True
 
 
+def _safe_reprinted_header_starts(xml: str, note_bindings: dict | None) -> list[float]:
+    """Locate system starts where Verovio's printed header is just a repeat.
+
+    A changed meter/key/clef at the beginning of a *single* source measure
+    must protect that measure, but must not force duplicated headers on every
+    subsequent printed system. Only generated two-hand lessons can be
+    proven safe without losing imported navigation and markings.
+    """
+    if note_bindings is None:
+        return []
+    import xml.etree.ElementTree as ET
+    from .reading_spacing import _measure_lengths
+    root = ET.fromstring(xml)
+    parts = root.findall("part")
+    if [part.get("id") for part in parts] != ["RH", "LH"]:
+        return []
+    measures = [part.findall("measure") for part in parts]
+    if not measures[0] or len(measures[0]) != len(measures[1]):
+        return []
+    lengths = _measure_lengths(root)
+    starts = []
+    beat = 0.0
+    for index, length in enumerate(lengths):
+        if index:
+            repeated_only = True
+            for part_measures in measures:
+                measure = part_measures[index]
+                if any(measure.find(name) is not None for name in (
+                        "direction", "harmony", "barline")):
+                    repeated_only = False
+                    break
+                if any(attrs.find(tag) is not None
+                       for attrs in measure.findall("attributes")
+                       for tag in ("clef", "key", "time", "transpose", "staff-details")):
+                    repeated_only = False
+                    break
+            if repeated_only:
+                starts.append(round(beat, 8))
+        beat += length
+    return starts
+
+
 def _engrave_xml(xml: str, hand: str, total_beats: float,
                  *, bpm: float | None = None, note_bindings: dict | None = None,
                  staff_clefs: dict | None = None,
@@ -345,6 +387,10 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
                                note_bindings=note_bindings)
     layout["strip_trim_repeated_headers"] = (False if continuous else
         _can_remove_repeated_system_headers(xml, note_bindings))
+    # Header safety is per source measure, not all-or-nothing. Chopin begins
+    # with a genuine 1/8 -> 12/8 change but later reprinted clefs are redundant.
+    layout["strip_trim_safe_starts"] = ([] if continuous else
+        _safe_reprinted_header_starts(xml, note_bindings))
     layout["continuous_score"] = continuous
     # Keeping a genuine clef/key/meter change must not disable the temporal
     # layout. Header safety and equal musical beat spacing are independent.
