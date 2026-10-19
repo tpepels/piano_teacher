@@ -72,3 +72,33 @@ def test_beam_mismatch_does_not_invent_a_symbol():
                                 MODEL["notation_events"][1]]}
     assert extract_beam_fragments([SVG],altered)=={}
     assert _filter_beam_svg(SVG,("not-there","n2")) is None
+
+
+def test_three_note_beam_has_every_original_musical_anchor(monkeypatch):
+    """The middle note must not inherit Verovio's printed page spacing."""
+    import piano_teacher.score_geometry as geometry
+
+    multi_svg=SVG.replace(
+        '<g class="note" id="n2">',
+        '<g class="note" id="n3"><circle cx="310" cy="100" r="8"/></g>'
+        '<g class="note" id="n2">')
+    multi_model={"notation_events":[
+        MODEL["notation_events"][0],
+        {"id":"n3","kind":"note","staff":"right","voice":"1",
+         "measure":1,"beat":0.25,"chord":False},
+        MODEL["notation_events"][1]
+    ]}
+    monkeypatch.setattr(geometry,"parse_svg_geometry",lambda svg:SimpleNamespace(
+        elements={"n1":(.125,.5,"s1"),"n3":(.3875,.5,"s1"),
+                  "n2":(.5,.5,"s1")},
+        staff_systems={"s1":{"staff_lines":[.35,.45,.55,.65,.75]}}))
+    atlas=extract_beam_fragments([multi_svg],multi_model)
+    assert list(atlas)==["n1|n3|n2"]
+    result=atlas["n1|n3|n2"]
+    assert result["note_ids"]==["n1","n3","n2"]
+    assert len(result["tip_offsets"])==3
+    assert len(result["head_offsets"])==3
+    assert result["head_offsets"][0] == 0
+    assert 0 < result["head_offsets"][1] < result["head_offsets"][2]
+    # The native renderer will map three original image anchors to the
+    # three independent timestamps (0, .25, .5), not stretch the whole PNG.
