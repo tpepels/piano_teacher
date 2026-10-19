@@ -40,6 +40,8 @@ def test_native_mode_is_opt_in_and_unsupported_music_reverts_to_legacy():
     assert 'for event in _visible_events(left, right):' in native
     assert 'cached_staff_gap' in native
     assert 'tie_pairs' in native
+    assert 'str(int(meter[0]))' in native and 'str(int(meter[1]))' in native
+    assert 'str(meter[0])' not in native and 'str(meter[1])' not in native
     assert 'draw_colored_polygon(' in native
     assert 'preload("res://score_strip.gd")' not in native
     assert 'preload("res://score_motion_curve.gd")' not in native
