@@ -1953,6 +1953,9 @@ class PracticeEngine:
                 layout["native_beam_fragments"] = beam_fragments(
                     score.pages, self.semantic_score(), self.preprocessing,
                     self._layout_cache_key or "")
+                if layout["native_beam_fragments"]:
+                    print("VEROVIO_NATIVE_BEAMS:",
+                          len(layout["native_beam_fragments"]))
             except Exception as exc:
                 print("VEROVIO_BEAM_FRAGMENTS_UNAVAILABLE:",
                       type(exc).__name__,exc)
