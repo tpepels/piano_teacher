@@ -1,140 +1,80 @@
-# Verovio engraving, Godot game timeline
+# Piano Teacher — native Godot notation (Phase 1)
 
-## Decision (2026-10-18)
+## Current decision (2026-10-19)
 
-The hand-drawn Phase C notation experiment (`godot/score_native_notation.gd`)
-is retired from the normal user-facing launch. It is not the basis for the
-production score. `PIANO_TEACHER_NATIVE_NOTATION=1` now falls back to the
-existing Verovio-engraved display; the old prototype is available *only*
-with `PIANO_TEACHER_NATIVE_NOTATION_EXPERIMENTAL=1` for diagnostics.
+Continue the existing **native Godot notation engine** in
+`godot/score_native_notation.gd`. Do not replace it with a different
+Verovio rendering architecture. Native music is rendered by Godot from
+the backend's semantic `/score/model`: both staves, noteheads, rests,
+accidentals, clefs, meters, ledger lines, beams and ties. The musical
+clock, not Verovio page geometry, owns every horizontal position.
 
-**Verovio owns the music alphabet. Godot owns the game presentation.**
-Do not attempt to implement a substitute SMuFL/font/notation engine in
-GDScript. Conversely, do not treat Verovio's printed page arrangement as
-the moving practice interface.
+The original user-visible switch is restored:
+```bash
+PIANO_TEACHER_NATIVE_NOTATION=1 ./run.sh
+```
 
-## Responsibilities
+The existing raster score remains the default **for now**, and is a
+whole-passage fallback when `Geometry.supported(model)` or
+`required_density` rejects a passage. We have not yet demonstrated that
+every user MIDI is supported by the native glyph renderer.
 
-- **Source and timing, Python:** MusicXML/MIDI import, musical structure,
-  meter/clef/key changes, source-note identities and rhythmic timestamps;
-  use the same transport beat as scoring, Listen and count-in.
-- **Engraving, Verovio:** render real musical glyphs and their relationships:
-  noteheads, stems, beams, flags, rests, clefs, key/time signatures,
-  accidentals, ledger lines, tuplets, dots, ties, slurs, articulations and
-  barlines. Preserve context and source IDs. Keep SVG vector geometry or
-  transparently rasterize once at sufficient native resolution.
-- **Continuous layout, a new adapter:** produce a logical unbroken grand
-  staff and a render manifest mapping each engraved ink group to a musical
-  beat, staff and source IDs. Keep exactly one X scale in musical time:
-  `x(beat) = beat * pixels_per_beat`. Position glyphs **by translation**,
-  preserving their Verovio geometry and proportions. Do not resize raster
-  strips, stretch symbols, use interpolated speed profiles, splice through
-  ink, or infer missing noteheads.
-- **Presentation, Godot:** move a cached static score scene using the
-  transport beat; fixed playhead at 42% of viewport; keep both staves,
-  dim inactive hand without erasing it, render count-in before beat zero,
-  display note-attached feedback above ink, draw atmospheric background
-  and subtle particles separately. Never make effects alter the score clock.
+`PIANO_TEACHER_EXACT_VEROVIO_GRID=1` is a **separate raster prototype**
+and is disabled by default. It is not the workstream for this phase and
+must not run when native notation is selected.
 
-## Layout adapter requirements
+## Phase 1: continuous, deterministic movement
 
-The adapter must not naïvely split a Verovio system into individual note
-sprites. A beam, tie, slur, tuplet bracket, accidental or articulation may
-belong to several notes or cross an event boundary. It must preserve these
-as complete engraved groups, with their source identities and bounding
-boxes. Reserve collision-clearance within the fixed beat grid; if a piece
-cannot be represented without ink overlap at the requested density,
-increase *the common density* before starting playback, or show the
-existing Verovio display with an explicit diagnostic. Never vary velocity
-between two notes to compensate for insufficient room.
+- `score_timeline.gd` owns `x(beat) = beat * pixels_per_beat`.
+- `VisualTransportClock` follows the authoritative Python music clock.
+- The fixed playhead stays at 42% of the viewport, at all supported BPMs.
+- The selected starting measure is an absolute beat offset.
+- Negative count-in beats share the same coordinate system. No different
+  travel speed between lead-in and the first note.
+- `ScoreNativeNotation` must use this same transform for every note,
+  barline, rest, beam and tie. No per-note scroll easing.
+- Determine the common density once on passage load. Unsupported
+  extremely close attacks must produce an explicit fallback rather than
+  change scroll speed halfway through a bar.
 
-The existing backend components are useful: `score.py` generates authentic
-Verovio SVG, `score_geometry.py` extracts note identities and timings,
-`score_model.py` supplies semantic beats, and `score_timeline.gd` already
-provides a fixed temporal X mapping. The existing `score_strip.gd`
-raster-warping path is a **temporary fallback**, not a new font/layout model.
+### Implemented in this increment
 
-The first deliverable is a **vertical slice** through one simple 3/4 piano
-piece at 44 BPM: full Verovio noteheads and stems, opening clefs and meter,
-aligned to `score_timeline.gd` with a *constant* 96 px/beat, including
-count-in. Then extend to chords, rests, flags and beams; then ties,
-tuplets, grace notes and imported notation with mid-piece changes.
-A partial adapter must use Verovio fallback for the unsupported *entire
-passage* rather than mix hand-drawn and engraved symbols.
+- The original native launch switch is enabled again.
+- `ScoreNativeNotation` indexes measures and sorts note events once.
+- Grand-staff vertical fitting and chord offsets are cached for a given
+  viewport height, instead of rescanning the entire piece every frame.
+- Offscreen noteheads are culled with a binary search in beat order.
+- Beam work is culled to groups crossing the visible viewport.
+- Tie connectivity is computed when a lesson loads, not every draw.
+- Engineering labels on the native score are hidden by default;
+  `PIANO_TEACHER_NATIVE_DIAGNOSTICS=1` enables them.
+- The phase C unit test checks count-in and beat positions at 40, 80,
+  and 120 BPM, plus viewport culling and cached staff geometry.
+- The graphical MIDI test can capture the native rendering of Ala
+  using `scripts/check_user_midi_desktop.py --native --only Ala`.
 
-## Visual contract
+### Still to do
 
-- Single connected grand staff across the viewport, visually dominant
-  with generous clef/ledger clearance and high-resolution sharp symbols.
-- No printed page margins, multi-system pagination, cropped staff ends,
-  duplicated opening clefs on system joins, or vertical line breaks.
-- Fixed, bright playhead. The score advances **linearly** according to
-  the backend quarter-beat clock at every BPM. Tempo change only affects
-  pixels/second, not pixels/beat or glyph scale.
-- Only clean measure numbers and sparse navigational guidance.
-  Never display `PHASE B`, `NATIVE SCORE`, raw density metrics,
-  `3.0 / 4.0` debugging text or developer state labels in practice UI.
-- During count-in, show empty bars/beat markers to the left of the first
-  genuine engraved note; **do not** display synthetic full-clef systems.
-- MIDI visual events must use the Verovio source-note ID and the same
-  logical beat mapping. A missed chord note highlights only the missed
-  notehead. Listen/preview animations cannot claim a graded success.
+- Confirm the CI graphical native MIDI capture and fix any failure.
+- Test all seven imported real MIDI files, including explicit fallback
+  reasons for unsupported notation and hand changes.
+- Profile CPU/frame pacing on the actual Arch Linux laptop and MIDI keyboard.
+- Improve visual notation details without changing the working time axis.
+- Make native mode the default only after end-to-end acceptance on the
+  provided MIDI corpus. No claim of completion until then.
 
-## Acceptance (must be measured, not inferred)
+## Acceptance
 
-1. Compare native Verovio SVG against what Godot displays for a corpus
-   containing accidentals, dots, rests, beams, tuplets and mid-piece
-   signatures. Every supported symbol must remain recognizably identical.
-2. Record x-position at the fixed playhead at beats 0, 1, 2, 3, etc.,
-   and during negative count-in, 40 / 80 / 120 BPM. Error budget: <= 2 px
-   against `playhead_x + (event_beat - clock_beat) * pixels_per_beat`.
-3. Hold, resume, retry, seek, and change hand. The same source note keeps
-   the same engraved glyph and lands on the same clock beat; no camera jump.
-4. Verify on a 1536x960 viewport and smaller supported sizes that the
-   staff is large, notes are legible and both hands remain visible.
-5. Measure steady-play CPU and tile uploads. Do not regenerate or upload
-   Verovio notation every frame; only shift cached resources and animate
-   lightweight feedback.
-6. Any unsupported group or mismatch must revert to the complete Verovio
-   fallback, log a precise reason, and avoid silently dropping notes.
-
-## Developer commands
-
-- `./run.sh`: production Verovio fallback.
-- `PIANO_TEACHER_NATIVE_NOTATION=1 ./run.sh`: deprecated alias; still
-  displays Verovio fallback and prints a warning.
-- `PIANO_TEACHER_NATIVE_NOTATION_EXPERIMENTAL=1 ./run.sh`: old Phase C
-  handwritten diagnostic ONLY. Do not use for acceptance.
-- `PIANO_TEACHER_TIMELINE_PREVIEW=1 ./run.sh`: non-engraved timing diagnostic;
-  not a presentation mode.
-
-## Phase 1 implementation status (2026-10-19)
-
-The next renderer increment is **in progress**.
-
-- `godot/score_exact_spacing.gd` is a conservative, real-Verovio-raster
-  adapter for a single continuous two-hand staff, currently opt-in via
-  `PIANO_TEACHER_EXACT_VEROVIO_GRID=1 ./run.sh` (normal launch unchanged). It scans source ink
-  once and inserts transparent columns only where a complete vertical
-  cut intersects no non-staff musical ink. It never stretches, resamples
-  or redraws original pixels; connected beams/slurs/ties force a full
-  passage fallback instead of corrupting music.
-- `godot/score_beat_camera.gd` is a **pure validation library**, checking
-  whether the resulting engraved anchors lie within 2 source pixels of
-  one `x = origin + beat * pixels_per_beat` axis. It is **not currently
-  installed as the production camera**, because that integration was
-  reverted during visual CI debugging.
-- Godot still uses the established cursor-following movement. When the
-  exact adapter succeeds, it sees proportionally placed Verovio
-  noteheads; if it fails, the original native Verovio score is retained.
-  Actual source/MIDI acceptance and pixel tests, not a synthetic camera
-  test alone, decide which passages the adapter supports.
-- The difficult portions of Ala, Chopin and imported jazz may contain
-  connected engraving across adjacent beats and therefore legitimately
-  fall back. New code must not hide or sever those connections to force
-  a linear layout.
-
-**Remaining Phase 1:** implement a source-identity-preserving vector/SVG
-*group* adapter for beam/tie/slur groups crossing time boundaries, with
-full-score glyph-level pixel regression. Do not call Phase 1 complete
-before real MIDI examples pass both identity and constant-motion audits.
+1. Onset position: for any event, its screen X equals
+   `0.42 * viewport_width + (event_beat - play_from_beat - clock_beat)
+   * pixels_per_beat`, within 2 px.
+2. No speed change at beat zero, meter boundaries, pause/resume, seek,
+   Retry, hand change or Listen.
+3. A long score renders only events near the viewport. Frame work does
+   not grow linearly with all notes in the file.
+4. The native score always shows both five-line staves (inactive hand
+   dimmed, never removed), with source-accurate clefs and meters.
+5. Unsupported rhythms use a complete, explicit fallback; a rejected
+   model never leaves stale notes on screen.
+6. The seven real MIDI fixtures remain unchanged, with screenshots and
+   numeric regression evidence checked before changing defaults.
