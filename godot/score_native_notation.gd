@@ -1,14 +1,18 @@
 extends "res://score_timeline_preview.gd"
-# Phase C: directly draw source MusicXML-derived symbols as Godot vector ink.
-# No Verovio PNG/SVG, cropped staves, external font assets, extra clock,
-# special short-note camera easing or per-event position corrections.
+# Native Godot compositor for authentic individually extracted Verovio glyphs.
+# The score's continuous time axis, staff geometry, ledger rules, stems, beams
+# and ties are native Godot primitives. Musical glyph CONTOURS come ONLY from
+# the installed Verovio font, cached as individual Godot ImageTextures.
+# There is no full-page SVG bitmap or custom imitation of a music glyph.
 # Incomplete notation falls back to the existing Verovio score as a whole.
 const Geometry := preload("res://score_notation_geometry.gd")
+const VerovioGlyphs := preload("res://score_verovio_glyphs.gd")
 const Design := preload("res://practice_theme.gd")
 const NOTE_INK := Design.SCORE_INK
 const DIM_INK := Design.STAFF_MUTED
 const PREVIEW_LIGHT := Design.MINT
 
+var glyphs = VerovioGlyphs.new()
 var native_ready := false
 var failure_reason := ""
 var visible_symbols := 0
@@ -46,8 +50,19 @@ func clear_score() -> void:
     cached_head_offsets.clear()
     cached_offsets_gap = -1.0
 
+func set_verovio_glyphs(items: Dictionary) -> bool:
+    var success: bool = glyphs.load_font(items)
+    if not success:
+        failure_reason = glyphs.error
+    return success
+
+
 func load_score(candidate: Dictionary) -> bool:
     native_ready = false
+    if not glyphs.ready():
+        failure_reason = "Authentic Verovio font atlas is not loaded"
+        notice = failure_reason
+        return false
     failure_reason = Geometry.supported(candidate)
     if not failure_reason.is_empty():
         notice = failure_reason
@@ -149,21 +164,7 @@ func _ink(staff: String) -> Color:
     var selected: bool = active_hand == "both" or active_hand == staff
     return NOTE_INK if selected else Color(DIM_INK, .46)
 
-func _paint_ellipse(center: Vector2, rx: float, ry: float,
-        fill: Color, solid: bool, rotation: float = -.27) -> void:
-    var shape := PackedVector2Array()
-    for i in range(33):
-        var theta: float = TAU * float(i)/32.0
-        var xx: float = cos(theta)*rx
-        var yy: float = sin(theta)*ry
-        shape.append(center + Vector2(xx*cos(rotation)-yy*sin(rotation),
-            xx*sin(rotation)+yy*cos(rotation)))
-    if solid:
-        var polygon: PackedVector2Array = shape
-        polygon.resize(32)
-        draw_colored_polygon(polygon, fill)
-    else:
-        draw_polyline(shape, fill, 2.0, true)
+
 
 func _paint_ledger(x: float, y: float, step: int,
         bottom: float, gap: float, ink: Color) -> void:
@@ -184,61 +185,28 @@ func _paint_ledger(x: float, y: float, step: int,
 
 func _paint_accidental(x: float, y: float,
         value: String, ink: Color, gap: float) -> void:
-    # Accidentals are vector strokes, not text glyphs from Verovio.
-    var left: float = x - 19.0
-    var width: float = 7.0
-    match value:
-        "sharp", "double-sharp":
-            draw_line(Vector2(left, y-gap*1.0), Vector2(left, y+gap*.9),
-                ink, 1.6, true)
-            draw_line(Vector2(left+width, y-gap*1.1),
-                Vector2(left+width, y+gap*.8), ink, 1.6, true)
-            for offset in [-.32, .30]:
-                draw_line(Vector2(left-3.0, y+offset*gap+2.0),
-                    Vector2(left+width+3.0, y+offset*gap-2.0),
-                    ink, 2.0, true)
-            if value == "double-sharp":
-                draw_line(Vector2(left+11.0, y-5.0),
-                    Vector2(left+18.0, y+5.0), ink, 1.4)
-                draw_line(Vector2(left+18.0, y-5.0),
-                    Vector2(left+11.0, y+5.0), ink, 1.4)
-        "flat", "flat-flat":
-            draw_line(Vector2(left, y-gap*1.4), Vector2(left, y+gap*.55),
-                ink, 1.7, true)
-            draw_arc(Vector2(left+2.0, y+gap*.21), gap*.32,
-                -.65*PI, .65*PI, 15, ink, 1.8, true)
-            if value == "flat-flat":
-                draw_line(Vector2(left-7, y-gap*1.4),
-                    Vector2(left-7, y+gap*.55), ink, 1.7, true)
-        "natural":
-            draw_line(Vector2(left, y-gap*1.1),
-                Vector2(left, y+gap*.55), ink, 1.6, true)
-            draw_line(Vector2(left+width, y-gap*.55),
-                Vector2(left+width, y+gap*1.05), ink, 1.6, true)
-            draw_line(Vector2(left, y-gap*.25),
-                Vector2(left+width, y-gap*.43), ink, 2.2, true)
-            draw_line(Vector2(left, y+gap*.55),
-                Vector2(left+width, y+gap*.36), ink, 2.2, true)
+    var names := {
+        "sharp": "acc_sharp", "flat": "acc_flat",
+        "natural": "acc_natural", "double-sharp": "acc_double_sharp",
+        "double-flat": "acc_double_flat", "flat-flat": "acc_double_flat"
+    }
+    var name: String = str(names.get(value, ""))
+    if not name.is_empty():
+        glyphs.paint(self, name, x - gap*1.15, y, gap, ink, true)
+
 
 func _paint_flag(stem_x: float, tip_y: float,
         up: bool, count: int, ink: Color, gap: float) -> void:
-    var direction: float = 1.0 if up else -1.0
-    for index in range(count):
-        var origin: float = tip_y + direction * float(index) * gap*.57
-        var points := PackedVector2Array()
-        points.append(Vector2(stem_x, origin))
-        points.append(Vector2(stem_x+direction*5.0, origin+direction*gap*.10))
-        points.append(Vector2(stem_x+direction*11.0, origin+direction*gap*.58))
-        points.append(Vector2(stem_x+direction*10.0, origin+direction*gap*1.0))
-        draw_polyline(points, ink, 2.2, true)
+    var name: String = "flag_%s_%d" % ["up" if up else "down", count]
+    glyphs.paint(self, name, stem_x, tip_y, gap, ink)
+
 
 func _paint_rhythm_dots(x: float, y: float, dots: int,
         ink: Color, gap: float) -> void:
-    # Each dot is a separate articulation of the notated duration.
-    # Never stretch a notehead or shift musical time to fit them.
     for index in range(dots):
-        draw_circle(Vector2(x+gap*1.05+float(index)*gap*.63,
-            y-gap*.24), maxf(1.65,gap*.18), ink)
+        glyphs.paint(self, "augmentation_dot",
+            x+gap*1.05+float(index)*gap*.63, y-gap*.24,
+            gap, ink, true)
 
 
 func _paint_tuplet_brackets(clock: float, playhead_x: float,
@@ -299,53 +267,31 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
 
 func _paint_rest(x: float, y: float,
         note_type: String, dots: int, ink: Color, gap: float) -> void:
-    match note_type:
-        "whole", "half":
-            var bar_y: float = y - (gap*.6 if note_type == "whole" else gap*.15)
-            draw_rect(Rect2(x-7.0, bar_y, 14.0, gap*.33), ink, true)
-        "quarter":
-            var points := PackedVector2Array([
-                Vector2(x-3.0,y-gap*1.1), Vector2(x+4.0,y-gap*.55),
-                Vector2(x-2.0,y-gap*.18), Vector2(x+4.0,y+gap*.30),
-                Vector2(x-4.0,y+gap*.88), Vector2(x+2.0,y+gap*.70)])
-            draw_polyline(points, ink, 2.9, true)
-        _:
-            var flags: int = Geometry.beam_level(note_type)
-            draw_line(Vector2(x+3.0, y-gap*.85),
-                Vector2(x-4.0, y+gap*.86), ink, 2.0, true)
-            for index in range(flags):
-                draw_circle(Vector2(x+3.0, y-gap*(.7-index*.5)), 3.0, ink)
-    _paint_rhythm_dots(x,y,dots,ink,gap)
+    glyphs.paint(self, "rest_" + note_type, x, y, gap, ink, true)
+    _paint_rhythm_dots(x, y, dots, ink, gap)
+
 
 func _paint_clef(x: float, center: float, sign: String,
         gap: float, ink: Color) -> void:
-    # Simple directly drawn vector clefs. Real font replacement can follow
-    # without changing time or y-coordinate math.
-    if sign == "G":
-        var path := PackedVector2Array()
-        for i in range(57):
-            var t: float = float(i)/56.0
-            var radius: float = lerpf(gap*.8, gap*.18, t)
-            var angle: float = -PI*.65 + t*TAU*1.7
-            path.append(Vector2(x+cos(angle)*radius,
-                center+sin(angle)*radius*1.3))
-        draw_polyline(path, ink, 1.9, true)
-        draw_line(Vector2(x+gap*.08,center-gap*2.5),
-            Vector2(x+gap*.08,center+gap*3.0), ink, 1.7, true)
-        draw_arc(Vector2(x+gap*.22,center+gap*2.8),gap*.5,
-            .2, PI*1.55, 23, ink, 1.7, true)
-    elif sign == "F":
-        draw_arc(Vector2(x-gap*.16, center-gap*.56), gap*.90,
-            -PI*.56, PI*.69, 35, ink, 2.7, true)
-        draw_circle(Vector2(x-gap*.20, center-gap*.70), gap*.18, ink)
-        draw_circle(Vector2(x+gap*.60,center-gap*.85), 2.0, ink)
-        draw_circle(Vector2(x+gap*.60,center-gap*.31), 2.0, ink)
-    else:
-        draw_line(Vector2(x-gap*.20,center-gap*1.65),
-            Vector2(x-gap*.20,center+gap*1.65), ink, 2.3, true)
-        for offset in [-.8,.8]:
-            draw_arc(Vector2(x+gap*.20,center+offset*gap),gap*.65,
-                -PI*.64, PI*.64, 16, ink, 2.1, true)
+    var name: String = {"G":"clef_g", "F":"clef_f", "C":"clef_c"}.get(sign, "")
+    if name.is_empty():
+        return
+    # SMuFL origin marks the clef's reference staff line.
+    var origin_y: float = center + gap if sign == "G" else (
+        center - gap if sign == "F" else center)
+    glyphs.paint(self, name, x, origin_y, gap, ink, true)
+
+
+func _paint_meter_number(value: int, x: float, y: float,
+        ink: Color, gap: float) -> void:
+    # Real Verovio time-signature digits rather than generic GUI text.
+    var digits: String = str(value)
+    var advance: float = gap*1.10
+    var start: float = x - float(digits.length()-1)*advance*.5
+    for digit in range(digits.length()):
+        glyphs.paint(self, "time_" + digits[ digit ],
+            start + float(digit)*advance, y, gap, ink, true)
+
 
 func _paint_note(event: Dictionary, x: float,
         gap: float, ink: Color, beam_stem: Dictionary = {},
@@ -363,7 +309,9 @@ func _paint_note(event: Dictionary, x: float,
     var ink_center := Vector2(x,y)
     _paint_ledger(x, y, step, bottom, gap, ink)
     var solid: bool = kind not in ["half","whole"]
-    _paint_ellipse(ink_center, gap*.66, gap*.44, ink, solid)
+    glyphs.paint(self, "head_black" if solid else (
+        "head_whole" if kind == "whole" else "head_half"),
+        x, y, gap, ink, true)
     # Multiple chord pitches have distinct noteheads but one common stem.
     if kind != "whole" and not bool(event.get("chord", false)):
         var stem_x: float = x+(gap*.61 if stem_up else -gap*.61)
@@ -583,10 +531,10 @@ func _draw() -> void:
             if previous_measure.is_empty() or previous_measure.get("meter",[]) != measure.get("meter",[]):
                 var meter: Array = measure.get("meter",[4,4])
                 if meter.size() >= 2:
-                    draw_string(font,Vector2(x-30.0,center-2.0),str(int(meter[0])),
-                        HORIZONTAL_ALIGNMENT_LEFT,-1,14,_ink(staff))
-                    draw_string(font,Vector2(x-30.0,center+gap*1.2),str(int(meter[1])),
-                        HORIZONTAL_ALIGNMENT_LEFT,-1,14,_ink(staff))
+                    _paint_meter_number(int(meter[0]), x-gap*1.6,
+                        center-gap*.95, _ink(staff), gap)
+                    _paint_meter_number(int(meter[1]), x-gap*1.6,
+                        center+gap*.8, _ink(staff), gap)
         if x >= 0.0 and x <= size.x:
             draw_string(font,Vector2(x+5.0,_staff_center("right")-gap*3.0),
                 str(int(measure.get("number", 0))),
