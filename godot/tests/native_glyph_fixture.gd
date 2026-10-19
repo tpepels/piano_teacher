@@ -65,4 +65,5 @@ static func beam_catalogue() -> Dictionary:
         "bounds":[100.0,-860.0,600.0,85.0],
         "span":650.0,"stem_up":true,
         "note_ids":["d","e"],"tip_offsets":[-860.0,-860.0],
+        "head_offsets":[0.0,650.0],
         "png_base64":Marshalls.raw_to_base64(image.save_png_to_buffer())}}
