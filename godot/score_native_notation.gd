@@ -20,6 +20,7 @@ var drawn_noteheads: Dictionary = {}
 var selected_density := 0.0
 var beam_groups: Array = []
 var beamed_note_ids: Dictionary = {}
+var chord_members: Dictionary = {}
 var notation_tuplets: Array = []
 # Immutable musical structure is indexed ONCE when a passage changes.
 # Each frame then visits only visible onsets, beams and ties.
@@ -41,6 +42,7 @@ func clear_score() -> void:
     drawn_noteheads.clear()
     beam_groups.clear()
     beamed_note_ids.clear()
+    chord_members.clear()
     notation_tuplets.clear()
     measure_by_number.clear()
     ordered_events.clear()
@@ -90,6 +92,7 @@ func load_score(candidate: Dictionary) -> bool:
     ordered_events = timeline.model.get("notation_events", []).duplicate()
     ordered_events.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
         return float(a.get("beat", 0.0)) < float(b.get("beat", 0.0)))
+    chord_members = Geometry.chord_members(ordered_events)
     tie_pairs.clear()
     var unfinished: Dictionary = {}
     for event in ordered_events:
@@ -332,6 +335,34 @@ func _stem_attachment(note_type: String, gap: float, up: bool) -> float:
     return half_width if up else -half_width
 
 
+# Pitch extrema determine a whole chord's stem, not the arbitrarily
+# first note in MusicXML. The head artwork/width still comes from Verovio.
+func _chord_extents(event: Dictionary, gap: float,
+        head_offsets: Dictionary = {}) -> Dictionary:
+    var members: Array = chord_members.get(str(event.get("id", "")), [event])
+    var top_y := INF
+    var bottom_y := -INF
+    var top_offset := 0.0
+    var bottom_offset := 0.0
+    var sum_step := 0.0
+    for member in members:
+        var head_y: float = _event_y(member, gap)
+        var offset: float = float(head_offsets.get(str(member.get("id", "")), 0.0))
+        if head_y < top_y:
+            top_y = head_y
+            top_offset = offset
+        if head_y > bottom_y:
+            bottom_y = head_y
+            bottom_offset = offset
+        var clef: Dictionary = _clef_for(
+            str(member.get("staff", "right")), _measure_for(member))
+        sum_step += float(Geometry.staff_step(
+            member.get("spelling", {}),clef))
+    return {"top_y":top_y,"bottom_y":bottom_y,
+        "top_offset":top_offset,"bottom_offset":bottom_offset,
+        "up":sum_step/float(maxi(1,members.size())) < 4.0}
+
+
 func _paint_note(event: Dictionary, x: float,
         gap: float, ink: Color, beam_stem: Dictionary = {},
         head_offset: float = 0.0) -> void:
@@ -344,21 +375,31 @@ func _paint_note(event: Dictionary, x: float,
     var bottom: float = _staff_center(staff) + gap*2.0
     var y: float = Geometry.note_y(step, bottom, gap)
     var kind: String = str(event.get("note_type", "quarter"))
-    var stem_up: bool = bool(beam_stem.get("up", step < 4))
     _paint_ledger(x, y, step, bottom, gap, ink)
     var solid: bool = kind not in ["half","whole"]
     glyphs.paint(self, "head_black" if solid else (
         "head_whole" if kind == "whole" else "head_half"),
         x, y, gap, ink, true)
-    # Multiple chord pitches have distinct noteheads but one common stem.
+    # MusicXML chord members keep their separate real glyphs, but only
+    # the leading event gets a stem spanning the COMPLETE chord pitch range.
     if kind != "whole" and not bool(event.get("chord", false)):
-        var stem_x: float = x+_stem_attachment(kind,gap,stem_up)
-        var tip_y: float = float(beam_stem.get("tip_y",
-            y+(-gap*3.25 if stem_up else gap*3.25)))
-        draw_line(Vector2(stem_x,y), Vector2(stem_x,tip_y), ink, 1.65, true)
+        var chord: Dictionary = _chord_extents(event,gap,cached_head_offsets)
+        var stem_up: bool = bool(beam_stem.get("up",chord["up"]))
+        var anchor_y: float = float(chord["bottom_y"] if stem_up else chord["top_y"])
+        var anchor_offset: float = float(chord[
+            "bottom_offset" if stem_up else "top_offset"])
+        var stem_x: float = x-head_offset+anchor_offset+ \
+            _stem_attachment(kind,gap,stem_up)
+        var tip_y: float = (float(chord["top_y"])-gap*3.25 if stem_up else
+            float(chord["bottom_y"])+gap*3.25)
+        if not beam_stem.is_empty():
+            stem_x = float(beam_stem.get("x",stem_x))
+            tip_y = float(beam_stem.get("tip_y",tip_y))
+        draw_line(Vector2(stem_x,anchor_y),Vector2(stem_x,tip_y),
+            ink,1.65,true)
         if Geometry.beam_level(kind) > 0 and beam_stem.is_empty():
-            _paint_flag(stem_x, tip_y, stem_up,
-                Geometry.beam_level(kind), ink, gap)
+            _paint_flag(stem_x,tip_y,stem_up,
+                Geometry.beam_level(kind),ink,gap)
     _paint_rhythm_dots(x,y,int(event.get("dots",0)),ink,gap)
     var accidental: String = str(event.get("accidental", ""))
     if not accidental.is_empty() and accidental != "null":
@@ -382,17 +423,34 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
         if last_x < -60.0 or first_x > size.x + 60.0:
             continue
         frame_visible_beam_groups += 1
-        var up: bool = Geometry.stem_up(group, timeline.model)
+        # The overall stem direction includes ALL chord tones, even when
+        # the beam grouping indexes only the chord leaders.
+        var sum_steps := 0.0
+        var counted := 0
+        for event in group:
+            var all_heads: Array = chord_members.get(
+                str(event.get("id", "")), [event])
+            for head in all_heads:
+                var clef: Dictionary = _clef_for(
+                    str(head.get("staff", "right")), _measure_for(head))
+                sum_steps += float(Geometry.staff_step(
+                    head.get("spelling", {}),clef))
+                counted += 1
+        var up: bool = sum_steps/float(maxi(1,counted)) < 4.0
         var members: Array = []
         for event in group:
             var x: float = timeline.screen_x(float(event.get("beat", 0.0)),
                 clock, playhead_x, play_from_beat)
-            var stem_x: float = x + float(head_offsets.get(
-                str(event.get("id", "")), 0.0)) + \
+            var chord: Dictionary = _chord_extents(event,gap,head_offsets)
+            var anchor_offset: float = float(chord[
+                "bottom_offset" if up else "top_offset"])
+            var stem_x: float = x+anchor_offset+ \
                 _stem_attachment(str(event.get("note_type", "eighth")),gap,up)
             members.append({
                 "id":str(event.get("id", "")), "x":stem_x,
-                "head_y":_event_y(event, gap),
+                "head_y":float(chord["bottom_y"] if up else chord["top_y"]),
+                "top_y":float(chord["top_y"]),
+                "bottom_y":float(chord["bottom_y"]),
                 "note_type":str(event.get("note_type", "eighth"))
             })
         # Conventional beams follow the overall melodic contour, but a
@@ -408,8 +466,8 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
         var origin: float = INF if up else -INF
         for member in members:
             var t: float = (float(member["x"])-left_x)/width if width > .01 else 0.0
-            var required: float = float(member["head_y"]) + (
-                -gap*3.25 if up else gap*3.25)
+            var required: float = (float(member["top_y"])-gap*3.25
+                if up else float(member["bottom_y"])+gap*3.25)
             var candidate: float = required-rise*t
             origin = minf(origin, candidate) if up else maxf(origin, candidate)
         for index in range(members.size()):
@@ -418,7 +476,8 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
             var tip: float = origin+rise*t
             member["tip_y"] = tip
             members[index] = member
-            stems[str(member["id"])] = {"up":up, "tip_y":tip}
+            stems[str(member["id"])] = {"up":up, "tip_y":tip,
+                "x":float(member["x"])}
         drawn_groups.append({"members":members,
             "staff":str(group[0].get("staff", "right")),
             "up":up, "tip_y":origin})
