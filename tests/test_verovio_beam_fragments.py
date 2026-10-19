@@ -186,3 +186,39 @@ def test_verovio_beamed_chord_keeps_one_attack_and_all_pitches(monkeypatch):
     assert item["chord_note_ids"]==[["n1","n1upper"],["n2"]]
     assert len(item["tip_offsets"])==2
     assert len(item["head_offsets"])==2
+
+
+def test_original_verovio_beamed_chord_has_only_two_time_anchors():
+    import verovio
+    from piano_teacher.score import _create_verovio_toolkit
+    score = """<score-partwise version="4.0"><work><work-title> </work-title></work>
+      <movement-title> </movement-title><part-list><score-part id="P1">
+      <part-name>Piano</part-name></score-part></part-list>
+      <part id="P1"><measure number="1"><attributes><divisions>10080</divisions>
+      <time><beats>4</beats><beat-type>4</beat-type></time>
+      <clef><sign>G</sign><line>2</line></clef></attributes>
+      <note id="n1"><pitch><step>G</step><octave>4</octave></pitch>
+      <duration>5040</duration><type>eighth</type><stem>up</stem>
+      <beam number="1">begin</beam></note>
+      <note id="n1upper"><chord/><pitch><step>B</step><octave>4</octave></pitch>
+      <duration>5040</duration><type>eighth</type></note>
+      <note id="n2"><pitch><step>C</step><octave>5</octave></pitch>
+      <duration>5040</duration><type>eighth</type><stem>up</stem>
+      <beam number="1">end</beam></note>
+      <note><rest/><duration>30240</duration><type>half</type><dot/></note>
+      </measure></part></score-partwise>"""
+    model={"notation_events":[
+        MODEL["notation_events"][0],
+        {**MODEL["notation_events"][0], "id":"n1upper",
+         "chord":True},
+        MODEL["notation_events"][1]]}
+    toolkit=_create_verovio_toolkit(verovio)
+    assert toolkit.setOptions({"inputFrom":"xml","scale":48,"pageWidth":900,
+          "pageHeight":650,"svgViewBox":True,"svgBoundingBoxes":True,
+          "svgContentBoundingBoxes":True})
+    assert toolkit.loadData(score)
+    page=toolkit.renderToSVG(1)
+    found=extract_beam_fragments([page],model)
+    assert "n1|n2" in found
+    assert found["n1|n2"]["chord_note_ids"]==[
+        ["n1","n1upper"],["n2"]]
