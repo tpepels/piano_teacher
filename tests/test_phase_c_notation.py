@@ -36,7 +36,10 @@ def test_native_mode_is_opt_in_and_unsupported_music_reverts_to_legacy():
     assert 'timeline_preview.visible = false' in app
     assert 'push_warning("Native notation fallback: "' in app
     assert 'timeline.screen_x(' in native
-    assert 'timeline.model.get("notation_events",[])' in native
+    assert 'ordered_events = timeline.model.get("notation_events", []).duplicate()' in native
+    assert 'for event in _visible_events(left, right):' in native
+    assert 'cached_staff_gap' in native
+    assert 'tie_pairs' in native
     assert 'draw_colored_polygon(' in native
     assert 'preload("res://score_strip.gd")' not in native
     assert 'preload("res://score_motion_curve.gd")' not in native
