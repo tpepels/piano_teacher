@@ -40,8 +40,18 @@ def test_native_mode_is_opt_in_and_unsupported_music_reverts_to_legacy():
     assert 'for event in _visible_events(left, right):' in native
     assert 'cached_staff_gap' in native
     assert 'tie_pairs' in native
-    assert 'str(int(meter[0]))' in native and 'str(int(meter[1]))' in native
-    assert 'str(meter[0])' not in native and 'str(meter[1])' not in native
+    assert '_paint_meter_number(int(meter[0])' in native
+    assert '_paint_meter_number(int(meter[1])' in native
+    assert 'glyphs.paint(self, "head_black"' in native
+    assert 'glyphs.paint(self, "rest_" + note_type' in native
+    assert 'glyphs.paint(self, name' in native
+    assert 'func _paint_ellipse(' not in native
+    assert 'func _paint_flag(' in native
+    assert 'draw_arc(' not in native
+    assert 'draw_circle(' not in native
+    assert 'def native_glyphs' in (ROOT / "piano_teacher/notation_symbols.py").read_text()
+    assert 'parsed.get("native_glyphs", {})' in app
+    assert 'set_verovio_glyphs(glyph_catalog)' in app
     assert 'str(int(measure.get("number", 0)))' in native
     assert 'draw_colored_polygon(' in native
     assert 'preload("res://score_strip.gd")' not in native
