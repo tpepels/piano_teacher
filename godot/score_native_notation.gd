@@ -467,9 +467,7 @@ func _paint_engraved_chord(event: Dictionary, x: float,
         return Geometry.diatonic_index(a.get("spelling",{})) < \
             Geometry.diatonic_index(b.get("spelling",{})))
     var anchor: float = _event_y(event,gap)
-    if not glyphs.paint_chord(self,key,x,anchor,gap,ink):
-        return []
-    var painted: Array = []
+    var head_centres: Array = []
     for i in range(sorted_heads.size()):
         var current: Dictionary = sorted_heads[i]
         var offset: Array = heads[i]
@@ -479,14 +477,23 @@ func _paint_engraved_chord(event: Dictionary, x: float,
         var clef: Dictionary = _clef_for(staff,_measure_for(current))
         var step: int = Geometry.staff_step(
             current.get("spelling",{}),clef)
+        head_centres.append(Vector2(head_x,head_y))
+        # Ledger rules must be UNDER the authentic filled noteheads.
         _paint_ledger(head_x,head_y,step,_staff_center(staff)+gap*2.0,
             gap,ink)
-        _paint_rhythm_dots(head_x,head_y,int(current.get("dots",0)),ink,gap)
+    if not glyphs.paint_chord(self,key,x,anchor,gap,ink):
+        return []
+    var painted: Array = []
+    for i in range(sorted_heads.size()):
+        var current: Dictionary = sorted_heads[i]
+        var center: Vector2 = head_centres[i]
+        _paint_rhythm_dots(center.x,center.y,
+            int(current.get("dots",0)),ink,gap)
         var accidental: String = str(current.get("accidental",""))
         if not accidental.is_empty() and accidental != "null":
-            _paint_accidental(head_x,head_y,accidental,ink,gap)
+            _paint_accidental(center.x,center.y,accidental,ink,gap)
         var id: String = str(current.get("id",""))
-        drawn_noteheads[id] = Vector2(head_x,head_y)
+        drawn_noteheads[id] = center
         painted.append(id)
     return painted
 
