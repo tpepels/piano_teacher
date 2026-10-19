@@ -126,6 +126,37 @@ depending on actual pitches and note intervals, so they are not yet baked into
 fixed templates. They retain native Godot geometry and must be audited
 separately. There is no full-sheet Verovio SVG scrolling or new speed curve.
 
+### Next native engraving pass: Verovio chord and tie compounds
+
+The first native implementation drew chord stems and tie contours with
+Godot primitive lines/polygons. To avoid competing with the music engraving
+library, this revision moves two more kinds of ink to real Verovio exports:
+
+- **Ties**: `verovio_tie_templates.py` requests actual tied notes from
+  Verovio, extracts the tapered tie element alone, rasterizes it to an RGBA
+  mask once, and stores the shape/anchor span in the versioned preprocessing
+  cache. Godot stretches only that tie contour between the two source beats,
+  without drawing any replacement curve or moving noteheads.
+- **Isolated chords**: `verovio_chord_templates.py` builds Verovio chord
+  samples indexed by note type, stem direction and relative diatonic intervals.
+  Each unique sample is cached. Up to 32 patterns per score are imported;
+  the individual original notehead positions stay available for dots,
+  accidentals, ledger lines and note-specific animation. Octave-transposed
+  chords reuse the same cached artwork. Unsupported patterns and chords
+  belonging to a beam group keep the previous per-head native renderer.
+- Both asset sets are served only when `/score/layout?native=1` is used, and
+  are removed from the large layout dictionary after texture import.
+  A failure to export either compound must never break legacy raster layout.
+- **Beams remain unresolved**: Verovio's beam/stem geometry depends on
+  the exact note sequence and engraving spacing. Stretching entire beam-group
+  bitmaps would distort noteheads and violate beat positions. The next change
+  needs to extract beam and stem ink separately, anchoring every notehead to
+  the existing single native time axis before enabling the new rendering.
+  Do not silently substitute a resized full Verovio page or alter scroll speed.
+
+These templates reuse the installed Verovio contours, not a newly
+hand-constructed glyph or copied font file.
+
 ### Short-pickup time-signature collisions (2026-10-19)
 
 Some imported performances, including Chopin's Nocturne Op. 9 No. 2,
