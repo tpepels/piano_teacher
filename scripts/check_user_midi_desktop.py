@@ -109,6 +109,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=Path("/tmp/piano-midi-desktop"))
     parser.add_argument("--only", help="Case-insensitive substring in filename")
+    parser.add_argument("--require-exact-ink-grid", action="store_true",
+                        help="Fail unless the opt-in Verovio pixel-preserving adapter activates")
     args = parser.parse_args()
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
         parser.error("This captures actual desktop pixels: start a display or use xvfb-run")
@@ -126,7 +128,17 @@ def main() -> int:
     results, failures = [], []
     for filename in cases:
         try:
-            results.append(run_one(filename, args.out, godot))
+            outcome = run_one(filename, args.out, godot)
+            if args.require_exact_ink_grid:
+                practice_frames = [frame for frame in outcome["frames"]
+                                   if frame.get("screen") == "practice"]
+                assert practice_frames and all(
+                    frame.get("exact_ink_grid", False)
+                    and frame.get("beat_camera", {}).get("enabled", False)
+                    for frame in practice_frames), (
+                        f"{filename}: opt-in exact Verovio ink did not align every practice frame"
+                    )
+            results.append(outcome)
         except Exception as exc:
             failures.append({"filename": filename, "error": str(exc)})
             print(f"FAIL DESKTOP {filename}: {exc}", file=sys.stderr, flush=True)
