@@ -55,7 +55,8 @@ func clear_score() -> void:
     cached_offsets_gap = -1.0
 
 func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
-        tie_items: Dictionary = {}, chord_items: Dictionary = {}) -> bool:
+        tie_items: Dictionary = {}, chord_items: Dictionary = {},
+        beam_items: Dictionary = {}) -> bool:
     if not glyphs.load_font(items):
         failure_reason = glyphs.error
         return false
@@ -66,6 +67,9 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         failure_reason = glyphs.error
         return false
     if not glyphs.load_chord_templates(chord_items):
+        failure_reason = glyphs.error
+        return false
+    if not glyphs.load_beam_fragments(beam_items):
         failure_reason = glyphs.error
         return false
     failure_reason = ""
@@ -602,6 +606,7 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
                 _stem_attachment(str(event.get("note_type", "eighth")),gap,up)
             members.append({
                 "id":str(event.get("id", "")), "x":stem_x,
+                "head_x":x+float(head_offsets.get(str(event.get("id","")),0.0)),
                 "head_y":float(chord["bottom_y"] if up else chord["top_y"]),
                 "top_y":float(chord["top_y"]),
                 "bottom_y":float(chord["bottom_y"]),
@@ -624,17 +629,30 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
                 if up else float(member["bottom_y"])+gap*3.25)
             var candidate: float = required-rise*t
             origin = minf(origin, candidate) if up else maxf(origin, candidate)
+        # For exactly two notes, reuse the beam pixels from the real
+        # Verovio exercise SVG and its measured stem endpoints.
+        # Longer beam groups need multi-anchor piecewise warping; they
+        # deliberately retain native geometry until that is implemented.
+        var art_key: String = ""
+        var art_tips: Array = []
+        if members.size() == 2:
+            var candidate: String = str(members[0]["id"])+"|"+str(members[1]["id"])
+            if glyphs.has_beam(candidate,up):
+                art_key = candidate
+                art_tips = glyphs.beam_tips(candidate)
         for index in range(members.size()):
             var member: Dictionary = members[index]
             var t: float = (float(member["x"])-left_x)/width if width > .01 else 0.0
             var tip: float = origin+rise*t
+            if art_tips.size() == 2:
+                tip = float(member["head_y"])+float(art_tips[index])*gap/250.0
             member["tip_y"] = tip
             members[index] = member
             stems[str(member["id"])] = {"up":up, "tip_y":tip,
                 "x":float(member["x"])}
         drawn_groups.append({"members":members,
             "staff":str(group[0].get("staff", "right")),
-            "up":up, "tip_y":origin})
+            "up":up, "tip_y":origin,"art_key":art_key})
     return {"stems":stems, "groups":drawn_groups}
 
 
@@ -662,6 +680,11 @@ func _paint_beams(data: Dictionary, gap: float) -> void:
             continue
         var ink: Color = _ink(str(group.get("staff", "right")))
         var up: bool = bool(group.get("up", true))
+        var art_key: String = str(group.get("art_key",""))
+        if not art_key.is_empty() and glyphs.paint_beam(
+                self,art_key,float(first["head_x"]),float(last["head_x"]),
+                float(first["head_y"]),gap,ink):
+            continue
         var sign: float = 1.0 if up else -1.0
         var thick: float = gap*.39
         var slope: float = (float(last["tip_y"])-float(first["tip_y"])) / \
