@@ -480,8 +480,10 @@ func _chord_template_key(event: Dictionary) -> String:
 func _paint_engraved_chord(event: Dictionary, x: float,
         gap: float, ink: Color) -> Array:
     var key: String = _chord_template_key(event)
-    if key.is_empty() or not glyphs.has_chord(key) or \
-            beamed_note_ids.has(str(event.get("id",""))):
+    if key.is_empty() or not glyphs.has_chord(key):
+        return []
+    var beamed: bool = beamed_note_ids.has(str(event.get("id","")))
+    if beamed and not glyphs.has_chord_heads(key):
         return []
     var group: Array = chord_members.get(str(event.get("id","")),[])
     var heads: Array = glyphs.chord_heads(key)
@@ -506,7 +508,10 @@ func _paint_engraved_chord(event: Dictionary, x: float,
         # Ledger rules must be UNDER the authentic filled noteheads.
         _paint_ledger(head_x,head_y,step,_staff_center(staff)+gap*2.0,
             gap,ink)
-    if not glyphs.paint_chord(self,key,x,anchor,gap,ink):
+    var painted_ok: bool = (glyphs.paint_chord_heads(
+        self,key,x,anchor,gap,ink) if beamed else
+        glyphs.paint_chord(self,key,x,anchor,gap,ink))
+    if not painted_ok:
         return []
     var painted: Array = []
     for i in range(sorted_heads.size()):
