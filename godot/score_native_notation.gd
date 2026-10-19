@@ -341,8 +341,8 @@ func _paint_note(event: Dictionary, x: float,
 
 func _beam_layout(gap: float, clock: float, playhead_x: float,
         head_offsets: Dictionary = {}) -> Dictionary:
-    # Build one set of stem tips and polygons for the complete score.
-    # Their screen X changes only through the common, linear timeline.
+    # Beam position is derived from the real notehead Y coordinates.
+    # All horizontal positions still come from the one musical-time axis.
     var stems: Dictionary = {}
     var drawn_groups: Array = []
     frame_visible_beam_groups = 0
@@ -357,13 +357,6 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
             continue
         frame_visible_beam_groups += 1
         var up: bool = Geometry.stem_up(group, timeline.model)
-        var y_min := INF
-        var y_max := -INF
-        for event in group:
-            var y: float = _event_y(event, gap)
-            y_min = minf(y_min, y)
-            y_max = maxf(y_max, y)
-        var tip: float = (y_min - gap*3.25 if up else y_max + gap*3.25)
         var members: Array = []
         for event in group:
             var x: float = timeline.screen_x(float(event.get("beat", 0.0)),
@@ -371,70 +364,99 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
             var stem_x: float = x + float(head_offsets.get(
                 str(event.get("id", "")), 0.0)) + \
                 (gap*.61 if up else -gap*.61)
-            var id: String = str(event.get("id", ""))
-            stems[id] = {"up":up, "tip_y":tip}
-            members.append({"x":stem_x, "tip_y":tip,
-                "note_type":str(event.get("note_type", "eighth"))})
+            members.append({
+                "id":str(event.get("id", "")), "x":stem_x,
+                "head_y":_event_y(event, gap),
+                "note_type":str(event.get("note_type", "eighth"))
+            })
+        # Conventional beams follow the overall melodic contour, but a
+        # shallow cap prevents steep diagonals on wide intervals.
+        var left_x: float = float(members[0]["x"])
+        var right_x: float = float(members[-1]["x"])
+        var width: float = right_x-left_x
+        var rise: float = clampf(
+            float(members[-1]["head_y"])-float(members[0]["head_y"]),
+            -gap*.75, gap*.75) if width > .01 else 0.0
+        # Move the complete tilted beam clear of EVERY notehead, not only
+        # the endpoints. Every stem retains at least 3.25 staff spaces.
+        var origin: float = INF if up else -INF
+        for member in members:
+            var t: float = (float(member["x"])-left_x)/width if width > .01 else 0.0
+            var required: float = float(member["head_y"]) + (
+                -gap*3.25 if up else gap*3.25)
+            var candidate: float = required-rise*t
+            origin = minf(origin, candidate) if up else maxf(origin, candidate)
+        for index in range(members.size()):
+            var member: Dictionary = members[index]
+            var t: float = (float(member["x"])-left_x)/width if width > .01 else 0.0
+            var tip: float = origin+rise*t
+            member["tip_y"] = tip
+            members[index] = member
+            stems[str(member["id"])] = {"up":up, "tip_y":tip}
         drawn_groups.append({"members":members,
             "staff":str(group[0].get("staff", "right")),
-            "up":up, "tip_y":tip})
+            "up":up, "tip_y":origin})
     return {"stems":stems, "groups":drawn_groups}
 
 
-func _beam_rectangle(a: float, b: float, y: float,
+func _beam_segment(x0: float, y0: float, x1: float, y1: float,
         thickness: float, ink: Color) -> void:
-    if b <= a:
+    if x1 <= x0:
         return
     draw_colored_polygon(PackedVector2Array([
-        Vector2(a, y), Vector2(b, y),
-        Vector2(b, y+thickness), Vector2(a, y+thickness)]), ink)
+        Vector2(x0, y0), Vector2(x1, y1),
+        Vector2(x1, y1+thickness), Vector2(x0, y0+thickness)]), ink)
 
 
 func _paint_beams(data: Dictionary, gap: float) -> void:
-    # The first beam joins the entire group. Additional beams at levels
-    # 2/3/4 respectively encode 16th/32nd/64th values. Each level either
-    # joins adjacent eligible notes or paints a short isolated hook.
-    # All layers use the exact same source-beat positions and stem tips.
+    # Main and secondary beams follow exactly the same capped slope;
+    # short hooks also follow that line rather than floating horizontally.
     for group in data.get("groups", []):
         var members: Array = group.get("members", [])
         if members.size() < 2:
             continue
         var first: Dictionary = members[0]
         var last: Dictionary = members[-1]
-        if float(last["x"]) < -40.0 or float(first["x"]) > size.x+40.0:
+        var left_x: float = float(first["x"])
+        var right_x: float = float(last["x"])
+        if right_x < -40.0 or left_x > size.x+40.0 or right_x <= left_x:
             continue
         var ink: Color = _ink(str(group.get("staff", "right")))
         var up: bool = bool(group.get("up", true))
-        var first_y: float = float(group.get("tip_y", 0.0))
         var sign: float = 1.0 if up else -1.0
         var thick: float = gap*.39
-        _beam_rectangle(float(first["x"]), float(last["x"]),
-            first_y, sign*thick, ink)
+        var slope: float = (float(last["tip_y"])-float(first["tip_y"])) / \
+            (right_x-left_x)
+        _beam_segment(left_x,float(first["tip_y"]),right_x,
+            float(last["tip_y"]),sign*thick,ink)
         for level in range(2, 5):
-            var beam_y: float = first_y + sign*gap*.65*float(level-1)
+            var offset: float = sign*gap*.65*float(level-1)
             for i in range(members.size()):
                 var amount: int = Geometry.beam_level(
                     str(members[i].get("note_type", "")))
                 if amount < level:
                     continue
                 var x0: float = float(members[i]["x"])
+                var y0: float = float(members[i]["tip_y"])+offset
                 var prior: bool = i > 0 and Geometry.beam_level(
                     str(members[i-1].get("note_type", ""))) >= level
                 var following: bool = i+1 < members.size() and \
                     Geometry.beam_level(
                     str(members[i+1].get("note_type", ""))) >= level
                 if following:
-                    _beam_rectangle(x0, float(members[i+1]["x"]),
-                        beam_y, sign*thick, ink)
+                    _beam_segment(x0,y0,float(members[i+1]["x"]),
+                        float(members[i+1]["tip_y"])+offset,sign*thick,ink)
                 elif not prior:
                     var left_hook: bool = i == members.size()-1
                     var nearby: float = (x0-float(members[i-1]["x"])
                         if left_hook else float(members[i+1]["x"])-x0)
                     var hook: float = minf(gap*1.3, nearby*.50)
                     if left_hook:
-                        _beam_rectangle(x0-hook, x0, beam_y, sign*thick, ink)
+                        _beam_segment(x0-hook,y0-slope*hook,x0,y0,
+                            sign*thick,ink)
                     else:
-                        _beam_rectangle(x0, x0+hook, beam_y, sign*thick, ink)
+                        _beam_segment(x0,y0,x0+hook,y0+slope*hook,
+                            sign*thick,ink)
 
 func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
     # Build tie connectivity once on load, not O(all notes) every frame.
