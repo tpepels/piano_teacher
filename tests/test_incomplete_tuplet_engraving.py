@@ -29,8 +29,11 @@ def test_isolated_expressive_quintuplet_rest_and_note_have_no_fake_group_label()
         "Verovio timing markers, without invented visible '5' labels"
     )
     assert all(
-        len(item[3]) == 2 and all(mark["show-number"] == "none"
-                                 and mark["bracket"] == "no" for mark in item[3])
+        len(item[3]) == 2
+        and item[3][0]["type"] == "start"
+        and item[3][0]["show-number"] == "none"
+        and item[3][0]["bracket"] == "no"
+        and item[3][1]["type"] == "stop"
         for item in after
     )
 
