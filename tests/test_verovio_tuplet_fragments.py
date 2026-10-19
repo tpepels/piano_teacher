@@ -112,5 +112,27 @@ def test_real_verovio_exports_explicit_triplet_bracket():
                  ET.fromstring(original).iter()
                  if "tuplet" in n.get("class","").lower()]
         print("ACTUAL_VEROVIO_TUPLET_CLASSES",classes[:20])
+        from piano_teacher.verovio_tuplet_fragments import crop_art
+        from piano_teacher.score_geometry import parse_svg_geometry
+        geom=parse_svg_geometry(original)
+        first=geom.elements["n1"]
+        last=geom.elements["n3"]
+        space=geom.staff_systems[first[2]]["staff_lines"]
+        print("ACTUAL_TUPLET_ANCHORS",first,last,"staff",space)
+        from piano_teacher.verovio_tuplet_fragments import isolate, source_ids
+        tree=ET.fromstring(original)
+        for node in tree.iter():
+            if node.get("class")=="tuplet":
+                print("TUPLET_NESTED_IDS",source_ids(node))
+                for element in node.iter():
+                    if element.get("class") in ("tupletNum","tupletBracket"):
+                        try:
+                            raster=crop_art(isolate(tree,element),
+                                space[1]-space[0],(first[0],first[1]),
+                                element.get("class"))
+                            print("TUPLET_REAL_ART",element.get("class"),
+                                  raster and raster["bounds"])
+                        except Exception as err:
+                            print("TUPLET_ART_ERROR",type(err).__name__,str(err))
     assert "n1|n2|n3" in atlas
     assert atlas["n1|n2|n3"]["number"]
