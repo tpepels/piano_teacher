@@ -28,8 +28,13 @@ def _classes(node: ET.Element) -> set[str]:
 
 
 def _note_ids(group: ET.Element) -> tuple[str, ...]:
+    # With svgBoundingBoxes enabled, Verovio adds diagnostic groups
+    # `class="note bounding-box"` and `note content-bounding-box`.
+    # Those are not score notes and must never become musical anchors.
     return tuple(node.get("id", "") for node in group.iter()
-                 if "note" in _classes(node) and node.get("id"))
+                 if "note" in _classes(node)
+                 and not _classes(node) & {"bounding-box","content-bounding-box"}
+                 and node.get("id"))
 
 
 def _filter_beam_svg(svg: str, selected: tuple[str, ...]) -> str | None:
