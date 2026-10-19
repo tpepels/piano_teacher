@@ -337,19 +337,125 @@ func _ink(staff: String) -> Color:
 
 
 
-# One continuous grand-staff barline, displaced slightly left of the
-# next measure's attack. This is engraving clearance, not a new time axis.
-# The opening header is not preceded by an invented moving barline.
+# MusicXML determines each boundary's structure. The first measure has
+# no moving barline unless it explicitly opens with a repeat sign. At later
+# boundaries an explicit left barline overrides the previous default regular
+# right line. A closing double/repeat line belongs to the previous measure.
 func _barline_geometry(measure: Dictionary, clock: float,
         playhead_x: float, gap: float) -> Dictionary:
-    if timeline.measures.is_empty() or \
-            int(measure.get("number", -1)) == \
-            int(timeline.measures[0].get("number", -2)):
+    var index: int = timeline.measures.find(measure)
+    if index < 0:
         return {}
+    var mark: Variant = measure.get("left_barline")
+    if index == 0 and not mark is Dictionary:
+        return {}
+    if index > 0:
+        var previous: Dictionary = timeline.measures[index-1]
+        var previous_right: Variant = previous.get("right_barline")
+        if not mark is Dictionary:
+            mark = previous_right
+        elif previous_right is Dictionary and \
+                str(previous_right.get("repeat","")) == "backward" and \
+                str(mark.get("repeat","")) == "forward":
+            # Right repeat followed by left repeat at the same barline.
+            mark = {"style":"heavy-heavy","repeat":"both"}
+    if not mark is Dictionary:
+        mark = {"style":"regular","repeat":""}
     var x: float = timeline.screen_x(float(measure.get("start_beat", 0.0)),
         clock, playhead_x, play_from_beat) - gap*1.35
     return {"x":x, "top":_staff_center("right")-2.0*gap,
-        "bottom":_staff_center("left")+2.0*gap}
+        "bottom":_staff_center("left")+2.0*gap,
+        "style":str(mark.get("style","regular")),
+        "repeat":str(mark.get("repeat",""))}
+
+
+func _terminal_barline_geometry(clock: float,
+        playhead_x: float, gap: float) -> Dictionary:
+    if timeline.measures.is_empty():
+        return {}
+    var last: Dictionary = timeline.measures[-1]
+    var mark: Variant = last.get("right_barline")
+    if not mark is Dictionary:
+        mark = {"style":"regular","repeat":""}
+    var x: float = timeline.screen_x(float(last.get("end_beat",0.0)),
+        clock,playhead_x,play_from_beat)-gap*.45
+    return {"x":x, "top":_staff_center("right")-2.0*gap,
+        "bottom":_staff_center("left")+2.0*gap,
+        "style":str(mark.get("style","regular")),
+        "repeat":str(mark.get("repeat",""))}
+
+
+# Per SMuFL, barline strokes are drawn as structural rules. Unlike
+# noteheads/stems they are variable-length rules spanning both staves;
+# their repeat punctuation is genuine Verovio E044 music-font ink.
+func _barline_strokes(style: String, gap: float) -> Array:
+    var thin: float = maxf(1.15,gap*.095)
+    var heavy: float = maxf(3.1,gap*.35)
+    var separation: float = gap*.44
+    match style:
+        "none": return []
+        "regular", "dashed", "dotted":
+            return [{"offset":0.0,"width":thin}]
+        "heavy":
+            return [{"offset":0.0,"width":heavy}]
+        "light-light":
+            return [{"offset":-separation,"width":thin},
+                {"offset":0.0,"width":thin}]
+        "light-heavy":
+            return [{"offset":-separation,"width":thin},
+                {"offset":0.0,"width":heavy}]
+        "heavy-light":
+            return [{"offset":-separation,"width":heavy},
+                {"offset":0.0,"width":thin}]
+        "heavy-heavy":
+            return [{"offset":-separation,"width":heavy},
+                {"offset":0.0,"width":heavy}]
+    return []
+
+
+func _paint_barline(info: Dictionary, gap: float) -> void:
+    if info.is_empty():
+        return
+    var style: String = str(info.get("style","regular"))
+    var bars: Array = _barline_strokes(style,gap)
+    if bars.is_empty():
+        return
+    var x: float = float(info["x"])
+    var top: float = float(info["top"])
+    var bottom: float = float(info["bottom"])
+    var ink: Color = Color(DIM_INK,.76)
+    for stroke in bars:
+        var sx: float = x+float(stroke["offset"])
+        var width: float = float(stroke["width"])
+        if style in ["dashed","dotted"]:
+            var length: float = gap*(.65 if style=="dashed" else .13)
+            var skip: float = gap*(.35 if style=="dashed" else .27)
+            var at: float = top
+            while at < bottom:
+                draw_line(Vector2(sx,at),Vector2(sx,minf(bottom,at+length)),
+                    ink,width,true)
+                at += length+skip
+        else:
+            draw_line(Vector2(sx,top),Vector2(sx,bottom),ink,width,true)
+    var repetition: String = str(info.get("repeat",""))
+    if repetition not in ["forward","backward","both"]:
+        return
+    var positions: Array = []
+    if repetition in ["backward","both"]:
+        positions.append(x-gap*.92)
+    if repetition in ["forward","both"]:
+        positions.append(x+gap*.56)
+    var box: Array = glyphs.bounds.get("repeat_dot",[])
+    if box.size()!=4:
+        return
+    var unit: float = gap/250.0
+    var center_offset: float = (float(box[1])+float(box[3])*.5)*unit
+    for dot_x in positions:
+        for staff in ["right","left"]:
+            var middle: float = _staff_center(staff)
+            for dot_y in [middle-gap*.5,middle+gap*.5]:
+                glyphs.paint(self,"repeat_dot",float(dot_x),
+                    dot_y-center_offset,gap,ink,true)
 
 
 # Meter changes need room to the LEFT of the next attack. A short
@@ -861,8 +967,7 @@ func _draw() -> void:
             continue
         var x: float = timeline.screen_x(at,camera_clock,
             playhead_x,play_from_beat)
-        var boundary_tint: Color = Color(DIM_INK,.70)
-        # Opening Verovio glyphs occupy PRE-ROLL space. Moving those
+         # Opening Verovio glyphs occupy PRE-ROLL space. Moving those
         # ornaments left leaves note beat 0 exactly on the time grid.
         var opening: bool = not timeline.measures.is_empty() and \
             int(measure.get("number", -1)) == \
@@ -872,11 +977,9 @@ func _draw() -> void:
             measure, previous_measure, gap)
         var barline: Dictionary = _barline_geometry(measure,
             camera_clock, playhead_x, gap)
-        if not barline.is_empty() and float(barline["x"]) >= -2.0 and \
-                float(barline["x"]) <= size.x+2.0:
-            draw_line(Vector2(float(barline["x"]),float(barline["top"])),
-                Vector2(float(barline["x"]),float(barline["bottom"])),
-                boundary_tint,1.3,true)
+        if not barline.is_empty() and float(barline["x"]) >= -gap*2.0 and \
+                float(barline["x"]) <= size.x+gap*2.0:
+            _paint_barline(barline,gap)
         for staff in ["right","left"]:
             var center: float = _staff_center(staff)
             var clef: Dictionary = _clef_for(staff,measure)
@@ -915,6 +1018,13 @@ func _draw() -> void:
                 str(int(measure.get("number", 0))),
                 HORIZONTAL_ALIGNMENT_LEFT,-1,11,DIM_INK)
         previous_measure = measure
+    # The actual ending of the last measure has its own terminal barline.
+    # It must not disappear simply because no following measure exists.
+    var terminal: Dictionary = _terminal_barline_geometry(
+        camera_clock,playhead_x,gap)
+    if not terminal.is_empty() and float(terminal["x"]) >= -gap*2.0 and \
+            float(terminal["x"]) <= size.x+gap*2.0:
+        _paint_barline(terminal,gap)
     # All symbols carry their original source onset; NO separate horizontal
     # layout pass or per-note acceleration, including chord tones and rests.
     visible_symbols = 0

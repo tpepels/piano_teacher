@@ -418,7 +418,8 @@ def _phrase_lanes(phrase, hand, grid=()):
 def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                        time_signatures: tuple[tuple[float, int, int], ...] = (),
                        key_signatures=(), clef_changes=(),
-                       default_clefs: dict | None = None) -> LessonScore:
+                       default_clefs: dict | None = None,
+                       barlines: tuple = ()) -> LessonScore:
     """Create notation from the source measure grid, not averaged bars."""
     identities = [source_note_id(note,index) for index,note in enumerate(phrase.notes)]
     if len(set(identities)) != len(identities):
@@ -426,6 +427,31 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
     grid = phrase_grid(phrase, boundaries)
     bars = len(grid) - 1
     changes = sorted(time_signatures)
+    barline_at = {}
+    for mark in barlines:
+        key = (round(mark.beat, 8), mark.location)
+        current = (mark.style, mark.repeat)
+        if key in barline_at and barline_at[key] != current:
+            raise ValueError("Conflicting source barline declarations")
+        barline_at[key] = current
+
+    def append_barline(measure, beat, location):
+        style_and_repeat = barline_at.get((round(beat, 8), location))
+        if style_and_repeat is None:
+            return
+        style, direction = style_and_repeat
+        tag = ET.Element("barline", location=location)
+        ET.SubElement(tag, "bar-style").text = style
+        if direction:
+            ET.SubElement(tag, "repeat", direction=direction)
+        if location == "left":
+            # MusicXML left barlines precede the note stream. Attributes
+            # (meter/clef/key) stay at the beginning of the measure.
+            index = next((i for i, node in enumerate(measure)
+                          if node.tag not in {"attributes"}), len(measure))
+            measure.insert(index, tag)
+        else:
+            measure.append(tag)
 
     def meter_at(beat: float, length: float) -> tuple[int, int]:
         active = [(n, d) for offset, n, d in changes if offset <= beat + 1e-7]
@@ -511,7 +537,9 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                         ET.SubElement(clef,'clef-octave-change').text = str(chosen_clef['octave_change'])
             last_meter = (beats, beat_type)
             last_key, last_clef = key_value, chosen_clef
+            append_barline(measure,source_beat,"left")
             _render_measure(measure,lanes,bar_end-bar_start,bar_start,bindings,counts)
             _write_accidentals(measure,active_key.fifths if active_key else 0)
             _write_tuplet_groups(measure)
+            append_barline(measure,phrase.start+grid[b+1],"right")
     return LessonScore(ET.tostring(root, encoding="unicode"), phrase, bindings, staff_clefs)

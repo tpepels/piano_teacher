@@ -42,6 +42,7 @@ _NATIVE_CODES = {
     "clef_g": "E050", "clef_f": "E062", "clef_c": "E05C",
     "head_whole": "E0A2", "head_half": "E0A3", "head_black": "E0A4",
     "augmentation_dot": "E1E7",
+    "repeat_dot": "E044",
     "rest_whole": "E4E3", "rest_half": "E4E4",
     "rest_quarter": "E4E5", "rest_eighth": "E4E6",
     "rest_16th": "E4E7", "rest_32nd": "E4E8", "rest_64th": "E4E9",

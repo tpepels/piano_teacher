@@ -4,6 +4,8 @@ extends RefCounted
 const STEPS := {"C":0, "D":1, "E":2, "F":3, "G":4, "A":5, "B":6}
 const SUPPORTED := ["whole", "half", "quarter", "eighth", "16th", "32nd", "64th"]
 const BEAM_LEVELS := {"eighth":1, "16th":2, "32nd":3, "64th":4}
+const BARLINE_STYLES := ["regular", "light-light", "light-heavy",
+    "heavy-light", "heavy-heavy", "heavy", "none", "dashed", "dotted"]
 const NOTE_BEATS := {"whole":4.0,"half":2.0,"quarter":1.0,
     "eighth":.5,"16th":.25,"32nd":.125,"64th":.0625}
 
@@ -87,9 +89,29 @@ static func supported(model: Dictionary) -> String:
             notes_seen[key] = true
         if str(event.get("staff", "")) not in ["right", "left"]:
             return "Unsupported staff"
+    var previous_right: Variant = null
     for measure in model.get("measures", []):
         if not measure is Dictionary:
             return "Invalid measure"
+        var opening: Variant = measure.get("left_barline")
+        if previous_right is Dictionary and opening is Dictionary:
+            var old_style: String = str(previous_right.get("style","regular"))
+            var old_repeat: String = str(previous_right.get("repeat",""))
+            var new_repeat: String = str(opening.get("repeat",""))
+            var paired: bool = old_repeat == "backward" and \
+                new_repeat == "forward"
+            if not paired and old_style not in ["regular","none"] and \
+                    opening != previous_right:
+                return "Conflicting source barline styles at one measure boundary"
+        previous_right = measure.get("right_barline")
+        for side in ["left_barline","right_barline"]:
+            var descriptor: Variant = measure.get(side)
+            if descriptor == null:
+                continue
+            if not descriptor is Dictionary or \
+                    str(descriptor.get("style","")) not in BARLINE_STYLES or \
+                    str(descriptor.get("repeat","")) not in ["","forward","backward"]:
+                return "Unsupported source barline descriptor"
         var clefs: Dictionary = measure.get("clefs", {})
         for hand in ["right", "left"]:
             var clef: Dictionary = clefs.get(hand, {})

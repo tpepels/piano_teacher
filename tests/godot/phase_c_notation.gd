@@ -134,6 +134,50 @@ func run() -> void:
         check(approx(float(joined["x"]),
             renderer.timeline.screen_x(3.0,0.0,480.0,0.0)-
             staff_gap*1.35), "Barline clears first note without moving onset")
+    var ending: Dictionary = renderer._terminal_barline_geometry(0.0,480.0,
+        staff_gap)
+    check(not ending.is_empty() and ending["style"] == "regular" and
+        approx(float(ending["x"]),
+            renderer.timeline.screen_x(7.0,0.0,480.0,0.0)-staff_gap*.45),
+        "Terminal barline exists at exercise end without changing timing")
+    check(renderer._barline_strokes("regular",staff_gap).size()==1,
+        "Single measure barline is one continuous thin stroke")
+    var double_bar: Array = renderer._barline_strokes("light-light",staff_gap)
+    check(double_bar.size()==2 and
+        approx(float(double_bar[0]["width"]),float(double_bar[1]["width"])),
+        "Double measure barline has two thin equal-weight strokes")
+    var final_bar: Array = renderer._barline_strokes("light-heavy",staff_gap)
+    check(final_bar.size()==2 and
+        float(final_bar[1]["width"])>float(final_bar[0]["width"])*2.0,
+        "Final measure barline has thick right stroke")
+    var forward: Array = renderer._barline_strokes("heavy-light",staff_gap)
+    check(forward.size()==2 and
+        float(forward[0]["width"])>float(forward[1]["width"]),
+        "Forward repeat uses thick left stroke")
+    check(renderer.glyphs.textures.has("repeat_dot"),
+        "Repeat colon is genuine source Verovio repeat-dot music glyph")
+    var styled: Dictionary = model.duplicate(true)
+    styled["measures"][0]["right_barline"] = {
+        "style":"light-heavy","repeat":"backward"}
+    styled["measures"][1]["left_barline"] = {
+        "style":"heavy-light","repeat":"forward"}
+    styled["measures"][1]["right_barline"] = {
+        "style":"light-light","repeat":""}
+    check(renderer.load_score(styled),"Explicit double-repeat bars remain native")
+    var shared: Dictionary = renderer._barline_geometry(
+        styled["measures"][1],0.0,480.0,staff_gap)
+    check(shared["style"]=="heavy-heavy" and shared["repeat"]=="both",
+        "Back-to-back backward/forward repeats share one correctly composed boundary")
+    check(renderer._terminal_barline_geometry(0.0,480.0,
+        staff_gap)["style"] == "light-light",
+        "Explicit right-hand ending style remains a double terminal bar")
+    var contradiction: Dictionary = styled.duplicate(true)
+    contradiction["measures"][1]["left_barline"] = {
+        "style":"light-light","repeat":""}
+    check(Geometry.supported(contradiction).contains("Conflicting"),
+        "Incompatible barline styles on the same boundary trigger fallback")
+    check(renderer.load_score(model),
+        "Restore source model after barline style tests")
     check(renderer.chord_members.has("n6") and
         renderer.chord_members["n6"].size() == 2,
         "Two simultaneous right-hand notes use one MusicXML chord leader")

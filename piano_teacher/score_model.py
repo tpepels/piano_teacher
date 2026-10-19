@@ -47,6 +47,34 @@ class ScoreMeasure:
     meter: tuple[int, int]
     keys: dict[str, int]
     clefs: dict[str, dict]
+    left_barline: dict | None = None
+    right_barline: dict | None = None
+
+
+BARLINE_STYLES = frozenset({
+    "regular", "light-light", "light-heavy", "heavy-light",
+    "heavy-heavy", "heavy", "none", "dashed", "dotted",
+})
+
+
+def _barline_data(tag: ET.Element) -> tuple[str, dict]:
+    """MusicXML engraving data, independent of tempo and SVG coordinates."""
+    location = tag.get("location", "right")
+    if location not in {"left", "right"}:
+        raise ValueError(f"Unsupported MusicXML barline location: {location}")
+    if tag.find("ending") is not None:
+        raise ValueError("Volta endings require full Verovio notation")
+    repeat = tag.find("repeat")
+    direction = repeat.get("direction", "") if repeat is not None else ""
+    if direction not in {"", "forward", "backward"}:
+        raise ValueError(f"Unknown MusicXML repeat direction: {direction}")
+    style = (tag.findtext("bar-style") or "").strip()
+    if not style:
+        style = ("heavy-light" if direction == "forward" else
+                 "light-heavy" if direction == "backward" else "regular")
+    if style not in BARLINE_STYLES:
+        raise ValueError(f"Unsupported MusicXML barline style: {style}")
+    return location, {"style": style, "repeat": direction}
 
 
 @dataclass(frozen=True)
@@ -118,6 +146,7 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
     meters: dict[int, tuple[int, int]] = {}
     keys: dict[int, dict[str, int]] = {}
     clefs: dict[int, dict[str, dict]] = {}
+    barlines: dict[int, dict[str, dict]] = {}
     for part_id, hand in PART_HAND.items():
         part_measures = parts[part_id].findall("measure")
         if len(part_measures) != count:
@@ -133,6 +162,17 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
             if int(measure.get("number", "-1")) != number:
                 raise ValueError("Source measure numbering differs between parts")
             ticks_in_bar = round((grid[bar_index + 1] - grid[bar_index]) * divisions)
+            local_barlines: dict[str, dict] = {}
+            for tag in measure.findall("barline"):
+                location, mark = _barline_data(tag)
+                if location in local_barlines and local_barlines[location] != mark:
+                    raise ValueError("Conflicting barlines within a MusicXML measure")
+                local_barlines[location] = mark
+            shared = barlines.setdefault(bar_index, {})
+            for location, mark in local_barlines.items():
+                if location in shared and shared[location] != mark:
+                    raise ValueError("Inconsistent barlines between piano hands")
+                shared[location] = mark
             cursor = 0
             last_onset: int | None = None
             for child in measure:
@@ -240,8 +280,11 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
             keys.setdefault(bar_index, {})[hand] = current_key
             clefs.setdefault(bar_index, {})[hand] = current_clef.copy()
     for bar_index in range(count):
+        boundary = barlines.get(bar_index, {})
         measures.append(ScoreMeasure(first_bar + bar_index, grid[bar_index],
-            grid[bar_index + 1], meters[bar_index], keys[bar_index], clefs[bar_index]))
+            grid[bar_index + 1], meters[bar_index], keys[bar_index], clefs[bar_index],
+            boundary.get("left"), boundary.get("right", {
+                "style": "regular", "repeat": ""})))
     if set(score.note_bindings) != segment_ids:
         raise ValueError("Unmatched printed note segments")
     return tuple(measures), tuple(symbols)

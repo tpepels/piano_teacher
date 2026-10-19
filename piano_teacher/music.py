@@ -56,6 +56,14 @@ class Phrase:
 
 
 @dataclass(frozen=True)
+class BarlineChange:
+    beat: float
+    location: str
+    style: str
+    repeat: str = ""
+
+
+@dataclass(frozen=True)
 class Piece:
     title: str
     bpm: int
@@ -67,6 +75,7 @@ class Piece:
     key_signatures: tuple[KeySignature, ...] = ()
     clef_changes: tuple[ClefChange, ...] = ()
     import_warnings: tuple[str, ...] = ()
+    barlines: tuple[BarlineChange, ...] = ()
 
 
 def note_name(pitch: int) -> str:

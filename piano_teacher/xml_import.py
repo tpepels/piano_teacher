@@ -12,7 +12,11 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 import zipfile
 
-from .music import Note, Piece, KeySignature, ClefChange, _assign_hands, _named_hand, _phrases
+from .music import (
+    Note, Piece, KeySignature, ClefChange, BarlineChange,
+    _assign_hands, _named_hand, _phrases,
+)
+from .score_model import _barline_data
 
 
 def _xml_root(path: Path):
@@ -56,6 +60,7 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
     source_staffs = {}
     metadata = []
     signatures = {}
+    source_barlines = {}
     grid = None
 
     def track_for(part_index, staff, name):
@@ -187,6 +192,15 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
                             ties[binding] = len(notes)-1
             if extent <= 0:
                 raise ValueError('MusicXML source measure has no explicit rhythmic duration')
+            for tag in measure.findall("barline"):
+                location, descriptor = _barline_data(tag)
+                key = (measure_index, location)
+                position = offset if location == "left" else offset + extent
+                mark = BarlineChange(float(position), location,
+                                     descriptor["style"], descriptor["repeat"])
+                if key in source_barlines and source_barlines[key] != mark:
+                    raise ValueError("Conflicting MusicXML grand-staff barlines")
+                source_barlines[key] = mark
             offset += extent
             part_grid.append(offset)
         if ties:
@@ -223,4 +237,6 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
     changes = tuple((float(beat), *signature) for beat, signature in sorted(signatures.items()))
     return Piece(path.stem, bpm, tuple(notes), _phrases(notes, list(boundaries), 2),
                  bar_boundaries=boundaries, time_signatures=changes,
-                 key_signatures=tuple(dict.fromkeys(keys)), clef_changes=tuple(dict.fromkeys(clefs)))
+                 key_signatures=tuple(dict.fromkeys(keys)),
+                 clef_changes=tuple(dict.fromkeys(clefs)),
+                 barlines=tuple(mark for _, mark in sorted(source_barlines.items())))
