@@ -36,6 +36,8 @@ var bounds: Dictionary = {}
 var font_name := ""
 var note_textures: Dictionary = {}
 var note_bounds: Dictionary = {}
+var note_stem_textures: Dictionary = {}
+var note_stem_bounds: Dictionary = {}
 var tie_textures: Dictionary = {}
 var tie_metadata: Dictionary = {}
 var chord_textures: Dictionary = {}
@@ -98,7 +100,8 @@ func load_font(items: Dictionary) -> bool:
     return true
 
 func note_ready() -> bool:
-    return note_textures.size() == NOTE_TEMPLATES.size()
+    return note_textures.size() == NOTE_TEMPLATES.size() and \
+        note_stem_textures.size() == NOTE_TEMPLATES.size()-1
 
 
 func load_note_templates(items: Dictionary) -> bool:
@@ -106,6 +109,8 @@ func load_note_templates(items: Dictionary) -> bool:
         return true
     var new_textures: Dictionary = {}
     var new_bounds: Dictionary = {}
+    var stems: Dictionary = {}
+    var stem_boxes: Dictionary = {}
     for name in NOTE_TEMPLATES:
         var item: Dictionary = items.get(name, {})
         if str(item.get("source", "")) != "verovio-engraved-note" or \
@@ -128,8 +133,27 @@ func load_note_templates(items: Dictionary) -> bool:
             return false
         new_textures[name] = ImageTexture.create_from_image(note)
         new_bounds[name] = coordinates.duplicate()
+        if name != "whole":
+            var stem: Dictionary = item.get("stem_only",{})
+            var box: Array = stem.get("bounds",[])
+            if str(stem.get("source","")) != "verovio-engraved-note-stem" or \
+                    int(stem.get("units_per_space",0)) != 250 or \
+                    box.size() != 4 or float(box[2]) <= 0.0 or \
+                    float(box[3]) <= 0.0:
+                error = "Missing original Verovio stem for "+name
+                return false
+            var stem_image := Image.new()
+            if stem_image.load_png_from_buffer(Marshalls.base64_to_raw(
+                    str(stem.get("png_base64","")))) != OK or \
+                    stem_image.is_empty():
+                error = "Invalid original Verovio stem for "+name
+                return false
+            stems[name] = ImageTexture.create_from_image(stem_image)
+            stem_boxes[name] = box.duplicate()
     note_textures = new_textures
     note_bounds = new_bounds
+    note_stem_textures = stems
+    note_stem_bounds = stem_boxes
     error = ""
     return true
 
@@ -552,6 +576,23 @@ func paint_slur(canvas: CanvasItem, name: String,
             Vector2(float(tex.get_width()),0.0),
             Vector2(float(tex.get_width()),float(tex.get_height())),
             Vector2(0.0,float(tex.get_height()))]),tex)
+    return true
+
+
+func paint_note_stem(canvas: CanvasItem, kind: String, up: bool,
+        x: float, head_y: float, tip_y: float, gap: float,
+        ink: Color) -> bool:
+    var name: String = kind + ("_up" if up else "_down")
+    var sprite: Texture2D = note_stem_textures.get(name)
+    if sprite == null or absf(head_y-tip_y) <= 1.0:
+        return false
+    var box: Array = note_stem_bounds[name]
+    var unit: float = gap/250.0
+    # Verovio supplies stroke thickness, engraving caps and the X anchor.
+    # Only the longitudinal distance changes to meet the real source beam.
+    canvas.draw_texture_rect(sprite,Rect2(
+        x+float(box[0])*unit,minf(head_y,tip_y),
+        float(box[2])*unit,absf(head_y-tip_y)),false,ink)
     return true
 
 

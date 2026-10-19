@@ -29,6 +29,11 @@ static func note_catalogue() -> Dictionary:
             "units_per_space": 250, "bounds":[-1.5,-1.5,3.0,3.0],
             "png_base64":encoded
         }
+        if name != "whole":
+            entries[name]["stem_only"] = {
+                "source":"verovio-engraved-note-stem",
+                "units_per_space":250,"bounds":[0.0,-300.0,2.0,300.0],
+                "png_base64":encoded}
     return entries
 
 
