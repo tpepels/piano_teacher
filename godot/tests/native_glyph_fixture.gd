@@ -13,3 +13,20 @@ static func catalogue() -> Dictionary:
             "svg": '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2 2" width="2" height="2"><path d="M0 0L2 0L2 2L0 2Z" fill="white"/></svg>'
         }
     return result
+
+
+# Synthetic PNG fixtures used only by geometry tests. The actual desktop
+# tests validate Verovio's engraved heads, stems and flags end-to-end.
+static func note_catalogue() -> Dictionary:
+    var atlas = load("res://score_verovio_glyphs.gd")
+    var image := Image.create(3,3,false,Image.FORMAT_RGBA8)
+    image.fill(Color.WHITE)
+    var encoded: String = Marshalls.raw_to_base64(image.save_png_to_buffer())
+    var entries: Dictionary = {}
+    for name in atlas.NOTE_TEMPLATES:
+        entries[name] = {
+            "source": "verovio-engraved-note",
+            "units_per_space": 250, "bounds":[-1.5,-1.5,3.0,3.0],
+            "png_base64":encoded
+        }
+    return entries
