@@ -1,4 +1,4 @@
-extends "res://score_timeline_preview.gd"
+extends "res://notation/shared/view_base.gd"
 # Native Godot compositor for authentic individually extracted Verovio glyphs.
 # The score's continuous time axis, staff geometry, ledger rules, stems, beams
 # and ties are native Godot primitives. Musical glyph CONTOURS come ONLY from
