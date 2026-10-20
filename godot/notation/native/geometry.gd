@@ -63,6 +63,17 @@ static func staff_step(spelling: Dictionary, clef: Dictionary) -> int:
 static func note_y(step: int, bottom_y: float, gap: float) -> float:
     return bottom_y - float(step)*gap*.5
 
+# SMuFL/Leipzig rest origin is a staff-line reference, not the visual
+# centre of its bounding box. A whole rest hangs FROM line 4; a half rest
+# rests ON line 3. Other rest glyphs use the staff's middle line.
+static func rest_staff_offset(note_type: String) -> float:
+    return -1.0 if note_type == "whole" else 0.0
+
+# Dots sit beside the rest's ink: below the hanging whole-rest line, above
+# the half-rest support line. This is relative to the same glyph origin.
+static func rest_dot_offset(note_type: String) -> float:
+    return .5 if note_type == "whole" else 0.0
+
 static func supported(model: Dictionary) -> String:
     if not model.has("notation_events") or not model["notation_events"] is Array:
         return "Semantic score has no notation events"
