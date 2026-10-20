@@ -49,7 +49,7 @@ def test_extract_separate_genuine_tuplet_bracket_and_number(tmp_path,monkeypatch
     cache=PreprocessingCache(tmp_path)
     assert tuplet_fragments([XML],MODEL,cache,"example")==atlas
     monkeypatch.setattr(
-        "piano_teacher.verovio_tuplet_fragments.extract_tuplets",
+        "piano_teacher.notation.assets.tuplets.extract_tuplets",
         lambda *_: (_ for _ in ()).throw(AssertionError("re-engraved cached tuplet")))
     assert tuplet_fragments([XML],MODEL,
                              PreprocessingCache(tmp_path),"example")==atlas
