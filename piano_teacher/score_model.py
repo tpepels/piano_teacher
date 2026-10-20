@@ -51,30 +51,10 @@ class ScoreMeasure:
     right_barline: dict | None = None
 
 
-BARLINE_STYLES = frozenset({
-    "regular", "light-light", "light-heavy", "heavy-light",
-    "heavy-heavy", "heavy", "none", "dashed", "dotted",
-})
-
-
-def _barline_data(tag: ET.Element) -> tuple[str, dict]:
-    """MusicXML engraving data, independent of tempo and SVG coordinates."""
-    location = tag.get("location", "right")
-    if location not in {"left", "right"}:
-        raise ValueError(f"Unsupported MusicXML barline location: {location}")
-    if tag.find("ending") is not None:
-        raise ValueError("Volta endings require full Verovio notation")
-    repeat = tag.find("repeat")
-    direction = repeat.get("direction", "") if repeat is not None else ""
-    if direction not in {"", "forward", "backward"}:
-        raise ValueError(f"Unknown MusicXML repeat direction: {direction}")
-    style = (tag.findtext("bar-style") or "").strip()
-    if not style:
-        style = ("heavy-light" if direction == "forward" else
-                 "light-heavy" if direction == "backward" else "regular")
-    if style not in BARLINE_STYLES:
-        raise ValueError(f"Unsupported MusicXML barline style: {style}")
-    return location, {"style": style, "repeat": direction}
+# Compatibility names retained for existing tests and callers.
+# Both source import and semantic model use the independent parser.
+from .notation.musicxml import BARLINE_STYLES, parse_barline
+_barline_data = parse_barline
 
 
 @dataclass(frozen=True)
