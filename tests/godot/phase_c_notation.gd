@@ -70,7 +70,7 @@ func _score() -> Dictionary:
 func run() -> void:
     var Geometry = load("res://notation/native/geometry.gd")
     var Renderer = load("res://notation/native/view.gd")
-    var Timeline = load("res://score_timeline.gd")
+    var Timeline = load("res://notation/shared/timeline.gd")
     check(Geometry != null and Renderer != null and Timeline != null,
         "All Phase C scripts parse")
     if Geometry == null or Renderer == null or Timeline == null:
