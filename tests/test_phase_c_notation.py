@@ -23,6 +23,8 @@ def test_native_mode_is_canonical_and_unsupported_music_reverts_to_legacy():
     app = (ROOT / "godot" / "main.gd").read_text()
     native = (ROOT / "godot" / "score_native_notation.gd").read_text()
     geometry = (ROOT / "godot" / "score_notation_geometry.gd").read_text()
+    index = (ROOT / "godot/notation/native/score_index.gd").read_text()
+    preparation = (ROOT / "piano_teacher/application/score_preparation.py").read_text()
     # Native is default; explicit env/CLI switches enable compatibility
     # comparisons. Missing source glyphs must still reveal Verovio pages.
     assert 'PIANO_TEACHER_RENDERER").to_lower() != "legacy"' in app
@@ -37,7 +39,8 @@ def test_native_mode_is_canonical_and_unsupported_music_reverts_to_legacy():
     assert 'timeline_preview.visible = false' in app
     assert 'push_warning("Native notation fallback: "' in app
     assert 'timeline.screen_x(' in native
-    assert 'ordered_events = timeline.model.get("notation_events", []).duplicate()' in native
+    assert 'var index: Dictionary = ScoreIndex.build(timeline.model, glyphs)' in native
+    assert 'var ordered_events: Array = model.get("notation_events", []).duplicate()' in index
     assert 'for event in _visible_events(left, right):' in native
     assert 'cached_staff_gap' in native
     assert 'tie_pairs' in native
@@ -55,7 +58,8 @@ def test_native_mode_is_canonical_and_unsupported_music_reverts_to_legacy():
     assert 'parsed.get("native_glyphs", {})' in app
     assert 'glyph_catalog, note_catalog, tie_catalog, chord_catalog,' in app
     assert 'glyphs.paint_note(self, kind, normal_up, x, y, gap, ink)' in native
-    assert 'note_templates(self.preprocessing)' in (
+    assert 'note_templates(cache)' in preparation
+    assert 'assemble_layout(source_score, native_notes=True,' in (
         ROOT / "piano_teacher/server.py").read_text()
     assert 'str(int(measure.get("number", 0)))' in native
     assert 'func _beam_segment(' not in native
