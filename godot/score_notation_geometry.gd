@@ -149,8 +149,22 @@ static func required_density(events: Array, preferred: float,
             if distance > .00001:
                 minimum_gap = minf(minimum_gap, distance)
     var needed := preferred
-    if is_finite(minimum_gap):
-        needed = maxf(needed, MIN_ATTACK_SEPARATION/minimum_gap)
+    # A fixed 25 px spacing is sufficient for tiny 64ths but far too
+    # cramped for ordinary quarter/eighth reading on a large grand staff.
+    # Choose one score-wide density from each successive source onset:
+    # source beat positions and camera speed remain perfectly linear.
+    for key in voices:
+        var onsets: Array = voices[key]
+        onsets.sort()
+        for index in range(1, onsets.size()):
+            var distance: float = float(onsets[index])-float(onsets[index-1])
+            if distance <= .00001:
+                continue  # Simultaneous chord notes share one musical attack.
+            var readable: float = (MIN_ATTACK_SEPARATION if
+                distance <= .0625001 else
+                minf(96.0, maxf(MIN_ATTACK_SEPARATION,
+                    78.0*sqrt(distance/.5))))
+            needed = maxf(needed, readable/distance)
     return needed if needed <= limit else -1.0
 
 static func event_positions(model: Dictionary, density: float) -> Dictionary:

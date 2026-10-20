@@ -14,8 +14,8 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 4
-MAX_PATTERNS = 32
+VERSION = 5
+MAX_PATTERNS = 256
 _STEPS = {"C":0,"D":1,"E":2,"F":3,"G":4,"A":5,"B":6}
 _LETTERS = "CDEFGAB"
 _BEATS = {"whole":4.0,"half":2.0,"quarter":1.0,"eighth":.5,
@@ -27,7 +27,7 @@ def diatonic(spelling: dict) -> int:
 
 
 def chord_pattern(leader: dict, notes: list[dict], measure: dict) -> str | None:
-    if not 2 <= len(notes) <= 5:
+    if not 2 <= len(notes) <= 10:
         return None
     kind = str(leader.get("note_type",""))
     if kind not in _BEATS or any(n.get("note_type") != kind for n in notes):
@@ -36,7 +36,7 @@ def chord_pattern(leader: dict, notes: list[dict], measure: dict) -> str | None:
         absolute = [diatonic(n["spelling"]) for n in notes]
     except (KeyError,TypeError,ValueError):
         return None
-    if len(set(absolute)) != len(absolute) or max(absolute)-min(absolute)>15:
+    if len(set(absolute)) != len(absolute) or max(absolute)-min(absolute)>28:
         return None
     staff = leader.get("staff","right")
     clef = measure.get("clefs",{}).get(staff,{})
@@ -69,7 +69,9 @@ def patterns_from_model(model: dict) -> list[str]:
         pattern = chord_pattern(leaders[0],notes,measures[measure_id])
         if pattern:
             patterns.add(pattern)
-    return sorted(patterns)[:MAX_PATTERNS]
+    if len(patterns) > MAX_PATTERNS:
+        raise ValueError("Too many distinct source chord patterns for native engraving")
+    return sorted(patterns)
 
 
 def _xml(pattern: str) -> str:
@@ -281,9 +283,12 @@ def chord_templates(model: dict,cache=None) -> dict:
                     raise RuntimeError("Verovio rejected chord engraving options")
             try:
                 value=_render(toolkit,pattern)
-            except (ValueError,RuntimeError):
-                # Keep the old compound renderer for unsupported patterns,
-                # without introducing fake substitute font artwork.
+            except (ValueError,RuntimeError) as exc:
+                # Keep the original complete Verovio score available, but
+                # report precisely which source chord failed to engrave.
+                # A quiet skip here used to cause opaque 'Missing chord' UI.
+                print("VEROVIO_CHORD_PATTERN_UNAVAILABLE:",
+                      pattern,type(exc).__name__,str(exc))
                 continue
             if key:
                 cache.write_json("verovio-chord",key,value)
