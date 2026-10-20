@@ -124,14 +124,30 @@ func capture(label: String) -> Dictionary:
         if not paused and bool(app.last_state.get("loaded", false)):
             var panel: Rect2 = app.score_frame.get_global_rect()
             var found := false
-            for note in app.score_layout.get("notes",[]):
-                var point := note_position(note)
-                var pixels := note_ink(picture,point*scale)
-                if panel.grow(-8).has_point(point) and pixels >= 8:
-                    entry["note_id"] = str(note.id)
-                    entry["notehead_ink"] = pixels
-                    found = true
-                    break
+            if app.native_notation_enabled and app.timeline_preview != null and \
+                    app.timeline_preview.visible:
+                # Native noteheads live in the fixed musical-time viewport.
+                # Testing the retired strip positions reports false blank
+                # scores once full-page PNGs stop being downloaded.
+                var view: Control = app.timeline_preview
+                for id in view.drawn_noteheads:
+                    var local: Vector2 = view.drawn_noteheads[id]
+                    var point: Vector2 = view.get_global_transform_with_canvas()*local
+                    var pixels := note_ink(picture,point*scale)
+                    if panel.grow(-8).has_point(point) and pixels >= 8:
+                        entry["note_id"] = str(id)
+                        entry["notehead_ink"] = pixels
+                        found = true
+                        break
+            else:
+                for note in app.score_layout.get("notes",[]):
+                    var point := note_position(note)
+                    var pixels := note_ink(picture,point*scale)
+                    if panel.grow(-8).has_point(point) and pixels >= 8:
+                        entry["note_id"] = str(note.id)
+                        entry["notehead_ink"] = pixels
+                        found = true
+                        break
             check(found or phase() == "count_in",
                 "Actual engraved note pixels remain visible after the count-in in "+label)
             for button in [app.start_button,app.practice_retry_button,app.listen_button]:
