@@ -6,6 +6,7 @@ extends "res://notation/shared/view_base.gd"
 # There is no full-page SVG bitmap or custom imitation of a music glyph.
 # Incomplete notation falls back to the existing Verovio score as a whole.
 const Geometry := preload("res://score_notation_geometry.gd")
+const ScoreIndex := preload("res://notation/native/score_index.gd")
 const VerovioGlyphs := preload("res://score_verovio_glyphs.gd")
 const Design := preload("res://practice_theme.gd")
 const NOTE_INK := Design.SCORE_INK
@@ -120,72 +121,16 @@ func load_score(candidate: Dictionary) -> bool:
         notice = failure_reason
         return false
     selected_density = density
-    # Source-Verovio beam groups are authoritative. Inferring meter-based
-    # beams here incorrectly connected separately flagged Chopin notes.
-    var source_beams: Dictionary = _engraved_beam_groups(timeline.model)
-    beam_groups = source_beams.get("groups",[])
-    beamed_note_ids = Geometry.beamed_ids(beam_groups)
-    notation_tuplets = Geometry.tuplet_groups(timeline.model)
-    measure_by_number.clear()
-    for measure in timeline.measures:
-        measure_by_number[int(measure.get("number", -1))] = measure
-    ordered_events = timeline.model.get("notation_events", []).duplicate()
-    ordered_events.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-        var beat_a: float = float(a.get("beat", 0.0))
-        var beat_b: float = float(b.get("beat", 0.0))
-        if absf(beat_a-beat_b) > .000001:
-            return beat_a < beat_b
-        # A chord leader MUST be painted before any child at this beat.
-        # sort_custom does not promise stable ordering of equal keys.
-        var lane_a: String = str(a.get("staff",""))+"|"+ \
-            str(a.get("voice","1"))+"|"+str(a.get("measure",0))
-        var lane_b: String = str(b.get("staff",""))+"|"+ \
-            str(b.get("voice","1"))+"|"+str(b.get("measure",0))
-        if lane_a != lane_b:
-            return lane_a < lane_b
-        var child_a: bool = bool(a.get("chord",false))
-        var child_b: bool = bool(b.get("chord",false))
-        if child_a != child_b:
-            return not child_a
-        return str(a.get("id","")) < str(b.get("id","")))
-    chord_members = Geometry.chord_members(ordered_events)
-    # Cache the preceding attack for every measure once. Tight meter
-    # changes must be relocated out of the ink; no per-frame note scan.
-    previous_attack_before_measure.clear()
-    var scan := 0
-    var last_attack := -INF
-    for measure in timeline.measures:
-        var boundary: float = float(measure.get("start_beat", 0.0))
-        while scan < ordered_events.size() and \
-                float(ordered_events[scan].get("beat",0.0)) < boundary-.0001:
-            if str(ordered_events[scan].get("kind","")) == "note":
-                last_attack = float(ordered_events[scan].get("beat",0.0))
-            scan += 1
-        previous_attack_before_measure[int(measure.get("number",0))] = last_attack
-    tie_pairs.clear()
-    var unfinished: Dictionary = {}
-    for event in ordered_events:
-        if str(event.get("kind", "")) != "note":
-            continue
-        var source_id: String = str(event.get("source_id", ""))
-        if bool(event.get("tie_stop", false)) and unfinished.has(source_id):
-            tie_pairs.append({"first": unfinished[source_id], "last": event})
-        if bool(event.get("tie_start", false)):
-            unfinished[source_id] = event
-        else:
-            unfinished.erase(source_id)
-    slur_pairs.clear()
-    var by_id: Dictionary = {}
-    for event in ordered_events:
-        if str(event.get("kind","")) == "note":
-            by_id[str(event.get("id",""))] = event
-    for key in glyphs.slur_keys():
-        var ids: Array = glyphs.slur_note_ids(str(key))
-        if ids.size() == 2 and by_id.has(str(ids[0])) and by_id.has(str(ids[1])):
-            var first: Dictionary = by_id[str(ids[0])]
-            var last: Dictionary = by_id[str(ids[1])]
-            if float(first.get("beat",0.0)) < float(last.get("beat",0.0)):
-                slur_pairs.append({"key":str(key),"first":first,"last":last})
+    var index: Dictionary = ScoreIndex.build(timeline.model, glyphs)
+    beam_groups = index["beam_groups"]
+    beamed_note_ids = index["beamed_note_ids"]
+    notation_tuplets = index["notation_tuplets"]
+    measure_by_number = index["measure_by_number"]
+    ordered_events = index["ordered_events"]
+    chord_members = index["chord_members"]
+    previous_attack_before_measure = index["previous_attack_before_measure"]
+    tie_pairs = index["tie_pairs"]
+    slur_pairs = index["slur_pairs"]
     failure_reason = _missing_source_engraving()
     if not failure_reason.is_empty():
         notice = failure_reason
@@ -250,38 +195,7 @@ func _missing_source_engraving() -> String:
 
 
 func _engraved_beam_groups(model: Dictionary) -> Dictionary:
-    var notes: Dictionary = {}
-    for event in model.get("notation_events",[]):
-        if str(event.get("kind","")) == "note" and \
-                not bool(event.get("chord",false)):
-            notes[str(event.get("id",""))] = event
-    var output: Array = []
-    # Metadata is extracted from each original Verovio SVG beam group.
-    for key in glyphs.beam_metadata:
-        var data: Dictionary = glyphs.beam_metadata[key]
-        var ids: Array = data.get("note_ids",[])
-        var attacks: Array = []
-        for identifier in ids:
-            if notes.has(str(identifier)):
-                attacks.append(notes[str(identifier)])
-        if attacks.size() != ids.size() or attacks.size() < 2:
-            continue
-        var valid: bool = true
-        for index in range(1,attacks.size()):
-            if float(attacks[index]["beat"]) <= \
-                    float(attacks[index-1]["beat"]) or \
-                    str(attacks[index]["staff"]) != \
-                    str(attacks[0]["staff"]) or \
-                    str(attacks[index]["voice"]) != \
-                    str(attacks[0]["voice"]):
-                valid = false
-                break
-        if valid:
-            output.append(attacks)
-    output.sort_custom(func(a: Array,b: Array) -> bool:
-        return float(a[0].get("beat",0.0)) < \
-            float(b[0].get("beat",0.0)))
-    return {"groups":output}
+    return ScoreIndex.source_beam_groups(model, glyphs)
 
 
 func _staff_center(hand: String) -> float:
