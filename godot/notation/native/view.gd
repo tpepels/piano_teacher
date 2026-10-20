@@ -6,9 +6,11 @@ extends "res://notation/shared/view_base.gd"
 # There is no full-page SVG bitmap or custom imitation of a music glyph.
 # Incomplete notation falls back to the existing Verovio score as a whole.
 const Geometry := preload("res://notation/native/geometry.gd")
+const SpacingLayout := preload("res://notation/native/spacing_layout.gd")
 const ScoreIndex := preload("res://notation/native/score_index.gd")
 const BarlineLayout := preload("res://notation/native/barline_layout.gd")
 const VerovioGlyphs := preload("res://notation/native/glyphs.gd")
+const AnnotationPainter := preload("res://notation/native/annotations.gd")
 const Design := preload("res://practice_theme.gd")
 const NOTE_INK := Design.SCORE_INK
 const DIM_INK := Design.STAFF_MUTED
@@ -16,6 +18,9 @@ const PREVIEW_LIGHT := Design.MINT
 const MAX_STAFF_GAP := 22.0
 
 var glyphs = VerovioGlyphs.new()
+var annotation_painter = AnnotationPainter.new()
+var annotation_fragments: Dictionary = {}
+var annotation_error := ""
 var native_ready := false
 var failure_reason := ""
 var visible_symbols := 0
@@ -27,6 +32,7 @@ var beam_groups: Array = []
 var beamed_note_ids: Dictionary = {}
 var beam_stem_up_by_note: Dictionary = {}
 var chord_members: Dictionary = {}
+var chord_leader_by_note: Dictionary = {}
 var notation_tuplets: Array = []
 # Immutable musical structure is indexed ONCE when a passage changes.
 # Each frame then visits only visible onsets, beams and ties.
@@ -41,9 +47,26 @@ var beam_extraction_complete := true
 var previous_attack_before_measure: Dictionary = {}
 var cached_staff_gap := -1.0
 var cached_gap_height := -1.0
+var spacing_layout = SpacingLayout.new()
+# Public cached anchors for expression/feedback painters; values are pixels.
+var cached_rest_y: Dictionary = {}
+var cached_group_offsets: Dictionary = {}
+var layout_head_spaces: Dictionary = {}
+var layout_group_spaces: Dictionary = {}
+var layout_rest_spaces: Dictionary = {}
+var layout_accidental_spaces: Dictionary = {}
+var layout_note_components: Array = []
+var layout_source_heads: Dictionary = {}
+var layout_source_columns: Dictionary = {}
+var layout_components: Array = []
+var layout_ink_reach := 0.0
 var cached_head_offsets: Dictionary = {}
 var cached_accidental_offsets: Dictionary = {}
 var cached_offsets_gap := -1.0
+var fragment_indices: Dictionary = {}
+var previous_measure_by_number: Dictionary = {}
+var barline_context_by_number: Dictionary = {}
+var staff_pitch_factors: Dictionary = {}
 var frame_scanned_events := 0
 var frame_visible_beam_groups := 0
 
@@ -59,6 +82,7 @@ func clear_score() -> void:
     beamed_note_ids.clear()
     beam_stem_up_by_note.clear()
     chord_members.clear()
+    chord_leader_by_note.clear()
     notation_tuplets.clear()
     measure_by_number.clear()
     ordered_events.clear()
@@ -68,6 +92,20 @@ func clear_score() -> void:
     cached_staff_gap = -1.0
     cached_gap_height = -1.0
     cached_head_offsets.clear()
+    cached_rest_y.clear()
+    cached_group_offsets.clear()
+    layout_head_spaces.clear()
+    layout_group_spaces.clear()
+    layout_rest_spaces.clear()
+    layout_accidental_spaces.clear()
+    layout_note_components.clear()
+    layout_source_heads.clear()
+    layout_source_columns.clear()
+    layout_components.clear()
+    fragment_indices.clear()
+    previous_measure_by_number.clear()
+    barline_context_by_number.clear()
+    staff_pitch_factors.clear()
     cached_accidental_offsets.clear()
     cached_offsets_gap = -1.0
 
@@ -84,6 +122,11 @@ func set_density_from_env() -> bool:
         return false
     configured_density = timeline.pixels_per_beat
     return true
+
+
+func set_annotation_fragments(items: Dictionary, error: String = "") -> void:
+    annotation_fragments = items
+    annotation_error = error
 
 
 func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
@@ -135,18 +178,10 @@ func load_score(candidate: Dictionary) -> bool:
     if not super.load_score(candidate):
         failure_reason = notice
         return false
-    var density: float = Geometry.required_density(
-        timeline.model.get("notation_events", []), configured_density,
-        timeline.MAX_SCORE_PIXELS_PER_BEAT)
-    if density <= 0.0:
-        failure_reason = "Rhythm too dense for one fixed native horizontal scale"
-        notice = failure_reason
-        return false
-    if not timeline.set_score_density(density):
-        failure_reason = timeline.last_error
-        notice = failure_reason
-        return false
-    selected_density = density
+    # The rhythmic preference remains one linear clock. Actual source ink
+    # feasibility is established by bounded engraving below, before playback.
+    var density: float = minf(480.0,Geometry.required_density(
+        timeline.model.get("notation_events", []), configured_density,INF))
     var index: Dictionary = ScoreIndex.build(timeline.model, glyphs)
     beam_groups = index["beam_groups"]
     beamed_note_ids = index["beamed_note_ids"]
@@ -155,34 +190,43 @@ func load_score(candidate: Dictionary) -> bool:
     measure_by_number = index["measure_by_number"]
     ordered_events = index["ordered_events"]
     chord_members = index["chord_members"]
+    chord_leader_by_note = index["chord_leader_by_note"]
     previous_attack_before_measure = index["previous_attack_before_measure"]
     tie_pairs = index["tie_pairs"]
     slur_pairs = index["slur_pairs"]
+    _index_fragments()
     failure_reason = _missing_source_engraving()
     if not failure_reason.is_empty():
         notice = failure_reason
         return false
-    # Fit the widest actual note/accidental footprint once for the score.
-    # Use the maximum supported staff gap so a later resize cannot create
-    # collisions or force a mid-performance change of horizontal scale.
-    var ink_density: float = _required_ink_density(density)
     staff_gap_limit = MAX_STAFF_GAP
-    if ink_density > timeline.MAX_SCORE_PIXELS_PER_BEAT:
-        # Very short source segments (Peace Piece's expressive tied attacks)
-        # need the original compact ink size. Pick this once per passage;
-        # never alter note timing or the global scale during playback.
+    var layout: Dictionary = _prepare_spacing(density,staff_gap_limit)
+    if not bool(layout.get("ok",false)):
         staff_gap_limit = 17.0
-        ink_density = _required_ink_density(density, staff_gap_limit)
-    if not timeline.set_score_density(ink_density):
+        layout = _prepare_spacing(density,staff_gap_limit)
+    if not bool(layout.get("ok",false)):
+        failure_reason = str(layout.get("reason","Source ink cannot fit bounded engraving"))
+        notice = failure_reason
+        return false
+    selected_density = float(layout["density"])
+    if not timeline.set_score_density(selected_density):
         failure_reason = timeline.last_error
         notice = failure_reason
         return false
-    selected_density = ink_density
     cached_staff_gap = -1.0
     cached_gap_height = -1.0
     cached_offsets_gap = -1.0
-    cached_head_offsets.clear()
-    cached_accidental_offsets.clear()
+    if not _cache_spacing(_gap()):
+        notice = failure_reason
+        return false
+    if not annotation_error.is_empty():
+        failure_reason = "Source annotation extraction failed: " + annotation_error
+        notice = failure_reason
+        return false
+    if not annotation_painter.bind({"annotation_fragments":annotation_fragments}, candidate, self):
+        failure_reason = annotation_painter.error
+        notice = failure_reason
+        return false
     failure_reason = ""
     native_ready = true
     queue_redraw()
@@ -192,6 +236,14 @@ func load_score(candidate: Dictionary) -> bool:
 # Missing engraving falls back to the existing full Verovio score, rather than
 # drawing approximate beams, stems, chord shapes, tuplets or omitted slurs.
 func _missing_source_engraving() -> String:
+    for measure in timeline.measures:
+        for staff in ["right","left"]:
+            var clef: Dictionary = _clef_for(staff,measure)
+            var octave: int = int(clef.get("octave_change",0))
+            var suffix: String = {1:"_8va",-1:"_8vb",2:"_15ma",-2:"_15mb"}.get(octave,"")
+            var name: String = "clef_"+str(clef.get("sign","G")).to_lower()+suffix
+            if not glyphs.textures.has(name):
+                return "Missing original Verovio clef variant: "+name
     if not beam_extraction_complete:
         return "Source Verovio beam extraction failed"
     for key in expected_beam_groups:
@@ -200,16 +252,22 @@ func _missing_source_engraving() -> String:
     if not slur_extraction_complete:
         return "Source Verovio slur extraction failed"
     for group in notation_tuplets:
+        if group.has("key"):
+            if not glyphs.has_tuplet(str(group["key"]),str(group.get("bracket","yes")) == "yes",
+                    str(group.get("show_number","actual")) != "none"):
+                return "Missing original source tuplet group: "+str(group["key"])
+            continue
         var ids := PackedStringArray()
         for event in group.get("events",[]):
-            if str(event.get("kind","")) == "note":
+            if str(event.get("kind","")) in ["note","rest"]:
                 ids.append(str(event.get("id","")))
         # Some imported MIDI notes carry a one-event start/stop marker.
         # Those do not have a multi-note Verovio number/bracket fragment:
         # their actual beat duration remains intact; invent no symbol.
         if ids.size() < 2:
             continue
-        if not glyphs.has_tuplet("|".join(ids),false):
+        if not glyphs.has_tuplet("|".join(ids),false,
+                str(group.get("show_number","actual")) != "none"):
             return "Missing engraved Verovio tuplet: "+("|".join(ids))
     for leader_id in chord_members:
         var event: Dictionary = {}
@@ -255,23 +313,66 @@ func _gap() -> float:
     var gap: float = clampf(size.y * .042, 8.5, staff_gap_limit)
     if timeline.model.is_empty():
         return gap
-    for event in ordered_events:
-        if str(event.get("kind", "")) != "note":
-            continue
-        var staff: String = str(event.get("staff", "right"))
-        var clef: Dictionary = _clef_for(staff, _measure_for(event))
-        var step: int = Geometry.staff_step(event.get("spelling", {}), clef)
-        var factor: float = 2.0 - float(step)*.5
-        var center: float = _staff_center(staff)
-        if factor < -.001:
-            gap = minf(gap, (center-32.0) / -factor)
-        elif factor > .001:
-            gap = minf(gap, (size.y-32.0-center) / factor)
-    # A note that truly cannot fit is still drawn deterministically; the
-    # score is not cropped, and no horizontal position can change.
-    cached_staff_gap = maxf(5.0, gap)
+    for staff in staff_pitch_factors:
+        var center: float = _staff_center(str(staff))
+        var factors: Array = staff_pitch_factors[staff]
+        if float(factors[0]) < -.001:
+            gap = minf(gap,(center-32.0)/-float(factors[0]))
+        if float(factors[1]) > .001:
+            gap = minf(gap,(size.y-32.0-center)/float(factors[1]))
+    # Reserve the interstaff region as well as the canvas edges. The cached
+    # factors include actual flag, stem, ledger, accidental and rest ink.
+    if staff_pitch_factors.has("right") and staff_pitch_factors.has("left"):
+        var shared: float = float(staff_pitch_factors["right"][1])-float(staff_pitch_factors["left"][0])
+        if shared > .001:
+            gap = minf(gap,(_staff_center("left")-_staff_center("right")-12.0)/shared)
+    cached_staff_gap = gap
     cached_gap_height = size.y
     return cached_staff_gap
+
+func _index_fragments() -> void:
+    previous_measure_by_number.clear()
+    barline_context_by_number.clear()
+    var previous: Dictionary = {}
+    for measure in timeline.measures:
+        var number: int = int(measure.get("number",0))
+        previous_measure_by_number[number] = previous
+        barline_context_by_number[number] = [measure] if previous.is_empty() else [previous,measure]
+        previous = measure
+    fragment_indices = {
+        "beams":ScoreIndex.interval_index(beam_groups,
+            func(group: Array) -> float: return float(group[0].get("beat",0.0)),
+            func(group: Array) -> float: return float(group[-1].get("beat",0.0))),
+        "ties":ScoreIndex.interval_index(tie_pairs,
+            func(pair: Dictionary) -> float: return float(pair["first"].get("beat",0.0)),
+            func(pair: Dictionary) -> float: return float(pair["last"].get("beat",0.0))),
+        "slurs":ScoreIndex.interval_index(slur_pairs,
+            func(pair: Dictionary) -> float: return float(pair["first"].get("beat",0.0)),
+            func(pair: Dictionary) -> float: return float(pair["last"].get("beat",0.0))),
+        "tuplets":ScoreIndex.interval_index(notation_tuplets,
+            func(group: Dictionary) -> float: return float(group["events"][0].get("beat",0.0)),
+            func(group: Dictionary) -> float: return float(group["events"][-1].get("beat",0.0))),
+        "measures":ScoreIndex.interval_index(timeline.measures,
+            func(measure: Dictionary) -> float: return float(measure.get("start_beat",0.0)),
+            func(measure: Dictionary) -> float: return float(measure.get("end_beat",0.0))) }
+    staff_pitch_factors = {"right":[2.0,2.0],"left":[2.0,2.0]}
+    for event in ordered_events:
+        if str(event.get("kind","")) != "note":
+            continue
+        var staff: String = str(event.get("staff","right"))
+        var step: int = Geometry.staff_step(event.get("spelling",{}),_clef_for(staff,_measure_for(event)))
+        var factor: float = 2.0-float(step)*.5
+        staff_pitch_factors[staff][0] = minf(float(staff_pitch_factors[staff][0]),factor)
+        staff_pitch_factors[staff][1] = maxf(float(staff_pitch_factors[staff][1]),factor)
+
+
+func _visible_fragments(kind: String, clock: float, playhead_x: float) -> Array:
+    var current: float = timeline.musical_beat(clock,play_from_beat)
+    var margin: float = maxf(100.0,staff_gap_limit*5.0)
+    return ScoreIndex.visible_intervals(fragment_indices.get(kind,{}),
+        current-(playhead_x+margin)/timeline.pixels_per_beat,
+        current+(size.x-playhead_x+margin)/timeline.pixels_per_beat)
+
 
 func _clef_for(staff: String, measure: Dictionary) -> Dictionary:
     var clefs: Dictionary = measure.get("clefs", {})
@@ -303,7 +404,8 @@ func _ink(staff: String) -> Color:
 # right line. A closing double/repeat line belongs to the previous measure.
 func _barline_geometry(measure: Dictionary, clock: float,
         playhead_x: float, gap: float) -> Dictionary:
-    var info: Dictionary = BarlineLayout.boundary(timeline.measures, measure, timeline,
+    var context: Array = barline_context_by_number.get(int(measure.get("number",0)),[])
+    var info: Dictionary = BarlineLayout.boundary(context, measure, timeline,
         clock, playhead_x, play_from_beat, gap,
         _staff_center("right")-2.0*gap,
         _staff_center("left")+2.0*gap)
@@ -429,15 +531,15 @@ func _paint_ledger(x: float, y: float, step: int,
         var line_step: int = -2
         while line_step >= step:
             var line_y: float = Geometry.note_y(line_step, bottom, gap)
-            draw_line(Vector2(x-14.0, line_y),
-                Vector2(x+14.0, line_y), Color(ink, .70), 1.35, true)
+            draw_line(Vector2(x-gap*.82, line_y),
+                Vector2(x+gap*.82, line_y), Color(ink, .70), 1.35, true)
             line_step -= 2
     elif step > 8:
         var line_step: int = 10
         while line_step <= step:
             var line_y: float = Geometry.note_y(line_step, bottom, gap)
-            draw_line(Vector2(x-14.0, line_y),
-                Vector2(x+14.0, line_y), Color(ink, .70), 1.35, true)
+            draw_line(Vector2(x-gap*.82, line_y),
+                Vector2(x+gap*.82, line_y), Color(ink, .70), 1.35, true)
             line_step += 2
 
 func _paint_accidental(x: float, y: float,
@@ -469,14 +571,14 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
         gap: float) -> void:
     # Authentic separated Verovio number/bracket masks only. Every group
     # was validated on lesson load; no Godot-drawn ratio, digit or hook.
-    for group in notation_tuplets:
+    for group in _visible_fragments("tuplets",clock,playhead_x):
         var events: Array = group.get("events",[])
         if events.size() < 2:
             continue
         var ids := PackedStringArray()
         var note_events: Array = []
         for event in events:
-            if str(event.get("kind","")) == "note":
+            if str(event.get("kind","")) in ["note","rest"]:
                 ids.append(str(event.get("id","")))
                 note_events.append(event)
         if note_events.size() < 2:
@@ -489,10 +591,13 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
             float(first.get("beat",0.0)),clock,playhead_x,play_from_beat)
         var x1: float = timeline.screen_x(
             float(last.get("beat",0.0)),clock,playhead_x,play_from_beat)
+        x0 += float((cached_group_offsets if str(first.get("kind","")) == "rest" else cached_head_offsets).get(str(first.get("id","")),0.0))
+        x1 += float((cached_group_offsets if str(last.get("kind","")) == "rest" else cached_head_offsets).get(str(last.get("id","")),0.0))
         if x1 < -50.0 or x0 > size.x+50.0:
             continue
-        glyphs.paint_tuplet(self,"|".join(ids),x0,x1,
-            _event_y(first,gap),gap,
+        var origin_y: float = float(cached_rest_y.get(str(first.get("id","")),_staff_center(str(first.get("staff","right"))))) if str(first.get("kind","")) == "rest" else _event_y(first,gap)
+        glyphs.paint_tuplet(self,str(group.get("key","|".join(ids))),x0,x1,
+            origin_y,gap,
             _ink(str(group.get("staff","right"))))
 
 
@@ -522,7 +627,7 @@ func _paint_clef(x: float, center: float, clef: Dictionary,
         variant = name+"_15mb"
     elif octave == 2:
         variant = name+"_15ma"
-    if not variant.is_empty() and glyphs.textures.has(variant):
+    if not variant.is_empty():
         name = variant
     glyphs.paint(self,name,x,origin_y,gap,ink,true)
     # No separate clef numeral is available in installed Leipzig. Any
@@ -648,107 +753,331 @@ func _engraved_head_offsets(gap: float) -> Dictionary:
     return offsets
 
 
-func _event_ink_rect(event: Dictionary, gap: float,
-        heads: Dictionary, accidentals: Dictionary) -> Rect2:
-    var unit: float = gap/250.0
-    var id: String = str(event.get("id",""))
-    var kind: String = str(event.get("note_type","quarter"))
-    var head_x: float = float(heads.get(id,0.0))
-    var box: Array = []
-    if str(event.get("kind","")) == "rest":
-        box = glyphs.bounds["rest_"+kind]
-        var y: float = _staff_center(str(event.get("staff","right")))+gap*(
-            -.3 if str(event.get("voice","1")) == "1" else .6)
-        return Rect2(-float(box[2])*unit*.5,y+float(box[1])*unit,
-            float(box[2])*unit,float(box[3])*unit)
-    if chord_members.has(id):
-        var key: String = _chord_template_key(event)
-        box = glyphs.chord_heads_bounds[key] if beamed_note_ids.has(id) else \
-            glyphs.chord_metadata[key]["bounds"]
-    elif not bool(event.get("chord",false)) and not beamed_note_ids.has(id):
-        var up: bool = bool(_chord_extents(event,gap)["up"])
-        var key: String = "whole" if kind == "whole" else kind+(
-            "_up" if up else "_down")
-        box = glyphs.note_bounds[key]
-    var head_box: Array = glyphs.bounds["head_"+(
-        kind if kind in ["whole","half"] else "black")]
-    var left: float = head_x-float(head_box[2])*unit*.5
-    var right: float = head_x+float(head_box[2])*unit*.5
-    var y: float = _event_y(event,gap)
-    var top: float = y+float(head_box[1])*unit
-    var bottom: float = y+(float(head_box[1])+float(head_box[3]))*unit
-    if box.size() == 4:
-        left = minf(left,float(box[0])*unit)
-        right = maxf(right,(float(box[0])+float(box[2]))*unit)
-        top = minf(top,y+float(box[1])*unit)
-        bottom = maxf(bottom,y+(float(box[1])+float(box[3]))*unit)
-    if beamed_note_ids.has(id):
-        var stem: Array = _source_stem_bounds(event,bool(beam_stem_up_by_note[id]))
-        left = minf(left,float(stem[0])*unit)
-        right = maxf(right,(float(stem[0])+float(stem[2]))*unit)
-        top = minf(top,y+float(stem[1])*unit)
-        bottom = maxf(bottom,y+(float(stem[1])+float(stem[3]))*unit)
-    var step: int = Geometry.staff_step(event.get("spelling",{}),
-        _clef_for(str(event.get("staff","right")),_measure_for(event)))
-    if step <= -2 or step >= 10:
-        left = minf(left,head_x-14.0)
-        right = maxf(right,head_x+14.0)
-        var staff_bottom: float = _staff_center(str(event.get("staff","right")))+2.0*gap
-        if step <= -2:
-            top = minf(top,Geometry.note_y(-2,staff_bottom,gap)-.675)
-        else:
-            bottom = maxf(bottom,Geometry.note_y(10,staff_bottom,gap)+.675)
-    if accidentals.has(id):
-        var name: String = str(Geometry.ACCIDENTAL_GLYPHS[str(event["accidental"])])
-        var width: float = float(glyphs.bounds[name][2])*unit
-        var center: float = head_x+float(accidentals[id])
-        left = minf(left,center-width*.5)
-        right = maxf(right,center+width*.5)
-        top = minf(top,y+float(glyphs.bounds[name][1])*unit)
-        bottom = maxf(bottom,y+(float(glyphs.bounds[name][1])+ \
-            float(glyphs.bounds[name][3]))*unit)
-    var dots: int = int(event.get("dots",0))
-    if dots > 0:
-        right = maxf(right,head_x+gap*(1.05+float(dots-1)*.63)+ \
-            float(glyphs.bounds["augmentation_dot"][2])*unit*.5)
-    return Rect2(left,top,right-left,bottom-top)
+func _symbol_parts(name: String, offset: Vector2) -> Array:
+    return SpacingLayout.translated(spacing_layout.components(
+        glyphs.textures[name],glyphs.bounds[name],true),offset)
 
 
-func _required_ink_density(preferred: float, gap: float = MAX_STAFF_GAP) -> float:
-    var heads: Dictionary = _engraved_head_offsets(gap)
+func _prepare_spacing(preferred: float, gap: float) -> Dictionary:
+    var source_heads: Dictionary = _engraved_head_offsets(1.0)
     var accidentals: Dictionary = Geometry.accidental_offsets(
-        ordered_events,gap,heads,glyphs.bounds)
-    var staves: Dictionary = {"right":{},"left":{}}
-    var minimum_left := INF
-    var maximum_right := -INF
+        ordered_events,1.0,source_heads,glyphs.bounds)
+    var groups: Array = []
+    var children: Dictionary = {}
+    var beam_tips: Dictionary = {}
+    for beam in beam_groups:
+        var ids := PackedStringArray()
+        for event in beam:
+            ids.append(str(event.get("id","")))
+        var tips: Array = glyphs.beam_tips("|".join(ids))
+        for i in range(beam.size()):
+            beam_tips[str(beam[i].get("id",""))] = float(tips[i])/250.0
     for event in ordered_events:
+        var id: String = str(event.get("id",""))
+        if children.has(id):
+            continue
         var staff: String = str(event.get("staff","right"))
-        var beat: float = float(event.get("beat",0.0))
-        var ink: Rect2 = _event_ink_rect(event,gap,heads,accidentals)
-        if not staves[staff].has(beat):
-            staves[staff][beat] = []
-        staves[staff][beat].append(ink)
-        minimum_left = minf(minimum_left,ink.position.x)
-        maximum_right = maxf(maximum_right,ink.end.x)
-    var density: float = preferred
-    var reach: float = (maximum_right-minimum_left+gap*.2)/preferred
-    for staff in staves:
-        var onsets: Array = staves[staff].keys()
-        onsets.sort()
-        for i in range(1,onsets.size()):
-            for j in range(i-1,-1,-1):
-                var distance: float = float(onsets[i])-float(onsets[j])
-                if distance > reach:
+        var kind: String = str(event.get("note_type","quarter"))
+        var members: Array = chord_members.get(id,[event])
+        var parts: Array = []
+        var ledgers: Array = []
+        var minimum := 0.0
+        var maximum := 0.0
+        var has_accidental := false
+        var source_accidentals: Array = []
+        var rest: bool = str(event.get("kind","")) == "rest"
+        var origin_y: float = _event_y(event,1.0)-_staff_center(staff) if not rest else 0.0
+        if rest:
+            parts = _symbol_parts("rest_"+kind,Vector2.ZERO)
+        elif chord_members.has(id):
+            var key: String = _chord_template_key(event)
+            if beamed_note_ids.has(id):
+                parts = SpacingLayout.translated(spacing_layout.components(
+                    glyphs.chord_heads_textures[key],glyphs.chord_heads_bounds[key]),Vector2(0,origin_y))
+            else:
+                parts = SpacingLayout.translated(spacing_layout.components(
+                    glyphs.chord_textures[key],glyphs.chord_metadata[key]["bounds"]),Vector2(0,origin_y))
+        elif beamed_note_ids.has(id):
+            parts = _symbol_parts("head_"+(kind if kind in ["whole","half"] else "black"),Vector2(0,origin_y))
+        else:
+            var up: bool = bool(_chord_extents(event,1.0)["up"])
+            var key: String = "whole" if kind == "whole" else kind+("_up" if up else "_down")
+            parts = SpacingLayout.translated(spacing_layout.components(
+                glyphs.note_textures[key],glyphs.note_bounds[key]),Vector2(0,origin_y))
+        if not rest and beamed_note_ids.has(id):
+            var up: bool = bool(beam_stem_up_by_note[id])
+            var extrema: Dictionary = _chord_extents(event,1.0)
+            var from_y: float = float(extrema["bottom_y" if up else "top_y"])-_staff_center(staff)
+            var tip_y: float = from_y+float(beam_tips[id])
+            var stem_box: Array = _source_stem_bounds(event,up)
+            # This is the exact destination of the source stem alpha mask.
+            parts.append(Rect2(float(stem_box[0])/250.0,minf(from_y,tip_y),
+                float(stem_box[2])/250.0,absf(tip_y-from_y)))
+        for member in members:
+            var member_id: String = str(member.get("id",""))
+            if member_id != id:
+                children[member_id] = true
+            var head_x: float = float(source_heads.get(member_id,0.0))
+            minimum = minf(minimum,head_x)
+            maximum = maxf(maximum,head_x)
+            var y: float = _event_y(member,1.0)-_staff_center(staff) if not rest else 0.0
+            var dots: int = int(member.get("dots",0))
+            for dot in range(dots):
+                parts.append_array(_symbol_parts("augmentation_dot",Vector2(
+                    head_x+1.05+float(dot)*.63,y-.24)))
+            if rest:
+                continue
+            if accidentals.has(member_id):
+                has_accidental = true
+                var name: String = str(Geometry.ACCIDENTAL_GLYPHS[str(member["accidental"])])
+                source_accidentals.append_array(_symbol_parts(name,Vector2(head_x+float(accidentals[member_id]),y)))
+            var step: int = Geometry.staff_step(member.get("spelling",{}),
+                _clef_for(staff,_measure_for(member)))
+            if step <= -2 or step >= 10:
+                var ledger: int = -2 if step <= -2 else 10
+                while (ledger >= step if step <= -2 else ledger <= step):
+                    ledgers.append(Rect2(head_x-.82,Geometry.note_y(ledger,2.0,1.0)-.04,1.64,.08))
+                    ledger += -2 if step <= -2 else 2
+        groups.append({"id":id,"members":members,"staff":staff,
+            "beat":float(event.get("beat",0.0)),"parts":parts,"box":SpacingLayout.footprint(parts),
+            "ledgers":ledgers,"rest":rest,
+            "min_head":minimum,"max_head":maximum,"has_accidental":has_accidental,
+            "source_accidentals":source_accidentals})
+    # A rest has no pitch. Place its original source glyph in a clear voice
+    # lane before solving horizontal constraints; its clock remains exact.
+    var rest_spaces: Dictionary = {}
+    for group in groups:
+        if not bool(group["rest"]):
+            continue
+        var base_parts: Array = group["parts"]
+        var placed := false
+        for candidate in range(41):
+            var y: float = 0.0 if candidate == 0 else \
+                float((candidate+1)/2)*(1.0 if candidate%2 == 0 else -1.0)
+            var trial: Array = SpacingLayout.translated(base_parts,Vector2(0,y))
+            var clear := true
+            for other in groups:
+                if other == group or str(other["staff"]) != str(group["staff"]):
+                    continue
+                if bool(other["rest"]) and not rest_spaces.has(str(other["id"])):
+                    continue
+                # Reserve the whole horizontal translation budget so later
+                # head packing never moves ink through this independent rest.
+                var distance: float = (float(other["beat"])-float(group["beat"]))*preferred/gap
+                var reserve: float = 0.0 if bool(other["rest"]) else 4.0
+                var trial_box: Rect2 = SpacingLayout.footprint(trial).grow(.12)
+                var other_box: Rect2 = Rect2(other["box"].position+Vector2(distance-reserve,0),
+                    other["box"].size+Vector2(reserve*2.0,0)).grow(.12)
+                if not trial_box.intersects(other_box):
+                    continue
+                for a in trial:
+                    for b in other["parts"]:
+                        if a.grow(.12).intersects(Rect2(b.position+Vector2(distance-reserve,0),b.size+Vector2(reserve*2.0,0)).grow(.12)):
+                            clear = false
+                            break
+                    if not clear:
+                        break
+                if not clear:
                     break
-                for previous in staves[staff][onsets[j]]:
-                    for current in staves[staff][onsets[i]]:
-                        # Close clocks alone do not imply touching ink:
-                        # separate voices/ledger registers may be clear in Y.
-                        if current.position.y >= previous.end.y+gap*.1 or \
-                                previous.position.y >= current.end.y+gap*.1:
-                            continue
-                        density = maxf(density,(previous.end.x-current.position.x+gap*.2)/distance)
-    return density
+            if clear:
+                group["parts"] = trial
+                group["box"] = SpacingLayout.footprint(trial)
+                rest_spaces[str(group["id"])] = y
+                placed = true
+                break
+        if not placed:
+            return {"ok":false,"reason":"No clear original rest lane: "+str(group["id"])}
+    # Independent simultaneous voices are not a chord and retain all their
+    # identities. Put their source stem sides in the least crowded order;
+    # their common musical onset is unchanged.
+    groups.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+        if float(a["beat"]) != float(b["beat"]):
+            return float(a["beat"]) < float(b["beat"])
+        if a["staff"] != b["staff"]:
+            return str(a["staff"]) < str(b["staff"])
+        var ab: float = SpacingLayout.separation(a["parts"],b["parts"])
+        var ba: float = SpacingLayout.separation(b["parts"],a["parts"])
+        if is_finite(ab) and is_finite(ba) and absf(ab-ba) > .0001:
+            return ab < ba
+        return str(a["id"]) < str(b["id"]))
+    var left := 0.0
+    var right := 0.0
+    for group in groups:
+        for part in group["parts"]:
+            left = minf(left,part.position.x)
+            right = maxf(right,part.end.x)
+    for group in groups:
+        group["left"] = left
+        group["sweep_reach"] = right-left+4.0+SpacingLayout.CLEARANCE
+    # At ordinary rhythmic intervals reserve the complete accidental column
+    # before the attack. This is a reading preference, bounded by the practical
+    # scale; the component solver still proves every dense source collision.
+    var density: float = preferred
+    for j in range(groups.size()):
+        if not bool(groups[j]["has_accidental"]):
+            continue
+        var current_left := INF
+        var current_box := Rect2()
+        var reading_parts: Array = groups[j]["parts"].duplicate()
+        reading_parts.append_array(groups[j]["source_accidentals"])
+        for part in reading_parts:
+            current_left = minf(current_left,part.position.x)
+            current_box = part if not current_box.has_area() else current_box.merge(part)
+        for i in range(j-1,-1,-1):
+            var distance: float = float(groups[j]["beat"])-float(groups[i]["beat"])
+            if distance > 2.0:
+                break
+            if distance < .125 or groups[i]["staff"] != groups[j]["staff"]:
+                continue
+            var previous_box := Rect2()
+            for part in groups[i]["parts"]:
+                previous_box = part if not previous_box.has_area() else previous_box.merge(part)
+            if current_box.position.y >= previous_box.end.y or previous_box.position.y >= current_box.end.y:
+                continue
+            density = maxf(density,minf(480.0,(previous_box.end.x-current_left+.3)*gap/distance))
+    var result: Dictionary = SpacingLayout.solve(groups,gap,density)
+    while not bool(result.get("ok",false)) and density < 480.0:
+        density = minf(480.0,density*1.25)
+        result = SpacingLayout.solve(groups,gap,density)
+    if not bool(result.get("ok",false)):
+        return result
+    var placed_accidentals: Dictionary = _place_accidentals(groups,result["shifts"],
+        source_heads,accidentals,density,gap)
+    if not bool(placed_accidentals.get("ok",false)):
+        return placed_accidentals
+    layout_accidental_spaces = placed_accidentals["relative"]
+    layout_note_components = groups.duplicate()
+    layout_source_heads = source_heads.duplicate()
+    layout_source_columns = accidentals.duplicate()
+    groups.append_array(placed_accidentals["groups"])
+    # Keep the occupancy audit and visibility sweep ordered by exact onset.
+    groups.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+        return float(a["beat"]) < float(b["beat"]))
+    layout_head_spaces = source_heads.duplicate()
+    layout_group_spaces = result["shifts"]
+    layout_group_spaces.merge(placed_accidentals["shifts"])
+    layout_rest_spaces = rest_spaces
+    layout_components = groups
+    layout_ink_reach = 0.0
+    staff_pitch_factors = {"right":[0.0,0.0],"left":[0.0,0.0]}
+    for group in groups:
+        var staff: String = str(group["staff"])
+        var ink_parts: Array = group["parts"].duplicate()
+        ink_parts.append_array(group["ledgers"])
+        for part in ink_parts:
+            staff_pitch_factors[staff][0] = minf(float(staff_pitch_factors[staff][0]),part.position.y)
+            staff_pitch_factors[staff][1] = maxf(float(staff_pitch_factors[staff][1]),part.end.y)
+            layout_ink_reach = maxf(layout_ink_reach,maxf(absf(part.position.x),absf(part.end.x))+2.0)
+    for group in groups:
+        var shift: float = float(layout_group_spaces[str(group["id"])])
+        for member in group["members"]:
+            var id: String = str(member.get("id",""))
+            layout_head_spaces[id] = shift+float(source_heads.get(id,0.0))
+    return {"ok":true,"density":density}
+
+
+func _place_accidentals(groups: Array, shifts: Dictionary, source_heads: Dictionary,
+        source_columns: Dictionary, density: float, gap: float) -> Dictionary:
+    # Accidentals belong to a written pitch, not to a rigid stem/flag sprite.
+    # Pack their original masks against the final heads of ALL voices, while
+    # leaving every source head and musical beat fixed.
+    var added: Array = []
+    var added_shifts: Dictionary = {}
+    var relative: Dictionary = {}
+    var scale: float = density/gap
+    for group in groups:
+        for event in group["members"]:
+            var id: String = str(event.get("id",""))
+            if not source_columns.has(id):
+                continue
+            var staff: String = str(group["staff"])
+            var beat: float = float(group["beat"])
+            var name: String = str(Geometry.ACCIDENTAL_GLYPHS[str(event["accidental"])])
+            var y: float = _event_y(event,1.0)-_staff_center(staff)
+            var parts: Array = _symbol_parts(name,Vector2(0,y))
+            var box: Rect2 = SpacingLayout.footprint(parts)
+            var head: float = float(shifts[group["id"]])+float(source_heads.get(id,0.0))
+            var center: float = head+float(source_columns[id])
+            var placed := false
+            for attempt in range(401):
+                var clear := true
+                for other in groups+added:
+                    if str(other["staff"]) != staff:
+                        continue
+                    var delta: float = (float(other["beat"])-beat)*scale
+                    var other_shift: float = float(added_shifts.get(other["id"],shifts.get(other["id"],0.0)))
+                    var first_box := Rect2(box.position+Vector2(center,0),box.size).grow(.04)
+                    var last_box := Rect2(other["box"].position+Vector2(delta+other_shift,0),other["box"].size).grow(.04)
+                    if not first_box.intersects(last_box):
+                        continue
+                    for a in parts:
+                        for b in other["parts"]:
+                            var first: Rect2 = Rect2(a.position+Vector2(center,0),a.size).grow(.04)
+                            var last: Rect2 = Rect2(b.position+Vector2(delta+other_shift,0),b.size).grow(.04)
+                            if first.intersects(last):
+                                clear = false
+                                break
+                        if not clear:
+                            break
+                    if not clear:
+                        break
+                if clear:
+                    placed = true
+                    break
+                center -= .10
+            if not placed:
+                return {"ok":false,"reason":"No clear authentic accidental column: "+id}
+            var acc_id: String = "accidental:"+id
+            relative[id] = center-head
+            added_shifts[acc_id] = center
+            added.append({"id":acc_id,"members":[],"staff":staff,"beat":beat,
+                "parts":parts,"box":box,"ledgers":[],"rest":false,"min_head":0.0,"max_head":0.0,
+                "left":-44.0,"sweep_reach":88.0})
+    var reach: float = 0.0
+    for group in added:
+        reach = maxf(reach,absf(float(added_shifts[group["id"]]))+8.0)
+    for group in groups+added:
+        group["sweep_reach"] = maxf(float(group["sweep_reach"]),reach)
+    return {"ok":true,"relative":relative,"groups":added,"shifts":added_shifts}
+
+
+func _cache_spacing(gap: float) -> bool:
+    # Repacking on a viewport resize uses the actual canvas scale. It is
+    # cached here, never recomputed while the unchanged viewport scrolls.
+    var placed: Dictionary = _place_accidentals(layout_note_components,layout_group_spaces,
+        layout_source_heads,layout_source_columns,selected_density,gap)
+    if not bool(placed.get("ok",false)):
+        failure_reason = str(placed.get("reason","Accidental layout failed"))
+        return false
+    layout_accidental_spaces = placed["relative"]
+    layout_components = layout_note_components.duplicate()
+    layout_components.append_array(placed["groups"])
+    layout_components.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+        return float(a["beat"]) < float(b["beat"]))
+    layout_group_spaces.merge(placed["shifts"],true)
+    layout_ink_reach = 0.0
+    for group in layout_components:
+        var shift: float = float(layout_group_spaces[str(group["id"])])
+        for part in group["parts"]+group["ledgers"]:
+            layout_ink_reach = maxf(layout_ink_reach,maxf(absf(part.position.x+shift),absf(part.end.x+shift)))
+    cached_head_offsets.clear()
+    cached_group_offsets.clear()
+    cached_rest_y.clear()
+    for id in layout_head_spaces:
+        cached_head_offsets[id] = float(layout_head_spaces[id])*gap
+    for id in layout_group_spaces:
+        cached_group_offsets[id] = float(layout_group_spaces[id])*gap
+    for group in layout_components:
+        var id: String = str(group["id"])
+        if bool(group["rest"]):
+            cached_rest_y[id] = _staff_center(str(group["staff"]))+float(layout_rest_spaces[id])*gap
+    # Painter offsets are relative to each actual source head, regardless of
+    # the independently packed accidental column.
+    cached_accidental_offsets.clear()
+    for id in layout_accidental_spaces:
+        cached_accidental_offsets[id] = float(layout_accidental_spaces[id])*gap
+    cached_offsets_gap = gap
+    return true
 
 
 func _paint_engraved_chord(event: Dictionary, x: float,
@@ -769,6 +1098,7 @@ func _paint_engraved_chord(event: Dictionary, x: float,
     sorted_heads.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
         return Geometry.diatonic_index(a.get("spelling",{})) < \
             Geometry.diatonic_index(b.get("spelling",{})))
+    x += float(cached_group_offsets.get(str(event.get("id","")),0.0))
     var anchor: float = _event_y(event,gap)
     var head_centres: Array = []
     for i in range(sorted_heads.size()):
@@ -860,7 +1190,7 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
     var stems: Dictionary = {}
     var drawn_groups: Array = []
     frame_visible_beam_groups = 0
-    for group in beam_groups:
+    for group in _visible_fragments("beams",clock,playhead_x):
         if group.size() < 2:
             continue
         var first_x: float = timeline.screen_x(
@@ -887,7 +1217,8 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
             var chord: Dictionary = _chord_extents(event,gap,head_offsets)
             var stem_box: Array = _source_stem_bounds(event,up)
             var attachment: float = float(stem_box[0])+float(stem_box[2])*.5
-            var stem_x: float = x+attachment*gap/250.0
+            var stem_x: float = x+float(cached_group_offsets.get(
+                str(event.get("id","")),0.0))+attachment*gap/250.0
             # The beam PNG uses source font origins, while stem masks use
             # centred heads. Map each measured stem centre in BOTH spaces;
             # mapping head centres stretches the first beam cap away from
@@ -935,8 +1266,8 @@ func _paint_beams(data: Dictionary, gap: float) -> void:
             continue
         var first: Dictionary = members[0]
         var last: Dictionary = members[-1]
-        if float(last["head_x"]) < -40.0 or \
-                float(first["head_x"]) > size.x+40.0:
+        if float(last["head_x"]) < -gap*3.0 or \
+                float(first["head_x"]) > size.x+gap*3.0:
             continue
         var anchors: Array = []
         for member in members:
@@ -955,25 +1286,31 @@ func _tie_placement(first: Dictionary, last: Dictionary,
         str(first.get("id","")),0.0))
     var right: float = x1+float(cached_head_offsets.get(
         str(last.get("id","")),0.0))
-    if right-left <= gap*1.2:
+    if right <= left:
         return {}
-    var upward_stem: bool = bool(_chord_extents(first,gap)["up"])
+    var leader_id: String = str(chord_leader_by_note.get(
+        str(first.get("id","")),str(first.get("id",""))))
+    var leader: Dictionary = first
+    for member in chord_members.get(leader_id,[]):
+        if str(member.get("id","")) == leader_id:
+            leader = member
+            break
+    var upward_stem: bool = bool(beam_stem_up_by_note.get(leader_id,
+        _chord_extents(leader,gap)["up"]))
     return {"x0":left, "x1":right, "y":_event_y(first,gap),
         "down":upward_stem}
 
 
 func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
-    for pair in tie_pairs:
+    for pair in _visible_fragments("ties",clock,playhead_x):
         var previous: Dictionary = pair["first"]
         var event: Dictionary = pair["last"]
         var x0: float = timeline.screen_x(float(previous.get("beat",0.0)),
             clock,playhead_x,play_from_beat)
         var x1: float = timeline.screen_x(float(event.get("beat",0.0)),
             clock,playhead_x,play_from_beat)
-        if x1 < -20.0 or x0 > size.x+20.0:
-            continue
         var place: Dictionary = _tie_placement(previous,event,x0,x1,gap)
-        if not place.is_empty():
+        if not place.is_empty() and float(place["x1"]) >= -gap*2.0 and float(place["x0"]) <= size.x+gap*2.0:
             glyphs.paint_tie(self,float(place["x0"]),float(place["x1"]),
                 float(place["y"]),gap,bool(place["down"]),
                 _ink(str(event.get("staff","right"))))
@@ -982,7 +1319,7 @@ func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
 # Binary-search into pre-sorted MusicXML events. Work is proportional
 # to what the pianist can actually see, not to the whole imported MIDI.
 func _paint_slurs(playhead_x: float,clock: float,gap: float) -> void:
-    for pair in slur_pairs:
+    for pair in _visible_fragments("slurs",clock,playhead_x):
         var first: Dictionary = pair["first"]
         var last: Dictionary = pair["last"]
         var x0: float = timeline.screen_x(float(first.get("beat",0.0)),
@@ -1001,18 +1338,19 @@ func _paint_slurs(playhead_x: float,clock: float,gap: float) -> void:
 
 
 func _visible_events(left: float, right: float) -> Array:
+    var margin: float = maxf(.25,layout_ink_reach*staff_gap_limit/timeline.pixels_per_beat)
     var begin := 0
     var end := ordered_events.size()
     while begin < end:
         var middle: int = (begin + end) >> 1
-        if float(ordered_events[middle].get("beat", 0.0)) < left-.25:
+        if float(ordered_events[middle].get("beat", 0.0)) < left-margin:
             begin = middle + 1
         else:
             end = middle
     var results: Array = []
     for index in range(begin, ordered_events.size()):
         var event: Dictionary = ordered_events[index]
-        if float(event.get("beat", 0.0)) > right+.25:
+        if float(event.get("beat", 0.0)) > right+margin:
             break
         results.append(event)
     frame_scanned_events = results.size()
@@ -1054,7 +1392,8 @@ func _draw() -> void:
     # intentionally NOT a printed barline: it sits before the clef/header
     # and used to look like an orphaned vertical rule in the score.
     var previous_measure: Dictionary = {}
-    for measure in timeline.measures:
+    for measure in _visible_fragments("measures",camera_clock,playhead_x):
+        previous_measure = previous_measure_by_number.get(int(measure.get("number",0)),{})
         var at: float = float(measure.get("start_beat",0.0))
         if at < left-.7 or at > right+.7:
             previous_measure = measure
@@ -1133,15 +1472,15 @@ func _draw() -> void:
     if not terminal.is_empty() and float(terminal["x"]) >= -gap*2.0 and \
             float(terminal["x"]) <= size.x+gap*2.0:
         _paint_barline(terminal,gap)
-    # All symbols carry their original source onset; NO separate horizontal
-    # layout pass or per-note acceleration, including chord tones and rests.
+    # Every symbol keeps its source onset on the single linear clock. The
+    # precomputed local ink offsets do not depend on playback position.
     visible_symbols = 0
     drawn_noteheads.clear()
     if cached_offsets_gap < 0.0 or absf(cached_offsets_gap-gap) > .001:
-        cached_head_offsets = _engraved_head_offsets(gap)
-        cached_accidental_offsets = Geometry.accidental_offsets(
-            ordered_events,gap,cached_head_offsets,glyphs.bounds)
-        cached_offsets_gap = gap
+        if not _cache_spacing(gap):
+            native_ready = false
+            notice = failure_reason
+            return
     var head_offsets: Dictionary = cached_head_offsets
     var beam_data: Dictionary = _beam_layout(gap, camera_clock,
         playhead_x, head_offsets)
@@ -1167,9 +1506,9 @@ func _draw() -> void:
                 beam_stems.get(str(event.get("id", "")), {}),
                 float(head_offsets.get(str(event.get("id", "")), 0.0)))
         else:
-            var voice: String = str(event.get("voice","1"))
-            var rest_y: float = _staff_center(staff)+(
-                -gap*.3 if voice == "1" else gap*.6)
+            var id: String = str(event.get("id",""))
+            x += float(cached_group_offsets.get(id,0.0))
+            var rest_y: float = float(cached_rest_y.get(id,_staff_center(staff)))
             _paint_rest(x,rest_y,str(event.get("note_type","quarter")),
                 int(event.get("dots",0)),ink,gap)
         visible_symbols += 1
@@ -1177,6 +1516,7 @@ func _draw() -> void:
     _paint_ties(playhead_x,camera_clock,gap)
     _paint_slurs(playhead_x,camera_clock,gap)
     _paint_tuplet_brackets(camera_clock,playhead_x,gap)
+    annotation_painter.paint(self,camera_clock,playhead_x,gap,NOTE_INK)
     draw_line(Vector2(playhead_x,_staff_center("right")-gap*3.8),
         Vector2(playhead_x,_staff_center("left")+gap*3.7),
         PREVIEW_LIGHT,2.0,true)

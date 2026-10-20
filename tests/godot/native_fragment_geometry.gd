@@ -75,6 +75,14 @@ func run() -> void:
         seconds["notation_events"][1],seconds["notation_events"][1],100.0,250.0,gap)
     check(not tied.is_empty() and absf(float(tied["x0"])-(100.0+gap*1.2)) < .001,
         "Tie attaches to displaced source head without changing beat spacing")
+    var tied_chord: Dictionary = model.duplicate(true)
+    tied_chord["notation_events"] = [note("tie_low",0.0,"G"),note("tie_child",0.0,"B",true)]
+    check(renderer.load_score(tied_chord) and renderer.native_ready,
+        "A chord with a middle-line child retains its source stem")
+    var child_tie: Dictionary = renderer._tie_placement(tied_chord["notation_events"][1],
+        tied_chord["notation_events"][1],100.0,250.0,renderer._gap())
+    check(not child_tie.is_empty() and bool(child_tie["down"]),
+        "Tie on a child head follows the original common chord stem")
     var accidentals: Dictionary = seconds.duplicate(true)
     accidentals["notation_events"] = [note("sharp_c",0.0,"C"),
         note("sharp_e",0.0,"E",true)]
@@ -99,6 +107,39 @@ func run() -> void:
             float(sharp_box[2])*gap/250.0,float(sharp_box[3])*gap/250.0))
     check(not boxes[0].intersects(boxes[1]),
         "Original Verovio accidentals on a close chord occupy separate clear columns")
+    # These are distinct tied MIDI voices, not a chord. Their source stems
+    # overlap at a common onset unless the independent sprites are separated.
+    var voices: Dictionary = model.duplicate(true)
+    voices["notation_events"] = []
+    for i in range(3):
+        var event: Dictionary = note("voice"+str(i),0.0,["G","B","E"][i])
+        event["spelling"]["octave"] = 6 if i == 2 else 5
+        event["voice"] = str(i+1)
+        event["note_type"] = "half"
+        event["dots"] = 1
+        event["duration_beats"] = 3.0
+        voices["notation_events"].append(event)
+    check(renderer.load_score(voices) and renderer.native_ready,
+        "Independent simultaneous high voices fit without merging their source sprites")
+    await process_frame
+    await process_frame
+    check(renderer.drawn_noteheads.size() == 3,
+        "Every simultaneous voice keeps a separate visible MIDI head")
+    for id in renderer.drawn_noteheads:
+        check(absf(float(renderer.cached_head_offsets[id])) <= renderer._gap()*2.0+.001,
+            "Independent voice head obeys the absolute displacement bound")
+    var with_rest: Dictionary = model.duplicate(true)
+    var rest: Dictionary = note("tiny_rest",.00208333,"E")
+    rest["kind"] = "rest"
+    rest["spelling"] = null
+    rest["voice"] = "2"
+    rest["note_type"] = "64th"
+    with_rest["notation_events"] = [note("tiny_preceding",0.0,"E"),rest]
+    check(renderer.load_score(with_rest) and renderer.native_ready and
+        renderer.timeline.pixels_per_beat <= 480.0,
+        "Chopin's .00208333 note/rest interval preserves its exact source clock")
+    check(renderer.cached_rest_y.has("tiny_rest"),
+        "Expression painter receives a cached independent rest anchor before drawing")
     for style in ["tick","short"]:
         var partial: Dictionary = model.duplicate(true)
         partial["measures"][0]["right_barline"] = {"style":style,"repeat":""}
@@ -120,7 +161,7 @@ func run() -> void:
             "%s uses a single authentic structural barline stroke" % style)
     # Peace Piece measures 57/58: a real ten-to-one 64th starts just
     # .00625 quarter beats before its tied continuation. Preserve both
-    # original onsets, even though one fixed scale must exceed 480 px/beat.
+    # original onsets with bounded local engraving at a practical fixed scale.
     var tiny: Dictionary = model.duplicate(true)
     tiny["duration_beats"] = 8.0
     tiny["measures"][0]["number"] = 57
@@ -143,11 +184,25 @@ func run() -> void:
     check(Geometry.required_density(tiny["notation_events"],96.0,480.0) < 0.0,
         "Caller-specified 480 density limit still rejects an over-dense source")
     check(renderer.load_score(tiny) and renderer.native_ready,
-        "Actual Peace Piece ten-to-one 64th stays native at one larger global scale")
+        "Actual Peace Piece ten-to-one 64th stays native at a practical global scale")
     if renderer.native_ready:
         var tiny_density: float = renderer.timeline.pixels_per_beat
-        check(tiny_density >= 3999.0 and tiny_density <= 8192.0,
-            "Source .00625 beat gap receives at least 25 px without moving its onset")
+        check(tiny_density > 0.0 and tiny_density <= 480.0,
+            "Source .00625 beat gap uses bounded engraving without moving its onset")
+        await process_frame
+        await process_frame
+        for id in ["midi-t0-e2015s0","midi-t0-e2015s1"]:
+            check(absf(float(renderer.cached_head_offsets.get(id,0.0))) <= gap*2.0+.001,
+                "Tiny tied head stays within two staff spaces: "+id)
+        var tiny_x0: float = renderer.timeline.screen_x(3.99375,4.0,500.0)
+        var tiny_x1: float = renderer.timeline.screen_x(4.0,4.0,500.0)
+        var tie_place: Dictionary = renderer._tie_placement(attack,continuation,tiny_x0,tiny_x1,gap)
+        check(not tie_place.is_empty(), "Tiny tied segment retains visible authentic tie ink")
+        var stable_offsets: Dictionary = renderer.cached_head_offsets.duplicate()
+        renderer.present({"bpm":80,"running":true,"play_from_beat":0},4.001)
+        await process_frame
+        check(renderer.cached_head_offsets == stable_offsets,
+            "Bounded engraving offsets stay constant across playback")
         check(renderer.tie_pairs.size() == 1 and renderer.ordered_events == [attack,continuation],
             "Tiny attack, original source identity and tied continuation all survive")
         var x0: float = renderer.timeline.screen_x(3.99375,4.0,500.0)

@@ -62,6 +62,6 @@ def test_peace_piece_cross_bar_attack_keeps_exact_timing_without_fallback(tmp_pa
     original = next(r for r in report["results"]
                     if r["hand"] == "both" and r["level"] == "original")
     # The real attack is .00625 beat before the next bar's tied continuation.
-    # A single global scale must give those heads space without quantising it.
-    assert original["pixels_per_beat"] >= 3999
+    # Bounded engraving must preserve that timing at a practical global scale.
+    assert 0 < original["pixels_per_beat"] <= 480
     assert original["native_ready"] and original["linear_timeline"]

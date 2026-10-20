@@ -33,6 +33,10 @@ static func build(model: Dictionary, glyphs) -> Dictionary:
             return not child_a
         return str(a.get("id","")) < str(b.get("id","")))
     var chord_members: Dictionary = Geometry.chord_members(ordered_events)
+    var chord_leader_by_note: Dictionary = {}
+    for leader in chord_members:
+        for member in chord_members[leader]:
+            chord_leader_by_note[str(member.get("id",""))] = str(leader)
     # Cache the preceding attack for every measure once. Tight meter
     # changes must be relocated out of the ink; no per-frame note scan.
     var previous_attack_before_measure: Dictionary = {}
@@ -75,6 +79,7 @@ static func build(model: Dictionary, glyphs) -> Dictionary:
         "beam_stem_up_by_note":beam_stem_up_by_note,
         "notation_tuplets":notation_tuplets,"measure_by_number":measure_by_number,
         "ordered_events":ordered_events,"chord_members":chord_members,
+        "chord_leader_by_note":chord_leader_by_note,
         "previous_attack_before_measure":previous_attack_before_measure,
         "tie_pairs":tie_pairs,"slur_pairs":slur_pairs}
 
@@ -117,3 +122,42 @@ static func source_beam_groups(model: Dictionary, glyphs) -> Dictionary:
     return {"groups":output,"stem_up_by_note":directions}
 
 
+# A static augmented interval tree culls long ties/slurs and beam groups as
+# well as short attacks. Querying never scans every score fragment per frame.
+static func interval_index(items: Array, start_of: Callable, end_of: Callable) -> Dictionary:
+    var entries: Array = []
+    for item in items:
+        entries.append({"start":float(start_of.call(item)),
+            "end":float(end_of.call(item)),"item":item})
+    entries.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+        return float(a["start"]) < float(b["start"]))
+    return _interval_node(entries,0,entries.size())
+
+
+static func _interval_node(entries: Array, begin: int, end: int) -> Dictionary:
+    if begin >= end:
+        return {}
+    if end-begin == 1:
+        return {"start":entries[begin]["start"],"end":entries[begin]["end"],
+            "item":entries[begin]["item"]}
+    var middle: int = (begin+end)>>1
+    var left: Dictionary = _interval_node(entries,begin,middle)
+    var right: Dictionary = _interval_node(entries,middle,end)
+    return {"start":left["start"],"end":maxf(float(left["end"]),float(right["end"])),
+        "left":left,"right":right}
+
+
+static func visible_intervals(index: Dictionary, left: float, right: float) -> Array:
+    var output: Array = []
+    _query_intervals(index,left,right,output)
+    return output
+
+
+static func _query_intervals(index: Dictionary, left: float, right: float, output: Array) -> void:
+    if index.is_empty() or float(index["end"]) < left or float(index["start"]) > right:
+        return
+    if index.has("item"):
+        output.append(index["item"])
+        return
+    _query_intervals(index["left"],left,right,output)
+    _query_intervals(index["right"],left,right,output)

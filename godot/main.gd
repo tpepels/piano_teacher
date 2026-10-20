@@ -3338,6 +3338,9 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
     # Godot textures. Full raster pages are only requested on fallback.
     var native_assets_ready := true
     if native_notation_enabled and timeline_preview != null:
+        timeline_preview.set_annotation_fragments(
+            parsed.get("native_annotation_fragments", {}),
+            str(parsed.get("native_annotations_error", "")))
         var glyph_catalog: Dictionary = parsed.get("native_glyphs", {})
         var note_catalog: Dictionary = parsed.get("native_note_templates", {})
         var tie_catalog: Dictionary = parsed.get("native_tie_templates", {})
@@ -3356,6 +3359,8 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
             push_warning("Native Verovio glyph fallback: " +
                 str(timeline_preview.failure_reason))
     parsed.erase("native_glyphs")
+    parsed.erase("native_annotation_fragments")
+    parsed.erase("native_annotations_error")
     parsed.erase("native_note_templates")
     parsed.erase("native_tie_templates")
     parsed.erase("native_chord_templates")

@@ -227,7 +227,7 @@ func run() -> void:
     check(renderer.glyphs.has_chord("quarter|up|0,2"),
         "Completed original Verovio chord ink is resident and can be reused")
     check(renderer.glyphs.note_ready() and \
-        renderer.glyphs.note_stem_textures.size() == 12,
+        renderer.glyphs.note_stem_textures.size() == atlas_script.NOTE_TEMPLATES.size()-1,
         "Native beam stems are original Verovio sprites, never Godot lines")
     check(renderer.glyphs.chord_heads("quarter|up|0,2").size() == 2,
         "Each head keeps its exact original relative Verovio anchor")
@@ -370,8 +370,24 @@ func run() -> void:
         "Fallback provides a concrete reason")
     var dense: Dictionary = model.duplicate(true)
     dense["notation_events"][1]["beat"] = .001
-    check(not renderer.load_score(dense),
-        "Impossible collision must request Verovio fallback, not per-note speedups")
+    check(renderer.load_score(dense),
+        "Nearby vertically separated attacks use bounded engraving")
+    check(renderer.timeline.pixels_per_beat <= 480.0 and
+        approx(renderer.timeline.x_at_beat(.001),renderer.timeline.pixels_per_beat*.001),
+        "Dense engraving retains the exact anchor below the global ceiling")
+    for offset in renderer.cached_head_offsets.values():
+        check(absf(float(offset)) <= renderer._gap()*2.0001,
+            "Total source head displacement stays within two spaces")
+    var overloaded: Dictionary = model.duplicate(true)
+    overloaded["notation_events"] = []
+    for i in range(60):
+        var event: Dictionary = model["notation_events"][0].duplicate(true)
+        event["id"] = "overload"+str(i)
+        event["source_id"] = event["id"]
+        event["beat"] = float(i)*.00001
+        overloaded["notation_events"].append(event)
+    check(not renderer.load_score(overloaded) and renderer.failure_reason.contains("collision"),
+        "Infeasible source ink reports a collision without changing musical time")
     check(renderer.load_score(model), "Recovery after fallback is supported")
     renderer.clear_score()
     check(not renderer.native_ready and not renderer.timeline.has_score(),
