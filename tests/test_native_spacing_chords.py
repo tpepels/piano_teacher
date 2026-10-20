@@ -42,8 +42,11 @@ def test_ala_original_source_chords_have_native_template_signatures():
     from piano_teacher.score_model import build_score_model
 
     piece = load_midi(ROOT/"midi/Ala_–_Joep_Beving.midi")
+    from piano_teacher.verovio_chord_templates import chord_templates
     found = False
     total = 0
+    target_pattern = None
+    target_model = None
     for phrase in piece.phrases:
         score = build_lesson_score(
             phrase, boundaries=piece.bar_boundaries,
@@ -72,7 +75,30 @@ def test_ala_original_source_chords_have_native_template_signatures():
                 found = True
                 assert pattern is not None, (notes,measure_id)
                 assert pattern in known, pattern
+                target_pattern = pattern
+                target_model = model
     assert total > 0, "Ala has chords and must exercise the compound atlas"
-    # If this source ID is present, it must have an engraved catalogue key.
-    # An absent ID can belong to a curriculum-transformed lesson rather than
-    # the original imported score and is verified in UI-level tests.
+    if found:
+        atlas = chord_templates(target_model)
+        assert target_pattern in atlas, (
+            "Exact Ala chord ID could not be engraved by Verovio",
+            target_pattern, list(atlas))
+    else:
+        # The source ID may be a lesson transformation. Nonetheless prove
+        # that the original Ala passage containing measure 9 has a complete
+        # authentic chord atlas, not just semantic pattern strings.
+        section = next((p for p in piece.phrases
+                        if p.first_bar <= 9 <= p.last_bar),None)
+        assert section is not None, "Ala measure 9 must exist"
+        notation = build_lesson_score(
+            section, boundaries=piece.bar_boundaries,
+            time_signatures=piece.time_signatures,
+            key_signatures=piece.key_signatures,
+            clef_changes=piece.clef_changes)
+        model = build_score_model(notation,boundaries=piece.bar_boundaries)
+        requested = set(patterns_from_model(model))
+        generated = chord_templates(model)
+        assert requested <= set(generated), (
+            "Verovio failed real Ala measure-9 chord patterns",
+            requested-set(generated))
+
