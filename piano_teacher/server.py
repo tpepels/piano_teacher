@@ -1922,96 +1922,29 @@ class PracticeEngine:
             return self._page_png[key]
 
     def geometry(self, *, native_notes: bool = False) -> dict:
-        from .notation_symbols import native_glyphs, preparation_symbols
-        source_score = self.engraving()
-        layout = {**source_score.layout, "symbols": preparation_symbols(),
-                  "native_glyphs": native_glyphs()}
-        if native_notes:
-            # Build the identity-preserving model once for all fragment
-            # extractors, rather than reparsing the lesson four times.
-            native_model = self.semantic_score()
-            from .verovio_note_templates import note_templates
-            from .verovio_tie_templates import tie_templates
-            from .verovio_chord_templates import chord_templates
-            # Variable chord patterns are pre-engraved individually and
-            # reused via a disk cache; unsupported patterns remain native.
-            layout["native_note_templates"] = note_templates(self.preprocessing)
-            # The backend's raster notation must remain available even if
-            # the installed Verovio version changes its compound SVG markup.
-            # Never fail the entire /score/layout response for optional art.
-            try:
-                layout["native_tie_templates"] = tie_templates(self.preprocessing)
-            except Exception as exc:
-                print("VEROVIO_TIE_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
-                layout["native_tie_templates"] = {}
-            try:
-                layout["native_chord_templates"] = chord_templates(
-                    native_model, self.preprocessing)
-            except Exception as exc:
-                print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
-                layout["native_chord_templates"] = {}
-            # These fragments are cut directly from this lesson's original
-            # Verovio engraving. They retain the two real note identities,
-            # leaving the Godot transport in complete control of timing.
-            try:
-                from .verovio_beam_fragments import (
-                    beam_fragments, expected_beam_groups)
-                layout["native_required_beam_groups"] = expected_beam_groups(
-                    source_score.pages,native_model)
-                layout["native_beams_complete"] = True
-                layout["native_beam_fragments"] = beam_fragments(
-                    source_score.pages, native_model, self.preprocessing,
-                    self._layout_cache_key or "")
-                if layout["native_beam_fragments"]:
-                    print("VEROVIO_NATIVE_BEAMS:",
-                          len(layout["native_beam_fragments"]))
-            except Exception as exc:
-                print("VEROVIO_BEAM_FRAGMENTS_UNAVAILABLE:",
-                      type(exc).__name__,exc)
-                layout["native_beam_fragments"] = {}
-                layout["native_required_beam_groups"] = []
-                layout["native_beams_complete"] = False
-            try:
-                from .verovio_tuplet_fragments import tuplet_fragments
-                layout["native_tuplet_fragments"] = tuplet_fragments(
-                    source_score.pages, native_model,
-                    self.preprocessing, self._layout_cache_key or "")
-            except Exception as exc:
-                print("VEROVIO_TUPLET_FRAGMENTS_UNAVAILABLE:",
-                      type(exc).__name__,exc)
-                layout["native_tuplet_fragments"] = {}
-            try:
-                from .verovio_slur_fragments import (
-                    slur_fragments, slur_pairs_from_xml)
-                p=self.plan
-                if p is None:
-                    raise ValueError("No piece loaded")
-                notation=build_lesson_score(
-                    self.display_phrase(),boundaries=p.piece.bar_boundaries,
-                    time_signatures=p.piece.time_signatures,
-                    key_signatures=p.piece.key_signatures,
-                    clef_changes=p.piece.clef_changes,
-                    default_clefs=infer_piece_clefs(p.piece.notes),
-                    barlines=p.piece.barlines)
-                expected = slur_pairs_from_xml(notation.musicxml)
-                available = {str(e["id"]) for e in
-                             native_model.get("notation_events",[])
-                             if e.get("kind")=="note" and e.get("id")}
-                layout["native_required_slur_pairs"] = [
-                    list(pair) for pair in expected
-                    if pair[0] in available and pair[1] in available]
-                layout["native_slurs_complete"] = True
-                layout["native_slur_fragments"] = slur_fragments(
-                    source_score.pages,notation.musicxml,
-                    native_model,self.preprocessing,
-                    self._layout_cache_key or "")
-            except Exception as exc:
-                print("VEROVIO_SLUR_FRAGMENTS_UNAVAILABLE:",
-                      type(exc).__name__,exc)
-                layout["native_slur_fragments"] = {}
-                layout["native_required_slur_pairs"] = []
-                layout["native_slurs_complete"] = False
-        return layout
+        """Prepare selected revision/hand in a stateless notation collaborator."""
+        from .application.score_preparation import assemble_layout
+        with self.lock:
+            source_score = self.engraving()
+            if not native_notes:
+                return assemble_layout(source_score)
+            if self.plan is None:
+                raise ValueError("No piece loaded")
+            p = self.plan
+            phrase = self.display_phrase()
+            notation = build_lesson_score(
+                phrase, boundaries=p.piece.bar_boundaries,
+                time_signatures=p.piece.time_signatures,
+                key_signatures=p.piece.key_signatures,
+                clef_changes=p.piece.clef_changes,
+                default_clefs=infer_piece_clefs(p.piece.notes),
+                barlines=p.piece.barlines)
+            native_model = build_score_model(notation,
+                boundaries=p.piece.bar_boundaries,
+                hand=p.hand, revision=self.score_revision)
+            return assemble_layout(source_score, native_notes=True,
+                native_model=native_model, notation_xml=notation.musicxml,
+                cache=self.preprocessing, cache_key=self._layout_cache_key or "")
 
     def lesson_overview(self) -> dict:
         """Full readable curriculum, with unique per-hand/per-level progress."""
