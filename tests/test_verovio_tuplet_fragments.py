@@ -31,7 +31,7 @@ MODEL = {"notation_events":[
 
 
 def test_extract_separate_genuine_tuplet_bracket_and_number(tmp_path,monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     monkeypatch.setattr(geometry,"parse_svg_geometry",lambda _:SimpleNamespace(
         elements={"n1":(.125,.5,"staff1"),"n2":(.3125,.475,"staff1"),
                   "n3":(.525,.5,"staff1")},
@@ -50,7 +50,7 @@ def test_extract_separate_genuine_tuplet_bracket_and_number(tmp_path,monkeypatch
     cache=PreprocessingCache(tmp_path)
     assert tuplet_fragments([XML],MODEL,cache,"example")==atlas
     monkeypatch.setattr(
-        "piano_teacher.verovio_tuplet_fragments.extract_tuplets",
+        "piano_teacher.notation.assets.tuplets.extract_tuplets",
         lambda *_: (_ for _ in ()).throw(AssertionError("re-engraved cached tuplet")))
     assert tuplet_fragments([XML],MODEL,
                              PreprocessingCache(tmp_path),"example")==atlas

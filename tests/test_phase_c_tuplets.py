@@ -25,9 +25,9 @@ def test_phase_c3_tuplets_and_double_dots():
 
 
 def test_group_brackets_are_not_based_on_verovio_coordinates():
-    geom = (ROOT / "godot/score_notation_geometry.gd").read_text()
-    score = (ROOT / "godot/score_native_notation.gd").read_text()
-    model = (ROOT / "piano_teacher/score_model.py").read_text()
+    geom = (ROOT / "godot/notation/native/geometry.gd").read_text()
+    score = (ROOT / "godot/notation/native/view.gd").read_text()
+    model = (ROOT / "piano_teacher/notation/model.py").read_text()
     assert "static func tuplet_groups(model: Dictionary)" in geom
     assert "static func valid_modification(event: Dictionary)" in geom
     assert "func _paint_tuplet_brackets(" in score

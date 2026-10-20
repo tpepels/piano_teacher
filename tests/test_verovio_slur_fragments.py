@@ -48,7 +48,7 @@ def test_explicit_musicxml_slur_pair_is_not_inferred_from_time():
 
 
 def test_extract_only_genuine_slur_and_reuse_cache(tmp_path,monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     monkeypatch.setattr(geometry,"parse_svg_geometry",fake_geometry)
     result=extract_slurs([SVG],PART,MODEL)
     assert list(result)==["a|c"]
@@ -61,7 +61,7 @@ def test_extract_only_genuine_slur_and_reuse_cache(tmp_path,monkeypatch):
     cache=PreprocessingCache(tmp_path)
     assert slur_fragments([SVG],PART,MODEL,cache,"slur-piece")==result
     monkeypatch.setattr(
-        "piano_teacher.verovio_slur_fragments.extract_slurs",
+        "piano_teacher.notation.assets.slurs.extract_slurs",
         lambda *_: (_ for _ in ()).throw(
             AssertionError("A previously saved slur should not rerender")))
     assert slur_fragments([SVG],PART,MODEL,
@@ -69,7 +69,7 @@ def test_extract_only_genuine_slur_and_reuse_cache(tmp_path,monkeypatch):
 
 
 def test_ambiguous_slurs_refuse_to_guess(monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     monkeypatch.setattr(geometry,"parse_svg_geometry",fake_geometry)
     doubled=SVG.replace("</svg>",
         '<g class="slur" id="another">'
@@ -113,7 +113,7 @@ def test_identical_slur_numbers_in_two_voices_do_not_overwrite_each_other():
 
 
 def test_slur_with_correct_start_but_wrong_end_pitch_is_rejected(monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     monkeypatch.setattr(geometry,"parse_svg_geometry",fake_geometry)
     # Both shapes have the same left/right X and a plausible top bound.
     # Only the first ends near the MusicXML stop note at y=200.
