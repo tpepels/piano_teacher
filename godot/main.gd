@@ -260,14 +260,16 @@ func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
-    # Phase 1: keep working on the native Godot score engine. The original
-    # PIANO_TEACHER_NATIVE_NOTATION launch option selects it again; unsupported
-    # imported notation falls back safely to the established score display.
+    # Native semantic notation is the canonical score engine. The original
+    # Verovio page display remains a compatibility path for scores whose
+    # source engraving cannot yet be represented faithfully. An explicit
+    # switch allows comparing the historical pipeline during migration.
+    # PIANO_TEACHER_NATIVE_NOTATION=1 stays valid but is no longer required.
     native_notation_enabled = (
-        OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" or
-        OS.get_cmdline_user_args().has("--native-notation") or
-        OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION_EXPERIMENTAL") == "1" or
-        OS.get_cmdline_user_args().has("--native-notation-experimental"))
+        OS.get_environment("PIANO_TEACHER_RENDERER").to_lower() != "legacy" and
+        OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION").to_lower() not in
+            ["0", "false", "off"] and
+        not OS.get_cmdline_user_args().has("--legacy-notation"))
     timeline_preview_enabled = (native_notation_enabled or
         OS.get_environment("PIANO_TEACHER_TIMELINE_PREVIEW") == "1" or
         OS.get_cmdline_user_args().has("--timeline-preview"))
@@ -3543,6 +3545,11 @@ func _on_timeline_model(_result: int, code: int,
         if timeline_preview.load_score(candidate):
             timeline_model_revision = revision
             timeline_preview.visible = true
+            # The page tiles remain a recoverable compatibility fallback,
+            # not a second visible rendering behind the native score.
+            score_view.visible = not native_notation_enabled
+            for tile in score_tiles:
+                tile.visible = not native_notation_enabled
             print("PHASE_B_MODEL_READY: ", revision,
                 " NOTES: ", timeline_preview.timeline.notes.size(),
                 " DENSITY: ", timeline_preview.timeline.pixels_per_beat)
@@ -3551,6 +3558,9 @@ func _on_timeline_model(_result: int, code: int,
             # Phase C must never show incomplete or incorrect notation.
             # Leave the existing Verovio engraving visible underneath.
             timeline_preview.visible = false
+            score_view.visible = true
+            for tile in score_tiles:
+                tile.visible = true
             timeline_model_revision = revision
             push_warning("Native notation fallback: " +
                 str(timeline_preview.failure_reason))
