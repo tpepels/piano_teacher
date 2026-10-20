@@ -8,6 +8,7 @@ static func build(model: Dictionary, glyphs) -> Dictionary:
     var source_beams: Dictionary = source_beam_groups(model, glyphs)
     var beam_groups: Array = source_beams.get("groups",[])
     var beamed_note_ids: Dictionary = Geometry.beamed_ids(beam_groups)
+    var beam_stem_up_by_note: Dictionary = source_beams.get("stem_up_by_note",{})
     var notation_tuplets: Array = Geometry.tuplet_groups(model)
     var measure_by_number: Dictionary = {}
     for measure in model.get("measures",[]):
@@ -71,6 +72,7 @@ static func build(model: Dictionary, glyphs) -> Dictionary:
                 slur_pairs.append({"key":str(key),"first":first,"last":last})
 
     return {"beam_groups":beam_groups,"beamed_note_ids":beamed_note_ids,
+        "beam_stem_up_by_note":beam_stem_up_by_note,
         "notation_tuplets":notation_tuplets,"measure_by_number":measure_by_number,
         "ordered_events":ordered_events,"chord_members":chord_members,
         "previous_attack_before_measure":previous_attack_before_measure,
@@ -84,6 +86,7 @@ static func source_beam_groups(model: Dictionary, glyphs) -> Dictionary:
                 not bool(event.get("chord",false)):
             notes[str(event.get("id",""))] = event
     var output: Array = []
+    var directions: Dictionary = {}
     # Metadata is extracted from each original Verovio SVG beam group.
     for key in glyphs.beam_metadata:
         var data: Dictionary = glyphs.beam_metadata[key]
@@ -106,9 +109,11 @@ static func source_beam_groups(model: Dictionary, glyphs) -> Dictionary:
                 break
         if valid:
             output.append(attacks)
+            for event in attacks:
+                directions[str(event.get("id",""))] = bool(data["stem_up"])
     output.sort_custom(func(a: Array,b: Array) -> bool:
         return float(a[0].get("beat",0.0)) < \
             float(b[0].get("beat",0.0)))
-    return {"groups":output}
+    return {"groups":output,"stem_up_by_note":directions}
 
 

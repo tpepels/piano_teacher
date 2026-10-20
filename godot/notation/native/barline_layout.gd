@@ -56,7 +56,7 @@ static func strokes(style: String, gap: float) -> Array:
     var separation: float = gap*.44
     match style:
         "none": return []
-        "regular", "dashed", "dotted":
+        "regular", "dashed", "dotted", "tick", "short":
             return [{"offset":0.0,"width":thin}]
         "heavy":
             return [{"offset":0.0,"width":heavy}]

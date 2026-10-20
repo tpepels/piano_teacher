@@ -6,6 +6,9 @@ const SCHEMA := "piano-teacher-score-model-v1"
 const DEFAULT_PIXELS_PER_BEAT := 96.0
 const MIN_PIXELS_PER_BEAT := 24.0
 const MAX_PIXELS_PER_BEAT := 480.0
+# Automatic source fitting is separate from the user preference range.
+# Imported tuplets can contain genuine .00625-quarter-beat note segments.
+const MAX_SCORE_PIXELS_PER_BEAT := 8192.0
 
 var pixels_per_beat := DEFAULT_PIXELS_PER_BEAT
 var model: Dictionary = {}
@@ -19,6 +22,16 @@ func set_density(requested: float) -> bool:
     if not is_finite(requested) or requested < MIN_PIXELS_PER_BEAT \
             or requested > MAX_PIXELS_PER_BEAT:
         last_error = "Pixels per beat must be between 24 and 480"
+        return false
+    pixels_per_beat = requested
+    last_error = ""
+    return true
+
+
+func set_score_density(requested: float) -> bool:
+    if not is_finite(requested) or requested < MIN_PIXELS_PER_BEAT \
+            or requested > MAX_SCORE_PIXELS_PER_BEAT:
+        last_error = "Automatic score density must be between 24 and 8192"
         return false
     pixels_per_beat = requested
     last_error = ""
