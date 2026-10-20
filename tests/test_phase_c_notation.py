@@ -21,8 +21,8 @@ def test_phase_c_native_renderer_and_global_collision_scale():
 
 def test_native_mode_is_canonical_and_unsupported_music_reverts_to_legacy():
     app = (ROOT / "godot" / "main.gd").read_text()
-    native = (ROOT / "godot" / "score_native_notation.gd").read_text()
-    geometry = (ROOT / "godot" / "score_notation_geometry.gd").read_text()
+    native = (ROOT / "godot" / "notation/native/view.gd").read_text()
+    geometry = (ROOT / "godot" / "notation/native/geometry.gd").read_text()
     index = (ROOT / "godot/notation/native/score_index.gd").read_text()
     preparation = (ROOT / "piano_teacher/application/score_preparation.py").read_text()
     # Native is default; explicit env/CLI switches enable compatibility

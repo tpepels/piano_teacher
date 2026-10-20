@@ -86,7 +86,7 @@ def test_chord_sprite_is_actual_verovio_compound_and_reusable(tmp_path,monkeypat
 def test_native_compound_code_has_no_drawn_tie_path():
     from pathlib import Path
     root=Path(__file__).resolve().parents[1]
-    source=(root/"godot/score_native_notation.gd").read_text()
+    source=(root/"godot/notation/native/view.gd").read_text()
     assert "func _tie_shape(" not in source
     assert "glyphs.paint_tie(self" in source
     assert "glyphs.paint_chord(self" in source
@@ -95,7 +95,7 @@ def test_native_compound_code_has_no_drawn_tie_path():
 def test_native_renderer_never_draws_imitated_beams_stems_or_tuplets():
     from pathlib import Path
     source=(Path(__file__).resolve().parents[1] /
-            "godot/score_native_notation.gd").read_text()
+            "godot/notation/native/view.gd").read_text()
     assert "func _beam_segment(" not in source
     assert "func _paint_flag(" not in source
     assert "draw_line(Vector2(stem_x,anchor_y)" not in source

@@ -5,10 +5,10 @@ extends "res://notation/shared/view_base.gd"
 # the installed Verovio font, cached as individual Godot ImageTextures.
 # There is no full-page SVG bitmap or custom imitation of a music glyph.
 # Incomplete notation falls back to the existing Verovio score as a whole.
-const Geometry := preload("res://score_notation_geometry.gd")
+const Geometry := preload("res://notation/native/geometry.gd")
 const ScoreIndex := preload("res://notation/native/score_index.gd")
 const BarlineLayout := preload("res://notation/native/barline_layout.gd")
-const VerovioGlyphs := preload("res://score_verovio_glyphs.gd")
+const VerovioGlyphs := preload("res://notation/native/glyphs.gd")
 const Design := preload("res://practice_theme.gd")
 const NOTE_INK := Design.SCORE_INK
 const DIM_INK := Design.STAFF_MUTED

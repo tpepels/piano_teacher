@@ -1,6 +1,6 @@
 extends RefCounted
 # Immutable event and compound index: no CanvasItem, clock, paint or GPU.
-const Geometry := preload("res://score_notation_geometry.gd")
+const Geometry := preload("res://notation/native/geometry.gd")
 
 static func build(model: Dictionary, glyphs) -> Dictionary:
     # Source-Verovio beam groups are authoritative. Inferring meter-based

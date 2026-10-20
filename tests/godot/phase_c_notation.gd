@@ -68,8 +68,8 @@ func _score() -> Dictionary:
         "active_note_ids":notes.map(func(n):return n.id)}
 
 func run() -> void:
-    var Geometry = load("res://score_notation_geometry.gd")
-    var Renderer = load("res://score_native_notation.gd")
+    var Geometry = load("res://notation/native/geometry.gd")
+    var Renderer = load("res://notation/native/view.gd")
     var Timeline = load("res://score_timeline.gd")
     check(Geometry != null and Renderer != null and Timeline != null,
         "All Phase C scripts parse")
@@ -117,7 +117,7 @@ func run() -> void:
     # Synthetic 2x2 SVG paths below are a UNIT-TEST DOUBLE for placement and
     # transport math; real MIDI desktop tests require actual installed
     # Verovio glyphs from Python's notation_symbols.native_glyphs().
-    var atlas_script = load("res://score_verovio_glyphs.gd")
+    var atlas_script = load("res://notation/native/glyphs.gd")
     var sample_glyphs: Dictionary = {}
     for name in atlas_script.REQUIRED:
         sample_glyphs[name] = {

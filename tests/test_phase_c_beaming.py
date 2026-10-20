@@ -23,8 +23,8 @@ def test_native_eighth_sixteenth_beams_in_simple_and_compound_meters():
 
 
 def test_beaming_uses_semantic_beat_and_never_verovio_x():
-    geometry = (ROOT / "godot/score_notation_geometry.gd").read_text()
-    renderer = (ROOT / "godot/score_native_notation.gd").read_text()
+    geometry = (ROOT / "godot/notation/native/geometry.gd").read_text()
+    renderer = (ROOT / "godot/notation/native/view.gd").read_text()
     assert "static func beam_groups(model: Dictionary)" in geometry
     assert "static func beat_group_length(meter: Array)" in geometry
     assert "func _paint_beams(data: Dictionary, gap: float)" in renderer

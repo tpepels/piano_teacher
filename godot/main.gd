@@ -30,7 +30,7 @@ const LibraryRow := preload("res://library_row.gd")
 const GameInputIndicator := preload("res://game_input_indicator.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const TimelinePreview := preload("res://score_timeline_preview.gd")
-const NativeNotation := preload("res://score_native_notation.gd")
+const NativeNotation := preload("res://notation/native/view.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 
 var current_screen := "practice"

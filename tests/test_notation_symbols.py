@@ -51,8 +51,8 @@ def test_native_renderer_has_no_original_hand_drawn_musical_glyphs():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
-    gd = (root / "godot/score_native_notation.gd").read_text()
-    atlas = (root / "godot/score_verovio_glyphs.gd").read_text()
+    gd = (root / "godot/notation/native/view.gd").read_text()
+    atlas = (root / "godot/notation/native/glyphs.gd").read_text()
     assert "const VerovioGlyphs" in gd
     assert "func _paint_ellipse(" not in gd
     assert "draw_circle(" not in gd
