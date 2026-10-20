@@ -40,6 +40,13 @@ def preparation_symbols() -> dict:
 # ImageTexture, then positions/composites the textures on its own beat grid.
 _NATIVE_CODES = {
     "clef_g": "E050", "clef_f": "E062", "clef_c": "E05C",
+    # Original SMuFL clefs with octave numbers attached.
+    "clef_g_8vb": "E052", "clef_g_8va": "E053",
+    "clef_g_15mb": "E051", "clef_g_15ma": "E054",
+    "clef_f_8vb": "E064", "clef_f_8va": "E065",
+    "clef_f_15mb": "E063", "clef_f_15ma": "E066",
+    "clef_c_8vb": "E05D", "clef_octave_8": "E07D",
+    "clef_octave_15": "E07E",
     "head_whole": "E0A2", "head_half": "E0A3", "head_black": "E0A4",
     "augmentation_dot": "E1E7",
     "repeat_dot": "E044",

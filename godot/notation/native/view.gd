@@ -434,15 +434,35 @@ func _paint_rest(x: float, y: float,
     _paint_rhythm_dots(x, y, dots, ink, gap)
 
 
-func _paint_clef(x: float, center: float, sign: String,
+func _paint_clef(x: float, center: float, clef: Dictionary,
         gap: float, ink: Color) -> void:
+    var sign: String = str(clef.get("sign","G"))
+    var line: int = int(clef.get("line", 2 if sign == "G" else 4 if sign == "F" else 3))
+    var octave: int = int(clef.get("octave_change",0))
     var name: String = {"G":"clef_g", "F":"clef_f", "C":"clef_c"}.get(sign, "")
-    if name.is_empty():
+    if name.is_empty() or line < 1 or line > 5:
         return
-    # SMuFL origin marks the clef's reference staff line.
-    var origin_y: float = center + gap if sign == "G" else (
-        center - gap if sign == "F" else center)
-    glyphs.paint(self, name, x, origin_y, gap, ink, true)
+    # The reference mark is exactly MusicXML's numbered staff line:
+    # 1 is bottom, 5 is top. Changing it must NOT transpose note time.
+    var origin_y: float = center+(3.0-float(line))*gap
+    var variant: String = ""
+    if octave == -1:
+        variant = name+"_8vb"
+    elif octave == 1:
+        variant = name+"_8va"
+    elif octave == -2:
+        variant = name+"_15mb"
+    elif octave == 2:
+        variant = name+"_15ma"
+    if not variant.is_empty() and glyphs.textures.has(variant):
+        name = variant
+    glyphs.paint(self,name,x,origin_y,gap,ink,true)
+    if octave != 0 and variant != name:
+        # No combined C-clef 8va/15ma in SMuFL: attach authentic
+        # Verovio clef numeral glyph rather than faking a text 8.
+        var numeral: String = "clef_octave_8" if absi(octave)==1 else "clef_octave_15"
+        var numeral_y: float = origin_y-2.6*gap if octave > 0 else origin_y+2.6*gap
+        glyphs.paint(self,numeral,x,numeral_y,gap,ink,true)
 
 
 func _paint_meter_number(value: int, x: float, y: float,
@@ -861,16 +881,28 @@ func _draw() -> void:
             var key_changed: bool = signature != int(previous_keys.get(staff,999))
             if opening or _clef_for(staff,previous_measure) != clef:
                 _paint_clef(x-86.0-header_shift-float(absi(signature))*14.0,
-                    center,str(clef.get("sign","G")),gap,_ink(staff))
-            if key_changed and signature != 0:
-                var steps: Array = Geometry.signature_steps(clef, signature)
-                for i in range(steps.size()):
-                    var glyph_x: float = x-39.0-header_shift-float(steps.size()-i)*14.0
-                    var glyph_y: float = Geometry.note_y(int(steps[i]),
+                    center,clef,gap,_ink(staff))
+            if key_changed:
+                # Cancelling an old signature requires visible naturals,
+                # even when the new signature is C major (zero accidentals).
+                var previous_fifths: int = int(previous_keys.get(staff,0))
+                var cancelled: Array = ([] if opening else
+                    Geometry.key_cancellation_steps(clef,previous_fifths,signature))
+                var incoming: Array = Geometry.signature_steps(clef,signature)
+                var change_marks: Array = []
+                for step in cancelled:
+                    change_marks.append({"step":step,"accidental":"natural"})
+                for step in incoming:
+                    change_marks.append({"step":step,"accidental":
+                        "sharp" if signature > 0 else "flat"})
+                for i in range(change_marks.size()):
+                    var mark: Dictionary = change_marks[i]
+                    var glyph_x: float = x-39.0-header_shift- \
+                        float(change_marks.size()-i)*14.0
+                    var glyph_y: float = Geometry.note_y(int(mark["step"]),
                         center+2.0*gap,gap)
                     _paint_accidental(glyph_x,glyph_y,
-                        "sharp" if signature > 0 else "flat",
-                        _ink(staff),gap)
+                        str(mark["accidental"]),_ink(staff),gap)
             if (opening or previous_measure.get("meter",[]) !=
                     measure.get("meter",[])) and not crowded_meter:
                 var meter: Array = measure.get("meter",[4,4])
