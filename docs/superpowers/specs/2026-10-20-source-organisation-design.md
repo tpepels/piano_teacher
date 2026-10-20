@@ -1,6 +1,18 @@
 # Source organisation for native notation development
 
-Status: proposed for review; source implementation has not started.
+Status: implemented on integration branch `integrate-native-source-20261020`
+(PR #15), pending final CI validation and merge to `main`.
+
+The package boundaries and native-first loading described in this design have
+been implemented. The original implementation in PR #13 was reconciled with
+subsequent source-Verovio fragment, native feedback, collision-spacing and
+art-direction changes already on `main`. The legacy PNG renderer remains a lazy
+fallback or an explicit `PIANO_TEACHER_RENDERER=legacy` compatibility mode.
+Full source MusicXML is retained during import and preprocessing; preserving
+every expression when compiling simplified exercises remains separate work.
+
+The findings and migration plan below record the *pre-refactor* codebase and
+historical decisions, rather than describing current source file ownership.
 
 ## Intent and constraints
 
