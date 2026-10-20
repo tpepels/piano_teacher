@@ -60,7 +60,7 @@ def test_extract_only_genuine_slur_and_reuse_cache(tmp_path,monkeypatch):
     cache=PreprocessingCache(tmp_path)
     assert slur_fragments([SVG],PART,MODEL,cache,"slur-piece")==result
     monkeypatch.setattr(
-        "piano_teacher.verovio_slur_fragments.extract_slurs",
+        "piano_teacher.notation.assets.slurs.extract_slurs",
         lambda *_: (_ for _ in ()).throw(
             AssertionError("A previously saved slur should not rerender")))
     assert slur_fragments([SVG],PART,MODEL,
