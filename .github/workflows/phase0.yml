@@ -119,6 +119,19 @@ jobs:
           path: /tmp/piano-phase1-exact-grid
           if-no-files-found: warn
           retention-days: 14
+      - name: Verify original Verovio rest positions, dots, voices and rendered pixels
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          PIANO_TEACHER_REST_SCREENSHOTS: /tmp/piano-native-rest-screenshots
+        run: .venv/bin/python -m pytest tests/test_native_rest_placement.py -q
+      - name: Upload native rest engraving evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-verovio-rest-placement
+          path: /tmp/piano-native-rest-screenshots
+          if-no-files-found: warn
+          retention-days: 14
       - name: Confirm canonical native renderer without opt-in environment flag
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
