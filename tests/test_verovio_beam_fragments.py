@@ -41,7 +41,7 @@ def test_extract_exactly_beam_ink_not_heads_or_staff():
 
 
 def test_original_two_anchors_and_measured_stem_tips(monkeypatch,tmp_path):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     def model_geometry(svg):
         return SimpleNamespace(
             elements={"n1":(.125,.5,"s1"),"n2":(.5,.5,"s1")},
@@ -84,7 +84,7 @@ def test_beam_mismatch_does_not_invent_a_symbol():
 
 def test_three_note_beam_has_every_original_musical_anchor(monkeypatch):
     """The middle note must not inherit Verovio's printed page spacing."""
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
 
     multi_svg=SVG.replace(
         '<g class="note" id="n2">',
@@ -171,7 +171,7 @@ def test_diagnostic_svg_bounding_boxes_do_not_create_fake_notes():
 
 
 def test_verovio_beamed_chord_keeps_one_attack_and_all_pitches(monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     svg=SVG.replace(
         '<g class="note" id="n1"><circle cx="100" cy="100" r="8"/></g>',
         '<g class="chord"><g class="note" id="n1">'
