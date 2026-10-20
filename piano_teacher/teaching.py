@@ -125,7 +125,13 @@ class TeachingController:
         self._hint_reason = ""
         self._hint_used = False
 
-    def receive(self, *, pitch: int, is_on: bool, channel: int = 0, at: float):
+    def receive(self, *, pitch: int, is_on: bool, channel: int = 0, at: float,
+                optional_notes: tuple[dict, ...] = ()):
+        """Recognize required attacks; current-anchor grace pitches stay ungraded.
+
+        Optional records must carry canonical anchor_source_id. Printed
+        anchor_id and beat positions do not identify an untimed Learn target.
+        """
         if (not isinstance(pitch, int) or not 0 <= pitch <= 127
                 or not isinstance(channel, int) or not 0 <= channel <= 15
                 or channel == 9 or not self._connected):
@@ -155,6 +161,13 @@ class TeachingController:
         expected = self._targets[self._target_index]
         required = {note["pitch"] for note in expected}
         if pitch not in required:
+            # Keep physical press/release bookkeeping above, but never let a
+            # grace attack join a required chord or introduce a wrong-note hint.
+            # Required pitches take priority even when also printed as grace.
+            anchors = {note["source_id"] for note in expected if note.get("source_id")}
+            if any(note.get("kind") == "grace" and note.get("midi_pitch") == pitch
+                   and note.get("anchor_source_id") in anchors for note in optional_notes):
+                return
             self._hint_reason = "wrong_note"
             self._hint_used = True
             for note in expected:

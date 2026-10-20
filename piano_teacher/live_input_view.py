@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections import deque
 
 from .music import Phrase, source_note_id
+from .optional_notes import match_optional_note
 
 
 class LiveInputView:
@@ -16,9 +17,11 @@ class LiveInputView:
         self.events: deque[dict] = deque(maxlen=32)
         self.sequence = 0
         self.used: set[int] = set()
+        self.used_optional: set[str] = set()
 
     def reset_attempt(self) -> None:
         self.used.clear()
+        self.used_optional.clear()
         self.events.clear()
 
     def clear_device(self) -> None:
@@ -29,7 +32,7 @@ class LiveInputView:
         self, *, pitch: int, is_on: bool, now: float, phrase: Phrase | None,
         hand: str, bpm: float, from_beat: float, run_at: float,
         running: bool, paused: bool, preview: bool, mode: str,
-        transport_id: int,
+        transport_id: int, optional_notes: tuple[dict, ...] = (),
     ) -> None:
         if not 0 <= pitch <= 127:
             return
@@ -75,21 +78,29 @@ class LiveInputView:
                     drift = at - expected_at
                     status = "on_time" if abs(drift) <= 0.1 else "early" if drift < 0 else "late"
                 else:
-                    status = "unexpected"
-                    # Pair only an attack close to an actual required onset.
-                    # For chords, prefer the closest pitch in the chord while
-                    # preserving the separate exact-pitch notes as unplayed.
-                    nearby = [
-                        (abs(at - (note.start - phrase.start - from_beat) * seconds_per_beat),
-                         abs(pitch - note.pitch), index, note)
-                        for index, note in enumerate(phrase.notes)
-                        if (hand == "both" or note.hand == hand)
-                        and note.start - phrase.start >= from_beat - 1e-7
-                        and abs(at - (note.start - phrase.start - from_beat) * seconds_per_beat) <= .1
-                    ]
-                    if nearby:
-                        _, _, index, reference = min(nearby, key=lambda entry: entry[:3])
-                        reference_source = source_note_id(reference, index)
+                    optional = match_optional_note(
+                        optional_notes, pitch=pitch, onset=at, hand=hand,
+                        seconds_per_beat=seconds_per_beat, search_window=window,
+                        used=self.used_optional, from_beat=from_beat)
+                    if optional is not None:
+                        status = "heard"
+                        source = optional["id"]
+                    else:
+                        status = "unexpected"
+                        # Pair only an attack close to an actual required onset.
+                        # For chords, prefer the closest pitch in the chord while
+                        # preserving the separate exact-pitch notes as unplayed.
+                        nearby = [
+                            (abs(at - (note.start - phrase.start - from_beat) * seconds_per_beat),
+                             abs(pitch - note.pitch), index, note)
+                            for index, note in enumerate(phrase.notes)
+                            if (hand == "both" or note.hand == hand)
+                            and note.start - phrase.start >= from_beat - 1e-7
+                            and abs(at - (note.start - phrase.start - from_beat) * seconds_per_beat) <= .1
+                        ]
+                        if nearby:
+                            _, _, index, reference = min(nearby, key=lambda entry: entry[:3])
+                            reference_source = source_note_id(reference, index)
 
         self.sequence += 1
         self.events.append({

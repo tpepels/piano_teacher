@@ -5,6 +5,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Literal
 from .music import Note, Phrase, Piece
+from .optional_notes import match_optional_note
 
 
 @dataclass(frozen=True)
@@ -49,11 +50,15 @@ class Assessment:
         return f"{self.correct}/{len(self.notes)} correct · {details}"
 
 
-def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote]) -> Assessment:
+def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote],
+             optional_notes: tuple[dict, ...] = ()) -> Assessment:
     """Score pitch, start timing, and held duration independently.
 
     Matching uses the nearest unused same-pitch onset in a generous window;
     the stricter onset/release tolerances decide whether it was correct.
+    Optional grace beats are relative to this phrase's start; slice/rebase them
+    with relative_optional_notes() when evaluating a seeked passage. Required
+    exact pitches win, then optional attacks, then wrong-pitch substitutions.
     """
     seconds_per_beat = 60.0 / bpm
     expected = [n for n in phrase.notes if hand == "both" or n.hand == hand]
@@ -89,6 +94,15 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote]) ->
             else:
                 status = "correct"
         assessments.append(NoteAssessment(note, status))
+    # A played ornament must not substitute for a missing required pitch or
+    # count as an extra. Required exact pitches have already taken priority.
+    used_optional: set[str] = set()
+    for index in sorted(unused):
+        event = played[index]
+        if match_optional_note(optional_notes, pitch=event.pitch, onset=event.onset,
+                               hand=hand, seconds_per_beat=seconds_per_beat,
+                               search_window=search_window, used=used_optional) is not None:
+            unused.remove(index)
     # Reclassify a missing pitch as 'wrong' only when an as-yet-unmatched
     # played note started at the expected beat. This avoids counting an
     # incorrect chord note as both 'missed' and 'extra'. Exact-pitch matching

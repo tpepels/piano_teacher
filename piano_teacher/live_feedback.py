@@ -6,12 +6,14 @@ No video-frame clock or Godot interaction is involved.
 """
 from __future__ import annotations
 from .music import Phrase
+from .optional_notes import relative_optional_notes
 from .practice import Assessment, NoteAssessment, PlayedNote, evaluate
 
 
 def settled_assessment(phrase: Phrase, hand: str, bpm: float,
                        played: list[PlayedNote], *, from_beat: float,
-                       until_beat: float, beats_per_bar: float) -> Assessment | None:
+                       until_beat: float, beats_per_bar: float,
+                       optional_notes: tuple[dict, ...] = ()) -> Assessment | None:
     if bpm <= 0 or beats_per_bar <= 0:
         raise ValueError("Tempo and measure length must be positive")
     grace = .12 * bpm / 60  # 120 ms after expected note release
@@ -33,7 +35,8 @@ def settled_assessment(phrase: Phrase, hand: str, bpm: float,
     upto = (until_beat-from_beat)*60/bpm+.12
     since = max(0.0,(earliest-from_beat)*60/bpm-.15)
     eligible = [n for n in played if since <= n.onset <= upto]
-    result = evaluate(passage, hand, bpm, eligible)
+    result = evaluate(passage, hand, bpm, eligible,
+                      optional_notes=relative_optional_notes(optional_notes, from_beat))
     # Project only required settled notes here. Early/key mistakes remain
     # marked at their corresponding noteheads; extra-note labels are shown
     # in the final assessment to avoid a misleading moving marker.
@@ -43,13 +46,16 @@ def settled_assessment(phrase: Phrase, hand: str, bpm: float,
 def expired_attack_misses(phrase: Phrase, hand: str, bpm: float,
                           played: list[PlayedNote], *, from_beat: float,
                           until_beat: float,
-                          window_start_beat: float | None = None) -> Assessment | None:
+                          window_start_beat: float | None = None,
+                          optional_notes: tuple[dict, ...] = ()) -> Assessment | None:
     """Mark only individual missing pitches after their allowable onset window.
 
     A two-beat held chord must not wait for release before its unplayed
     pitches become red. Use exactly the same pitch/onset matching window as
     evaluate(), so a valid late note cannot first flash as missing.
     This is a display-only assessment: it never increments failure counts.
+    optional_notes is accepted for parity with settled/final assessment, but
+    grace pitches cannot clear a required miss; only exact required attacks do.
     """
     if bpm <= 0:
         raise ValueError("Tempo must be positive")

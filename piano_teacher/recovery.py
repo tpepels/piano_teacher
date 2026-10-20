@@ -9,6 +9,7 @@ from collections import deque
 from dataclasses import dataclass
 from .measure_grid import chunk_start_at_end
 from .music import Phrase
+from .optional_notes import relative_optional_notes
 from .practice import PlayedNote, evaluate
 
 
@@ -24,7 +25,8 @@ class RecoveryDecision:
 def check_rolling_two_bar_window(phrase: Phrase, hand: str, bpm: int,
                                  played: list[PlayedNote], *, from_beat: float,
                                  end_beat: float, grid: tuple[float, ...],
-                                 threshold: int = 5) -> RecoveryDecision | None:
+                                 threshold: int = 5,
+                                 optional_notes: tuple[dict, ...] = ()) -> RecoveryDecision | None:
     """Detect a rolling threshold, then retry the just-completed source chunk.
 
     Only a threshold reached in this chunk can trigger. Assessment is bounded
@@ -33,6 +35,8 @@ def check_rolling_two_bar_window(phrase: Phrase, hand: str, bpm: int,
     without treating every bar as the first bar's number of quarter beats.
     Error totals describe the rolling window; beat bounds identify the
     canonical retry idea, whose own error total can be smaller.
+    Optional grace beats use the original phrase's origin and are rebased to
+    the assessed segment, independently of the take's recording start.
     """
     if threshold <= 0:
         raise ValueError("A positive error threshold is required")
@@ -54,7 +58,8 @@ def check_rolling_two_bar_window(phrase: Phrase, hand: str, bpm: int,
                 if offset - .15 <= note.onset < (end_beat - from_beat) * seconds + .15]
     segment = Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
                      phrase.start + start, phrase.start + end_beat, selected)
-    assessed = evaluate(segment, hand, bpm, relative)
+    assessed = evaluate(segment, hand, bpm, relative,
+                        optional_notes=relative_optional_notes(optional_notes, start))
 
     def measure_position(beat: float) -> float:
         index = min(len(grid) - 2, max(0, bisect_right(grid, beat) - 1))
@@ -85,12 +90,14 @@ def check_two_bar_window(phrase: Phrase, hand: str, bpm: int,
                          played: list[PlayedNote], *,
                          from_beat: float, end_beat: float,
                          beats_per_bar: float, threshold: int = 5,
-                         window_start_beat: float | None = None) -> RecoveryDecision | None:
+                         window_start_beat: float | None = None,
+                         optional_notes: tuple[dict, ...] = ()) -> RecoveryDecision | None:
     """Return a rewind after five wrong/missed notes, or None.
 
     played timestamps begin at from_beat within the excerpt. The window
     is aligned to its ending two-bar boundary. evaluate() prevents
-    counting one bad chord pitch as both wrong and missed.
+    counting one bad chord pitch as both wrong and missed. Optional grace
+    beats are relative to the original phrase and rebased to this window.
     """
     if threshold <= 0 or beats_per_bar <= 0:
         raise ValueError("A positive error threshold and bar duration are required")
@@ -113,7 +120,8 @@ def check_two_bar_window(phrase: Phrase, hand: str, bpm: int,
                 for n in played if window_seconds - .15 <= n.onset < (end_beat - from_beat) * seconds + .15]
     segment = Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
                      phrase.start + start_beat, phrase.start + end_beat, selected)
-    assessed = evaluate(segment, hand, bpm, relative)
+    assessed = evaluate(segment, hand, bpm, relative,
+                        optional_notes=relative_optional_notes(optional_notes, start_beat))
     missed = sum(n.status == "missed" for n in assessed.notes)
     wrong = sum(n.status == "wrong" for n in assessed.notes)
     errors = missed + wrong
