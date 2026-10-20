@@ -127,7 +127,7 @@ def test_slur_with_correct_start_but_wrong_end_pitch_is_rejected(monkeypatch):
 
 
 def test_explicit_slur_source_id_disambiguates_overlapping_contours(monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     monkeypatch.setattr(geometry,"parse_svg_geometry",fake_geometry)
     xml=PART.replace('<slur number="1" type="start"/>',
                      '<slur id="slur-x" number="1" type="start"/>')
@@ -138,7 +138,7 @@ def test_explicit_slur_source_id_disambiguates_overlapping_contours(monkeypatch)
 
 
 def test_slur_endpoint_tolerance_uses_staff_space_on_a_wide_page(monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     monkeypatch.setattr(geometry,"parse_svg_geometry",fake_geometry)
     # The second curve begins four staff spaces after the source note.
     # Page-relative X and Y have different scales on an 800x400 viewport.
@@ -163,7 +163,7 @@ def test_cross_staff_slur_retains_unique_number_and_voice_identity():
 
 
 def test_empty_slur_cache_retries_when_source_graphics_become_available(tmp_path,monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     monkeypatch.setattr(geometry,"parse_svg_geometry",fake_geometry)
     cache=PreprocessingCache(tmp_path)
     assert slur_fragments([],PART,MODEL,cache,"piece")=={}

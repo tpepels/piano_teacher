@@ -303,18 +303,24 @@ func _ink(staff: String) -> Color:
 # right line. A closing double/repeat line belongs to the previous measure.
 func _barline_geometry(measure: Dictionary, clock: float,
         playhead_x: float, gap: float) -> Dictionary:
-    return BarlineLayout.boundary(timeline.measures, measure, timeline,
+    var info: Dictionary = BarlineLayout.boundary(timeline.measures, measure, timeline,
         clock, playhead_x, play_from_beat, gap,
         _staff_center("right")-2.0*gap,
         _staff_center("left")+2.0*gap)
+    if not info.is_empty():
+        info["segments"] = _barline_segments(str(info.get("style","regular")),gap)
+    return info
 
 
 func _terminal_barline_geometry(clock: float,
         playhead_x: float, gap: float) -> Dictionary:
-    return BarlineLayout.terminal(timeline.measures, timeline,
+    var info: Dictionary = BarlineLayout.terminal(timeline.measures, timeline,
         clock, playhead_x, play_from_beat, gap,
         _staff_center("right")-2.0*gap,
         _staff_center("left")+2.0*gap)
+    if not info.is_empty():
+        info["segments"] = _barline_segments(str(info.get("style","regular")),gap)
+    return info
 
 
 func _barline_segments(style: String, gap: float) -> Array:

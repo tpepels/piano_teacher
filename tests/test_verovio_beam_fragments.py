@@ -255,7 +255,7 @@ def test_beam_mask_excludes_chord_stems_and_nested_tuplet_ink():
 
 def test_full_performance_keeps_beams_after_the_120th(monkeypatch):
     import copy
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     root=ET.fromstring(SVG)
     beam=next(n for n in root if n.get("class")=="beam")
     root.remove(beam)
@@ -285,7 +285,7 @@ def test_full_performance_keeps_beams_after_the_120th(monkeypatch):
 
 
 def test_long_source_beam_keeps_all_32_attacks(monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     notes=[]
     events=[]
     heads={}
