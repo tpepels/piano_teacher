@@ -567,8 +567,9 @@ func _layout_rest_lanes(gap: float, density: float) -> bool:
             rect.position.x += float(event.get("beat",0.0))*density
             var collision := false
             for blocker in obstacles[lane_key]:
+                var other: Rect2 = blocker["ink"]
                 if str(blocker["voice"]) != voice and \
-                        rect.intersects((blocker["ink"] as Rect2).grow(gap*.06)):
+                        rect.intersects(other.grow(gap*.06)):
                     collision = true
                     break
             if not collision:
