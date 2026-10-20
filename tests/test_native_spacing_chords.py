@@ -23,8 +23,8 @@ def test_chord_catalogue_is_not_silently_truncated_at_thirty_two():
                 {"id":f"b{beat}","kind":"note","staff":"right",
                  "voice":"1","measure":1,"beat":float(beat),
                  "chord":True,"note_type":kind,
-                 "spelling":{"step":"CDEFGAB"[((4+interval)%7)],
-                              "octave":4+(4+interval)//7}},
+                 "spelling":{"step":"CDEFGAB"[((6+interval)%7)],
+                              "octave":4+(6+interval)//7}},
             ])
             beat += 1
     model = {"measures":[{"number":1,"clefs":clefs}],
