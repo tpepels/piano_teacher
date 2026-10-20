@@ -9,7 +9,7 @@ def assemble_layout(source_score, *, native_notes: bool = False,
                     native_model: dict | None = None,
                     notation_xml: str | None = None,
                     cache=None, cache_key: str = "") -> dict:
-    from ..notation_symbols import native_glyphs, preparation_symbols
+    from ..notation.assets.glyphs import native_glyphs, preparation_symbols
     layout = {**source_score.layout, "symbols": preparation_symbols(),
               "native_glyphs": native_glyphs()}
     if native_notes:
@@ -17,9 +17,9 @@ def assemble_layout(source_score, *, native_notes: bool = False,
             raise ValueError("Native score preparation requires the selected lesson model and MusicXML")
         # Build the identity-preserving model once for all fragment
         # extractors, rather than reparsing the lesson four times.
-        from ..verovio_note_templates import note_templates
-        from ..verovio_tie_templates import tie_templates
-        from ..verovio_chord_templates import chord_templates
+        from ..notation.assets.notes import note_templates
+        from ..notation.assets.ties import tie_templates
+        from ..notation.assets.chords import chord_templates
         # Variable chord patterns are pre-engraved individually and
         # reused via a disk cache; unsupported patterns remain native.
         layout["native_note_templates"] = note_templates(cache)
@@ -41,7 +41,7 @@ def assemble_layout(source_score, *, native_notes: bool = False,
         # Verovio engraving. They retain the two real note identities,
         # leaving the Godot transport in complete control of timing.
         try:
-            from ..verovio_beam_fragments import (
+            from ..notation.assets.beams import (
                 beam_fragments, expected_beam_groups)
             layout["native_required_beam_groups"] = expected_beam_groups(
                 source_score.pages,native_model)
@@ -59,7 +59,7 @@ def assemble_layout(source_score, *, native_notes: bool = False,
             layout["native_required_beam_groups"] = []
             layout["native_beams_complete"] = False
         try:
-            from ..verovio_tuplet_fragments import tuplet_fragments
+            from ..notation.assets.tuplets import tuplet_fragments
             layout["native_tuplet_fragments"] = tuplet_fragments(
                 source_score.pages, native_model,
                 cache, cache_key)
@@ -68,7 +68,7 @@ def assemble_layout(source_score, *, native_notes: bool = False,
                   type(exc).__name__,exc)
             layout["native_tuplet_fragments"] = {}
         try:
-            from ..verovio_slur_fragments import (
+            from ..notation.assets.slurs import (
                 slur_fragments, slur_pairs_from_xml)
             expected = slur_pairs_from_xml(notation_xml)
             available = {str(e["id"]) for e in
