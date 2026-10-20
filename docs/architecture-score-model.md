@@ -1,6 +1,6 @@
 # Architecture decision A — Semantic ScoreModel (October 2026)
 
-Status: **Phases A and B complete; Phase C native renderer opt-in, fallback retained.**
+Status: **Semantic score and native Verovio-fragment compositor implemented. Native is canonical by default; legacy raster retained on explicit request or for unsupported engraving.**
 
 The current Phase C engine uses authentic Verovio font glyphs and reusable
 engraved note/chord/tie templates, plus source-bound beam, tuplet and slur
@@ -8,7 +8,7 @@ fragments. Godot composes these on its own linear musical timeline. The earlier
 primitive-symbol experiments described below are historical, not the current
 rendering path. Musical glyphs are never approximated with Godot drawings.
 
-Always launch native verification with `PIANO_TEACHER_NATIVE_NOTATION=1`.
+Native verification requires no renderer flag. For regression comparison, set `PIANO_TEACHER_RENDERER=legacy` to exercise the old raster path.
 `scripts/check_native_notation.py` checks the real MIDI curriculum through the
 native compositor and requires every notation note ID to be painted.
 `scripts/smoke_native_notation.py` additionally checks the actual HTTP application,
@@ -43,7 +43,7 @@ LearningPlan.active_phrase (the exact exercise variant)
        v                        v
 ScoreModel v1 (/score/model)   Legacy Verovio renderer (/score/layout, /score.png)
        |                        |
- Future native Godot renderer   Existing Godot score (untouched)
+ Native Godot compositor      Legacy PNG fallback (lazy)
 ```
 
 The Python grader still consumes `LearningPlan.active_phrase`. Listen, MIDI,

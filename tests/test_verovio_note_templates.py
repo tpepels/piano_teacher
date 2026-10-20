@@ -7,6 +7,13 @@ from io import BytesIO
 from PIL import Image
 
 
+def test_whole_note_ink_is_centred_on_its_musical_attack():
+    from piano_teacher.notation.assets.notes import note_templates
+
+    bounds = note_templates()["whole"]["bounds"]
+    assert abs(bounds[0] + bounds[2] / 2) < 15, bounds
+
+
 def test_engrave_complete_notes_once_then_reuse_across_loads(tmp_path, monkeypatch):
     from piano_teacher.preprocessing_cache import PreprocessingCache
     from piano_teacher.notation.assets import notes as templates
