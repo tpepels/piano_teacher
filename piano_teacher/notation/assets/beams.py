@@ -124,7 +124,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
     renderer. No tempo-dependent page positions replace source-beat timing.
     """
     import cairosvg
-    from ...score_geometry import parse_svg_geometry
+    from .svg_geometry import parse_svg_geometry
 
     # Match the two semantic attacks in order; other Verovio beam groupings
     # cannot be attached safely to this model without a full multi-anchor map.
