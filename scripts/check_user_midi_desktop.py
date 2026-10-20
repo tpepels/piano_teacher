@@ -51,6 +51,12 @@ def run_one(filename: str, out: Path, godot: str, *, native: bool = False) -> di
     folder = out / (_name(filename) + ("-native" if native else ""))
     folder.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
+    if not native:
+        # This test intentionally exercises the RETIRED page renderer as a
+        # compatibility comparison; the actual app defaults to native.
+        env["PIANO_TEACHER_RENDERER"] = "legacy"
+    else:
+        env.pop("PIANO_TEACHER_RENDERER", None)
     if native:
         env["PIANO_TEACHER_NATIVE_NOTATION"] = "1"
         # Raster-based time-grid work must not alter the native score test.
