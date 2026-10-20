@@ -321,6 +321,22 @@ static func signature_steps(clef: Dictionary, fifths: int) -> Array:
         result.append(step)
     return result
 
+static func key_cancellation_steps(clef: Dictionary, before: int,
+        after: int) -> Array:
+    # An old key has to relinquish accidentals when the signature
+    # switches direction, shrinks or returns to C major/A minor.
+    # Retain accidentals shared by signatures of the same sign.
+    if before == 0 or before == after:
+        return []
+    if (before > 0) == (after > 0) and after != 0 and \
+            absi(after) >= absi(before):
+        return []
+    var old_steps: Array = signature_steps(clef, before)
+    if before * after < 0 or after == 0:
+        return old_steps
+    return old_steps.slice(mini(old_steps.size(), absi(after)))
+
+
 static func chord_members(events: Array) -> Dictionary:
     # A MusicXML chord has exactly one unmarked onset followed by notes with
     # chord=true at the SAME beat, staff and voice. Keep the entire pitch range
