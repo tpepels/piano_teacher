@@ -41,8 +41,8 @@ static func terminal(measures: Array, timeline,
         mark = {"style":"regular","repeat":""}
     var x: float = timeline.screen_x(float(last.get("end_beat",0.0)),
         clock,playhead_x,play_from_beat)-gap*.45
-    return {"x":x, "top":_staff_center("right")-2.0*gap,
-        "bottom":_staff_center("left")+2.0*gap,
+    return {"x":x, "top":top,
+        "bottom":bottom,
         "style":str(mark.get("style","regular")),
         "repeat":str(mark.get("repeat",""))}
 
