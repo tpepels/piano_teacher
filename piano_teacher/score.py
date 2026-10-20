@@ -8,7 +8,8 @@ import math
 from pathlib import Path
 from dataclasses import dataclass
 
-from .score_geometry import layout_from_pages, parse_svg_geometry
+from .rendering.legacy.geometry import layout_from_pages
+from .notation.assets.svg_geometry import parse_svg_geometry
 from .notation.lesson import LessonScore
 from .reading_spacing import space_for_reading, space_for_continuous_reading
 
