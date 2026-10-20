@@ -1,4 +1,4 @@
-"""Real raster rules must remain continuously white on the active hand."""
+"""Legacy raster continuity rails stay white outside preserved glyph columns."""
 import os
 from pathlib import Path
 import shutil
@@ -22,7 +22,12 @@ def test_active_staves_are_white_through_countin_and_scrolling(tmp_path):
     result = subprocess.run(
         [godot, "--path", str(ROOT / "godot"), "--audio-driver", "Dummy",
          "--script", str(ROOT / "tests/godot/staff_visibility.gd"), "--", str(tmp_path)],
+        # The GDScript fixture explicitly selects the raster fallback; the
+        # suite's native launch setting must not silently change that coverage.
+        env={**os.environ, "PIANO_TEACHER_NATIVE_NOTATION": "1"},
         capture_output=True, text=True, timeout=45,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+    assert "SCRIPT ERROR" not in result.stdout + result.stderr, result.stdout + result.stderr
+    assert "STAFF_VISIBILITY_PIXEL_CHECKS:180" in result.stdout
     assert "STAFF_VISIBILITY_FAILURES:0" in result.stdout

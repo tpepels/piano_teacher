@@ -41,6 +41,7 @@ var navigation_rail: VBoxContainer
 var screen_navigation: Dictionary = {}
 var library_heading: BoxContainer
 var library_grids: Array[GridContainer] = []
+var settings_grid: GridContainer
 var lesson_stage_labels: Dictionary = {}
 var lesson_piece_title: Label
 var drawer_intro: Tween
@@ -96,6 +97,7 @@ var open_mode: OptionButton
 var open_title: Label
 var practice_stage_bar: HFlowContainer
 var practice_stage_labels: Dictionary = {}
+var presented_hand_stages: Array = []
 var practice_retry_button: Button
 var practice_music_button: Button
 var folder_edit: LineEdit
@@ -186,6 +188,7 @@ var visual_transport_clock = VisualTransportClock.new()
 var timeline_preview_enabled := false
 var native_notation_enabled := false
 var timeline_preview: Control
+var native_score_feedback: Control
 var timeline_model_request: HTTPRequest
 var timeline_model_pending := false
 var timeline_model_revision := -1
@@ -204,6 +207,8 @@ var phase0_last_cursor_tick := -1
 var phase0_last_lead_tick := -999
 var lesson_request: HTTPRequest
 var lesson_pending := false
+var lesson_columns: BoxContainer
+var lesson_options: PanelContainer
 var lesson_rows: VBoxContainer
 var lesson_summary: Label
 var lesson_description: Label
@@ -725,14 +730,15 @@ func _game_button(button: Button, central := false) -> void:
     var kind: String = str(button.get("action_kind"))
     var role: String = "play" if central else kind
     var accent: Color = Design.role_accent(role)
-    normal.bg_color = Design.role_fill(role)
+    normal.bg_color = Design.MINT if central else Design.role_fill(role)
     button.set_meta("ui_button_role",
         "transport_primary" if central else "transport_retry" if kind == "retry" else "transport_listen")
     normal.set_corner_radius_all(7)
     normal.set_content_margin_all(12)
     normal.set_border_width_all(1)
     normal.border_color = Color(accent, .7 if central else .22)
-    normal.shadow_size = 0
+    normal.shadow_color = Color(Design.MINT, .10) if central else Color.TRANSPARENT
+    normal.shadow_size = 10 if central else 0
     button.add_theme_stylebox_override("normal", normal)
     var hover := normal.duplicate() as StyleBoxFlat
     hover.bg_color = normal.bg_color.lightened(.16)
@@ -896,28 +902,29 @@ func _mount_overlays() -> void:
     # practice scene remains mounted so returning preserves the exact take.
     overlay_root = Control.new()
     overlay_root.name = "MusicAndSettingsDrawer"
+    overlay_root.z_index = 10
     overlay_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(overlay_root)
     overlay_backdrop = ColorRect.new()
-    overlay_backdrop.color = Design.FOREST
+    overlay_backdrop.color = Design.NIGHT
     overlay_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     overlay_root.add_child(overlay_backdrop)
     overlay_drawer = PanelContainer.new()
     overlay_drawer.name = "ContextDrawer"
     overlay_drawer.clip_contents = true
-    overlay_drawer.add_theme_stylebox_override("panel", Design.surface(Design.PANEL_RECESSED, 10))
+    overlay_drawer.add_theme_stylebox_override("panel", Design.bordered_surface(Design.PANEL_RECESSED, 14, .25))
     overlay_root.add_child(overlay_drawer)
     var shell := HBoxContainer.new()
     shell.add_theme_constant_override("separation", 0)
     overlay_drawer.add_child(shell)
     var rail_panel := PanelContainer.new()
-    rail_panel.add_theme_stylebox_override("panel", Design.surface(Design.FOREST, 8))
+    rail_panel.add_theme_stylebox_override("panel", Design.surface(Color(Design.NIGHT, .52), 10))
     shell.add_child(rail_panel)
-    navigation_rail = _stack(10)
+    navigation_rail = _stack(8)
     navigation_rail.custom_minimum_size.x = 150
     rail_panel.add_child(navigation_rail)
     var brand := _title("Piano\nTeacher", 23)
-    brand.custom_minimum_size.y = 94
+    brand.custom_minimum_size.y = 100
     navigation_rail.add_child(brand)
     for item in [["library", "Library"], ["lesson", "Lesson path"], ["settings", "Settings"]]:
         var destination: String = item[0]
@@ -929,7 +936,7 @@ func _mount_overlays() -> void:
     var spacer := Control.new()
     spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
     navigation_rail.add_child(spacer)
-    navigation_rail.add_child(_button("Practice", func(): _navigate("practice"), false, "navigation"))
+    navigation_rail.add_child(_button("Practice", func(): _navigate("practice"), true, "primary"))
     var rail_exit := _button("Exit", _exit_app, false, "danger")
     rail_exit.tooltip_text = "Close Piano Teacher (Ctrl+Q)"
     navigation_rail.add_child(rail_exit)
@@ -957,11 +964,21 @@ func _resize_overlay_drawer() -> void:
     navigation_rail.custom_minimum_size.x = 160.0 if size.x >= 1100.0 else 125.0
     if library_heading != null:
         library_heading.vertical = size.x < 1100.0
-        library_path_label.visible = size.y >= 700.0
+        library_message.visible = size.x >= 1100.0 or not library_error.is_empty() \
+            or not str(library_info.get("error", "")).is_empty() \
+            or library_rows.get_child_count() == 0
+        library_path_label.visible = false
         library_search.tooltip_text = library_path_label.text + "\nCtrl+F or / to search"
+    if lesson_columns != null:
+        lesson_columns.vertical = size.x < 1280.0
+        # Compact learners can reach hand/mode choices without scrolling
+        # past an entire course; the wide view keeps progression first.
+        lesson_columns.move_child(lesson_options, 0 if lesson_columns.vertical else 1)
+    if settings_grid != null:
+        settings_grid.columns = 2 if size.x >= 1100.0 else 1
     # Folder controls always stack; only their actions wrap horizontally.
     for grid in library_grids:
-        grid.columns = 2 if size.x >= 1100.0 else 1
+        grid.columns = 1
 
 
 func _go_back() -> void:
@@ -1028,13 +1045,17 @@ func _build_interface() -> void:
     # Library: automatic indexing without manually opening each MIDI file.
     var library_page := _screen("Library")
     screens["library"] = library_page
-    var library_layout := _stack(12)
+    var library_layout := _stack(10)
     library_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     library_page.add_child(library_layout)
     library_heading = BoxContainer.new()
     library_heading.add_theme_constant_override("separation", 20)
     library_layout.add_child(library_heading)
-    library_heading.add_child(_title("Your music", 28))
+    var library_intro := _stack(4)
+    library_intro.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    library_heading.add_child(library_intro)
+    library_intro.add_child(_label("PIANO TEACHER", 14, ACCENT, true))
+    library_intro.add_child(_title("Your music", 32))
     library_path_label = _label("Looking for scores…", 13, MUTED)
     library_path_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     library_path_label.clip_text = true
@@ -1064,6 +1085,7 @@ func _build_interface() -> void:
     var library_utilities := HBoxContainer.new()
     library_utilities.add_theme_constant_override("separation", 10)
     library_layout.add_child(library_utilities)
+    library_utilities.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     library_utilities.add_child(_button("Refresh", _request_library, false, "utility"))
     library_health_button = _button("Check files", func(): _start_library_health(), false, "settings")
     # Dynamic text also says "Checking…" or "Recheck files". Reserve room
@@ -1076,7 +1098,8 @@ func _build_interface() -> void:
     # bottom of a full-screen library where they are easy to miss.
     library_message = _label("", 13, MUTED)
     library_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    library_layout.add_child(library_message)
+    library_message.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    library_utilities.add_child(library_message)
     library_health_label = _label("", 16, MUTED)
     library_health_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     library_health_label.visible = false
@@ -1086,7 +1109,7 @@ func _build_interface() -> void:
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     library_layout.add_child(scroll)
-    library_rows = _stack(14)
+    library_rows = _stack(18)
     library_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.add_child(library_rows)
     _build_settings_screen()
@@ -1097,85 +1120,74 @@ func _build_interface() -> void:
     var practice_layout := _stack(12)
     practice_layout_box = practice_layout
     practice_page.add_child(practice_layout)
-    # Navigation and lesson metadata are separate rows. A long title or
-    # small viewport must never squeeze BPM into a one-letter column.
+    # One compact lesson header. Music occupies the expanding stage below;
+    # navigation never gets a separate full-width toolbar of its own.
+    practice_header = HBoxContainer.new()
+    practice_header.add_theme_constant_override("separation", 20)
+    practice_layout.add_child(practice_header)
+    var heading := _stack(5)
+    heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    practice_header.add_child(heading)
+    title_label = _title("Choose your music", 26)
+    title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    title_label.clip_text = true
+    title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    heading.add_child(title_label)
+    passage_label = _label("A little practice. A little progress.", 14, MUTED)
+    passage_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+    passage_label.clip_text = true
+    passage_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    heading.add_child(passage_label)
+    var context := _stack(6)
+    context.custom_minimum_size.x = 435
+    context.size_flags_horizontal = Control.SIZE_SHRINK_END
+    practice_header.add_child(context)
     practice_navigation = HFlowContainer.new()
-    practice_navigation.add_theme_constant_override("h_separation", 10)
-    practice_navigation.add_theme_constant_override("v_separation", 8)
-    practice_navigation.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    practice_layout.add_child(practice_navigation)
+    practice_navigation.alignment = FlowContainer.ALIGNMENT_END
+    practice_navigation.add_theme_constant_override("h_separation", 6)
+    context.add_child(practice_navigation)
     game_brand = _title("Piano Teacher", 18)
-    game_brand.custom_minimum_size = Vector2(168, 32)
-    game_brand.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    game_brand.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    game_brand.visible = false
     practice_navigation.add_child(game_brand)
     practice_music_button = _button("Music", func(): _navigate("library"), false, "library")
     practice_music_button.tooltip_text = "Choose a piece · Escape"
     practice_navigation.add_child(practice_music_button)
-    mode_choice = OptionButton.new()
-    mode_choice.disabled = true
-    mode_choice.fit_to_longest_item = false
-    mode_choice.add_item("Learn notes")
-    mode_choice.add_item("Practice rhythm")
-    mode_choice.add_item("Perform passage")
-    mode_choice.add_item("Perform whole piece")
-    mode_choice.custom_minimum_size = Vector2(210 * ui_scale, 48 * ui_scale)
-    mode_choice.add_theme_font_size_override("font_size", _ui_font(15))
-    mode_choice.item_selected.connect(func(index: int):
-        _send_action({"action": "learn" if index == 0 else "practice" if index == 1 else "perform", "scope": "whole" if index == 3 else "current"}))
-    # Advanced mode and hint choices live in Lesson Path, not the stage.
-    # Listen is a main transport choice, not a navigation option.
-    hints_toggle = CheckButton.new()
-    hints_toggle.text = "Hints"
-    hints_toggle.add_theme_font_size_override("font_size", _ui_font(15))
-    hints_toggle.tooltip_text = "Keep key hints visible while learning notes"
-    hints_toggle.toggled.connect(func(enabled: bool): _send_action({"action": "hints", "enabled": enabled}))
-    # Teaching hints are controlled in Lesson Path.
     var path_button := _button("Path", func(): _navigate("lesson"), false, "navigation")
     path_button.tooltip_text = "Learning stages and advanced practice"
     practice_navigation.add_child(path_button)
     practice_settings_button = _button("Settings", func(): _navigate("settings"), false, "settings")
     practice_navigation.add_child(practice_settings_button)
-    var practice_exit := _button("Exit", _exit_app, false, "danger")
-    practice_exit.tooltip_text = "Close Piano Teacher (Ctrl+Q)"
-    practice_navigation.add_child(practice_exit)
-
-    practice_header = HBoxContainer.new()
-    practice_header.add_theme_constant_override("separation", 20)
-    practice_layout.add_child(practice_header)
-    var heading := _stack(2)
-    heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    practice_header.add_child(heading)
-    title_label = _title("Piano Teacher", 27)
-    title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-    title_label.clip_text = true
-    title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-    heading.add_child(title_label)
-    passage_label = _label("", 14, MUTED)
-    passage_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-    passage_label.clip_text = true
-    heading.add_child(passage_label)
-    var tempo := _stack(2)
-    tempo.custom_minimum_size = Vector2(190, 0)
-    tempo.size_flags_horizontal = Control.SIZE_SHRINK_END
-    practice_header.add_child(tempo)
-    speed_label = _label("-- BPM", 20, INK)
+    var details := HBoxContainer.new()
+    details.add_theme_constant_override("separation", 14)
+    details.alignment = BoxContainer.ALIGNMENT_END
+    context.add_child(details)
+    speed_label = _label("-- BPM", 14, INK)
     speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-    speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    tempo.add_child(speed_label)
-    hand_label = _label("", 13, MUTED)
+    speed_label.size_flags_horizontal = Control.SIZE_SHRINK_END
+    details.add_child(speed_label)
+    hand_label = _label("", 14, ACCENT)
     hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-    hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-    tempo.add_child(hand_label)
+    hand_label.size_flags_horizontal = Control.SIZE_SHRINK_END
+    details.add_child(hand_label)
     game_input_indicator = GameInputIndicator.new()
-    tempo.add_child(game_input_indicator)
+    details.add_child(game_input_indicator)
+    mode_choice = OptionButton.new()
+    mode_choice.disabled = true
+    mode_choice.fit_to_longest_item = false
+    for activity_name in ["Learn notes", "Practice rhythm", "Perform passage", "Perform whole piece"]:
+        mode_choice.add_item(activity_name)
+    mode_choice.item_selected.connect(func(index: int):
+        _send_action({"action": "learn" if index == 0 else "practice" if index == 1 else "perform", "scope": "whole" if index == 3 else "current"}))
+    hints_toggle = CheckButton.new()
+    hints_toggle.text = "Hints"
+    hints_toggle.toggled.connect(func(enabled: bool): _send_action({"action": "hints", "enabled": enabled}))
     lesson_info_label = _label("", 14, MUTED)
     lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_stage_bar = HFlowContainer.new()
     practice_stage_bar.add_theme_constant_override("h_separation", 10)
     practice_stage_bar.add_theme_constant_override("v_separation", 6)
     practice_stage_bar.visible = false
-    practice_layout.add_child(practice_stage_bar)
     for hand in ["right", "left", "both"]:
         var stage_label := _label("", 12, MUTED)
         stage_label.custom_minimum_size = Vector2(140, 26)
@@ -1207,6 +1219,9 @@ func _build_interface() -> void:
     score_region.add_child(score_area)
     score_frame = score_area
     score_frame.clip_contents = true
+    practice_stage_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+    practice_stage_bar.position = Vector2(18, 12)
+    practice_stage_bar.size = Vector2(500, 28)
     score_frame.resized.connect(_layout_moving_score)
     game_stage = GameStage.new()
     game_stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1247,6 +1262,13 @@ func _build_interface() -> void:
         timeline_preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         timeline_preview.visible = false
         score_frame.add_child(timeline_preview)
+        if native_notation_enabled:
+            # Keep the measure rail visible above the opaque native canvas.
+            game_stage.surface_visible = false
+            game_stage.z_index = 1
+            native_score_feedback = preload("res://native_score_feedback.gd").new()
+            native_score_feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+            score_frame.add_child(native_score_feedback)
         if not timeline_preview.set_density_from_env():
             push_warning("Native score density: " + str(timeline_preview.notice))
     # Score status must live inside the score panel: feedback_label is replaced
@@ -1273,12 +1295,15 @@ func _build_interface() -> void:
     game_phase_cue.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
     game_phase_cue.offset_left = 178.0
     game_phase_cue.offset_right = -18.0
-    game_phase_cue.offset_top = 18.0
-    game_phase_cue.offset_bottom = 76.0
+    game_phase_cue.offset_top = 46.0
+    game_phase_cue.offset_bottom = 88.0
     score_frame.add_child(game_phase_cue)
     # Short earned-judgment coaching, placed below the notes on the right.
     # No preview note may create one of these success/correction labels.
     game_impact_callout = GameImpactCallout.new()
+    # Native reactions stay on exact noteheads. The legacy coaching card
+    # can cover low staff ink when the contextual keyboard reduces height.
+    game_impact_callout.visible = not native_notation_enabled
     game_impact_callout.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
     game_impact_callout.offset_left = -264.0
     game_impact_callout.offset_right = -14.0
@@ -1287,10 +1312,11 @@ func _build_interface() -> void:
     score_frame.add_child(game_impact_callout)
     game_count_in = GameCountIn.new()
     game_count_in.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-    game_count_in.position = Vector2(22, 12)
+    game_count_in.position = Vector2(22, 46)
     game_count_in.size = Vector2(142, 38)
     game_count_in.visible = false
     score_frame.add_child(game_count_in)
+    score_frame.add_child(practice_stage_bar)
     # A visible retry notice must not consume vertical space or force the
     # bottom transport buttons off smaller laptop screens.
     practice_playback_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
@@ -1351,7 +1377,7 @@ func _build_interface() -> void:
     # Navigation is deliberately outside the three transport buttons.
     # The progress row directly below the score gives Skip a stable,
     # immediately visible location without changing the control cluster.
-    practice_skip_button = _button("Skip → Next lesson", _skip_current_lesson,
+    practice_skip_button = _button("Next lesson", _skip_current_lesson,
         false, "navigation")
     practice_skip_button.tooltip_text = "Go to the next lesson without earning mastery"
     practice_skip_button.disabled = true
@@ -1362,7 +1388,7 @@ func _build_interface() -> void:
     feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     information.add_child(_caption_slot(feedback_label, 1))
-    information.add_child(_caption_slot(lesson_info_label, 2))
+    information.add_child(_caption_slot(lesson_info_label, 1))
     performance_review = VBoxContainer.new()
     performance_review.visible = false
     information.add_child(performance_review)
@@ -1378,7 +1404,7 @@ func _build_interface() -> void:
     practice_controls = controls
     controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     controls.alignment = FlowContainer.ALIGNMENT_CENTER
-    controls.add_theme_constant_override("h_separation", 16)
+    controls.add_theme_constant_override("h_separation", 12)
     controls.add_theme_constant_override("v_separation", 8)
     practice_layout.add_child(controls)
     practice_retry_button = _transport_button("Retry", _restart_practice, "retry")
@@ -1414,6 +1440,7 @@ func _build_interface() -> void:
     # it. Use one predictable in-stage modal with ordinary Control layout.
     open_picker = Control.new()
     open_picker.name = "StartingMeasureOverlay"
+    open_picker.z_index = 20
     open_picker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     open_picker.mouse_filter = Control.MOUSE_FILTER_STOP
     open_picker.visible = false
@@ -1516,6 +1543,7 @@ func _build_interface() -> void:
     device_menu.id_pressed.connect(_choose_device)
     add_child(device_menu)
     pause_sheet = preload("res://pause_sheet.gd").new()
+    pause_sheet.z_index = 30
     add_child(pause_sheet)
     pause_sheet.chosen.connect(func(command: Dictionary):
         if command.get("action") == "exit":
@@ -1584,8 +1612,8 @@ func _update_responsive_layout() -> void:
         _update_hand_stages(last_state)
     if practice_header == null:
         return
-    practice_header.add_theme_constant_override("separation", 16)
-    game_brand.visible = width >= 1280.0
+    practice_header.add_theme_constant_override("separation", 10 if width < 950.0 else 20)
+    game_brand.visible = false
     practice_navigation.add_theme_constant_override("h_separation", 8 if width >= 1000.0 else 5)
     practice_navigation.add_theme_constant_override("v_separation", 4)
     if mode_choice != null:
@@ -1601,8 +1629,8 @@ func _update_responsive_layout() -> void:
             var measured: float = button.get_theme_font("font").get_string_size(
                 button.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
             # Icon + label still need one accessible, unclipped click target.
-            button.custom_minimum_size = Vector2(maxf(90.0, measured + 60.0),
-                34.0 if compact else 36.0)
+            button.custom_minimum_size = Vector2(maxf(78.0, measured + 40.0),
+                32.0)
             button.clip_text = false
     if practice_controls != null:
         practice_layout_box.add_theme_constant_override("separation", 6 if compact else 9)
@@ -1611,7 +1639,7 @@ func _update_responsive_layout() -> void:
         # pushed the transport below the screen when those became visible.
         score_frame.custom_minimum_size.y = 135.0
         for side in ["left", "right", "top", "bottom"]:
-            score_margin_box.add_theme_constant_override("margin_" + side, 5 if compact else 10)
+            score_margin_box.add_theme_constant_override("margin_" + side, 1 if compact else 6)
         for child in practice_controls.get_children():
             if child is Button:
                 var button := child as Button
@@ -1627,17 +1655,21 @@ func _update_responsive_layout() -> void:
                 var per_button: float = maxf(155.0, (available - 48.0) / 3.0)
                 button.custom_minimum_size = Vector2(
                     minf(ideal * (1.13 if width >= 1600.0 else 1.0), per_button * (1.18 if central else .91)),
-                    44.0 if compact else 48.0)
+                    54.0)
                 button.clip_text = false
-        title_label.add_theme_font_size_override("font_size", _ui_font(25))
+        title_label.add_theme_font_size_override("font_size", _ui_font(24))
         passage_label.add_theme_font_size_override("font_size", _ui_font(15))
-        speed_label.add_theme_font_size_override("font_size", _ui_font(18))
-        hand_label.add_theme_font_size_override("font_size", _ui_font(15))
+        speed_label.add_theme_font_size_override("font_size", _ui_font(14))
+        hand_label.add_theme_font_size_override("font_size", _ui_font(14))
         progress_label.add_theme_font_size_override("font_size", _ui_font(15))
         game_streak.custom_minimum_size = Vector2(130 if width < 950 else 155, 30)
-        game_input_indicator.custom_minimum_size.y = 25
+        game_input_indicator.custom_minimum_size.y = 22
         feedback_label.add_theme_font_size_override("font_size", _ui_font(14))
         lesson_info_label.add_theme_font_size_override("font_size", _ui_font(14))
+        var instruction_lines := 2 if width < 1000.0 else 1
+        lesson_info_label.set_meta("caption_lines", instruction_lines)
+        lesson_info_label.max_lines_visible = instruction_lines
+        lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART if instruction_lines == 2 else TextServer.AUTOWRAP_OFF
         _resize_caption_slots()
         practice_playback_banner.add_theme_font_size_override("font_size", _ui_font(17))
         practice_note_feedback_label.add_theme_font_size_override("font_size", _ui_font(18))
@@ -1654,12 +1686,20 @@ func _build_settings_screen() -> void:
     var content := _stack(20)
     content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.add_child(content)
-    content.add_child(_title("Settings"))
+    content.add_child(_label("PIANO & PREFERENCES", 14, ACCENT, true))
+    content.add_child(_title("Your piano & practice", 32))
 
+    settings_grid = GridContainer.new()
+    settings_grid.columns = 2 if size.x >= 1100.0 else 1
+    settings_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    settings_grid.add_theme_constant_override("h_separation", 18)
+    settings_grid.add_theme_constant_override("v_separation", 18)
+    content.add_child(settings_grid)
     var midi_panel := _card()
-    content.add_child(midi_panel)
+    midi_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    settings_grid.add_child(midi_panel)
     var midi := _section("MIDI input")
-    _card_body(midi_panel, 8).add_child(midi)
+    _card_body(midi_panel, 18).add_child(midi)
     var device_row := HFlowContainer.new()
     device_row.add_theme_constant_override("h_separation", 10)
     midi.add_child(device_row)
@@ -1670,7 +1710,10 @@ func _build_settings_screen() -> void:
     midi.add_child(input_activity_label)
 
     var music := _section("Music library")
-    content.add_child(music)
+    var music_panel := _card()
+    music_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    settings_grid.add_child(music_panel)
+    _card_body(music_panel, 18).add_child(music)
     # A fixed vertical arrangement prevents Browse/Save from crowding the
     # folder path on narrower logical viewports and fullscreen displays.
     folder_controls = VBoxContainer.new()
@@ -1689,16 +1732,20 @@ func _build_settings_screen() -> void:
     folder_actions.add_child(_button("Choose folder…", _browse_folder, false, "navigation"))
     folder_actions.add_child(_button("Save folder", _save_folder, false, "secondary"))
     music.add_child(_label("MIDI and MusicXML files in this folder and its subfolders.", 13, MUTED))
-    content.add_child(_divider())
 
     var practice := _section("Practice tempo")
-    content.add_child(practice)
-    var tempo_row := HFlowContainer.new()
-    tempo_row.add_theme_constant_override("h_separation", 12)
+    var practice_panel := _card()
+    practice_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    settings_grid.add_child(practice_panel)
+    _card_body(practice_panel, 18).add_child(practice)
+    var tempo_row := HBoxContainer.new()
+    tempo_row.add_theme_constant_override("separation", 12)
     practice.add_child(tempo_row)
     var tempo_caption := _label("Target tempo", 14, MUTED)
+    tempo_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
+    tempo_caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     tempo_caption.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-    tempo_caption.custom_minimum_size.x = 140
+    tempo_caption.custom_minimum_size.x = 0
     tempo_row.add_child(tempo_caption)
     tempo_setting = SpinBox.new()
     tempo_setting.min_value = 12
@@ -1715,17 +1762,20 @@ func _build_settings_screen() -> void:
     metronome_toggle.tooltip_text = "Count-in is always audible, even when metronome is off"
     metronome_toggle.toggled.connect(func(enabled: bool): _send_post("/settings", {"metronome": enabled}))
     practice.add_child(metronome_toggle)
-    content.add_child(_divider())
 
     var audio := _section("Listen audio")
-    content.add_child(audio)
-    var audio_row := HFlowContainer.new()
-    audio_row.add_theme_constant_override("h_separation", 16)
-    audio_row.add_theme_constant_override("v_separation", 8)
+    var audio_panel := _card()
+    audio_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    settings_grid.add_child(audio_panel)
+    _card_body(audio_panel, 18).add_child(audio)
+    var audio_row := HBoxContainer.new()
+    audio_row.add_theme_constant_override("separation", 12)
     audio.add_child(audio_row)
     var volume_caption := _label("Piano volume", 14, MUTED)
+    volume_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
+    volume_caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     volume_caption.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-    volume_caption.custom_minimum_size.x = 140
+    volume_caption.custom_minimum_size.x = 0
     audio_row.add_child(volume_caption)
     listen_volume_slider = HSlider.new()
     listen_volume_slider.min_value = -12.0
@@ -1738,13 +1788,12 @@ func _build_settings_screen() -> void:
     listen_volume_label = _label("+6 dB", 14, INK)
     audio_row.add_child(listen_volume_label)
     listen_volume_slider.value_changed.connect(_on_listen_volume_changed)
-    content.add_child(_divider())
     fullscreen_toggle = CheckButton.new()
     fullscreen_toggle.text = "Fullscreen application  ·  F11"
     fullscreen_toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     fullscreen_toggle.button_pressed = true
     fullscreen_toggle.toggled.connect(_on_fullscreen_toggle)
-    content.add_child(fullscreen_toggle)
+    audio.add_child(fullscreen_toggle)
     var exit_button := _button("Exit application", _exit_app, false, "utility")
     exit_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     content.add_child(exit_button)
@@ -1762,11 +1811,12 @@ func _build_lesson_screen() -> void:
     outer_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     outer_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     page.add_child(outer_scroll)
-    var content := _stack(20)
+    var content := _stack(14)
     content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     outer_scroll.add_child(content)
-    content.add_child(_title("Your lesson path"))
-    lesson_piece_title = _title("Choose music to begin", 23)
+    content.add_child(_label("YOUR NEXT STEPS", 14, ACCENT, true))
+    content.add_child(_title("Lesson path", 32))
+    lesson_piece_title = _title("Choose music to begin", 25)
     content.add_child(lesson_piece_title)
     var stages := HBoxContainer.new()
     stages.add_theme_constant_override("separation", 0)
@@ -1778,10 +1828,26 @@ func _build_lesson_screen() -> void:
         label.visible = false
         stages.add_child(label)
         lesson_stage_labels[stage] = label
-    lesson_summary = _label("Open a piece to see its lessons.", 18, INK)
+    lesson_summary = _label("Open a piece to see its lessons.", 15, MUTED)
     content.add_child(lesson_summary)
-    lesson_description = _label("", 16, MUTED)
+    lesson_description = _label("", 14, MUTED)
     content.add_child(lesson_description)
+    lesson_columns = BoxContainer.new()
+    lesson_columns.vertical = size.x < 1280.0
+    lesson_columns.add_theme_constant_override("separation", 24)
+    content.add_child(lesson_columns)
+    lesson_rows = _stack(10)
+    lesson_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    lesson_rows.size_flags_stretch_ratio = 1.15
+    lesson_columns.add_child(lesson_rows)
+    var options_panel := _card()
+    lesson_options = options_panel
+    options_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    options_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+    lesson_columns.add_child(options_panel)
+    var path_options := _stack(14)
+    _card_body(options_panel, 18).add_child(path_options)
+    path_options.add_child(_label("Practice choices", 17, INK, true))
     # FlowContainer inside an expanding, vertically scrolling VBox can
     # calculate a near-zero width for its Label during a resize. The label
     # then wraps to one letter per line and forces the entire activity
@@ -1791,7 +1857,7 @@ func _build_lesson_screen() -> void:
     activity.name = "LessonActivityRow"
     activity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     activity.add_theme_constant_override("separation", 14)
-    content.add_child(activity)
+    path_options.add_child(activity)
     var activity_caption := _label("Activity", 17, MUTED)
     activity_caption.name = "LessonActivityCaption"
     activity_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -1799,7 +1865,7 @@ func _build_lesson_screen() -> void:
     activity_caption.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     activity_caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     activity.add_child(activity_caption)
-    mode_choice.custom_minimum_size = Vector2(220, 44)
+    mode_choice.custom_minimum_size = Vector2(210, 44)
     mode_choice.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     mode_choice.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     activity.add_child(mode_choice)
@@ -1808,7 +1874,7 @@ func _build_lesson_screen() -> void:
     activity.add_child(hints_toggle)
     var passage_nav := HFlowContainer.new()
     passage_nav.add_theme_constant_override("h_separation", 10)
-    content.add_child(passage_nav)
+    path_options.add_child(passage_nav)
     passage_nav.add_child(_button("Previous passage", func():
         _send_action({"action": "previous"})
         _navigate("practice"), false, "navigation"))
@@ -1818,7 +1884,7 @@ func _build_lesson_screen() -> void:
     passage_nav.add_child(stop_button)
     var hand_row := HFlowContainer.new()
     hand_row.add_theme_constant_override("separation", 12)
-    content.add_child(hand_row)
+    path_options.add_child(hand_row)
     for hand in ["right", "left", "both"]:
         var button := _button(hand.capitalize() + (" hands" if hand == "both" else " hand"),
             func():
@@ -1830,7 +1896,7 @@ func _build_lesson_screen() -> void:
         hand_row.add_child(button)
     var course_choices := HFlowContainer.new()
     course_choices.add_theme_constant_override("separation", 8)
-    content.add_child(course_choices)
+    path_options.add_child(course_choices)
     skip_stage_button = _button("Skip this step · no mastery", func(): _send_action({"action": "skip_stage", "reason": "Learner chose to skip this step"}), false, "review")
     skip_stage_button.custom_minimum_size.x = 220
     course_choices.add_child(skip_stage_button)
@@ -1838,13 +1904,9 @@ func _build_lesson_screen() -> void:
     course_choices.add_child(placement_button)
     # The outer scroll owns the whole path. A nested expanding ScrollContainer
     # has zero minimum height inside it, hiding every lesson stage.
-    lesson_rows = _stack(10)
-    lesson_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    content.add_child(lesson_rows)
     var advanced := _button("Advanced practice controls", _open_advanced_pause, false, "settings")
     advanced.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-    content.add_child(advanced)
-    content.move_child(advanced, lesson_rows.get_index())
+    path_options.add_child(advanced)
 
 func _request_lesson() -> void:
     if lesson_request == null or lesson_pending or not bool(last_state.get("loaded", false)):
@@ -1886,7 +1948,7 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
         label.add_theme_stylebox_override("normal", face)
     lesson_summary.text = "%d of %d stages completed · three clean performances at your target tempo" % [
         int(parsed.get("completed_steps", 0)), int(parsed.get("total_steps", 0))]
-    lesson_description.text = "Learn each passage, bring the hands together, connect adjoining passages, then play the complete piece."
+    lesson_description.text = "Learn the notes. Bring the hands together. Make it music."
     for child in lesson_rows.get_children():
         lesson_rows.remove_child(child)
         child.queue_free()
@@ -1916,7 +1978,14 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
         group["labels"].append(detail)
     for key in groups:
         var group: Dictionary = groups[key]
+        var chapter := PanelContainer.new()
+        var chapter_style := Design.surface(Color(Design.PINE,.32) if bool(group["current"]) else Color.TRANSPARENT, 6)
+        chapter_style.set_content_margin_all(14)
+        chapter_style.set_border_width(SIDE_LEFT, 3 if bool(group["current"]) else 1)
+        chapter_style.border_color = ACCENT if bool(group["current"]) else Color(Design.SAGE,.3)
+        chapter.add_theme_stylebox_override("panel", chapter_style)
         var row := _stack(4)
+        chapter.add_child(row)
         var status := "Completed" if bool(group["complete"]) else "Current passage" if bool(group["current"]) else str(group["kind"]).capitalize()
         row.add_child(_label("%s · Measures %d–%d" % [status, int(group["first"]), int(group["last"])], 18,
             ACCENT if bool(group["current"]) else INK, bool(group["current"])))
@@ -1924,7 +1993,7 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
         row.tooltip_text = detail
         if bool(group["current"]):
             row.add_child(_label(detail, 14, MUTED))
-        lesson_rows.add_child(row)
+        lesson_rows.add_child(chapter)
 
 func _refresh_score_status() -> void:
     if score_status_panel == null or score_view == null:
@@ -2099,7 +2168,7 @@ func _populate_library() -> void:
             if not section_added:
                 library_rows.add_child(_label(str(section.title).capitalize(), 15, MUTED, true))
                 grid = GridContainer.new()
-                grid.columns = 2 if size.x >= 1100.0 else 1
+                grid.columns = 1
                 grid.add_theme_constant_override("h_separation", 12)
                 grid.add_theme_constant_override("v_separation", 12)
                 grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -2149,6 +2218,8 @@ func _populate_library() -> void:
         library_message.text = "%d personal files  ·  %d built-in warm-ups  ·  %d shown" % [pieces.size(), warmups.size(), visible]
     if library_error.is_empty():
         library_message.add_theme_color_override("font_color", MUTED)
+    library_message.visible = size.x >= 1100.0 or not library_error.is_empty() \
+        or not issue.is_empty() or visible == 0
 
 func _resize_open_picker() -> void:
     if open_panel == null:
@@ -2216,7 +2287,10 @@ func _update_hand_stages(state: Dictionary) -> void:
     var stages: Array = state.get("hand_stages", [])
     # Transport changes must not add/remove a layout row: doing so changes
     # the score's zoom and moves its notes at Start and Pause.
-    practice_stage_bar.visible = not stages.is_empty() and size.y >= 750.0
+    practice_stage_bar.visible = not stages.is_empty()
+    if stages == presented_hand_stages:
+        return
+    presented_hand_stages = stages.duplicate(true)
     var by_hand: Dictionary = {}
     for stage in stages:
         by_hand[str(stage.get("hand", ""))] = stage
@@ -2230,14 +2304,16 @@ func _update_hand_stages(state: Dictionary) -> void:
         var complete: bool = bool(stage.get("complete", false))
         var locked: bool = bool(stage.get("locked", false))
         var word: String = "Both hands" if hand == "both" else str(hand).capitalize() + " hand"
-        label.text = ("✓ " if complete else "▶ " if active else "○ ") + word + (
-            " · done" if complete else "" if active else " · locked" if locked else " · next")
+        label.autowrap_mode = TextServer.AUTOWRAP_OFF
+        label.text = ("✓ " if complete else "● " if active else "○ ") + word + (" · locked" if locked else "")
+        label.tooltip_text = "Completed" if complete else "Active hand" if active else "Locked" if locked else "Next hand"
+        label.custom_minimum_size = Vector2(122, 24)
         label.add_theme_color_override("font_color",
             Color("#79DAAD") if complete else INK if active else MUTED)
         # Read as a three-step instrument runway, not three separate
         # web-form cards. The active hand has a bright lower edge; completed
         # hands retain a quieter mint trace, and locked ones recede.
-        var stage_color := Design.PINE if active else Color.TRANSPARENT
+        var stage_color := Color(Design.PINE, .45) if active else Color.TRANSPARENT
         var style := Design.surface(stage_color, 5)
         style.set_content_margin_all(5)
         style.set_border_width_all(0)
@@ -2692,6 +2768,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         game_streak.pulse_unlock()
         call_deferred("_pulse_hand_stage")
     last_state = parsed
+    if native_score_feedback != null:
+        native_score_feedback.present(parsed)
     _update_visual_frame_rate(parsed)
     _clear_assessed_effects_in_ungraded_mode(parsed)
     game_phase_cue.present(parsed)
@@ -2759,7 +2837,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if int(parsed.get("bpm", 0)) != int(parsed.get("target_bpm", parsed.get("bpm", 0))):
         speed_label.text += " · target %d" % int(parsed.get("target_bpm", 0))
     var recovery_notice: Variant = parsed.get("recovery_notice")
-    speed_label.add_theme_font_size_override("font_size", _ui_font(16 if size.x < 900 else 18))
+    speed_label.add_theme_font_size_override("font_size", _ui_font(14))
     speed_label.tooltip_text = "Current practice tempo and your selected target"
     hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
     hand_label.tooltip_text = "Current hand of the backend lesson"
@@ -3549,6 +3627,9 @@ func _on_timeline_model(_result: int, code: int,
         if timeline_preview.load_score(candidate):
             timeline_model_revision = revision
             timeline_preview.visible = true
+            if native_score_feedback != null:
+                native_score_feedback.bind_score(timeline_preview, revision)
+                native_score_feedback.present(last_state)
             print("PHASE_B_MODEL_READY: ", revision,
                 " NOTES: ", timeline_preview.timeline.notes.size(),
                 " DENSITY: ", timeline_preview.timeline.pixels_per_beat)

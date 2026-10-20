@@ -1,0 +1,22 @@
+{
+  "renderer": "X11",
+  "failures": [],
+  "full_clean_tempos": [
+    194,
+    213,
+    234,
+    240,
+    240,
+    240
+  ],
+  "earned_variant": {
+    "mode": "learn",
+    "level": "original",
+    "source_notes": 32,
+    "mastered": 1
+  },
+  "finished_modes": true,
+  "revisited_trouble": true,
+  "elapsed_seconds": 119.14691980699718,
+  "frames": 36
+}

@@ -168,7 +168,7 @@ def test_practice_navigation_no_vertical_letter_wrapping():
     assert "controls := HFlowContainer.new()" in script
     assert "button.clip_text = false" in script
     assert "practice_header = HBoxContainer.new()" in script
-    assert "tempo.custom_minimum_size = Vector2(190, 0)" in script
+    assert "context.custom_minimum_size.x = 435" in script
     assert "speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF" in script
     assert "hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF" in script
     assert "progress_label.autowrap_mode = TextServer.AUTOWRAP_OFF" in script

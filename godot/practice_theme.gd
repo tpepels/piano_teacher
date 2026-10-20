@@ -3,18 +3,20 @@ extends RefCounted
 # Piano Teacher visual system. Screens describe *meaning*, not their own
 # independent colors or borders. Keep static drawing cheap on HiDPI displays.
 const FOREST := Color("#1E3A34")
+const NIGHT := Color("#091C19")
+const CANOPY := Color("#173D34")
 const PINE := Color("#2E4D46")
 const CHARCOAL := Color("#2D3532")
 const SAGE := Color("#5B7068")
 const SLATE := Color("#8B9A92")
 const STONE := Color("#C4CDC6")
 const SECONDARY_INK := Color("#AEBAB2")
-const STAGE := Color("#1B2925")
+const STAGE := Color("#10251F")
 const SCORE_INK := Color("#EAF4ED")
 const SCORE_MUTED := Color("#A0B9AD")
 const STAFF_INK := Color.WHITE
 const STAFF_MUTED := Color("#81918B")
-const SCORE_ACCENT := Color("#76B79E")
+const SCORE_ACCENT := Color("#75DDB4")
 const SCORE_PROGRESS := SCORE_ACCENT
 const PANEL := CHARCOAL
 const PANEL_RAISED := PINE
@@ -77,7 +79,12 @@ static func modal_surface() -> StyleBoxFlat:
     return box
 
 static func stage_surface() -> StyleBoxFlat:
-    return bordered_surface(STAGE, RADIUS_CARD, .22)
+    var box := bordered_surface(STAGE, 14, .20)
+    box.set_content_margin_all(0)
+    box.shadow_color = Color(NIGHT, .28)
+    box.shadow_size = 16
+    box.shadow_offset = Vector2(0, 8)
+    return box
 
 static func role_accent(role: String) -> Color:
     match role:

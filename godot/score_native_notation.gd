@@ -11,7 +11,7 @@ const Design := preload("res://practice_theme.gd")
 const NOTE_INK := Design.SCORE_INK
 const DIM_INK := Design.STAFF_MUTED
 const PREVIEW_LIGHT := Design.MINT
-const MAX_STAFF_GAP := 17.0
+const MAX_STAFF_GAP := 22.0
 
 var glyphs = VerovioGlyphs.new()
 var native_ready := false
@@ -19,6 +19,7 @@ var failure_reason := ""
 var visible_symbols := 0
 var drawn_noteheads: Dictionary = {}
 var selected_density := 0.0
+var staff_gap_limit := MAX_STAFF_GAP
 var configured_density: float = Timeline.DEFAULT_PIXELS_PER_BEAT
 var beam_groups: Array = []
 var beamed_note_ids: Dictionary = {}
@@ -47,6 +48,7 @@ var frame_visible_beam_groups := 0
 func clear_score() -> void:
     super.clear_score()
     timeline.set_density(configured_density)
+    staff_gap_limit = MAX_STAFF_GAP
     native_ready = false
     failure_reason = ""
     visible_symbols = 0
@@ -218,6 +220,13 @@ func load_score(candidate: Dictionary) -> bool:
     # Use the maximum supported staff gap so a later resize cannot create
     # collisions or force a mid-performance change of horizontal scale.
     var ink_density: float = _required_ink_density(density)
+    staff_gap_limit = MAX_STAFF_GAP
+    if ink_density > timeline.MAX_SCORE_PIXELS_PER_BEAT:
+        # Very short source segments (Peace Piece's expressive tied attacks)
+        # need the original compact ink size. Pick this once per passage;
+        # never alter note timing or the global scale during playback.
+        staff_gap_limit = 17.0
+        ink_density = _required_ink_density(density, staff_gap_limit)
     if not timeline.set_score_density(ink_density):
         failure_reason = timeline.last_error
         notice = failure_reason
@@ -322,7 +331,7 @@ func _engraved_beam_groups(model: Dictionary) -> Dictionary:
 
 
 func _staff_center(hand: String) -> float:
-    return size.y * (.34 if hand == "right" else .69)
+    return size.y * (.36 if hand == "right" else .69)
 
 func _gap() -> float:
     if cached_staff_gap > 0.0 and absf(cached_gap_height - size.y) < .001:
@@ -331,7 +340,7 @@ func _gap() -> float:
     # The former raster crop clipped high notes because it only knew staff
     # rails, not the extreme noteheads. Fit the full semantic pitch range
     # once per frame/viewport, uniformly for both hands.
-    var gap: float = clampf(size.y * .034, 8.5, MAX_STAFF_GAP)
+    var gap: float = clampf(size.y * .042, 8.5, staff_gap_limit)
     if timeline.model.is_empty():
         return gap
     for event in ordered_events:
@@ -827,8 +836,7 @@ func _event_ink_rect(event: Dictionary, gap: float,
     return Rect2(left,top,right-left,bottom-top)
 
 
-func _required_ink_density(preferred: float) -> float:
-    var gap: float = MAX_STAFF_GAP
+func _required_ink_density(preferred: float, gap: float = MAX_STAFF_GAP) -> float:
     var heads: Dictionary = _engraved_head_offsets(gap)
     var accidentals: Dictionary = Geometry.accidental_offsets(
         ordered_events,gap,heads,glyphs.bounds)
@@ -1149,6 +1157,13 @@ func _draw() -> void:
     var current: float = timeline.musical_beat(camera_clock,play_from_beat)
     var left: float = current-playhead_x/timeline.pixels_per_beat
     var right: float = left+size.x/timeline.pixels_per_beat
+    # A quiet pool of light marks the strike without hiding any engraved ink.
+    var top: float = _staff_center("right")-gap*3.8
+    var bottom: float = _staff_center("left")+gap*3.7
+    var breath: float = .5+.5*cos(clock_beat*TAU) if running and not paused else 0.0
+    for radius in [20.0, 10.0, 4.0]:
+        draw_rect(Rect2(playhead_x-radius, top, radius*2.0, bottom-top),
+            Color(PREVIEW_LIGHT, .012+breath*.004))
     # Always draw ten native rules; no copied or stitched raster systems.
     for staff in ["right","left"]:
         var center: float = _staff_center(staff)
@@ -1175,7 +1190,8 @@ func _draw() -> void:
             int(timeline.measures[0].get("number", -2))
         # Increase the pre-roll header-to-first-attack breathing room.
         # Move only the ornament group, never any note beat coordinate.
-        var header_shift: float = 76.0 if opening else 0.0
+        var header_scale: float = gap / 17.0
+        var header_shift: float = 76.0*header_scale if opening else 0.0
         var crowded_meter: bool = _meter_is_crowded(
             measure, previous_measure, gap)
         var barline: Dictionary = _barline_geometry(measure,
@@ -1191,12 +1207,12 @@ func _draw() -> void:
             var previous_keys: Dictionary = previous_measure.get("keys",{})
             var key_changed: bool = signature != int(previous_keys.get(staff,999))
             if opening or _clef_for(staff,previous_measure) != clef:
-                _paint_clef(x-86.0-header_shift-float(absi(signature))*14.0,
+                _paint_clef(x-(86.0+float(absi(signature))*14.0)*header_scale-header_shift,
                     center,str(clef.get("sign","G")),gap,_ink(staff))
             if key_changed and signature != 0:
                 var steps: Array = Geometry.signature_steps(clef, signature)
                 for i in range(steps.size()):
-                    var glyph_x: float = x-39.0-header_shift-float(steps.size()-i)*14.0
+                    var glyph_x: float = x-(39.0+float(steps.size()-i)*14.0)*header_scale-header_shift
                     var glyph_y: float = Geometry.note_y(int(steps[i]),
                         center+2.0*gap,gap)
                     _paint_accidental(glyph_x,glyph_y,
@@ -1275,6 +1291,17 @@ func _draw() -> void:
     draw_line(Vector2(playhead_x,_staff_center("right")-gap*3.8),
         Vector2(playhead_x,_staff_center("left")+gap*3.7),
         PREVIEW_LIGHT,2.0,true)
+    # A genuine font brace joins the two continuous staves at the screen's
+    # edge. Stretch only this authentic brace, never the timed music stream.
+    var staff_top: float = _staff_center("right")-2.0*gap
+    var staff_bottom: float = _staff_center("left")+2.0*gap
+    draw_rect(Rect2(0, staff_top-gap, 29, staff_bottom-staff_top+gap*2), Design.STAGE)
+    if glyphs.textures.has("brace"):
+        draw_texture_rect(glyphs.textures["brace"],
+            Rect2(6, staff_top-2, 18, staff_bottom-staff_top+4), false,
+            NOTE_INK)
+    draw_line(Vector2(29,staff_top),Vector2(29,staff_bottom),
+        Color(NOTE_INK,.50),1.2,true)
     # Never put engineering telemetry on top of the actual lesson.
     if OS.get_environment("PIANO_TEACHER_NATIVE_DIAGNOSTICS") == "1":
         var phase: String = "COUNT-IN" if camera_clock < 0.0 and running else \

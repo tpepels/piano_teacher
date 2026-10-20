@@ -1,0 +1,662 @@
+{
+  "status": "passed",
+  "native_environment": "1",
+  "measure": 9,
+  "render": true,
+  "runs": [
+    {
+      "viewport": [
+        1920,
+        1080
+      ],
+      "failures": [],
+      "captures": [
+        {
+          "name": "practice_ready",
+          "phase": "ready",
+          "score_height_ratio": 0.671250011302807,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.0,
+            "covered_by_drawer": false,
+            "drawn_noteheads": 3,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 3,
+            "model_notes": 16,
+            "model_revision": 3,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "ready",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 3,
+            "revision": 3,
+            "state_revision": 3,
+            "visible": true,
+            "visible_noteheads": 3,
+            "visible_symbols": 5,
+            "window_geometry": {
+              "content_scale": 1.35000002384186,
+              "expected_scale": 1.35,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.35000002384186,
+                1.35000002384186
+              ],
+              "physical_viewport": {
+                "height": 1080.0,
+                "width": 1920.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              1920,
+              1080
+            ]
+          },
+          "image_size": [
+            1920,
+            1080
+          ]
+        },
+        {
+          "name": "practice_playing",
+          "phase": "playing",
+          "score_height_ratio": 0.671250011302807,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.379828727607087,
+            "covered_by_drawer": false,
+            "drawn_noteheads": 4,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 3,
+            "model_notes": 16,
+            "model_revision": 3,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "playing",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 3,
+            "revision": 3,
+            "state_revision": 3,
+            "visible": true,
+            "visible_noteheads": 3,
+            "visible_symbols": 6,
+            "window_geometry": {
+              "content_scale": 1.35000002384186,
+              "expected_scale": 1.35,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.35000002384186,
+                1.35000002384186
+              ],
+              "physical_viewport": {
+                "height": 1080.0,
+                "width": 1920.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              1920,
+              1080
+            ]
+          },
+          "image_size": [
+            1920,
+            1080
+          ]
+        },
+        {
+          "name": "practice_paused",
+          "phase": "paused",
+          "score_height_ratio": 0.671250011302807,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.512352314402233,
+            "covered_by_drawer": false,
+            "drawn_noteheads": 4,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 3,
+            "model_notes": 16,
+            "model_revision": 3,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "paused",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 3,
+            "revision": 3,
+            "state_revision": 3,
+            "visible": true,
+            "visible_noteheads": 4,
+            "visible_symbols": 6,
+            "window_geometry": {
+              "content_scale": 1.35000002384186,
+              "expected_scale": 1.35,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.35000002384186,
+                1.35000002384186
+              ],
+              "physical_viewport": {
+                "height": 1080.0,
+                "width": 1920.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              1920,
+              1080
+            ]
+          },
+          "image_size": [
+            1920,
+            1080
+          ]
+        },
+        {
+          "name": "library",
+          "phase": "paused",
+          "score_height_ratio": 0.671250011302807,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.512352314402233,
+            "covered_by_drawer": true,
+            "drawn_noteheads": 4,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 3,
+            "model_notes": 16,
+            "model_revision": 3,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "paused",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 3,
+            "revision": 3,
+            "state_revision": 3,
+            "visible": true,
+            "visible_noteheads": 4,
+            "visible_symbols": 6,
+            "window_geometry": {
+              "content_scale": 1.35000002384186,
+              "expected_scale": 1.35,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.35000002384186,
+                1.35000002384186
+              ],
+              "physical_viewport": {
+                "height": 1080.0,
+                "width": 1920.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              1920,
+              1080
+            ]
+          },
+          "image_size": [
+            1920,
+            1080
+          ]
+        },
+        {
+          "name": "lesson_path",
+          "phase": "paused",
+          "score_height_ratio": 0.671250011302807,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.512352314402233,
+            "covered_by_drawer": true,
+            "drawn_noteheads": 4,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 3,
+            "model_notes": 16,
+            "model_revision": 3,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "paused",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 3,
+            "revision": 3,
+            "state_revision": 3,
+            "visible": true,
+            "visible_noteheads": 4,
+            "visible_symbols": 6,
+            "window_geometry": {
+              "content_scale": 1.35000002384186,
+              "expected_scale": 1.35,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.35000002384186,
+                1.35000002384186
+              ],
+              "physical_viewport": {
+                "height": 1080.0,
+                "width": 1920.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              1920,
+              1080
+            ]
+          },
+          "image_size": [
+            1920,
+            1080
+          ]
+        },
+        {
+          "name": "settings",
+          "phase": "paused",
+          "score_height_ratio": 0.671250011302807,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.512352314402233,
+            "covered_by_drawer": true,
+            "drawn_noteheads": 4,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 3,
+            "model_notes": 16,
+            "model_revision": 3,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "paused",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 3,
+            "revision": 3,
+            "state_revision": 3,
+            "visible": true,
+            "visible_noteheads": 4,
+            "visible_symbols": 6,
+            "window_geometry": {
+              "content_scale": 1.35000002384186,
+              "expected_scale": 1.35,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.35000002384186,
+                1.35000002384186
+              ],
+              "physical_viewport": {
+                "height": 1080.0,
+                "width": 1920.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              1920,
+              1080
+            ]
+          },
+          "image_size": [
+            1920,
+            1080
+          ]
+        }
+      ]
+    },
+    {
+      "viewport": [
+        800,
+        600
+      ],
+      "failures": [],
+      "captures": [
+        {
+          "name": "practice_ready",
+          "phase": "ready",
+          "score_height_ratio": 0.558333333333333,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.0,
+            "covered_by_drawer": false,
+            "drawn_noteheads": 2,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 4,
+            "model_notes": 16,
+            "model_revision": 4,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "ready",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 4,
+            "revision": 4,
+            "state_revision": 4,
+            "visible": true,
+            "visible_noteheads": 1,
+            "visible_symbols": 4,
+            "window_geometry": {
+              "content_scale": 1.0,
+              "expected_scale": 1.0,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.0,
+                1.0
+              ],
+              "physical_viewport": {
+                "height": 600.0,
+                "width": 800.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              800,
+              600
+            ]
+          },
+          "image_size": [
+            800,
+            600
+          ]
+        },
+        {
+          "name": "practice_playing",
+          "phase": "playing",
+          "score_height_ratio": 0.558333333333333,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.383830943409095,
+            "covered_by_drawer": false,
+            "drawn_noteheads": 2,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 4,
+            "model_notes": 16,
+            "model_revision": 4,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "playing",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 4,
+            "revision": 4,
+            "state_revision": 4,
+            "visible": true,
+            "visible_noteheads": 2,
+            "visible_symbols": 4,
+            "window_geometry": {
+              "content_scale": 1.0,
+              "expected_scale": 1.0,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.0,
+                1.0
+              ],
+              "physical_viewport": {
+                "height": 600.0,
+                "width": 800.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              800,
+              600
+            ]
+          },
+          "image_size": [
+            800,
+            600
+          ]
+        },
+        {
+          "name": "practice_paused",
+          "phase": "paused",
+          "score_height_ratio": 0.558333333333333,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.435515288201471,
+            "covered_by_drawer": false,
+            "drawn_noteheads": 2,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 4,
+            "model_notes": 16,
+            "model_revision": 4,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "paused",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 4,
+            "revision": 4,
+            "state_revision": 4,
+            "visible": true,
+            "visible_noteheads": 2,
+            "visible_symbols": 4,
+            "window_geometry": {
+              "content_scale": 1.0,
+              "expected_scale": 1.0,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.0,
+                1.0
+              ],
+              "physical_viewport": {
+                "height": 600.0,
+                "width": 800.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              800,
+              600
+            ]
+          },
+          "image_size": [
+            800,
+            600
+          ]
+        },
+        {
+          "name": "library",
+          "phase": "paused",
+          "score_height_ratio": 0.558333333333333,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.435515288201471,
+            "covered_by_drawer": true,
+            "drawn_noteheads": 2,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 4,
+            "model_notes": 16,
+            "model_revision": 4,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "paused",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 4,
+            "revision": 4,
+            "state_revision": 4,
+            "visible": true,
+            "visible_noteheads": 2,
+            "visible_symbols": 4,
+            "window_geometry": {
+              "content_scale": 1.0,
+              "expected_scale": 1.0,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.0,
+                1.0
+              ],
+              "physical_viewport": {
+                "height": 600.0,
+                "width": 800.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              800,
+              600
+            ]
+          },
+          "image_size": [
+            800,
+            600
+          ]
+        },
+        {
+          "name": "lesson_path",
+          "phase": "paused",
+          "score_height_ratio": 0.558333333333333,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.435515288201471,
+            "covered_by_drawer": true,
+            "drawn_noteheads": 2,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 4,
+            "model_notes": 16,
+            "model_revision": 4,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "paused",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 4,
+            "revision": 4,
+            "state_revision": 4,
+            "visible": true,
+            "visible_noteheads": 2,
+            "visible_symbols": 4,
+            "window_geometry": {
+              "content_scale": 1.0,
+              "expected_scale": 1.0,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.0,
+                1.0
+              ],
+              "physical_viewport": {
+                "height": 600.0,
+                "width": 800.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              800,
+              600
+            ]
+          },
+          "image_size": [
+            800,
+            600
+          ]
+        },
+        {
+          "name": "settings",
+          "phase": "paused",
+          "score_height_ratio": 0.558333333333333,
+          "native": {
+            "action_pending": false,
+            "checked": true,
+            "clock_beat": 0.435515288201471,
+            "covered_by_drawer": true,
+            "drawn_noteheads": 2,
+            "enabled": true,
+            "failure_reason": "",
+            "first_bar": 9.0,
+            "layout_revision": 4,
+            "model_notes": 16,
+            "model_revision": 4,
+            "native_ready": true,
+            "pending_action": "",
+            "phase": "paused",
+            "pixels_per_beat": 156.0,
+            "play_from_beat": 0.0,
+            "rendered_revision": 4,
+            "revision": 4,
+            "state_revision": 4,
+            "visible": true,
+            "visible_noteheads": 2,
+            "visible_symbols": 4,
+            "window_geometry": {
+              "content_scale": 1.0,
+              "expected_scale": 1.0,
+              "native_mode_checked": true,
+              "physical_scale": [
+                1.0,
+                1.0
+              ],
+              "physical_viewport": {
+                "height": 600.0,
+                "width": 800.0,
+                "x": 0.0,
+                "y": 0.0
+              }
+            },
+            "window_mode": 0,
+            "window_size": [
+              800,
+              600
+            ]
+          },
+          "image_size": [
+            800,
+            600
+          ]
+        }
+      ]
+    }
+  ]
+}

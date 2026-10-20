@@ -69,12 +69,12 @@ def test_older_paginated_rendering_is_still_available():
     assert not regular.layout["continuous_score"]
 
 
-def test_practice_screen_has_fullscreen_exit_and_direct_source_score():
+def test_practice_keeps_keyboard_exit_and_direct_source_score():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1] / "godot" / "main.gd"
     source = root.read_text(encoding="utf-8")
-    assert 'var practice_exit := _button("Exit", _exit_app' in source
+    assert 'event.ctrl_pressed' in source and 'KEY_Q' in source
     assert 'var rail_exit := _button("Exit", _exit_app' in source
     assert 'source_layout.get("continuous_score", false)' in source
     assert "native_ink_preview or continuous_engraving" in source
@@ -130,7 +130,7 @@ def test_skip_next_lesson_control_stays_visible_in_practice():
     from pathlib import Path
     source = (Path(__file__).resolve().parents[1] / "godot" / "main.gd"
               ).read_text(encoding="utf-8")
-    assert 'practice_skip_button = _button("Skip → Next lesson"' in source
+    assert 'practice_skip_button = _button("Next lesson"' in source
     assert 'practice_skip_button.visible = bool(parsed.get("loaded", false))' in source
     assert '"reason": "Learner skipped to the next lesson from the practice screen"' in source
     assert 'practice_skip_button.disabled = not bool(parsed.get("skip_available", false))' in source

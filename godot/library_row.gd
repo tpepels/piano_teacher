@@ -7,10 +7,12 @@ const Palette := preload("res://practice_theme.gd")
 var title_label: Label
 var detail_label: Label
 var text_scale := 1.0
+var mark_face: StyleBoxFlat
 
 func _init() -> void:
     super._init()
-    custom_minimum_size = Vector2(0, 115)
+    custom_minimum_size = Vector2(0, 96)
+    mark_face = Palette.bordered_surface(Color(Palette.PINE,.45), 8, .25)
     size_flags_horizontal = Control.SIZE_EXPAND_FILL
     clip_text = false
 
@@ -63,12 +65,22 @@ func set_text_scale(scale_factor: float) -> void:
     detail_label.add_theme_font_size_override("font_size", roundi(14.0 * text_scale))
     # Keep the compact tile height until actual enlarged font metrics need
     # more room; viewport scaling alone must not create oversized cards.
-    custom_minimum_size.y = maxf(115.0,
+    custom_minimum_size.y = maxf(96.0,
         title_label.get_line_height() + detail_label.get_line_height() + 44.0)
     queue_redraw()
 
 func set_entry(title: String, detail: String, status: String = "") -> void:
     configure("library")
+    # A music shelf: one ruled row, large title, and a single hover surface.
+    # Do not fill the library with identical pretend album-art cards.
+    var normal := Palette.surface(Color.TRANSPARENT, 5)
+    normal.set_border_width(SIDE_BOTTOM, 1)
+    normal.border_color = Color(Palette.SAGE,.30)
+    add_theme_stylebox_override("normal", normal)
+    var hover := normal.duplicate() as StyleBoxFlat
+    hover.bg_color = Color(Palette.PINE,.48)
+    hover.border_color = Color(Palette.MINT,.55)
+    add_theme_stylebox_override("hover", hover)
     # The real entry title remains machine-readable for keyboard navigation
     # and diagnostics while custom visible labels use clearer hierarchy.
     set_meta("library_title", title)
@@ -105,8 +117,7 @@ func _draw() -> void:
         return
     var top: float = (size.y - 54.0) * .5
     var frame := Rect2(18.0, top, 50.0, 54.0)
-    var face := Palette.bordered_surface(Palette.PANEL_RECESSED, 7, .25)
-    draw_style_box(face, frame)
+    draw_style_box(mark_face, frame)
     var keyboard := Rect2(27.0, top + 13.0, 32.0, 29.0)
     draw_rect(keyboard, Color(Palette.STONE, .78))
     var key_width: float = keyboard.size.x / 4.0
@@ -116,3 +127,7 @@ func _draw() -> void:
             Vector2(x, keyboard.end.y), Color(Palette.PANEL_RECESSED, .8), 1.0)
         if key != 3:
             draw_rect(Rect2(x - 2.5, keyboard.position.y, 5.0, 17.0), Palette.PANEL_RECESSED)
+    var arrow := Vector2(size.x-26,size.y*.5)
+    draw_line(arrow-Vector2(6,0),arrow+Vector2(5,0),Palette.MINT,1.6,true)
+    draw_line(arrow+Vector2(1,-4),arrow+Vector2(5,0),Palette.MINT,1.6,true)
+    draw_line(arrow+Vector2(1,4),arrow+Vector2(5,0),Palette.MINT,1.6,true)

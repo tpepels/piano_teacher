@@ -180,8 +180,8 @@ func test_short_challenge_loop() -> void:
     check(not app.feedback_label.visible,
         "Count-in hides repeated status text")
     check(app.practice_stage_bar.visible == ribbon_visible_at_ready
-        and app.practice_stage_bar.visible == (app.size.y >= 750.0),
-        "Hand progression keeps the same allocation through count-in, except on compact windows")
+        and app.practice_stage_bar.visible,
+        "Hand progression remains an overlay through count-in at all supported sizes")
     run["phase"] = "playing"
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
     check(app.game_phase_cue.message.is_empty() and not app.feedback_label.visible,
@@ -240,7 +240,7 @@ func test_short_challenge_loop() -> void:
     pending["hand_stages"][1]["active"] = true
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
     var labels: Dictionary = app.practice_stage_labels
-    check("done" in labels["left"].text.to_lower() and labels["right"].text.begins_with("▶"),
+    check(labels["left"].text.begins_with("✓") and labels["right"].text.begins_with("●"),
         "Backend hand completion must unlock the next real stage")
     check("RIGHT HAND UNLOCKED" in app.progress_label.text,
         "Completed first hand should visibly unlock the next without opening a menu")
@@ -446,8 +446,8 @@ func test_caption_bounds() -> void:
                     "Bounded captions must receive pointer hover for their full tooltip")
                 check(viewport.encloses(caption.get_parent().get_global_rect()),
                     "Caption slot must fit the viewport at %s" % dimensions)
-            check(app.feedback_label.max_lines_visible == 1 and app.lesson_info_label.max_lines_visible == 2,
-                "Reserve one feedback line and two instruction lines")
+            check(app.feedback_label.max_lines_visible == 1 and app.lesson_info_label.max_lines_visible == (2 if app.size.x < 1000.0 else 1),
+                "Reserve a feedback line and enough instruction space for this viewport")
 
 func test_notation_phase_cues() -> void:
     var texture: Texture2D = app.score_view.texture
@@ -579,6 +579,8 @@ func test_pause_choices() -> void:
     check(not app.pause_sheet.visible, "Ordinary Pause never opens a menu over the score")
     app._open_advanced_pause()
     check(app.pause_sheet.visible, "Explicit advanced controls open a focused sheet")
+    check(app.pause_sheet.z_index > app.game_stage.z_index,
+        "Advanced pause sheet covers the native progress rail")
     app.commands.clear()
     app.pause_sheet.resume_button.pressed.emit()
     expect_command("resume", "Sheet Resume continues the same attempt")

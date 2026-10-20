@@ -47,6 +47,7 @@ var result_age := 0.0
 var result_tone := Design.SCORE_ACCENT
 const AMBIENT_REDRAW_SECONDS := 1.0 / 20.0
 var ambient_redraw_elapsed := 0.0
+var surface_visible := true
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -221,7 +222,8 @@ func _draw() -> void:
         return
     # Only ScoreOverlay paints the precise vertical timing line. The stage
     # must not draw a second line behind it, especially during count-in.
-    draw_rect(Rect2(0, 0, w, h), Design.STAGE)
+    if surface_visible:
+        draw_rect(Rect2(0, 0, w, h), Design.STAGE)
     if transport_active or phase == "paused":
         var x: float = w * .42
         var top: float = maxf(8.0, staff_band_top * h - 18.0)

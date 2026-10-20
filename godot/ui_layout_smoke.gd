@@ -193,8 +193,8 @@ func _run() -> void:
     _check(not (scene.get("practice_progress") as ProgressBar).visible,
         "A duplicate progress bar below the score must not compete with the stage rail")
     var brand: Label = scene.get("game_brand")
-    _check(brand.visible == (viewport.x >= 1280.0),
-        "Decorative game brand must collapse before it crowds piano controls")
+    _check(not brand.visible,
+        "Practice keeps the piece title above music without a competing brand row")
     var count_in: Control = scene.get("game_count_in")
     count_in.present(-2.5, 3, true, false)
     _check(count_in.visible and int(count_in.get("count")) == 3,
@@ -367,15 +367,9 @@ func _run() -> void:
         var first: Rect2 = tiles[0].get_global_rect()
         var second: Rect2 = tiles[1].get_global_rect()
         var third: Rect2 = tiles[2].get_global_rect()
-        if viewport.x >= 1100.0:
-            _check(absf(first.position.y - second.position.y) < 2.0
-                and second.position.x >= first.end.x - 1.0
-                and third.position.y >= first.end.y - 1.0,
-                "Desktop library must display two nonoverlapping tiles per row")
-        else:
-            _check(second.position.y >= first.end.y - 1.0
-                and third.position.y >= second.end.y - 1.0,
-                "Compact library must stack complete readable music tiles")
+        _check(second.position.y >= first.end.y - 1.0
+            and third.position.y >= second.end.y - 1.0,
+            "Music shelf uses full readable rows without overlapping titles")
         for tile in tiles:
             _check(tile.get_global_rect().position.x >= library_root.get_global_rect().position.x - 1.0
                 and tile.get_global_rect().end.x <= library_root.get_global_rect().end.x + 1.0,
@@ -451,10 +445,10 @@ func _run() -> void:
         {"hand": "both", "active": false, "complete": false, "locked": true}]})
     var ribbon: Control = scene.get("practice_stage_bar")
     var stage_labels: Dictionary = scene.get("practice_stage_labels")
-    _check(ribbon.visible == (viewport.y >= 750.0),
-        "Hand progression must stay visible on tall windows and collapse on compact windows")
-    _check("done" in stage_labels["left"].text.to_lower()
-        and stage_labels["right"].text.begins_with("▶")
+    _check(ribbon.visible,
+        "Hand progression stays in the stage without consuming a layout row")
+    _check(stage_labels["left"].text.begins_with("✓")
+        and stage_labels["right"].text.begins_with("●")
         and "locked" in stage_labels["both"].text.to_lower(),
         "The hand progression does not show completed, current and locked stages")
     scene.call("_update_hand_stages", {"hand_stages": []})
