@@ -45,6 +45,7 @@ var cached_head_offsets: Dictionary = {}
 var cached_accidental_offsets: Dictionary = {}
 # Per-rest displacements measured in staff spaces; fixed for one score revision.
 var rest_lane_offsets: Dictionary = {}
+var unavoidable_rest_overlaps := 0
 var cached_offsets_gap := -1.0
 var frame_scanned_events := 0
 var frame_visible_beam_groups := 0
@@ -72,6 +73,7 @@ func clear_score() -> void:
     cached_head_offsets.clear()
     cached_accidental_offsets.clear()
     rest_lane_offsets.clear()
+    unavoidable_rest_overlaps = 0
     cached_offsets_gap = -1.0
 
 
@@ -167,10 +169,7 @@ func load_score(candidate: Dictionary) -> bool:
         return false
     # Place rests before choosing global spacing. Their real vertical ink
     # footprints must participate in the SAME collision calculation as notes.
-    if not _layout_rest_lanes(MAX_STAFF_GAP, density):
-        failure_reason = "Cannot engrave overlapping voices and rests without collisions"
-        notice = failure_reason
-        return false
+    _layout_rest_lanes(MAX_STAFF_GAP, density)
     # Fit the widest actual note/accidental footprint once for the score.
     # Use the maximum supported staff gap so a later resize cannot create
     # collisions or force a mid-performance change of horizontal scale.
@@ -182,6 +181,12 @@ func load_score(candidate: Dictionary) -> bool:
         # never alter note timing or the global scale during playback.
         staff_gap_limit = 17.0
         ink_density = _required_ink_density(density, staff_gap_limit)
+    # Rest collisions are reevaluated at the FINAL density: otherwise
+    # close expressive attacks can look coincident at the provisional scale.
+    # This placement is calculated once per lesson, never during scrolling.
+    _layout_rest_lanes(staff_gap_limit,ink_density)
+    ink_density = maxf(ink_density,
+        _required_ink_density(ink_density,staff_gap_limit))
     if not timeline.set_score_density(ink_density):
         failure_reason = timeline.last_error
         notice = failure_reason
@@ -520,8 +525,9 @@ func _rest_y(event: Dictionary, gap: float) -> float:
         float(rest_lane_offsets.get(str(event.get("id","")),0.0)))
 
 
-func _layout_rest_lanes(gap: float, density: float) -> bool:
+func _layout_rest_lanes(gap: float, density: float) -> void:
     rest_lane_offsets.clear()
+    unavoidable_rest_overlaps = 0
     var heads: Dictionary = _engraved_head_offsets(gap)
     var accidentals: Dictionary = Geometry.accidental_offsets(
         ordered_events,gap,heads,glyphs.bounds)
@@ -561,25 +567,37 @@ func _layout_rest_lanes(gap: float, density: float) -> bool:
             candidates.append(preferred+direction*float(step)*.5)
             candidates.append(preferred-direction*float(step)*.5)
         var placed := false
+        var best_score := INF
+        var best_shift: float = preferred
+        var best_rect := Rect2()
         for shift in candidates:
             rest_lane_offsets[str(event.get("id",""))] = shift
             var rect: Rect2 = _event_ink_rect(event,gap,heads,accidentals)
             rect.position.x += float(event.get("beat",0.0))*density
-            var collision := false
+            var overlap_area := 0.0
             for blocker in obstacles[lane_key]:
+                if str(blocker["voice"]) == voice:
+                    continue
                 var other: Rect2 = blocker["ink"]
-                if str(blocker["voice"]) != voice and \
-                        rect.intersects(other.grow(gap*.06)):
-                    collision = true
-                    break
-            if not collision:
+                if rect.intersects(other.grow(gap*.06)):
+                    var overlap: Rect2 = rect.intersection(other.grow(gap*.06))
+                    overlap_area += overlap.size.x*overlap.size.y
+            var score: float = overlap_area+absf(float(shift)-preferred)*gap*gap*.02
+            if score < best_score:
+                best_score = score
+                best_shift = float(shift)
+                best_rect = rect
+            if overlap_area <= .00001:
                 obstacles[lane_key].append({"voice":voice,"ink":rect})
                 placed = true
                 break
         if not placed:
-            rest_lane_offsets.clear()
-            return false
-    return true
+            # A score can contain an unavoidable collision among polyphonic
+            # voices with huge ledger notes. Do not discard every source
+            # attack or fall back solely for a rest: use minimum overlap.
+            rest_lane_offsets[str(event.get("id",""))] = best_shift
+            obstacles[lane_key].append({"voice":voice,"ink":best_rect})
+            unavoidable_rest_overlaps += 1
 
 
 func _paint_clef(x: float, center: float, clef: Dictionary,
