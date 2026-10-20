@@ -52,7 +52,7 @@ def _classes(node):
 def extract_slurs(svgs, musicxml: str, model: dict) -> dict:
     import cairosvg
     from .score_geometry import parse_svg_geometry
-    from .verovio_tuplet_fragments import isolate
+    from .notation.assets.svg import isolate
 
     notes={str(e["id"]):e for e in model.get("notation_events",[])
            if e.get("kind")=="note" and e.get("id")}
