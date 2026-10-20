@@ -8,15 +8,15 @@ const MUTED := Design.SECONDARY_INK
 const PAPER := Design.FOREST
 const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
-const ScoreStrip := preload("res://score_strip.gd")
-const ScoreExactSpacing := preload("res://score_exact_spacing.gd")
-const ScoreQuality := preload("res://score_quality.gd")
+const ScoreStrip := preload("res://notation/legacy/strip.gd")
+const ScoreExactSpacing := preload("res://notation/legacy/exact_spacing.gd")
+const ScoreQuality := preload("res://notation/legacy/quality.gd")
 const StaffContinuity := preload("res://staff_continuity.gd")
 const ScoreOverlay := preload("res://score_overlay.gd")
 const NoteReactions := preload("res://note_reactions.gd")
 const ChallengeFlow := preload("res://challenge_flow.gd")
 const LivingScore := preload("res://living_score.gd")
-const ScoreMotionCurve := preload("res://score_motion_curve.gd")
+const ScoreMotionCurve := preload("res://notation/legacy/motion_curve.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
 const GameBackdrop := preload("res://game_backdrop.gd")
 const GameStage := preload("res://game_stage.gd")
@@ -29,8 +29,8 @@ const ActionButton := preload("res://action_button.gd")
 const LibraryRow := preload("res://library_row.gd")
 const GameInputIndicator := preload("res://game_input_indicator.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
-const TimelinePreview := preload("res://score_timeline_preview.gd")
-const NativeNotation := preload("res://score_native_notation.gd")
+const TimelinePreview := preload("res://notation/diagnostics/timeline_preview.gd")
+const NativeNotation := preload("res://notation/native/view.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 
 var current_screen := "practice"
@@ -265,14 +265,16 @@ func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
-    # Phase 1: keep working on the native Godot score engine. The original
-    # PIANO_TEACHER_NATIVE_NOTATION launch option selects it again; unsupported
-    # imported notation falls back safely to the established score display.
+    # Native semantic notation is the canonical score engine. The original
+    # Verovio page display remains a compatibility path for scores whose
+    # source engraving cannot yet be represented faithfully. An explicit
+    # switch allows comparing the historical pipeline during migration.
+    # PIANO_TEACHER_NATIVE_NOTATION=1 stays valid but is no longer required.
     native_notation_enabled = (
-        OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" or
-        OS.get_cmdline_user_args().has("--native-notation") or
-        OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION_EXPERIMENTAL") == "1" or
-        OS.get_cmdline_user_args().has("--native-notation-experimental"))
+        OS.get_environment("PIANO_TEACHER_RENDERER").to_lower() != "legacy" and
+        OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION").to_lower() not in
+            ["0", "false", "off"] and
+        not OS.get_cmdline_user_args().has("--legacy-notation"))
     timeline_preview_enabled = (native_notation_enabled or
         OS.get_environment("PIANO_TEACHER_TIMELINE_PREVIEW") == "1" or
         OS.get_cmdline_user_args().has("--timeline-preview"))
@@ -3101,7 +3103,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         _send_action({"action": "score_ready", "revision": revision})
     if str(parsed.get("phase", "")) == "feedback" and not score_overlay.marks.is_empty():
         var target_page: int = int(score_overlay.marks[0].get("page", 0))
-        if current_page != target_page and layout_revision == revision:
+        if current_page != target_page and layout_revision == revision and \
+                (not native_notation_enabled or timeline_preview == null or \
+                not timeline_preview.visible):
             _request_score(target_page)
     # A physical note-on is the hands-free equivalent of Start on this
     # screen only. Poll-based arming keeps device checks in Settings inert.
@@ -3331,7 +3335,8 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
         # response reached this window. Wait for that revision's normal poll.
         return
     # The original Verovio font glyphs are imported ONCE into native
-    # Godot textures. Layout XML/SVG pages are never used as glyph artwork.
+    # Godot textures. Full raster pages are only requested on fallback.
+    var native_assets_ready := true
     if native_notation_enabled and timeline_preview != null:
         var glyph_catalog: Dictionary = parsed.get("native_glyphs", {})
         var note_catalog: Dictionary = parsed.get("native_note_templates", {})
@@ -3347,6 +3352,7 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
                 bool(parsed.get("native_slurs_complete",false)),
                 parsed.get("native_required_beam_groups",[]),
                 bool(parsed.get("native_beams_complete",false))):
+            native_assets_ready = false
             push_warning("Native Verovio glyph fallback: " +
                 str(timeline_preview.failure_reason))
     parsed.erase("native_glyphs")
@@ -3369,15 +3375,17 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
     # never mix pixel densities within one source score.
     score_raster_width = ScoreQuality.png_width(source_layout, score_frame.size.y)
     page_images.clear()
-    page_images.resize(int(parsed.get("pages", 0)))
     layout_revision = revision
-    _request_score(0)
-    if native_notation_enabled:
-        # Publish asset readiness only after assigning this layout's revision.
-        # An older font atlas can be ready while its chords belong to a
-        # different exercise. Loading the new model then causes false fallback.
+    if native_notation_enabled and native_assets_ready:
+        # A native lesson needs its authentic fragment atlas and semantic
+        # model, not the legacy raster tiles.
         timeline_model_revision = -1
+        print("NATIVE_SCORE_RASTER_SKIPPED: ", revision)
         _request_timeline_model()
+        return
+    # Native glyph preparation failed or legacy was explicitly selected.
+    page_images.resize(int(parsed.get("pages", 0)))
+    _request_score(0)
 
 func _request_score(page: int) -> void:
     if score_pending or layout_revision != revision:
@@ -3593,6 +3601,35 @@ func _on_score(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if str(last_state.get("phase", "")) == "loading" and int(last_state.get("awaiting_score_revision", -1)) == revision:
         _send_action({"action": "score_ready", "revision": revision})
 
+func _finish_native_score() -> void:
+    # A 1x1 readiness marker preserves the existing UI/transport contract;
+    # no full score page or GPU texture is constructed for native notation.
+    if layout_revision != revision:
+        return
+    for tile in score_tiles:
+        score_content.remove_child(tile)
+        tile.queue_free()
+    score_tiles.clear()
+    strip_tiles.clear()
+    page_images.clear()
+    current_page = 0
+    var pixel := Image.create(1, 1, false, Image.FORMAT_LA8)
+    pixel.fill(Color(1, 1, 1, 0))
+    score_view.texture = ImageTexture.create_from_image(pixel)
+    score_view.visible = false
+    rendered_revision = revision
+    score_error = ""
+    score_overlay.showing = false
+    score_overlay.queue_redraw()
+    start_button.disabled = false
+    _refresh_score_status()
+    if phase0_smoke_mode:
+        print("PHASE0_SCORE_READY_NATIVE: REVISION:", revision)
+    if str(last_state.get("phase","")) == "loading" and \
+            int(last_state.get("awaiting_score_revision",-1)) == revision:
+        _send_action({"action":"score_ready","revision":revision})
+
+
 func _request_timeline_model() -> void:
     if timeline_model_request == null or timeline_model_pending \
             or not bool(last_state.get("loaded", false)):
@@ -3627,6 +3664,11 @@ func _on_timeline_model(_result: int, code: int,
         if timeline_preview.load_score(candidate):
             timeline_model_revision = revision
             timeline_preview.visible = true
+            if native_notation_enabled:
+                _finish_native_score()
+                score_view.visible = false
+                for tile in score_tiles:
+                    tile.visible = false
             if native_score_feedback != null:
                 native_score_feedback.bind_score(timeline_preview, revision)
                 native_score_feedback.present(last_state)
@@ -3638,9 +3680,16 @@ func _on_timeline_model(_result: int, code: int,
             # Phase C must never show incomplete or incorrect notation.
             # Leave the existing Verovio engraving visible underneath.
             timeline_preview.visible = false
+            score_view.visible = true
+            for tile in score_tiles:
+                tile.visible = true
             timeline_model_revision = revision
             push_warning("Native notation fallback: " +
                 str(timeline_preview.failure_reason))
+            # Only now pay for the complete legacy PNG strip.
+            if rendered_revision != revision and not score_pending:
+                page_images.resize(int(source_layout.get("pages", 0)))
+                _request_score(0)
             return
     timeline_model_retry_after_ms = Time.get_ticks_msec() + 2000
     timeline_preview.notice = "Score model unavailable; retrying"
