@@ -2,6 +2,27 @@
 
 Status: **Phases A and B complete; Phase C native renderer opt-in, fallback retained.**
 
+The current Phase C engine uses authentic Verovio font glyphs and reusable
+engraved note/chord/tie templates, plus source-bound beam, tuplet and slur
+fragments. Godot composes these on its own linear musical timeline. The earlier
+primitive-symbol experiments described below are historical, not the current
+rendering path. Musical glyphs are never approximated with Godot drawings.
+
+Always launch native verification with `PIANO_TEACHER_NATIVE_NOTATION=1`.
+`scripts/check_native_notation.py` checks the real MIDI curriculum through the
+native compositor and requires every notation note ID to be painted.
+`scripts/smoke_native_notation.py` additionally checks the actual HTTP application,
+native readiness/visibility and moving musical clock; `--render` saves a desktop
+screenshot. Legacy strip checks alone do not verify native notation.
+
+The user density preference remains 24–480 pixels per beat. Automatic collision
+clearance may select up to 8192 for an entire exercise, including expressive
+attacks very close to a barline. That scale is constant throughout playback and
+count-in, independent of BPM, and resets to the configured preference for the
+next exercise before choosing its clearance. No attack is individually shifted
+in time. Asset preparation and revision readiness keep the score model, pages
+and native fragments bound to the same lesson.
+
 ## Why
 
 The legacy practice view derives musical position from Verovio's glyph X
@@ -171,10 +192,10 @@ rather than silently showing an incorrect rhythm.
 **Remaining limitations:** nested/cross-staff tuplets, complex independent
 voice collisions, 128th notes, more than two augmentation dots, full octave
 signs and a polished SMuFL music-font pipeline are not supported yet.
-The renderer currently uses native vector primitives for clefs and symbols,
-rather than shipping an external binary font. Dense/impossible rhythmic
-spacing and unrepresentable symbols still fall back to the full Verovio
-engraving. This is not yet a complete MusicXML engraver.
+The current renderer obtains clefs and symbols from the installed Verovio font
+and authentic engraved components. Unsupported expressive notation and rhythms
+that exceed the single automatic density limit still produce an explicit full
+Verovio fallback. This is not a general-purpose MusicXML engraver.
 
 Use the legacy app by omitting `PIANO_TEACHER_NATIVE_NOTATION`. The previous
 Phase B marker-only preview is still available separately via

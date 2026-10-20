@@ -1922,9 +1922,16 @@ class PracticeEngine:
             return self._page_png[key]
 
     def geometry(self, *, native_notes: bool = False) -> dict:
+        # HTTP state/control requests run on other threads. Pages, semantic
+        # IDs and extracted fragments must all belong to this one revision.
+        with self.lock:
+            return self._geometry(native_notes=native_notes)
+
+    def _geometry(self, *, native_notes: bool) -> dict:
         from .notation_symbols import native_glyphs, preparation_symbols
         source_score = self.engraving()
-        layout = {**source_score.layout, "symbols": preparation_symbols(),
+        layout = {**source_score.layout, "revision": self.score_revision,
+                  "symbols": preparation_symbols(),
                   "native_glyphs": native_glyphs()}
         if native_notes:
             # Build the identity-preserving model once for all fragment
@@ -1944,12 +1951,6 @@ class PracticeEngine:
             except Exception as exc:
                 print("VEROVIO_TIE_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
                 layout["native_tie_templates"] = {}
-            try:
-                layout["native_chord_templates"] = chord_templates(
-                    native_model, self.preprocessing)
-            except Exception as exc:
-                print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
-                layout["native_chord_templates"] = {}
             # These fragments are cut directly from this lesson's original
             # Verovio engraving. They retain the two real note identities,
             # leaving the Godot transport in complete control of timing.
@@ -1971,6 +1972,17 @@ class PracticeEngine:
                 layout["native_beam_fragments"] = {}
                 layout["native_required_beam_groups"] = []
                 layout["native_beams_complete"] = False
+            try:
+                # An authored beam may reverse a chord's isolated stem
+                # direction. Request precisely those authentic variants.
+                directions = {str(identifier): bool(fragment["stem_up"])
+                    for fragment in layout["native_beam_fragments"].values()
+                    for identifier in fragment["note_ids"]}
+                layout["native_chord_templates"] = chord_templates(
+                    native_model, self.preprocessing, stem_directions=directions)
+            except Exception as exc:
+                print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
+                layout["native_chord_templates"] = {}
             try:
                 from .verovio_tuplet_fragments import tuplet_fragments
                 layout["native_tuplet_fragments"] = tuplet_fragments(

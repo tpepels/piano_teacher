@@ -47,7 +47,7 @@ def test_regular_boundaries_and_final_bar_exist_without_source_tags():
 
 @pytest.mark.parametrize("style", [
     "regular", "light-light", "light-heavy", "heavy-light",
-    "heavy-heavy", "heavy", "none", "dashed", "dotted",
+    "heavy-heavy", "heavy", "none", "dashed", "dotted", "tick", "short",
 ])
 def test_musicxml_explicit_styles_preserve_source_beat_and_all_notes(style):
     original = score()
@@ -90,7 +90,7 @@ def test_conflicting_grand_staff_barlines_fail_instead_of_mismatching_hands():
 
 
 @pytest.mark.parametrize("location,style", [
-    ("middle", "regular"), ("right", "tick"), ("right", "short"),
+    ("middle", "regular"), ("right", "invalid"),
 ])
 def test_unsupported_barlines_are_never_silently_drawn(location, style):
     changed = with_barlines(score(), [

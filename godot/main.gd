@@ -3248,6 +3248,10 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
     if typeof(parsed) != TYPE_DICTIONARY or not parsed.has("anchors"):
         _score_failed("The engraving engine returned invalid note positions")
         return
+    if parsed.has("revision") and int(parsed["revision"]) != revision:
+        # A control request may have advanced the server before its state
+        # response reached this window. Wait for that revision's normal poll.
+        return
     # The original Verovio font glyphs are imported ONCE into native
     # Godot textures. Layout XML/SVG pages are never used as glyph artwork.
     if native_notation_enabled and timeline_preview != null:
@@ -3267,11 +3271,6 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
                 bool(parsed.get("native_beams_complete",false))):
             push_warning("Native Verovio glyph fallback: " +
                 str(timeline_preview.failure_reason))
-        elif not timeline_model_pending and bool(last_state.get("loaded", false)):
-            # /score/model can arrive ahead of /score/layout. Retry its
-            # semantic parse now that the real glyph atlas is resident.
-            timeline_model_revision = -1
-            _request_timeline_model()
     parsed.erase("native_glyphs")
     parsed.erase("native_note_templates")
     parsed.erase("native_tie_templates")
@@ -3295,6 +3294,12 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
     page_images.resize(int(parsed.get("pages", 0)))
     layout_revision = revision
     _request_score(0)
+    if native_notation_enabled:
+        # Publish asset readiness only after assigning this layout's revision.
+        # An older font atlas can be ready while its chords belong to a
+        # different exercise. Loading the new model then causes false fallback.
+        timeline_model_revision = -1
+        _request_timeline_model()
 
 func _request_score(page: int) -> void:
     if score_pending or layout_revision != revision:
@@ -3517,7 +3522,8 @@ func _request_timeline_model() -> void:
     # The semantic model may arrive before /score/layout. Wait for the
     # authentic Verovio glyphs instead of reporting a false native fallback.
     # _on_layout requests the model once the font atlas is actually ready.
-    if native_notation_enabled and (timeline_preview == null or \
+    if native_notation_enabled and (layout_revision != revision or \
+            timeline_preview == null or \
             not timeline_preview.glyphs.ready()):
         return
     timeline_model_pending = true

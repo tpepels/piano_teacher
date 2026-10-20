@@ -1,6 +1,7 @@
 """Complex original Verovio slurs must preserve paired note identity."""
 from types import SimpleNamespace
 import xml.etree.ElementTree as ET
+import pytest
 
 from piano_teacher.preprocessing_cache import PreprocessingCache
 from piano_teacher.verovio_slur_fragments import (
@@ -76,7 +77,8 @@ def test_ambiguous_slurs_refuse_to_guess(monkeypatch):
     assert extract_slurs([doubled],PART,MODEL)=={}
 
 
-def test_real_verovio_source_slur_export():
+@pytest.mark.parametrize("source_id",[None,"source-phrase"])
+def test_real_verovio_source_slur_export(source_id):
     import verovio
     from piano_teacher.score import _create_verovio_toolkit
     from piano_teacher.score_geometry import parse_svg_geometry
@@ -84,10 +86,13 @@ def test_real_verovio_source_slur_export():
     assert kit.setOptions({"inputFrom":"xml","scale":48,
         "pageWidth":900,"pageHeight":650,"svgViewBox":True,
         "svgBoundingBoxes":True,"svgContentBoundingBoxes":True})
-    assert kit.loadData(PART)
+    xml=PART if source_id is None else PART.replace(
+        '<slur number="1" type="start"/>',
+        f'<slur id="{source_id}" number="1" type="start"/>')
+    assert kit.loadData(xml)
     svg=kit.renderToSVG(1)
     assert {"a","c"}.issubset(parse_svg_geometry(svg).elements)
-    slurs=extract_slurs([svg],PART,MODEL)
+    slurs=extract_slurs([svg],xml,MODEL)
     if not slurs:
         print("ACTUAL_VEROVIO_SLUR_CLASSES",[
             (el.get("class"),el.get("id"))
@@ -119,3 +124,48 @@ def test_slur_with_correct_start_but_wrong_end_pitch_is_rejected(monkeypatch):
     result=extract_slurs([competing],PART,MODEL)
     assert list(result)==["a|c"]
     assert result["a|c"]["source"]=="verovio-engraved-slur"
+
+
+def test_explicit_slur_source_id_disambiguates_overlapping_contours(monkeypatch):
+    import piano_teacher.score_geometry as geometry
+    monkeypatch.setattr(geometry,"parse_svg_geometry",fake_geometry)
+    xml=PART.replace('<slur number="1" type="start"/>',
+                     '<slur id="slur-x" number="1" type="start"/>')
+    duplicate=SVG.replace('</svg>',
+        '<g class="slur" id="another"><path d="M100 142Q260 108 420 142'
+        ' Q260 120 100 142"/></g></svg>')
+    assert extract_slurs([duplicate],xml,MODEL)["a|c"]["note_ids"]==["a","c"]
+
+
+def test_slur_endpoint_tolerance_uses_staff_space_on_a_wide_page(monkeypatch):
+    import piano_teacher.score_geometry as geometry
+    monkeypatch.setattr(geometry,"parse_svg_geometry",fake_geometry)
+    # The second curve begins four staff spaces after the source note.
+    # Page-relative X and Y have different scales on an 800x400 viewport.
+    wrong='<g class="slur" id="wrong"><path d="M140 142Q280 108 420 142'
+    wrong+=' Q280 120 140 142"/></g>'
+    competing=SVG.replace('</svg>',wrong+'</svg>')
+    assert extract_slurs([competing],PART,MODEL)["a|c"]["note_ids"]==["a","c"]
+
+
+def test_cross_staff_slur_retains_unique_number_and_voice_identity():
+    xml='''<score-partwise><part id="P1"><measure number="1">
+      <note id="a"><voice>1</voice><staff>1</staff><notations>
+        <slur type="start" number="1"/></notations></note>
+      <note id="b"><voice>2</voice><staff>1</staff><notations>
+        <slur type="start" number="1"/></notations></note>
+      <note id="c"><voice>1</voice><staff>2</staff><notations>
+        <slur type="stop" number="1"/></notations></note>
+      <note id="d"><voice>2</voice><staff>1</staff><notations>
+        <slur type="stop" number="1"/></notations></note>
+    </measure></part></score-partwise>'''
+    assert slur_pairs_from_xml(xml)==(("a","c"),("b","d"))
+
+
+def test_empty_slur_cache_retries_when_source_graphics_become_available(tmp_path,monkeypatch):
+    import piano_teacher.score_geometry as geometry
+    monkeypatch.setattr(geometry,"parse_svg_geometry",fake_geometry)
+    cache=PreprocessingCache(tmp_path)
+    assert slur_fragments([],PART,MODEL,cache,"piece")=={}
+    result=slur_fragments([SVG],PART,MODEL,cache,"piece")
+    assert result["a|c"]["note_ids"]==["a","c"]

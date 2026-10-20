@@ -1,6 +1,7 @@
 """Phase C2 group-beam geometry and constant-axis regression."""
 import shutil
 import subprocess
+import os
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,8 @@ def test_native_eighth_sixteenth_beams_in_simple_and_compound_meters():
     result = subprocess.run([
         binary, "--headless", "--path", str(ROOT / "godot"),
         "--script", str(ROOT / "tests/godot/phase_c_beaming.gd"),
-    ], capture_output=True, text=True, timeout=45)
+    ], env={**os.environ, "PIANO_TEACHER_NATIVE_NOTATION": "1"},
+        capture_output=True, text=True, timeout=45)
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
     assert "PHASE_C2_BEAM_FAILURES:0" in output, output

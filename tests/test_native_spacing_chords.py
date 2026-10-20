@@ -35,6 +35,24 @@ def test_chord_catalogue_is_not_silently_truncated_at_thirty_two():
     assert any(x.startswith("eighth|") for x in patterns)
 
 
+def test_long_score_keeps_every_distinct_chord_pattern():
+    events = []
+    beat = 0
+    for kind in ("whole", "half", "quarter", "eighth", "16th", "32nd", "64th"):
+        for first, second in ((a, b) for a in range(1, 11) for b in range(a + 1, 12)):
+            for index, offset in enumerate((0, first, second)):
+                pitch = 34 + offset
+                events.append({
+                    "id": f"{beat}-{index}", "kind": "note", "staff": "right",
+                    "voice": "1", "measure": 1, "beat": beat, "chord": index > 0,
+                    "note_type": kind,
+                    "spelling": {"step": "CDEFGAB"[pitch % 7], "octave": pitch // 7}})
+            beat += 1
+    model = {"measures": [{"number": 1, "clefs": {"right": {"sign": "G", "line": 2}}}],
+             "notation_events": events}
+    assert len(patterns_from_model(model)) == 385
+
+
 def test_ala_original_source_chords_have_native_template_signatures():
     """A real user MIDI should never be rejected by a 32-item atlas cap."""
     from piano_teacher.music import load_midi

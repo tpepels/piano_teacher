@@ -1,5 +1,6 @@
 """Exercise the ordinary launcher and real desktop pixels without MIDI input."""
 import os
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -11,6 +12,12 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_visible_playback_rejects_native_fallback_warning():
+    from scripts.check_visible_playback import require_clean_log
+    with pytest.raises(RuntimeError,match="Native notation fallback"):
+        require_clean_log("VISIBLE_RESULT:PASS samples=44\nWARNING: Native notation fallback: missing atlas")
+
+
 def test_launcher_moves_visible_notes_at_four_tempos(tmp_path):
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
         pytest.skip("Visible playback requires a graphical desktop")
@@ -19,9 +26,14 @@ def test_launcher_moves_visible_notes_at_four_tempos(tmp_path):
     result = subprocess.run(
         [sys.executable, str(ROOT / "scripts/check_visible_playback.py"),
          "--output-dir", str(tmp_path)], cwd=ROOT,
+        env={**os.environ,"PIANO_TEACHER_NATIVE_NOTATION":"1"},
         capture_output=True, text=True, timeout=240,
     )
     assert result.returncode == 0, result.stdout + result.stderr + (
         (tmp_path / "godot.log").read_text(errors="replace")
         if (tmp_path / "godot.log").exists() else "")
     assert "VISIBLE_RESULT:PASS samples=44" in result.stdout
+    report=json.loads((tmp_path/"samples.json").read_text())
+    assert report["failures"]==[]
+    assert all(sample["native_ready"] and sample["native_visible"]
+               for sample in report["samples"])

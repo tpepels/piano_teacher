@@ -1,6 +1,7 @@
 """Extract the original Verovio beam ink without copying source noteheads."""
 from types import SimpleNamespace
 from xml.etree import ElementTree as ET
+import pytest
 
 from piano_teacher.preprocessing_cache import PreprocessingCache
 from piano_teacher.verovio_beam_fragments import (
@@ -196,22 +197,23 @@ def test_verovio_beamed_chord_keeps_one_attack_and_all_pitches(monkeypatch):
     assert len(item["head_offsets"])==2
 
 
-def test_original_verovio_beamed_chord_has_only_two_time_anchors():
+@pytest.mark.parametrize("upper,direction", [("B", "up"), ("A", "down")])
+def test_original_verovio_beamed_chord_has_only_two_time_anchors(upper, direction):
     import verovio
     from piano_teacher.score import _create_verovio_toolkit
-    score = """<score-partwise version="4.0"><work><work-title> </work-title></work>
+    score = f"""<score-partwise version="4.0"><work><work-title> </work-title></work>
       <movement-title> </movement-title><part-list><score-part id="P1">
       <part-name>Piano</part-name></score-part></part-list>
       <part id="P1"><measure number="1"><attributes><divisions>10080</divisions>
       <time><beats>4</beats><beat-type>4</beat-type></time>
       <clef><sign>G</sign><line>2</line></clef></attributes>
       <note id="n1"><pitch><step>G</step><octave>4</octave></pitch>
-      <duration>5040</duration><type>eighth</type><stem>up</stem>
+      <duration>5040</duration><type>eighth</type><stem>{direction}</stem>
       <beam number="1">begin</beam></note>
-      <note id="n1upper"><chord/><pitch><step>B</step><octave>4</octave></pitch>
+      <note id="n1upper"><chord/><pitch><step>{upper}</step><octave>4</octave></pitch>
       <duration>5040</duration><type>eighth</type></note>
       <note id="n2"><pitch><step>C</step><octave>5</octave></pitch>
-      <duration>5040</duration><type>eighth</type><stem>up</stem>
+      <duration>5040</duration><type>eighth</type><stem>{direction}</stem>
       <beam number="1">end</beam></note>
       <note><rest/><duration>30240</duration><type>half</type><dot/></note>
       </measure></part></score-partwise>"""
@@ -230,3 +232,82 @@ def test_original_verovio_beamed_chord_has_only_two_time_anchors():
     assert "n1|n2" in found
     assert found["n1|n2"]["chord_note_ids"]==[
         ["n1","n1upper"],["n2"]]
+
+
+def test_beam_mask_excludes_chord_stems_and_nested_tuplet_ink():
+    # Verovio puts a chord's shared stem beside its notes. A tuplet may
+    # also live inside the beam, with independent number/bracket graphics.
+    svg=SVG.replace('<g class="note" id="n1">',
+        '<g class="chord"><g class="stem"><path d="M111 32L111 100"/></g>'
+        '<g class="note" id="n1">').replace(
+        '<g class="note" id="n2">',
+        '</g><g class="tuplet"><g class="tupletNum">'
+        '<path d="M230 10L240 10"/></g><g class="tupletBracket">'
+        '<path d="M100 5L420 5"/></g><g class="note" id="n2">').replace(
+        '</g>\n <g class="staff">','</g></g>\n <g class="staff">')
+    filtered=ET.fromstring(_filter_beam_svg(svg,("n1","n2")))
+    shapes=[n for n in filtered.iter()
+            if n.tag.rsplit("}",1)[-1] in {"path","polygon","polyline"}
+            and n.get("id")!="a"]
+    assert len(shapes)==1
+    assert shapes[0].tag.endswith("polygon")
+
+
+def test_full_performance_keeps_beams_after_the_120th(monkeypatch):
+    import copy
+    import piano_teacher.score_geometry as geometry
+    root=ET.fromstring(SVG)
+    beam=next(n for n in root if n.get("class")=="beam")
+    root.remove(beam)
+    events=[]
+    heads={}
+    for index in range(121):
+        group=copy.deepcopy(beam)
+        group.set("id",f"beam-{index}")
+        for node in group.iter():
+            if node.get("class")=="note":
+                original=node.get("id")
+                identifier=f"{original}-{index}"
+                node.set("id",identifier)
+                event=next(e for e in MODEL["notation_events"]
+                           if e["id"]==original)
+                events.append({**event,"id":identifier,"measure":index+1,
+                               "beat":index*4+event["beat"]})
+                heads[identifier]=(.125 if original=="n1" else .5,.5,"s1")
+        root.append(group)
+    monkeypatch.setattr(geometry,"parse_svg_geometry",lambda _:SimpleNamespace(
+        elements=heads,
+        staff_systems={"s1":{"staff_lines":[.35,.45,.55,.65,.75]}}))
+    found=extract_beam_fragments([ET.tostring(root,encoding="unicode")],
+                                {"notation_events":events})
+    assert len(found)==121
+    assert found["n1-120|n2-120"]["note_ids"]==["n1-120","n2-120"]
+
+
+def test_long_source_beam_keeps_all_32_attacks(monkeypatch):
+    import piano_teacher.score_geometry as geometry
+    notes=[]
+    events=[]
+    heads={}
+    ids=[f"a{index}" for index in range(32)]
+    for index,identifier in enumerate(ids):
+        x=100+index*300/31
+        notes.append(f'<g class="note" id="{identifier}">'
+                     f'<circle cx="{x}" cy="100" r="8"/></g>')
+        heads[identifier]=(x/800,.5,"s1")
+        events.append({**MODEL["notation_events"][0],"id":identifier,
+                       "beat":index/8})
+    root=ET.fromstring(SVG)
+    group=next(n for n in root if n.get("class")=="beam")
+    for child in list(group):
+        if child.get("class")=="note":
+            group.remove(child)
+    for note in notes:
+        group.append(ET.fromstring(note))
+    monkeypatch.setattr(geometry,"parse_svg_geometry",lambda _:SimpleNamespace(
+        elements=heads,
+        staff_systems={"s1":{"staff_lines":[.35,.45,.55,.65,.75]}}))
+    found=extract_beam_fragments([ET.tostring(root,encoding="unicode")],
+                                {"notation_events":events})
+    assert found["|".join(ids)]["note_ids"]==ids
+    assert len(found["|".join(ids)]["tip_offsets"])==32

@@ -5,7 +5,8 @@ const STEPS := {"C":0, "D":1, "E":2, "F":3, "G":4, "A":5, "B":6}
 const SUPPORTED := ["whole", "half", "quarter", "eighth", "16th", "32nd", "64th"]
 const BEAM_LEVELS := {"eighth":1, "16th":2, "32nd":3, "64th":4}
 const BARLINE_STYLES := ["regular", "light-light", "light-heavy",
-    "heavy-light", "heavy-heavy", "heavy", "none", "dashed", "dotted"]
+    "heavy-light", "heavy-heavy", "heavy", "none", "dashed", "dotted",
+    "tick", "short"]
 const NOTE_BEATS := {"whole":4.0,"half":2.0,"quarter":1.0,
     "eighth":.5,"16th":.25,"32nd":.125,"64th":.0625}
 
@@ -37,6 +38,9 @@ static func beam_level(note_type: String) -> int:
     return int(BEAM_LEVELS.get(note_type, 0))
 const HEAD_HALF_WIDTH := 9.2
 const MIN_ATTACK_SEPARATION := 25.0
+const ACCIDENTAL_GLYPHS := {"sharp":"acc_sharp","flat":"acc_flat",
+    "natural":"acc_natural","double-sharp":"acc_double_sharp",
+    "double-flat":"acc_double_flat","flat-flat":"acc_double_flat"}
 
 static func diatonic_index(spelling: Dictionary) -> int:
     var name: String = str(spelling.get("step", ""))
@@ -388,6 +392,78 @@ static func chord_offsets(events: Array, gap: float) -> Dictionary:
                     result[new_id] = width
                 else:
                     result[new_id] = -old_offset
+    return result
+
+
+static func accidental_offsets(events: Array, gap: float,
+        head_offsets: Dictionary, glyph_bounds: Dictionary) -> Dictionary:
+    # Pack authentic glyph bounding boxes once per staff/onset. A single
+    # fixed left offset makes accidentals on seconds/thirds overprint each
+    # other. Include all voices sharing a staff; leave musical X unchanged.
+    var lanes: Dictionary = {}
+    for event in events:
+        if str(event.get("kind","")) != "note":
+            continue
+        var key: String = str(event.get("staff",""))+"|"+ \
+            str(event.get("measure",0))+"|"+ \
+            str(snappedf(float(event.get("beat",0.0)),.000001))
+        if not lanes.has(key):
+            lanes[key] = []
+        lanes[key].append(event)
+    var result: Dictionary = {}
+    var unit: float = gap/250.0
+    for key in lanes:
+        var accidentals: Array = []
+        var left_edge := INF
+        for event in lanes[key]:
+            var id: String = str(event.get("id",""))
+            var head_x: float = float(head_offsets.get(id,0.0))
+            var kind: String = str(event.get("note_type","quarter"))
+            var head: Array = glyph_bounds.get("head_"+(
+                kind if kind in ["whole","half"] else "black"),[])
+            if head.size() == 4:
+                left_edge = minf(left_edge,head_x-float(head[2])*unit*.5)
+            var name: String = str(ACCIDENTAL_GLYPHS.get(
+                str(event.get("accidental","")),""))
+            var box: Array = glyph_bounds.get(name,[])
+            if box.size() != 4:
+                continue
+            var y: float = -float(diatonic_index(event.get("spelling",{})))*gap*.5
+            accidentals.append({"id":id,"head_x":head_x,
+                "top":y+float(box[1])*unit,
+                "bottom":y+(float(box[1])+float(box[3]))*unit,
+                "width":float(box[2])*unit})
+        if accidentals.is_empty() or not is_finite(left_edge):
+            continue
+        accidentals.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+            if absf(float(a["top"])-float(b["top"])) > .001:
+                return float(a["top"]) < float(b["top"])
+            return str(a["id"]) < str(b["id"]))
+        var columns: Array = []
+        for accidental in accidentals:
+            var selected := -1
+            for i in range(columns.size()):
+                var clear := true
+                for other in columns[i]["items"]:
+                    if float(accidental["top"]) < float(other["bottom"])+gap*.15 and \
+                            float(accidental["bottom"]) > float(other["top"])-gap*.15:
+                        clear = false
+                        break
+                if clear:
+                    selected = i
+                    break
+            if selected < 0:
+                selected = columns.size()
+                columns.append({"width":0.0,"items":[]})
+            columns[selected]["width"] = maxf(float(columns[selected]["width"]),
+                float(accidental["width"]))
+            columns[selected]["items"].append(accidental)
+        var right: float = left_edge-gap*.25
+        for column in columns:
+            for accidental in column["items"]:
+                result[str(accidental["id"])] = right- \
+                    float(accidental["width"])*.5-float(accidental["head_x"])
+            right -= float(column["width"])+gap*.2
     return result
 
 

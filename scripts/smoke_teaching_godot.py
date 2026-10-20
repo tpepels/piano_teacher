@@ -30,6 +30,12 @@ from piano_teacher.server import Handler, PracticeEngine, ThreadingHTTPServer
 PIANO = "Journey test piano"
 
 
+def require_clean_log(content: str) -> None:
+    if any(token in content for token in ("SCRIPT ERROR", "ERROR:", "TEACHING_FAIL:",
+                                          "Native notation fallback:")):
+        raise RuntimeError(f"Godot teaching journey failed:\n{content}")
+
+
 def make_fixture(path: Path) -> None:
     """Two user-imported bars; repeated two-hand attacks survive skeletonization."""
     midi = mido.MidiFile(ticks_per_beat=480)
@@ -124,8 +130,7 @@ def run(output: Path, resolution: tuple[int, int] = (1536, 960)) -> dict:
             content = transcript.read_text(errors="replace") if transcript.exists() else ""
             if desktop is not None and desktop.poll() is not None:
                 raise RuntimeError(f"Godot exited during {label}:\n{content}")
-            if any(token in content for token in ("SCRIPT ERROR", "ERROR:", "TEACHING_FAIL:")):
-                raise RuntimeError(f"Godot failed during {label}:\n{content}")
+            require_clean_log(content)
             value = predicate(content)
             if value:
                 return value
@@ -207,8 +212,8 @@ def run(output: Path, resolution: tuple[int, int] = (1536, 960)) -> dict:
                 # The UI captures movement and stops. It receives no fake perfect practice answers.
                 desktop.wait(timeout=15)
                 content = transcript.read_text(errors="replace")
-                if desktop.returncode or "TEACHING_RESULT:PASS" not in content or any(
-                    token in content for token in ("SCRIPT ERROR", "ERROR:", "TEACHING_FAIL:")):
+                require_clean_log(content)
+                if desktop.returncode or "TEACHING_RESULT:PASS" not in content:
                     raise RuntimeError(f"Teaching UI failed ({desktop.returncode}):\n{content}")
                 final = engine.state()
                 assert not final["running"] and final["phase"] == "ready"

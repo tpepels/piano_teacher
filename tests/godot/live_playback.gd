@@ -57,14 +57,33 @@ func api(command: Dictionary) -> Dictionary:
     return parsed
 
 func score_ready() -> bool:
-    return app.score_view.texture != null and app.layout_revision == app.revision \
+    var ready: bool = app.score_view.texture != null and app.layout_revision == app.revision \
         and app.rendered_revision == app.revision and not app.layout_pending and not app.score_pending
+    if ready and app.native_notation_enabled:
+        return app.timeline_preview != null and app.timeline_preview.native_ready \
+            and app.timeline_preview.is_visible_in_tree() and app.timeline_model_revision == app.revision
+    return ready
 
 func active_attempt(transport_id: int) -> bool:
     return int(app.last_state.get("transport_id", -1)) == transport_id \
         and bool(app.last_state.get("running", false)) and app.score_overlay.showing and score_ready()
 
 func note_position(note: Dictionary) -> Vector2:
+    if app.native_notation_enabled:
+        var renderer = app.timeline_preview
+        var id: String = str(note["id"])
+        if renderer.drawn_noteheads.has(id):
+            return renderer.get_global_transform_with_canvas() * renderer.drawn_noteheads[id]
+        for event in renderer.ordered_events:
+            if str(event.get("id", "")) == id:
+                var clock: float = renderer.clock_beat if renderer.running or renderer.paused else 0.0
+                var x: float = renderer.timeline.screen_x(float(event["beat"]),clock,
+                    renderer.size.x * renderer.PLAYHEAD_FRACTION,renderer.play_from_beat)
+                x += float(renderer.cached_head_offsets.get(id,0.0))
+                return renderer.get_global_transform_with_canvas() * Vector2(x,
+                    renderer._event_y(event,renderer._gap()))
+        check(false, "Tracked native source note missing")
+        return Vector2.ZERO
     var local: Vector2 = (Vector2(float(note.x), float(note.y)) - app.score_crop_origin) \
         / app.score_crop_size * app.score_content.size
     return app.score_content.get_global_transform_with_canvas() * local
@@ -215,6 +234,10 @@ func capture(bpm: int, label: String) -> Dictionary:
     var beam_local: Vector2 = (Vector2(float(cursor.get("x", 0.0)), 0.0) \
         - app.score_crop_origin) / app.score_crop_size * app.score_content.size
     var beam: Vector2 = (app.score_content.get_global_transform_with_canvas() * beam_local) * pixel_scale
+    if app.native_notation_enabled:
+        var renderer = app.timeline_preview
+        beam = (renderer.get_global_transform_with_canvas() * Vector2(
+            renderer.size.x * renderer.PLAYHEAD_FRACTION,0.0)) * pixel_scale
     var canvas_panel: Rect2 = app.score_frame.get_global_rect()
     var panel := Rect2(canvas_panel.position * pixel_scale, canvas_panel.size * pixel_scale)
     check(absf(beam.x - (panel.position.x + panel.size.x * 0.42)) < 2.0,
@@ -222,6 +245,9 @@ func capture(bpm: int, label: String) -> Dictionary:
     check(app.score_content.size.distance_to(baseline_size) < 0.5,
         "%d BPM %s: notation scale stays stable" % [bpm, label])
     var staff_gap: Vector2 = app.score_overlay.staff_gap_fraction * app.score_content.size.y * pixel_scale
+    if app.native_notation_enabled:
+        staff_gap = Vector2.ONE * app.timeline_preview._gap() * pixel_scale
+        check(score_ready(), "%d BPM %s: current source revision remains visibly native" % [bpm,label])
     var ink := local_ink(frame, position, staff_gap)
     var paused_modal: bool = app.pause_sheet.is_visible_in_tree()
     var modal_ink: Dictionary = {}
@@ -254,6 +280,10 @@ func capture(bpm: int, label: String) -> Dictionary:
         "width": app.score_content.size.x, "height": app.score_content.size.y,
         "ink": ink, "paused_modal": paused_modal, "modal_ink": modal_ink,
         "frame": filename, "pixel_scale": [pixel_scale.x, pixel_scale.y]}
+    if app.native_notation_enabled:
+        result["native_ready"] = app.timeline_preview.native_ready
+        result["native_visible"] = app.timeline_preview.is_visible_in_tree()
+        result["native_noteheads"] = app.timeline_preview.drawn_noteheads.size()
     samples.append(result)
     write_samples()
     return result

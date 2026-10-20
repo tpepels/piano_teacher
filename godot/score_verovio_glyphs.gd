@@ -375,12 +375,13 @@ func beam_tips(name: String) -> Array:
 
 
 func paint_beam(canvas: CanvasItem, name: String,
-        heads: Array, y0: float, gap: float, ink: Color) -> bool:
+        heads: Array, y0: float, gap: float, ink: Color,
+        source_offsets: Array = []) -> bool:
     var texture: Texture2D = beam_textures.get(name)
     if texture == null or heads.size() < 2:
         return false
     var data: Dictionary = beam_metadata[name]
-    var offsets: Array = data["head_offsets"]
+    var offsets: Array = source_offsets if not source_offsets.is_empty() else data["head_offsets"]
     if offsets.size() != heads.size():
         return false
     var box: Array = data["bounds"]
@@ -392,8 +393,8 @@ func paint_beam(canvas: CanvasItem, name: String,
     var pixel_per_unit: float = texture_width/width
     var base_y: float = y0+float(box[1])*gap/250.0
     var ink_height: float = float(box[3])*gap/250.0
-    # Piecewise affine X mapping: every original Verovio notehead centre
-    # maps to its independent native source-beat X, not only the endpoints.
+    # Piecewise affine X mapping between measured source/native stem
+    # attachments, not the bounding box or just the first/last notehead.
     # The original beam contours and their vertical thickness stay intact.
     var anchors_px: Array = []
     for offset in offsets:
@@ -574,10 +575,8 @@ func paint_slur(canvas: CanvasItem, name: String,
         Vector2(xx1,bottom+right_shift),
         Vector2(xx0,bottom+left_shift)]),
         PackedColorArray([ink,ink,ink,ink]),
-        PackedVector2Array([Vector2.ZERO,
-            Vector2(float(tex.get_width()),0.0),
-            Vector2(float(tex.get_width()),float(tex.get_height())),
-            Vector2(0.0,float(tex.get_height()))]),tex)
+        PackedVector2Array([Vector2.ZERO,Vector2(1.0,0.0),
+            Vector2.ONE,Vector2(0.0,1.0)]),tex)
     return true
 
 

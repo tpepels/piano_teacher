@@ -26,6 +26,12 @@ ROOT = Path(__file__).resolve().parents[1]
 URL = "http://127.0.0.1:8765"
 
 
+def require_clean_log(content: str) -> None:
+    if any(token in content for token in ("SCRIPT ERROR", "ERROR:", "VISIBLE_FAIL:",
+                                          "Native notation fallback:")):
+        raise RuntimeError(f"Visible playback renderer failed:\n{content}")
+
+
 def request(route: str, payload: dict | None = None, *, raw: bool = False):
     body = None if payload is None else json.dumps(payload).encode()
     headers = {} if body is None else {"Content-Type": "application/json"}
@@ -102,6 +108,7 @@ def run(output: Path, bpms: list[int], resolution: tuple[int, int]) -> None:
                 if time.monotonic() >= deadline:
                     raise RuntimeError("Visible playback check timed out; see godot.log")
                 transcript = (output / "godot.log").read_text(errors="replace")
+                require_clean_log(transcript)
                 for line in transcript[previous_size:].splitlines():
                     if line.startswith(("VISIBLE_STAGE:", "VISIBLE_FAIL:", "VISIBLE_RESULT:")):
                         print(line, flush=True)
@@ -111,8 +118,8 @@ def run(output: Path, bpms: list[int], resolution: tuple[int, int]) -> None:
             for line in transcript[previous_size:].splitlines():
                 if line.startswith(("VISIBLE_STAGE:", "VISIBLE_FAIL:", "VISIBLE_RESULT:")):
                     print(line, flush=True)
-            if (desktop.returncode or "VISIBLE_RESULT:PASS" not in transcript
-                    or any(error in transcript for error in ("SCRIPT ERROR", "ERROR:"))):
+            require_clean_log(transcript)
+            if desktop.returncode or "VISIBLE_RESULT:PASS" not in transcript:
                 raise RuntimeError(f"Visible playback check failed (Godot exit {desktop.returncode}); see godot.log")
             result = json.loads((output / "samples.json").read_text())
             print(f"PASS {len(result['samples'])} rendered samples at {bpms} BPM; artifacts: {output}", flush=True)

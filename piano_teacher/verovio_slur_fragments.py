@@ -14,10 +14,10 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 2
+VERSION = 3
 
 
-def slur_pairs_from_xml(musicxml: str) -> tuple[tuple[str,str], ...]:
+def _slur_sources_from_xml(musicxml: str) -> dict[tuple[str,str], str | None]:
     root=ET.fromstring(musicxml)
     pairs=[]
     for part in root.findall("part"):
@@ -34,15 +34,28 @@ def slur_pairs_from_xml(musicxml: str) -> tuple[tuple[str,str], ...]:
                     key=(*lane,mark.get("number","1"))
                     kind=mark.get("type")
                     if kind=="start":
-                        started[key]=identifier
-                    elif kind=="stop" and key in started:
-                        first=started.pop(key)
+                        started[key]=(identifier,mark.get("id"))
+                    elif kind=="stop":
+                        if key not in started:
+                            # A voice can carry a slur across piano staves.
+                            # Keep concurrent voices separate and accept
+                            # only one unambiguous open source number.
+                            matches=[candidate for candidate in started
+                                     if candidate[1:]==key[1:]]
+                            if len(matches)!=1:
+                                continue
+                            key=matches[0]
+                        first,source=started.pop(key)
                         if first != identifier:
-                            pairs.append((first,identifier))
+                            pairs.append(((first,identifier),source))
     # Multiple slurs between identical endpoints cannot be distinguished
     # from the SVG without extra source IDs. Refuse ambiguous duplicates.
-    return tuple(pair for pair in dict.fromkeys(pairs)
-                 if pairs.count(pair)==1)
+    endpoints=[pair for pair,_ in pairs]
+    return {pair:source for pair,source in pairs if endpoints.count(pair)==1}
+
+
+def slur_pairs_from_xml(musicxml: str) -> tuple[tuple[str,str], ...]:
+    return tuple(_slur_sources_from_xml(musicxml))
 
 
 def _classes(node):
@@ -56,8 +69,8 @@ def extract_slurs(svgs, musicxml: str, model: dict) -> dict:
 
     notes={str(e["id"]):e for e in model.get("notation_events",[])
            if e.get("kind")=="note" and e.get("id")}
-    desired=[p for p in slur_pairs_from_xml(musicxml)
-             if all(id in notes for id in p)]
+    desired={pair:source for pair,source in _slur_sources_from_xml(musicxml).items()
+             if all(id in notes for id in pair)}
     if not desired:
         return {}
     out={}
@@ -77,7 +90,9 @@ def extract_slurs(svgs, musicxml: str, model: dict) -> dict:
                     rgba=image.convert("RGBA")
                 rect=rgba.getchannel("A").getbbox()
                 if rect:
-                    candidates.append((rgba,rect))
+                    # Retain only contour pixels, never one full-page RGBA
+                    # image for every slur in a complete performance.
+                    candidates.append((group.get("id"),rgba.crop(rect),rect,rgba.size))
             except (ValueError,RuntimeError,OverflowError,ET.ParseError):
                 continue
         for first,last in desired:
@@ -93,45 +108,47 @@ def extract_slurs(svgs, musicxml: str, model: dict) -> dict:
                 continue
             space=lines[1]-lines[0]
             accepted=[]
-            for rgba,rect in candidates:
+            for source,cut,rect,size in candidates:
+                if desired[first,last] and desired[first,last]!=source:
+                    continue
                 left,top,right,bottom=rect
-                pxspace=space*rgba.height
+                width,height=size
+                pxspace=space*height
                 # Check both engraved endpoints, not just the overall
                 # bounding box: a different voice may share the same X
                 # interval yet curve towards another final pitch.
-                if (abs(left/rgba.width-x0)>space*2.6 or
-                        abs(right/rgba.width-x1)>space*2.6 or
-                        (right-left)/rgba.width<space*.5 or pxspace<=4):
+                if (abs(left-x0*width)>pxspace*2.6 or
+                        abs(right-x1*width)>pxspace*2.6 or
+                        right-left<pxspace*.5 or pxspace<=4):
                     continue
                 edge=max(2,min(int(pxspace*.8),int((right-left)*.08)))
-                alpha=rgba.getchannel("A")
-                start_box=alpha.crop((left,top,left+edge,bottom)).getbbox()
-                end_box=alpha.crop((right-edge,top,right,bottom)).getbbox()
+                alpha=cut.getchannel("A")
+                start_box=alpha.crop((0,0,edge,cut.height)).getbbox()
+                end_box=alpha.crop((cut.width-edge,0,cut.width,cut.height)).getbbox()
                 if start_box is None or end_box is None:
                     continue
                 start_y=top+(start_box[1]+start_box[3])*.5
                 end_y=top+(end_box[1]+end_box[3])*.5
-                if (abs(start_y-y0*rgba.height)>pxspace*7.0 or
-                        abs(end_y-y1*rgba.height)>pxspace*7.0):
+                if (abs(start_y-y0*height)>pxspace*7.0 or
+                        abs(end_y-y1*height)>pxspace*7.0):
                     continue
-                accepted.append((rgba,rect))
+                accepted.append((cut,rect,size))
             if len(accepted)!=1:
                 continue
-            rgba,rect=accepted[0]
-            pxspace=space*rgba.height
+            cut,rect,(width,height)=accepted[0]
+            pxspace=space*height
             if pxspace<=4:
                 continue
             left,top,right,bottom=rect
-            cut=rgba.crop(rect)
             white=Image.new("RGBA",cut.size,(255,255,255,255))
             white.putalpha(cut.getchannel("A"))
             mem=BytesIO()
             white.save(mem,format="PNG",optimize=True)
-            bounds=[(left-x0*rgba.width)*250/pxspace,
-                    (top-y0*rgba.height)*250/pxspace,
+            bounds=[(left-x0*width)*250/pxspace,
+                    (top-y0*height)*250/pxspace,
                     (right-left)*250/pxspace,(bottom-top)*250/pxspace]
-            span=(x1-x0)*rgba.width*250/pxspace
-            change=(y1-y0)*rgba.height*250/pxspace
+            span=(x1-x0)*width*250/pxspace
+            change=(y1-y0)*height*250/pxspace
             if all(math.isfinite(v) for v in bounds+[span,change]) and span>0:
                 out[key]={"source":"verovio-engraved-slur",
                           "units_per_space":250,
@@ -146,12 +163,12 @@ def slur_fragments(svgs, musicxml, model, cache=None,identity="") -> dict:
         cache is not None and identity) else None
     if key:
         stored=cache.read_json("verovio-slurs",key)
-        if isinstance(stored,dict) and all(
+        if isinstance(stored,dict) and stored and all(
                 isinstance(item,dict) and
                 item.get("source")=="verovio-engraved-slur"
                 for item in stored.values()):
             return stored
     result=extract_slurs(svgs,musicxml,model)
-    if key:
+    if key and result:
         cache.write_json("verovio-slurs",key,result)
     return result

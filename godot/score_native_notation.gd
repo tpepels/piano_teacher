@@ -11,6 +11,7 @@ const Design := preload("res://practice_theme.gd")
 const NOTE_INK := Design.SCORE_INK
 const DIM_INK := Design.STAFF_MUTED
 const PREVIEW_LIGHT := Design.MINT
+const MAX_STAFF_GAP := 17.0
 
 var glyphs = VerovioGlyphs.new()
 var native_ready := false
@@ -18,8 +19,10 @@ var failure_reason := ""
 var visible_symbols := 0
 var drawn_noteheads: Dictionary = {}
 var selected_density := 0.0
+var configured_density: float = Timeline.DEFAULT_PIXELS_PER_BEAT
 var beam_groups: Array = []
 var beamed_note_ids: Dictionary = {}
+var beam_stem_up_by_note: Dictionary = {}
 var chord_members: Dictionary = {}
 var notation_tuplets: Array = []
 # Immutable musical structure is indexed ONCE when a passage changes.
@@ -36,18 +39,21 @@ var previous_attack_before_measure: Dictionary = {}
 var cached_staff_gap := -1.0
 var cached_gap_height := -1.0
 var cached_head_offsets: Dictionary = {}
+var cached_accidental_offsets: Dictionary = {}
 var cached_offsets_gap := -1.0
 var frame_scanned_events := 0
 var frame_visible_beam_groups := 0
 
 func clear_score() -> void:
     super.clear_score()
+    timeline.set_density(configured_density)
     native_ready = false
     failure_reason = ""
     visible_symbols = 0
     drawn_noteheads.clear()
     beam_groups.clear()
     beamed_note_ids.clear()
+    beam_stem_up_by_note.clear()
     chord_members.clear()
     notation_tuplets.clear()
     measure_by_number.clear()
@@ -58,7 +64,23 @@ func clear_score() -> void:
     cached_staff_gap = -1.0
     cached_gap_height = -1.0
     cached_head_offsets.clear()
+    cached_accidental_offsets.clear()
     cached_offsets_gap = -1.0
+
+
+func set_density(value: float) -> bool:
+    if not super.set_density(value):
+        return false
+    configured_density = value
+    return true
+
+
+func set_density_from_env() -> bool:
+    if not super.set_density_from_env():
+        return false
+    configured_density = timeline.pixels_per_beat
+    return true
+
 
 func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         tie_items: Dictionary = {}, chord_items: Dictionary = {},
@@ -110,12 +132,13 @@ func load_score(candidate: Dictionary) -> bool:
         failure_reason = notice
         return false
     var density: float = Geometry.required_density(
-        timeline.model.get("notation_events", []), timeline.pixels_per_beat)
+        timeline.model.get("notation_events", []), configured_density,
+        timeline.MAX_SCORE_PIXELS_PER_BEAT)
     if density <= 0.0:
         failure_reason = "Rhythm too dense for one fixed native horizontal scale"
         notice = failure_reason
         return false
-    if not timeline.set_density(density):
+    if not timeline.set_score_density(density):
         failure_reason = timeline.last_error
         notice = failure_reason
         return false
@@ -125,6 +148,7 @@ func load_score(candidate: Dictionary) -> bool:
     var source_beams: Dictionary = _engraved_beam_groups(timeline.model)
     beam_groups = source_beams.get("groups",[])
     beamed_note_ids = Geometry.beamed_ids(beam_groups)
+    beam_stem_up_by_note = source_beams.get("stem_up_by_note",{})
     notation_tuplets = Geometry.tuplet_groups(timeline.model)
     measure_by_number.clear()
     for measure in timeline.measures:
@@ -190,10 +214,20 @@ func load_score(candidate: Dictionary) -> bool:
     if not failure_reason.is_empty():
         notice = failure_reason
         return false
+    # Fit the widest actual note/accidental footprint once for the score.
+    # Use the maximum supported staff gap so a later resize cannot create
+    # collisions or force a mid-performance change of horizontal scale.
+    var ink_density: float = _required_ink_density(density)
+    if not timeline.set_score_density(ink_density):
+        failure_reason = timeline.last_error
+        notice = failure_reason
+        return false
+    selected_density = ink_density
     cached_staff_gap = -1.0
     cached_gap_height = -1.0
     cached_offsets_gap = -1.0
     cached_head_offsets.clear()
+    cached_accidental_offsets.clear()
     failure_reason = ""
     native_ready = true
     queue_redraw()
@@ -256,6 +290,7 @@ func _engraved_beam_groups(model: Dictionary) -> Dictionary:
                 not bool(event.get("chord",false)):
             notes[str(event.get("id",""))] = event
     var output: Array = []
+    var directions: Dictionary = {}
     # Metadata is extracted from each original Verovio SVG beam group.
     for key in glyphs.beam_metadata:
         var data: Dictionary = glyphs.beam_metadata[key]
@@ -278,10 +313,12 @@ func _engraved_beam_groups(model: Dictionary) -> Dictionary:
                 break
         if valid:
             output.append(attacks)
+            for event in attacks:
+                directions[str(event.get("id",""))] = bool(data["stem_up"])
     output.sort_custom(func(a: Array,b: Array) -> bool:
         return float(a[0].get("beat",0.0)) < \
             float(b[0].get("beat",0.0)))
-    return {"groups":output}
+    return {"groups":output,"stem_up_by_note":directions}
 
 
 func _staff_center(hand: String) -> float:
@@ -294,7 +331,7 @@ func _gap() -> float:
     # The former raster crop clipped high notes because it only knew staff
     # rails, not the extreme noteheads. Fit the full semantic pitch range
     # once per frame/viewport, uniformly for both hands.
-    var gap: float = clampf(size.y * .034, 8.5, 17.0)
+    var gap: float = clampf(size.y * .034, 8.5, MAX_STAFF_GAP)
     if timeline.model.is_empty():
         return gap
     for event in ordered_events:
@@ -368,7 +405,8 @@ func _barline_geometry(measure: Dictionary, clock: float,
     return {"x":x, "top":_staff_center("right")-2.0*gap,
         "bottom":_staff_center("left")+2.0*gap,
         "style":str(mark.get("style","regular")),
-        "repeat":str(mark.get("repeat",""))}
+        "repeat":str(mark.get("repeat","")),
+        "segments":_barline_segments(str(mark.get("style","regular")),gap)}
 
 
 func _terminal_barline_geometry(clock: float,
@@ -384,7 +422,23 @@ func _terminal_barline_geometry(clock: float,
     return {"x":x, "top":_staff_center("right")-2.0*gap,
         "bottom":_staff_center("left")+2.0*gap,
         "style":str(mark.get("style","regular")),
-        "repeat":str(mark.get("repeat",""))}
+        "repeat":str(mark.get("repeat","")),
+        "segments":_barline_segments(str(mark.get("style","regular")),gap)}
+
+
+func _barline_segments(style: String, gap: float) -> Array:
+    # MusicXML tick crosses the top line; short spans lines two to four.
+    # These rules belong to each individual staff, not the grand-staff gap.
+    if style in ["tick","short"]:
+        var segments: Array = []
+        for staff in ["right","left"]:
+            var center: float = _staff_center(staff)
+            segments.append({
+                "top":center-gap*(2.5 if style == "tick" else 1.0),
+                "bottom":center-gap*1.5 if style == "tick" else center+gap})
+        return segments
+    return [{"top":_staff_center("right")-2.0*gap,
+        "bottom":_staff_center("left")+2.0*gap}]
 
 
 # Per SMuFL, barline strokes are drawn as structural rules. Unlike
@@ -396,7 +450,7 @@ func _barline_strokes(style: String, gap: float) -> Array:
     var separation: float = gap*.44
     match style:
         "none": return []
-        "regular", "dashed", "dotted":
+        "regular", "dashed", "dotted", "tick", "short":
             return [{"offset":0.0,"width":thin}]
         "heavy":
             return [{"offset":0.0,"width":heavy}]
@@ -423,22 +477,23 @@ func _paint_barline(info: Dictionary, gap: float) -> void:
     if bars.is_empty():
         return
     var x: float = float(info["x"])
-    var top: float = float(info["top"])
-    var bottom: float = float(info["bottom"])
     var ink: Color = Color(DIM_INK,.76)
     for stroke in bars:
         var sx: float = x+float(stroke["offset"])
         var width: float = float(stroke["width"])
-        if style in ["dashed","dotted"]:
-            var length: float = gap*(.65 if style=="dashed" else .13)
-            var skip: float = gap*(.35 if style=="dashed" else .27)
-            var at: float = top
-            while at < bottom:
-                draw_line(Vector2(sx,at),Vector2(sx,minf(bottom,at+length)),
-                    ink,width,true)
-                at += length+skip
-        else:
-            draw_line(Vector2(sx,top),Vector2(sx,bottom),ink,width,true)
+        for segment in info.get("segments",_barline_segments(style,gap)):
+            var top: float = float(segment["top"])
+            var bottom: float = float(segment["bottom"])
+            if style in ["dashed","dotted"]:
+                var length: float = gap*(.65 if style=="dashed" else .13)
+                var skip: float = gap*(.35 if style=="dashed" else .27)
+                var at: float = top
+                while at < bottom:
+                    draw_line(Vector2(sx,at),Vector2(sx,minf(bottom,at+length)),
+                        ink,width,true)
+                    at += length+skip
+            else:
+                draw_line(Vector2(sx,top),Vector2(sx,bottom),ink,width,true)
     var repetition: String = str(info.get("repeat",""))
     if repetition not in ["forward","backward","both"]:
         return
@@ -515,15 +570,20 @@ func _paint_ledger(x: float, y: float, step: int,
             line_step += 2
 
 func _paint_accidental(x: float, y: float,
-        value: String, ink: Color, gap: float) -> void:
-    var names := {
-        "sharp": "acc_sharp", "flat": "acc_flat",
-        "natural": "acc_natural", "double-sharp": "acc_double_sharp",
-        "double-flat": "acc_double_flat", "flat-flat": "acc_double_flat"
-    }
-    var name: String = str(names.get(value, ""))
+        value: String, ink: Color, gap: float,
+        head_offset: float = INF) -> void:
+    var name: String = str(Geometry.ACCIDENTAL_GLYPHS.get(value, ""))
     if not name.is_empty():
-        glyphs.paint(self, name, x - gap*1.15, y, gap, ink, true)
+        var offset: float = head_offset if is_finite(head_offset) else -gap*1.15
+        glyphs.paint(self, name, x+offset, y, gap, ink, true)
+
+
+func _paint_note_accidental(event: Dictionary, x: float, y: float,
+        ink: Color, gap: float) -> void:
+    var accidental: String = str(event.get("accidental",""))
+    if not accidental.is_empty() and accidental != "null":
+        _paint_accidental(x,y,accidental,ink,gap,
+            float(cached_accidental_offsets.get(str(event.get("id","")),-gap*1.15)))
 
 
 func _paint_rhythm_dots(x: float, y: float, dots: int,
@@ -606,6 +666,14 @@ func _stem_attachment(note_type: String, gap: float, up: bool) -> float:
     return half_width if up else -half_width
 
 
+func _source_stem_bounds(event: Dictionary, up: bool) -> Array:
+    if chord_members.has(str(event.get("id",""))):
+        return glyphs.chord_stem_bounds.get(_chord_template_key(event),[])
+    var key: String = str(event.get("note_type","eighth"))+(
+        "_up" if up else "_down")
+    return glyphs.note_stem_bounds.get(key,[])
+
+
 # Pitch extrema determine a whole chord's stem, not the arbitrarily
 # first note in MusicXML. The head artwork/width still comes from Verovio.
 func _chord_extents(event: Dictionary, gap: float,
@@ -659,9 +727,142 @@ func _chord_template_key(event: Dictionary) -> String:
     for value in differences:
         names.append(str(value))
     var extents: Dictionary = _chord_extents(event,1.0)
-    var direction: String = "up" if bool(extents["up"]) else "down"
+    # A source beam can force a chord opposite to its isolated pitch rule.
+    # Its direction selects BOTH displaced heads and the stem-side mask,
+    # including during load validation, before a frame has been painted.
+    var up: bool = bool(beam_stem_up_by_note.get(
+        str(event.get("id","")),extents["up"]))
+    var direction: String = "up" if up else "down"
     return "%s|%s|%s" % [
         str(event.get("note_type","quarter")),direction,",".join(names)]
+
+
+func _engraved_head_offsets(gap: float) -> Dictionary:
+    # All attachments use the SAME original head centres as the compound
+    # sprite. Estimated second/unison spacing moves ties and slurs away
+    # from the ink even though the musical beat itself is unchanged.
+    var offsets: Dictionary = {}
+    for leader_id in chord_members:
+        var members: Array = chord_members[leader_id].duplicate()
+        var leader: Dictionary = {}
+        for member in members:
+            if str(member.get("id","")) == str(leader_id):
+                leader = member
+                break
+        var positions: Array = glyphs.chord_heads(_chord_template_key(leader))
+        if positions.size() != members.size():
+            continue
+        members.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+            return Geometry.diatonic_index(a.get("spelling",{})) < \
+                Geometry.diatonic_index(b.get("spelling",{})))
+        for i in range(members.size()):
+            offsets[str(members[i].get("id",""))] = \
+                float(positions[i][0])*gap/250.0
+    return offsets
+
+
+func _event_ink_rect(event: Dictionary, gap: float,
+        heads: Dictionary, accidentals: Dictionary) -> Rect2:
+    var unit: float = gap/250.0
+    var id: String = str(event.get("id",""))
+    var kind: String = str(event.get("note_type","quarter"))
+    var head_x: float = float(heads.get(id,0.0))
+    var box: Array = []
+    if str(event.get("kind","")) == "rest":
+        box = glyphs.bounds["rest_"+kind]
+        var y: float = _staff_center(str(event.get("staff","right")))+gap*(
+            -.3 if str(event.get("voice","1")) == "1" else .6)
+        return Rect2(-float(box[2])*unit*.5,y+float(box[1])*unit,
+            float(box[2])*unit,float(box[3])*unit)
+    if chord_members.has(id):
+        var key: String = _chord_template_key(event)
+        box = glyphs.chord_heads_bounds[key] if beamed_note_ids.has(id) else \
+            glyphs.chord_metadata[key]["bounds"]
+    elif not bool(event.get("chord",false)) and not beamed_note_ids.has(id):
+        var up: bool = bool(_chord_extents(event,gap)["up"])
+        var key: String = "whole" if kind == "whole" else kind+(
+            "_up" if up else "_down")
+        box = glyphs.note_bounds[key]
+    var head_box: Array = glyphs.bounds["head_"+(
+        kind if kind in ["whole","half"] else "black")]
+    var left: float = head_x-float(head_box[2])*unit*.5
+    var right: float = head_x+float(head_box[2])*unit*.5
+    var y: float = _event_y(event,gap)
+    var top: float = y+float(head_box[1])*unit
+    var bottom: float = y+(float(head_box[1])+float(head_box[3]))*unit
+    if box.size() == 4:
+        left = minf(left,float(box[0])*unit)
+        right = maxf(right,(float(box[0])+float(box[2]))*unit)
+        top = minf(top,y+float(box[1])*unit)
+        bottom = maxf(bottom,y+(float(box[1])+float(box[3]))*unit)
+    if beamed_note_ids.has(id):
+        var stem: Array = _source_stem_bounds(event,bool(beam_stem_up_by_note[id]))
+        left = minf(left,float(stem[0])*unit)
+        right = maxf(right,(float(stem[0])+float(stem[2]))*unit)
+        top = minf(top,y+float(stem[1])*unit)
+        bottom = maxf(bottom,y+(float(stem[1])+float(stem[3]))*unit)
+    var step: int = Geometry.staff_step(event.get("spelling",{}),
+        _clef_for(str(event.get("staff","right")),_measure_for(event)))
+    if step <= -2 or step >= 10:
+        left = minf(left,head_x-14.0)
+        right = maxf(right,head_x+14.0)
+        var staff_bottom: float = _staff_center(str(event.get("staff","right")))+2.0*gap
+        if step <= -2:
+            top = minf(top,Geometry.note_y(-2,staff_bottom,gap)-.675)
+        else:
+            bottom = maxf(bottom,Geometry.note_y(10,staff_bottom,gap)+.675)
+    if accidentals.has(id):
+        var name: String = str(Geometry.ACCIDENTAL_GLYPHS[str(event["accidental"])])
+        var width: float = float(glyphs.bounds[name][2])*unit
+        var center: float = head_x+float(accidentals[id])
+        left = minf(left,center-width*.5)
+        right = maxf(right,center+width*.5)
+        top = minf(top,y+float(glyphs.bounds[name][1])*unit)
+        bottom = maxf(bottom,y+(float(glyphs.bounds[name][1])+ \
+            float(glyphs.bounds[name][3]))*unit)
+    var dots: int = int(event.get("dots",0))
+    if dots > 0:
+        right = maxf(right,head_x+gap*(1.05+float(dots-1)*.63)+ \
+            float(glyphs.bounds["augmentation_dot"][2])*unit*.5)
+    return Rect2(left,top,right-left,bottom-top)
+
+
+func _required_ink_density(preferred: float) -> float:
+    var gap: float = MAX_STAFF_GAP
+    var heads: Dictionary = _engraved_head_offsets(gap)
+    var accidentals: Dictionary = Geometry.accidental_offsets(
+        ordered_events,gap,heads,glyphs.bounds)
+    var staves: Dictionary = {"right":{},"left":{}}
+    var minimum_left := INF
+    var maximum_right := -INF
+    for event in ordered_events:
+        var staff: String = str(event.get("staff","right"))
+        var beat: float = float(event.get("beat",0.0))
+        var ink: Rect2 = _event_ink_rect(event,gap,heads,accidentals)
+        if not staves[staff].has(beat):
+            staves[staff][beat] = []
+        staves[staff][beat].append(ink)
+        minimum_left = minf(minimum_left,ink.position.x)
+        maximum_right = maxf(maximum_right,ink.end.x)
+    var density: float = preferred
+    var reach: float = (maximum_right-minimum_left+gap*.2)/preferred
+    for staff in staves:
+        var onsets: Array = staves[staff].keys()
+        onsets.sort()
+        for i in range(1,onsets.size()):
+            for j in range(i-1,-1,-1):
+                var distance: float = float(onsets[i])-float(onsets[j])
+                if distance > reach:
+                    break
+                for previous in staves[staff][onsets[j]]:
+                    for current in staves[staff][onsets[i]]:
+                        # Close clocks alone do not imply touching ink:
+                        # separate voices/ledger registers may be clear in Y.
+                        if current.position.y >= previous.end.y+gap*.1 or \
+                                previous.position.y >= current.end.y+gap*.1:
+                            continue
+                        density = maxf(density,(previous.end.x-current.position.x+gap*.2)/distance)
+    return density
 
 
 func _paint_engraved_chord(event: Dictionary, x: float,
@@ -716,9 +917,7 @@ func _paint_engraved_chord(event: Dictionary, x: float,
         var center: Vector2 = head_centres[i]
         _paint_rhythm_dots(center.x,center.y,
             int(current.get("dots",0)),ink,gap)
-        var accidental: String = str(current.get("accidental",""))
-        if not accidental.is_empty() and accidental != "null":
-            _paint_accidental(center.x,center.y,accidental,ink,gap)
+        _paint_note_accidental(current,center.x,center.y,ink,gap)
         var id: String = str(current.get("id",""))
         drawn_noteheads[id] = center
         painted.append(id)
@@ -752,9 +951,7 @@ func _paint_note(event: Dictionary, x: float,
             push_warning("Missing authentic Verovio note template: " + kind)
             return
         _paint_rhythm_dots(x,y,int(event.get("dots",0)),ink,gap)
-        var accidental_name: String = str(event.get("accidental", ""))
-        if not accidental_name.is_empty() and accidental_name != "null":
-            _paint_accidental(x,y,accidental_name,ink,gap)
+        _paint_note_accidental(event,x,y,ink,gap)
         drawn_noteheads[str(event.get("id", ""))] = Vector2(x,y)
         return
     var solid: bool = kind not in ["half","whole"]
@@ -767,9 +964,7 @@ func _paint_note(event: Dictionary, x: float,
         glyphs.paint_note_stem(self,kind,bool(beam_stem["up"]),
             x,y,float(beam_stem["tip_y"]),gap,ink)
     _paint_rhythm_dots(x,y,int(event.get("dots",0)),ink,gap)
-    var accidental: String = str(event.get("accidental", ""))
-    if not accidental.is_empty() and accidental != "null":
-        _paint_accidental(x,y,accidental,ink,gap)
+    _paint_note_accidental(event,x,y,ink,gap)
     drawn_noteheads[str(event.get("id", ""))] = Vector2(x,y)
 
 func _beam_layout(gap: float, clock: float, playhead_x: float,
@@ -789,35 +984,29 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
         if last_x < -60.0 or first_x > size.x + 60.0:
             continue
         frame_visible_beam_groups += 1
-        # The overall stem direction includes ALL chord tones, even when
-        # the beam grouping indexes only the chord leaders.
-        var sum_steps := 0.0
-        var counted := 0
-        for event in group:
-            var all_heads: Array = chord_members.get(
-                str(event.get("id", "")), [event])
-            for head in all_heads:
-                var clef: Dictionary = _clef_for(
-                    str(head.get("staff", "right")), _measure_for(head))
-                sum_steps += float(Geometry.staff_step(
-                    head.get("spelling", {}),clef))
-                counted += 1
-        var up: bool = sum_steps/float(maxi(1,counted)) < 4.0
+        var up: bool = bool(beam_stem_up_by_note[str(group[0].get("id",""))])
         var group_ids := PackedStringArray()
         for event in group:
             group_ids.append(str(event.get("id","")))
         var source_key: String = "|".join(group_ids)
-        if glyphs.beam_metadata.has(source_key):
-            up = bool(glyphs.beam_metadata[source_key].get("stem_up",up))
         var members: Array = []
-        for event in group:
+        var source_stems: Array = []
+        var source_heads: Array = glyphs.beam_metadata[source_key]["head_offsets"]
+        var head_box: Array = glyphs.bounds["head_black"]
+        var origin_to_center: float = float(head_box[0])+float(head_box[2])*.5
+        for index in range(group.size()):
+            var event: Dictionary = group[index]
             var x: float = timeline.screen_x(float(event.get("beat", 0.0)),
                 clock, playhead_x, play_from_beat)
             var chord: Dictionary = _chord_extents(event,gap,head_offsets)
-            var anchor_offset: float = float(chord[
-                "bottom_offset" if up else "top_offset"])
-            var stem_x: float = x+anchor_offset+ \
-                _stem_attachment(str(event.get("note_type", "eighth")),gap,up)
+            var stem_box: Array = _source_stem_bounds(event,up)
+            var attachment: float = float(stem_box[0])+float(stem_box[2])*.5
+            var stem_x: float = x+attachment*gap/250.0
+            # The beam PNG uses source font origins, while stem masks use
+            # centred heads. Map each measured stem centre in BOTH spaces;
+            # mapping head centres stretches the first beam cap away from
+            # its stem when the source spacing differs from the beat grid.
+            source_stems.append(float(source_heads[index])+origin_to_center+attachment)
             members.append({
                 "id":str(event.get("id", "")), "x":stem_x,
                 "head_x":x+float(head_offsets.get(str(event.get("id","")),0.0)),
@@ -842,7 +1031,12 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
                 "x":float(member["x"])}
         drawn_groups.append({"members":members,
             "staff":str(group[0].get("staff", "right")),
-            "up":up, "art_key":art_key})
+            "up":up, "art_key":art_key,
+            "source_stem_offsets":source_stems,
+            # Beam bounds are exported relative to the first source ID,
+            # which may be an inner/higher chord tone. Stem tip offsets
+            # deliberately use the outer tone and have a different origin.
+            "anchor_y":_event_y(group[0],gap)})
     return {"stems":stems, "groups":drawn_groups}
 
 
@@ -860,10 +1054,10 @@ func _paint_beams(data: Dictionary, gap: float) -> void:
             continue
         var anchors: Array = []
         for member in members:
-            anchors.append(float(member["head_x"]))
+            anchors.append(float(member["x"]))
         glyphs.paint_beam(self,str(group["art_key"]),anchors,
-            float(first["head_y"]),gap,
-            _ink(str(group.get("staff","right"))))
+            float(group["anchor_y"]),gap,
+            _ink(str(group.get("staff","right"))),group["source_stem_offsets"])
 
 
 # Only the original Verovio-rendered tie contours are permitted.
@@ -1039,7 +1233,9 @@ func _draw() -> void:
     visible_symbols = 0
     drawn_noteheads.clear()
     if cached_offsets_gap < 0.0 or absf(cached_offsets_gap-gap) > .001:
-        cached_head_offsets = Geometry.chord_offsets(ordered_events, gap)
+        cached_head_offsets = _engraved_head_offsets(gap)
+        cached_accidental_offsets = Geometry.accidental_offsets(
+            ordered_events,gap,cached_head_offsets,glyphs.bounds)
         cached_offsets_gap = gap
     var head_offsets: Dictionary = cached_head_offsets
     var beam_data: Dictionary = _beam_layout(gap, camera_clock,

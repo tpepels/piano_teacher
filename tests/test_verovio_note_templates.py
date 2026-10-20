@@ -7,6 +7,15 @@ from io import BytesIO
 from PIL import Image
 
 
+def test_whole_note_ink_is_centred_on_its_musical_attack():
+    from piano_teacher.verovio_note_templates import note_templates
+
+    bounds = note_templates()["whole"]["bounds"]
+    # Whole heads are wider than black heads. Their actual ink centre must
+    # coincide with the timeline anchor, within one raster pixel (15 units).
+    assert abs(bounds[0] + bounds[2] / 2) < 15, bounds
+
+
 def test_engrave_complete_notes_once_then_reuse_across_loads(tmp_path, monkeypatch):
     from piano_teacher.preprocessing_cache import PreprocessingCache
     from piano_teacher import verovio_note_templates as templates
@@ -56,6 +65,20 @@ def test_note_stems_are_only_verovio_svg_graphics():
     assert "stem" in classes
     assert "notehead" not in classes
     assert "staff" not in classes
+
+
+def test_real_flag_is_not_embedded_in_reusable_beam_stem():
+    import verovio
+    from xml.etree import ElementTree as ET
+    from piano_teacher.score import _create_verovio_toolkit
+    from piano_teacher.verovio_note_templates import _one_note_xml, _only_stem_svg
+
+    toolkit = _create_verovio_toolkit(verovio)
+    assert toolkit.loadData(_one_note_xml("eighth", "up"))
+    stem = ET.fromstring(_only_stem_svg(toolkit.renderToSVG(1)))
+    classes = {c for element in stem.iter() for c in element.get("class", "").split()}
+    assert "stem" in classes
+    assert "flag" not in classes, "A reusable beam stem must not retain its standalone flag"
 
 
 def test_note_template_musicxml_has_verovio_stem_and_real_note_duration():

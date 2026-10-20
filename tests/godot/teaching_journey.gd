@@ -42,12 +42,30 @@ func press(text: String) -> void:
     check(false, "Visible enabled control missing: " + text)
 
 func score_ready() -> bool:
-    return app.score_view.texture != null and app.layout_revision == app.revision \
+    var ready: bool = app.score_view.texture != null and app.layout_revision == app.revision \
         and app.rendered_revision == app.revision and not app.layout_pending and not app.score_pending
+    if ready and app.native_notation_enabled:
+        return app.timeline_preview != null and app.timeline_preview.native_ready \
+            and app.timeline_preview.is_visible_in_tree() and app.timeline_model_revision == app.revision
+    return ready
 
 func note_position() -> Vector2:
     for note in app.score_layout.get("notes", []):
         if str(note.get("id", "")) == tracked_id:
+            if app.native_notation_enabled:
+                var renderer = app.timeline_preview
+                if renderer.drawn_noteheads.has(tracked_id):
+                    return renderer.get_global_transform_with_canvas() * renderer.drawn_noteheads[tracked_id]
+                for event in renderer.ordered_events:
+                    if str(event.get("id", "")) == tracked_id:
+                        var clock: float = renderer.clock_beat if renderer.running or renderer.paused else 0.0
+                        var x: float = renderer.timeline.screen_x(float(event["beat"]),clock,
+                            renderer.size.x * renderer.PLAYHEAD_FRACTION,renderer.play_from_beat)
+                        x += float(renderer.cached_head_offsets.get(tracked_id,0.0))
+                        return renderer.get_global_transform_with_canvas() * Vector2(x,
+                            renderer._event_y(event,renderer._gap()))
+                check(false, "Tracked native source note missing")
+                return Vector2.ZERO
             var local: Vector2 = (Vector2(float(note.x), float(note.y)) - app.score_crop_origin) \
                 / app.score_crop_size * app.score_content.size
             return app.score_content.get_global_transform_with_canvas() * local
@@ -55,6 +73,7 @@ func note_position() -> Vector2:
     return Vector2.ZERO
 
 func capture(label: String) -> Dictionary:
+    await wait_for(score_ready, "matching rendered source revision before " + label)
     await process_frame
     RenderingServer.force_draw()
     var picture := root.get_texture().get_image()
@@ -65,6 +84,12 @@ func capture(label: String) -> Dictionary:
         "mode": app.last_state.get("mode", ""), "beat": app._transport_beat_now(),
         "width": picture.get_width(), "height": picture.get_height(),
         "score_height": app.score_frame.size.y}
+    if app.native_notation_enabled:
+        var renderer = app.timeline_preview
+        entry["native_ready"] = renderer.native_ready
+        entry["native_visible"] = renderer.is_visible_in_tree()
+        entry["native_noteheads"] = renderer.drawn_noteheads.size()
+        check(score_ready(), "Current source revision remains visibly native: " + label)
     var background := picture.get_pixel(5,5)
     check(background.r < .2 and background.g < .32 and background.b < .28,
         "Low-glare dark background: " + label)

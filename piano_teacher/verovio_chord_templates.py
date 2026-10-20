@@ -14,8 +14,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 5
-MAX_PATTERNS = 256
+VERSION = 7
 _STEPS = {"C":0,"D":1,"E":2,"F":3,"G":4,"A":5,"B":6}
 _LETTERS = "CDEFGAB"
 _BEATS = {"whole":4.0,"half":2.0,"quarter":1.0,"eighth":.5,
@@ -53,7 +52,7 @@ def chord_pattern(leader: dict, notes: list[dict], measure: dict) -> str | None:
     return f"{kind}|{direction}|{','.join(map(str,differences))}"
 
 
-def patterns_from_model(model: dict) -> list[str]:
+def patterns_from_model(model: dict, *, stem_directions: dict[str, bool] | None = None) -> list[str]:
     measures = {int(m["number"]):m for m in model.get("measures",[])}
     lanes = defaultdict(list)
     for e in model.get("notation_events",[]):
@@ -69,8 +68,11 @@ def patterns_from_model(model: dict) -> list[str]:
         pattern = chord_pattern(leaders[0],notes,measures[measure_id])
         if pattern:
             patterns.add(pattern)
-    if len(patterns) > MAX_PATTERNS:
-        raise ValueError("Too many distinct source chord patterns for native engraving")
+            leader_id = str(leaders[0].get("id", ""))
+            if stem_directions is not None and leader_id in stem_directions:
+                kind, _, relative = pattern.split("|")
+                direction = "up" if stem_directions[leader_id] else "down"
+                patterns.add(f"{kind}|{direction}|{relative}")
     return sorted(patterns)
 
 
@@ -154,6 +156,10 @@ def _only_original_chord_stems(svg: str) -> str:
     root=ET.fromstring(svg)
     def prune(node):
         if "stem" in node.get("class","").split():
+            for parent in node.iter():
+                for child in list(parent):
+                    if "flag" in child.get("class", "").split():
+                        parent.remove(child)
             return True
         if node.tag.rsplit("}",1)[-1] in {"defs","style"}:
             return True
@@ -205,7 +211,9 @@ def _render(toolkit,pattern: str) -> dict:
     if staff<=2:
         raise ValueError("Invalid chord staff spacing")
     from .notation_symbols import native_glyphs
-    head=native_glyphs()["head_black"]["bounds"]
+    kind = pattern.split("|", 1)[0]
+    head=native_glyphs()["head_" + (
+        kind if kind in {"whole", "half"} else "black")]["bounds"]
     dx=(head[0]+head[2]*.5)*staff/250
     note_x=anchor[0]*rgba.width+dx
     note_y=anchor[1]*rgba.height
@@ -257,8 +265,50 @@ def _render(toolkit,pattern: str) -> dict:
     return result
 
 
-def chord_templates(model: dict,cache=None) -> dict:
-    patterns=patterns_from_model(model)
+def _valid_asset(value: object, pattern: str) -> bool:
+    """A partial disk atlas must be regenerated before Godot requests it."""
+    def box(item):
+        if not isinstance(item, dict):
+            return False
+        bounds = item.get("bounds")
+        valid = (isinstance(bounds, list) and len(bounds) == 4 and
+                all(isinstance(n, (int, float)) and math.isfinite(n) for n in bounds) and
+                bounds[2] > 0 and bounds[3] > 0 and
+                isinstance(item.get("png_base64"), str) and
+                item["png_base64"].startswith("iVBORw0KGgo"))
+        if not valid:
+            return False
+        try:
+            data = base64.b64decode(item["png_base64"], validate=True)
+            with Image.open(BytesIO(data)) as image:
+                if image.format != "PNG":
+                    return False
+                image.verify()
+        except (ValueError, OSError, SyntaxError):
+            return False
+        return True
+
+    if not (box(value) and value.get("source") == "verovio-engraved-chord" and
+            value.get("units_per_space") == 250):
+        return False
+    positions = value.get("head_positions")
+    if not (isinstance(positions, list) and
+            len(positions) == len(pattern.split("|")[2].split(",")) and
+            all(isinstance(p, list) and len(p) == 2 and
+                all(isinstance(n, (int, float)) and math.isfinite(n) for n in p)
+                for p in positions)):
+        return False
+    heads = value.get("heads_only")
+    if not box(heads) or heads.get("source") != "verovio-engraved-chord-heads":
+        return False
+    stem = value.get("stem_only")
+    return (pattern.startswith("whole|") or
+            (box(stem) and stem.get("source") == "verovio-engraved-chord-stem"))
+
+
+def chord_templates(model: dict,cache=None, *,
+                    stem_directions: dict[str, bool] | None = None) -> dict:
+    patterns=patterns_from_model(model, stem_directions=stem_directions)
     if not patterns:
         return {}
     import verovio
@@ -271,9 +321,7 @@ def chord_templates(model: dict,cache=None) -> dict:
     for pattern in patterns:
         key=cache.key("verovio-chords",VERSION,font,ver,pattern) if cache else None
         value=cache.read_json("verovio-chord",key) if key else None
-        if not (isinstance(value,dict) and
-                value.get("source")=="verovio-engraved-chord" and
-                isinstance(value.get("head_positions"),list)):
+        if not _valid_asset(value, pattern):
             if toolkit is None:
                 toolkit=_create_verovio_toolkit(verovio)
                 if not toolkit.setOptions({"inputFrom":"xml","scale":48,
@@ -283,6 +331,8 @@ def chord_templates(model: dict,cache=None) -> dict:
                     raise RuntimeError("Verovio rejected chord engraving options")
             try:
                 value=_render(toolkit,pattern)
+                if not _valid_asset(value, pattern):
+                    raise ValueError("Incomplete genuine chord components")
             except (ValueError,RuntimeError) as exc:
                 # Keep the original complete Verovio score available, but
                 # report precisely which source chord failed to engrave.

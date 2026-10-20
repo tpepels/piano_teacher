@@ -7,7 +7,7 @@ No guessed linear page offsets are produced when Verovio supplies no matching no
 from __future__ import annotations
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 import re
 import xml.etree.ElementTree as ET
@@ -78,6 +78,8 @@ class PageGeometry:
     staff_systems: dict[str, dict]
     # Actual leftmost event ink, including accidentals and staff ledger paths.
     ink_left: dict[str, float]
+    # Measured source stem centre, shared by every pitch of a chord.
+    stem_x: dict[str, float] = field(default_factory=dict)
 
 
 def parse_svg_geometry(svg: str) -> PageGeometry:
@@ -258,7 +260,33 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
             "top": max(0.0, top), "bottom": min(1.0, bottom),
             "staff_lines": lines,
         }
-    return PageGeometry(width, height, found, system_ends, staff_systems, ink_left)
+    stem_x = {}
+    parents = {child: parent for parent in root.iter() for child in parent}
+    for stem in root.iter():
+        classes = _classes(stem)
+        if "stem" not in classes or classes & {"bounding-box", "content-bounding-box"}:
+            continue
+        owner = parents.get(stem)
+        while owner is not None and not _classes(owner) & {"note", "chord"}:
+            owner = parents.get(owner)
+        if owner is None:
+            continue
+        for path in stem:
+            if path.tag.rsplit("}", 1)[-1] != "path":
+                continue
+            match = re.match(r"\s*M\s*(%s)[,\s]+(%s)" % (NUMBERS.pattern, NUMBERS.pattern),
+                             path.get("d", ""))
+            if match is None:
+                continue
+            x, _ = _apply(matrix[path], float(match.group(1)), float(match.group(2)))
+            normalized = (x-bx)/width
+            if math.isfinite(normalized):
+                for note in owner.iter():
+                    identifier = note.get("id")
+                    if "note" in _classes(note) and identifier in found:
+                        stem_x[identifier] = normalized
+            break
+    return PageGeometry(width, height, found, system_ends, staff_systems, ink_left, stem_x)
 
 
 def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,

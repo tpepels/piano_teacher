@@ -6,6 +6,80 @@ from io import BytesIO
 from xml.etree import ElementTree as ET
 
 from PIL import Image
+import pytest
+
+
+def _whole_chord_model():
+    return {"measures": [{"number": 1, "clefs": {"right": {"sign": "G", "line": 2}}}],
+            "notation_events": [
+                {"id": "a", "kind": "note", "staff": "right", "voice": "1",
+                 "measure": 1, "beat": 0, "chord": False, "note_type": "whole",
+                 "spelling": {"step": "B", "octave": 4}},
+                {"id": "b", "kind": "note", "staff": "right", "voice": "1",
+                 "measure": 1, "beat": 0, "chord": True, "note_type": "whole",
+                 "spelling": {"step": "D", "octave": 5}}]}
+
+
+def test_whole_chord_ink_is_centred_on_source_head_positions():
+    from piano_teacher.verovio_chord_templates import chord_templates
+
+    item = chord_templates(_whole_chord_model())["whole|down|0,2"]
+    bounds = item["heads_only"]["bounds"]
+    assert abs(bounds[0] + bounds[2] / 2) < 15, bounds
+
+
+def test_real_chord_stem_excludes_its_nested_flag():
+    import verovio
+    from piano_teacher.score import _create_verovio_toolkit
+    from piano_teacher.verovio_chord_templates import (
+        _xml, _extract_chord, _only_original_chord_stems,
+    )
+
+    toolkit = _create_verovio_toolkit(verovio)
+    assert toolkit.loadData(_xml("eighth|up|0,2"))
+    chord = _extract_chord(toolkit.renderToSVG(1), {"c0", "c1"})
+    stem = ET.fromstring(_only_original_chord_stems(chord))
+    classes = {c for element in stem.iter() for c in element.get("class", "").split()}
+    assert "stem" in classes
+    assert "flag" not in classes, "Chord flags must not reappear inside a beamed attack"
+
+
+def test_source_beam_direction_gets_its_own_reusable_chord_template():
+    from piano_teacher.verovio_chord_templates import chord_templates
+
+    model = _whole_chord_model()
+    model["notation_events"] = [{**event, "note_type": "eighth"}
+                                for event in model["notation_events"]]
+    atlas = chord_templates(model, stem_directions={"a": True})
+    assert set(atlas) == {"eighth|up|0,2", "eighth|down|0,2"}
+    up = atlas["eighth|up|0,2"]["stem_only"]["bounds"]
+    down = atlas["eighth|down|0,2"]["stem_only"]["bounds"]
+    assert up[0] > 0 > down[0], "Original stem attachments must switch sides with the beam"
+
+
+@pytest.mark.parametrize("damage", ["missing_stem", "corrupt_png"])
+def test_incomplete_cached_chord_is_rebuilt_instead_of_causing_fallback(tmp_path, damage):
+    import verovio
+    from piano_teacher.preprocessing_cache import PreprocessingCache
+    from piano_teacher import verovio_chord_templates as chords
+    from piano_teacher.notation_symbols import native_glyphs
+
+    cache = PreprocessingCache(tmp_path)
+    model = _whole_chord_model()
+    model["notation_events"] = [{**e, "note_type": "quarter"}
+                                for e in model["notation_events"]]
+    pattern = "quarter|down|0,2"
+    original = chords.chord_templates(model, cache)[pattern]
+    incomplete = {k: v for k, v in original.items() if k != "stem_only"}
+    if damage == "corrupt_png":
+        incomplete = {**original, "png_base64": original["png_base64"][:-16]}
+    key = cache.key("verovio-chords", chords.VERSION,
+                    native_glyphs()["head_black"]["font"],
+                    getattr(verovio, "__version__", "unknown"), pattern)
+    cache.write_json("verovio-chord", key, incomplete)
+    repaired = chords.chord_templates(model, cache)[pattern]
+    assert repaired["stem_only"]["png_base64"] == original["stem_only"]["png_base64"]
+    assert repaired["png_base64"] == original["png_base64"]
 
 
 def _valid_sprite(asset,source):

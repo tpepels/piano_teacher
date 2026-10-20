@@ -53,7 +53,7 @@ class ScoreMeasure:
 
 BARLINE_STYLES = frozenset({
     "regular", "light-light", "light-heavy", "heavy-light",
-    "heavy-heavy", "heavy", "none", "dashed", "dotted",
+    "heavy-heavy", "heavy", "none", "dashed", "dotted", "tick", "short",
 })
 
 

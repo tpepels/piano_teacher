@@ -42,6 +42,9 @@ func press(text: String) -> void:
     check(false, "Visible enabled control missing: " + text)
 
 func score_ready() -> bool:
+    if app.native_notation_enabled and (app.timeline_preview == null or \
+            not app.timeline_preview.native_ready or app.timeline_model_revision != app.revision):
+        return false
     return app.score_view.texture != null and app.layout_revision == app.revision \
         and app.rendered_revision == app.revision and not app.layout_pending and not app.score_pending
 
@@ -58,6 +61,12 @@ func visible_instruction() -> bool:
     return false
 
 func position(note: Dictionary) -> Vector2:
+    if app.native_notation_enabled:
+        var renderer = app.timeline_preview
+        if renderer != null and renderer.drawn_noteheads.has(str(note.id)):
+            return renderer.get_global_transform_with_canvas() * \
+                Vector2(renderer.drawn_noteheads[str(note.id)])
+        return Vector2(-10000,-10000)
     var local: Vector2 = (Vector2(float(note.x), float(note.y)) - app.score_crop_origin) \
         / app.score_crop_size * app.score_content.size
     return app.score_content.get_global_transform_with_canvas() * local

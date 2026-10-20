@@ -12,15 +12,13 @@ from __future__ import annotations
 
 import base64
 from io import BytesIO
-import copy
 import math
 import os
 import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 3
-MAX_FRAGMENTS = 120
+VERSION = 5
 
 
 def _classes(node: ET.Element) -> set[str]:
@@ -45,7 +43,6 @@ def _filter_beam_svg(svg: str, selected: tuple[str, ...]) -> str | None:
                       and _note_ids(node) == selected), None)
     if candidate is None:
         return None
-    beam_id = candidate.get("id")
     # Even a beam without an XML id has a unique position among candidates.
     siblings = [node for node in root.iter()
                 if "beam" in _classes(node) and _note_ids(node) == selected]
@@ -55,7 +52,8 @@ def _filter_beam_svg(svg: str, selected: tuple[str, ...]) -> str | None:
     def strip_notes(node: ET.Element) -> None:
         for child in list(node):
             classes = _classes(child)
-            if classes & {"note", "rest", "bounding-box",
+            if classes & {"note", "chord", "rest", "stem", "flag",
+                          "tupletNum", "tupletBracket", "bounding-box",
                           "content-bounding-box"}:
                 node.remove(child)
             else:
@@ -120,14 +118,13 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                            model: dict) -> dict:
     """Return source-accurate beam masks with an anchor for EVERY note.
 
-    Chords, duplicate-time events and ambiguous groups remain in the existing
-    renderer. No tempo-dependent page positions replace source-beat timing.
+    Chord tones retain their source IDs and share one attack anchor. No
+    tempo-dependent page positions replace source-beat timing.
     """
     import cairosvg
     from .score_geometry import parse_svg_geometry
 
-    # Match the two semantic attacks in order; other Verovio beam groupings
-    # cannot be attached safely to this model without a full multi-anchor map.
+    # Every source attack gets its own anchor, including long beam groups.
     events = {e.get("id"):e for e in model.get("notation_events",[])
               if e.get("kind")=="note" and e.get("id")}
     eligible: dict[tuple[str,...],tuple[str,tuple[str,...],tuple[tuple[str,...],...]]] = {}
@@ -137,7 +134,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
             if "beam" not in _classes(node):
                 continue
             full_ids = _note_ids(node)
-            if not 2 <= len(full_ids) <= 24 or any(i not in events for i in full_ids):
+            if len(full_ids) < 2 or any(i not in events for i in full_ids):
                 continue
             full = [events[i] for i in full_ids]
             if any((e.get("staff"),e.get("voice"),e.get("measure")) !=
@@ -156,14 +153,10 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                     chord_ids.append([str(event["id"])])
             else:
                 ids = tuple(str(event["id"]) for event in attacks)
-                if (2 <= len(ids) <= 16 and
+                if (len(ids) >= 2 and
                     all(float(a["beat"]) < float(b["beat"])
                         for a,b in zip(attacks,attacks[1:]))):
                     eligible[ids] = page,full_ids,tuple(tuple(g) for g in chord_ids)
-            if len(eligible) >= MAX_FRAGMENTS:
-                break
-        if len(eligible) >= MAX_FRAGMENTS:
-            break
     if os.environ.get("PIANO_TEACHER_BEAM_DEBUG") == "1":
         print("VEROVIO_BEAM_CANDIDATES:",len(eligible),
               [(ids, len(pair[0])) for ids,pair in eligible.items()])
@@ -229,7 +222,9 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                 source_heads = [geom.elements[id] for id in chord_ids[index]]
                 reference_y = (max(head[1] for head in source_heads) if up
                                else min(head[1] for head in source_heads))
-                stem_x = note_x*rgba.width + (.54 if up else -.54)*staff_space
+                actual_stem = getattr(geom, "stem_x", {}).get(ids[index])
+                stem_x = (actual_stem*rgba.width if actual_stem is not None else
+                          note_x*rgba.width + (.54 if up else -.54)*staff_space)
                 px = round(stem_x)
                 sample = []
                 # Verovio's stem attachment differs from the centre of
@@ -294,7 +289,7 @@ def beam_fragments(svgs, model, cache=None, cache_identity="") -> dict:
         if isinstance(stored,dict) and stored and all(
                 isinstance(v,dict) and
                 v.get("source")=="verovio-engraved-beam" and
-                2 <= len(v.get("note_ids",[])) <= 16 and
+                len(v.get("note_ids",[])) >= 2 and
                 len(v.get("head_offsets",[]))==len(v.get("note_ids",[]))
                 for v in stored.values()):
             return stored

@@ -1,6 +1,7 @@
 """Phase C native notation and safe fallback acceptance."""
 import shutil
 import subprocess
+import os
 from pathlib import Path
 import pytest
 
@@ -13,6 +14,7 @@ def test_phase_c_native_renderer_and_global_collision_scale():
     proc = subprocess.run(
         [binary, "--headless", "--path", str(ROOT / "godot"),
          "--script", str(ROOT / "tests/godot/phase_c_notation.gd")],
+        env={**os.environ, "PIANO_TEACHER_NATIVE_NOTATION": "1"},
         text=True, capture_output=True, timeout=60)
     output = proc.stdout + proc.stderr
     assert proc.returncode == 0, output

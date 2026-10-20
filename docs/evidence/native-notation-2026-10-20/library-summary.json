@@ -1,0 +1,61 @@
+{
+  "environment": {
+    "PIANO_TEACHER_NATIVE_NOTATION": "1"
+  },
+  "stages_passed": 1041,
+  "stages_failed": 0,
+  "expected_noteheads": 41857,
+  "drawn_noteheads": 41857,
+  "missing_noteheads": 0,
+  "pieces": [
+    {
+      "file": "Ala_–_Joep_Beving.midi",
+      "stages": 59,
+      "noteheads": 2701,
+      "maximum_pixels_per_beat": 322.950677158641,
+      "all_linear": true
+    },
+    {
+      "file": "Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi",
+      "stages": 88,
+      "noteheads": 3049,
+      "maximum_pixels_per_beat": 249.267866245761,
+      "all_linear": true
+    },
+    {
+      "file": "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+      "stages": 122,
+      "noteheads": 7253,
+      "maximum_pixels_per_beat": 434.059617633063,
+      "all_linear": true
+    },
+    {
+      "file": "Danny_Boy(Bill_Evans_Ver_).midi",
+      "stages": 63,
+      "noteheads": 1885,
+      "maximum_pixels_per_beat": 220.617315730203,
+      "all_linear": true
+    },
+    {
+      "file": "Merry-Go-Round-of-Life.midi",
+      "stages": 301,
+      "noteheads": 11144,
+      "maximum_pixels_per_beat": 1214.20798950195,
+      "all_linear": true
+    },
+    {
+      "file": "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi",
+      "stages": 311,
+      "noteheads": 12251,
+      "maximum_pixels_per_beat": 7793.97161865223,
+      "all_linear": true
+    },
+    {
+      "file": "Waltz_for_Debby.midi",
+      "stages": 97,
+      "noteheads": 3574,
+      "maximum_pixels_per_beat": 367.527614048565,
+      "all_linear": true
+    }
+  ]
+}
