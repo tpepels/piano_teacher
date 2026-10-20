@@ -57,7 +57,7 @@ def test_original_two_anchors_and_measured_stem_tips(monkeypatch,tmp_path):
     assert len(item["tip_offsets"])==2
     assert all(offset < -600 for offset in item["tip_offsets"])
 
-    import piano_teacher.verovio_beam_fragments as native
+    from piano_teacher.notation.assets import beams as native
     cache=PreprocessingCache(tmp_path)
     first=beam_fragments([SVG],MODEL,cache,"same-score-revision")
     assert first==fragments
