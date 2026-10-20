@@ -15,8 +15,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 2
-MAX_FRAGMENTS = 140
+VERSION = 3
 
 
 def classes(node: ET.Element) -> set[str]:
@@ -28,6 +27,15 @@ def source_ids(node: ET.Element) -> tuple[str,...]:
                  if "note" in classes(el)
                  and not classes(el) & {"bounding-box","content-bounding-box"}
                  and el.get("id"))
+
+
+def _owned_art(node: ET.Element):
+    """Visit this tuplet's graphics without entering a nested tuplet."""
+    for child in node:
+        if classes(child) & {"tuplet","bounding-box","content-bounding-box"}:
+            continue
+        yield child
+        yield from _owned_art(child)
 
 
 def semantic_tuplets(model: dict) -> dict[tuple[str,...],dict]:
@@ -94,27 +102,32 @@ def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
     desired=semantic_tuplets(model)
     if not desired:
         return {}
+    events={str(event["id"]):event for event in model.get("notation_events",[])
+            if event.get("kind")=="note" and event.get("id")}
     output={}
     for page in svgs:
         root=ET.fromstring(page)
         geom=parse_svg_geometry(page)
+        viewport=[float(v) for v in root.get("viewBox","").replace(","," ").split()]
+        aspect=viewport[2]/viewport[3]
         for group in root.iter():
             if "tuplet" not in classes(group) or classes(group) & {
                     "bounding-box","content-bounding-box"}:
                 continue
-            if len(output)>=MAX_FRAGMENTS:
-                break
             # Separate the genuine number and bracket ink: the number is
             # never deformed by later horizontal beat-spacing changes.
-            number_nodes=[node for node in group.iter()
-                          if "tupletNum" in classes(node)
-                          and not classes(node) & {"bounding-box","content-bounding-box"}]
-            bracket_nodes=[node for node in group.iter()
-                           if "tupletBracket" in classes(node)
-                           and not classes(node) & {"bounding-box","content-bounding-box"}]
+            art=list(_owned_art(group))
+            number_nodes=[node for node in art if "tupletNum" in classes(node)]
+            bracket_nodes=[node for node in art if "tupletBracket" in classes(node)]
             if len(number_nodes)!=1:
                 continue
             contained=source_ids(group)
+            if any(identifier not in events for identifier in contained):
+                continue
+            # A Verovio tuplet contains every pitch of its chords, while
+            # semantic boundaries and horizontal anchors name attacks.
+            contained=tuple(identifier for identifier in contained
+                            if not events[identifier].get("chord"))
             candidates=[]
             # Verovio 5.x can place the tuplet graphic BESIDE the note
             # groups, so source IDs are sometimes absent from the tuplet
@@ -153,14 +166,14 @@ def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
                 # centred in the same rhythmic group even when no note
                 # nodes are descendants of its graphics group.
                 number_mid=number_box[0]+number_box[2]*.5
-                distance=abs(number_mid-(x1-x0)*125/space)
+                distance=abs(number_mid-(x1-x0)*aspect*125/space)
                 if not contained and distance > 500:
                     continue
                 if bracket is not None and not contained:
                     bounds=bracket["bounds"]
                     left=bounds[0]
                     right=bounds[0]+bounds[2]
-                    span=(x1-x0)*250/space
+                    span=(x1-x0)*aspect*250/space
                     if abs(left)>620 or abs(right-span)>620:
                         continue
                 candidates.append((ids,x0,y0,space,numeric,bracket))
@@ -169,7 +182,7 @@ def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
             if len(candidates)!=1:
                 continue
             ids,x0,y0,space,numeral,bracket=candidates[0]
-            span=(geom.elements[ids[-1]][0]-x0)*250/space
+            span=(geom.elements[ids[-1]][0]-x0)*aspect*250/space
             if span<=0 or not math.isfinite(span):
                 continue
             output["|".join(ids)]={

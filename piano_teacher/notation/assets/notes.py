@@ -20,7 +20,7 @@ from PIL import Image
 KINDS = ("whole", "half", "quarter", "eighth", "16th", "32nd", "64th")
 BEATS = {"whole": 4, "half": 2, "quarter": 1, "eighth": 0.5,
          "16th": 0.25, "32nd": 0.125, "64th": 0.0625}
-TEMPLATE_VERSION = 2
+TEMPLATE_VERSION = 4
 XML_DIVISIONS = 10080
 
 
@@ -85,6 +85,10 @@ def _only_stem_svg(note_svg: str) -> str:
     root = ET.fromstring(note_svg)
     def prune(node: ET.Element) -> bool:
         if "stem" in node.get("class", "").split():
+            for parent in node.iter():
+                for child in list(parent):
+                    if "flag" in child.get("class", "").split():
+                        parent.remove(child)
             return True
         if node.tag.rsplit("}", 1)[-1] in {"defs", "style"}:
             return True
@@ -229,6 +233,8 @@ def _generate(font: str) -> dict:
     for name in keys():
         kind, direction = (("whole", "up") if name == "whole"
                            else name.rsplit("_", 1))
+        head = atlas["head_" + (kind if kind in {"whole", "half"} else "black")]["bounds"]
+        head_center = head[0] + head[2] * 0.5
         result[name] = _render_template(toolkit, kind, direction, head_center)
     return result
 
