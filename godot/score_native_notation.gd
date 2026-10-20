@@ -7,6 +7,7 @@ extends "res://notation/shared/view_base.gd"
 # Incomplete notation falls back to the existing Verovio score as a whole.
 const Geometry := preload("res://score_notation_geometry.gd")
 const ScoreIndex := preload("res://notation/native/score_index.gd")
+const BarlineLayout := preload("res://notation/native/barline_layout.gd")
 const VerovioGlyphs := preload("res://score_verovio_glyphs.gd")
 const Design := preload("res://practice_theme.gd")
 const NOTE_INK := Design.SCORE_INK
@@ -259,74 +260,22 @@ func _ink(staff: String) -> Color:
 # right line. A closing double/repeat line belongs to the previous measure.
 func _barline_geometry(measure: Dictionary, clock: float,
         playhead_x: float, gap: float) -> Dictionary:
-    var index: int = timeline.measures.find(measure)
-    if index < 0:
-        return {}
-    var mark: Variant = measure.get("left_barline")
-    if index == 0 and not mark is Dictionary:
-        return {}
-    if index > 0:
-        var previous: Dictionary = timeline.measures[index-1]
-        var previous_right: Variant = previous.get("right_barline")
-        if not mark is Dictionary:
-            mark = previous_right
-        elif previous_right is Dictionary and \
-                str(previous_right.get("repeat","")) == "backward" and \
-                str(mark.get("repeat","")) == "forward":
-            # Right repeat followed by left repeat at the same barline.
-            mark = {"style":"heavy-heavy","repeat":"both"}
-    if not mark is Dictionary:
-        mark = {"style":"regular","repeat":""}
-    var x: float = timeline.screen_x(float(measure.get("start_beat", 0.0)),
-        clock, playhead_x, play_from_beat) - gap*1.35
-    return {"x":x, "top":_staff_center("right")-2.0*gap,
-        "bottom":_staff_center("left")+2.0*gap,
-        "style":str(mark.get("style","regular")),
-        "repeat":str(mark.get("repeat",""))}
+    return BarlineLayout.boundary(timeline.measures, measure, timeline,
+        clock, playhead_x, play_from_beat, gap,
+        _staff_center("right")-2.0*gap,
+        _staff_center("left")+2.0*gap)
 
 
 func _terminal_barline_geometry(clock: float,
         playhead_x: float, gap: float) -> Dictionary:
-    if timeline.measures.is_empty():
-        return {}
-    var last: Dictionary = timeline.measures[-1]
-    var mark: Variant = last.get("right_barline")
-    if not mark is Dictionary:
-        mark = {"style":"regular","repeat":""}
-    var x: float = timeline.screen_x(float(last.get("end_beat",0.0)),
-        clock,playhead_x,play_from_beat)-gap*.45
-    return {"x":x, "top":_staff_center("right")-2.0*gap,
-        "bottom":_staff_center("left")+2.0*gap,
-        "style":str(mark.get("style","regular")),
-        "repeat":str(mark.get("repeat",""))}
+    return BarlineLayout.terminal(timeline.measures, timeline,
+        clock, playhead_x, play_from_beat, gap,
+        _staff_center("right")-2.0*gap,
+        _staff_center("left")+2.0*gap)
 
 
-# Per SMuFL, barline strokes are drawn as structural rules. Unlike
-# noteheads/stems they are variable-length rules spanning both staves;
-# their repeat punctuation is genuine Verovio E044 music-font ink.
 func _barline_strokes(style: String, gap: float) -> Array:
-    var thin: float = maxf(1.15,gap*.095)
-    var heavy: float = maxf(3.1,gap*.35)
-    var separation: float = gap*.44
-    match style:
-        "none": return []
-        "regular", "dashed", "dotted":
-            return [{"offset":0.0,"width":thin}]
-        "heavy":
-            return [{"offset":0.0,"width":heavy}]
-        "light-light":
-            return [{"offset":-separation,"width":thin},
-                {"offset":0.0,"width":thin}]
-        "light-heavy":
-            return [{"offset":-separation,"width":thin},
-                {"offset":0.0,"width":heavy}]
-        "heavy-light":
-            return [{"offset":-separation,"width":heavy},
-                {"offset":0.0,"width":thin}]
-        "heavy-heavy":
-            return [{"offset":-separation,"width":heavy},
-                {"offset":0.0,"width":heavy}]
-    return []
+    return BarlineLayout.strokes(style, gap)
 
 
 func _paint_barline(info: Dictionary, gap: float) -> void:
