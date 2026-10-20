@@ -15,7 +15,10 @@ def test_adaptive_smoke_exercises_real_godot_and_three_clean_repeats():
     assert 'engine.start()' in SCRIPT
     assert 'engine.state()["lesson_level"] == "outline"' in SCRIPT
     assert 'engine.score_revision > first_revision' in SCRIPT
-    assert 'log.count("PHASE0_LESSON_READY:") >= 2' in SCRIPT
+    assert 'lesson_rendered(log, first_revision)' in SCRIPT
+    assert 'lesson_rendered(log, next_revision)' in SCRIPT
+    assert 'PHASE0_SCORE_READY_NATIVE: REVISION:' in SCRIPT
+    assert 'PHASE_B_MODEL_READY: ' in SCRIPT
     assert 'engine.lesson_overview()' in SCRIPT
     assert 'engine.midi_port = object()' in SCRIPT
     assert 'scripts/smoke_adaptive_godot.py' in WORKFLOW
@@ -24,3 +27,17 @@ def test_adaptive_smoke_exercises_real_godot_and_three_clean_repeats():
 def test_godot_reports_actual_loaded_lesson():
     assert 'print("PHASE0_LESSON_READY: REVISION:"' in GODOT
     assert 'int(last_state.get("required_notes", 0))' in GODOT
+
+
+def test_adaptive_smoke_requires_versioned_native_or_legacy_readiness():
+    from scripts.smoke_adaptive_godot import lesson_rendered
+
+    assert lesson_rendered("PHASE0_LESSON_READY: REVISION:2", 2)
+    assert not lesson_rendered("PHASE0_LESSON_READY: REVISION:1", 2)
+    assert not lesson_rendered("PHASE0_SCORE_READY_NATIVE: REVISION:2", 2)
+    assert lesson_rendered(
+        "PHASE0_SCORE_READY_NATIVE: REVISION:2\n"
+        "PHASE_B_MODEL_READY: 2 NOTES: 8 DENSITY: 96.0", 2)
+    assert not lesson_rendered(
+        "PHASE0_SCORE_READY_NATIVE: REVISION:2\n"
+        "PHASE_B_MODEL_READY: 1 NOTES: 8 DENSITY: 96.0", 2)
