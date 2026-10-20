@@ -232,7 +232,9 @@ func _missing_source_engraving() -> String:
             return "Missing original chord leader: "+str(leader_id)
         var key: String = _chord_template_key(event)
         if key.is_empty() or not glyphs.has_chord(key):
-            return "Missing engraved Verovio chord: "+str(leader_id)
+            return "Missing engraved Verovio chord: "+str(leader_id)+ \
+                " (pattern="+key+", atlas="+ \
+                str(glyphs.chord_textures.size())+" templates)"
         if beamed_note_ids.has(str(leader_id)) and ( \
                 not glyphs.has_chord_heads(key) or \
                 not glyphs.has_chord_stem(key)):
@@ -636,7 +638,7 @@ func _chord_extents(event: Dictionary, gap: float,
 # invariant under octave transposition. Godot places only Verovio ink.
 func _chord_template_key(event: Dictionary) -> String:
     var notes: Array = chord_members.get(str(event.get("id","")),[])
-    if notes.size() < 2 or notes.size() > 5:
+    if notes.size() < 2 or notes.size() > 10:
         return ""
     var leader: int = Geometry.diatonic_index(event.get("spelling",{}))
     if leader < 0:
@@ -648,6 +650,11 @@ func _chord_template_key(event: Dictionary) -> String:
         differences.append(Geometry.diatonic_index(
             head.get("spelling",{}))-leader)
     differences.sort()
+    if differences.size() < 2 or differences[-1]-differences[0] > 28:
+        return ""
+    for i in range(1,differences.size()):
+        if differences[i] == differences[i-1]:
+            return ""
     var names: PackedStringArray = []
     for value in differences:
         names.append(str(value))
@@ -972,7 +979,9 @@ func _draw() -> void:
         var opening: bool = not timeline.measures.is_empty() and \
             int(measure.get("number", -1)) == \
             int(timeline.measures[0].get("number", -2))
-        var header_shift: float = 50.0 if opening else 0.0
+        # Increase the pre-roll header-to-first-attack breathing room.
+        # Move only the ornament group, never any note beat coordinate.
+        var header_shift: float = 76.0 if opening else 0.0
         var crowded_meter: bool = _meter_is_crowded(
             measure, previous_measure, gap)
         var barline: Dictionary = _barline_geometry(measure,
