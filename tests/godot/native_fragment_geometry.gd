@@ -20,7 +20,7 @@ func run() -> void:
     check(OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1",
         "Regression must explicitly select the native notation engine")
     var Fixture = load("res://tests/native_glyph_fixture.gd")
-    var renderer = load("res://score_native_notation.gd").new()
+    var renderer = load("res://notation/native/view.gd").new()
     get_root().add_child(renderer)
     renderer.size = Vector2(1200,440)
     var chord_atlas: Dictionary = Fixture.chord_catalogue()
@@ -139,7 +139,7 @@ func run() -> void:
     tiny["notation_events"] = [attack,continuation]
     tiny["notes"] = [{"id":"midi-t0-e2015","onset_beats":3.99375,
         "duration_beats":1.00625,"midi_pitch":59,"hand":"right"}]
-    var Geometry = load("res://score_notation_geometry.gd")
+    var Geometry = load("res://notation/native/geometry.gd")
     check(Geometry.required_density(tiny["notation_events"],96.0,480.0) < 0.0,
         "Caller-specified 480 density limit still rejects an over-dense source")
     check(renderer.load_score(tiny) and renderer.native_ready,

@@ -68,7 +68,7 @@ func run() -> void:
     fixture.score_view.texture = ImageTexture.create_from_image(
         Image.create(2,2,false,Image.FORMAT_RGBA8))
     fixture.score_layout = payload["layout"]
-    fixture.timeline_preview = load("res://score_native_notation.gd").new()
+    fixture.timeline_preview = load("res://notation/native/view.gd").new()
     fixture.add_child(fixture.timeline_preview)
     var renderer = fixture.timeline_preview
     renderer.position = Vector2(83,47)

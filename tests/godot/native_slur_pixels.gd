@@ -23,7 +23,7 @@ func _initialize() -> void:
     call_deferred("run")
 
 func run() -> void:
-    var glyphs = load("res://score_verovio_glyphs.gd").new()
+    var glyphs = load("res://notation/native/glyphs.gd").new()
     var atlas: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
         OS.get_environment("PIANO_TEACHER_SLUR_FIXTURE")))
     var failures := 0

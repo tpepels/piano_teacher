@@ -15,7 +15,7 @@ func run() -> void:
         "Authored regression explicitly selects native notation")
     var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
         OS.get_cmdline_user_args()[0]))
-    var renderer = load("res://score_native_notation.gd").new()
+    var renderer = load("res://notation/native/view.gd").new()
     root.add_child(renderer)
     renderer.size = Vector2(1200,560)
     check(renderer.set_verovio_glyphs(data["glyphs"],data["notes"],

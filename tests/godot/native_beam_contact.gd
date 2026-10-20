@@ -1,6 +1,6 @@
 extends SceneTree
 
-class BeamCanvas extends "res://score_native_notation.gd":
+class BeamCanvas extends "res://notation/native/view.gd":
     var layout: Dictionary = {}
     func _draw() -> void:
         if not layout.is_empty():
@@ -12,7 +12,7 @@ func _initialize() -> void:
 func run() -> void:
     var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
         OS.get_cmdline_user_args()[0]))
-    var renderer = load("res://score_native_notation.gd").new()
+    var renderer = load("res://notation/native/view.gd").new()
     root.add_child(renderer)
     renderer.size = Vector2(1200,560)
     if OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") != "1" or not \
