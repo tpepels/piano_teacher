@@ -39,6 +39,7 @@ def preparation_symbols() -> dict:
 # SVG is an interchange format for ONE glyph: Godot rasterizes it once into an
 # ImageTexture, then positions/composites the textures on its own beat grid.
 _NATIVE_CODES = {
+    "brace": "E000",
     "clef_g": "E050", "clef_f": "E062", "clef_c": "E05C",
     # Original SMuFL clefs with octave numbers attached.
     "clef_g_8vb": "E052", "clef_g_8va": "E053",

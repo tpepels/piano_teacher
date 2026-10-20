@@ -8,10 +8,13 @@ from __future__ import annotations
 def assemble_layout(source_score, *, native_notes: bool = False,
                     native_model: dict | None = None,
                     notation_xml: str | None = None,
-                    cache=None, cache_key: str = "") -> dict:
+                    cache=None, cache_key: str = "",
+                    revision: int | None = None) -> dict:
     from ..notation.assets.glyphs import native_glyphs, preparation_symbols
     layout = {**source_score.layout, "symbols": preparation_symbols(),
               "native_glyphs": native_glyphs()}
+    if revision is not None:
+        layout["revision"] = revision
     if native_notes:
         if native_model is None or not notation_xml:
             raise ValueError("Native score preparation requires the selected lesson model and MusicXML")
@@ -31,12 +34,6 @@ def assemble_layout(source_score, *, native_notes: bool = False,
         except Exception as exc:
             print("VEROVIO_TIE_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
             layout["native_tie_templates"] = {}
-        try:
-            layout["native_chord_templates"] = chord_templates(
-                native_model, cache)
-        except Exception as exc:
-            print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
-            layout["native_chord_templates"] = {}
         # These fragments are cut directly from this lesson's original
         # Verovio engraving. They retain the two real note identities,
         # leaving the Godot transport in complete control of timing.
@@ -58,6 +55,15 @@ def assemble_layout(source_score, *, native_notes: bool = False,
             layout["native_beam_fragments"] = {}
             layout["native_required_beam_groups"] = []
             layout["native_beams_complete"] = False
+        try:
+            directions = {str(identifier): bool(fragment["stem_up"])
+                for fragment in layout["native_beam_fragments"].values()
+                for identifier in fragment["note_ids"]}
+            layout["native_chord_templates"] = chord_templates(
+                native_model, cache, stem_directions=directions)
+        except Exception as exc:
+            print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
+            layout["native_chord_templates"] = {}
         try:
             from ..notation.assets.tuplets import tuplet_fragments
             layout["native_tuplet_fragments"] = tuplet_fragments(

@@ -19,7 +19,8 @@ from urllib.parse import urlsplit
 from .learning import LearningPlan, build_exercises
 from .exercise_generator import generate_variants
 from .practice import Recorder, evaluate
-from .score import import_piece, render_layout, EngravedScore
+from .importing.pieces import import_piece
+from .score import render_layout, EngravedScore
 from .feedback import project_assessment
 from .library import ScoreLibrary
 from .preprocessing_cache import PreprocessingCache
@@ -28,8 +29,8 @@ from .warmups import is_warmup
 from .raster import rasterize_score
 from .recovery import check_rolling_two_bar_window, check_two_bar_window
 from .music import Phrase, source_note_id, note_name
-from .lesson_score import build_lesson_score, infer_piece_clefs
-from .score_model import build_score_model
+from .notation.lesson import build_lesson_score, infer_piece_clefs
+from .notation.model import build_score_model
 from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats, preparation_meter
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
@@ -1922,108 +1923,30 @@ class PracticeEngine:
             return self._page_png[key]
 
     def geometry(self, *, native_notes: bool = False) -> dict:
-        # HTTP state/control requests run on other threads. Pages, semantic
-        # IDs and extracted fragments must all belong to this one revision.
+        """Prepare selected revision/hand in a stateless notation collaborator."""
+        from .application.score_preparation import assemble_layout
         with self.lock:
-            return self._geometry(native_notes=native_notes)
-
-    def _geometry(self, *, native_notes: bool) -> dict:
-        from .notation_symbols import native_glyphs, preparation_symbols
-        source_score = self.engraving()
-        layout = {**source_score.layout, "revision": self.score_revision,
-                  "symbols": preparation_symbols(),
-                  "native_glyphs": native_glyphs()}
-        if native_notes:
-            # Build the identity-preserving model once for all fragment
-            # extractors, rather than reparsing the lesson four times.
-            native_model = self.semantic_score()
-            from .verovio_note_templates import note_templates
-            from .verovio_tie_templates import tie_templates
-            from .verovio_chord_templates import chord_templates
-            # Variable chord patterns are pre-engraved individually and
-            # reused via a disk cache; unsupported patterns remain native.
-            layout["native_note_templates"] = note_templates(self.preprocessing)
-            # The backend's raster notation must remain available even if
-            # the installed Verovio version changes its compound SVG markup.
-            # Never fail the entire /score/layout response for optional art.
-            try:
-                layout["native_tie_templates"] = tie_templates(self.preprocessing)
-            except Exception as exc:
-                print("VEROVIO_TIE_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
-                layout["native_tie_templates"] = {}
-            # These fragments are cut directly from this lesson's original
-            # Verovio engraving. They retain the two real note identities,
-            # leaving the Godot transport in complete control of timing.
-            try:
-                from .verovio_beam_fragments import (
-                    beam_fragments, expected_beam_groups)
-                layout["native_required_beam_groups"] = expected_beam_groups(
-                    source_score.pages,native_model)
-                layout["native_beams_complete"] = True
-                layout["native_beam_fragments"] = beam_fragments(
-                    source_score.pages, native_model, self.preprocessing,
-                    self._layout_cache_key or "")
-                if layout["native_beam_fragments"]:
-                    print("VEROVIO_NATIVE_BEAMS:",
-                          len(layout["native_beam_fragments"]))
-            except Exception as exc:
-                print("VEROVIO_BEAM_FRAGMENTS_UNAVAILABLE:",
-                      type(exc).__name__,exc)
-                layout["native_beam_fragments"] = {}
-                layout["native_required_beam_groups"] = []
-                layout["native_beams_complete"] = False
-            try:
-                # An authored beam may reverse a chord's isolated stem
-                # direction. Request precisely those authentic variants.
-                directions = {str(identifier): bool(fragment["stem_up"])
-                    for fragment in layout["native_beam_fragments"].values()
-                    for identifier in fragment["note_ids"]}
-                layout["native_chord_templates"] = chord_templates(
-                    native_model, self.preprocessing, stem_directions=directions)
-            except Exception as exc:
-                print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
-                layout["native_chord_templates"] = {}
-            try:
-                from .verovio_tuplet_fragments import tuplet_fragments
-                layout["native_tuplet_fragments"] = tuplet_fragments(
-                    source_score.pages, native_model,
-                    self.preprocessing, self._layout_cache_key or "")
-            except Exception as exc:
-                print("VEROVIO_TUPLET_FRAGMENTS_UNAVAILABLE:",
-                      type(exc).__name__,exc)
-                layout["native_tuplet_fragments"] = {}
-            try:
-                from .verovio_slur_fragments import (
-                    slur_fragments, slur_pairs_from_xml)
-                p=self.plan
-                if p is None:
-                    raise ValueError("No piece loaded")
-                notation=build_lesson_score(
-                    self.display_phrase(),boundaries=p.piece.bar_boundaries,
-                    time_signatures=p.piece.time_signatures,
-                    key_signatures=p.piece.key_signatures,
-                    clef_changes=p.piece.clef_changes,
-                    default_clefs=infer_piece_clefs(p.piece.notes),
-                    barlines=p.piece.barlines)
-                expected = slur_pairs_from_xml(notation.musicxml)
-                available = {str(e["id"]) for e in
-                             native_model.get("notation_events",[])
-                             if e.get("kind")=="note" and e.get("id")}
-                layout["native_required_slur_pairs"] = [
-                    list(pair) for pair in expected
-                    if pair[0] in available and pair[1] in available]
-                layout["native_slurs_complete"] = True
-                layout["native_slur_fragments"] = slur_fragments(
-                    source_score.pages,notation.musicxml,
-                    native_model,self.preprocessing,
-                    self._layout_cache_key or "")
-            except Exception as exc:
-                print("VEROVIO_SLUR_FRAGMENTS_UNAVAILABLE:",
-                      type(exc).__name__,exc)
-                layout["native_slur_fragments"] = {}
-                layout["native_required_slur_pairs"] = []
-                layout["native_slurs_complete"] = False
-        return layout
+            source_score = self.engraving()
+            if not native_notes:
+                return assemble_layout(source_score, revision=self.score_revision)
+            if self.plan is None:
+                raise ValueError("No piece loaded")
+            p = self.plan
+            phrase = self.display_phrase()
+            notation = build_lesson_score(
+                phrase, boundaries=p.piece.bar_boundaries,
+                time_signatures=p.piece.time_signatures,
+                key_signatures=p.piece.key_signatures,
+                clef_changes=p.piece.clef_changes,
+                default_clefs=infer_piece_clefs(p.piece.notes),
+                barlines=p.piece.barlines)
+            native_model = build_score_model(notation,
+                boundaries=p.piece.bar_boundaries,
+                hand=p.hand, revision=self.score_revision)
+            return assemble_layout(source_score, native_notes=True,
+                native_model=native_model, notation_xml=notation.musicxml,
+                cache=self.preprocessing, cache_key=self._layout_cache_key or "",
+                revision=self.score_revision)
 
     def lesson_overview(self) -> dict:
         """Full readable curriculum, with unique per-hand/per-level progress."""
@@ -2050,106 +1973,8 @@ class PracticeEngine:
             }
 
 
-class Handler(BaseHTTPRequestHandler):
-    engine: PracticeEngine
-    def _reply(self, status: int, content: bytes, content_type: str):
-        self.send_response(status)
-        self.send_header("Content-Type",content_type)
-        self.send_header("Content-Length",str(len(content)))
-        self.send_header("Cache-Control","no-store")
-        self.end_headers()
-        self.wfile.write(content)
-    def _json(self, status, data):
-        self._reply(status,json.dumps(data).encode(),"application/json")
-    def do_GET(self):
-        try:
-            route=urlsplit(self.path).path
-            if route=="/state":
-                self._json(200,self.engine.state())
-            elif route=="/library":
-                self._json(200,self.engine.library_listing())
-            elif route=="/library/health":
-                self._json(200,self.engine.library_health_status())
-            elif route=="/lesson":
-                self._json(200,self.engine.lesson_overview())
-            elif route=="/settings":
-                self._json(200,self.engine.preferences())
-            elif route=="/devices":
-                self._json(200,{"devices":self.engine.ports()})
-            elif route=="/diagnostics/hardware":
-                self._json(200,self.engine.hardware_diagnostics())
-            elif route=="/demo.wav":
-                from urllib.parse import parse_qs
-                token = parse_qs(urlsplit(self.path).query).get("token", [""])[0]
-                path = self.engine.demo_audio(token)
-                self.send_response(200)
-                self.send_header("Content-Type", "audio/wav")
-                self.send_header("Content-Length", str(path.stat().st_size))
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-                with path.open("rb") as audio_file:
-                    while block := audio_file.read(65536):
-                        self.wfile.write(block)
-            elif route=="/score/layout":
-                from urllib.parse import parse_qs
-                native = parse_qs(urlsplit(self.path).query).get(
-                    "native", ["0"])[0] == "1"
-                self._json(200,self.engine.geometry(native_notes=native))
-            elif route=="/score/model":
-                self._json(200,self.engine.semantic_score())
-            elif route in ("/score.svg", "/score.png"):
-                from urllib.parse import parse_qs
-                query=parse_qs(urlsplit(self.path).query)
-                page=int(query.get("page", ["0"])[0])
-                if route=="/score.png":
-                    if "width" in query:
-                        width=int(query["width"][0])
-                        self._reply(200,self.engine.engraved_png(page, width=width),"image/png")
-                    else:
-                        self._reply(200,self.engine.engraved_png(page),"image/png")
-                else:
-                    self._reply(200,self.engine.engraved(page).encode(),"image/svg+xml; charset=utf-8")
-            else:
-                self._json(404,{"error":"Not found"})
-        except Exception as exc:
-            self._json(400,{"error":str(exc)})
-    def do_POST(self):
-        try:
-            length=int(self.headers.get("Content-Length","0"))
-            if length > 1_000_000:
-                raise ValueError("Request too large")
-            args=json.loads(self.rfile.read(length)) if length else {}
-            route=urlsplit(self.path).path
-            if route=="/load":
-                self.engine.load(args["path"])
-            elif route=="/library/open":
-                self.engine.load_library(args["id"])
-            elif route=="/library/health":
-                self._json(200, self.engine.start_library_health())
-                return
-            elif route=="/settings":
-                self.engine.set_preferences(**args)
-            elif route=="/device":
-                self.engine.connect(args.get("name",""))
-            elif route=="/diagnostics/hardware":
-                self._json(200,self.engine.hardware_diagnostics_action(args.get("action","")))
-                return
-            elif route=="/control":
-                self.engine.control(**args)
-            else:
-                self._json(404,{"error":"Not found"})
-                return
-            self._json(200,self.engine.preferences() if route == "/settings" else self.engine.state())
-        except (KeyError, ValueError, TypeError, RuntimeError) as exc:
-            self._json(400,{"error":str(exc)})
-        except Exception as exc:
-            # Converter and plugin exceptions must not close the HTTP socket,
-            # leaving Godot with no actionable error message.
-            import traceback
-            traceback.print_exc()
-            self._json(500, {"error": f"Piano Teacher could not complete this request: {exc}"})
-    def log_message(self, format, *args):
-        return
+# Keep the original public Handler import stable for clients and tests.
+from .transport.http import Handler
 
 
 def main():
