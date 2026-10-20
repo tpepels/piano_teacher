@@ -18,6 +18,15 @@ def assemble_layout(source_score, *, native_notes: bool = False,
     if native_notes:
         if native_model is None or not notation_xml:
             raise ValueError("Native score preparation requires the selected lesson model and MusicXML")
+        try:
+            from ..notation.assets.annotations import annotation_fragments
+            if layout.get('native_annotations_error'):
+                raise ValueError(layout['native_annotations_error'])
+            layout['native_annotation_fragments'] = annotation_fragments(
+                source_score.pages, native_model, cache, cache_key)
+        except (ValueError, RuntimeError, TypeError) as exc:
+            layout['native_annotation_fragments'] = {}
+            layout['native_annotations_error'] = str(exc)
         # Build the identity-preserving model once for all fragment
         # extractors, rather than reparsing the lesson four times.
         from ..notation.assets.notes import note_templates
@@ -76,7 +85,7 @@ def assemble_layout(source_score, *, native_notes: bool = False,
         try:
             from ..notation.assets.slurs import (
                 slur_fragments, slur_pairs_from_xml)
-            expected = slur_pairs_from_xml(notation_xml)
+            expected = slur_pairs_from_xml(notation_xml, native_model)
             available = {str(e["id"]) for e in
                          native_model.get("notation_events",[])
                          if e.get("kind")=="note" and e.get("id")}

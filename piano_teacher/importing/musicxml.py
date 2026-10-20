@@ -130,7 +130,9 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
                     previous_note = None
                 elif element.tag == 'note':
                     if element.find('grace') is not None:
-                        raise ValueError('Unsupported grace note: no source duration for timed assessment')
+                        # Visual source events are indexed after hand assignment;
+                        # they never enter required attacks or advance the cursor.
+                        continue
                     if element.find('unpitched') is not None:
                         raise ValueError('Unsupported unpitched note in piano material')
                     duration = _number(element.findtext('duration'), 'note duration')/divisions
@@ -191,16 +193,22 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
                         if 'start' in tie_types:
                             ties[binding] = len(notes)-1
             if extent <= 0:
+                if any(n.find('grace') is not None for n in measure.findall('note')):
+                    raise ValueError('MusicXML grace notes need an assessable principal-note anchor')
                 raise ValueError('MusicXML source measure has no explicit rhythmic duration')
             for tag in measure.findall("barline"):
                 location, descriptor = parse_barline(tag)
                 key = (measure_index, location)
                 position = offset if location == "left" else offset + extent
                 mark = BarlineChange(float(position), location,
-                                     descriptor["style"], descriptor["repeat"])
-                if key in source_barlines and source_barlines[key] != mark:
+                                     descriptor["style"], descriptor["repeat"],
+                                     tuple(descriptor.get('endings', ())))
+                previous_mark = source_barlines.get(key)
+                if previous_mark is not None and (
+                        (previous_mark.style, previous_mark.repeat) != (mark.style, mark.repeat)
+                        or (previous_mark.endings and mark.endings and previous_mark.endings != mark.endings)):
                     raise ValueError("Conflicting MusicXML grand-staff barlines")
-                source_barlines[key] = mark
+                source_barlines[key] = previous_mark if previous_mark and previous_mark.endings else mark
             offset += extent
             part_grid.append(offset)
         if ties:
@@ -235,9 +243,12 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
     notes.sort(key=lambda note: (note.start, note.pitch, note.track))
     boundaries = tuple(float(beat) for beat in grid)
     changes = tuple((float(beat), *signature) for beat, signature in sorted(signatures.items()))
+    from ..notation.source import index_source
+    source_xml = ET.tostring(root, encoding='unicode')
     return Piece(path.stem, bpm, tuple(notes), _phrases(notes, list(boundaries), 2),
                  bar_boundaries=boundaries, time_signatures=changes,
                  key_signatures=tuple(dict.fromkeys(keys)),
                  clef_changes=tuple(dict.fromkeys(clefs)),
                  barlines=tuple(mark for _, mark in sorted(source_barlines.items())),
-                 source_musicxml=ET.tostring(root,encoding="unicode"))
+                 source_musicxml=source_xml,
+                 source_notation=index_source(source_xml, notes))

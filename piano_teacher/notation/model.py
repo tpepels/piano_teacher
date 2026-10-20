@@ -131,7 +131,7 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
         part_measures = parts[part_id].findall("measure")
         if len(part_measures) != count:
             raise ValueError(f"{hand} has an incorrect measure count")
-        divisions = DIVISIONS
+        divisions = score.divisions
         current_meter: tuple[int, int] | None = None
         current_key = 0
         current_clef: dict = {"sign": "G" if hand == "right" else "F",
@@ -150,16 +150,19 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                 local_barlines[location] = mark
             shared = barlines.setdefault(bar_index, {})
             for location, mark in local_barlines.items():
-                if location in shared and shared[location] != mark:
+                previous_mark=shared.get(location)
+                if previous_mark is not None and (
+                        any(previous_mark.get(k) != mark.get(k) for k in ('style','repeat'))
+                        or (previous_mark.get('endings') and mark.get('endings') and previous_mark['endings'] != mark['endings'])):
                     raise ValueError("Inconsistent barlines between piano hands")
-                shared[location] = mark
+                shared[location] = previous_mark if previous_mark and previous_mark.get('endings') else mark
             cursor = 0
             last_onset: int | None = None
             for child in measure:
                 if child.tag == "attributes":
                     if child.find("divisions") is not None:
                         divisions = _int(child, "divisions")
-                        if divisions != DIVISIONS:
+                        if divisions != score.divisions:
                             raise ValueError("Unexpected MusicXML divisions")
                     if child.find("time") is not None:
                         time = child.find("time")
@@ -181,6 +184,8 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                     last_onset = None
                     continue
                 if child.tag != "note":
+                    continue
+                if child.find('grace') is not None:
                     continue
                 duration_ticks = _int(child, "duration")
                 if duration_ticks <= 0:
@@ -223,7 +228,7 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                     source_id = binding["source_id"]
                     is_attack = bool(binding["is_attack"])
                 else:
-                    identifier = f"rest:{hand}:{number}:{len(symbols)}"
+                    identifier = identifier or f"rest:{hand}:{number}:{len(symbols)}"
                     pitch, spelling, source_id, is_attack = None, None, None, False
                 modification = child.find("time-modification")
                 time_modification = ({
@@ -281,7 +286,7 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
     if hand not in (*HANDS, "both"):
         raise ValueError("Invalid active hand")
     phrase = score.phrase
-    grid = phrase_grid(phrase, boundaries)
+    grid = phrase_grid(phrase, boundaries or score.boundaries)
     notes = _notes(phrase)
     measures, symbols = _parse_notation(score, grid)
     sources = {note.id: note for note in notes}
@@ -319,5 +324,10 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
             for symbol in symbols],
         "active_note_ids": [note.id for note in notes
                             if hand == "both" or hand == note.hand],
+        "annotations": list(score.annotations),
+        "visual_events": list(score.visual_events),
+        "projection_report": list(score.projection_report),
     }
+    if score.source_projected or score.groups:
+        model['groups'] = list(score.groups)
     return model

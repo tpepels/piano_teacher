@@ -17,7 +17,7 @@ from .music import BarlineChange, ClefChange, KeySignature, Note, Phrase, Piece
 
 # Bump this whenever the importer, exercise generation, musical notation
 # contract or engraving algorithm changes. All historical entries then miss.
-CACHE_VERSION = "2026-10-20-retain-original-musicxml-v3"
+CACHE_VERSION = "2026-10-20-source-groups-grace-layout-v6"
 MAX_CACHE_BYTES = 256 * 1024 * 1024
 MAX_ENTRY_BYTES = 20 * 1024 * 1024
 
@@ -30,6 +30,7 @@ def _note(data: dict) -> Note:
 
 
 def _piece_from_json(data: dict) -> Piece:
+    from .notation.source import SourceNotation
     return Piece(
         title=str(data["title"]),
         bpm=int(data["bpm"]),
@@ -47,9 +48,11 @@ def _piece_from_json(data: dict) -> Piece:
         clef_changes=tuple(ClefChange(**item)
                            for item in data["clef_changes"]),
         import_warnings=tuple(data["import_warnings"]),
-        barlines=tuple(BarlineChange(**item)
+        barlines=tuple(BarlineChange(**{**item,'endings':tuple(item.get('endings',()))})
                        for item in data.get("barlines", [])),
         source_musicxml=str(data.get("source_musicxml","")),
+        source_notation=(SourceNotation.from_dict(data['source_notation'])
+                         if data.get('source_notation') else None),
     )
 
 

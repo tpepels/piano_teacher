@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .notation.source import SourceNotation
 from pathlib import Path
 from collections import defaultdict
 from statistics import median
@@ -61,6 +65,7 @@ class BarlineChange:
     location: str
     style: str
     repeat: str = ""
+    endings: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -80,6 +85,7 @@ class Piece:
     # includes direction, articulation, pedal, ornament, slur and grouping
     # elements that timed MIDI notes cannot faithfully represent.
     source_musicxml: str = ""
+    source_notation: SourceNotation | None = None
 
 
 def note_name(pitch: int) -> str:

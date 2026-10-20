@@ -1,0 +1,62 @@
+<mei xmlns="http://www.music-encoding.org/ns/mei" meiversion="5.1">
+   <meiHead xml:id="m1te7ogd">
+      <fileDesc xml:id="f1ikvsxg">
+         <titleStmt xml:id="tkxjjk9">
+            <title />
+            <respStmt />
+         </titleStmt>
+         <pubStmt xml:id="p1po1btq" />
+      </fileDesc>
+      <encodingDesc xml:id="e128ijb2">
+         <appInfo xml:id="a1au6i21">
+            <application xml:id="ae5u14a" isodate="2026-10-20T18:41:48" version="5.7.0-7135340">
+               <name xml:id="n1h34jpo">Verovio</name>
+               <p xml:id="pzdecro">Transcoded from MusicXML</p>
+            </application>
+         </appInfo>
+      </encodingDesc>
+   </meiHead>
+   <music>
+      <body>
+         <mdiv xml:id="x15bhfiz">
+            <score xml:id="y1awln0">
+               <scoreDef xml:id="z87dfok">
+                  <staffGrp xml:id="bex5p04">
+                     <staffDef xml:id="P1" n="1" lines="5" ppq="4">
+                        <label xml:id="c1wnbyd5">Piano</label>
+                        <clef xml:id="mcwifeo" shape="G" line="2" />
+                        <keySig xml:id="n18zw094" sig="0" />
+                        <meterSig xml:id="oih46vm" count="4" unit="4" />
+                     </staffDef>
+                  </staffGrp>
+               </scoreDef>
+               <section xml:id="a1hdqdde">
+                  <ending xml:id="a-volta" lendsym="angledown" n="1">
+                     <measure xml:id="p1ua9yc9" right="end" n="1">
+                        <staff xml:id="y13upxmm" n="1">
+                           <layer xml:id="d1is72zo" n="1">
+                              <beam xml:id="e1lj8f6x">
+                                 <note xml:id="g1" dur.ppq="0" dur="16" oct="4" pname="d" grace="unacc" stem.mod="1slash" />
+                                 <note xml:id="g2" dur.ppq="0" dur="16" oct="4" pname="e" grace="unacc" stem.mod="1slash" />
+                              </beam>
+                              <note xml:id="n1" dur.ppq="4" dur="4" oct="4" pname="c">
+                                 <artic xml:id="a-articulation" artic="stacc" />
+                              </note>
+                              <note xml:id="n2" dur.ppq="4" dur="4" oct="4" pname="d" />
+                              <note xml:id="n3" dur.ppq="4" dur="4" oct="4" pname="e" />
+                              <note xml:id="n4" dur.ppq="4" dur="4" oct="4" pname="f" />
+                           </layer>
+                        </staff>
+                        <dynam xml:id="a-dynamic" place="below" staff="1" tstamp="1" vgrp="2000">mf</dynam>
+                        <hairpin xml:id="a-hairpin" staff="1" tstamp="1" tstamp2="0m+4" form="cres" place="below" vgrp="2000" />
+                        <pedal xml:id="a-pedal" staff="1" tstamp="1" dir="down" form="line" place="below" vgrp="2000" />
+                        <trill xml:id="a-ornament" staff="1" startid="#n1" />
+                        <pedal xml:id="m1x6eh0h" staff="1" tstamp="3.9" dir="up" form="line" place="below" vgrp="2000" />
+                     </measure>
+                  </ending>
+               </section>
+            </score>
+         </mdiv>
+      </body>
+   </music>
+</mei>

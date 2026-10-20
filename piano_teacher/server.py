@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 from .learning import LearningPlan, build_exercises
 from .exercise_generator import generate_variants
 from .practice import Recorder, evaluate
+from .optional_notes import relative_optional_notes
 from .importing.pieces import import_piece
 from .score import render_layout, EngravedScore
 from .feedback import project_assessment
@@ -100,6 +101,10 @@ class PracticeEngine:
         self._layout_bpm: float | None = None
         self._layout_cache_key: str | None = None
         self._page_png: dict[tuple[int, int], bytes] = {}
+        self._notation_cache_key = None
+        self._notation_cache = None
+        self._optional_cache_key = None
+        self._optional_cache: tuple[dict, ...] = ()
         self.next_at = 0.0
         self.awaiting_score_revision: int | None = None
         self.pending_result = None
@@ -325,13 +330,15 @@ class PracticeEngine:
                     running=self.running, paused=self.paused,
                     preview=self.preview_only, mode=self.mode,
                     transport_id=self.transport_id,
+                    optional_notes=self.optional_notes(),
                 )
             if self.mode == "learn":
                 if (self.teaching is not None and self._piano_connected()
                         and message.type in ("note_on", "note_off")):
                     self.teaching.receive(pitch=message.note,
                         is_on=message.type == "note_on" and message.velocity > 0,
-                        channel=getattr(message, "channel", 0), at=now)
+                        channel=getattr(message, "channel", 0), at=now,
+                        optional_notes=self.optional_notes())
                     self._save_guided_preparation()
                 return
             if self.mode == "listen":
@@ -1408,11 +1415,13 @@ class PracticeEngine:
                     self.recorder.presses if self.recorder else [],
                     from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
                     beats_per_bar=beats_per_bar, threshold=2,
-                    window_start_beat=chunk_start_at_end(grid,self.next_boundary_beat))
+                    window_start_beat=chunk_start_at_end(grid,self.next_boundary_beat),
+                    optional_notes=self.optional_notes())
             else:
                 decision=check_rolling_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
                     self.recorder.presses if self.recorder else [],
-                    from_beat=self.play_from_beat, end_beat=self.next_boundary_beat, grid=grid)
+                    from_beat=self.play_from_beat, end_beat=self.next_boundary_beat, grid=grid,
+                    optional_notes=self.optional_notes())
             if decision is not None:
                 # Capture marks at the performance tempo, not at the slower
                 # BPM selected for the next retry. Re-scaling the recorded
@@ -1425,7 +1434,8 @@ class PracticeEngine:
                         assessed = evaluate(Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
                             phrase.start+self.play_from_beat, phrase.end,
                             tuple(note for note in phrase.notes if note.start >= phrase.start+self.play_from_beat)),
-                            self.plan.hand, self.plan.bpm, self.recorder.presses if self.recorder else [])
+                            self.plan.hand, self.plan.bpm, self.recorder.presses if self.recorder else [],
+                            optional_notes=relative_optional_notes(self.optional_notes(), self.play_from_beat))
                         # Rolling detection can include the preceding idea;
                         # saved trouble describes only this canonical unit.
                         unit_errors = [entry for entry in assessed.notes
@@ -1489,7 +1499,8 @@ class PracticeEngine:
             phrase.start+self.play_from_beat,phrase.start+ending,
             tuple(n for n in phrase.notes
                   if phrase.start+self.play_from_beat-1e-7 <= n.start < phrase.start+ending-1e-7))
-        result=evaluate(active_phrase,self.plan.hand,self.plan.bpm,self.recorder.presses if self.recorder else [])
+        result=evaluate(active_phrase,self.plan.hand,self.plan.bpm,self.recorder.presses if self.recorder else [],
+                        optional_notes=relative_optional_notes(self.optional_notes(), self.play_from_beat))
         # Keep the just-played score visible for feedback. Curriculum changes
         # are applied only after the display interval, never mid-feedback.
         try:
@@ -1589,7 +1600,8 @@ class PracticeEngine:
         played=self.recorder.presses if self.recorder else []
         settled=settled_assessment(phrase,p.hand,p.bpm,played,
                                   from_beat=self.play_from_beat,
-                                  until_beat=now_beat,beats_per_bar=per_bar)
+                                  until_beat=now_beat,beats_per_bar=per_bar,
+                                  optional_notes=self.optional_notes())
         grid=phrase_grid(phrase,p.piece.bar_boundaries)
         active_bar=max(index for index, bar_beat in enumerate(grid)
                        if bar_beat <= now_beat + 1e-7)
@@ -1597,7 +1609,8 @@ class PracticeEngine:
         missed=expired_attack_misses(phrase,p.hand,p.bpm,played,
                                      from_beat=self.play_from_beat,
                                      until_beat=now_beat,
-                                     window_start_beat=window_start)
+                                     window_start_beat=window_start,
+                                     optional_notes=self.optional_notes())
         if settled is None and missed is None:
             return []
         try:
@@ -1793,6 +1806,33 @@ class PracticeEngine:
                     feedback=feedback, feedback_marks=self._guided_marks(teaching), feedback_unmapped=0)
             return result
 
+    def _compile_notation(self, phrase: Phrase):
+        p = self.plan
+        if p is None:
+            raise ValueError('No piece loaded')
+        key = (id(p.piece), phrase)
+        if key != self._notation_cache_key:
+            self._notation_cache = build_lesson_score(
+                phrase, boundaries=p.piece.bar_boundaries,
+                time_signatures=p.piece.time_signatures,
+                key_signatures=p.piece.key_signatures,
+                clef_changes=p.piece.clef_changes,
+                default_clefs=infer_piece_clefs(p.piece.notes),
+                barlines=p.piece.barlines, source_notation=p.piece.source_notation)
+            self._notation_cache_key = key
+        return self._notation_cache
+
+    def optional_notes(self) -> tuple[dict, ...]:
+        """Prepare optional source events once per selected exercise/revision."""
+        p = self.plan
+        if p is None or p.piece.source_notation is None:
+            return ()
+        key = (id(p.piece), self.score_revision, p.index, p.hand_index, p.variant_index)
+        if key != self._optional_cache_key:
+            self._optional_cache = self._compile_notation(p.active_phrase).visual_events
+            self._optional_cache_key = key
+        return self._optional_cache
+
     def semantic_score(self) -> dict:
         """Phase A: source-accurate notation contract, without Verovio/SVG.
 
@@ -1804,13 +1844,7 @@ class PracticeEngine:
                 raise ValueError("No piece loaded")
             p = self.plan
             phrase = self.display_phrase()
-            notation = build_lesson_score(
-                phrase, boundaries=p.piece.bar_boundaries,
-                time_signatures=p.piece.time_signatures,
-                key_signatures=p.piece.key_signatures,
-                clef_changes=p.piece.clef_changes,
-                default_clefs=infer_piece_clefs(p.piece.notes),
-                barlines=p.piece.barlines)
+            notation = self._compile_notation(phrase)
             return build_score_model(
                 notation, boundaries=p.piece.bar_boundaries,
                 hand=p.hand, revision=self.score_revision)
@@ -1828,12 +1862,7 @@ class PracticeEngine:
             if (self._layout_revision != self.score_revision or self._layout_cache is None
                     or self._layout_bpm != p.bpm):
                 phrase=self.display_phrase()
-                notation=build_lesson_score(phrase, boundaries=p.piece.bar_boundaries,
-                                            time_signatures=p.piece.time_signatures,
-                                            key_signatures=p.piece.key_signatures,
-                                            clef_changes=p.piece.clef_changes,
-                                            default_clefs=infer_piece_clefs(p.piece.notes),
-                                            barlines=p.piece.barlines)
+                notation=self._compile_notation(phrase)
                 # Short lessons are freshly engraved as a continuous system.
                 # This avoids raster-copying printed Verovio lines together.
                 # Large works retain paginated rendering to bound GPU memory.
@@ -1933,13 +1962,7 @@ class PracticeEngine:
                 raise ValueError("No piece loaded")
             p = self.plan
             phrase = self.display_phrase()
-            notation = build_lesson_score(
-                phrase, boundaries=p.piece.bar_boundaries,
-                time_signatures=p.piece.time_signatures,
-                key_signatures=p.piece.key_signatures,
-                clef_changes=p.piece.clef_changes,
-                default_clefs=infer_piece_clefs(p.piece.notes),
-                barlines=p.piece.barlines)
+            notation = self._compile_notation(phrase)
             native_model = build_score_model(notation,
                 boundaries=p.piece.bar_boundaries,
                 hand=p.hand, revision=self.score_revision)

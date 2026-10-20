@@ -22,6 +22,13 @@ class LessonScore:
     phrase: Phrase
     note_bindings: dict = field(default_factory=dict)
     staff_clefs: dict = field(default_factory=dict)
+    annotations: tuple[dict, ...] = ()
+    groups: tuple[dict, ...] = ()
+    visual_events: tuple[dict, ...] = ()
+    projection_report: tuple[dict, ...] = ()
+    divisions: int = DIVISIONS
+    source_projected: bool = False
+    boundaries: tuple[float, ...] = ()
 
 
 def _ticks(beat: float) -> int:
@@ -59,7 +66,7 @@ def _pitch(parent: ET.Element, value: int, spelling=None) -> None:
 def _type(duration: int) -> tuple[str, bool] | None:
     # Spell ordinary durations. Compound values are split before emission.
     lengths = {4: "whole", 2: "half", 1: "quarter", .5: "eighth",
-               .25: "16th", .125: "32nd", .0625: "64th"}
+               .25: "16th", .125: "32nd", .0625: "64th", .03125: "128th"}
     for beats, label in lengths.items():
         if duration == round(beats * DIVISIONS):
             return label, False
@@ -318,11 +325,9 @@ def _readable_clef(notes, explicit, hand):
     if explicit is not None:
         if explicit.sign not in ('G','F','C'):
             raise ValueError(f'Unsupported source clef {explicit.sign}')
-        if explicit.sign in ('G','F') and explicit.line == (2 if explicit.sign == 'G' else 4):
-            if explicit.octave_change not in (-1,0,1):
-                raise ValueError('Unsupported clef octave change')
-            if not pitches or cost(explicit.sign, explicit.octave_change) <= cost(best)+12:
-                return {'sign':explicit.sign,'line':explicit.line,'octave_change':explicit.octave_change}
+        if explicit.octave_change not in (-2,-1,0,1,2) or not 1 <= explicit.line <= 5:
+            raise ValueError('Unsupported clef octave change or staff line')
+        return {'sign':explicit.sign,'line':explicit.line,'octave_change':explicit.octave_change}
     return {'sign':best,'line':2 if best == 'G' else 4,'octave_change':0}
 
 
@@ -419,8 +424,13 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                        time_signatures: tuple[tuple[float, int, int], ...] = (),
                        key_signatures=(), clef_changes=(),
                        default_clefs: dict | None = None,
-                       barlines: tuple = ()) -> LessonScore:
+                       barlines: tuple = (), source_notation=None) -> LessonScore:
     """Create notation from the source measure grid, not averaged bars."""
+    if source_notation is not None:
+        from .projection import project_lesson
+        return project_lesson(phrase, source_notation, boundaries=boundaries,
+            time_signatures=time_signatures, key_signatures=key_signatures,
+            clef_changes=clef_changes, default_clefs=default_clefs, barlines=barlines)
     identities = [source_note_id(note,index) for index,note in enumerate(phrase.notes)]
     if len(set(identities)) != len(identities):
         raise ValueError('Duplicate required source-note identity')
@@ -430,7 +440,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
     barline_at = {}
     for mark in barlines:
         key = (round(mark.beat, 8), mark.location)
-        current = (mark.style, mark.repeat)
+        current = (mark.style, mark.repeat, mark.endings)
         if key in barline_at and barline_at[key] != current:
             raise ValueError("Conflicting source barline declarations")
         barline_at[key] = current
@@ -439,11 +449,14 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
         style_and_repeat = barline_at.get((round(beat, 8), location))
         if style_and_repeat is None:
             return
-        style, direction = style_and_repeat
+        style, direction, endings = style_and_repeat
         tag = ET.Element("barline", location=location)
         ET.SubElement(tag, "bar-style").text = style
         if direction:
             ET.SubElement(tag, "repeat", direction=direction)
+        if hand == 'right':
+            for ending in endings:
+                tag.append(ET.fromstring(ending))
         if location == "left":
             # MusicXML left barlines precede the note stream. Attributes
             # (meter/clef/key) stay at the beginning of the measure.
@@ -541,5 +554,12 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             _render_measure(measure,lanes,bar_end-bar_start,bar_start,bindings,counts)
             _write_accidentals(measure,active_key.fifths if active_key else 0)
             _write_tuplet_groups(measure)
+            # Rest-containing tuplets need the same original IDs in XML,
+            # semantic groups and extracted SVG, just like pitched events.
+            for ordinal, node in enumerate(measure):
+                if node.tag == 'note' and node.find('rest') is not None:
+                    key=f'rest:{hand}:{phrase.first_bar+b}:{node.findtext("voice","1")}:{ordinal}'
+                    node.set('id','ptr'+hashlib.sha256(key.encode()).hexdigest()[:28])
             append_barline(measure,phrase.start+grid[b+1],"right")
-    return LessonScore(ET.tostring(root, encoding="unicode"), phrase, bindings, staff_clefs)
+    return LessonScore(ET.tostring(root, encoding="unicode"), phrase, bindings, staff_clefs,
+                       boundaries=boundaries)

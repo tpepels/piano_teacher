@@ -104,9 +104,13 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     except ImportError as exc:
         raise RuntimeError("Engraving requires verovio and music21: pip install -e '.[godot]'") from exc
     if isinstance(notation, LessonScore):
+        from ...notation.model import build_score_model
+        semantic_model = build_score_model(notation) if notation.source_projected or notation.annotations or notation.visual_events else None
+        if semantic_model is not None:
+            semantic_model['_source_projection'] = notation.source_projected
         return _engrave_xml(notation.musicxml, hand, total_beats, bpm=bpm,
                             note_bindings=notation.note_bindings, staff_clefs=notation.staff_clefs,
-                            continuous=continuous)
+                            continuous=continuous, semantic_model=semantic_model)
     sc = copy.deepcopy(notation)
     if not list(sc.recurse().getElementsByClass(stream.Measure)):
         sc.makeMeasures(inPlace=True)
@@ -227,7 +231,7 @@ def _safe_reprinted_header_starts(xml: str, note_bindings: dict | None) -> list[
 def _engrave_xml(xml: str, hand: str, total_beats: float,
                  *, bpm: float | None = None, note_bindings: dict | None = None,
                  staff_clefs: dict | None = None,
-                 continuous: bool = False) -> EngravedScore:
+                 continuous: bool = False, semantic_model: dict | None = None) -> EngravedScore:
     import verovio
     if note_bindings is not None:
         import xml.etree.ElementTree as ET
@@ -235,7 +239,7 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
         identities = []
         for part in root.findall('part'):
             for note in part.findall('.//note'):
-                if note.find('pitch') is None:
+                if note.find('pitch') is None or note.find('grace') is not None:
                     continue
                 identifier = note.get('id')
                 binding = note_bindings.get(identifier)
@@ -260,6 +264,17 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
         raise RuntimeError("Verovio rejected its engraving options")
     if not toolkit.loadData(xml):
         raise ValueError("Verovio could not engrave this passage")
+    annotation_error = ''
+    if semantic_model is not None:
+        from ...notation.assets.annotations import restore_annotation_ids
+        try:
+            restore_annotation_ids(toolkit, semantic_model)
+        except (ValueError, RuntimeError) as exc:
+            # Preserve the authentic score for explicit raster compatibility;
+            # this diagnostic prevents native readiness for missing source art.
+            annotation_error = str(exc)
+            if not toolkit.loadData(xml):
+                raise ValueError('Cannot restore original source engraving') from exc
     pages = _svg_pages(toolkit)
     if continuous:
         # A continuous exercise must consist of precisely one newly engraved
@@ -270,7 +285,7 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
         if len(pages) != 1 or systems != 1:
             return _engrave_xml(xml, hand, total_beats, bpm=bpm,
                 note_bindings=note_bindings, staff_clefs=staff_clefs,
-                continuous=False)
+                continuous=False, semantic_model=semantic_model)
     gaps = []
     for page in pages:
         for system in parse_svg_geometry(page).staff_systems.values():
@@ -310,9 +325,56 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
         raise ValueError("Verovio produced an invalid note timing map") from exc
     if not isinstance(events, list):
         raise ValueError("Verovio produced no note timing map")
+    if semantic_model is not None:
+        visual_ids = {e['id'] for e in semantic_model.get('visual_events', [])}
+        grace_anchors = {e['anchor_id'] for e in semantic_model.get('visual_events', [])
+                         if e.get('kind') == 'grace'}
+        events = [{**event, **{key:[identifier for identifier in event[key] if identifier not in visual_ids]
+                              for key in ('on','off') if key in event}} for event in events]
+        # Verovio's performance timemap steals time for a grace even when
+        # that pushes a very short principal attack past its own release.
+        # That audition policy is not the exercise's source timing. Bind only
+        # affected principal glyphs to their original semantic attack; leave
+        # every other strict timemap check in place.
+        anchor_events = []
+        for event in events:
+            principals = [identifier for identifier in event.get('on', [])
+                          if identifier in grace_anchors]
+            event['on'] = [identifier for identifier in event.get('on', [])
+                           if identifier not in grace_anchors]
+            for identifier in principals:
+                anchor_events.append({'qstamp': note_bindings[identifier]['display_beat'],
+                    'on': [identifier], 'visual_grace_anchor': True,
+                    'verovio_qstamp': event['qstamp']})
+        events.extend(anchor_events)
+        events.sort(key=lambda event: float(event.get('qstamp',0)))
+    timing_mismatches = []
+    if semantic_model is not None and semantic_model.get('_source_projection'):
+        # Imported written MusicXML was already validated against the exact
+        # exercise identities/cursors. Verovio's audition map can flatten
+        # nested/cross-bar tuplets or steal grace time; it is not a second
+        # musical clock. SVG locations still come from genuine source IDs.
+        original_onsets = {identifier: float(event['qstamp'])
+            for event in events for identifier in event.get('on',[])}
+        events=[]
+        for symbol in semantic_model['notation_events']:
+            identifier=symbol['id']
+            beat=symbol['beat']
+            if symbol['kind']=='note':
+                if identifier in original_onsets and abs(original_onsets[identifier]-beat)>1e-7:
+                    timing_mismatches.append({'id':identifier,'source_beat':beat,
+                        'verovio_audition_beat':original_onsets[identifier]})
+                events.append({'qstamp':beat,'on':[identifier]})
+            else:
+                events.append({'qstamp':beat,'restsOn':[identifier]})
+        events.sort(key=lambda event:float(event['qstamp']))
     pitches = _pitches_from_verovio(toolkit, events)
     layout = layout_from_pages(list(pages), events, total_beats, pitches=pitches,
                                note_bindings=note_bindings)
+    layout['native_annotations_error'] = annotation_error
+    if semantic_model is not None and semantic_model.get('_source_projection'):
+        layout['source_timing_projection'] = 'validated-musicxml-v1'
+        layout['verovio_audition_timing_differences'] = timing_mismatches
     layout["strip_trim_repeated_headers"] = (False if continuous else
         _can_remove_repeated_system_headers(xml, note_bindings))
     # Header safety is per source measure, not all-or-nothing. Chopin begins

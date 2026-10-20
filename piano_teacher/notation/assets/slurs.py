@@ -17,7 +17,17 @@ from PIL import Image
 VERSION = 3
 
 
-def _slur_sources_from_xml(musicxml: str) -> dict[tuple[str,str], str | None]:
+def _slur_sources_from_xml(musicxml: str, model: dict | None = None) -> dict[tuple[str,str], str | None]:
+    if model is not None and 'groups' in model:
+        result = {}
+        for group in model['groups']:
+            if group.get('kind') != 'slur' or len(group.get('event_ids',())) < 2:
+                continue
+            pair=(group['event_ids'][0],group['event_ids'][-1])
+            if pair in result:
+                raise ValueError('Multiple source slurs share endpoints; distinct fragments are required')
+            result[pair]=group.get('attributes',{}).get('id')
+        return result
     root=ET.fromstring(musicxml)
     pairs=[]
     for part in root.findall("part"):
@@ -54,8 +64,8 @@ def _slur_sources_from_xml(musicxml: str) -> dict[tuple[str,str], str | None]:
     return {pair:source for pair,source in pairs if endpoints.count(pair)==1}
 
 
-def slur_pairs_from_xml(musicxml: str) -> tuple[tuple[str,str], ...]:
-    return tuple(_slur_sources_from_xml(musicxml))
+def slur_pairs_from_xml(musicxml: str, model: dict | None = None) -> tuple[tuple[str,str], ...]:
+    return tuple(_slur_sources_from_xml(musicxml,model))
 
 
 def _classes(node):
@@ -69,7 +79,7 @@ def extract_slurs(svgs, musicxml: str, model: dict) -> dict:
 
     notes={str(e["id"]):e for e in model.get("notation_events",[])
            if e.get("kind")=="note" and e.get("id")}
-    desired={pair:source for pair,source in _slur_sources_from_xml(musicxml).items()
+    desired={pair:source for pair,source in _slur_sources_from_xml(musicxml,model).items()
              if all(id in notes for id in pair)}
     if not desired:
         return {}

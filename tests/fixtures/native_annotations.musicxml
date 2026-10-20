@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0"><part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list><part id="P1">
+<measure number="1"><attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
+<barline location="left"><ending id="a-volta" number="1" type="start"/></barline>
+<direction placement="below"><direction-type><dynamics id="a-dynamic"><mf/></dynamics></direction-type></direction>
+<direction placement="below"><direction-type><wedge id="a-hairpin" number="1" type="crescendo"/></direction-type></direction>
+<direction placement="below"><direction-type><pedal id="a-pedal" number="1" type="start" line="yes" sign="yes"/></direction-type></direction>
+<note id="g1"><grace slash="yes"/><pitch><step>D</step><octave>4</octave></pitch><voice>1</voice><type>16th</type><beam number="1">begin</beam><beam number="2">begin</beam></note>
+<note id="g2"><grace slash="yes"/><pitch><step>E</step><octave>4</octave></pitch><voice>1</voice><type>16th</type><beam number="1">end</beam><beam number="2">end</beam></note>
+<note id="n1"><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>quarter</type><notations><articulations><staccato id="a-articulation"/></articulations><ornaments><trill-mark id="a-ornament"/></ornaments></notations></note>
+<note id="n2"><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>quarter</type></note>
+<note id="n3"><pitch><step>E</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>quarter</type></note>
+<direction placement="below"><direction-type><wedge number="1" type="stop"/></direction-type></direction>
+<direction placement="below"><direction-type><pedal number="1" type="stop" line="yes" sign="yes"/></direction-type></direction>
+<note id="n4"><pitch><step>F</step><octave>4</octave></pitch><duration>4</duration><voice>1</voice><type>quarter</type></note>
+<barline location="right"><ending number="1" type="stop"/><bar-style>light-heavy</bar-style></barline>
+</measure></part></score-partwise>
