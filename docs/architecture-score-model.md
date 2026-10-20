@@ -177,6 +177,33 @@ compatibility checks and legacy-specific diagnostics. This is **not** a plan
 to remove Verovio fonts or genuine SVG fragment extraction. Those remain core
 dependencies of the native notation engine.
 
+### Loading and source-notation preservation status
+
+For a supported native score, Godot loads the original Verovio glyph/fragment
+atlas and semantic `/score/model`, then marks the matching revision ready
+**without requesting any full-page PNG**. The retired raster strip is built
+lazily only when authentic native engraving cannot be composed. The Python
+backend still engraves source Verovio SVG during native preparation because
+the original beam, slur, tuplet and chord extractors require its source ink;
+eliminating that Verovio source dependency is outside this refactor.
+
+A MusicXML import retains its complete original parsed XML as
+`Piece.source_musicxml`, including directions, pedals, articulations,
+ornaments, explicit beam/slur declarations and non-note markings. The
+preprocessing cache stores this source alongside the stable note identities.
+**This does not yet mean every original expression is emitted into a derived
+curriculum score**: `build_lesson_score` still reconstructs timed practice
+notation, and annotation mapping to simplified stages requires explicit
+source-identity/beat rules before safe rendering. Original XML remains
+recoverable for that later preservation pass; silent loss at import/cache is
+no longer necessary.
+
+Native key changes cancel old accidentals with naturals (including return
+to C major), and nonstandard clef reference lines use their declared
+MusicXML line. Supported octave-clef changes use combined SMuFL Verovio
+glyphs. Octave-above C-clef has no combined glyph in the installed Leipzig
+font and explicitly falls back instead of drawing an unmarked clef.
+
 ### Verification
 
 The Python suite, `scripts/check_godot.sh`, real MIDI fidelity fixtures,
