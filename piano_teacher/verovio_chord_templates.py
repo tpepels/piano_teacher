@@ -1,7 +1,6 @@
 """Compatibility exports for piano_teacher.notation.assets.chords."""
 from .notation.assets.chords import (
     VERSION,
-    MAX_PATTERNS,
     _STEPS,
     _LETTERS,
     _BEATS,
