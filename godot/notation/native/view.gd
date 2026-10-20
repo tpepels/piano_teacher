@@ -243,7 +243,7 @@ func _engraved_beam_groups(model: Dictionary) -> Dictionary:
 
 
 func _staff_center(hand: String) -> float:
-    return size.y * (.34 if hand == "right" else .69)
+    return size.y * (.36 if hand == "right" else .69)
 
 func _gap() -> float:
     if cached_staff_gap > 0.0 and absf(cached_gap_height - size.y) < .001:
@@ -1079,7 +1079,7 @@ func _draw() -> void:
             var previous_keys: Dictionary = previous_measure.get("keys",{})
             var key_changed: bool = signature != int(previous_keys.get(staff,999))
             if opening or _clef_for(staff,previous_measure) != clef:
-                _paint_clef(x-86.0-header_shift-float(absi(signature))*14.0,
+                _paint_clef(x-(86.0+float(absi(signature))*14.0)*header_scale-header_shift,
                     center,clef,gap,_ink(staff))
             if key_changed:
                 # Cancelling an old signature requires visible naturals,
@@ -1096,8 +1096,7 @@ func _draw() -> void:
                         "sharp" if signature > 0 else "flat"})
                 for i in range(change_marks.size()):
                     var mark: Dictionary = change_marks[i]
-                    var glyph_x: float = x-39.0-header_shift- \
-                        float(change_marks.size()-i)*14.0
+                    var glyph_x: float = x-(39.0+float(change_marks.size()-i)*14.0)*header_scale-header_shift
                     var glyph_y: float = Geometry.note_y(int(mark["step"]),
                         center+2.0*gap,gap)
                     _paint_accidental(glyph_x,glyph_y,

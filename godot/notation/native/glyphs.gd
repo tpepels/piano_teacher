@@ -8,6 +8,7 @@ extends RefCounted
 # natively using ScoreTimeline. No rendered page is moved or sliced here.
 
 const REQUIRED := [
+    "brace",
     "clef_g", "clef_f", "clef_c",
     "clef_g_8vb", "clef_g_8va", "clef_g_15mb", "clef_g_15ma",
     "clef_f_8vb", "clef_f_8va", "clef_f_15mb", "clef_f_15ma",
