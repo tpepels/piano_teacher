@@ -65,7 +65,7 @@ func run() -> void:
             "Whole passage has constant pixels per beat, including rests, barlines and system joins")
     # Responsive zoom must follow the grand staff's actual geometry, not
     # the legacy maximum of 27 pixels at every desktop resolution.
-    var Quality = load("res://score_quality.gd")
+    var Quality = load("res://notation/legacy/quality.gd")
     var native_rails: Array = app.score_layout.systems[0].staff_lines
     var page_aspect: float = float(app.source_layout.heights[0]) / float(app.source_layout.widths[0])
     var chosen_width: int = Quality.png_width(app.source_layout, app.score_frame.size.y)
@@ -86,7 +86,7 @@ func run() -> void:
         "8G camera must initialize cached raster geometry and visibility")
     check(app.deferred_tile_mode == (
         app.source_layout.get("systems", []).size() >=
-        load("res://score_strip.gd").DEFERRED_MIN_SYSTEMS or
+        load("res://notation/legacy/strip.gd").DEFERRED_MIN_SYSTEMS or
         app.strip_tiles.size() > app.source_layout.get("systems", []).size()),
         "8I enables deferred score textures only for long scores")
     var note: Dictionary = app.score_layout["notes"][0]

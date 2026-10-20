@@ -38,7 +38,7 @@ func _run() -> void:
             quit(1)
             return
         pages.append(img)
-    var helper = load("res://score_strip.gd")
+    var helper = load("res://notation/legacy/strip.gd")
     var report := {"cases": {}, "source_note_count": original.get("notes", []).size(),
         "continuous_score": bool(original.get("continuous_score", false))}
     var untouched_strip: Dictionary = {}

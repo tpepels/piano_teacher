@@ -49,7 +49,7 @@ def test_real_score_system_tiles_preserve_notehead_and_feedback_geometry(tmp_pat
         (tmp_path / f'page-{page}.png').write_bytes(rasterize_score(svg))
     result = subprocess.run(
         [GODOT, '--headless', '--path', str(ROOT / 'godot'), '--script',
-         str(ROOT / 'tests/godot/score_strip.gd'), '--', str(tmp_path)],
+         str(ROOT / 'tests/godot/notation/legacy/strip.gd'), '--', str(tmp_path)],
         capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'SCORE_STRIP_FAILURES:0' in result.stdout, result.stdout + result.stderr
