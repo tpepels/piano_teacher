@@ -22,7 +22,7 @@ def _valid_sprite(asset,source):
 
 def test_tie_is_real_verovio_engraved_curve_and_disk_cache(tmp_path,monkeypatch):
     from piano_teacher.preprocessing_cache import PreprocessingCache
-    from piano_teacher import verovio_tie_templates as tie
+    from piano_teacher.notation.assets import ties as tie
     cache=PreprocessingCache(tmp_path)
     templates=tie.tie_templates(cache)
     assert set(templates)=={"up","down"}
@@ -51,7 +51,7 @@ def test_chord_intervals_reuse_transposed_shapes():
 
 def test_chord_sprite_is_actual_verovio_compound_and_reusable(tmp_path,monkeypatch):
     from piano_teacher.preprocessing_cache import PreprocessingCache
-    from piano_teacher import verovio_chord_templates as chords
+    from piano_teacher.notation.assets import chords
     model={"measures":[{"number":1,"clefs":{"right":{"sign":"G","line":2}}}],
         "notation_events":[
             {"id":"a","kind":"note","staff":"right","voice":"1",
