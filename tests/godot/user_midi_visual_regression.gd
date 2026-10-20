@@ -38,7 +38,7 @@ func _run() -> void:
             quit(1)
             return
         pages.append(img)
-    var helper = load("res://score_strip.gd")
+    var helper = load("res://notation/legacy/strip.gd")
     var report := {"cases": {}, "source_note_count": original.get("notes", []).size(),
         "continuous_score": bool(original.get("continuous_score", false))}
     var untouched_strip: Dictionary = {}
@@ -56,7 +56,7 @@ func _run() -> void:
             untouched_strip = result
         var tiles: Array = result.tiles
         var mappings: Array = result.mappings
-        var beat_grid: Dictionary = load("res://score_beat_camera.gd").prepare(
+        var beat_grid: Dictionary = load("res://notation/shared/beat_camera.gd").prepare(
             result.layout)
         check(tiles.size() == mappings.size() and
             tiles.size() >= original.get("systems", []).size(),
@@ -121,10 +121,10 @@ func _run() -> void:
     # actual candidate layout against the same source pixels/IDs, regardless
     # of whether this specific passage can safely be represented on a grid.
     if bool(original.get("continuous_score", false)) and not untouched_strip.is_empty():
-        var exact: Dictionary = load("res://score_exact_spacing.gd").reflow(
+        var exact: Dictionary = load("res://notation/legacy/exact_spacing.gd").reflow(
             untouched_strip)
         var enabled: bool = bool(exact["layout"].get("exact_ink_grid", false))
-        var audit: Dictionary = load("res://score_beat_camera.gd").prepare(
+        var audit: Dictionary = load("res://notation/shared/beat_camera.gd").prepare(
             exact["layout"])
         if enabled:
             check(bool(audit.get("enabled", false)),

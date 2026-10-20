@@ -47,12 +47,23 @@ def api(route: str, data: dict) -> dict:
         return json.load(response)
 
 
-def run_one(filename: str, out: Path, godot: str, *, native: bool = False) -> dict:
+def run_one(filename: str, out: Path, godot: str, *, native: bool = False,
+            default_native: bool = False) -> dict:
     folder = out / (_name(filename) + ("-native" if native else ""))
     folder.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
+    if not native:
+        # This test intentionally exercises the RETIRED page renderer as a
+        # compatibility comparison; the actual app defaults to native.
+        env["PIANO_TEACHER_RENDERER"] = "legacy"
+    else:
+        env.pop("PIANO_TEACHER_RENDERER", None)
     if native:
-        env["PIANO_TEACHER_NATIVE_NOTATION"] = "1"
+        if default_native:
+            # Verify the normal app launches native even with NO opt-in flag.
+            env.pop("PIANO_TEACHER_NATIVE_NOTATION", None)
+        else:
+            env["PIANO_TEACHER_NATIVE_NOTATION"] = "1"
         # Raster-based time-grid work must not alter the native score test.
         env["PIANO_TEACHER_EXACT_VEROVIO_GRID"] = "0"
     env["PYTHONPATH"] = str(ROOT)
@@ -82,6 +93,14 @@ def run_one(filename: str, out: Path, godot: str, *, native: bool = False) -> di
                 raise AssertionError(f"Godot desktop capture failed for {filename}:\n{transcript[-8000:]}")
             report = json.loads((folder / "desktop-report.json").read_text())
             assert not report["errors"], report["errors"]
+            if native:
+                assert "NATIVE_SCORE_RASTER_SKIPPED:" in transcript, (
+                    "Native score path still downloads the legacy raster "
+                    "before validating original Verovio note fragments"
+                )
+                assert "PHASE0_SCORE_READY:" not in transcript, (
+                    "Native desktop unexpectedly completed legacy PNG tile rendering"
+                )
             resolutions = ((1536, 960), (1024, 768), (800, 600)) if filename.startswith("Ala_") else ((1536, 960),)
             expected = {"ready", "count-in", "playing"} | {
                 f"{screen}-{width}x{height}"
@@ -115,6 +134,8 @@ def main() -> int:
     parser.add_argument("--only", help="Case-insensitive substring in filename")
     parser.add_argument("--native", action="store_true",
                         help="Capture and require the original pure-Godot native renderer")
+    parser.add_argument("--default-native", action="store_true",
+                        help="Verify native renderer without setting the old opt-in flag")
     parser.add_argument("--require-exact-ink-grid", action="store_true",
                         help="Fail unless the opt-in Verovio pixel-preserving adapter activates")
     args = parser.parse_args()
@@ -134,8 +155,10 @@ def main() -> int:
     results, failures = [], []
     for filename in cases:
         try:
-            outcome = run_one(filename, args.out, godot, native=args.native)
-            if args.native:
+            native = args.native or args.default_native
+            outcome = run_one(filename, args.out, godot,
+                              native=native, default_native=args.default_native)
+            if native:
                 for frame in outcome["frames"]:
                     if frame["screen"] == "practice":
                         assert frame.get("native_ready", False), (

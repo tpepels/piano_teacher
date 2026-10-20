@@ -13,7 +13,7 @@ func _initialize() -> void:
     call_deferred("run")
 
 func run() -> void:
-    var Curve = load("res://score_motion_curve.gd")
+    var Curve = load("res://notation/legacy/motion_curve.gd")
     check(Curve != null, "Camera easing module parses")
     if Curve == null:
         quit(1)

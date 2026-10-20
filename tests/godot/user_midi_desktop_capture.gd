@@ -58,7 +58,16 @@ func _capture(label: String) -> void:
         errors.append("Cannot capture real rendered desktop: " + label)
         return
     var bounds: Rect2 = app.score_frame.get_global_rect()
-    var rows: Array = app.staff_continuity.staff_lines
+    var rows: Array = app.staff_continuity.staff_lines.duplicate()
+    if app.native_notation_enabled and _native_notation_ready():
+        # Count the ten real staff rules painted by the native compositor.
+        # The retired raster rail underlay is deliberately not allocated.
+        rows.clear()
+        var gap: float = app.timeline_preview._gap()
+        for staff in ["right","left"]:
+            var middle: float = app.timeline_preview._staff_center(staff)
+            for line in range(-2,3):
+                rows.append(middle+float(line)*gap)
     var info := {
         "frame": label, "screen": app.current_screen,
         "image_size": [image.get_width(), image.get_height()],
@@ -69,10 +78,10 @@ func _capture(label: String) -> void:
         "note_count": app.score_layout.get("notes", []).size(),
         "glyph_tile_count": app.score_tiles.size(),
         "score_width": app.score_content.size.x,
-        "beat_camera": load("res://score_beat_camera.gd").prepare(app.score_layout),
+        "beat_camera": load("res://notation/shared/beat_camera.gd").prepare(app.score_layout),
         "exact_ink_grid": bool(app.score_layout.get("exact_ink_grid", false)),
         "native_ready": _native_notation_ready() if
-            OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" else false,
+            app.native_notation_enabled else false,
         "native_failure": _native_failure(),
         "exact_ink_grid_reason": str(app.score_layout.get("exact_ink_grid_reason", "")),
         "current_hand": str(app.last_state.get("hand", "")),
@@ -96,8 +105,9 @@ func _capture(label: String) -> void:
             var left: Dictionary = clefs.get("left", {})
             if str(right.get("sign", "")) != "G" or str(left.get("sign", "")) != "F":
                 errors.append("Ala piano grand staff requires G clef over F clef")
-        if int(info.note_count) <= 0 or int(info.glyph_tile_count) <= 0:
-            errors.append("Real practice notation has no measured notes or tiles")
+        if int(info.note_count) <= 0 or \
+                (int(info.glyph_tile_count) <= 0 and not bool(info.native_ready)):
+            errors.append("Real practice notation has no measured notes or active native score")
     if app.current_screen == "lesson":
         var activity_row: Control = app.find_child("LessonActivityRow", true, false)
         var caption: Label = app.find_child("LessonActivityCaption", true, false)
@@ -169,8 +179,7 @@ func _audit_all_screens() -> void:
 
 
 func _native_failure() -> String:
-    if OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") != "1" or \
-            app.timeline_preview == null:
+    if not app.native_notation_enabled or app.timeline_preview == null:
         return ""
     return str(app.timeline_preview.get("failure_reason"))
 
@@ -186,7 +195,7 @@ func _notation_ready() -> bool:
     return app.score_view.texture != null and \
         app.rendered_revision == app.revision and \
         not app.score_layout.get("notes", []).is_empty() and \
-        app.score_tiles.size() > 0 and \
+        (app.score_tiles.size() > 0 or _native_notation_ready()) and \
         app.score_frame.is_visible_in_tree()
 
 func _is_counting() -> bool:

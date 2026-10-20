@@ -9,7 +9,7 @@ extends RefCounted
 #
 # All placements use the same absolute quarter-beat x axis. If any event
 # interval is unsafe, reject the WHOLE passage and return its native engraving.
-const BeatCamera := preload("res://score_beat_camera.gd")
+const BeatCamera := preload("res://notation/shared/beat_camera.gd")
 const MAX_TILE_WIDTH := 16384
 const GUARD_COLUMNS := 3
 

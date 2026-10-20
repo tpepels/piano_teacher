@@ -4,7 +4,7 @@ extends RefCounted
 # MIDI integration test checks authentic Verovio outlines independently.
 
 static func catalogue() -> Dictionary:
-    var asset = load("res://score_verovio_glyphs.gd")
+    var asset = load("res://notation/native/glyphs.gd")
     var result: Dictionary = {}
     for name in asset.REQUIRED:
         result[name] = {
@@ -18,7 +18,7 @@ static func catalogue() -> Dictionary:
 # Synthetic PNG fixtures used only by geometry tests. The actual desktop
 # tests validate Verovio's engraved heads, stems and flags end-to-end.
 static func note_catalogue() -> Dictionary:
-    var atlas = load("res://score_verovio_glyphs.gd")
+    var atlas = load("res://notation/native/glyphs.gd")
     var image := Image.create(3,3,false,Image.FORMAT_RGBA8)
     image.fill(Color.WHITE)
     var encoded: String = Marshalls.raw_to_base64(image.save_png_to_buffer())

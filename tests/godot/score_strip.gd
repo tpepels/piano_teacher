@@ -16,7 +16,7 @@ func run() -> void:
     var pages: Array[Image] = []
     for page in range(int(original.pages)):
         pages.append(Image.load_from_file(folder + "/page-%d.png" % page))
-    var helper = load("res://score_strip.gd")
+    var helper = load("res://notation/legacy/strip.gd")
     check(helper != null, "score strip helper must load")
     if helper == null:
         quit(1)
@@ -97,7 +97,7 @@ func run() -> void:
           "missing score pages must return an explicit error")
     # A single extra-wide Verovio system needs far more pixels than the
     # former 5200px page cap; ordinary multi-page pieces retain that cap.
-    var quality = load("res://score_quality.gd")
+    var quality = load("res://notation/legacy/quality.gd")
     var quality_system := {"page":0, "staff_lines":[.20, .225, .25, .275, .30,
         .425, .45, .475, .50, .525]}
     var long_layout := {"systems":[quality_system],
