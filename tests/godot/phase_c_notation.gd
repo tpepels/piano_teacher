@@ -89,6 +89,26 @@ func run() -> void:
         "Alto clef C4 is third line")
     check(approx(Geometry.note_y(0,160.0,12.0),160.0),
         "Correct bottom-line note height")
+    var spacing_eighth := [
+        {"kind":"note","staff":"right","voice":"1","beat":0.0},
+        {"kind":"note","staff":"right","voice":"1","beat":.5},
+        {"kind":"note","staff":"right","voice":"1","beat":1.0}]
+    check(Geometry.required_density(spacing_eighth,96.0) >= 155.0,
+        "Readability: consecutive eighth-note attacks get at least 78 px")
+    var spacing_16th := [
+        {"kind":"note","staff":"right","voice":"1","beat":0.0},
+        {"kind":"note","staff":"right","voice":"1","beat":.25}]
+    check(Geometry.required_density(spacing_16th,96.0) >= 215.0,
+        "Readability: sixteenths widen through one global density")
+    var spacing_64th := [
+        {"kind":"note","staff":"right","voice":"1","beat":0.0},
+        {"kind":"note","staff":"right","voice":"1","beat":.0625}]
+    check(approx(Geometry.required_density(spacing_64th,96.0),400.0),
+        "Fast 64th-note grouping preserves its previous fixed 400 px/beat")
+    check(approx(Geometry.required_density(spacing_eighth,96.0)*.5,
+        Geometry.required_density(spacing_eighth,96.0)*1.0/2.0),
+        "A larger density never introduces beat-dependent non-linear X")
+
     var renderer = Renderer.new()
     get_root().add_child(renderer)
     renderer.size = Vector2(1150,440)
