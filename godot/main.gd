@@ -29,7 +29,7 @@ const ActionButton := preload("res://action_button.gd")
 const LibraryRow := preload("res://library_row.gd")
 const GameInputIndicator := preload("res://game_input_indicator.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
-const TimelinePreview := preload("res://score_timeline_preview.gd")
+const TimelinePreview := preload("res://notation/diagnostics/timeline_preview.gd")
 const NativeNotation := preload("res://notation/native/view.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 

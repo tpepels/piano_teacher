@@ -16,7 +16,7 @@ func _initialize() -> void:
 func run() -> void:
     var Timeline = load("res://notation/shared/timeline.gd")
     var Clock = load("res://visual_transport_clock.gd")
-    var Preview = load("res://score_timeline_preview.gd")
+    var Preview = load("res://notation/diagnostics/timeline_preview.gd")
     var scores := {
         "schema":"piano-teacher-score-model-v1", "beat_unit":"quarter",
         "revision":11, "duration_beats":7.0, "active_hand":"right",

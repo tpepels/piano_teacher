@@ -118,7 +118,7 @@ preserving Verovio as a fallback until coverage is sufficient.
 
 ## Native notation — canonical since 2026-10-20
 
-The production practice score uses `godot/score_native_notation.gd` by default.
+The production practice score uses `godot/notation/native/view.gd` by default.
 `./run.sh` requires **no** renderer environment flag. The former
 `PIANO_TEACHER_NATIVE_NOTATION=1` flag remains accepted for existing scripts.
 Choose the retired page-renderer explicitly for regression comparisons:
