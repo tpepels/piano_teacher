@@ -219,8 +219,6 @@ def _generate(font: str) -> dict:
     from .glyphs import native_glyphs
 
     atlas = native_glyphs()
-    head = atlas["head_black"]["bounds"]
-    head_center = head[0] + head[2] * 0.5
     toolkit = _create_verovio_toolkit(verovio)
     if not toolkit.setOptions({
         "inputFrom": "xml", "scale": 48, "pageWidth": 900,

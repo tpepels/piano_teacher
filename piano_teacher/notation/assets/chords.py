@@ -211,7 +211,9 @@ def _render(toolkit,pattern: str) -> dict:
     if staff<=2:
         raise ValueError("Invalid chord staff spacing")
     from .glyphs import native_glyphs
-    head=native_glyphs()["head_black"]["bounds"]
+    kind = pattern.split("|", 1)[0]
+    head=native_glyphs()["head_" + (
+        kind if kind in {"whole", "half"} else "black")]["bounds"]
     dx=(head[0]+head[2]*.5)*staff/250
     note_x=anchor[0]*rgba.width+dx
     note_y=anchor[1]*rgba.height

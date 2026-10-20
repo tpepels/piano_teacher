@@ -118,14 +118,13 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
                            model: dict) -> dict:
     """Return source-accurate beam masks with an anchor for EVERY note.
 
-    Chords, duplicate-time events and ambiguous groups remain in the existing
-    renderer. No tempo-dependent page positions replace source-beat timing.
+    Chord tones retain their source IDs and share one attack anchor. No
+    tempo-dependent page positions replace source-beat timing.
     """
     import cairosvg
     from .svg_geometry import parse_svg_geometry
 
-    # Match the two semantic attacks in order; other Verovio beam groupings
-    # cannot be attached safely to this model without a full multi-anchor map.
+    # Every source attack gets its own anchor, including long beam groups.
     events = {e.get("id"):e for e in model.get("notation_events",[])
               if e.get("kind")=="note" and e.get("id")}
     eligible: dict[tuple[str,...],tuple[str,tuple[str,...],tuple[tuple[str,...],...]]] = {}
