@@ -9,7 +9,7 @@ from PIL import Image
 
 def test_engrave_complete_notes_once_then_reuse_across_loads(tmp_path, monkeypatch):
     from piano_teacher.preprocessing_cache import PreprocessingCache
-    from piano_teacher import verovio_note_templates as templates
+    from piano_teacher.notation.assets import notes as templates
 
     first = PreprocessingCache(tmp_path)
     atlas = templates.note_templates(first)
