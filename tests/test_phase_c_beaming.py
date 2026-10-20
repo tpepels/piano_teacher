@@ -34,4 +34,4 @@ def test_beaming_uses_semantic_beat_and_never_verovio_x():
     assert "glyphs.beam_metadata" in renderer
     assert "Geometry.beam_groups(timeline.model)" not in renderer
     assert 'timeline.screen_x(float(event.get("beat", 0.0))' in renderer
-    assert 'score_motion_curve.gd' not in renderer
+    assert 'notation/legacy/motion_curve.gd' not in renderer

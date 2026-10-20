@@ -121,7 +121,7 @@ func _run() -> void:
     # actual candidate layout against the same source pixels/IDs, regardless
     # of whether this specific passage can safely be represented on a grid.
     if bool(original.get("continuous_score", false)) and not untouched_strip.is_empty():
-        var exact: Dictionary = load("res://score_exact_spacing.gd").reflow(
+        var exact: Dictionary = load("res://notation/legacy/exact_spacing.gd").reflow(
             untouched_strip)
         var enabled: bool = bool(exact["layout"].get("exact_ink_grid", false))
         var audit: Dictionary = load("res://notation/shared/beat_camera.gd").prepare(

@@ -66,6 +66,6 @@ def test_native_mode_is_canonical_and_unsupported_music_reverts_to_legacy():
     assert 'func _beam_segment(' not in native
     assert 'glyphs.paint_beam(' in native
     assert 'preload("res://notation/legacy/strip.gd")' not in native
-    assert 'preload("res://score_motion_curve.gd")' not in native
+    assert 'preload("res://notation/legacy/motion_curve.gd")' not in native
     assert 'MIN_ATTACK_SEPARATION' in geometry
     assert 'supported(model: Dictionary)' in geometry

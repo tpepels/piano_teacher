@@ -13,7 +13,7 @@ def test_smooth_score_motion_respects_real_beat_anchors():
         pytest.skip("Godot 4 unavailable")
     result = subprocess.run(
         [godot, "--headless", "--path", str(ROOT / "godot"),
-         "--script", str(ROOT / "tests/godot/score_motion_curve.gd")],
+         "--script", str(ROOT / "tests/godot/notation/legacy/motion_curve.gd")],
         capture_output=True, text=True, timeout=30)
     output = result.stdout + result.stderr
     assert result.returncode == 0 and "SCRIPT ERROR" not in output, output

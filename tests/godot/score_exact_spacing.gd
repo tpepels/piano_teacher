@@ -1,7 +1,7 @@
 extends SceneTree
 # Exercise Phase 1 on real ImageTexture LA8 bytes, not invented SVG glyphs.
 
-const Exact := preload("res://score_exact_spacing.gd")
+const Exact := preload("res://notation/legacy/exact_spacing.gd")
 const BeatCamera := preload("res://notation/shared/beat_camera.gd")
 var problems: Array[String] = []
 
