@@ -157,6 +157,8 @@ func run() -> void:
         "duration_beats":1.0,"midi_pitch":71,"hand":"right"}]
     check(renderer.load_score(poly),
         "Independent voices remain on native renderer without collisions")
+    check(renderer.unavoidable_rest_overlaps == 0,
+        "Ordinary polyphonic fixtures must not require compromised rest positions")
     var heads: Dictionary = renderer._engraved_head_offsets(gap)
     var accidentals: Dictionary = Geometry.accidental_offsets(
         renderer.ordered_events,gap,heads,renderer.glyphs.bounds)
