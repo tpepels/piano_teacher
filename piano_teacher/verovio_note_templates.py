@@ -211,7 +211,7 @@ def _validate(items: dict) -> bool:
 @lru_cache(maxsize=2)
 def _generate(font: str) -> dict:
     import verovio
-    from .score import _create_verovio_toolkit
+    from .notation.assets.runtime import _create_verovio_toolkit
     from .notation_symbols import native_glyphs
 
     atlas = native_glyphs()
