@@ -265,7 +265,7 @@ def chord_templates(model: dict,cache=None) -> dict:
     from .notation_symbols import native_glyphs
     font=native_glyphs()["head_black"]["font"]
     ver=getattr(verovio,"__version__","unknown")
-    from .score import _create_verovio_toolkit
+    from .notation.assets.runtime import _create_verovio_toolkit
     toolkit=None
     result={}
     for pattern in patterns:
