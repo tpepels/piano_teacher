@@ -21,7 +21,7 @@ def test_engrave_complete_notes_once_then_reuse_across_loads(tmp_path, monkeypat
     first = PreprocessingCache(tmp_path)
     atlas = templates.note_templates(first)
     assert set(atlas) == set(templates.keys())
-    assert len(atlas) == 13
+    assert len(atlas) == 15
     assert atlas["eighth_up"]["png_base64"] != atlas["eighth_down"]["png_base64"]
     assert atlas["quarter_up"]["png_base64"] != atlas["quarter_down"]["png_base64"]
     assert atlas["whole"]["png_base64"] != atlas["quarter_up"]["png_base64"]

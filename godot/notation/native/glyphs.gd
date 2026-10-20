@@ -12,15 +12,16 @@ const REQUIRED := [
     "clef_g", "clef_f", "clef_c",
     "clef_g_8vb", "clef_g_8va", "clef_g_15mb", "clef_g_15ma",
     "clef_f_8vb", "clef_f_8va", "clef_f_15mb", "clef_f_15ma",
-    "clef_c_8vb",
+    "clef_c_8vb", "clef_c_8va", "clef_c_15ma", "clef_c_15mb",
     "head_whole", "head_half", "head_black", "augmentation_dot",
     "repeat_dot",
     "rest_whole", "rest_half", "rest_quarter", "rest_eighth",
-    "rest_16th", "rest_32nd", "rest_64th",
+    "rest_16th", "rest_32nd", "rest_64th", "rest_128th",
     "acc_flat", "acc_natural", "acc_sharp",
     "acc_double_sharp", "acc_double_flat",
     "flag_up_1", "flag_down_1", "flag_up_2", "flag_down_2",
     "flag_up_3", "flag_down_3", "flag_up_4", "flag_down_4",
+    "flag_up_5", "flag_down_5",
     "time_0", "time_1", "time_2", "time_3", "time_4",
     "time_5", "time_6", "time_7", "time_8", "time_9",
 ]
@@ -34,6 +35,7 @@ const NOTE_TEMPLATES := [
     "16th_up", "16th_down",
     "32nd_up", "32nd_down",
     "64th_up", "64th_down",
+    "128th_up", "128th_down",
 ]
 
 var textures: Dictionary = {}
@@ -442,20 +444,22 @@ func load_tuplet_fragments(items: Dictionary) -> bool:
     var descriptions: Dictionary = {}
     for key in items:
         var data: Dictionary = items[key]
-        var numeral: Dictionary = data.get("number",{})
+        var numeral: Variant = data.get("number")
         if str(data.get("source","")) != "verovio-engraved-tuplet" or \
-                float(data.get("span",0.0)) <= 0.0:
+                float(data.get("span",0.0)) <= 0.0 or not data.has("number"):
             error = "Invalid Verovio tuplet group "+str(key)
             return false
-        var number_img := Image.new()
-        if str(numeral.get("source","")) != "verovio-tuplet-number" or \
-                numeral.get("bounds",[]).size() != 4 or \
-                number_img.load_png_from_buffer(Marshalls.base64_to_raw(
-                    str(numeral.get("png_base64","")))) != OK:
-            error = "Missing original Verovio tuplet numeral "+str(key)
-            return false
-        var artwork: Dictionary = {
-            "number":ImageTexture.create_from_image(number_img)}
+        var artwork: Dictionary = {}
+        if numeral != null:
+            var number_img := Image.new()
+            if not numeral is Dictionary or \
+                    str(numeral.get("source","")) != "verovio-tuplet-number" or \
+                    numeral.get("bounds",[]).size() != 4 or \
+                    number_img.load_png_from_buffer(Marshalls.base64_to_raw(
+                        str(numeral.get("png_base64","")))) != OK:
+                error = "Missing original Verovio tuplet numeral "+str(key)
+                return false
+            artwork["number"] = ImageTexture.create_from_image(number_img)
         var bracket: Variant = data.get("bracket")
         if bracket is Dictionary and not bracket.is_empty():
             var bracket_image := Image.new()
@@ -473,9 +477,11 @@ func load_tuplet_fragments(items: Dictionary) -> bool:
     return true
 
 
-func has_tuplet(name: String, requires_bracket: bool) -> bool:
+func has_tuplet(name: String, requires_bracket: bool,
+        requires_number: bool = true) -> bool:
     return tuplet_textures.has(name) and (not requires_bracket or \
-        tuplet_textures[name].has("bracket"))
+        tuplet_textures[name].has("bracket")) and (not requires_number or \
+        tuplet_textures[name].has("number"))
 
 
 func paint_tuplet(canvas: CanvasItem, name: String, x0: float, x1: float,
@@ -484,13 +490,14 @@ func paint_tuplet(canvas: CanvasItem, name: String, x0: float, x1: float,
         return false
     var info: Dictionary = tuplet_metadata[name]
     var textures: Dictionary = tuplet_textures[name]
-    var number: Dictionary = info["number"]
-    var nb: Array = number["bounds"]
     var unit: float = gap/250.0
     var center: float = (x0+x1)*.5
-    canvas.draw_texture_rect(textures["number"],
-        Rect2(center-float(nb[2])*unit*.5, y0+float(nb[1])*unit,
-            float(nb[2])*unit,float(nb[3])*unit),false,ink)
+    if textures.has("number"):
+        var number: Dictionary = info["number"]
+        var nb: Array = number["bounds"]
+        canvas.draw_texture_rect(textures["number"],
+            Rect2(center-float(nb[2])*unit*.5, y0+float(nb[1])*unit,
+                float(nb[2])*unit,float(nb[3])*unit),false,ink)
     if textures.has("bracket"):
         var bracket: Dictionary = info["bracket"]
         var box: Array = bracket["bounds"]

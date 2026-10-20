@@ -2,13 +2,13 @@ extends RefCounted
 # Deterministic engraving-independent geometry for Phase C.
 # No texture, Verovio resource, frame clock or audio timing dependency.
 const STEPS := {"C":0, "D":1, "E":2, "F":3, "G":4, "A":5, "B":6}
-const SUPPORTED := ["whole", "half", "quarter", "eighth", "16th", "32nd", "64th"]
-const BEAM_LEVELS := {"eighth":1, "16th":2, "32nd":3, "64th":4}
+const SUPPORTED := ["whole", "half", "quarter", "eighth", "16th", "32nd", "64th", "128th"]
+const BEAM_LEVELS := {"eighth":1, "16th":2, "32nd":3, "64th":4, "128th":5}
 const BARLINE_STYLES := ["regular", "light-light", "light-heavy",
     "heavy-light", "heavy-heavy", "heavy", "none", "dashed", "dotted",
     "tick", "short"]
 const NOTE_BEATS := {"whole":4.0,"half":2.0,"quarter":1.0,
-    "eighth":.5,"16th":.25,"32nd":.125,"64th":.0625}
+    "eighth":.5,"16th":.25,"32nd":.125,"64th":.0625,"128th":.03125}
 
 static func dotted_multiplier(dots: int) -> float:
     var result := 1.0
@@ -75,8 +75,8 @@ static func supported(model: Dictionary) -> String:
         var duration: String = str(event.get("note_type", ""))
         if kind not in ["note", "rest"] or duration not in SUPPORTED:
             return "Unsupported music value: " + duration
-        if int(event.get("dots", 0)) < 0 or int(event.get("dots", 0)) > 2:
-            return "More than two rhythm dots are not supported"
+        if int(event.get("dots", 0)) < 0:
+            return "Invalid augmentation dot count"
         if not valid_modification(event):
             return "Invalid or unrepresentable tuplet time ratio"
         for mark in event.get("tuplet_marks", []):
@@ -122,11 +122,10 @@ static func supported(model: Dictionary) -> String:
             if str(clef.get("sign", "G" if hand == "right" else "F")) \
                     not in ["G", "F", "C"]:
                 return "Unimplemented clef"
-            if abs(int(clef.get("octave_change", 0))) > 1:
+            if abs(int(clef.get("octave_change", 0))) > 2:
                 return "Unimplemented octave clef"
-            if str(clef.get("sign", "")) == "C" and \
-                    int(clef.get("octave_change",0)) > 0:
-                return "Source C-clef octave-above glyph unavailable in installed Verovio font"
+            if int(clef.get("line", 2)) < 1 or int(clef.get("line", 2)) > 5:
+                return "Invalid clef staff line"
             if abs(int(measure.get("keys", {}).get(hand, 0))) > 7:
                 return "Invalid key signature"
     return ""
@@ -487,6 +486,8 @@ static func accidental_offsets(events: Array, gap: float,
 
 
 static func tuplet_groups(model: Dictionary) -> Array:
+    if model.has("groups"):
+        return preload("res://notation/native/tuplets_layout.gd").groups(model)
     # Group from explicit MusicXML start/stop, not from guessed X intervals.
     # An unusual standalone time-modification is displayed with its
     # full actual:normal ratio instead of being silently misrepresented.
@@ -495,8 +496,7 @@ static func tuplet_groups(model: Dictionary) -> Array:
         if not event is Dictionary:
             continue
         var key: String = str(event.get("staff", "")) + "|" + \
-            str(event.get("voice", "1")) + "|" + \
-            str(event.get("measure", 0))
+            str(event.get("voice", "1"))
         if not lanes.has(key):
             lanes[key] = []
         if not bool(event.get("chord", false)):

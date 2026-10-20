@@ -17,10 +17,10 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-KINDS = ("whole", "half", "quarter", "eighth", "16th", "32nd", "64th")
+KINDS = ("whole", "half", "quarter", "eighth", "16th", "32nd", "64th", "128th")
 BEATS = {"whole": 4, "half": 2, "quarter": 1, "eighth": 0.5,
-         "16th": 0.25, "32nd": 0.125, "64th": 0.0625}
-TEMPLATE_VERSION = 4
+         "16th": 0.25, "32nd": 0.125, "64th": 0.0625, "128th": 0.03125}
+TEMPLATE_VERSION = 5
 XML_DIVISIONS = 10080
 
 
