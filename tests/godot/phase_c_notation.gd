@@ -191,7 +191,7 @@ func run() -> void:
         "Declared reference line and octave indication affect pitch placement")
     check(renderer.glyphs.textures.has("clef_g_8va") and
         renderer.glyphs.textures.has("clef_f_8vb") and
-        renderer.glyphs.textures.has("clef_octave_8"),
+        renderer.glyphs.textures.has("clef_c_8vb"),
         "Original Verovio clef octave variants and numerals are cached")
     var styled: Dictionary = model.duplicate(true)
     styled["measures"][0]["right_barline"] = {

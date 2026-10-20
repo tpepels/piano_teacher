@@ -120,6 +120,9 @@ static func supported(model: Dictionary) -> String:
                 return "Unimplemented clef"
             if abs(int(clef.get("octave_change", 0))) > 1:
                 return "Unimplemented octave clef"
+            if str(clef.get("sign", "")) == "C" and \
+                    int(clef.get("octave_change",0)) > 0:
+                return "Source C-clef octave-above glyph unavailable in installed Verovio font"
             if abs(int(measure.get("keys", {}).get(hand, 0))) > 7:
                 return "Invalid key signature"
     return ""

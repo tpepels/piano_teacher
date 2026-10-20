@@ -457,12 +457,8 @@ func _paint_clef(x: float, center: float, clef: Dictionary,
     if not variant.is_empty() and glyphs.textures.has(variant):
         name = variant
     glyphs.paint(self,name,x,origin_y,gap,ink,true)
-    if octave != 0 and variant != name:
-        # No combined C-clef 8va/15ma in SMuFL: attach authentic
-        # Verovio clef numeral glyph rather than faking a text 8.
-        var numeral: String = "clef_octave_8" if absi(octave)==1 else "clef_octave_15"
-        var numeral_y: float = origin_y-2.6*gap if octave > 0 else origin_y+2.6*gap
-        glyphs.paint(self,numeral,x,numeral_y,gap,ink,true)
+    # No separate clef numeral is available in installed Leipzig. Any
+    # unsupported combined variant must be rejected by Geometry.supported.
 
 
 func _paint_meter_number(value: int, x: float, y: float,
