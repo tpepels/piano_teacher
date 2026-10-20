@@ -130,8 +130,9 @@ func capture(label: String) -> Dictionary:
                 # Testing the retired strip positions reports false blank
                 # scores once full-page PNGs stop being downloaded.
                 var view: Control = app.timeline_preview
-                for id in view.drawn_noteheads:
-                    var local: Vector2 = view.drawn_noteheads[id]
+                var native_heads: Dictionary = view.get("drawn_noteheads")
+                for id in native_heads:
+                    var local: Vector2 = native_heads[id]
                     var point: Vector2 = view.get_global_transform_with_canvas()*local
                     var pixels := note_ink(picture,point*scale)
                     if panel.grow(-8).has_point(point) and pixels >= 8:
