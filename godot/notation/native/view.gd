@@ -43,6 +43,9 @@ var cached_staff_gap := -1.0
 var cached_gap_height := -1.0
 var cached_head_offsets: Dictionary = {}
 var cached_accidental_offsets: Dictionary = {}
+# Per-rest displacements measured in staff spaces; fixed for one score revision.
+var rest_lane_offsets: Dictionary = {}
+var unavoidable_rest_overlaps := 0
 var cached_offsets_gap := -1.0
 var frame_scanned_events := 0
 var frame_visible_beam_groups := 0
@@ -69,6 +72,8 @@ func clear_score() -> void:
     cached_gap_height = -1.0
     cached_head_offsets.clear()
     cached_accidental_offsets.clear()
+    rest_lane_offsets.clear()
+    unavoidable_rest_overlaps = 0
     cached_offsets_gap = -1.0
 
 
@@ -162,6 +167,9 @@ func load_score(candidate: Dictionary) -> bool:
     if not failure_reason.is_empty():
         notice = failure_reason
         return false
+    # Place rests before choosing global spacing. Their real vertical ink
+    # footprints must participate in the SAME collision calculation as notes.
+    _layout_rest_lanes(MAX_STAFF_GAP, density)
     # Fit the widest actual note/accidental footprint once for the score.
     # Use the maximum supported staff gap so a later resize cannot create
     # collisions or force a mid-performance change of horizontal scale.
@@ -173,6 +181,12 @@ func load_score(candidate: Dictionary) -> bool:
         # never alter note timing or the global scale during playback.
         staff_gap_limit = 17.0
         ink_density = _required_ink_density(density, staff_gap_limit)
+    # Rest collisions are reevaluated at the FINAL density: otherwise
+    # close expressive attacks can look coincident at the provisional scale.
+    # This placement is calculated once per lesson, never during scrolling.
+    _layout_rest_lanes(staff_gap_limit,ink_density)
+    ink_density = maxf(ink_density,
+        _required_ink_density(ink_density,staff_gap_limit))
     if not timeline.set_score_density(ink_density):
         failure_reason = timeline.last_error
         notice = failure_reason
@@ -499,7 +513,91 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
 func _paint_rest(x: float, y: float,
         note_type: String, dots: int, ink: Color, gap: float) -> void:
     glyphs.paint(self, "rest_" + note_type, x, y, gap, ink, true)
-    _paint_rhythm_dots(x, y, dots, ink, gap)
+    _paint_rhythm_dots(x, y+Geometry.rest_dot_offset(note_type)*gap,
+        dots, ink, gap)
+
+
+func _rest_y(event: Dictionary, gap: float) -> float:
+    # The Verovio source glyph is positioned by its staff-line origin.
+    # Multi-voice offsets are extra staff spaces, never arbitrary pixels.
+    return _staff_center(str(event.get("staff","right"))) + gap * (
+        Geometry.rest_staff_offset(str(event.get("note_type","quarter"))) +
+        float(rest_lane_offsets.get(str(event.get("id","")),0.0)))
+
+
+func _layout_rest_lanes(gap: float, density: float) -> void:
+    rest_lane_offsets.clear()
+    unavoidable_rest_overlaps = 0
+    var heads: Dictionary = _engraved_head_offsets(gap)
+    var accidentals: Dictionary = Geometry.accidental_offsets(
+        ordered_events,gap,heads,glyphs.bounds)
+    var voices_by_measure: Dictionary = {}
+    var obstacles: Dictionary = {}
+    for event in ordered_events:
+        var lane_key: String = str(event.get("staff","right"))+"|"+str(
+            event.get("measure",-1))
+        if not voices_by_measure.has(lane_key):
+            voices_by_measure[lane_key] = {}
+            obstacles[lane_key] = []
+        var voice: String = str(event.get("voice","1"))
+        voices_by_measure[lane_key][voice] = true
+        if str(event.get("kind","")) != "note":
+            continue
+        var ink: Rect2 = _event_ink_rect(event,gap,heads,accidentals)
+        ink.position.x += float(event.get("beat",0.0))*density
+        obstacles[lane_key].append({"voice":voice,"ink":ink})
+    # Placing rests after source note ink means their voice-lane choice
+    # is deterministic and cannot move MIDI attacks, beams or noteheads.
+    for event in ordered_events:
+        if str(event.get("kind","")) != "rest":
+            continue
+        var lane_key: String = str(event.get("staff","right"))+"|"+str(
+            event.get("measure",-1))
+        var voice: String = str(event.get("voice","1"))
+        var voices: Array = voices_by_measure[lane_key].keys()
+        voices.sort()
+        var voice_index: int = voices.find(voice)
+        var preferred := 0.0
+        var direction := -1.0
+        if voices.size() > 1:
+            direction = -1.0 if voice_index % 2 == 0 else 1.0
+            preferred = direction*(1.0+float(voice_index/2))
+        var candidates: Array = [preferred]
+        for step in range(1,15):
+            candidates.append(preferred+direction*float(step)*.5)
+            candidates.append(preferred-direction*float(step)*.5)
+        var placed := false
+        var best_score := INF
+        var best_shift: float = preferred
+        var best_rect := Rect2()
+        for shift in candidates:
+            rest_lane_offsets[str(event.get("id",""))] = shift
+            var rect: Rect2 = _event_ink_rect(event,gap,heads,accidentals)
+            rect.position.x += float(event.get("beat",0.0))*density
+            var overlap_area := 0.0
+            for blocker in obstacles[lane_key]:
+                if str(blocker["voice"]) == voice:
+                    continue
+                var other: Rect2 = blocker["ink"]
+                if rect.intersects(other.grow(gap*.06)):
+                    var overlap: Rect2 = rect.intersection(other.grow(gap*.06))
+                    overlap_area += overlap.size.x*overlap.size.y
+            var score: float = overlap_area+absf(float(shift)-preferred)*gap*gap*.02
+            if score < best_score:
+                best_score = score
+                best_shift = float(shift)
+                best_rect = rect
+            if overlap_area <= .00001:
+                obstacles[lane_key].append({"voice":voice,"ink":rect})
+                placed = true
+                break
+        if not placed:
+            # A score can contain an unavoidable collision among polyphonic
+            # voices with huge ledger notes. Do not discard every source
+            # attack or fall back solely for a rest: use minimum overlap.
+            rest_lane_offsets[str(event.get("id",""))] = best_shift
+            obstacles[lane_key].append({"voice":voice,"ink":best_rect})
+            unavoidable_rest_overlaps += 1
 
 
 func _paint_clef(x: float, center: float, clef: Dictionary,
@@ -657,10 +755,21 @@ func _event_ink_rect(event: Dictionary, gap: float,
     var box: Array = []
     if str(event.get("kind","")) == "rest":
         box = glyphs.bounds["rest_"+kind]
-        var y: float = _staff_center(str(event.get("staff","right")))+gap*(
-            -.3 if str(event.get("voice","1")) == "1" else .6)
-        return Rect2(-float(box[2])*unit*.5,y+float(box[1])*unit,
-            float(box[2])*unit,float(box[3])*unit)
+        var y: float = _rest_y(event,gap)
+        var left := -float(box[2])*unit*.5
+        var right := float(box[2])*unit*.5
+        var top := y+float(box[1])*unit
+        var bottom := top+float(box[3])*unit
+        var dots: int = int(event.get("dots",0))
+        if dots > 0:
+            var dot: Array = glyphs.bounds["augmentation_dot"]
+            var dot_y: float = y+gap*(
+                Geometry.rest_dot_offset(kind)-.24)
+            top = minf(top,dot_y+float(dot[1])*unit)
+            bottom = maxf(bottom,dot_y+float(dot[1]+dot[3])*unit)
+            right = maxf(right,gap*(1.05+float(dots-1)*.63)+
+                float(dot[2])*unit*.5)
+        return Rect2(left,top,right-left,bottom-top)
     if chord_members.has(id):
         var key: String = _chord_template_key(event)
         box = glyphs.chord_heads_bounds[key] if beamed_note_ids.has(id) else \
@@ -1167,10 +1276,8 @@ func _draw() -> void:
                 beam_stems.get(str(event.get("id", "")), {}),
                 float(head_offsets.get(str(event.get("id", "")), 0.0)))
         else:
-            var voice: String = str(event.get("voice","1"))
-            var rest_y: float = _staff_center(staff)+(
-                -gap*.3 if voice == "1" else gap*.6)
-            _paint_rest(x,rest_y,str(event.get("note_type","quarter")),
+            _paint_rest(x,_rest_y(event,gap),
+                str(event.get("note_type","quarter")),
                 int(event.get("dots",0)),ink,gap)
         visible_symbols += 1
     _paint_beams(beam_data, gap)
