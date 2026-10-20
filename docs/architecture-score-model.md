@@ -66,7 +66,7 @@ errors instead of silently producing a plausible but incorrect lesson.
 
 ## Phase B — fixed musical timeline implemented as an opt-in diagnostic
 
-The pure `godot/score_timeline.gd` is the mathematical contract. It consumes
+The pure `godot/notation/shared/timeline.gd` is the mathematical contract. It consumes
 `/score/model` directly, never imports Verovio's X positions, and has no
 internal timer. The already existing `VisualTransportClock` is the SINGLE
 frontend presentation clock; its authoritative snapshots still come from

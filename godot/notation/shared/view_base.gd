@@ -3,7 +3,7 @@ extends Control
 # source note attacks and durations while validating the new time axis.
 # It runs above the legacy score only when explicitly enabled. Phase C will
 # consume the same ScoreTimeline with real notation glyphs.
-const Timeline := preload("res://score_timeline.gd")
+const Timeline := preload("res://notation/shared/timeline.gd")
 const BACKGROUND := Color("#192F30")
 const GRID := Color("#668982")
 const FOREGROUND := Color("#E5F2EA")

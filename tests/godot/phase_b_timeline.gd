@@ -14,7 +14,7 @@ func _initialize() -> void:
     call_deferred("run")
 
 func run() -> void:
-    var Timeline = load("res://score_timeline.gd")
+    var Timeline = load("res://notation/shared/timeline.gd")
     var Clock = load("res://visual_transport_clock.gd")
     var Preview = load("res://score_timeline_preview.gd")
     var scores := {

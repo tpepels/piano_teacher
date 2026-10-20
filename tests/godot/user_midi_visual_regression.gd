@@ -56,7 +56,7 @@ func _run() -> void:
             untouched_strip = result
         var tiles: Array = result.tiles
         var mappings: Array = result.mappings
-        var beat_grid: Dictionary = load("res://score_beat_camera.gd").prepare(
+        var beat_grid: Dictionary = load("res://notation/shared/beat_camera.gd").prepare(
             result.layout)
         check(tiles.size() == mappings.size() and
             tiles.size() >= original.get("systems", []).size(),
@@ -124,7 +124,7 @@ func _run() -> void:
         var exact: Dictionary = load("res://score_exact_spacing.gd").reflow(
             untouched_strip)
         var enabled: bool = bool(exact["layout"].get("exact_ink_grid", false))
-        var audit: Dictionary = load("res://score_beat_camera.gd").prepare(
+        var audit: Dictionary = load("res://notation/shared/beat_camera.gd").prepare(
             exact["layout"])
         if enabled:
             check(bool(audit.get("enabled", false)),

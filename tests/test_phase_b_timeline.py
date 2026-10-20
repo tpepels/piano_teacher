@@ -28,7 +28,7 @@ def test_fixed_beat_timeline_and_preparation_at_40_80_120_bpm():
 def test_opt_in_app_uses_existing_visual_transport_clock_not_engraving_x():
     script = (GODOT / "main.gd").read_text()
     prototype = (GODOT / "score_timeline_preview.gd").read_text()
-    timeline = (GODOT / "score_timeline.gd").read_text()
+    timeline = (GODOT / "notation/shared/timeline.gd").read_text()
     assert 'timeline_model_request.request(URL + "/score/model")' in script
     assert 'timeline_preview.present(last_state, _transport_beat_now())' in script
     assert 'PIANO_TEACHER_TIMELINE_PREVIEW' in script

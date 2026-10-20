@@ -69,7 +69,7 @@ func _capture(label: String) -> void:
         "note_count": app.score_layout.get("notes", []).size(),
         "glyph_tile_count": app.score_tiles.size(),
         "score_width": app.score_content.size.x,
-        "beat_camera": load("res://score_beat_camera.gd").prepare(app.score_layout),
+        "beat_camera": load("res://notation/shared/beat_camera.gd").prepare(app.score_layout),
         "exact_ink_grid": bool(app.score_layout.get("exact_ink_grid", false)),
         "native_ready": _native_notation_ready() if
             OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1" else false,
