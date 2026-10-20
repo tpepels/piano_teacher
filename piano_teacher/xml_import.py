@@ -16,7 +16,7 @@ from .music import (
     Note, Piece, KeySignature, ClefChange, BarlineChange,
     _assign_hands, _named_hand, _phrases,
 )
-from .score_model import _barline_data
+from .notation.musicxml import parse_barline
 
 
 def _xml_root(path: Path):
@@ -193,7 +193,7 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
             if extent <= 0:
                 raise ValueError('MusicXML source measure has no explicit rhythmic duration')
             for tag in measure.findall("barline"):
-                location, descriptor = _barline_data(tag)
+                location, descriptor = parse_barline(tag)
                 key = (measure_index, location)
                 position = offset if location == "left" else offset + extent
                 mark = BarlineChange(float(position), location,
