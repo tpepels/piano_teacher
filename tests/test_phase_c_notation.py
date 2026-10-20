@@ -19,15 +19,16 @@ def test_phase_c_native_renderer_and_global_collision_scale():
     assert "PHASE_C_NOTATION_FAILURES:0" in output, output
     assert "SCRIPT ERROR" not in output and "Parse Error" not in output, output
 
-def test_native_mode_is_opt_in_and_unsupported_music_reverts_to_legacy():
+def test_native_mode_is_canonical_and_unsupported_music_reverts_to_legacy():
     app = (ROOT / "godot" / "main.gd").read_text()
     native = (ROOT / "godot" / "score_native_notation.gd").read_text()
     geometry = (ROOT / "godot" / "score_notation_geometry.gd").read_text()
-    # Resume development of the existing native engine. The original
-    # public flag must select it; the separate raster experiment is opt-in.
-    assert 'PIANO_TEACHER_NATIVE_NOTATION") == "1"' in app
-    assert 'OS.get_cmdline_user_args().has("--native-notation")' in app
-    assert 'PIANO_TEACHER_NATIVE_NOTATION_EXPERIMENTAL' in app
+    # Native is default; explicit env/CLI switches enable compatibility
+    # comparisons. Missing source glyphs must still reveal Verovio pages.
+    assert 'PIANO_TEACHER_RENDERER").to_lower() != "legacy"' in app
+    assert 'PIANO_TEACHER_NATIVE_NOTATION").to_lower() not in' in app
+    assert 'OS.get_cmdline_user_args().has("--legacy-notation")' in app
+    assert 'score_view.visible = true' in app
     assert 'PIANO_TEACHER_EXACT_VEROVIO_GRID") == "1"' in app
     assert 'not native_notation_enabled' in app
     assert 'var retired_native_flag' not in app
