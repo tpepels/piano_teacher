@@ -70,7 +70,7 @@ def _extract_tie(svg: str) -> str:
 
 def _render(toolkit, direction: str) -> dict:
     import cairosvg
-    from ...score_geometry import parse_svg_geometry
+    from .svg_geometry import parse_svg_geometry
     if not toolkit.loadData(_score_xml(direction)):
         raise RuntimeError("Verovio refused tied-note MusicXML")
     svg = toolkit.renderToSVG(1)
