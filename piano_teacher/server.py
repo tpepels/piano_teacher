@@ -19,7 +19,8 @@ from urllib.parse import urlsplit
 from .learning import LearningPlan, build_exercises
 from .exercise_generator import generate_variants
 from .practice import Recorder, evaluate
-from .score import import_piece, render_layout, EngravedScore
+from .importing.pieces import import_piece
+from .score import render_layout, EngravedScore
 from .feedback import project_assessment
 from .library import ScoreLibrary
 from .preprocessing_cache import PreprocessingCache
@@ -28,8 +29,8 @@ from .warmups import is_warmup
 from .raster import rasterize_score
 from .recovery import check_rolling_two_bar_window, check_two_bar_window
 from .music import Phrase, source_note_id, note_name
-from .lesson_score import build_lesson_score, infer_piece_clefs
-from .score_model import build_score_model
+from .notation.lesson import build_lesson_score, infer_piece_clefs
+from .notation.model import build_score_model
 from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats, preparation_meter
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
