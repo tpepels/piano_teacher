@@ -176,6 +176,23 @@ func run() -> void:
         "Forward repeat uses thick left stroke")
     check(renderer.glyphs.textures.has("repeat_dot"),
         "Repeat colon is genuine source Verovio repeat-dot music glyph")
+    var clef_g: Dictionary = {"sign":"G","line":2,"octave_change":0}
+    var new_clef: Dictionary = {"sign":"G","line":1,"octave_change":1}
+    check(Geometry.key_cancellation_steps(clef_g, 3, 0).size() == 3,
+        "Changing from three sharps to C major engraves three naturals")
+    check(Geometry.key_cancellation_steps(clef_g, -4, -2).size() == 2,
+        "Shrinking a flat signature cancels the two discarded flats")
+    check(Geometry.key_cancellation_steps(clef_g, -2, 2).size() == 2,
+        "Switching flats to sharps cancels the former key")
+    check(Geometry.key_cancellation_steps(clef_g, 2, 3).is_empty(),
+        "Increasing the same key signature adds sharps, not naturals")
+    check(Geometry.staff_step({"step":"G","octave":4},new_clef) !=
+        Geometry.staff_step({"step":"G","octave":4},clef_g),
+        "Declared reference line and octave indication affect pitch placement")
+    check(renderer.glyphs.textures.has("clef_g_8va") and
+        renderer.glyphs.textures.has("clef_f_8vb") and
+        renderer.glyphs.textures.has("clef_octave_8"),
+        "Original Verovio clef octave variants and numerals are cached")
     var styled: Dictionary = model.duplicate(true)
     styled["measures"][0]["right_barline"] = {
         "style":"light-heavy","repeat":"backward"}

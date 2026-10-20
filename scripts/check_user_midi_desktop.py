@@ -93,6 +93,14 @@ def run_one(filename: str, out: Path, godot: str, *, native: bool = False,
                 raise AssertionError(f"Godot desktop capture failed for {filename}:\n{transcript[-8000:]}")
             report = json.loads((folder / "desktop-report.json").read_text())
             assert not report["errors"], report["errors"]
+            if native:
+                assert "NATIVE_SCORE_RASTER_SKIPPED:" in transcript, (
+                    "Native score path still downloads the legacy raster "
+                    "before validating original Verovio note fragments"
+                )
+                assert "PHASE0_SCORE_READY:" not in transcript, (
+                    "Native desktop unexpectedly completed legacy PNG tile rendering"
+                )
             resolutions = ((1536, 960), (1024, 768), (800, 600)) if filename.startswith("Ala_") else ((1536, 960),)
             expected = {"ready", "count-in", "playing"} | {
                 f"{screen}-{width}x{height}"
