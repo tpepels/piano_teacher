@@ -7,3 +7,7 @@ playtest-results/
 *.egg-info/
 !tests/fixtures/musical_fidelity/*.mid
 
+godot/*.uid
+godot/.godot/
+godot/tests/*uid
+godot/.godot/uid_cache.bin
