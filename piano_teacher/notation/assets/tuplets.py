@@ -90,7 +90,7 @@ def crop_art(svg: str, staff_space: float,
 
 
 def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
-    from ...score_geometry import parse_svg_geometry
+    from .svg_geometry import parse_svg_geometry
     desired=semantic_tuplets(model)
     if not desired:
         return {}
