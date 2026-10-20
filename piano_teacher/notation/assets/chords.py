@@ -170,7 +170,7 @@ def _only_original_chord_stems(svg: str) -> str:
 
 def _render(toolkit,pattern: str) -> dict:
     import cairosvg
-    from ...score_geometry import parse_svg_geometry
+    from .svg_geometry import parse_svg_geometry
     if not toolkit.loadData(_xml(pattern)):
         raise ValueError("Verovio refused chord sample")
     svg = toolkit.renderToSVG(1)
