@@ -1,6 +1,6 @@
 extends SceneTree
 
-const Strip := preload("res://score_strip.gd")
+const Strip := preload("res://notation/legacy/strip.gd")
 
 class FixtureApp extends "res://main.gd":
     func _ready() -> void:

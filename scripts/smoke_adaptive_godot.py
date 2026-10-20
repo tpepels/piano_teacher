@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Real Godot 1D/1E smoke: three scored passes -> new generated exercise PNG.
+"""Real Godot 1D/1E smoke: three scored passes -> new generated lesson.
 
 A synthetic MIDI performance is injected *inside the isolated test engine*.
 No production endpoint accepts simulated notes. Requires real Godot,
@@ -76,6 +76,19 @@ def until(predicate, *, timeout: float, label: str, godot: subprocess.Popen,
     raise RuntimeError(f"{label}: timed out\n{transcript.read_text(errors='replace')}")
 
 
+def lesson_rendered(log: str, revision: int) -> bool:
+    """Require this exact revision to be ready on either supported renderer.
+
+    Native uses genuine Verovio fragments and deliberately skips full-page
+    PNGs. Its model must also have loaded before a lesson is considered
+    render-ready; the legacy path publishes its existing score-ready marker.
+    """
+    legacy = f"PHASE0_LESSON_READY: REVISION:{revision}"
+    native = f"PHASE0_SCORE_READY_NATIVE: REVISION:{revision}"
+    model = f"PHASE_B_MODEL_READY: {revision} NOTES:"
+    return legacy in log or (native in log and model in log)
+
+
 def inject_full_performance(engine: PracticeEngine) -> tuple[int, int]:
     """Populate one clean attempt; use the production assessor unchanged."""
     with engine.lock:
@@ -139,10 +152,10 @@ def run() -> None:
                     [godot_exe, "--headless", "--path", str(ROOT/"godot"),
                      "--", "--phase0-smoke"],
                     cwd=ROOT, env=env, stdout=out, stderr=subprocess.STDOUT)
-                until(lambda log: "PHASE0_LESSON_READY:" in log,
-                      timeout=100, label="first generated skeleton PNG",
-                      godot=godot, transcript=log_path)
                 first_revision = engine.score_revision
+                until(lambda log: lesson_rendered(log, first_revision),
+                      timeout=100, label="first generated skeleton notation",
+                      godot=godot, transcript=log_path)
                 last_attempt_id = engine.transport_id
                 # One course step: 3 full, clean, target-speed attempts.
                 for attempt in range(1,4):
@@ -179,8 +192,9 @@ def run() -> None:
                       timeout=9, label="three-clean mastery transition",
                       godot=godot, transcript=log_path)
                 assert engine.score_revision > first_revision
-                until(lambda log: log.count("PHASE0_LESSON_READY:") >= 2,
-                      timeout=100, label="new outline engraved PNG",
+                next_revision = engine.score_revision
+                until(lambda log: lesson_rendered(log, next_revision),
+                      timeout=100, label="new outline notation",
                       godot=godot, transcript=log_path)
                 until(lambda log: engine.state()["phase"] == "count_in",
                       timeout=10, label="new lesson count-in after rendering",
@@ -195,7 +209,7 @@ def run() -> None:
                 if any(token in log_path.read_text(errors="replace")
                        for token in ("SCRIPT ERROR", "Parse Error:", "Failed to load script")):
                     raise RuntimeError(log_path.read_text(errors="replace"))
-                print("PASS generated skeleton -> outline, revision and image acknowledgement",flush=True)
+                print("PASS generated skeleton -> outline, revision and score acknowledgement",flush=True)
                 print("PASS lesson progress persisted and fresh moving count-in",flush=True)
                 print("PHASE 1D/1E ADAPTIVE GODOT SMOKE PASSED",flush=True)
         finally:

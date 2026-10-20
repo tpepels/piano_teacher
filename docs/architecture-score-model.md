@@ -1,6 +1,6 @@
 # Architecture decision A — Semantic ScoreModel (October 2026)
 
-Status: **Phases A and B complete; Phase C native renderer opt-in, fallback retained.**
+Status: **Semantic score and native Verovio-fragment compositor implemented. Native is canonical by default; legacy raster retained on explicit request or for unsupported engraving.**
 
 The current Phase C engine uses authentic Verovio font glyphs and reusable
 engraved note/chord/tie templates, plus source-bound beam, tuplet and slur
@@ -8,7 +8,7 @@ fragments. Godot composes these on its own linear musical timeline. The earlier
 primitive-symbol experiments described below are historical, not the current
 rendering path. Musical glyphs are never approximated with Godot drawings.
 
-Always launch native verification with `PIANO_TEACHER_NATIVE_NOTATION=1`.
+Native verification requires no renderer flag. For regression comparison, set `PIANO_TEACHER_RENDERER=legacy` to exercise the old raster path.
 `scripts/check_native_notation.py` checks the real MIDI curriculum through the
 native compositor and requires every notation note ID to be painted.
 `scripts/smoke_native_notation.py` additionally checks the actual HTTP application,
@@ -43,7 +43,7 @@ LearningPlan.active_phrase (the exact exercise variant)
        v                        v
 ScoreModel v1 (/score/model)   Legacy Verovio renderer (/score/layout, /score.png)
        |                        |
- Future native Godot renderer   Existing Godot score (untouched)
+ Native Godot compositor      Legacy PNG fallback (lazy)
 ```
 
 The Python grader still consumes `LearningPlan.active_phrase`. Listen, MIDI,
@@ -87,7 +87,7 @@ errors instead of silently producing a plausible but incorrect lesson.
 
 ## Phase B — fixed musical timeline implemented as an opt-in diagnostic
 
-The pure `godot/score_timeline.gd` is the mathematical contract. It consumes
+The pure `godot/notation/shared/timeline.gd` is the mathematical contract. It consumes
 `/score/model` directly, never imports Verovio's X positions, and has no
 internal timer. The already existing `VisualTransportClock` is the SINGLE
 frontend presentation clock; its authoritative snapshots still come from
@@ -115,16 +115,16 @@ PIANO_TEACHER_TIMELINE_PREVIEW=1 PIANO_TEACHER_PIXELS_PER_BEAT=96 ./run.sh
 Change only `96` to `72`, `120` or `144` to tune horizontal
 density. The preview is an **overlaid diagnostic with simple note markers and
 duration bars**. It is deliberately NOT the Phase C sheet music renderer;
-there are no drawn clefs, flags, beams, ties, etc. The legacy score remains
-the default without the flag. Only the preview's visible score changes.
+there are no drawn clefs, flags, beams, ties, etc. The diagnostic marker preview remains opt-in; it is separate from the
+canonical native notation view.
 
 A semantic score is fetched asynchronously from `/score/model` whenever
 the exercise revision changes. A response from a previous revision is
 discarded. The preview continues to use the same transport and playing
 controls. There is no new backend service or second time source.
 
-The old Verovio camera and count-in logic remain untouched in the default
-view until Phase C can draw notation from this timeline. Fitting dense
+The retired Verovio page camera is retained only for explicitly selected
+legacy mode or complete-score fallback. Fitting dense
 polyphonic symbols may require a one-time *whole-passsage* global scale
 increase or collision indication in Phase C; it must never introduce
 between-note speed changes.
@@ -137,75 +137,101 @@ negative lead-in, pause, seek, and precise 40/80/120 BPM fixed velocity.
 Phase C will use this semantic timeline to draw SMuFL notation in Godot,
 preserving Verovio as a fallback until coverage is sufficient.
 
-## Phase C1 — native vector notation is opt-in
+## Native notation — canonical since 2026-10-20
 
-The new `godot/score_native_notation.gd` directly consumes
-`ScoreModel.notation_events` and the Phase B `ScoreTimeline`.
-No Verovio, SVG, raster tile, external music font or page/slice composition
-is needed to paint the practice notes in native mode.
+The production practice score uses `godot/notation/native/view.gd` by default.
+`./run.sh` requires **no** renderer environment flag. The former
+`PIANO_TEACHER_NATIVE_NOTATION=1` flag remains accepted for existing scripts.
+Choose the retired page-renderer explicitly for regression comparisons:
 
-Start after a clean pull:
-
-```bash
-PIANO_TEACHER_NATIVE_NOTATION=1 PIANO_TEACHER_PIXELS_PER_BEAT=96 ./run.sh
+```sh
+PIANO_TEACHER_RENDERER=legacy ./run.sh
+# Or: ./run.sh --legacy-notation
 ```
 
-Change `96` to test another preferred density. Collision clearance may
-choose a larger scale **once for the entire exercise** at load time, never
-between notes or at the onset. The timeline, count-in, playhead, and all
-notation events use exactly the same musical quarter-beat axis.
+The native renderer consumes the versioned, transport-independent
+`/score/model` contract on one fixed quarter-beat axis. All notation glyphs
+and compound engraving (including notes, chords, beams, ties, tuplets and
+slurs) are source Verovio font outlines or independently extracted genuine
+Verovio fragments. Godot owns placement, fixed-speed horizontal motion,
+feedback, and non-glyph structural rules. No local per-note timing warp is
+allowed. Source glyph failure keeps the **complete** old Verovio score as
+an explicit compatibility fallback rather than displaying counterfeit ink.
 
-Implemented in the first opt-in renderer: two continuously drawn five-line
-staves, default G/F and explicit C clefs, clef changes, meter labels,
-key-signature indication, voice-aware rests, ledger lines, oval noteheads,
-stems, eighth/sixteenth flags, accidentals, dots, chords, ties, and a single
-stationary timing line. High/low semantic note extents are used to fit the
-grand staff during viewport resizing. The existing HUD remains above the
-native score. MIDI/Listen still use the existing Python lesson engine and
-its authoritative visual transport.
+### Python ownership
 
-**C2 additions:** conventional eighth/sixteenth groups are beamed
-directly in Godot, with common stem direction, secondary sixteenth beams and
-individual hooks. Grouping respects staff, voice, rests and measure boundaries:
-quarter-beat groups in regular meters, dotted-quarter groups in 6/8, 9/8 and
-12/8. No unsupported meter receives guessed beam groupings. Key signatures
-place each accidental at a clef-relative staff step, and seconds in chords
-receive local notehead displacements. These are *glyph corrections only*;
-none change musical time or the linear scroll camera.
+| Package / module | Responsibility |
+| --- | --- |
+| `music.py` | Musical source types and performance identity |
+| `importing/pieces.py`, `importing/musicxml.py` | Source MIDI/MusicXML import |
+| `notation/musicxml.py` | Pure shared MusicXML barline parsing |
+| `notation/lesson.py` | Compile the selected exercise into MusicXML |
+| `notation/model.py` | Renderer-independent semantic score contract |
+| `notation/assets/runtime.py` | Verovio toolkit and bundled font paths |
+| `notation/assets/glyphs.py`, `notes.py`, `chords.py`, `ties.py`, `beams.py`, `tuplets.py`, `slurs.py`, `svg.py` | Native glyph and authentic fragment extraction |
+| `rendering/legacy/engraving.py`, `geometry.py`, `spacing.py`, `raster.py` | Retired page renderer and page geometry, preserved for compatibility |
+| `application/score_preparation.py` | Stateless preparation of native layout payloads using the existing cache |
+| `transport/http.py` | HTTP routes and response/error handling |
+| `server.py` | Authoritative practice state, revision and cache invalidation, entry point |
 
-**C2 follow-up:** native 32nd and 64th notes/rests are now supported
-with three/four flag strokes or beam levels. Short rhythmic values can raise
-the **whole exercise's** pixels-per-beat scale before playback (e.g., a
-1/64-note interval with 25 px glyph clearance requires 400 px/beat).
-They never alter the speed partway through the passage. This specifically
-resolves the native fallback warning `Unsupported music value: 32nd`.
+Existing top-level module paths (e.g. `score_model.py`, `lesson_score.py`,
+`score.py`) provide thin explicit compatibility imports; internal callers
+should use the owning modules. Source imports and score semantics do not
+depend on page rendering. Asset runtime does not depend on legacy page
+engraving. The original `python -m piano_teacher` and
+`python -m piano_teacher.server` entry points remain supported.
 
-**Phase C3 follow-up:** the ScoreModel now preserves MusicXML tuplet
-start/stop markers and exact actual:normal time ratios, while Godot paints
-numbered tuplet brackets without altering the source beat positions. Native
-notation also displays two separate augmentation dots on notes and rests.
-Explicit grouped tuplets (e.g., 3:2 and 5:4) can beam across ordinary beat
-boundaries; unsupported or malformed timing ratios still fall back safely.
-Unconventional one-note ratios are labelled with both numbers (e.g., 7:5)
-rather than silently showing an incorrect rhythm.
+### Godot ownership
 
-**Remaining limitations:** nested/cross-staff tuplets, complex independent
-voice collisions, 128th notes, more than two augmentation dots, full octave
-signs and a polished SMuFL music-font pipeline are not supported yet.
-The current renderer obtains clefs and symbols from the installed Verovio font
-and authentic engraved components. Unsupported expressive notation and rhythms
-that exceed the single automatic density limit still produce an explicit full
-Verovio fallback. This is not a general-purpose MusicXML engraver.
+`godot/notation/shared/view_base.gd` owns the common semantic clock and
+transport state, independently inherited by the native renderer and marker-only
+diagnostic preview. `godot/notation/native/score_index.gd` indexes events,
+chord membership, source beams, ties and slurs without drawing or owning a
+transport. `godot/notation/native/barline_layout.gd` derives single, double,
+heavy and repeating bar rules from the source semantic boundary. The main
+native compositor remains responsible for visible event culling and paint
+ordering. Existing exact beat spacing, glyph textures and source geometry are
+separate collaborators.
 
-Use the legacy app by omitting `PIANO_TEACHER_NATIVE_NOTATION`. The previous
-Phase B marker-only preview is still available separately via
-`PIANO_TEACHER_TIMELINE_PREVIEW=1` when native mode is off.
+The old page strip is still available solely for unsupported notation,
+compatibility checks and legacy-specific diagnostics. This is **not** a plan
+to remove Verovio fonts or genuine SVG fragment extraction. Those remain core
+dependencies of the native notation engine.
 
-Further C iterations should improve SMuFL typography, automatic cross-voice
-collision handling and unsupported expressive notation *before* native mode
-is considered as the default. Phase D can attach notehead
-feedback to these native semantic coordinates rather than the old SVG map.
-This strict separation avoids the earlier regressions in the main GUI.
+### Loading and source-notation preservation status
+
+For a supported native score, Godot loads the original Verovio glyph/fragment
+atlas and semantic `/score/model`, then marks the matching revision ready
+**without requesting any full-page PNG**. The retired raster strip is built
+lazily only when authentic native engraving cannot be composed. The Python
+backend still engraves source Verovio SVG during native preparation because
+the original beam, slur, tuplet and chord extractors require its source ink;
+eliminating that Verovio source dependency is outside this refactor.
+
+A MusicXML import retains its complete original parsed XML as
+`Piece.source_musicxml`, including directions, pedals, articulations,
+ornaments, explicit beam/slur declarations and non-note markings. The
+preprocessing cache stores this source alongside the stable note identities.
+**This does not yet mean every original expression is emitted into a derived
+curriculum score**: `build_lesson_score` still reconstructs timed practice
+notation, and annotation mapping to simplified stages requires explicit
+source-identity/beat rules before safe rendering. Original XML remains
+recoverable for that later preservation pass; silent loss at import/cache is
+no longer necessary.
+
+Native key changes cancel old accidentals with naturals (including return
+to C major), and nonstandard clef reference lines use their declared
+MusicXML line. Supported octave-clef changes use combined SMuFL Verovio
+glyphs. Octave-above C-clef has no combined glyph in the installed Leipzig
+font and explicitly falls back instead of drawing an unmarked clef.
+
+### Verification
+
+The Python suite, `scripts/check_godot.sh`, real MIDI fidelity fixtures,
+Godot capture tests and the explicit native-default screenshot check must pass
+before merging a source-organisation refactor. Any unsupported notation falls
+back to complete original Verovio pages without changing MIDI grading, BPM,
+revision identities or cache namespaces.
 
 ## Compatibility
 

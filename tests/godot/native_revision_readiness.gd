@@ -22,7 +22,7 @@ func run() -> void:
         quit(1)
         return
     app.native_notation_enabled = true
-    app.timeline_preview = load("res://score_native_notation.gd").new()
+    app.timeline_preview = load("res://notation/native/view.gd").new()
     app.add_child(app.timeline_preview)
     var fixture = load("res://tests/native_glyph_fixture.gd")
     app.timeline_preview.glyphs.load_font(fixture.catalogue())

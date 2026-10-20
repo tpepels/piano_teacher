@@ -180,7 +180,7 @@ def run(file: Path | None = None) -> int:
                 godot_process = subprocess.Popen(
                     [godot, "--headless", "--resolution", "1536x960", "--path", str(ROOT / "godot"),
                      "--", "--phase0-smoke"],
-                    cwd=ROOT, env=env, stdout=ui_output,
+                    cwd=ROOT, env={**env, "PIANO_TEACHER_RENDERER": "legacy"}, stdout=ui_output,
                     stderr=subprocess.STDOUT)
                 await_condition(
                     lambda log: "PHASE0_SCORE_READY:" in log,

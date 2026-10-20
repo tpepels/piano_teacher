@@ -22,8 +22,8 @@ func _initialize() -> void:
     call_deferred("run")
 
 func run() -> void:
-    var Geometry = load("res://score_notation_geometry.gd")
-    var Native = load("res://score_native_notation.gd")
+    var Geometry = load("res://notation/native/geometry.gd")
+    var Native = load("res://notation/native/view.gd")
     check(Geometry != null and Native != null, "Phase C2 modules parse")
     if Geometry == null or Native == null:
         quit(1)

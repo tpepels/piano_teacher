@@ -22,7 +22,7 @@ func _run() -> void:
         quit(2)
         return
     var folder: String = arguments[0]
-    var helper = preload("res://score_strip.gd")
+    var helper = preload("res://notation/legacy/strip.gd")
     var manifests: Array = []
     var directory := DirAccess.open(folder)
     if directory == null:

@@ -1,6 +1,6 @@
 extends SceneTree
 # Real backend payloads and authentic Verovio assets, never synthetic atlases.
-const Native := preload("res://score_native_notation.gd")
+const Native := preload("res://notation/native/view.gd")
 
 func _initialize() -> void:
     call_deferred("run")

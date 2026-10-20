@@ -124,6 +124,9 @@ static func supported(model: Dictionary) -> String:
                 return "Unimplemented clef"
             if abs(int(clef.get("octave_change", 0))) > 1:
                 return "Unimplemented octave clef"
+            if str(clef.get("sign", "")) == "C" and \
+                    int(clef.get("octave_change",0)) > 0:
+                return "Source C-clef octave-above glyph unavailable in installed Verovio font"
             if abs(int(measure.get("keys", {}).get(hand, 0))) > 7:
                 return "Invalid key signature"
     return ""
@@ -324,6 +327,22 @@ static func signature_steps(clef: Dictionary, fifths: int) -> Array:
             step += 7
         result.append(step)
     return result
+
+static func key_cancellation_steps(clef: Dictionary, before: int,
+        after: int) -> Array:
+    # An old key has to relinquish accidentals when the signature
+    # switches direction, shrinks or returns to C major/A minor.
+    # Retain accidentals shared by signatures of the same sign.
+    if before == 0 or before == after:
+        return []
+    if (before > 0) == (after > 0) and after != 0 and \
+            absi(after) >= absi(before):
+        return []
+    var old_steps: Array = signature_steps(clef, before)
+    if before * after < 0 or after == 0:
+        return old_steps
+    return old_steps.slice(mini(old_steps.size(), absi(after)))
+
 
 static func chord_members(events: Array) -> Dictionary:
     # A MusicXML chord has exactly one unmarked onset followed by notes with

@@ -31,7 +31,7 @@ MODEL = {"notation_events":[
 
 
 def test_extract_separate_genuine_tuplet_bracket_and_number(tmp_path,monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     monkeypatch.setattr(geometry,"parse_svg_geometry",lambda _:SimpleNamespace(
         elements={"n1":(.125,.5,"staff1"),"n2":(.3125,.475,"staff1"),
                   "n3":(.525,.5,"staff1")},
@@ -50,7 +50,7 @@ def test_extract_separate_genuine_tuplet_bracket_and_number(tmp_path,monkeypatch
     cache=PreprocessingCache(tmp_path)
     assert tuplet_fragments([XML],MODEL,cache,"example")==atlas
     monkeypatch.setattr(
-        "piano_teacher.verovio_tuplet_fragments.extract_tuplets",
+        "piano_teacher.notation.assets.tuplets.extract_tuplets",
         lambda *_: (_ for _ in ()).throw(AssertionError("re-engraved cached tuplet")))
     assert tuplet_fragments([XML],MODEL,
                              PreprocessingCache(tmp_path),"example")==atlas
@@ -150,7 +150,7 @@ def test_real_verovio_exports_explicit_triplet_bracket(with_chords):
 
 
 def test_tuplet_span_uses_horizontal_staff_space_on_a_wide_page(monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     monkeypatch.setattr(geometry,"parse_svg_geometry",lambda _:SimpleNamespace(
         elements={"n1":(.125,.5,"s1"),"n2":(.3125,.475,"s1"),
                   "n3":(.525,.5,"s1")},
@@ -167,7 +167,7 @@ def test_tuplet_span_uses_horizontal_staff_space_on_a_wide_page(monkeypatch):
 
 
 def test_chord_tuplet_matches_attacks_without_losing_tone_ids(monkeypatch):
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     xml=XML.replace('<g class="note" id="n2">',
         '<g class="note" id="n1upper"><circle cx="100" cy="180" r="10"/></g>'
         '<g class="note" id="n2">')
@@ -185,7 +185,7 @@ def test_chord_tuplet_matches_attacks_without_losing_tone_ids(monkeypatch):
 
 def test_full_performance_keeps_tuplets_after_the_140th(monkeypatch):
     import copy
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     root=ET.fromstring(XML)
     original=next(n for n in root if n.get("class")=="tuplet")
     root.remove(original)
@@ -217,7 +217,7 @@ def test_full_performance_keeps_tuplets_after_the_140th(monkeypatch):
 
 def test_nested_tuplets_keep_each_groups_own_number(monkeypatch):
     import copy
-    import piano_teacher.score_geometry as geometry
+    import piano_teacher.notation.assets.svg_geometry as geometry
     root=ET.fromstring(XML)
     outer=next(n for n in root if n.get("class")=="tuplet")
     inner=ET.SubElement(outer,"g",{"class":"tuplet","id":"inner"})

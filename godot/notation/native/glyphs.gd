@@ -10,6 +10,9 @@ extends RefCounted
 const REQUIRED := [
     "brace",
     "clef_g", "clef_f", "clef_c",
+    "clef_g_8vb", "clef_g_8va", "clef_g_15mb", "clef_g_15ma",
+    "clef_f_8vb", "clef_f_8va", "clef_f_15mb", "clef_f_15ma",
+    "clef_c_8vb",
     "head_whole", "head_half", "head_black", "augmentation_dot",
     "repeat_dot",
     "rest_whole", "rest_half", "rest_quarter", "rest_eighth",

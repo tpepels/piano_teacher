@@ -119,6 +119,21 @@ jobs:
           path: /tmp/piano-phase1-exact-grid
           if-no-files-found: warn
           retention-days: 14
+      - name: Confirm canonical native renderer without opt-in environment flag
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            .venv/bin/python scripts/check_user_midi_desktop.py \
+            --default-native --only Ala --out /tmp/piano-native-default
+      - name: Upload native-default practice window evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-default-without-flag
+          path: /tmp/piano-native-default
+          if-no-files-found: warn
+          retention-days: 14
       - name: Exercise the original native Godot score on real Joep Beving MIDI
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"

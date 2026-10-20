@@ -1,12 +1,14 @@
-extends "res://score_timeline_preview.gd"
+extends "res://notation/shared/view_base.gd"
 # Native Godot compositor for authentic individually extracted Verovio glyphs.
 # The score's continuous time axis, staff geometry, ledger rules, stems, beams
 # and ties are native Godot primitives. Musical glyph CONTOURS come ONLY from
 # the installed Verovio font, cached as individual Godot ImageTextures.
 # There is no full-page SVG bitmap or custom imitation of a music glyph.
 # Incomplete notation falls back to the existing Verovio score as a whole.
-const Geometry := preload("res://score_notation_geometry.gd")
-const VerovioGlyphs := preload("res://score_verovio_glyphs.gd")
+const Geometry := preload("res://notation/native/geometry.gd")
+const ScoreIndex := preload("res://notation/native/score_index.gd")
+const BarlineLayout := preload("res://notation/native/barline_layout.gd")
+const VerovioGlyphs := preload("res://notation/native/glyphs.gd")
 const Design := preload("res://practice_theme.gd")
 const NOTE_INK := Design.SCORE_INK
 const DIM_INK := Design.STAFF_MUTED
@@ -145,73 +147,17 @@ func load_score(candidate: Dictionary) -> bool:
         notice = failure_reason
         return false
     selected_density = density
-    # Source-Verovio beam groups are authoritative. Inferring meter-based
-    # beams here incorrectly connected separately flagged Chopin notes.
-    var source_beams: Dictionary = _engraved_beam_groups(timeline.model)
-    beam_groups = source_beams.get("groups",[])
-    beamed_note_ids = Geometry.beamed_ids(beam_groups)
-    beam_stem_up_by_note = source_beams.get("stem_up_by_note",{})
-    notation_tuplets = Geometry.tuplet_groups(timeline.model)
-    measure_by_number.clear()
-    for measure in timeline.measures:
-        measure_by_number[int(measure.get("number", -1))] = measure
-    ordered_events = timeline.model.get("notation_events", []).duplicate()
-    ordered_events.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-        var beat_a: float = float(a.get("beat", 0.0))
-        var beat_b: float = float(b.get("beat", 0.0))
-        if absf(beat_a-beat_b) > .000001:
-            return beat_a < beat_b
-        # A chord leader MUST be painted before any child at this beat.
-        # sort_custom does not promise stable ordering of equal keys.
-        var lane_a: String = str(a.get("staff",""))+"|"+ \
-            str(a.get("voice","1"))+"|"+str(a.get("measure",0))
-        var lane_b: String = str(b.get("staff",""))+"|"+ \
-            str(b.get("voice","1"))+"|"+str(b.get("measure",0))
-        if lane_a != lane_b:
-            return lane_a < lane_b
-        var child_a: bool = bool(a.get("chord",false))
-        var child_b: bool = bool(b.get("chord",false))
-        if child_a != child_b:
-            return not child_a
-        return str(a.get("id","")) < str(b.get("id","")))
-    chord_members = Geometry.chord_members(ordered_events)
-    # Cache the preceding attack for every measure once. Tight meter
-    # changes must be relocated out of the ink; no per-frame note scan.
-    previous_attack_before_measure.clear()
-    var scan := 0
-    var last_attack := -INF
-    for measure in timeline.measures:
-        var boundary: float = float(measure.get("start_beat", 0.0))
-        while scan < ordered_events.size() and \
-                float(ordered_events[scan].get("beat",0.0)) < boundary-.0001:
-            if str(ordered_events[scan].get("kind","")) == "note":
-                last_attack = float(ordered_events[scan].get("beat",0.0))
-            scan += 1
-        previous_attack_before_measure[int(measure.get("number",0))] = last_attack
-    tie_pairs.clear()
-    var unfinished: Dictionary = {}
-    for event in ordered_events:
-        if str(event.get("kind", "")) != "note":
-            continue
-        var source_id: String = str(event.get("source_id", ""))
-        if bool(event.get("tie_stop", false)) and unfinished.has(source_id):
-            tie_pairs.append({"first": unfinished[source_id], "last": event})
-        if bool(event.get("tie_start", false)):
-            unfinished[source_id] = event
-        else:
-            unfinished.erase(source_id)
-    slur_pairs.clear()
-    var by_id: Dictionary = {}
-    for event in ordered_events:
-        if str(event.get("kind","")) == "note":
-            by_id[str(event.get("id",""))] = event
-    for key in glyphs.slur_keys():
-        var ids: Array = glyphs.slur_note_ids(str(key))
-        if ids.size() == 2 and by_id.has(str(ids[0])) and by_id.has(str(ids[1])):
-            var first: Dictionary = by_id[str(ids[0])]
-            var last: Dictionary = by_id[str(ids[1])]
-            if float(first.get("beat",0.0)) < float(last.get("beat",0.0)):
-                slur_pairs.append({"key":str(key),"first":first,"last":last})
+    var index: Dictionary = ScoreIndex.build(timeline.model, glyphs)
+    beam_groups = index["beam_groups"]
+    beamed_note_ids = index["beamed_note_ids"]
+    beam_stem_up_by_note = index["beam_stem_up_by_note"]
+    notation_tuplets = index["notation_tuplets"]
+    measure_by_number = index["measure_by_number"]
+    ordered_events = index["ordered_events"]
+    chord_members = index["chord_members"]
+    previous_attack_before_measure = index["previous_attack_before_measure"]
+    tie_pairs = index["tie_pairs"]
+    slur_pairs = index["slur_pairs"]
     failure_reason = _missing_source_engraving()
     if not failure_reason.is_empty():
         notice = failure_reason
@@ -293,41 +239,7 @@ func _missing_source_engraving() -> String:
 
 
 func _engraved_beam_groups(model: Dictionary) -> Dictionary:
-    var notes: Dictionary = {}
-    for event in model.get("notation_events",[]):
-        if str(event.get("kind","")) == "note" and \
-                not bool(event.get("chord",false)):
-            notes[str(event.get("id",""))] = event
-    var output: Array = []
-    var directions: Dictionary = {}
-    # Metadata is extracted from each original Verovio SVG beam group.
-    for key in glyphs.beam_metadata:
-        var data: Dictionary = glyphs.beam_metadata[key]
-        var ids: Array = data.get("note_ids",[])
-        var attacks: Array = []
-        for identifier in ids:
-            if notes.has(str(identifier)):
-                attacks.append(notes[str(identifier)])
-        if attacks.size() != ids.size() or attacks.size() < 2:
-            continue
-        var valid: bool = true
-        for index in range(1,attacks.size()):
-            if float(attacks[index]["beat"]) <= \
-                    float(attacks[index-1]["beat"]) or \
-                    str(attacks[index]["staff"]) != \
-                    str(attacks[0]["staff"]) or \
-                    str(attacks[index]["voice"]) != \
-                    str(attacks[0]["voice"]):
-                valid = false
-                break
-        if valid:
-            output.append(attacks)
-            for event in attacks:
-                directions[str(event.get("id",""))] = bool(data["stem_up"])
-    output.sort_custom(func(a: Array,b: Array) -> bool:
-        return float(a[0].get("beat",0.0)) < \
-            float(b[0].get("beat",0.0)))
-    return {"groups":output,"stem_up_by_note":directions}
+    return ScoreIndex.source_beam_groups(model, glyphs)
 
 
 func _staff_center(hand: String) -> float:
@@ -391,53 +303,27 @@ func _ink(staff: String) -> Color:
 # right line. A closing double/repeat line belongs to the previous measure.
 func _barline_geometry(measure: Dictionary, clock: float,
         playhead_x: float, gap: float) -> Dictionary:
-    var index: int = timeline.measures.find(measure)
-    if index < 0:
-        return {}
-    var mark: Variant = measure.get("left_barline")
-    if index == 0 and not mark is Dictionary:
-        return {}
-    if index > 0:
-        var previous: Dictionary = timeline.measures[index-1]
-        var previous_right: Variant = previous.get("right_barline")
-        if not mark is Dictionary:
-            mark = previous_right
-        elif previous_right is Dictionary and \
-                str(previous_right.get("repeat","")) == "backward" and \
-                str(mark.get("repeat","")) == "forward":
-            # Right repeat followed by left repeat at the same barline.
-            mark = {"style":"heavy-heavy","repeat":"both"}
-    if not mark is Dictionary:
-        mark = {"style":"regular","repeat":""}
-    var x: float = timeline.screen_x(float(measure.get("start_beat", 0.0)),
-        clock, playhead_x, play_from_beat) - gap*1.35
-    return {"x":x, "top":_staff_center("right")-2.0*gap,
-        "bottom":_staff_center("left")+2.0*gap,
-        "style":str(mark.get("style","regular")),
-        "repeat":str(mark.get("repeat","")),
-        "segments":_barline_segments(str(mark.get("style","regular")),gap)}
+    var info: Dictionary = BarlineLayout.boundary(timeline.measures, measure, timeline,
+        clock, playhead_x, play_from_beat, gap,
+        _staff_center("right")-2.0*gap,
+        _staff_center("left")+2.0*gap)
+    if not info.is_empty():
+        info["segments"] = _barline_segments(str(info.get("style","regular")),gap)
+    return info
 
 
 func _terminal_barline_geometry(clock: float,
         playhead_x: float, gap: float) -> Dictionary:
-    if timeline.measures.is_empty():
-        return {}
-    var last: Dictionary = timeline.measures[-1]
-    var mark: Variant = last.get("right_barline")
-    if not mark is Dictionary:
-        mark = {"style":"regular","repeat":""}
-    var x: float = timeline.screen_x(float(last.get("end_beat",0.0)),
-        clock,playhead_x,play_from_beat)-gap*.45
-    return {"x":x, "top":_staff_center("right")-2.0*gap,
-        "bottom":_staff_center("left")+2.0*gap,
-        "style":str(mark.get("style","regular")),
-        "repeat":str(mark.get("repeat","")),
-        "segments":_barline_segments(str(mark.get("style","regular")),gap)}
+    var info: Dictionary = BarlineLayout.terminal(timeline.measures, timeline,
+        clock, playhead_x, play_from_beat, gap,
+        _staff_center("right")-2.0*gap,
+        _staff_center("left")+2.0*gap)
+    if not info.is_empty():
+        info["segments"] = _barline_segments(str(info.get("style","regular")),gap)
+    return info
 
 
 func _barline_segments(style: String, gap: float) -> Array:
-    # MusicXML tick crosses the top line; short spans lines two to four.
-    # These rules belong to each individual staff, not the grand-staff gap.
     if style in ["tick","short"]:
         var segments: Array = []
         for staff in ["right","left"]:
@@ -450,32 +336,8 @@ func _barline_segments(style: String, gap: float) -> Array:
         "bottom":_staff_center("left")+2.0*gap}]
 
 
-# Per SMuFL, barline strokes are drawn as structural rules. Unlike
-# noteheads/stems they are variable-length rules spanning both staves;
-# their repeat punctuation is genuine Verovio E044 music-font ink.
 func _barline_strokes(style: String, gap: float) -> Array:
-    var thin: float = maxf(1.15,gap*.095)
-    var heavy: float = maxf(3.1,gap*.35)
-    var separation: float = gap*.44
-    match style:
-        "none": return []
-        "regular", "dashed", "dotted", "tick", "short":
-            return [{"offset":0.0,"width":thin}]
-        "heavy":
-            return [{"offset":0.0,"width":heavy}]
-        "light-light":
-            return [{"offset":-separation,"width":thin},
-                {"offset":0.0,"width":thin}]
-        "light-heavy":
-            return [{"offset":-separation,"width":thin},
-                {"offset":0.0,"width":heavy}]
-        "heavy-light":
-            return [{"offset":-separation,"width":heavy},
-                {"offset":0.0,"width":thin}]
-        "heavy-heavy":
-            return [{"offset":-separation,"width":heavy},
-                {"offset":0.0,"width":heavy}]
-    return []
+    return BarlineLayout.strokes(style, gap)
 
 
 func _paint_barline(info: Dictionary, gap: float) -> void:
@@ -640,15 +502,31 @@ func _paint_rest(x: float, y: float,
     _paint_rhythm_dots(x, y, dots, ink, gap)
 
 
-func _paint_clef(x: float, center: float, sign: String,
+func _paint_clef(x: float, center: float, clef: Dictionary,
         gap: float, ink: Color) -> void:
+    var sign: String = str(clef.get("sign","G"))
+    var line: int = int(clef.get("line", 2 if sign == "G" else 4 if sign == "F" else 3))
+    var octave: int = int(clef.get("octave_change",0))
     var name: String = {"G":"clef_g", "F":"clef_f", "C":"clef_c"}.get(sign, "")
-    if name.is_empty():
+    if name.is_empty() or line < 1 or line > 5:
         return
-    # SMuFL origin marks the clef's reference staff line.
-    var origin_y: float = center + gap if sign == "G" else (
-        center - gap if sign == "F" else center)
-    glyphs.paint(self, name, x, origin_y, gap, ink, true)
+    # The reference mark is exactly MusicXML's numbered staff line:
+    # 1 is bottom, 5 is top. Changing it must NOT transpose note time.
+    var origin_y: float = center+(3.0-float(line))*gap
+    var variant: String = ""
+    if octave == -1:
+        variant = name+"_8vb"
+    elif octave == 1:
+        variant = name+"_8va"
+    elif octave == -2:
+        variant = name+"_15mb"
+    elif octave == 2:
+        variant = name+"_15ma"
+    if not variant.is_empty() and glyphs.textures.has(variant):
+        name = variant
+    glyphs.paint(self,name,x,origin_y,gap,ink,true)
+    # No separate clef numeral is available in installed Leipzig. Any
+    # unsupported combined variant must be rejected by Geometry.supported.
 
 
 func _paint_meter_number(value: int, x: float, y: float,
@@ -1208,16 +1086,27 @@ func _draw() -> void:
             var key_changed: bool = signature != int(previous_keys.get(staff,999))
             if opening or _clef_for(staff,previous_measure) != clef:
                 _paint_clef(x-(86.0+float(absi(signature))*14.0)*header_scale-header_shift,
-                    center,str(clef.get("sign","G")),gap,_ink(staff))
-            if key_changed and signature != 0:
-                var steps: Array = Geometry.signature_steps(clef, signature)
-                for i in range(steps.size()):
-                    var glyph_x: float = x-(39.0+float(steps.size()-i)*14.0)*header_scale-header_shift
-                    var glyph_y: float = Geometry.note_y(int(steps[i]),
+                    center,clef,gap,_ink(staff))
+            if key_changed:
+                # Cancelling an old signature requires visible naturals,
+                # even when the new signature is C major (zero accidentals).
+                var previous_fifths: int = int(previous_keys.get(staff,0))
+                var cancelled: Array = ([] if opening else
+                    Geometry.key_cancellation_steps(clef,previous_fifths,signature))
+                var incoming: Array = Geometry.signature_steps(clef,signature)
+                var change_marks: Array = []
+                for step in cancelled:
+                    change_marks.append({"step":step,"accidental":"natural"})
+                for step in incoming:
+                    change_marks.append({"step":step,"accidental":
+                        "sharp" if signature > 0 else "flat"})
+                for i in range(change_marks.size()):
+                    var mark: Dictionary = change_marks[i]
+                    var glyph_x: float = x-(39.0+float(change_marks.size()-i)*14.0)*header_scale-header_shift
+                    var glyph_y: float = Geometry.note_y(int(mark["step"]),
                         center+2.0*gap,gap)
                     _paint_accidental(glyph_x,glyph_y,
-                        "sharp" if signature > 0 else "flat",
-                        _ink(staff),gap)
+                        str(mark["accidental"]),_ink(staff),gap)
             if (opening or previous_measure.get("meter",[]) !=
                     measure.get("meter",[])) and not crowded_meter:
                 var meter: Array = measure.get("meter",[4,4])

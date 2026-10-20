@@ -63,8 +63,8 @@ func _initialize() -> void:
     call_deferred("run")
 
 func run() -> void:
-    var Geometry = load("res://score_notation_geometry.gd")
-    var Renderer = load("res://score_native_notation.gd")
+    var Geometry = load("res://notation/native/geometry.gd")
+    var Renderer = load("res://notation/native/view.gd")
     if Geometry == null or Renderer == null:
         check(false, "Scripts parse successfully")
         quit(1)
