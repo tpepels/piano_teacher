@@ -51,7 +51,7 @@ def _classes(node):
 
 def extract_slurs(svgs, musicxml: str, model: dict) -> dict:
     import cairosvg
-    from ...score_geometry import parse_svg_geometry
+    from .svg_geometry import parse_svg_geometry
     from .svg import isolate
 
     notes={str(e["id"]):e for e in model.get("notation_events",[])
