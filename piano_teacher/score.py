@@ -9,7 +9,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 from .score_geometry import layout_from_pages, parse_svg_geometry
-from .lesson_score import LessonScore
+from .notation.lesson import LessonScore
 from .reading_spacing import space_for_reading, space_for_continuous_reading
 
 from .music import Note, Piece, _bar_boundaries, _phrases, load_midi
