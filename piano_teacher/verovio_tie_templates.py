@@ -113,7 +113,7 @@ def _render(toolkit, direction: str) -> dict:
 @lru_cache(maxsize=2)
 def _generate(font: str) -> dict:
     import verovio
-    from .score import _create_verovio_toolkit
+    from .notation.assets.runtime import _create_verovio_toolkit
     toolkit = _create_verovio_toolkit(verovio)
     if not toolkit.setOptions({"inputFrom":"xml","scale":48,
             "pageWidth":900,"pageHeight":650,"adjustPageHeight":True,
