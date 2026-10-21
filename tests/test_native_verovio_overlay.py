@@ -20,6 +20,9 @@ def _report():
     return {
         "density": 188.0,
         "unavoidable_rest_overlaps": 0,
+        "staff_gap": 18.0,
+        "staff_centers": {"right": 190.0, "left": 359.0},
+        "frames": [],
     }
 
 
@@ -60,3 +63,26 @@ def test_visible_notehead_pixel_check_is_not_staff_rule_test():
     assert visible_ink(image, 35, 30) == 0
     pen.ellipse((31, 26, 39, 34), fill="#E5F2EA")
     assert visible_ink(image, 35, 30) >= 35
+
+
+def test_source_midi_micro_rest_clutter_is_detected():
+    model = _model()
+    for index in range(3):
+        model["notation_events"].append({
+            "id": f"rest-{index}", "kind":"rest",
+            "note_type":"64th", "dots":0, "is_attack":False,
+        })
+    assert any("tiny printed rests" in error for error in
+               readability_errors(model,_report()))
+
+
+def test_native_rest_a_long_way_off_its_staff_is_detected():
+    report = _report()
+    report["frames"] = [{
+        "rests": [{
+            "id":"orphan-rest", "hand":"right",
+            "x":720.0, "y":260.0,
+        }],
+    }]
+    assert any("displaced too far" in error for error in
+               readability_errors(_model(),report))
