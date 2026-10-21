@@ -1,7 +1,7 @@
 {
   "focus_measures": 2,
-  "start_tempo_fraction": 0.4,
-  "automatic_tempo_multiplier": 1.1,
+  "start_tempo_bpm": 40,
+  "automatic_tempo_steps": 12,
   "manual_tempo_step_bpm": 5,
   "minimum_tempo_step_bpm": 1,
   "minimum_bpm": 12,

@@ -59,10 +59,11 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
         e.control("score_ready",revision=waiting["revision"])
         assert e.state()["phase"]=="count_in"
         assert e.state()["count_in_beats"]==4
-        # Two clean performances restore the selected 80 BPM target,
-        # without counting towards three target-speed clean repeats.
-        for expected_bpm in (79,80,80,80,80):
+        # Clean takes climb successive equal BPM rungs; only target-speed
+        # takes count toward the three repetitions needed for mastery.
+        for _ in range(20):
             before=e.plan.bpm
+            expected_bpm = e.plan._next_automatic_bpm() if before < e.plan.target_bpm else e.plan.target_bpm
             phrase=e.plan.active_phrase
             seconds=60.0/before
             assert e.recorder is not None

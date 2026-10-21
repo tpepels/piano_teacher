@@ -118,6 +118,14 @@ var passage_label: Label
 var hand_label: Label
 var speed_label: Label
 var tempo_up_button: Button
+var tempo_down_button: Button
+var practice_step_picker: OptionButton
+var practice_step_controls: HBoxContainer
+var practice_step_previous_button: Button
+var practice_step_next_button: Button
+var practice_step_entries: Array = []
+var lesson_choice_fingerprint := ""
+var lesson_requested_fingerprint := ""
 var feedback_label: Label
 var progress_label: Label
 var device_button: Button
@@ -1374,7 +1382,43 @@ func _build_interface() -> void:
     progress_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     progress_label.clip_text = true
     progress_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    progress_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     challenge_bar.add_child(progress_label)
+    # Stage navigation floats within the existing score stage. Putting
+    # it in the progress row enlarges the entire Practice minimum width,
+    # clipping transport and the MIDI keyboard on 800x600 desktops.
+    practice_step_controls = HBoxContainer.new()
+    practice_step_controls.name = "PracticeStepControls"
+    practice_step_controls.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+    practice_step_controls.offset_left = -332.0
+    practice_step_controls.offset_right = -12.0
+    practice_step_controls.offset_top = 10.0
+    practice_step_controls.offset_bottom = 50.0
+    practice_step_controls.add_theme_constant_override("separation", 5)
+    practice_step_controls.z_index = 6
+    score_frame.add_child(practice_step_controls)
+    practice_step_previous_button = _button("‹", func(): _navigate_practice_step(-1), false, "navigation")
+    practice_step_previous_button.custom_minimum_size = Vector2(38, 38)
+    practice_step_previous_button.tooltip_text = "Previous lesson step (hand and note level)"
+    practice_step_controls.add_child(practice_step_previous_button)
+    practice_step_picker = OptionButton.new()
+    practice_step_picker.name = "PracticeLessonStepPicker"
+    practice_step_picker.custom_minimum_size = Vector2(225, 38)
+    practice_step_picker.fit_to_longest_item = false
+    practice_step_picker.clip_text = true
+    practice_step_picker.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+    practice_step_picker.disabled = true
+    practice_step_picker.tooltip_text = "Choose any lesson step directly, without earning mastery"
+    practice_step_picker.item_selected.connect(_on_practice_step_selected)
+    practice_step_controls.add_child(practice_step_picker)
+    practice_step_next_button = _button("›", func(): _navigate_practice_step(1), false, "navigation")
+    practice_step_next_button.custom_minimum_size = Vector2(38, 38)
+    practice_step_next_button.tooltip_text = "Next lesson step (hand and note level)"
+    practice_step_controls.add_child(practice_step_next_button)
+    tempo_down_button = _button("-5 BPM", func(): _send_action({"action":"tempo_down"}),
+        false, "settings")
+    tempo_down_button.tooltip_text = "Slow this lesson step without changing its song target"
+    challenge_bar.add_child(tempo_down_button)
     tempo_up_button = _button("+5 BPM", func(): _send_action({"action":"tempo_up"}),
         false, "settings")
     tempo_up_button.tooltip_text = "Advance this stage's tempo without changing its target or awarding clean passes"
@@ -1620,6 +1664,19 @@ func _update_responsive_layout() -> void:
         _update_hand_stages(last_state)
     if practice_header == null:
         return
+    # Floating navigation never changes the Practice row's intrinsic size.
+    var compact_steps: bool = width < 1250.0
+    progress_label.visible = true
+    if practice_step_controls != null:
+        var controls_width: float = 350.0 if width < 850.0 else 420.0 if compact_steps else 500.0
+        practice_step_controls.offset_left = -controls_width - 12.0
+        practice_step_controls.offset_right = -12.0
+        practice_step_picker.custom_minimum_size.x = 120.0 if width < 850.0 else 150.0 if compact_steps else 180.0
+        practice_stage_bar.size = Vector2(356.0 if width < 1150.0 else 500.0, 28.0)
+        for arrow in [practice_step_previous_button, practice_step_next_button]:
+            arrow.custom_minimum_size.x = 40.0
+    for bpm_button in [tempo_down_button, tempo_up_button]:
+        bpm_button.custom_minimum_size.x = 84.0 if compact_steps else 100.0
     practice_header.add_theme_constant_override("separation", 10 if width < 950.0 else 20)
     game_brand.visible = false
     practice_navigation.add_theme_constant_override("h_separation", 8 if width >= 1000.0 else 5)
@@ -1916,12 +1973,51 @@ func _build_lesson_screen() -> void:
     advanced.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     path_options.add_child(advanced)
 
+func _navigate_practice_step(offset: int) -> void:
+    var target: int = int(last_state.get("lesson_step", 0)) + offset
+    if target >= 1 and target <= practice_step_entries.size() and not action_pending:
+        _send_action({"action": "select_step", "number": target})
+
+
+func _on_practice_step_selected(index: int) -> void:
+    var number: int = index + 1
+    if number != int(last_state.get("lesson_step", 0)) and not action_pending:
+        _send_action({"action": "select_step", "number": number})
+
+
+func _sync_practice_step_navigation(state: Dictionary) -> void:
+    if practice_step_picker == null:
+        return
+    var loaded: bool = bool(state.get("loaded", false))
+    var fingerprint: String = str(state.get("piece_fingerprint", ""))
+    if not loaded:
+        practice_step_picker.clear()
+        practice_step_entries.clear()
+        lesson_choice_fingerprint = ""
+        lesson_requested_fingerprint = ""
+    elif fingerprint != lesson_choice_fingerprint and fingerprint != lesson_requested_fingerprint and not lesson_pending:
+        _request_lesson()
+    var ready: bool = loaded and fingerprint == lesson_choice_fingerprint and not practice_step_entries.is_empty()
+    var current: int = int(state.get("lesson_step", 0))
+    practice_step_picker.disabled = action_pending or not ready
+    practice_step_previous_button.disabled = action_pending or not ready or current <= 1
+    practice_step_next_button.disabled = action_pending or not ready or current >= practice_step_entries.size()
+    if ready and current >= 1 and current <= practice_step_picker.item_count:
+        if practice_step_picker.selected != current - 1:
+            practice_step_picker.select(current - 1)
+        # The popup has the complete hand/measure/variant descriptions;
+        # only the selected caption is shortened to avoid widening Practice.
+        practice_step_picker.text = "Step %d / %d" % [current, practice_step_entries.size()]
+
+
 func _request_lesson() -> void:
     if lesson_request == null or lesson_pending or not bool(last_state.get("loaded", false)):
         return
     lesson_pending = true
     if lesson_request.request(URL + "/lesson") != OK:
         lesson_pending = false
+    else:
+        lesson_requested_fingerprint = str(last_state.get("piece_fingerprint", ""))
 
 func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     lesson_pending = false
@@ -1931,6 +2027,20 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
+    var fingerprint: String = str(parsed.get("piece_fingerprint", ""))
+    if fingerprint != str(last_state.get("piece_fingerprint", "")):
+        return # A stale response from music that has already been replaced.
+    lesson_choice_fingerprint = fingerprint
+    practice_step_entries = parsed.get("steps", []).duplicate(true)
+    practice_step_picker.clear()
+    for step in practice_step_entries:
+        var number: int = int(step.get("number", 0))
+        var caption: String = "%d/%d · %d–%d · %s · %s" % [
+            number, practice_step_entries.size(),
+            int(step.get("first_bar", 1)), int(step.get("last_bar", 1)),
+            str(step.get("hand", "")).capitalize(), str(step.get("level", "")).capitalize()]
+        practice_step_picker.add_item(caption)
+    _sync_practice_step_navigation(last_state)
     lesson_piece_title.text = str(last_state.get("title", "Your music")).replace("_", " ")
     var available: Array = []
     var current: Dictionary = {}
@@ -2314,9 +2424,11 @@ func _update_hand_stages(state: Dictionary) -> void:
         var locked: bool = bool(stage.get("locked", false))
         var word: String = "Both hands" if hand == "both" else str(hand).capitalize() + " hand"
         label.autowrap_mode = TextServer.AUTOWRAP_OFF
+        label.clip_text = true
+        label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
         label.text = ("✓ " if complete else "● " if active else "○ ") + word + (" · locked" if locked else "")
         label.tooltip_text = "Completed" if complete else "Active hand" if active else "Locked" if locked else "Next hand"
-        label.custom_minimum_size = Vector2(122, 24)
+        label.custom_minimum_size = Vector2(102 if size.x < 1150.0 else 122, 24)
         label.add_theme_color_override("font_color",
             Color("#79DAAD") if complete else INK if active else MUTED)
         # Read as a three-step instrument runway, not three separate
@@ -2475,6 +2587,12 @@ func _process(_delta: float) -> void:
         score_overlay.queue_redraw()
         note_reactions.queue_redraw()
     apply_tempo_button.disabled = action_pending
+    if tempo_down_button != null:
+        tempo_down_button.disabled = (action_pending or not bool(last_state.get("loaded", false))
+            or not bool(last_state.get("can_decrease_tempo", false))
+            or str(last_state.get("phase", "")) in ["count_in", "playing", "loading"])
+    if practice_step_picker != null:
+        _sync_practice_step_navigation(last_state)
     if tempo_up_button != null:
         tempo_up_button.disabled = (action_pending or not bool(last_state.get("loaded",false))
             or not bool(last_state.get("can_increase_tempo",false))
@@ -2781,6 +2899,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         game_streak.pulse_unlock()
         call_deferred("_pulse_hand_stage")
     last_state = parsed
+    _sync_practice_step_navigation(parsed)
     if native_score_feedback != null:
         native_score_feedback.present(parsed)
     _update_visual_frame_rate(parsed)
@@ -2846,6 +2965,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         else:
             passage_label.text = "%s · %s" % [kind, bar_text]
     _update_note_feedback_hud(parsed)
+    if tempo_down_button != null:
+        tempo_down_button.text = "-%d BPM" % int(parsed.get("manual_tempo_step_bpm", 5))
+        tempo_down_button.disabled = (action_pending or not bool(parsed.get("can_decrease_tempo", false))
+            or str(parsed.get("phase", "")) in ["count_in", "playing", "loading"])
     if tempo_up_button != null:
         tempo_up_button.text = "+%d BPM" % int(parsed.get("manual_tempo_step_bpm", 5))
         tempo_up_button.disabled = (action_pending or not bool(parsed.get("can_increase_tempo",false))

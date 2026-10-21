@@ -21,6 +21,13 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(content)
     def _json(self, status, data):
         self._reply(status,json.dumps(data).encode(),"application/json")
+    def _json_error(self, status: int, message: str) -> None:
+        """A client may disconnect while the server prepares an error response."""
+        try:
+            self._json(status, {"error": message})
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass
+
     def do_GET(self):
         try:
             route=urlsplit(self.path).path
@@ -71,8 +78,12 @@ class Handler(BaseHTTPRequestHandler):
                     self._reply(200,self.engine.engraved(page).encode(),"image/svg+xml; charset=utf-8")
             else:
                 self._json(404,{"error":"Not found"})
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # Godot cancelled this request; the response socket is already gone.
+            return
         except Exception as exc:
-            self._json(400,{"error":str(exc)})
+            self._json_error(400, str(exc))
+
     def do_POST(self):
         try:
             length=int(self.headers.get("Content-Length","0"))
@@ -100,14 +111,17 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(404,{"error":"Not found"})
                 return
             self._json(200,self.engine.preferences() if route == "/settings" else self.engine.state())
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            # The client already closed the socket; do not try another reply.
+            return
         except (KeyError, ValueError, TypeError, RuntimeError) as exc:
-            self._json(400,{"error":str(exc)})
+            self._json_error(400, str(exc))
         except Exception as exc:
-            # Converter and plugin exceptions must not close the HTTP socket,
-            # leaving Godot with no actionable error message.
+            # Preserve diagnostics for genuine backend failures without making
+            # a failed error-response write produce a second traceback.
             import traceback
             traceback.print_exc()
-            self._json(500, {"error": f"Piano Teacher could not complete this request: {exc}"})
+            self._json_error(500, f"Piano Teacher could not complete this request: {exc}")
     def log_message(self, format, *args):
         return
 

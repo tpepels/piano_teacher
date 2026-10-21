@@ -121,8 +121,9 @@ def test_custom_target_recovers_instead_of_running_to_original_midi_speed(tmp_pa
         assert e.state()["bpm"] == 72
         assert e.plan.target_bpm == 80
         e.plan.apply_result(correct=8, total=8)
-        assert e.plan.bpm == 79
-        e.plan.apply_result(correct=8, total=8)
+        assert e.plan.bpm == 73  # Next even rung after a recovery at 72 BPM.
+        while e.plan.bpm < 80:
+            e.plan.apply_result(correct=8, total=8)
         assert e.plan.bpm == 80
     finally:
         e.db.close()

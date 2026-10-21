@@ -27,16 +27,16 @@ def test_only_exact_identical_source_measures_share_bpm_and_not_mastery():
     p = LearningPlan(repeated_piece())
     first = p.identity
     p.increase_tempo()
-    assert p.bpm == 44 + SETTINGS.manual_tempo_step_bpm
+    assert p.bpm == SETTINGS.start_tempo_bpm + SETTINGS.manual_tempo_step_bpm
     p.select(1)
-    assert p.bpm == 44  # Different musical notes receive no credit.
+    assert p.bpm == SETTINGS.start_tempo_bpm  # Different notes receive no credit.
     p.select(3)
     assert p.exercise.phrase.first_bar == 5
-    assert p.bpm == 44 + SETTINGS.manual_tempo_step_bpm
+    assert p.bpm == SETTINGS.start_tempo_bpm + SETTINGS.manual_tempo_step_bpm
     assert p.identity != first and p.identity not in p.mastered and p.streak == 0
     # The previously learned source stage remains independent.
     p.select(0)
-    assert p.bpm == 44 + SETTINGS.manual_tempo_step_bpm
+    assert p.bpm == SETTINGS.start_tempo_bpm + SETTINGS.manual_tempo_step_bpm
 
 
 def test_repeated_source_with_different_pitch_or_duration_is_not_equivalent():
@@ -109,7 +109,7 @@ def test_target_change_invalidates_repeat_tempo_inheritance():
     p.increase_tempo()
     p.set_bpm(80)
     p.select(3)
-    assert p.bpm == round(80 * SETTINGS.start_tempo_fraction)
+    assert p.bpm == SETTINGS.start_tempo_bpm
     assert p.target_bpm == 80
 
 
@@ -121,7 +121,7 @@ def test_explicit_target_change_does_not_invent_transferable_tempo(tmp_path):
     first.control("tempo",bpm=80)
     first.control("next")
     # A target selected in Settings is not evidence of playing at 80 BPM.
-    assert first.plan.bpm == 32
+    assert first.plan.bpm == SETTINGS.start_tempo_bpm
     first.db.close()
     reopened = PracticeEngine(tmp_path,enable_midi=False)
     try:
@@ -130,7 +130,7 @@ def test_explicit_target_change_does_not_invent_transferable_tempo(tmp_path):
         reopened._restore()
         reopened.control("next")  # leave different measures for source 5-6
         reopened.control("next")
-        assert reopened.plan.bpm == 32
+        assert reopened.plan.bpm == SETTINGS.start_tempo_bpm
         assert not reopened.plan.mastered
     finally:
         reopened.db.close()

@@ -1,5 +1,6 @@
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.learning import LearningPlan, build_exercises
+from piano_teacher.lesson_settings import SETTINGS
 
 
 def make_piece(bars=6):
@@ -23,7 +24,7 @@ def test_overlapping_connections_and_performance():
 def test_single_hand_piece_finishes_without_repeating_the_same_notes_as_both():
     c = LearningPlan(make_piece(2))
     assert c.hands == ('right',)
-    assert c.bpm == 48
+    assert c.bpm == SETTINGS.start_tempo_bpm
     assert 'Tempo increased' in c.apply_result(correct=2, total=2)
     while c.bpm < c.piece.bpm:
         c.apply_result(correct=2, total=2)

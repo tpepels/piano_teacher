@@ -8,7 +8,7 @@ def next_full_attempt(plan, result) -> str:
     if not result.clean:
         return "Let's try the whole passage again."
     if plan.bpm < plan.target_bpm:
-        following = min(plan.target_bpm, max(plan.bpm + SETTINGS.minimum_tempo_step_bpm, round(plan.bpm * SETTINGS.automatic_tempo_multiplier)))
+        following = plan._next_automatic_bpm()
         return f"Clean passage — restore tempo to {following} BPM toward {plan.target_bpm} BPM."
     streak = plan.streak + 1
     if streak < SETTINGS.clean_runs_to_master:

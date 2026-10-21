@@ -15,8 +15,8 @@ from pathlib import Path
 class LessonSettings:
     focus_measures: int
     repeated_tempo_min_attacks: int
-    start_tempo_fraction: float
-    automatic_tempo_multiplier: float
+    start_tempo_bpm: int
+    automatic_tempo_steps: int
     manual_tempo_step_bpm: int
     minimum_tempo_step_bpm: int
     minimum_bpm: int
@@ -53,6 +53,8 @@ def load_lesson_settings(path: Path | None = None) -> LessonSettings:
             or data.maximum_bpm < data.minimum_bpm
             or data.clean_runs_to_master < 1 or data.manual_tempo_step_bpm < 1
             or data.minimum_tempo_step_bpm < 1
+            or not data.minimum_bpm <= data.start_tempo_bpm <= data.maximum_bpm
+            or data.automatic_tempo_steps < 1
             or data.recovery_errors_in_window < 1
             or data.warmup_recovery_errors < 1
             or data.guided_recovery_after_failures < 1
@@ -63,8 +65,6 @@ def load_lesson_settings(path: Path | None = None) -> LessonSettings:
             or data.grading_match_window_min_seconds < data.grading_onset_tolerance_seconds
             or data.grading_match_window_beats <= 0
             or data.count_in_max_seconds <= 0
-            or not 0 < data.start_tempo_fraction <= 1
-            or data.automatic_tempo_multiplier <= 1
             or not 0 < data.recovery_tempo_multiplier < 1):
         raise ValueError("Invalid lesson target, BPM limit, or adaptive tempo multiplier")
     return data

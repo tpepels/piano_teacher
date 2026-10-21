@@ -295,8 +295,10 @@ def test_entire_recovery_restores_chosen_tempo_then_three_full_takes_reveal_chor
     assert finish_take(e, now, 16)['phase'] == 'recovering'
     assert not e.plan.mastered and e.plan.streak == 0
     after_break(e, now)
-    for before, after in ((65, 72), (72, 79), (79, 80)):
-        assert e.plan.bpm == before
+    while e.plan.bpm < e.plan.target_bpm:
+        before = e.plan.bpm
+        after = e.plan._next_automatic_bpm()
+        assert after > before
         feedback = finish_take(e, now, 16)
         assert 'restore tempo' in feedback['next_action'] and f'{after} BPM' in feedback['next_action']
         assert feedback['streak'] == 0 and not e.plan.mastered

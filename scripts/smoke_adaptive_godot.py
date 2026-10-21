@@ -205,12 +205,13 @@ def run() -> None:
                 assert overview["steps"][0]["completed"]
                 assert overview["current_step"] == 2
                 assert engine.state()["required_notes"] > required
-                # The next level starts at the committed fraction of the
-                # learner's chosen target BPM. Count-in beats are determined
-                # by the existing bounded preparation-meter policy, not a
-                # hard-coded historical 48-BPM assumption.
+                # A newly unlocked level uses the common starting BPM,
+                # capped at the learner's target for slower pieces. Count-in
+                # beats follow the existing bounded preparation-meter policy.
                 tempo = engine.state()["bpm"]
-                assert tempo == round(240 * SETTINGS.start_tempo_fraction)
+                expected_start = min(SETTINGS.start_tempo_bpm, engine.plan.target_bpm)
+                assert tempo == expected_start, (
+                    f"Expected shared starting tempo {expected_start}, got {tempo}")
                 expected_lead = lead_in_beats(
                     engine.state()["count_in_bar_beats"], tempo)
                 assert engine.state()["count_in_beats"] == expected_lead
