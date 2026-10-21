@@ -174,5 +174,29 @@ func run() -> void:
                 "Cross-voice glyph collision: "+str(first["id"])+" / "+str(second["id"]))
     var poly_image: Image = await _image(view)
     poly_image.save_png(folder.path_join("native-polyphonic-rests.png"))
+    # The screenshot observation: treble notes far above the stave had
+    # too-short, translucent ledger extensions hidden by authentic heads.
+    # Capture actual pixels in the extended portion of a C6 ledger rule.
+    var high: Dictionary = _model([{
+        "id":"high-c6","source_id":"high-c6","kind":"note",
+        "staff":"right","voice":"1","measure":1,"beat":1.0,
+        "duration_beats":1.0,"note_type":"quarter","dots":0,
+        "chord":false,"spelling":{"step":"C","octave":6,"alter":0},
+        "time_modification":null}])
+    high["notes"] = [{"id":"high-c6","onset_beats":1.0,
+        "duration_beats":1.0,"midi_pitch":84,"hand":"right"}]
+    check(renderer.load_score(high),"High C6 native Verovio note supported")
+    var ledger_image: Image = await _image(view)
+    var ledger_gap: float = renderer._gap()
+    var high_center: float = renderer._staff_center("right")
+    var c6_y: float = high_center-4.0*ledger_gap
+    var note_x: int = roundi(renderer.size.x*.42+
+        renderer.timeline.pixels_per_beat)
+    var rail: Dictionary = _difference(empty_ink,ledger_image,
+        note_x+roundi(ledger_gap*.75), note_x+roundi(ledger_gap*.98)+1,
+        roundi(c6_y)-2,roundi(c6_y)+3)
+    check(int(rail["count"]) >= 3,
+        "Visible high-ledger extensions survive beyond original notehead ink")
+    ledger_image.save_png(folder.path_join("native-extended-ledger.png"))
     print("NATIVE_REST_PIXEL_FAILURES:",failures.size())
     quit(0 if failures.is_empty() else 1)

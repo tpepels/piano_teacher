@@ -2,6 +2,7 @@
 from __future__ import annotations
 from bisect import bisect_right
 from .music import Phrase
+from .lesson_settings import SETTINGS
 
 def phrase_grid(phrase: Phrase, boundaries: tuple[float, ...] = ()) -> tuple[float, ...]:
     count = phrase.last_bar - phrase.first_bar + 1
@@ -21,7 +22,9 @@ def phrase_grid(phrase: Phrase, boundaries: tuple[float, ...] = ()) -> tuple[flo
     return grid
 
 def two_bar_chunks(grid: tuple[float, ...]) -> tuple[tuple[float, float], ...]:
-    return tuple((grid[i], grid[min(i + 2, len(grid) - 1)]) for i in range(0, len(grid) - 1, 2))
+    length = SETTINGS.focus_measures
+    return tuple((grid[i], grid[min(i + length, len(grid) - 1)])
+                 for i in range(0, len(grid) - 1, length))
 
 def next_chunk_end(grid: tuple[float, ...], from_beat: float) -> float:
     return next((end for _, end in two_bar_chunks(grid) if end > from_beat + 1e-7), 0.0)

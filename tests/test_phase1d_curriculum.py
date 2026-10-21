@@ -19,7 +19,7 @@ def piece():
 
 
 def test_curriculum_lists_every_hand_and_generated_level():
-    p = LearningPlan(piece())
+    p = LearningPlan(piece(), consolidate=True)
     steps = p.lesson_steps
     assert len(steps) > len(p.exercises)
     assert steps[0].hand == "right"
@@ -36,7 +36,7 @@ def test_curriculum_lists_every_hand_and_generated_level():
 
 
 def test_three_clean_plays_unlock_exactly_one_lesson_step():
-    p = LearningPlan(piece())
+    p = LearningPlan(piece(), consolidate=True)
     p.set_bpm(100)
     first = p.identity
     count = len(p.active_phrase.notes)
@@ -53,7 +53,7 @@ def test_three_clean_plays_unlock_exactly_one_lesson_step():
 
 def test_curriculum_api_matches_active_stage(tmp_path):
     e=PracticeEngine(tmp_path,enable_midi=False)
-    e.plan=LearningPlan(piece())
+    e.plan=LearningPlan(piece(), consolidate=True)
     try:
         overview=e.lesson_overview()
         assert overview["current_step"] == e.state()["lesson_step"] == 1
@@ -66,7 +66,7 @@ def test_curriculum_api_matches_active_stage(tmp_path):
 
 def test_manual_stop_during_feedback_discards_uncommitted_mastery(tmp_path):
     e=PracticeEngine(tmp_path,enable_midi=False)
-    p=LearningPlan(piece())
+    p=LearningPlan(piece(), consolidate=True)
     p.set_bpm(100)
     e.plan=p
     e.fingerprint="cancelled-performance"
@@ -86,7 +86,7 @@ def test_manual_stop_during_feedback_discards_uncommitted_mastery(tmp_path):
 
 def test_manual_navigation_discards_pending_take(tmp_path):
     e=PracticeEngine(tmp_path,enable_midi=False)
-    e.plan=LearningPlan(piece())
+    e.plan=LearningPlan(piece(), consolidate=True)
     e.fingerprint="cancelled-navigation"
     try:
         e.pending_result=type("Result",(),{"correct":1,"extra_notes":0,"notes":[1]})()

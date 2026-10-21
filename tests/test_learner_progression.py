@@ -3,6 +3,7 @@ import mido
 import pytest
 
 from piano_teacher import server
+from piano_teacher.learning import LearningPlan
 from piano_teacher.learner_state import LearnerStateStore, guided_units
 from piano_teacher.server import PracticeEngine
 
@@ -48,6 +49,10 @@ def course(tmp_path, monkeypatch):
         e = PracticeEngine(data_dir, enable_midi=False)
         engines.append(e)
         e.load(str(path))
+        # This fixture specifically validates the historical 8-bar guided
+        # course and its four internal ideas. Production defaults to 2 bars.
+        e.plan = LearningPlan(e.plan.piece, consolidate=True)
+        e._restore()
         if connected:
             e.midi_port = object()
             e.midi_device = 'Learner piano'

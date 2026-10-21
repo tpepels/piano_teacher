@@ -28,6 +28,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from piano_teacher.practice import PlayedNote
 from piano_teacher.server import PracticeEngine, Handler, ThreadingHTTPServer
+from piano_teacher.lesson_settings import SETTINGS
+from piano_teacher.lesson_timing import lead_in_beats
 
 
 def fixture(path: Path) -> None:
@@ -203,9 +205,15 @@ def run() -> None:
                 assert overview["steps"][0]["completed"]
                 assert overview["current_step"] == 2
                 assert engine.state()["required_notes"] > required
-                # The next level starts at 40% of the MIDI's 120 BPM:
-                # a 3-beat pickup at 48 BPM, not the former eight beats.
-                assert engine.state()["count_in_beats"] == 3.0
+                # The next level starts at the committed fraction of the
+                # learner's chosen target BPM. Count-in beats are determined
+                # by the existing bounded preparation-meter policy, not a
+                # hard-coded historical 48-BPM assumption.
+                tempo = engine.state()["bpm"]
+                assert tempo == round(240 * SETTINGS.start_tempo_fraction)
+                expected_lead = lead_in_beats(
+                    engine.state()["count_in_bar_beats"], tempo)
+                assert engine.state()["count_in_beats"] == expected_lead
                 if any(token in log_path.read_text(errors="replace")
                        for token in ("SCRIPT ERROR", "Parse Error:", "Failed to load script")):
                     raise RuntimeError(log_path.read_text(errors="replace"))

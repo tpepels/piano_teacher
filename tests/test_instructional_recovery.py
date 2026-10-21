@@ -24,7 +24,7 @@ def lesson(tmp_path, monkeypatch):
                       time_signatures=((0, 3, 4), (6, 4, 4)) if mixed else ((0, 4, 4),))
         e = PracticeEngine(tmp_path / str(len(engines)), enable_midi=False)
         engines.append(e)
-        e.plan = LearningPlan(piece)
+        e.plan = LearningPlan(piece, consolidate=True)
         e.plan.set_bpm(bpm)
         if connected:
             e.midi_port = object()
@@ -446,6 +446,8 @@ def test_loading_piece_starts_new_trouble_history_and_fresh_instruction(lesson, 
     path.write_bytes(b'controlled import fixture')
     monkeypatch.setattr(server, 'import_piece', lambda _: (piece, object()))
     e.load(str(path))
+    # Reimport is tested using the original four-bar error window.
+    e.plan = LearningPlan(e.plan.piece, consolidate=True)
     ready = e.state()
     assert 'Start' in ready['next_action']
     assert ready['retry_range'] is None
