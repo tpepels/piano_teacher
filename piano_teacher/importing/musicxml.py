@@ -197,7 +197,8 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
                 key = (measure_index, location)
                 position = offset if location == "left" else offset + extent
                 mark = BarlineChange(float(position), location,
-                                     descriptor["style"], descriptor["repeat"])
+                                     descriptor["style"], descriptor["repeat"],
+                                     descriptor.get("ending"))
                 if key in source_barlines and source_barlines[key] != mark:
                     raise ValueError("Conflicting MusicXML grand-staff barlines")
                 source_barlines[key] = mark

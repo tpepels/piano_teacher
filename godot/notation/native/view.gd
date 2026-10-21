@@ -1177,6 +1177,57 @@ func _paint_expressions(left: float, right: float, clock: float,
                 head.x,y,gap*.9,ink,true)
 
 
+func _paint_volta_endings(left: float, right: float, clock: float,
+        playhead_x: float, gap: float) -> void:
+    # Volta brackets are structural rule lines with an engraved text label;
+    # neither the repeat marks nor the transport clock causes an auto-repeat.
+    var pending: Dictionary = {}
+    var ends: Array = []
+    for measure in timeline.measures:
+        for location in ["left", "right"]:
+            var mark: Variant = measure.get(location+"_barline")
+            if not mark is Dictionary:
+                continue
+            var ending: Variant = mark.get("ending")
+            if not ending is Dictionary:
+                continue
+            var number: String = str(ending.get("number", ""))
+            var kind: String = str(ending.get("type", ""))
+            var beat: float = float(measure.get(
+                "start_beat" if location == "left" else "end_beat", 0.0))
+            if kind == "start":
+                pending[number] = beat
+            elif kind in ["stop", "discontinue"] and pending.has(number):
+                ends.append({"start": float(pending[number]), "end": beat,
+                    "number": number, "closed": kind == "stop"})
+                pending.erase(number)
+    # A source excerpt may end inside an open volta. Never silently lose it.
+    for number in pending:
+        ends.append({"start": float(pending[number]),
+            "end": timeline.duration_beats, "number": str(number), "closed": false})
+    var y: float = _staff_center("right")-gap*5.05
+    for ending in ends:
+        var first: float = float(ending["start"])
+        var last: float = float(ending["end"])
+        if first > right+.5 or last < left-.5 or last <= first:
+            continue
+        var x0: float = timeline.screen_x(first,clock,playhead_x,play_from_beat)
+        var x1: float = timeline.screen_x(last,clock,playhead_x,play_from_beat)
+        var start_x: float = maxf(-gap,x0)
+        var end_x: float = minf(size.x+gap,x1)
+        if end_x <= start_x:
+            continue
+        draw_line(Vector2(start_x,y),Vector2(end_x,y),NOTE_INK,1.3,true)
+        if x0 >= -gap and x0 <= size.x+gap:
+            draw_line(Vector2(x0,y),Vector2(x0,y+gap*.85),NOTE_INK,1.3,true)
+            draw_string(ThemeDB.fallback_font,Vector2(x0+gap*.35,y-gap*.3),
+                str(ending["number"])+"." if not str(ending["number"]).ends_with(".")
+                else str(ending["number"]),
+                HORIZONTAL_ALIGNMENT_LEFT,-1,roundi(gap*.92),NOTE_INK)
+        if bool(ending["closed"]) and x1 >= -gap and x1 <= size.x+gap:
+            draw_line(Vector2(x1,y),Vector2(x1,y+gap*.85),NOTE_INK,1.3,true)
+
+
 func _visible_events(left: float, right: float) -> Array:
     var begin := 0
     var end := ordered_events.size()
@@ -1310,6 +1361,7 @@ func _draw() -> void:
     if not terminal.is_empty() and float(terminal["x"]) >= -gap*2.0 and \
             float(terminal["x"]) <= size.x+gap*2.0:
         _paint_barline(terminal,gap)
+    _paint_volta_endings(left,right,camera_clock,playhead_x,gap)
     # All symbols carry their original source onset; NO separate horizontal
     # layout pass or per-note acceleration, including chord tones and rests.
     visible_symbols = 0

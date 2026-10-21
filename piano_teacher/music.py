@@ -61,6 +61,7 @@ class BarlineChange:
     location: str
     style: str
     repeat: str = ""
+    ending: dict | None = None
 
 
 @dataclass(frozen=True)
