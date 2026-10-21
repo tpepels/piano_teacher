@@ -44,6 +44,10 @@ var library_grids: Array[GridContainer] = []
 var settings_grid: GridContainer
 var lesson_stage_labels: Dictionary = {}
 var lesson_piece_title: Label
+var path_reset_button: Button
+var path_reset_confirmation: VBoxContainer
+var path_reset_fingerprint := ""
+var lesson_refresh_after_reset := false
 var drawer_intro: Tween
 var picker_intro: Tween
 var overlay_backdrop: ColorRect
@@ -1972,6 +1976,47 @@ func _build_lesson_screen() -> void:
     var advanced := _button("Advanced practice controls", _open_advanced_pause, false, "settings")
     advanced.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     path_options.add_child(advanced)
+    # Reset lives in the full Lesson Path drawer, not alongside the three
+    # everyday Play / Retry / Listen buttons. It requires a second click.
+    path_reset_button = _button("Reset this song's lesson path…",
+        _show_path_reset_confirmation, false, "danger")
+    path_reset_button.disabled = true
+    path_reset_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    path_reset_button.tooltip_text = "Erase saved mastery, tempo, skipped steps and trouble spots for this song only"
+    path_options.add_child(path_reset_button)
+    path_reset_confirmation = _stack(8)
+    path_reset_confirmation.name = "ResetPathConfirmation"
+    path_reset_confirmation.visible = false
+    path_options.add_child(path_reset_confirmation)
+    var reset_warning := _label(
+        "Reset this song to step 1? All saved tempos, mastery, completed notes and skipped steps for this song will be erased. Other songs are unaffected.",
+        15, INK)
+    reset_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    path_reset_confirmation.add_child(reset_warning)
+    var reset_actions := HFlowContainer.new()
+    reset_actions.add_theme_constant_override("h_separation", 10)
+    path_reset_confirmation.add_child(reset_actions)
+    reset_actions.add_child(_button("Cancel", _cancel_path_reset, false, "navigation"))
+    reset_actions.add_child(_button("Erase this song's progress", _confirm_path_reset,
+        false, "danger"))
+
+func _show_path_reset_confirmation() -> void:
+    if action_pending or not bool(last_state.get("loaded", false)):
+        return
+    path_reset_fingerprint = str(last_state.get("piece_fingerprint", ""))
+    path_reset_confirmation.visible = not path_reset_fingerprint.is_empty()
+
+func _cancel_path_reset() -> void:
+    path_reset_confirmation.visible = false
+    path_reset_fingerprint = ""
+
+func _confirm_path_reset() -> void:
+    var current: String = str(last_state.get("piece_fingerprint", ""))
+    if action_pending or path_reset_fingerprint.is_empty() or path_reset_fingerprint != current:
+        _cancel_path_reset()
+        return
+    _send_action({"action": "reset_path", "fingerprint": current, "confirm": true})
+    _cancel_path_reset()
 
 func _navigate_practice_step(offset: int) -> void:
     var target: int = int(last_state.get("lesson_step", 0)) + offset
@@ -2021,6 +2066,12 @@ func _request_lesson() -> void:
 
 func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     lesson_pending = false
+    if lesson_refresh_after_reset:
+        # Discard the response of a request started before the reset. It
+        # carries the same piece fingerprint but obsolete mastery flags.
+        lesson_refresh_after_reset = false
+        _request_lesson()
+        return
     if code != 200:
         lesson_summary.text = _http_failure(code, body)
         return
@@ -2899,6 +2950,13 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         game_streak.pulse_unlock()
         call_deferred("_pulse_hand_stage")
     last_state = parsed
+    if path_reset_confirmation != null:
+        if not bool(parsed.get("loaded", false)) or (
+                path_reset_confirmation.visible
+                and str(parsed.get("piece_fingerprint", "")) != path_reset_fingerprint):
+            _cancel_path_reset()
+    if path_reset_button != null:
+        path_reset_button.disabled = action_pending or not bool(parsed.get("loaded", false))
     _sync_practice_step_navigation(parsed)
     if native_score_feedback != null:
         native_score_feedback.present(parsed)
@@ -3907,6 +3965,12 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         _flush_transport_action()
         return
     if path == "/control":
+        if completed_action == "reset_path":
+            # The fingerprint stays the same after a reset; invalidate the
+            # cached lesson overview so mastered/skip badges refresh.
+            lesson_choice_fingerprint = ""
+            lesson_requested_fingerprint = ""
+            lesson_refresh_after_reset = lesson_pending
         _on_state(_result, code, _headers, body, action_request_started_ms)
         if completed_action in ["skip_stage", "place_original", "revisit_trouble"]:
             _navigate("practice")

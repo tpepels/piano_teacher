@@ -483,6 +483,42 @@ class PracticeEngine:
             self.db.execute("INSERT OR REPLACE INTO mastery VALUES (?,?,?)", (self.fingerprint,key,bpm))
         self.db.commit()
 
+    def _reset_current_path(self, *, fingerprint: str, confirm: bool) -> None:
+        """Forget only the loaded piece's learning path and restart at step 1.
+
+        A caller must identify the currently loaded source so a stale UI
+        confirmation cannot erase a different piece after a library switch.
+        Music files, shared preferences and other pieces remain untouched.
+        """
+        if self.plan is None or not self.fingerprint:
+            raise ValueError("Open a piece before resetting its lesson path")
+        if confirm is not True or fingerprint != self.fingerprint:
+            raise ValueError("Confirm the reset for the currently loaded piece")
+        piece = self.plan.piece
+        warmup = self.is_builtin_warmup
+        # The database deletes are atomic, scoped exclusively to this score.
+        with self.db:
+            for table in ("learner_units", "learner_stages", "repeat_tempo_credit",
+                          "stage_tempos", "mastery", "sessions"):
+                self.db.execute(f"DELETE FROM {table} WHERE fingerprint=?", (fingerprint,))
+        self._stop()
+        self._reset_trouble()
+        self.plan = LearningPlan(piece, warmup=warmup)
+        self.open_from_beat = 0.0
+        self.course_guided = False
+        self.mode = "practice"
+        self.teaching = None
+        self.guided_range = None
+        self._layout_cache = None
+        self._layout_revision = -1
+        self._layout_cache_key = None
+        self._page_png.clear()
+        self.score_revision += 1
+        self.awaiting_score_revision = None
+        self.feedback = "Lesson path reset to its first step"
+        self.next_action = "Press Play when you are ready."
+        self._save()
+
     def _stop(self):
         if self.teaching is not None:
             self.teaching.stop()
@@ -1111,6 +1147,11 @@ class PracticeEngine:
             # Explicit navigation, Stop and Restart abandon the current
             # attempt. Only the timed feedback lifecycle commits assessment.
             # Otherwise Stop during feedback could accidentally earn mastery.
+            if action == "reset_path":
+                self._reset_current_path(
+                    fingerprint=kwargs.get("fingerprint"),
+                    confirm=kwargs.get("confirm") is True)
+                return
             if action == "score_ready":
                 revision = int(kwargs.get("revision", -1))
                 # Ignore delayed PNG acknowledgements from older passages.
