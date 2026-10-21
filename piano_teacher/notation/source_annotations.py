@@ -22,7 +22,7 @@ NATIVE_PEDAL_TYPES = frozenset({"start", "stop"})
 
 def _native_notation(element: ET.Element) -> bool:
     return (element.tag == "articulations"
-            and bool(list(element))
+            and len(element) == 1
             and all(tag.tag in NATIVE_ARTICULATIONS and not tag.attrib
                     for tag in element))
 
@@ -34,7 +34,9 @@ def _native_direction(element: ET.Element) -> bool:
         return (element.get("type") in NATIVE_PEDAL_TYPES
                 and element.get("number", "1") == "1"
                 and element.get("line", "no") in ("yes", "no")
-                and element.get("sign", "yes") in ("yes", "no"))
+                and element.get("sign", "yes") in ("yes", "no")
+                and (element.get("line", "no") == "yes"
+                     or element.get("sign", "yes") == "yes"))
     return False
 
 
@@ -215,5 +217,6 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                     dest_measure.insert(index, rendered)
                     unrendered.update("direction:" + type_.tag
                                       for group in types for type_ in group
-                                      if not _native_direction(type_))
+                                      if not _native_direction(type_) or
+                                      child.get("placement", "below") != "below")
     return ET.tostring(output, encoding="unicode"), tuple(sorted(unrendered))
