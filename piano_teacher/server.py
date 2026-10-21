@@ -1946,7 +1946,7 @@ class PracticeEngine:
                 # phrase, hand, BPM and engraver version, not ephemeral revision.
                 # Never share one stage's PNG/geometry with another.
                 self._layout_cache_key = self.preprocessing.key(
-                    "engraving", "source-expressions-v1", self.fingerprint, p.identity,
+                    "engraving", "readable-midi-engraving-v2", self.fingerprint, p.identity,
                     phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
                     p.hand, p.bpm, compact_exercise,
                     tuple((n.source_id, n.start, n.end, n.pitch, n.hand)
