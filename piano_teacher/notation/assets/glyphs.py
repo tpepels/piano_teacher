@@ -50,6 +50,15 @@ _NATIVE_CODES = {
     "head_whole": "E0A2", "head_half": "E0A3", "head_black": "E0A4",
     "augmentation_dot": "E1E7",
     "repeat_dot": "E044",
+    # Authentic SMuFL dynamics, articulations and pedal symbols from the
+    # installed Verovio engraving font (not drawn as UI text).
+    "dynamic_p": "E520", "dynamic_pp": "E52B", "dynamic_ppp": "E52A",
+    "dynamic_mp": "E52C", "dynamic_mf": "E52D",
+    "dynamic_f": "E522", "dynamic_ff": "E52F", "dynamic_fff": "E530",
+    "artic_staccato_above": "E4A2", "artic_staccato_below": "E4A3",
+    "artic_tenuto_above": "E4A4", "artic_tenuto_below": "E4A5",
+    "artic_accent_above": "E4A0", "artic_accent_below": "E4A1",
+    "pedal_start": "E650", "pedal_stop": "E655",
     "rest_whole": "E4E3", "rest_half": "E4E4",
     "rest_quarter": "E4E5", "rest_eighth": "E4E6",
     "rest_16th": "E4E7", "rest_32nd": "E4E8", "rest_64th": "E4E9",
