@@ -121,3 +121,96 @@ def test_server_controls_persist_step_choice_and_decrease(tmp_path):
         assert reopened.plan.streak == 0
     finally:
         reopened.db.close()
+
+
+def test_reset_path_clears_all_saved_learning_data_for_only_the_loaded_song(tmp_path):
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        engine.plan = LearningPlan(song(110))
+        engine.fingerprint = "song-one"
+        engine.control("tempo_down")
+        engine.control("select_step", number=2)
+        current = engine.plan
+        current.mastered[current.identity] = current.target_bpm
+        engine._save()
+        engine.learner_store.mark_skipped(
+            engine.fingerprint, current.identity, reason="Skipped during test")
+        # A saved guided unit is tied to the same fingerprint but to its
+        # stage key; it must disappear together with tempo/mastery.
+        unit = {"start_beat": 0.0, "end_beat": 4.0, "first_bar": 1,
+                "last_bar": 1, "source_indices": [0], "required_notes": 1}
+        engine.learner_store.complete_unit(engine.fingerprint, current.identity, unit)
+        engine.learner_store.record_trouble(
+            engine.fingerprint, current.identity, unit, errors=5, pitches=[60])
+
+        # Populate every persistence table for a *different* score.
+        with engine.db:
+            engine.db.execute(
+                "INSERT INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm) "
+                "VALUES ('song-two',0,'right',66,2,90)")
+            engine.db.execute(
+                "INSERT INTO mastery VALUES ('song-two','second-stage',90)")
+            engine.db.execute(
+                "INSERT INTO stage_tempos VALUES ('song-two','second-stage',66)")
+            engine.db.execute(
+                "INSERT INTO repeat_tempo_credit VALUES ('song-two','second-stage')")
+            engine.db.execute(
+                "INSERT INTO learner_stages(fingerprint,stage_key) "
+                "VALUES ('song-two','second-stage')")
+            engine.db.execute(
+                "INSERT INTO learner_units(fingerprint,stage_key,start_beat,end_beat,unit) "
+                "VALUES ('song-two','second-stage',0,4,'{}')")
+
+        import pytest
+        with pytest.raises(ValueError, match="Confirm"):
+            engine.control("reset_path", fingerprint="song-one")
+        with pytest.raises(ValueError, match="Confirm"):
+            engine.control("reset_path", fingerprint="song-two", confirm=True)
+        assert engine.plan.lesson_step_number == 2
+
+        old_revision = engine.score_revision
+        engine.control("reset_path", fingerprint="song-one", confirm=True)
+        assert engine.plan.lesson_step_number == 1
+        assert engine.plan.bpm == SETTINGS.start_tempo_bpm
+        assert engine.plan.target_bpm == 110
+        assert engine.plan.streak == 0
+        assert not engine.plan.mastered
+        assert engine.course_guided is False
+        assert engine.mode == "practice"
+        assert engine.score_revision == old_revision + 1
+        assert engine.lesson_overview()["completed_steps"] == 0
+        for table in ("mastery", "stage_tempos", "repeat_tempo_credit",
+                      "learner_stages", "learner_units", "sessions"):
+            count = engine.db.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE fingerprint='song-two'").fetchone()[0]
+            assert count == 1, table
+            reset_count = engine.db.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE fingerprint='song-one'").fetchone()[0]
+            assert reset_count == (1 if table in ("sessions", "stage_tempos") else 0), table
+        assert engine.learner_store.trouble_for_piece("song-one") == []
+    finally:
+        engine.db.close()
+
+    # Reload from the real SQLite database, not the in-memory reset plan.
+    reopened = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        reopened.plan = LearningPlan(song(110))
+        reopened.fingerprint = "song-one"
+        reopened._restore()
+        assert reopened.plan.lesson_step_number == 1
+        assert reopened.plan.bpm == SETTINGS.start_tempo_bpm
+        assert not reopened.plan.mastered
+        assert reopened.lesson_overview()["completed_steps"] == 0
+    finally:
+        reopened.db.close()
+
+
+def test_reset_path_without_open_music_is_rejected(tmp_path):
+    import pytest
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        with pytest.raises(ValueError, match="Open a piece"):
+            engine.control("reset_path", fingerprint="nonexistent", confirm=True)
+    finally:
+        engine.db.close()
+
