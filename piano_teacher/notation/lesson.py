@@ -431,7 +431,8 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
             # staccato articulation, NOT an intentionally quadruple-dotted
             # note followed by a 64th rest. Preserve MusicXML-sourced rhythms.
             tolerance = .12 if from_source_musicxml else .15
-            if _tuplet_type(end-start) is None and rounded > start and abs(rounded-end) <= _ticks(tolerance):
+            if (_tuplet_type(end-start) is None and rounded > start
+                    and rounded >= end and rounded-end <= _ticks(tolerance)):
                 end = min(rounded,_ticks(phrase.end-phrase.start),lane[i+1][0] if i+1 < len(lane) else _ticks(phrase.end-phrase.start))
             if i+1 < len(lane):
                 following = lane[i+1][0]
