@@ -119,8 +119,14 @@ def _tuplet_type(duration: int):
 
 def _append_note(measure: ET.Element, pitch: int | None, duration: int,
                  voice: int, *, chord=False, begin_tie=False, end_tie=False,
-                 spelling=None, identifier: str | None = None) -> None:
+                 spelling=None, identifier: str | None = None,
+                 hidden_rest: bool = False) -> None:
     el = ET.SubElement(measure, "note")
+    if pitch is None and hidden_rest:
+        # Keep each synthetic voice's exact duration/cursor but omit its
+        # superfluous silence glyph. Otherwise independently reconstructed
+        # pseudo-voices draw 32nd/64th rests above and below unrelated notes.
+        el.set("print-object", "no")
     if identifier is not None:
         el.set('id', identifier)
     if chord:
@@ -175,7 +181,7 @@ def _append_note(measure: ET.Element, pitch: int | None, duration: int,
 
 def _append_event(measure: ET.Element, tones: list, duration: int,
                   voice: int, *, begin_tie=False, end_tie=False, display_start=0,
-                  bindings=None, counts=None) -> None:
+                  bindings=None, counts=None, hidden_rest=False) -> None:
     parts = _duration_parts(duration)
     position = display_start
     for index, length in enumerate(parts):
@@ -197,7 +203,8 @@ def _append_event(measure: ET.Element, tones: list, duration: int,
             _append_note(measure, pitch, length, voice, chord=chord_index > 0,
                          begin_tie=begin_tie or index > 0,
                          end_tie=end_tie or index < len(parts)-1,
-                         spelling=tone.get('spelling') if tone else None, identifier=identifier)
+                         spelling=tone.get('spelling') if tone else None,
+                         identifier=identifier, hidden_rest=hidden_rest)
         position += length
 
 
@@ -214,13 +221,15 @@ def _render_measure(measure: ET.Element, lanes: list[list[tuple]], length: int,
             first, last = start < bar_start, end > bar_start+length
             start, end = max(start, bar_start)-bar_start, min(end, bar_start+length)-bar_start
             if start > position:
-                _append_event(measure, [None], start-position, lane_idx+1)
+                _append_event(measure, [None], start-position, lane_idx+1,
+                              hidden_rest=lane_idx > 0)
             _append_event(measure, tones, end-start, lane_idx+1,
                           begin_tie=first, end_tie=last, display_start=bar_start+start,
                           bindings=bindings, counts=counts)
             position = end
         if position < length:
-            _append_event(measure, [None], length-position, lane_idx+1)
+            _append_event(measure, [None], length-position, lane_idx+1,
+                          hidden_rest=lane_idx > 0)
 
 
 def _key_alters(fifths: int) -> dict:
@@ -373,7 +382,7 @@ def _spelling(note, fifths):
     return None
 
 
-def _phrase_lanes(phrase, hand, grid=()):
+def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
     groups = defaultdict(list)
     attacks = {}
     identities = set()
@@ -417,7 +426,12 @@ def _phrase_lanes(phrase, hand, grid=()):
     for lane in lanes:
         for i,(start,end,tones) in enumerate(lane):
             rounded = round(end/(DIVISIONS//4))*(DIVISIONS//4)
-            if _tuplet_type(end-start) is None and rounded > start and abs(rounded-end) <= _ticks(.12):
+            # MIDI records key release, not an engraver's intended note-off.
+            # A release 1/8 quarter beat ahead of a beat boundary is normally
+            # staccato articulation, NOT an intentionally quadruple-dotted
+            # note followed by a 64th rest. Preserve MusicXML-sourced rhythms.
+            tolerance = .12 if from_source_musicxml else .15
+            if _tuplet_type(end-start) is None and rounded > start and abs(rounded-end) <= _ticks(tolerance):
                 end = min(rounded,_ticks(phrase.end-phrase.start),lane[i+1][0] if i+1 < len(lane) else _ticks(phrase.end-phrase.start))
             if i+1 < len(lane):
                 following = lane[i+1][0]
@@ -500,7 +514,8 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
         part = ET.SubElement(root, "part", id=ident)
         last_meter = None
         last_key = last_clef = None
-        lanes = _phrase_lanes(phrase, hand, grid)
+        lanes = _phrase_lanes(phrase, hand, grid,
+                              from_source_musicxml=bool(source_musicxml))
         keys = sorted((key for key in key_signatures if key.hand in (hand,'both')),key=lambda item:item.beat)
         clefs = sorted((clef for clef in clef_changes if clef.hand in (hand,'both')),key=lambda item:item.beat)
         for lane in lanes:
