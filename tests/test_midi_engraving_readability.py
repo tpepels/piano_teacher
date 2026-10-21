@@ -67,4 +67,4 @@ def test_midi_release_far_from_simple_grid_is_not_quantized():
     pitched = [x for x in root.findall("./part[@id='RH']/measure/note")
                if x.find("pitch") is not None]
     assert sum(int(n.findtext("duration")) for n in pitched) == round(3.6 * DIVISIONS)
-    assert build_score_model(score, boundaries=(0.0, 4.0))["notes"][0]["duration_beats"] == 3.7
+    assert build_score_model(score, boundaries=(0.0, 4.0))["notes"][0]["duration_beats"] == 3.6
