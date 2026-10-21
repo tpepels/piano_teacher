@@ -32,6 +32,8 @@ var notation_tuplets: Array = []
 # Each frame then visits only visible onsets, beams and ties.
 var measure_by_number: Dictionary = {}
 var ordered_events: Array = []
+var source_expressions: Array = []
+var expression_note_index: Dictionary = {}
 var tie_pairs: Array = []
 var slur_pairs: Array = []
 var expected_slur_pairs: Array = []
@@ -65,6 +67,8 @@ func clear_score() -> void:
     notation_tuplets.clear()
     measure_by_number.clear()
     ordered_events.clear()
+    source_expressions.clear()
+    expression_note_index.clear()
     tie_pairs.clear()
     slur_pairs.clear()
     previous_attack_before_measure.clear()
@@ -159,6 +163,11 @@ func load_score(candidate: Dictionary) -> bool:
     notation_tuplets = index["notation_tuplets"]
     measure_by_number = index["measure_by_number"]
     ordered_events = index["ordered_events"]
+    source_expressions = timeline.model.get("expressions", []).duplicate(true)
+    expression_note_index.clear()
+    for source_event in ordered_events:
+        if str(source_event.get("kind", "")) == "note":
+            expression_note_index[str(source_event.get("id", ""))] = source_event
     chord_members = index["chord_members"]
     previous_attack_before_measure = index["previous_attack_before_measure"]
     tie_pairs = index["tie_pairs"]
@@ -1114,6 +1123,60 @@ func _paint_slurs(playhead_x: float,clock: float,gap: float) -> void:
             _ink(str(first.get("staff","right"))))
 
 
+func _paint_expressions(left: float, right: float, clock: float,
+        playhead_x: float, gap: float) -> void:
+    # The notation model is the *only* source. These marks never alter the
+    # clock, create MIDI attacks, or participate in lesson mastery.
+    var pedal_starts: Dictionary = {}
+    for mark in source_expressions:
+        var at: float = float(mark.get("beat", -1.0))
+        var hand: String = str(mark.get("hand", "right"))
+        var ink: Color = _ink(hand)
+        var kind: String = str(mark.get("kind", ""))
+        var value: String = str(mark.get("value", ""))
+        var x: float = timeline.screen_x(at, clock, playhead_x, play_from_beat)
+        if kind == "pedal":
+            var y: float = _staff_center(hand) + gap*3.55
+            if value == "start":
+                pedal_starts[hand] = mark
+            elif value == "stop" and pedal_starts.has(hand):
+                var start_mark: Dictionary = pedal_starts[hand]
+                var begin: float = float(start_mark.get("beat", 0.0))
+                if bool(start_mark.get("line", false)) and begin < at and \
+                        at >= left-.5 and begin <= right+.5:
+                    var start_x: float = timeline.screen_x(
+                        begin, clock, playhead_x, play_from_beat)
+                    var x0: float = maxf(-gap, start_x+gap*.65)
+                    var x1: float = minf(size.x+gap, x-gap*.3)
+                    if x1 > x0:
+                        draw_line(Vector2(x0,y), Vector2(x1,y), ink, 1.3,true)
+                        draw_line(Vector2(x1,y), Vector2(x1,y-gap*.55),ink,1.3,true)
+                pedal_starts.erase(hand)
+            if at >= left-.5 and at <= right+.5 and bool(mark.get("sign", true)):
+                glyphs.paint(self, "pedal_start" if value == "start" else "pedal_stop",
+                    x,y,gap*.9,ink,true)
+            continue
+        if at < left-.5 or at > right+.5:
+            continue
+        if kind == "dynamic":
+            glyphs.paint(self, "dynamic_"+value, x,
+                _staff_center(hand)+gap*3.0, gap*.9, ink, true)
+        elif kind == "articulation":
+            var note_id: String = str(mark.get("note_id", ""))
+            if not drawn_noteheads.has(note_id) or not expression_note_index.has(note_id):
+                continue
+            var source_event: Dictionary = expression_note_index[note_id]
+            var center: float = _staff_center(hand)
+            var head: Vector2 = drawn_noteheads[note_id]
+            var clef: Dictionary = _clef_for(hand, _measure_for(source_event))
+            var step: int = Geometry.staff_step(source_event.get("spelling", {}),clef)
+            var below: bool = step < 4
+            var y: float = maxf(head.y+gap*1.05,center+gap*2.9) if below \
+                else minf(head.y-gap*1.05,center-gap*2.9)
+            glyphs.paint(self, "artic_"+value+("_below" if below else "_above"),
+                head.x,y,gap*.9,ink,true)
+
+
 func _visible_events(left: float, right: float) -> Array:
     var begin := 0
     var end := ordered_events.size()
@@ -1289,6 +1352,7 @@ func _draw() -> void:
     _paint_ties(playhead_x,camera_clock,gap)
     _paint_slurs(playhead_x,camera_clock,gap)
     _paint_tuplet_brackets(camera_clock,playhead_x,gap)
+    _paint_expressions(left,right,camera_clock,playhead_x,gap)
     draw_line(Vector2(playhead_x,_staff_center("right")-gap*3.8),
         Vector2(playhead_x,_staff_center("left")+gap*3.7),
         PREVIEW_LIGHT,2.0,true)

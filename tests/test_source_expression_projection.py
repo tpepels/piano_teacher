@@ -61,12 +61,13 @@ def test_complete_source_markings_project_to_matching_generated_notes(tmp_path):
     assert root.find("./part[@id='RH']/measure/direction/direction-type/dynamics/p") is not None
     assert root.find("./part[@id='RH']/measure/direction/direction-type/pedal") is not None
     assert not root.findall("./part[@id='LH']/measure/direction")
-    assert {"note:articulations","note:ornaments",
-            "direction:dynamics","direction:pedal"}.issubset(score.unrendered_expressions)
+    assert score.unrendered_expressions == ("note:ornaments",)
     model = build_score_model(score,boundaries=piece.bar_boundaries)
     assert len(model["notes"]) == len(piece.notes)
     assert len([n for n in model["notation_events"] if n["kind"] == "note"]) == 3
-    assert len(model["unrendered_expressions"]) == 4
+    assert model["unrendered_expressions"] == ["note:ornaments"]
+    assert {(mark["kind"], mark["value"]) for mark in model["expressions"]} == {
+        ("articulation", "staccato"), ("dynamic", "p"), ("pedal", "start")}
 
 
 def test_simplified_variant_drops_unpaired_slurs_and_omitted_hand_markings(tmp_path):
@@ -148,11 +149,51 @@ def test_unstaffed_voice_directions_follow_the_correct_grand_staff_hand(tmp_path
     assert root.find("./part[@id='RH']/measure/direction/direction-type/dynamics/p") is not None
     assert root.find("./part[@id='LH']/measure/direction/direction-type/dynamics/f") is not None
     assert root.find(".//direction-type/dynamics/mf") is None
-    assert "direction:dynamics" in full.unrendered_expressions
+    assert full.unrendered_expressions == ()
 
     # Omitting the right-hand attack must not send its expression to the left.
     left = tuple(n for n in piece.notes if n.hand == "left")
     _, simplified = _lesson(piece, left)
     assert simplified.find("./part[@id='LH']/measure/direction/direction-type/dynamics/f") is not None
     assert simplified.find(".//direction-type/dynamics/p") is None
+
+
+def test_native_expressions_survive_as_ungraded_beat_anchored_events(tmp_path):
+    piece = _decorated_piece(tmp_path)
+    # Remove the deliberately unsupported ornament from the fixture. A score
+    # containing ONLY supported marks must keep the native renderer enabled.
+    from dataclasses import replace
+    source_root = ET.fromstring(piece.source_musicxml)
+    note_markings = source_root.find(".//notations")
+    note_markings.remove(note_markings.find("ornaments"))
+    piece = replace(piece, source_musicxml=ET.tostring(source_root, encoding="unicode"))
+    score, root = _lesson(piece, piece.notes)
+    assert score.unrendered_expressions == ()
+    model = build_score_model(score, boundaries=piece.bar_boundaries)
+    assert model["unrendered_expressions"] == []
+    marks = model["expressions"]
+    assert {(m["kind"], m["value"], m["hand"], m["beat"])
+            for m in marks} == {
+        ("articulation", "staccato", "right", 0.0),
+        ("dynamic", "p", "right", 0.0),
+        ("pedal", "start", "right", 0.0),
+    }
+    assert len(model["notes"]) == 3  # No expressive mark is a graded note.
+    assert len([x for x in model["notation_events"]
+                if x["kind"] == "note" and x["is_attack"]]) == 3
+
+
+def test_unknown_musical_directions_keep_full_verovio_fallback(tmp_path):
+    piece = _decorated_piece(tmp_path)
+    from dataclasses import replace
+    source_root = ET.fromstring(piece.source_musicxml)
+    dynamic = source_root.find(".//direction-type/dynamics")
+    dynamic.clear()
+    ET.SubElement(dynamic, "other-dynamics").text = "subito"
+    piece = replace(piece, source_musicxml=ET.tostring(source_root, encoding="unicode"))
+    score, _ = _lesson(piece, piece.notes)
+    assert "direction:dynamics" in score.unrendered_expressions
+    assert "note:ornaments" in score.unrendered_expressions
+    assert not any(m["kind"] == "dynamic" for m in
+                   build_score_model(score, boundaries=piece.bar_boundaries)["expressions"])
 

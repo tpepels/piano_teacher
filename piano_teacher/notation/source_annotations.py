@@ -13,6 +13,33 @@ from fractions import Fraction
 from xml.etree import ElementTree as ET
 
 
+# Native Godot uses original Verovio font contours for these precisely
+# specified marks. Anything else stays on original Verovio-page fallback.
+NATIVE_ARTICULATIONS = frozenset({"staccato", "tenuto", "accent"})
+NATIVE_DYNAMICS = frozenset({"p", "pp", "ppp", "mp", "mf", "f", "ff", "fff"})
+NATIVE_PEDAL_TYPES = frozenset({"start", "stop"})
+
+
+def _native_notation(element: ET.Element) -> bool:
+    return (element.tag == "articulations"
+            and len(element) == 1
+            and all(tag.tag in NATIVE_ARTICULATIONS and not tag.attrib
+                    for tag in element))
+
+
+def _native_direction(element: ET.Element) -> bool:
+    if element.tag == "dynamics":
+        return len(element) == 1 and element[0].tag in NATIVE_DYNAMICS and not element[0].attrib
+    if element.tag == "pedal":
+        return (element.get("type") in NATIVE_PEDAL_TYPES
+                and element.get("number", "1") == "1"
+                and element.get("line", "no") in ("yes", "no")
+                and element.get("sign", "yes") in ("yes", "no")
+                and (element.get("line", "no") == "yes"
+                     or element.get("sign", "yes") == "yes"))
+    return False
+
+
 def project_annotations(source_musicxml: str, lesson_xml: str,
                         bindings: dict, phrase, *, boundaries: tuple[float, ...]
                         ) -> tuple[str, tuple[str, ...]]:
@@ -106,7 +133,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                 if target_notations is None:
                     target_notations = ET.SubElement(dest, "notations")
                 target_notations.append(deepcopy(item))
-                if item.tag != "slur":
+                if item.tag != "slur" and not _native_notation(item):
                     unrendered.add("note:" + item.tag)
         for lyric in original.findall("lyric"):
             dest.append(deepcopy(lyric))
@@ -189,5 +216,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                                   if node.tag not in {"attributes","barline"}),len(dest_measure))
                     dest_measure.insert(index, rendered)
                     unrendered.update("direction:" + type_.tag
-                                      for group in types for type_ in group)
+                                      for group in types for type_ in group
+                                      if not _native_direction(type_) or
+                                      child.get("placement", "below") != "below")
     return ET.tostring(output, encoding="unicode"), tuple(sorted(unrendered))
