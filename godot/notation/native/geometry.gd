@@ -75,6 +75,8 @@ static func rest_dot_offset(note_type: String) -> float:
     return .5 if note_type == "whole" else 0.0
 
 static func supported(model: Dictionary) -> String:
+    if not model.get("unrendered_expressions", []).is_empty():
+        return "Source expression requires original Verovio engraving"
     if not model.has("notation_events") or not model["notation_events"] is Array:
         return "Semantic score has no notation events"
     var events: Array = model["notation_events"]

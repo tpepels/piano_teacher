@@ -1861,7 +1861,8 @@ class PracticeEngine:
                 key_signatures=p.piece.key_signatures,
                 clef_changes=p.piece.clef_changes,
                 default_clefs=infer_piece_clefs(p.piece.notes),
-                barlines=p.piece.barlines)
+                barlines=p.piece.barlines,
+                source_musicxml=p.piece.source_musicxml)
             return build_score_model(
                 notation, boundaries=p.piece.bar_boundaries,
                 hand=p.hand, revision=self.score_revision)
@@ -1884,7 +1885,8 @@ class PracticeEngine:
                                             key_signatures=p.piece.key_signatures,
                                             clef_changes=p.piece.clef_changes,
                                             default_clefs=infer_piece_clefs(p.piece.notes),
-                                            barlines=p.piece.barlines)
+                                            barlines=p.piece.barlines,
+                source_musicxml=p.piece.source_musicxml)
                 # Short lessons are freshly engraved as a continuous system.
                 # This avoids raster-copying printed Verovio lines together.
                 # Large works retain paginated rendering to bound GPU memory.
@@ -1896,7 +1898,7 @@ class PracticeEngine:
                 # phrase, hand, BPM and engraver version, not ephemeral revision.
                 # Never share one stage's PNG/geometry with another.
                 self._layout_cache_key = self.preprocessing.key(
-                    "engraving", self.fingerprint, p.identity,
+                    "engraving", "source-expressions-v1", self.fingerprint, p.identity,
                     phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
                     p.hand, p.bpm, compact_exercise,
                     tuple((n.source_id, n.start, n.end, n.pitch, n.hand)
@@ -1990,7 +1992,8 @@ class PracticeEngine:
                 key_signatures=p.piece.key_signatures,
                 clef_changes=p.piece.clef_changes,
                 default_clefs=infer_piece_clefs(p.piece.notes),
-                barlines=p.piece.barlines)
+                barlines=p.piece.barlines,
+                source_musicxml=p.piece.source_musicxml)
             native_model = build_score_model(notation,
                 boundaries=p.piece.bar_boundaries,
                 hand=p.hand, revision=self.score_revision)

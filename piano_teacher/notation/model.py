@@ -319,5 +319,8 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
             for symbol in symbols],
         "active_note_ids": [note.id for note in notes
                             if hand == "both" or hand == note.hand],
+        # Native only paints authentic supported glyphs. Expression classes
+        # without native Verovio fragments request full-page legacy ink.
+        "unrendered_expressions": list(score.unrendered_expressions),
     }
     return model
