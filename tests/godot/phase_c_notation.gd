@@ -281,8 +281,10 @@ func run() -> void:
         renderer.timeline.pixels_per_beat*.5),
         "Floating time signature never changes note position or speed")
     check(renderer.load_score(model),"Restore baseline notation after meter test")
-    check(renderer.timeline.pixels_per_beat > 96.0,
-        "Tightly spaced sixteenth note selects fixed whole-piece density")
+    check(renderer.timeline.pixels_per_beat >= 96.0
+        and renderer.timeline.pixels_per_beat <=
+            Geometry.required_density(model["notation_events"],96.0),
+        "Native whole-piece density follows actual glyph overlap, not duration alone")
     var density: float = renderer.timeline.pixels_per_beat
     check(approx(renderer.timeline.x_at_beat(.25),density*.25),
         "Source attacks retain quarter-beat geometry")
