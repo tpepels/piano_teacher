@@ -1,5 +1,7 @@
 # Native notation verification — 20 October 2026
 
+> **Historical baseline.** The [21 October post-refactor audit](native-notation-verification-2026-10-21.md) verifies the current two-measure curriculum and supersedes these stage and notehead totals.
+
 The engine keeps the established architecture: Verovio supplies authentic glyphs
 and engraved fragments; Godot composes them on one continuous musical timeline.
 Native application runs explicitly used `PIANO_TEACHER_NATIVE_NOTATION=1` and
