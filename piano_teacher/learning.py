@@ -179,8 +179,7 @@ class LearningPlan:
         if self.warmup:
             return min(getattr(self, "target_bpm", self.piece.bpm), self.piece.bpm)
         target = getattr(self, "target_bpm", self.piece.bpm)
-        return min(target, max(SETTINGS.minimum_bpm,
-                               round(target * SETTINGS.start_tempo_fraction)))
+        return min(target, max(SETTINGS.minimum_bpm, SETTINGS.start_tempo_bpm))
 
     @property
     def exercise(self) -> Exercise:
@@ -341,6 +340,22 @@ class LearningPlan:
     def jump(self, amount: int) -> None:
         self.select(min(len(self.exercises) - 1, max(0, self.index + amount)))
 
+    def select_step(self, number: int) -> None:
+        """Navigate directly to a hand and variant without awarding mastery."""
+        if not 1 <= number <= len(self.lesson_steps):
+            raise ValueError("Lesson step out of bounds")
+        step = self.lesson_steps[number - 1]
+        if step.key == self.identity:
+            return
+        self.stage_tempos[self.identity] = self.bpm
+        self.index = step.exercise_index
+        self.hand_index = self.hands.index(step.hand)
+        self.variant_index = next(i for i, variant in enumerate(self.variants)
+                                  if variant.level == step.level)
+        self.bpm = self._tempo_for_current_stage()
+        self.streak = 0
+        self.failures = 0
+
     def select(self, index: int) -> None:
         if not 0 <= index < len(self.exercises):
             raise ValueError("Exercise index out of bounds")
@@ -370,6 +385,35 @@ class LearningPlan:
         self.stage_tempos.clear()
         self.transferable_tempos.clear()
         self.streak = self.failures = 0
+
+    def tempo_rungs(self) -> tuple[int, ...]:
+        """Integer tempo ladder with a common start and exact song target."""
+        start, target = self.start_bpm, self.target_bpm
+        if start >= target:
+            return (target,)
+        return tuple(sorted(set(
+            start + round((target - start) * i / SETTINGS.automatic_tempo_steps)
+            for i in range(SETTINGS.automatic_tempo_steps + 1)
+        )))
+
+    def _next_automatic_bpm(self) -> int:
+        rungs = self.tempo_rungs()
+        if self.bpm < rungs[0]:
+            # Deliberate manual slowdown below the shared start.
+            return min(rungs[0], self.bpm + max(
+                SETTINGS.minimum_tempo_step_bpm,
+                round((self.target_bpm - rungs[0]) / SETTINGS.automatic_tempo_steps)))
+        return next((bpm for bpm in rungs if bpm > self.bpm), self.target_bpm)
+
+    def decrease_tempo(self) -> int:
+        """Lower only the active stage tempo; keep the piece's target."""
+        if self.bpm > SETTINGS.minimum_bpm:
+            self.bpm = max(SETTINGS.minimum_bpm, self.bpm - SETTINGS.manual_tempo_step_bpm)
+            self.streak = self.failures = 0
+            self.stage_tempos[self.identity] = self.bpm
+            if self.bpm <= self.start_bpm:
+                self.transferable_tempos.discard(self.identity)
+        return self.bpm
 
     def increase_tempo(self) -> int:
         """Learner skips the slow tempo rungs, not the proof of mastery.
@@ -401,7 +445,7 @@ class LearningPlan:
         self.failures = 0
         if self.bpm < self.target_bpm:
             self.streak = 0
-            self.bpm = min(self.target_bpm, max(self.bpm + SETTINGS.minimum_tempo_step_bpm, round(self.bpm * SETTINGS.automatic_tempo_multiplier)))
+            self.bpm = self._next_automatic_bpm()
             self.stage_tempos[self.identity] = self.bpm
             self.transferable_tempos.add(self.identity)
             return f"Tempo increased to {self.bpm} BPM"
