@@ -200,10 +200,11 @@ def test_changing_global_target_invalidates_old_stage_tempo_ladders(tmp_path):
     engine.control("tempo_up")
     engine.control("next")
     engine.control("tempo_up")
+    engine.control("previous")
     engine.control("tempo", bpm=80)
     assert engine.plan.target_bpm == 80
-    engine.control("previous")
-    assert engine.plan.bpm == 32
+    engine.control("next")
+    assert engine.plan.bpm == 32  # The old 49-BPM rung has been invalidated.
     engine.db.close()
 
     reopened = PracticeEngine(tmp_path, enable_midi=False)
@@ -213,7 +214,7 @@ def test_changing_global_target_invalidates_old_stage_tempo_ladders(tmp_path):
         reopened._restore()
         assert reopened.plan.bpm == 32
         assert reopened.plan.target_bpm == 80
-        reopened.control("next")
-        assert reopened.plan.bpm == 32
+        reopened.control("previous")
+        assert reopened.plan.bpm == 80  # The user's explicit target choice remains.
     finally:
         reopened.db.close()
