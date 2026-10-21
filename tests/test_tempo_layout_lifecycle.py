@@ -82,6 +82,7 @@ def test_recovery_keeps_old_feedback_then_waits_for_new_score_and_retries_same_c
 def test_clean_tempo_restore_waits_for_score_without_advancing_lesson(harness):
     e, now = harness
     e.plan.bpm = 72
+    expected_bpm = e.plan._next_automatic_bpm()
     original = e.engraving()
     identity = e.plan.identity
     revision = e.score_revision
@@ -94,7 +95,7 @@ def test_clean_tempo_restore_waits_for_score_without_advancing_lesson(harness):
     assert e.engraving() is original
     now[0] = e.next_at + .01
     waiting = e.state()
-    assert waiting["bpm"] == 79
+    assert waiting["bpm"] == expected_bpm
     assert e.plan.identity == identity
     assert waiting["phase"] == "loading"
     assert waiting["revision"] == revision + 1
