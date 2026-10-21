@@ -47,6 +47,7 @@ var lesson_piece_title: Label
 var path_reset_button: Button
 var path_reset_confirmation: VBoxContainer
 var path_reset_fingerprint := ""
+var lesson_refresh_after_reset := false
 var drawer_intro: Tween
 var picker_intro: Tween
 var overlay_backdrop: ColorRect
@@ -2065,6 +2066,12 @@ func _request_lesson() -> void:
 
 func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     lesson_pending = false
+    if lesson_refresh_after_reset:
+        # Discard the response of a request started before the reset. It
+        # carries the same piece fingerprint but obsolete mastery flags.
+        lesson_refresh_after_reset = false
+        _request_lesson()
+        return
     if code != 200:
         lesson_summary.text = _http_failure(code, body)
         return
@@ -3963,6 +3970,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
             # cached lesson overview so mastered/skip badges refresh.
             lesson_choice_fingerprint = ""
             lesson_requested_fingerprint = ""
+            lesson_refresh_after_reset = lesson_pending
         _on_state(_result, code, _headers, body, action_request_started_ms)
         if completed_action in ["skip_stage", "place_original", "revisit_trouble"]:
             _navigate("practice")
