@@ -106,8 +106,11 @@ def test_volta_ending_is_not_dropped_by_native_semantic_score():
     barline = ET.SubElement(measure, "barline", location="right")
     ET.SubElement(barline, "ending", number="1", type="start")
     changed = replace(original, musicxml=ET.tostring(root, encoding="unicode"))
-    with pytest.raises(ValueError, match="Volta endings"):
-        build_score_model(changed, boundaries=(0, 2, 4))
+    model = build_score_model(changed, boundaries=(0, 2, 4))
+    assert model["measures"][0]["right_barline"]["ending"] == {
+        "number": "1", "type": "start"}
+    assert model["duration_beats"] == 4
+    assert len(model["notes"]) == len(build_score_model(original, boundaries=(0, 2, 4))["notes"])
 
 
 def test_imported_musicxml_barlines_survive_disk_cache_and_reengraving(tmp_path):

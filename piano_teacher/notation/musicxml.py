@@ -14,8 +14,16 @@ def parse_barline(tag: ET.Element) -> tuple[str, dict]:
     location = tag.get("location", "right")
     if location not in {"left", "right"}:
         raise ValueError(f"Unsupported MusicXML barline location: {location}")
-    if tag.find("ending") is not None:
-        raise ValueError("Volta endings require full Verovio notation")
+    ending_element = tag.find("ending")
+    ending = None
+    if ending_element is not None:
+        number = (ending_element.get("number") or "").strip()
+        kind = (ending_element.get("type") or "").strip()
+        if (not number or len(number) > 16 or
+                any(c not in "0123456789, -." for c in number) or
+                kind not in {"start", "stop", "discontinue"}):
+            raise ValueError("Unsupported MusicXML volta ending declaration")
+        ending = {"number": number, "type": kind}
     repeat = tag.find("repeat")
     direction = repeat.get("direction", "") if repeat is not None else ""
     if direction not in {"", "forward", "backward"}:
@@ -26,4 +34,7 @@ def parse_barline(tag: ET.Element) -> tuple[str, dict]:
                  "light-heavy" if direction == "backward" else "regular")
     if style not in BARLINE_STYLES:
         raise ValueError(f"Unsupported MusicXML barline style: {style}")
-    return location, {"style": style, "repeat": direction}
+    result = {"style": style, "repeat": direction}
+    if ending is not None:
+        result["ending"] = ending
+    return location, result

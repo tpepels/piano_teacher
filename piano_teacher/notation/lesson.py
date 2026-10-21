@@ -432,7 +432,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
     barline_at = {}
     for mark in barlines:
         key = (round(mark.beat, 8), mark.location)
-        current = (mark.style, mark.repeat)
+        current = (mark.style, mark.repeat, mark.ending)
         if key in barline_at and barline_at[key] != current:
             raise ValueError("Conflicting source barline declarations")
         barline_at[key] = current
@@ -441,9 +441,12 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
         style_and_repeat = barline_at.get((round(beat, 8), location))
         if style_and_repeat is None:
             return
-        style, direction = style_and_repeat
+        style, direction, ending = style_and_repeat
         tag = ET.Element("barline", location=location)
         ET.SubElement(tag, "bar-style").text = style
+        if ending is not None:
+            ET.SubElement(tag, "ending", number=ending["number"],
+                          type=ending["type"])
         if direction:
             ET.SubElement(tag, "repeat", direction=direction)
         if location == "left":
