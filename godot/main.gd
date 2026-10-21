@@ -345,7 +345,13 @@ func _ready() -> void:
     scan_timer.timeout.connect(func():
         if current_screen == "home" or current_screen == "library":
             _request_library()
-        if current_screen == "practice" or current_screen == "settings":
+        # The backend independently checks the chosen MIDI port every
+        # MIDI_SCAN_SECONDS and reconnects the saved piano if needed. Repeating
+        # ALSA enumeration in the Practice UI adds device-probe warnings and
+        # lock contention without improving hotplug detection. Only discover
+        # a new device while none is connected, in Settings, or on explicit tap.
+        if current_screen == "settings" or (current_screen == "practice"
+                and str(last_state.get("device", "")).is_empty()):
             _request_devices()
     )
     add_child(scan_timer)
