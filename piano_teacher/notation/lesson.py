@@ -12,6 +12,7 @@ import math
 from xml.etree import ElementTree as ET
 from ..music import Phrase, source_note_id
 from ..measure_grid import phrase_grid
+from .source_annotations import project_annotations
 
 DIVISIONS = 10080
 
@@ -22,6 +23,7 @@ class LessonScore:
     phrase: Phrase
     note_bindings: dict = field(default_factory=dict)
     staff_clefs: dict = field(default_factory=dict)
+    unrendered_expressions: tuple[str, ...] = ()
 
 
 def _ticks(beat: float) -> int:
@@ -419,7 +421,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                        time_signatures: tuple[tuple[float, int, int], ...] = (),
                        key_signatures=(), clef_changes=(),
                        default_clefs: dict | None = None,
-                       barlines: tuple = ()) -> LessonScore:
+                       barlines: tuple = (), source_musicxml: str = "") -> LessonScore:
     """Create notation from the source measure grid, not averaged bars."""
     identities = [source_note_id(note,index) for index,note in enumerate(phrase.notes)]
     if len(set(identities)) != len(identities):
@@ -542,4 +544,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             _write_accidentals(measure,active_key.fifths if active_key else 0)
             _write_tuplet_groups(measure)
             append_barline(measure,phrase.start+grid[b+1],"right")
-    return LessonScore(ET.tostring(root, encoding="unicode"), phrase, bindings, staff_clefs)
+    xml, unsupported = project_annotations(
+        source_musicxml, ET.tostring(root, encoding="unicode"),
+        bindings, phrase, boundaries=boundaries)
+    return LessonScore(xml, phrase, bindings, staff_clefs, unsupported)
