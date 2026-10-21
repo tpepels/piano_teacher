@@ -71,7 +71,7 @@ jobs:
   desktop-screenshots:
     runs-on: ubuntu-latest
     container: archlinux:latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Install graphical test dependencies
         run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
@@ -161,6 +161,27 @@ jobs:
           xvfb-run -a -s "-screen 0 1600x1000x24" \
             .venv/bin/python scripts/check_user_midi_desktop.py \
             --native --only Chopin --out /tmp/piano-native-chopin
+      - name: Native Verovio overlay audit - real Autumn Leaves measures 7-8
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            .venv/bin/python scripts/check_native_verovio_overlay.py \
+            --out /tmp/piano-native-verovio-overlay
+      - name: Upload source-registered native Verovio overlay evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-verovio-note-overlay-autumn-leaves
+          path: |
+            /tmp/piano-native-verovio-overlay/*.png
+            /tmp/piano-native-verovio-overlay/*.svg
+            /tmp/piano-native-verovio-overlay/*.musicxml
+            /tmp/piano-native-verovio-overlay/audit.json
+            /tmp/piano-native-verovio-overlay/native-overlay-report.json
+            /tmp/piano-native-verovio-overlay/godot.log
+          if-no-files-found: warn
+          retention-days: 14
       - name: Upload native Chopin pickup engraving evidence
         if: always()
         uses: actions/upload-artifact@v4
