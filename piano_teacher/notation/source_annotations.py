@@ -139,6 +139,51 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
             dest.append(deepcopy(lyric))
             unrendered.add("note:lyric")
 
+    # A grace note's XML ordinal is not a graded attack. Project it only
+    # when its immediately following scored note is in this lesson. This
+    # applies to the same original voice/staff and cannot leak into another
+    # hand or a simplified lesson with the anchor omitted.
+    destination_measures = {
+        id(note): measure
+        for part in output.findall("part")
+        for measure in part.findall("measure")
+        for note in measure.findall("note")
+    }
+    for pi, part in enumerate(source_parts):
+        pending = defaultdict(list)
+        for mi, measure in enumerate(part.findall("measure")):
+            for ordinal, note in enumerate(measure):
+                if note.tag != "note":
+                    continue
+                key = (note.findtext("voice", "1"), note.findtext("staff", "1"))
+                if note.find("grace") is not None:
+                    pending[key].append(note)
+                    continue
+                group = pending.pop(key, [])
+                if not group or note.find("pitch") is None:
+                    continue
+                sid = f"xml-p{pi}-m{mi}-e{ordinal}"
+                target = targets.get(sid)
+                if target is None:
+                    continue
+                parent = destination_measures[id(target)]
+                if (len(group) != 1 or group[0].find("chord") is not None
+                        or group[0].findtext("type") not in ("eighth", "16th")
+                        or group[0].find("notations") is not None
+                        or group[0].find("grace").get("slash", "no") != "no"):
+                    # Verovio still receives the original markings, but the
+                    # native renderer must not silently imitate complex ink.
+                    unrendered.add("note:grace")
+                for index, original_grace in enumerate(group):
+                    added = deepcopy(original_grace)
+                    added.attrib.clear()
+                    added.set("id", f"pt-grace-{sid}-{index}")
+                    for staff in list(added.findall("staff")):
+                        added.remove(staff)
+                    for voice in list(added.findall("voice")):
+                        voice.text = target.findtext("voice", "1")
+                    parent.insert(list(parent).index(target), added)
+
     # Preserve meaningful directions on the correct *generated hand*.
     # Each generated part is one staff, so source <staff> is used for
     # routing but is not copied. Offset is relative to the measure start,

@@ -32,6 +32,7 @@ var notation_tuplets: Array = []
 # Each frame then visits only visible onsets, beams and ties.
 var measure_by_number: Dictionary = {}
 var ordered_events: Array = []
+var attached_grace_notes: Array = []
 var source_expressions: Array = []
 var expression_note_index: Dictionary = {}
 var tie_pairs: Array = []
@@ -67,6 +68,7 @@ func clear_score() -> void:
     notation_tuplets.clear()
     measure_by_number.clear()
     ordered_events.clear()
+    attached_grace_notes.clear()
     source_expressions.clear()
     expression_note_index.clear()
     tie_pairs.clear()
@@ -163,6 +165,7 @@ func load_score(candidate: Dictionary) -> bool:
     notation_tuplets = index["notation_tuplets"]
     measure_by_number = index["measure_by_number"]
     ordered_events = index["ordered_events"]
+    attached_grace_notes = timeline.model.get("grace_notes", []).duplicate(true)
     source_expressions = timeline.model.get("expressions", []).duplicate(true)
     expression_note_index.clear()
     for source_event in ordered_events:
@@ -1228,6 +1231,25 @@ func _paint_volta_endings(left: float, right: float, clock: float,
             draw_line(Vector2(x1,y),Vector2(x1,y+gap*.85),NOTE_INK,1.3,true)
 
 
+func _paint_grace_notes(gap: float) -> void:
+    # Every grace mark is attached to a *visible* graded notehead. Its
+    # authentic complete Verovio note template is merely reduced in size;
+    # it has no playback clock event, scored attack or independent X motion.
+    for grace in attached_grace_notes:
+        var target: String = str(grace.get("before_note_id", ""))
+        if not drawn_noteheads.has(target):
+            continue
+        var hand: String = str(grace.get("hand", "right"))
+        var spelling: Dictionary = grace.get("spelling", {})
+        var clef: Dictionary = _clef_for(hand, _measure_for(grace))
+        var step: int = Geometry.staff_step(spelling, clef)
+        var y: float = Geometry.note_y(step, _staff_center(hand)+gap*2.0,gap)
+        var head: Vector2 = drawn_noteheads[target]
+        var kind: String = str(grace.get("note_type", "eighth"))
+        glyphs.paint_note(self, kind, step < 4,
+            head.x-gap*1.4, y, gap*.66, _ink(hand))
+
+
 func _visible_events(left: float, right: float) -> Array:
     var begin := 0
     var end := ordered_events.size()
@@ -1405,6 +1427,7 @@ func _draw() -> void:
     _paint_slurs(playhead_x,camera_clock,gap)
     _paint_tuplet_brackets(camera_clock,playhead_x,gap)
     _paint_expressions(left,right,camera_clock,playhead_x,gap)
+    _paint_grace_notes(gap)
     draw_line(Vector2(playhead_x,_staff_center("right")-gap*3.8),
         Vector2(playhead_x,_staff_center("left")+gap*3.7),
         PREVIEW_LIGHT,2.0,true)

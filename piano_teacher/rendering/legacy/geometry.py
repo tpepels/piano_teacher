@@ -36,6 +36,10 @@ def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,
         note_ids = event.get("on", [])
         rest_ids = event.get("restsOn", []) + event.get("rests", [])
         for identifier in note_ids + rest_ids:
+            if note_bindings is not None and identifier.startswith("pt-grace-"):
+                # Genuine optional grace graphics are visible in the SVG,
+                # but must not become graded noteheads or transport anchors.
+                continue
             if identifier in where:
                 page, x, y, system = where[identifier]
                 binding = note_bindings.get(identifier) if note_bindings is not None else None

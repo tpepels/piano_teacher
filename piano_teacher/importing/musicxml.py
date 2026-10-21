@@ -130,7 +130,13 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
                     previous_note = None
                 elif element.tag == 'note':
                     if element.find('grace') is not None:
-                        raise ValueError('Unsupported grace note: no source duration for timed assessment')
+                        # Grace notes are *notation*, not timed graded attacks.
+                        # Preserve their original source MusicXML so the
+                        # lesson renderer can project them by the following
+                        # scored note; they do not move the measure cursor.
+                        if element.find('duration') is not None or element.find('pitch') is None:
+                            raise ValueError('Unsupported grace note without a valid untimed pitch')
+                        continue
                     if element.find('unpitched') is not None:
                         raise ValueError('Unsupported unpitched note in piano material')
                     duration = _number(element.findtext('duration'), 'note duration')/divisions

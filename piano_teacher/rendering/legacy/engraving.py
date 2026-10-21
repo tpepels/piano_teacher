@@ -235,7 +235,10 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
         identities = []
         for part in root.findall('part'):
             for note in part.findall('.//note'):
-                if note.find('pitch') is None:
+                if note.find('pitch') is None or note.find('grace') is not None:
+                    # Decorative grace has no graded identity or duration.
+                    # Keep its genuine Verovio ink in the SVG, but do not
+                    # require a nonexistent MIDI source-note binding.
                     continue
                 identifier = note.get('id')
                 binding = note_bindings.get(identifier)
@@ -304,7 +307,24 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
             pages = _svg_pages(toolkit)
     pages = tuple(_fade_inactive_staff(page, hand) for page in pages)
     try:
-        events = _verovio_object(toolkit.renderToTimemap(
+        # Verovio's grace layout occasionally advances its quarter-note
+        # timemap at the anchored principal note. Keep the original SVG ink,
+        # but read the clock from an otherwise identical score with only the
+        # untimed grace ornaments removed. Their note IDs and engraving
+        # coordinates remain the ones from the original score above.
+        timed_toolkit = toolkit
+        if note_bindings is not None and "<grace" in xml:
+            import xml.etree.ElementTree as ET
+            stable = ET.fromstring(xml)
+            for measure in stable.findall(".//measure"):
+                for note in list(measure):
+                    if note.tag == "note" and note.find("grace") is not None:
+                        measure.remove(note)
+            timed_toolkit = _create_verovio_toolkit(verovio)
+            if not timed_toolkit.setOptions(options) or not timed_toolkit.loadData(
+                    ET.tostring(stable, encoding="unicode")):
+                raise ValueError("Cannot preserve canonical note timing around source grace")
+        events = _verovio_object(timed_toolkit.renderToTimemap(
             {"includeRests": True, "includeMeasures": True}), "note timing map")
     except (ValueError, TypeError) as exc:
         raise ValueError("Verovio produced an invalid note timing map") from exc
