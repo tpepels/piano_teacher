@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass
 from xml.etree import ElementTree as ET
 
 from .lesson import DIVISIONS, LessonScore
+from .expressions import native_expressions
 from ..measure_grid import phrase_grid
 from ..music import Phrase, source_note_id
 
@@ -319,6 +320,9 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
             for symbol in symbols],
         "active_note_ids": [note.id for note in notes
                             if hand == "both" or hand == note.hand],
+        # Native expressive marks retain the musical clock but are never
+        # added to graded attacks or the practice progression.
+        "expressions": native_expressions(score, grid),
         # Native only paints authentic supported glyphs. Expression classes
         # without native Verovio fragments request full-page legacy ink.
         "unrendered_expressions": list(score.unrendered_expressions),
