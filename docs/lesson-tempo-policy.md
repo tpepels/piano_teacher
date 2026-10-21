@@ -53,7 +53,7 @@ measure, but mastery from incompatible old stages is not silently credited.
 
 ## Repeated passages
 
-A new two-measure **learn** stage can start at the BPM already reached for an
+A new two-measure **learn** stage can start at the *earned* BPM already reached for an
 exactly repeated musical passage elsewhere in the same imported piece. Matching
 requires the same hand, simplification level, source-measure durations, pitches,
 onsets and held durations. Absolute measure number, source-note IDs and track
@@ -67,3 +67,8 @@ including automatic slowdowns; another section's improvement cannot cancel
 its recovery. The shared tempo survives ordinary application restarts through
 the existing per-stage SQLite progress store. Changes to the overall target
 invalidate all inherited stage tempos, just as they invalidate other ladders.
+
+Only a clean attempt or the explicit +BPM control marks a source stage as
+transferable. Choosing a new target in Settings does **not** propagate that
+number to repeated passages. Eligibility is saved separately in SQLite, so
+reloading the app cannot turn an unplayed target into evidence of progress.

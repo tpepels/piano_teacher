@@ -111,3 +111,26 @@ def test_target_change_invalidates_repeat_tempo_inheritance():
     p.select(3)
     assert p.bpm == round(80 * SETTINGS.start_tempo_fraction)
     assert p.target_bpm == 80
+
+
+def test_explicit_target_change_does_not_invent_transferable_tempo(tmp_path):
+    piece = repeated_piece()
+    first = PracticeEngine(tmp_path,enable_midi=False)
+    first.plan = LearningPlan(piece)
+    first.fingerprint = "no-inherited-settings"
+    first.control("tempo",bpm=80)
+    first.control("next")
+    # A target selected in Settings is not evidence of playing at 80 BPM.
+    assert first.plan.bpm == 32
+    first.db.close()
+    reopened = PracticeEngine(tmp_path,enable_midi=False)
+    try:
+        reopened.plan = LearningPlan(piece)
+        reopened.fingerprint = "no-inherited-settings"
+        reopened._restore()
+        reopened.control("next")  # leave different measures for source 5-6
+        reopened.control("next")
+        assert reopened.plan.bpm == 32
+        assert not reopened.plan.mastered
+    finally:
+        reopened.db.close()

@@ -166,6 +166,9 @@ class LearningPlan:
         # the currently displayed take. Returning to an already practised
         # section must not silently discard its earned BPM progress.
         self.stage_tempos: dict[str, int] = {}
+        # Only independently earned tempo advances (clean practice or
+        # explicit +BPM), never a settings-target change, are transferable.
+        self.transferable_tempos: set[str] = set()
         self._repeated_groups: tuple[dict[str, tuple], dict[tuple, list[str]]] | None = None
         self._lesson_steps_cache: tuple[LessonStep, ...] | None = None
 
@@ -309,7 +312,8 @@ class LearningPlan:
             return self.start_bpm
         shared = (self.stage_tempos[other]
                   for other in by_signature[signature]
-                  if other != key and other in self.stage_tempos)
+                  if other != key and other in self.stage_tempos
+                  and other in self.transferable_tempos)
         return min(self.target_bpm, max(self.start_bpm, *shared))
 
     def restore_location(self, *, kind: str, first_bar: int, last_bar: int,
@@ -364,6 +368,7 @@ class LearningPlan:
         self.target_bpm = bpm
         # Changing the target invalidates old tempo ladders globally.
         self.stage_tempos.clear()
+        self.transferable_tempos.clear()
         self.streak = self.failures = 0
 
     def increase_tempo(self) -> int:
@@ -377,6 +382,7 @@ class LearningPlan:
             self.streak = 0
             self.failures = 0
             self.stage_tempos[self.identity] = self.bpm
+            self.transferable_tempos.add(self.identity)
         return self.bpm
 
     def apply_result(self, *, correct: int, total: int, extras: int = 0) -> str:
@@ -397,7 +403,9 @@ class LearningPlan:
             self.streak = 0
             self.bpm = min(self.target_bpm, max(self.bpm + SETTINGS.minimum_tempo_step_bpm, round(self.bpm * SETTINGS.automatic_tempo_multiplier)))
             self.stage_tempos[self.identity] = self.bpm
+            self.transferable_tempos.add(self.identity)
             return f"Tempo increased to {self.bpm} BPM"
+        self.transferable_tempos.add(self.identity)
         self.streak += 1
         if self.streak < SETTINGS.clean_runs_to_master:
             return f"Clean pass {self.streak}/{SETTINGS.clean_runs_to_master} - repeat"
