@@ -103,3 +103,13 @@ def test_imported_markup_does_not_modify_original_source_data(tmp_path):
     _lesson(piece,piece.notes)
     _lesson(piece,piece.notes[:1])
     assert piece.source_musicxml == original
+
+def test_projected_expressions_render_through_real_verovio(tmp_path):
+    from piano_teacher.score import render_layout
+    piece = _decorated_piece(tmp_path)
+    score, _ = _lesson(piece,piece.notes)
+    engraving = render_layout(score,1,1,"both",
+                              total_beats=4,bpm=80)
+    assert engraving.pages
+    assert any("svg" in page for page in engraving.pages)
+    assert len(engraving.layout["notes"]) == 3
