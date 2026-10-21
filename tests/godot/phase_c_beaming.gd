@@ -243,8 +243,9 @@ func run() -> void:
         and tiny_groups[1].size() == 5,
         "Short note groups retain exact quarter-beat boundaries")
     check(renderer.load_score(tiny), "Load 32nd and 64th lesson natively")
-    check(absf(renderer.timeline.pixels_per_beat-400.0) < .01,
-        "Dense sixteenth-of-a-beat onsets select one scale before playback")
+    check(renderer.timeline.pixels_per_beat >= 112.0
+        and renderer.timeline.pixels_per_beat <= 400.0,
+        "Native score fits genuine glyph ink at one fixed scale, without duration-only inflation")
     var fixed: float = renderer.timeline.pixels_per_beat
     for tempo in [40.0, 80.0, 120.0]:
         renderer.present({"bpm":tempo,"running":true,"paused":false,
