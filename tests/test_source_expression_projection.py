@@ -149,7 +149,7 @@ def test_unstaffed_voice_directions_follow_the_correct_grand_staff_hand(tmp_path
     assert root.find("./part[@id='RH']/measure/direction/direction-type/dynamics/p") is not None
     assert root.find("./part[@id='LH']/measure/direction/direction-type/dynamics/f") is not None
     assert root.find(".//direction-type/dynamics/mf") is None
-    assert "direction:dynamics" in full.unrendered_expressions
+    assert full.unrendered_expressions == ()
 
     # Omitting the right-hand attack must not send its expression to the left.
     left = tuple(n for n in piece.notes if n.hand == "left")
@@ -163,8 +163,10 @@ def test_native_expressions_survive_as_ungraded_beat_anchored_events(tmp_path):
     # Remove the deliberately unsupported ornament from the fixture. A score
     # containing ONLY supported marks must keep the native renderer enabled.
     from dataclasses import replace
-    source = piece.source_musicxml.replace("<ornaments><turn/></ornaments>", "")
-    piece = replace(piece, source_musicxml=source)
+    source_root = ET.fromstring(piece.source_musicxml)
+    note_markings = source_root.find(".//notations")
+    note_markings.remove(note_markings.find("ornaments"))
+    piece = replace(piece, source_musicxml=ET.tostring(source_root, encoding="unicode"))
     score, root = _lesson(piece, piece.notes)
     assert score.unrendered_expressions == ()
     model = build_score_model(score, boundaries=piece.bar_boundaries)
@@ -184,9 +186,11 @@ def test_native_expressions_survive_as_ungraded_beat_anchored_events(tmp_path):
 def test_unknown_musical_directions_keep_full_verovio_fallback(tmp_path):
     piece = _decorated_piece(tmp_path)
     from dataclasses import replace
-    source = piece.source_musicxml.replace(
-        "<dynamics><p/></dynamics>", "<dynamics><other-dynamics>subito</other-dynamics></dynamics>")
-    piece = replace(piece, source_musicxml=source)
+    source_root = ET.fromstring(piece.source_musicxml)
+    dynamic = source_root.find(".//direction-type/dynamics")
+    dynamic.clear()
+    ET.SubElement(dynamic, "other-dynamics").text = "subito"
+    piece = replace(piece, source_musicxml=ET.tostring(source_root, encoding="unicode"))
     score, _ = _lesson(piece, piece.notes)
     assert "direction:dynamics" in score.unrendered_expressions
     assert "note:ornaments" in score.unrendered_expressions
