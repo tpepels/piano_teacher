@@ -141,3 +141,15 @@ def test_manual_tempo_action_is_persisted_without_credit(tmp_path):
         assert second.plan.streak == 0
     finally:
         second.db.close()
+
+
+def test_source_with_single_import_phrase_still_builds_whole_piece_link():
+    p = make_piece(6)
+    whole = Phrase(1, 1, 6, 0.0, 24.0, p.notes)
+    p = replace(p, phrases=(whole,))
+    plan = LearningPlan(p)
+    assert len([e for e in plan.exercises if e.kind == "learn"]) == 3
+    assert plan.exercises[-1].kind == "perform"
+    assert plan.exercises[-1].phrase.first_bar == 1
+    assert plan.exercises[-1].phrase.last_bar == 6
+    assert plan.exercises[-1].phrase.notes == p.notes
