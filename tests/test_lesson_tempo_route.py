@@ -98,3 +98,46 @@ def test_versioned_json_settings_strict_validation(tmp_path):
         path.write_text(json.dumps(invalid))
         with pytest.raises(ValueError):
             load_lesson_settings(path)
+
+
+def test_original_piece_performance_covers_sustained_ending_and_silent_bars():
+    notes = (Note(2,3,60,0,0,"right","first"),
+             Note(10,18,48,1,0,"left","sustained"))
+    phrases = (Phrase(1,1,2,0,8,notes[:1]),
+               Phrase(2,3,4,8,16,notes[1:]))
+    piece = Piece("Full ending",80,notes,phrases,
+                  bar_boundaries=(0,4,8,12,16,20))
+    plan = LearningPlan(piece)
+    assert plan.exercises[-1].kind == "perform"
+    assert plan.exercises[-1].phrase.first_bar == 1
+    assert plan.exercises[-1].phrase.last_bar == 5
+    assert plan.exercises[-1].phrase.end == 20
+    assert plan.exercises[-1].phrase.notes == notes
+
+
+def test_manual_tempo_action_is_persisted_without_credit(tmp_path):
+    from piano_teacher.server import PracticeEngine
+
+    first = PracticeEngine(tmp_path, enable_midi=False)
+    first.plan = LearningPlan(make_piece(4))
+    first.fingerprint = "manual-tempo-progress"
+    stage = first.plan.identity
+    first.control("tempo_up")
+    state = first.state()
+    assert state["bpm"] == 44 + SETTINGS.manual_tempo_step_bpm
+    assert state["target_bpm"] == 110
+    assert state["manual_tempo_step_bpm"] == SETTINGS.manual_tempo_step_bpm
+    assert not first.plan.mastered and first.plan.streak == 0
+    first.db.close()
+
+    second = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        second.plan = LearningPlan(make_piece(4))
+        second.fingerprint = "manual-tempo-progress"
+        second._restore()
+        assert second.plan.identity == stage
+        assert second.plan.bpm == state["bpm"]
+        assert second.plan.target_bpm == 110
+        assert second.plan.streak == 0
+    finally:
+        second.db.close()

@@ -103,12 +103,6 @@ def build_exercises(piece: Piece, *, consolidate: bool = True) -> tuple[Exercise
                 joined = Phrase(0, first_bar, last_bar, start, end,
                                 tuple(n for n in piece.notes if start <= n.start < end))
                 exercises.append(Exercise("connect", joined, f"connect:{joined.first_bar}-{joined.last_bar}"))
-    if not consolidate and len(phrases) > 1:
-        combined = Phrase(0, phrases[0].first_bar, phrases[-1].last_bar,
-                          phrases[0].start, phrases[-1].end,
-                          tuple(n for n in piece.notes if phrases[0].start <= n.start < phrases[-1].end))
-        exercises.append(Exercise("perform", combined, "perform:all"))
-        return tuple(exercises)
     last_release = max((n.end for n in piece.notes), default=phrases[-1].end) if phrases else 0.0
     source_end = piece.bar_boundaries[-1] if piece.bar_boundaries else last_release
     source_start = piece.bar_boundaries[0] if piece.bar_boundaries else 0.0

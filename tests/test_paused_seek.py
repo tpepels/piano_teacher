@@ -100,7 +100,7 @@ def test_seek_bar_number_is_absolute_within_source_and_start_bar_remains_full_at
                   for i in range(8, 24))
     e.plan = LearningPlan(Piece('Later source passage', 80, notes,
         (Phrase(1, 3, 6, 8, 24, notes),), bar_boundaries=(0, 4, 8, 12, 16, 20, 24),
-        time_signatures=((0, 4, 4),)))
+        time_signatures=((0, 4, 4),)), consolidate=True)
     e.plan.set_bpm(80)
     e.start()
     e.control('pause')

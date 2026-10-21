@@ -446,6 +446,8 @@ def test_loading_piece_starts_new_trouble_history_and_fresh_instruction(lesson, 
     path.write_bytes(b'controlled import fixture')
     monkeypatch.setattr(server, 'import_piece', lambda _: (piece, object()))
     e.load(str(path))
+    # Reimport is tested using the original four-bar error window.
+    e.plan = LearningPlan(e.plan.piece, consolidate=True)
     ready = e.state()
     assert 'Start' in ready['next_action']
     assert ready['retry_range'] is None
