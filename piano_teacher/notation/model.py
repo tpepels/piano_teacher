@@ -183,6 +183,10 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                     continue
                 if child.tag != "note":
                     continue
+                if child.find("grace") is not None:
+                    # Notated grace notes do not consume score time or MIDI
+                    # note identities. Render their ink as anchored ornaments.
+                    continue
                 duration_ticks = _int(child, "duration")
                 if duration_ticks <= 0:
                     raise ValueError("Zero-length engraved symbol")
@@ -271,6 +275,53 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
     return tuple(measures), tuple(symbols)
 
 
+def _grace_notes(score: LessonScore, grid: tuple[float, ...]) -> list[dict]:
+    root = ET.fromstring(score.musicxml)
+    projected = []
+    for part in root.findall("part"):
+        hand = PART_HAND.get(part.get("id"))
+        if hand is None:
+            raise ValueError("Unknown generated notation staff")
+        for mi, measure in enumerate(part.findall("measure")):
+            pending = []
+            for child in measure.findall("note"):
+                grace = child.find("grace")
+                if grace is not None:
+                    pending.append(child)
+                    continue
+                group = pending
+                pending = []
+                binding = score.note_bindings.get(child.get("id"))
+                if not binding or not binding.get("is_attack") or not group:
+                    continue
+                # Only simple, unslashed, isolated grace notes use the
+                # already genuine Verovio note-template atlas. More complex
+                # source marks trigger complete-page fallback at projection.
+                if len(group) != 1:
+                    continue
+                item = group[0]
+                if item.findtext("type") not in ("eighth", "16th") or (
+                        item.find("grace").get("slash", "no") != "no"):
+                    continue
+                pitch = item.find("pitch")
+                if pitch is None:
+                    continue
+                projected.append({
+                    "id": item.get("id", ""),
+                    "before_note_id": child.get("id"),
+                    "hand": hand,
+                    "measure": score.phrase.first_bar + mi,
+                    "beat": round(binding["display_beat"], 8),
+                    "note_type": item.findtext("type"),
+                    "spelling": {
+                        "step": pitch.findtext("step"),
+                        "alter": int(pitch.findtext("alter", "0")),
+                        "octave": int(pitch.findtext("octave")),
+                    },
+                })
+    return projected
+
+
 def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
                       hand: str = "both", revision: int = 0) -> dict:
     """Export source-accurate score independent of raster layout and BPM.
@@ -323,6 +374,7 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
         # Native expressive marks retain the musical clock but are never
         # added to graded attacks or the practice progression.
         "expressions": native_expressions(score, grid),
+        "grace_notes": _grace_notes(score, grid),
         # Native only paints authentic supported glyphs. Expression classes
         # without native Verovio fragments request full-page legacy ink.
         "unrendered_expressions": list(score.unrendered_expressions),
