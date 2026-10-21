@@ -30,11 +30,11 @@ def test_focus_route_is_measured_in_source_bars_and_keeps_links():
         ("learn",5,6),("connect",3,6),("perform",1,6)]
     assert p.active_phrase.first_bar == 1
     assert p.active_phrase.last_bar == 2
-    assert p.bpm == 44
+    assert p.bpm == SETTINGS.start_tempo_bpm
     assert p.target_bpm == 110
     p.set_bpm(80)
     p.select(0)
-    assert p.start_bpm == 32  # 40% of the *chosen target*, not MIDI source BPM
+    assert p.start_bpm == SETTINGS.start_tempo_bpm  # Common start, independent of target
 
 
 def test_manual_tempo_skips_rungs_not_clean_credit_and_is_bounded():
@@ -86,8 +86,8 @@ def test_versioned_json_settings_strict_validation(tmp_path):
     assert settings.clean_runs_to_master >= 1
     assert settings.minimum_bpm <= settings.maximum_bpm
     for field,value in [
-        ("start_tempo_fraction", 1.3),
-        ("automatic_tempo_multiplier", 1.0),
+        ("start_tempo_bpm", 0),
+        ("automatic_tempo_steps", 0),
         ("recovery_tempo_multiplier", 1.01),
         ("manual_tempo_step_bpm", 0),
         ("clean_runs_to_master", 0),
@@ -124,7 +124,7 @@ def test_manual_tempo_action_is_persisted_without_credit(tmp_path):
     stage = first.plan.identity
     first.control("tempo_up")
     state = first.state()
-    assert state["bpm"] == 44 + SETTINGS.manual_tempo_step_bpm
+    assert state["bpm"] == SETTINGS.start_tempo_bpm + SETTINGS.manual_tempo_step_bpm
     assert state["target_bpm"] == 110
     assert state["manual_tempo_step_bpm"] == SETTINGS.manual_tempo_step_bpm
     assert not first.plan.mastered and first.plan.streak == 0
@@ -204,7 +204,7 @@ def test_changing_global_target_invalidates_old_stage_tempo_ladders(tmp_path):
     engine.control("tempo", bpm=80)
     assert engine.plan.target_bpm == 80
     engine.control("next")
-    assert engine.plan.bpm == 32  # The old 49-BPM rung has been invalidated.
+    assert engine.plan.bpm == SETTINGS.start_tempo_bpm  # Old ladder invalidated.
     engine.db.close()
 
     reopened = PracticeEngine(tmp_path, enable_midi=False)
@@ -212,7 +212,7 @@ def test_changing_global_target_invalidates_old_stage_tempo_ladders(tmp_path):
         reopened.plan = LearningPlan(piece)
         reopened.fingerprint = "target-change-ladders"
         reopened._restore()
-        assert reopened.plan.bpm == 32
+        assert reopened.plan.bpm == SETTINGS.start_tempo_bpm
         assert reopened.plan.target_bpm == 80
         reopened.control("previous")
         assert reopened.plan.bpm == 80  # The user's explicit target choice remains.
