@@ -4083,6 +4083,11 @@ func _request_devices() -> void:
 func _on_devices(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     device_pending = false
     if code != 200:
+        # Failed ALSA discovery previously disappeared silently, leaving a
+        # stale device picker. Give a diagnostic in Settings without
+        # interrupting a running practice take.
+        if current_screen == "settings" and settings_message != null:
+            settings_message.text = "MIDI device scan failed: " + _http_failure(code, body)
         return
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
