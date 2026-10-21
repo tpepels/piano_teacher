@@ -153,3 +153,11 @@ def test_source_with_single_import_phrase_still_builds_whole_piece_link():
     assert plan.exercises[-1].phrase.first_bar == 1
     assert plan.exercises[-1].phrase.last_bar == 6
     assert plan.exercises[-1].phrase.notes == p.notes
+
+
+def test_consolidated_legacy_route_has_final_perform_even_when_grouped():
+    p = make_piece(4)
+    legacy = LearningPlan(p, consolidate=True)
+    assert len([e for e in legacy.exercises if e.kind == "learn"]) == 1
+    assert legacy.exercises[-1].kind == "perform"
+    assert legacy.exercises[-1].phrase.notes == p.notes

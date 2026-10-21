@@ -408,7 +408,13 @@ class PracticeEngine:
                 equivalent = (row[1] == hand and p.hand == hand and p.active_variant.level == old_variant.level
                               and p.active_phrase.start == old_variant.phrase.start
                               and p.active_phrase.end == old_variant.phrase.end
-                              and p.active_phrase.notes == old_variant.notes)
+                              and p.active_phrase.notes == old_variant.notes
+                              # Old unversioned whole-performance rows did
+                              # not record whether the final sustained note
+                              # or previously silent measures were included.
+                              # Reuse their tempo, but never an unverifiable
+                              # target-speed clean streak.
+                              and old.kind != "perform")
             p.set_bpm(max(SETTINGS.minimum_bpm, min(SETTINGS.maximum_bpm, int(row[4] or p.piece.bpm))))
             p.bpm = max(SETTINGS.minimum_bpm, min(p.target_bpm, int(row[2])))
             p.streak = min(SETTINGS.clean_runs_to_master-1, max(0, int(row[3]))) if equivalent else 0

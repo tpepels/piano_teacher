@@ -106,7 +106,8 @@ def build_exercises(piece: Piece, *, consolidate: bool = True) -> tuple[Exercise
     last_release = max((n.end for n in piece.notes), default=phrases[-1].end) if phrases else 0.0
     source_end = piece.bar_boundaries[-1] if piece.bar_boundaries else last_release
     source_start = piece.bar_boundaries[0] if piece.bar_boundaries else 0.0
-    if phrases and (len(phrases) > 1 or source_start < phrases[0].start - 1e-6
+    if phrases and (len(phrases) > 1 or (consolidate and len(piece.phrases) > 1)
+                    or source_start < phrases[0].start - 1e-6
                     or max(last_release, source_end) > phrases[-1].end + 1e-6):
         # Empty-onset measures are omitted from targeted source passages, but
         # the complete performance includes introduction rests and held endings.
