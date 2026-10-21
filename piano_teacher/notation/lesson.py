@@ -426,14 +426,31 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
     for lane in lanes:
         for i,(start,end,tones) in enumerate(lane):
             rounded = round(end/(DIVISIONS//4))*(DIVISIONS//4)
-            # MIDI records key release, not an engraver's intended note-off.
-            # A release 1/8 quarter beat ahead of a beat boundary is normally
-            # staccato articulation, NOT an intentionally quadruple-dotted
-            # note followed by a 64th rest. Preserve MusicXML-sourced rhythms.
-            tolerance = .12 if from_source_musicxml else .15
+            # Performance MIDI stores physical key release, not the intended
+            # written duration. At Autumn Leaves measure 8, for example,
+            # a 3.798-beat held note was printed as a triple-dotted 3.75
+            # because the nearest 16th subdivision was chosen; a whole note
+            # is far easier to read when the remainder is just key release.
+            if not from_source_musicxml and end-start >= DIVISIONS:
+                close_barline = next((
+                    _ticks(boundary) for boundary in grid
+                    if 0 < _ticks(boundary)-end <= _ticks(.25)
+                ), None)
+                if close_barline is not None:
+                    rounded = close_barline
+            # Never shorten an unusual expressive MIDI duration by more
+            # than .08 beat. Small release noise around ordinary subdivisions
+            # is still normalized; genuine .625-beat values are preserved.
+            tolerance = .12 if from_source_musicxml else (
+                .08 if rounded < end else .15)
+            if not from_source_musicxml and rounded > end and end-start >= DIVISIONS:
+                tolerance = max(tolerance,.25) if rounded in {
+                    _ticks(boundary) for boundary in grid} else tolerance
             if (_tuplet_type(end-start) is None and rounded > start
-                    and rounded >= end and rounded-end <= _ticks(tolerance)):
-                end = min(rounded,_ticks(phrase.end-phrase.start),lane[i+1][0] if i+1 < len(lane) else _ticks(phrase.end-phrase.start))
+                    and abs(rounded-end) <= _ticks(tolerance)):
+                end = min(rounded,_ticks(phrase.end-phrase.start),
+                          lane[i+1][0] if i+1 < len(lane)
+                          else _ticks(phrase.end-phrase.start))
             if i+1 < len(lane):
                 following = lane[i+1][0]
                 # Tiny key-release gaps in performance MIDI are articulation,
