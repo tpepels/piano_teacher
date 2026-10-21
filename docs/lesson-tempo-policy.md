@@ -9,6 +9,7 @@ are required to experiment with another pace. Settings are validated on startup.
 | Setting | Default | Meaning |
 | --- | ---: | --- |
 | `focus_measures` | 2 | Measures in a new focused learn section and error window |
+| `repeated_tempo_min_attacks` | 2 | Minimum number of source note attacks before transferring a practice tempo to another identical passage |
 | `start_tempo_fraction` | 0.40 | Initial fraction of the piece's target BPM for a new hand/stage |
 | `automatic_tempo_multiplier` | 1.10 | Increase after one fully clean focused take |
 | `manual_tempo_step_bpm` | 5 | BPM increase when the student chooses **+ BPM** |
@@ -49,3 +50,20 @@ non-assessed preview does not increase tempo or earn mastery.
 Changing `focus_measures` changes the composition of the route and stage
 identities. Existing progress is safely located at the nearest source
 measure, but mastery from incompatible old stages is not silently credited.
+
+## Repeated passages
+
+A new two-measure **learn** stage can start at the BPM already reached for an
+exactly repeated musical passage elsewhere in the same imported piece. Matching
+requires the same hand, simplification level, source-measure durations, pitches,
+onsets and held durations. Absolute measure number, source-note IDs and track
+numbers do not matter. Transposed passages or different note durations do not
+match. Very short motifs below `repeated_tempo_min_attacks` never transfer BPM.
+
+Only **tempo** transfers, not mastery, clean-run streaks, feedback results or
+piano input. Every occurrence must still be played and graded independently.
+An already-visited section keeps its own current tempo and error recovery,
+including automatic slowdowns; another section's improvement cannot cancel
+its recovery. The shared tempo survives ordinary application restarts through
+the existing per-stage SQLite progress store. Changes to the overall target
+invalidate all inherited stage tempos, just as they invalidate other ladders.

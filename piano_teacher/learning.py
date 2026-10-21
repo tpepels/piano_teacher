@@ -8,6 +8,7 @@ import math
 from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant, generate_variants
 from .lesson_settings import SETTINGS
+from .repeated_passages import exact_repetition_signature
 
 @dataclass(frozen=True)
 class Exercise:
@@ -165,6 +166,7 @@ class LearningPlan:
         # the currently displayed take. Returning to an already practised
         # section must not silently discard its earned BPM progress.
         self.stage_tempos: dict[str, int] = {}
+        self._repeated_groups: tuple[dict[str, tuple], dict[tuple, list[str]]] | None = None
         self._lesson_steps_cache: tuple[LessonStep, ...] | None = None
 
     route_version = 3
@@ -273,6 +275,43 @@ class LearningPlan:
     def identity(self) -> str:
         return self._stage_key(self.exercise, self.hand, self.active_variant)
 
+    def _repeated_stage_index(self) -> tuple[dict[str, tuple], dict[tuple, list[str]]]:
+        if self._repeated_groups is not None:
+            return self._repeated_groups
+        by_key: dict[str, tuple] = {}
+        by_signature: dict[tuple, list[str]] = {}
+        for step in self.lesson_steps:
+            if step.kind != "learn":
+                continue  # Longer bridges/performances must prove themselves.
+            exercise = self.exercises[step.exercise_index]
+            variant = next(v for v in self._stage_variants(exercise, step.hand)
+                           if v.level == step.level)
+            signature = exact_repetition_signature(
+                self.piece, variant.phrase, step.hand, step.level,
+                minimum_attacks=SETTINGS.repeated_tempo_min_attacks)
+            if signature is None:
+                continue
+            by_key[step.key] = signature
+            by_signature.setdefault(signature, []).append(step.key)
+        self._repeated_groups = by_key, by_signature
+        return self._repeated_groups
+
+    def _tempo_for_current_stage(self) -> int:
+        # A stage with its own local history keeps its own BPM, including
+        # failure-driven slowdowns. Only genuinely UNSEEN repeated passages
+        # may inherit a higher starting tempo from already visited stages.
+        key = self.identity
+        if key in self.stage_tempos:
+            return self.stage_tempos[key]
+        by_key, by_signature = self._repeated_stage_index()
+        signature = by_key.get(key)
+        if signature is None:
+            return self.start_bpm
+        shared = (self.stage_tempos[other]
+                  for other in by_signature[signature]
+                  if other != key and other in self.stage_tempos)
+        return min(self.target_bpm, max(self.start_bpm, *shared))
+
     def restore_location(self, *, kind: str, first_bar: int, last_bar: int,
                          hand: str, level: str) -> None:
         """Find saved source material in this course without reusing a stale index."""
@@ -293,7 +332,7 @@ class LearningPlan:
         if hand in self.hands:
             self.set_hand(hand)
         self.variant_index = next((i for i, variant in enumerate(self.variants) if variant.level == level), 0)
-        self.bpm = self.stage_tempos.get(self.identity,self.start_bpm)
+        self.bpm = self._tempo_for_current_stage()
 
     def jump(self, amount: int) -> None:
         self.select(min(len(self.exercises) - 1, max(0, self.index + amount)))
@@ -305,7 +344,7 @@ class LearningPlan:
         self.index = index
         self.hand_index = 0
         self.variant_index = 0
-        self.bpm = self.stage_tempos.get(self.identity,self.start_bpm)
+        self.bpm = self._tempo_for_current_stage()
         self.streak = 0
         self.failures = 0
 
@@ -316,7 +355,7 @@ class LearningPlan:
         self.hand_index = self.hands.index(hand)
         self.variant_index = 0
         self.streak = self.failures = 0
-        self.bpm = self.stage_tempos.get(self.identity,self.start_bpm)
+        self.bpm = self._tempo_for_current_stage()
 
     def set_bpm(self, bpm: int) -> None:
         if bpm < SETTINGS.minimum_bpm or bpm > SETTINGS.maximum_bpm:
@@ -368,12 +407,12 @@ class LearningPlan:
         self.mastered[previous] = self.target_bpm
         if self.variant_index + 1 < len(self.variants):
             self.variant_index += 1
-            self.bpm = self.stage_tempos.get(self.identity,self.start_bpm)
+            self.bpm = self._tempo_for_current_stage()
             return f"Mastered {previous}; introducing {self.active_variant.level}"
         if self.hand_index + 1 < len(self.hands):
             self.hand_index += 1
             self.variant_index = 0
-            self.bpm = self.stage_tempos.get(self.identity,self.start_bpm)
+            self.bpm = self._tempo_for_current_stage()
             return f"Mastered {previous}; now {self.hand} hand"
         if self.index + 1 < len(self.exercises):
             self.select(self.index + 1)
