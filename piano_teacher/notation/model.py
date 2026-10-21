@@ -199,6 +199,12 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                 if not chord:
                     last_onset = onset_ticks
                     cursor += duration_ticks
+                if (child.find("rest") is not None
+                        and child.get("print-object") == "no"):
+                    # Silence in a reconstructed secondary voice is needed
+                    # for the MusicXML cursor, not for visible score ink.
+                    # Never insert it in the renderer's obstacle/spacing map.
+                    continue
                 at_beat = round(grid[bar_index] + onset_ticks / divisions, 8)
                 pitch_tag = child.find("pitch")
                 rest = child.find("rest") is not None
