@@ -1391,6 +1391,8 @@ func _build_interface() -> void:
     practice_step_picker.name = "PracticeLessonStepPicker"
     practice_step_picker.custom_minimum_size = Vector2(225, 38)
     practice_step_picker.fit_to_longest_item = false
+    practice_step_picker.clip_text = true
+    practice_step_picker.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     practice_step_picker.disabled = true
     practice_step_picker.tooltip_text = "Choose any lesson step directly, without earning mastery"
     practice_step_picker.item_selected.connect(_on_practice_step_selected)
@@ -1984,6 +1986,9 @@ func _sync_practice_step_navigation(state: Dictionary) -> void:
     if ready and current >= 1 and current <= practice_step_picker.item_count:
         if practice_step_picker.selected != current - 1:
             practice_step_picker.select(current - 1)
+        # The popup has the complete hand/measure/variant descriptions;
+        # only the selected caption is shortened to avoid widening Practice.
+        practice_step_picker.text = "Step %d / %d" % [current, practice_step_entries.size()]
 
 
 func _request_lesson() -> void:
