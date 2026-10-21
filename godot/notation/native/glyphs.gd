@@ -22,11 +22,11 @@ const REQUIRED := [
     "artic_accent_above", "artic_accent_below",
     "pedal_start", "pedal_stop",
     "rest_whole", "rest_half", "rest_quarter", "rest_eighth",
-    "rest_16th", "rest_32nd", "rest_64th",
+    "rest_16th", "rest_32nd", "rest_64th", "rest_128th",
     "acc_flat", "acc_natural", "acc_sharp",
     "acc_double_sharp", "acc_double_flat",
     "flag_up_1", "flag_down_1", "flag_up_2", "flag_down_2",
-    "flag_up_3", "flag_down_3", "flag_up_4", "flag_down_4",
+    "flag_up_3", "flag_down_3", "flag_up_4", "flag_down_4", "flag_up_5", "flag_down_5",
     "time_0", "time_1", "time_2", "time_3", "time_4",
     "time_5", "time_6", "time_7", "time_8", "time_9",
 ]
@@ -39,7 +39,7 @@ const NOTE_TEMPLATES := [
     "eighth_up", "eighth_down",
     "16th_up", "16th_down",
     "32nd_up", "32nd_down",
-    "64th_up", "64th_down",
+    "64th_up", "64th_down", "128th_up", "128th_down",
 ]
 
 var textures: Dictionary = {}

@@ -255,7 +255,7 @@ func run() -> void:
             -.0625*fixed) < .001,
             "32nd/64th timing remains fixed at %.0f BPM" % tempo)
     var still_unsupported: Dictionary = tiny.duplicate(true)
-    still_unsupported["notation_events"][0]["note_type"] = "128th"
+    still_unsupported["notation_events"][0]["note_type"] = "256th"
     check(not renderer.load_score(still_unsupported),
         "Truly unsupported rhythmic values still trigger fallback")
     renderer.clear_score()

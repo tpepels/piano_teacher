@@ -227,7 +227,7 @@ func run() -> void:
     check(renderer.glyphs.has_chord("quarter|up|0,2"),
         "Completed original Verovio chord ink is resident and can be reused")
     check(renderer.glyphs.note_ready() and \
-        renderer.glyphs.note_stem_textures.size() == 12,
+        renderer.glyphs.note_stem_textures.size() == 14,
         "Native beam stems are original Verovio sprites, never Godot lines")
     check(renderer.glyphs.chord_heads("quarter|up|0,2").size() == 2,
         "Each head keeps its exact original relative Verovio anchor")

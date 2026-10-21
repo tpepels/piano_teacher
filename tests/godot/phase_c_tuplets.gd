@@ -132,9 +132,9 @@ func run() -> void:
     check(not player.load_score(impossible),
         "Invalid time modification correctly preserves Verovio fallback")
     var over_dotted: Dictionary = model.duplicate(true)
-    over_dotted["notation_events"][8]["dots"] = 3
+    over_dotted["notation_events"][8]["dots"] = 5
     check(not player.load_score(over_dotted),
-        "Triple dot keeps safe fallback until supported")
+        "More than four dots still requires original Verovio fallback")
     check(player.load_score(model),"Valid tuplets recover after fallback")
     var source_missing: Dictionary = player.glyphs.tuplet_textures.duplicate()
     player.glyphs.tuplet_textures.erase("five0|five1|five2|five3|five4")

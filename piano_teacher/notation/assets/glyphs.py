@@ -62,12 +62,14 @@ _NATIVE_CODES = {
     "rest_whole": "E4E3", "rest_half": "E4E4",
     "rest_quarter": "E4E5", "rest_eighth": "E4E6",
     "rest_16th": "E4E7", "rest_32nd": "E4E8", "rest_64th": "E4E9",
+    "rest_128th": "E4EA",
     "acc_flat": "E260", "acc_natural": "E261", "acc_sharp": "E262",
     "acc_double_sharp": "E263", "acc_double_flat": "E264",
     "flag_up_1": "E240", "flag_down_1": "E241",
     "flag_up_2": "E242", "flag_down_2": "E243",
     "flag_up_3": "E244", "flag_down_3": "E245",
     "flag_up_4": "E246", "flag_down_4": "E247",
+    "flag_up_5": "E248", "flag_down_5": "E249",
     **{f"time_{n}": f"{0xE080 + n:04X}" for n in range(10)},
 }
 
