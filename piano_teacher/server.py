@@ -451,6 +451,13 @@ class PracticeEngine:
         p=self.plan
         if p is None:
             return
+        prior = self.db.execute("SELECT target_bpm FROM sessions WHERE fingerprint=?",
+                                (self.fingerprint,)).fetchone()
+        if prior and prior[0] is not None and int(prior[0]) != p.target_bpm:
+            # A new piece-wide target must not resurrect the former BPM
+            # ladders on later navigation or after restarting the app.
+            self.db.execute("DELETE FROM stage_tempos WHERE fingerprint=?",
+                            (self.fingerprint,))
         self.db.execute("INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (self.fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm,p.variant_index,
                          p.route_version,p.identity,p.exercise.phrase.first_bar,p.exercise.phrase.last_bar,
