@@ -1648,6 +1648,14 @@ func _update_responsive_layout() -> void:
         _update_hand_stages(last_state)
     if practice_header == null:
         return
+    # The practice step selector must not inflate the whole page's minimum
+    # width on a small 800px desktop. Streak remains visible; duplicate
+    # prose progress yields its space to the actual step controls.
+    var compact_steps: bool = width < 1250.0
+    progress_label.visible = not compact_steps
+    practice_step_picker.custom_minimum_size.x = 140.0 if width < 850.0 else 180.0 if compact_steps else 225.0
+    for bpm_button in [tempo_down_button, tempo_up_button]:
+        bpm_button.custom_minimum_size.x = 84.0 if compact_steps else 100.0
     practice_header.add_theme_constant_override("separation", 10 if width < 950.0 else 20)
     game_brand.visible = false
     practice_navigation.add_theme_constant_override("h_separation", 8 if width >= 1000.0 else 5)
