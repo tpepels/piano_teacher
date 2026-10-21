@@ -314,7 +314,7 @@ class LearningPlan:
                   for other in by_signature[signature]
                   if other != key and other in self.stage_tempos
                   and other in self.transferable_tempos)
-        return min(self.target_bpm, max(self.start_bpm, *shared))
+        return min(self.target_bpm, max([self.start_bpm, *shared]))
 
     def restore_location(self, *, kind: str, first_bar: int, last_bar: int,
                          hand: str, level: str) -> None:
