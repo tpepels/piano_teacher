@@ -279,6 +279,12 @@ class LearningPlan:
         preferred = [(i, ex) for i, ex in candidates if ex.kind == kind]
         if not preferred:
             preferred = [(i, ex) for i, ex in candidates if ex.kind == "learn"]
+        if not preferred and not candidates:
+            # Migration from the old 8-bar route: resume at the focused
+            # unit containing the old lesson's first source measure.
+            preferred = [(i,ex) for i,ex in enumerate(self.exercises)
+                         if ex.kind == "learn"
+                         and ex.phrase.first_bar <= first_bar <= ex.phrase.last_bar]
         if preferred or candidates:
             self.select(min(preferred or candidates,
                             key=lambda pair: pair[1].phrase.last_bar - pair[1].phrase.first_bar)[0])
