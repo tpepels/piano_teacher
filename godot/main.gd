@@ -1668,10 +1668,11 @@ func _update_responsive_layout() -> void:
     var compact_steps: bool = width < 1250.0
     progress_label.visible = true
     if practice_step_controls != null:
-        var controls_width: float = 235.0 if width < 850.0 else 275.0 if compact_steps else 330.0
+        var controls_width: float = 350.0 if width < 850.0 else 420.0 if compact_steps else 500.0
         practice_step_controls.offset_left = -controls_width - 12.0
         practice_step_controls.offset_right = -12.0
-        practice_step_picker.custom_minimum_size.x = controls_width - 98.0
+        practice_step_picker.custom_minimum_size.x = 120.0 if width < 850.0 else 150.0 if compact_steps else 180.0
+        practice_stage_bar.size = Vector2(356.0 if width < 1150.0 else 500.0, 28.0)
         for arrow in [practice_step_previous_button, practice_step_next_button]:
             arrow.custom_minimum_size.x = 40.0
     for bpm_button in [tempo_down_button, tempo_up_button]:
@@ -2405,7 +2406,7 @@ func _update_hand_stages(state: Dictionary) -> void:
     var stages: Array = state.get("hand_stages", [])
     # Transport changes must not add/remove a layout row: doing so changes
     # the score's zoom and moves its notes at Start and Pause.
-    practice_stage_bar.visible = not stages.is_empty() and size.x >= 1150.0
+    practice_stage_bar.visible = not stages.is_empty()
     if stages == presented_hand_stages:
         return
     presented_hand_stages = stages.duplicate(true)
@@ -2423,9 +2424,11 @@ func _update_hand_stages(state: Dictionary) -> void:
         var locked: bool = bool(stage.get("locked", false))
         var word: String = "Both hands" if hand == "both" else str(hand).capitalize() + " hand"
         label.autowrap_mode = TextServer.AUTOWRAP_OFF
+        label.clip_text = true
+        label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
         label.text = ("✓ " if complete else "● " if active else "○ ") + word + (" · locked" if locked else "")
         label.tooltip_text = "Completed" if complete else "Active hand" if active else "Locked" if locked else "Next hand"
-        label.custom_minimum_size = Vector2(122, 24)
+        label.custom_minimum_size = Vector2(102 if size.x < 1150.0 else 122, 24)
         label.add_theme_color_override("font_color",
             Color("#79DAAD") if complete else INK if active else MUTED)
         # Read as a three-step instrument runway, not three separate
