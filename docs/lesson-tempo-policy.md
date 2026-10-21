@@ -20,6 +20,12 @@ are required to experiment with another pace. Settings are validated on startup.
 | `recovery_tempo_multiplier` | 0.90 | Multiply BPM on recovery |
 | `guided_recovery_after_failures` | 2 | Repeated failures before a guided recovery |
 | `feedback_seconds` | 1.5 | Seconds for post-take feedback before auto restart |
+| `grading_onset_tolerance_seconds` | 0.10 | Accepted attack timing error |
+| `grading_duration_tolerance_fraction` | 0.20 | Allowed relative held-note duration error |
+| `grading_duration_floor_seconds` | 0.055 | Minimum allowed held-duration error |
+| `grading_match_window_min_seconds` | 0.35 | Minimum window to associate a played note with its expected pitch |
+| `grading_match_window_beats` | 0.65 | Tempo-scaled matching window |
+| `count_in_max_seconds` | 4.0 | Maximum count-in length before practice starts |
 
 ## Route and credit
 
