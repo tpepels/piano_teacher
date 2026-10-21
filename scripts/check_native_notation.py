@@ -39,6 +39,8 @@ def main(argv=None):
     parser.add_argument("--only", default="", help="MIDI filename substring")
     parser.add_argument("--measure", type=int)
     parser.add_argument("--output", type=Path, default=Path("/tmp/piano-native-notation"))
+    parser.add_argument("--compact", action="store_true",
+                        help="Keep full payloads/logs only for failed stages")
     args = parser.parse_args(argv)
     if os.environ.get("PIANO_TEACHER_NATIVE_NOTATION") != "1":
         parser.error("Set PIANO_TEACHER_NATIVE_NOTATION=1 to verify the native engine")
@@ -81,9 +83,16 @@ def main(argv=None):
                         raise RuntimeError(proc.stdout + proc.stderr)
                     report = json.loads(report_path.read_text())
                     if (proc.returncode or not report.get("native_ready") or
+                            not report.get("linear_timeline") or
+                            report.get("missing_noteheads") or
+                            int(report.get("drawn_noteheads", 0)) != int(report.get("expected_noteheads", -1)) or
                             "SCRIPT ERROR" in proc.stdout + proc.stderr):
                         raise RuntimeError(str(report) + "\n" + proc.stdout + proc.stderr)
                     results.append({**metadata, **report})
+                    if args.compact:
+                        payload.unlink(missing_ok=True)
+                        report_path.unlink(missing_ok=True)
+                        (output / f"{label}.log").unlink(missing_ok=True)
                     print("NATIVE_PASS:", path.name, index, hand, level, flush=True)
                 except Exception as exc:
                     failures.append({**metadata, "error": str(exc),
@@ -94,7 +103,18 @@ def main(argv=None):
                     "results": results, "failures": failures}, indent=2) + "\n")
         finally:
             engine.db.close()
+    summary = {
+        "passed_stages": len(results), "failed_stages": len(failures),
+        "drawn_noteheads": sum(row["drawn_noteheads"] for row in results),
+        "expected_noteheads": sum(row["expected_noteheads"] for row in results),
+        "max_pixels_per_beat": max((row["pixels_per_beat"] for row in results), default=0),
+        "files": sorted(set(row["file"] for row in results)),
+        "all_native": not failures and bool(results),
+        "all_linear": all(row["linear_timeline"] for row in results),
+    }
+    (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print(f"Native notation: {len(results)} passed, {len(failures)} failed; {output}")
+    print("NATIVE_AUDIT_SUMMARY:", json.dumps(summary), flush=True)
     return int(bool(failures) or not results)
 
 

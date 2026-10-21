@@ -167,26 +167,27 @@ func load_score(candidate: Dictionary) -> bool:
     if not failure_reason.is_empty():
         notice = failure_reason
         return false
-    # Place rests before choosing global spacing. Their real vertical ink
-    # footprints must participate in the SAME collision calculation as notes.
-    _layout_rest_lanes(MAX_STAFF_GAP, density)
-    # Fit the widest actual note/accidental footprint once for the score.
-    # Use the maximum supported staff gap so a later resize cannot create
-    # collisions or force a mid-performance change of horizontal scale.
-    var ink_density: float = _required_ink_density(density)
-    staff_gap_limit = MAX_STAFF_GAP
-    if ink_density > timeline.MAX_SCORE_PIXELS_PER_BEAT:
-        # Very short source segments (Peace Piece's expressive tied attacks)
-        # need the original compact ink size. Pick this once per passage;
-        # never alter note timing or the global scale during playback.
-        staff_gap_limit = 17.0
-        ink_density = _required_ink_density(density, staff_gap_limit)
-    # Rest collisions are reevaluated at the FINAL density: otherwise
-    # close expressive attacks can look coincident at the provisional scale.
-    # This placement is calculated once per lesson, never during scrolling.
-    _layout_rest_lanes(staff_gap_limit,ink_density)
-    ink_density = maxf(ink_density,
-        _required_ink_density(ink_density,staff_gap_limit))
+    # A source can have genuine near-simultaneous attacks on the same stave.
+    # Choose ONE score-wide density and ONE staff gap up front. Shrink ink
+    # progressively instead of falling back merely because the old 17 px
+    # minimum still demands >8192 pixels/beat after rest re-layout.
+    # Never clip density: that would hide colliding source noteheads.
+    var ink_density: float = density
+    var fits_density := false
+    for candidate_gap in [MAX_STAFF_GAP,17.0,14.0,11.0,8.5]:
+        _layout_rest_lanes(float(candidate_gap),density)
+        var trial: float = _required_ink_density(density,float(candidate_gap))
+        _layout_rest_lanes(float(candidate_gap),trial)
+        trial = maxf(trial,_required_ink_density(trial,float(candidate_gap)))
+        if is_finite(trial) and trial <= timeline.MAX_SCORE_PIXELS_PER_BEAT:
+            staff_gap_limit = float(candidate_gap)
+            ink_density = trial
+            fits_density = true
+            break
+    if not fits_density:
+        failure_reason = "Source glyph ink cannot fit within the fixed musical timeline"
+        notice = failure_reason
+        return false
     if not timeline.set_score_density(ink_density):
         failure_reason = timeline.last_error
         notice = failure_reason
