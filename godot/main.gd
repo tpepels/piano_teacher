@@ -2849,7 +2849,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if tempo_up_button != null:
         tempo_up_button.text = "+%d BPM" % int(parsed.get("manual_tempo_step_bpm", 5))
         tempo_up_button.disabled = (action_pending or not bool(parsed.get("can_increase_tempo",false))
-            or phase in ["count_in","playing","loading"])
+            or str(parsed.get("phase","")) in ["count_in","playing","loading"])
     speed_label.text = "%d BPM" % int(parsed.get("bpm", 0))
     if int(parsed.get("bpm", 0)) != int(parsed.get("target_bpm", parsed.get("bpm", 0))):
         speed_label.text += " · target %d" % int(parsed.get("target_bpm", 0))

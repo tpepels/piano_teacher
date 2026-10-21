@@ -144,7 +144,8 @@ class LessonStep:
 
 class LearningPlan:
     """Adaptive, manually navigable practice sequence independent of the GUI."""
-    def __init__(self, piece: Piece, *, warmup: bool = False) -> None:
+    def __init__(self, piece: Piece, *, warmup: bool = False,
+                 consolidate: bool = False) -> None:
         self.piece = piece
         self.warmup = warmup
         if warmup:
@@ -153,7 +154,7 @@ class LearningPlan:
             bars = len(piece.bar_boundaries) - 1 if piece.bar_boundaries else piece.phrases[-1].last_bar
             self.exercises = (Exercise("warmup", Phrase(0, 1, bars, 0.0, duration, piece.notes), "warmup:all"),)
         else:
-            self.exercises = build_exercises(piece, consolidate=False)
+            self.exercises = build_exercises(piece, consolidate=consolidate)
         if not self.exercises:
             raise ValueError("Piece has no practice passages")
         self.index = 0

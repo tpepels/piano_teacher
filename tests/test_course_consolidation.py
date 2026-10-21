@@ -30,7 +30,7 @@ def course_piece(bars=24, *, difficult_bar=None, both=True):
 
 def test_manageable_passages_are_grouped_and_source_notes_are_not_lost():
     piece = course_piece()
-    plan = LearningPlan(piece)
+    plan = LearningPlan(piece, consolidate=True)
     learn = [e for e in plan.exercises if e.kind == "learn"]
     assert [(e.phrase.first_bar, e.phrase.last_bar) for e in learn] == [(1, 8), (9, 16), (17, 24)]
     assert Counter(n for e in learn for n in e.phrase.notes) == Counter(piece.notes)
@@ -43,7 +43,7 @@ def test_manageable_passages_are_grouped_and_source_notes_are_not_lost():
 
 
 def test_difficult_material_stays_in_two_bar_exercises_with_progressive_variants():
-    plan = LearningPlan(course_piece(12, difficult_bar=5))
+    plan = LearningPlan(course_piece(12, difficult_bar=5), consolidate=True)
     difficult = next(e for e in plan.exercises if e.kind == "learn" and e.phrase.first_bar <= 5 <= e.phrase.last_bar)
     assert (difficult.phrase.first_bar, difficult.phrase.last_bar) == (5, 6)
     steps = [s for s in plan.lesson_steps if s.exercise_index == plan.exercises.index(difficult) and s.hand == "right"]
@@ -51,13 +51,13 @@ def test_difficult_material_stays_in_two_bar_exercises_with_progressive_variants
 
 
 def test_single_hand_is_not_repeated_as_a_both_hand_lesson():
-    plan = LearningPlan(course_piece(8, both=False))
+    plan = LearningPlan(course_piece(8, both=False), consolidate=True)
     assert plan.hands == ("right",)
     assert [s.hand for s in plan.lesson_steps if s.kind == "learn"] == ["right"]
 
 
 def test_selected_target_survives_hand_and_passage_changes():
-    plan = LearningPlan(course_piece(16))
+    plan = LearningPlan(course_piece(16), consolidate=True)
     plan.set_bpm(30)
     plan.set_hand("left")
     assert plan.target_bpm == 30 and plan.bpm <= 30
@@ -66,7 +66,7 @@ def test_selected_target_survives_hand_and_passage_changes():
 
 
 def test_consolidated_stage_still_needs_three_clean_target_speed_full_plays():
-    plan = LearningPlan(course_piece(8))
+    plan = LearningPlan(course_piece(8), consolidate=True)
     plan.set_bpm(80)
     identity = plan.identity
     count = len(plan.active_phrase.notes)
@@ -90,7 +90,7 @@ def test_legacy_progress_maps_by_original_span_without_awarding_larger_mastery(t
         db.execute("INSERT INTO mastery VALUES (?,?,?)", ("legacy", "learn:1-2:right:original", 70))
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        engine.plan = LearningPlan(course_piece(16))
+        engine.plan = LearningPlan(course_piece(16), consolidate=True)
         engine.fingerprint = "legacy"
         engine._restore()
         plan = engine.plan
@@ -108,7 +108,7 @@ def test_legacy_progress_maps_by_original_span_without_awarding_larger_mastery(t
 
 def test_new_course_resumes_exact_stage_and_streak(tmp_path):
     first = PracticeEngine(tmp_path, enable_midi=False)
-    first.plan = LearningPlan(course_piece(16))
+    first.plan = LearningPlan(course_piece(16), consolidate=True)
     first.plan.select(1)
     first.plan.set_bpm(75)
     first.plan.streak = 2
@@ -118,7 +118,7 @@ def test_new_course_resumes_exact_stage_and_streak(tmp_path):
     first.db.close()
     second = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        second.plan = LearningPlan(course_piece(16))
+        second.plan = LearningPlan(course_piece(16), consolidate=True)
         second.fingerprint = "modern"
         second._restore()
         assert second.plan.identity == expected
@@ -132,7 +132,7 @@ def test_preview_of_consolidated_material_cannot_award_mastery(tmp_path, monkeyp
     now = [10.0]
     monkeypatch.setattr(server.time, "monotonic", lambda: now[0])
     engine = PracticeEngine(tmp_path, enable_midi=False)
-    engine.plan = LearningPlan(course_piece(8))
+    engine.plan = LearningPlan(course_piece(8), consolidate=True)
     try:
         engine.start()
         assert engine.state()["preview_only"]
@@ -148,7 +148,7 @@ def test_consolidation_never_crosses_gaps_or_meter_changes():
     piece = Piece(piece.title, piece.bpm, piece.notes,
                   (piece.phrases[0], *piece.phrases[2:]),
                   bar_boundaries=piece.bar_boundaries, time_signatures=((0, 4, 4), (32, 3, 4)))
-    plan = LearningPlan(piece)
+    plan = LearningPlan(piece, consolidate=True)
     spans = [(e.phrase.first_bar, e.phrase.last_bar) for e in plan.exercises if e.kind == "learn"]
     assert spans == [(1, 2), (5, 8), (9, 16)]
     assert not any(e.kind == "connect" and e.phrase.first_bar <= 3 <= e.phrase.last_bar for e in plan.exercises)
@@ -157,7 +157,7 @@ def test_consolidation_never_crosses_gaps_or_meter_changes():
 def test_changed_required_notes_do_not_reuse_a_saved_clean_streak(tmp_path):
     first = PracticeEngine(tmp_path, enable_midi=False)
     original = course_piece(8)
-    first.plan = LearningPlan(original)
+    first.plan = LearningPlan(original, consolidate=True)
     first.plan.streak = 2
     first.fingerprint = "same-fingerprint-test"
     first._save()
@@ -167,7 +167,7 @@ def test_changed_required_notes_do_not_reuse_a_saved_clean_streak(tmp_path):
     ph = Phrase(1, 1, 8, 0, 32, changed)
     second = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        second.plan = LearningPlan(Piece(original.title, original.bpm, changed, (ph,)))
+        second.plan = LearningPlan(Piece(original.title, original.bpm, changed, (ph,)), consolidate=True)
         second.fingerprint = "same-fingerprint-test"
         second._restore()
         assert second.plan.streak == 0
@@ -179,7 +179,7 @@ def test_tiny_outline_increment_does_not_require_three_more_full_repetitions():
     notes = tuple(Note(i, i + .8, 60 + i, 0, 0, "right") for i in range(8)) + (
         Note(0, .8, 72, 0, 0, "right"), Note(0, .8, 76, 0, 0, "right"))
     phrase = Phrase(1, 1, 2, 0, 8, notes)
-    plan = LearningPlan(Piece("Small chord detail", 100, notes, (phrase,)))
+    plan = LearningPlan(Piece("Small chord detail", 100, notes, (phrase,)), consolidate=True)
     assert [v.level for v in plan.variants] == ["skeleton", "original"]
     assert set(plan.variants[-1].notes) == set(notes)
 
@@ -189,7 +189,7 @@ def test_complete_song_includes_initial_rests_and_sustained_final_measures():
     piece = Piece("Long ending", 100, notes,
                   (Phrase(1, 3, 4, 8, 16, notes[:1]), Phrase(2, 5, 6, 16, 24, notes[1:])),
                   bar_boundaries=tuple(range(0, 33, 4)))
-    plan = LearningPlan(piece)
+    plan = LearningPlan(piece, consolidate=True)
     final = plan.exercises[-1]
     assert final.kind == "perform"
     assert (final.phrase.first_bar, final.phrase.last_bar, final.phrase.start, final.phrase.end) == (1, 8, 0, 32)
@@ -208,7 +208,7 @@ def test_legacy_full_song_streak_is_reset_when_sustained_ending_is_restored(tmp_
         db.execute("INSERT INTO sessions VALUES (?,?,?,?,?,?,?)", ("ending", 3, "both", 100, 2, 100, 0))
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        engine.plan = LearningPlan(piece)
+        engine.plan = LearningPlan(piece, consolidate=True)
         engine.fingerprint = "ending"
         engine._restore()
         assert engine.plan.exercise.kind == "perform"
@@ -227,7 +227,7 @@ def test_legacy_identical_stage_keeps_real_mastery_and_clean_streak(tmp_path):
         db.execute("INSERT INTO mastery VALUES (?,?,?)", ("exact", "learn:1-2:left:original", 90))
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        engine.plan = LearningPlan(piece)
+        engine.plan = LearningPlan(piece, consolidate=True)
         engine.fingerprint = "exact"
         engine._restore()
         assert engine.plan.hand == "right" and engine.plan.streak == 2
@@ -243,7 +243,7 @@ def test_bad_legacy_hand_does_not_crash_course_restoration(tmp_path):
         db.execute("INSERT INTO sessions VALUES (?,?,?,?,?)", ("bad-hand", 0, "unavailable", 40, 2))
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        engine.plan = LearningPlan(course_piece(8))
+        engine.plan = LearningPlan(course_piece(8), consolidate=True)
         engine.fingerprint = "bad-hand"
         engine._restore()
         assert engine.plan.hand in engine.plan.hands

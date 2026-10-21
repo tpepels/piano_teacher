@@ -24,7 +24,7 @@ def lesson(tmp_path, monkeypatch):
                       time_signatures=((0, 3, 4), (6, 4, 4)) if mixed else ((0, 4, 4),))
         e = PracticeEngine(tmp_path / str(len(engines)), enable_midi=False)
         engines.append(e)
-        e.plan = LearningPlan(piece)
+        e.plan = LearningPlan(piece, consolidate=True)
         e.plan.set_bpm(bpm)
         if connected:
             e.midi_port = object()

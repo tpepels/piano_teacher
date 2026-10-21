@@ -20,7 +20,7 @@ def learner(tmp_path, monkeypatch):
     e = PracticeEngine(tmp_path, enable_midi=False)
     e.plan = LearningPlan(Piece('Imported idea', 120, notes, phrases,
                                bar_boundaries=(0, 4, 8, 12, 16),
-                               time_signatures=((0, 4, 4),)))
+                               time_signatures=((0, 4, 4),)), consolidate=True)
     e.plan.variant_index = len(e.plan.variants) - 1
     e.plan.set_bpm(120)
     e.midi_port = object()
