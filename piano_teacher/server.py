@@ -573,10 +573,7 @@ class PracticeEngine:
             self._begin_learn(from_beat=unit["start_beat"], bump_revision=bump_revision)
 
     def _select_step(self, step):
-        p = self.plan
-        p.select(step.exercise_index)
-        p.hand_index = p.hands.index(step.hand)
-        p.variant_index = next(i for i, variant in enumerate(p.variants) if variant.level == step.level)
+        self.plan.select_step(self.plan.lesson_steps.index(step) + 1)
         self._reset_trouble()
 
     def _skip_stage(self, reason):
@@ -1329,7 +1326,10 @@ class PracticeEngine:
             guided_retry_range = self.retry_range
             self._stop()
             self._reset_trouble()
-            if action == "next":
+            if action == "select_step":
+                self.open_from_beat = 0.0
+                p.select_step(int(kwargs["number"]))
+            elif action == "next":
                 self.open_from_beat = 0.0
                 p.jump(1)
             elif action == "previous":
@@ -1347,13 +1347,15 @@ class PracticeEngine:
                 p.set_bpm(int(kwargs["bpm"]))
             elif action == "tempo_up":
                 p.increase_tempo()
+            elif action == "tempo_down":
+                p.decrease_tempo()
             else:
                 raise ValueError(f"Unsupported action: {action}")
             self.score_revision+=1
             self.feedback="Ready"
             self.next_action="Start when you are ready."
             if was_guided:
-                if action in ("tempo", "tempo_up"):
+                if action in ("tempo", "tempo_up", "tempo_down"):
                     recovery = guided_return is not None and guided_return[0] == p.identity
                     if recovery:
                         self.retry_range = guided_retry_range
@@ -1775,6 +1777,11 @@ class PracticeEngine:
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,"target_bpm":p.target_bpm,
                     "streak":p.streak,"clean_runs_required":SETTINGS.clean_runs_to_master,
                     "manual_tempo_step_bpm":SETTINGS.manual_tempo_step_bpm,
+                    "start_bpm":p.start_bpm,
+                    "automatic_tempo_steps":SETTINGS.automatic_tempo_steps,
+                    "tempo_rungs":list(p.tempo_rungs()),
+                    "can_decrease_tempo":p.bpm > SETTINGS.minimum_bpm,
+                    "piece_fingerprint":self.fingerprint,
                     "minimum_bpm":SETTINGS.minimum_bpm,
                     "maximum_bpm":SETTINGS.maximum_bpm,
                     "can_increase_tempo":p.bpm < p.target_bpm,
@@ -2011,6 +2018,7 @@ class PracticeEngine:
             return {
                 "trouble_spots": self._valid_trouble_spots(),
                 "route_version": p.route_version,
+                "piece_fingerprint": self.fingerprint,
                 "current_step": p.lesson_step_number,
                 "total_steps": len(p.lesson_steps),
                 "completed_steps": p.lesson_steps_mastered,
