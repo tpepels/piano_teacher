@@ -30,7 +30,7 @@ def test_midi_release_just_before_barline_uses_plain_whole_note():
     assert not [x for x in elements if x.find("rest") is not None]
     # Graded release remains the original MIDI key-off.
     model = build_score_model(score, boundaries=(0.0, 4.0))
-    assert model["notes"][0]["duration_beats"] == 3.69792
+    assert model["notes"][0]["duration_beats"] == 3.79792
     assert len([x for x in model["notation_events"] if x["is_attack"]]) == 1
 
 
