@@ -2859,6 +2859,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
     hand_label.tooltip_text = "Current hand of the backend lesson"
     game_input_indicator.present(parsed)
+    tempo_setting.min_value = float(parsed.get("minimum_bpm", 12))
+    tempo_setting.max_value = float(parsed.get("maximum_bpm", 300))
     if current_screen != "settings":
         tempo_setting.set_value_no_signal(float(parsed.get("target_bpm", parsed.get("bpm", 40))))
     var stage: String = str(parsed.get("lesson_level", "original"))

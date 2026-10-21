@@ -1733,6 +1733,8 @@ class PracticeEngine:
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,"target_bpm":p.target_bpm,
                     "streak":p.streak,"clean_runs_required":SETTINGS.clean_runs_to_master,
                     "manual_tempo_step_bpm":SETTINGS.manual_tempo_step_bpm,
+                    "minimum_bpm":SETTINGS.minimum_bpm,
+                    "maximum_bpm":SETTINGS.maximum_bpm,
                     "can_increase_tempo":p.bpm < p.target_bpm,
                     "mastered":len(p.mastered),"phase":phase,
                     "auto":self.auto,

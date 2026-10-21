@@ -173,7 +173,9 @@ class LearningPlan:
     def start_bpm(self) -> int:
         if self.warmup:
             return min(getattr(self, "target_bpm", self.piece.bpm), self.piece.bpm)
-        return min(getattr(self, "target_bpm", self.piece.bpm), max(SETTINGS.minimum_bpm, round(self.piece.bpm * SETTINGS.start_tempo_fraction)))
+        target = getattr(self, "target_bpm", self.piece.bpm)
+        return min(target, max(SETTINGS.minimum_bpm,
+                               round(target * SETTINGS.start_tempo_fraction)))
 
     @property
     def exercise(self) -> Exercise:

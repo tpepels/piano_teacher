@@ -32,6 +32,9 @@ def test_focus_route_is_measured_in_source_bars_and_keeps_links():
     assert p.active_phrase.last_bar == 2
     assert p.bpm == 44
     assert p.target_bpm == 110
+    p.set_bpm(80)
+    p.select(0)
+    assert p.start_bpm == 32  # 40% of the *chosen target*, not MIDI source BPM
 
 
 def test_manual_tempo_skips_rungs_not_clean_credit_and_is_bounded():
