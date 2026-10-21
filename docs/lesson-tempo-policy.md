@@ -33,6 +33,9 @@ The learner may select **+ BPM** on the practice screen while stopped to
 skip easy slow repetitions. This changes the saved current-stage tempo, not
 the target, and does not award a clean performance or move to another stage.
 They must still perform `clean_runs_to_master` clean takes at target BPM.
+The active tempo is saved **for each stage** (source measure span, hand and
+variant) across restarts and lesson-path navigation. Returning to earlier
+measures restores their previous BPM, unless the overall target changes.
 
 Error-driven slowdowns remain active. If the piano is disconnected, a
 non-assessed preview does not increase tempo or earn mastery.

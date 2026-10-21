@@ -161,6 +161,10 @@ class LearningPlan:
         self.bpm = self.start_bpm
         self.target_bpm = piece.bpm
         self.mastered: dict[str, int] = {}
+        # Tempo is a ladder for each source passage/hand/variant, not just
+        # the currently displayed take. Returning to an already practised
+        # section must not silently discard its earned BPM progress.
+        self.stage_tempos: dict[str, int] = {}
         self._lesson_steps_cache: tuple[LessonStep, ...] | None = None
 
     route_version = 3
@@ -289,6 +293,7 @@ class LearningPlan:
         if hand in self.hands:
             self.set_hand(hand)
         self.variant_index = next((i for i, variant in enumerate(self.variants) if variant.level == level), 0)
+        self.bpm = self.stage_tempos.get(self.identity,self.start_bpm)
 
     def jump(self, amount: int) -> None:
         self.select(min(len(self.exercises) - 1, max(0, self.index + amount)))
@@ -296,26 +301,30 @@ class LearningPlan:
     def select(self, index: int) -> None:
         if not 0 <= index < len(self.exercises):
             raise ValueError("Exercise index out of bounds")
+        self.stage_tempos[self.identity] = self.bpm
         self.index = index
         self.hand_index = 0
         self.variant_index = 0
-        self.bpm = self.start_bpm
+        self.bpm = self.stage_tempos.get(self.identity,self.start_bpm)
         self.streak = 0
         self.failures = 0
 
     def set_hand(self, hand: str) -> None:
         if hand not in self.hands:
             raise ValueError(f"Hand {hand!r} unavailable")
+        self.stage_tempos[self.identity] = self.bpm
         self.hand_index = self.hands.index(hand)
         self.variant_index = 0
         self.streak = self.failures = 0
-        self.bpm = self.start_bpm
+        self.bpm = self.stage_tempos.get(self.identity,self.start_bpm)
 
     def set_bpm(self, bpm: int) -> None:
         if bpm < SETTINGS.minimum_bpm or bpm > SETTINGS.maximum_bpm:
             raise ValueError(f"BPM must be between {SETTINGS.minimum_bpm} and {SETTINGS.maximum_bpm}")
         self.bpm = bpm
         self.target_bpm = bpm
+        # Changing the target invalidates old tempo ladders globally.
+        self.stage_tempos.clear()
         self.streak = self.failures = 0
 
     def increase_tempo(self) -> int:
@@ -328,6 +337,7 @@ class LearningPlan:
             self.bpm = min(self.target_bpm, self.bpm + SETTINGS.manual_tempo_step_bpm)
             self.streak = 0
             self.failures = 0
+            self.stage_tempos[self.identity] = self.bpm
         return self.bpm
 
     def apply_result(self, *, correct: int, total: int, extras: int = 0) -> str:
@@ -347,21 +357,23 @@ class LearningPlan:
         if self.bpm < self.target_bpm:
             self.streak = 0
             self.bpm = min(self.target_bpm, max(self.bpm + SETTINGS.minimum_tempo_step_bpm, round(self.bpm * SETTINGS.automatic_tempo_multiplier)))
+            self.stage_tempos[self.identity] = self.bpm
             return f"Tempo increased to {self.bpm} BPM"
         self.streak += 1
         if self.streak < SETTINGS.clean_runs_to_master:
             return f"Clean pass {self.streak}/{SETTINGS.clean_runs_to_master} - repeat"
         self.streak = 0
         previous = self.identity
+        self.stage_tempos[previous] = self.bpm
         self.mastered[previous] = self.target_bpm
         if self.variant_index + 1 < len(self.variants):
             self.variant_index += 1
-            self.bpm = self.start_bpm
+            self.bpm = self.stage_tempos.get(self.identity,self.start_bpm)
             return f"Mastered {previous}; introducing {self.active_variant.level}"
         if self.hand_index + 1 < len(self.hands):
             self.hand_index += 1
             self.variant_index = 0
-            self.bpm = self.start_bpm
+            self.bpm = self.stage_tempos.get(self.identity,self.start_bpm)
             return f"Mastered {previous}; now {self.hand} hand"
         if self.index + 1 < len(self.exercises):
             self.select(self.index + 1)

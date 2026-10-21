@@ -137,6 +137,10 @@ class PracticeEngine:
             if column not in columns:
                 self.db.execute(f"ALTER TABLE sessions ADD COLUMN {column} {declaration}")
         self.db.execute("CREATE TABLE IF NOT EXISTS mastery (fingerprint TEXT, exercise TEXT, bpm INTEGER, PRIMARY KEY (fingerprint, exercise))")
+        self.db.execute("""CREATE TABLE IF NOT EXISTS stage_tempos (
+            fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL,
+            bpm INTEGER NOT NULL,
+            PRIMARY KEY (fingerprint,stage_key))""")
         self.db.commit()
         self.learner_store = LearnerStateStore(self.db)
 
@@ -418,6 +422,14 @@ class PracticeEngine:
             p.set_bpm(max(SETTINGS.minimum_bpm, min(SETTINGS.maximum_bpm, int(row[4] or p.piece.bpm))))
             p.bpm = max(SETTINGS.minimum_bpm, min(p.target_bpm, int(row[2])))
             p.streak = min(SETTINGS.clean_runs_to_master-1, max(0, int(row[3]))) if equivalent else 0
+        for key,bpm in self.db.execute("SELECT stage_key,bpm FROM stage_tempos WHERE fingerprint=?",(self.fingerprint,)):
+            if any(step.key == key for step in p.lesson_steps):
+                p.stage_tempos[key] = max(SETTINGS.minimum_bpm,
+                                          min(p.target_bpm,int(bpm)))
+        # A current session may predate per-stage tempos; retain its exact
+        # judged tempo, but only when the stage can be identified reliably.
+        if row is not None:
+            p.stage_tempos[p.identity] = p.bpm
         for key,bpm in self.db.execute("SELECT exercise,bpm FROM mastery WHERE fingerprint=?",(self.fingerprint,)):
             p.mastered[key]=bpm
         # Preserve legacy rows, and recognize them only when the exact same
@@ -443,6 +455,10 @@ class PracticeEngine:
                         (self.fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm,p.variant_index,
                          p.route_version,p.identity,p.exercise.phrase.first_bar,p.exercise.phrase.last_bar,
                          p.active_variant.level,p.exercise.kind))
+        p.stage_tempos[p.identity] = p.bpm
+        for key, bpm in p.stage_tempos.items():
+            self.db.execute("INSERT OR REPLACE INTO stage_tempos VALUES (?,?,?)",
+                            (self.fingerprint,key,bpm))
         for key, bpm in p.mastered.items():
             self.db.execute("INSERT OR REPLACE INTO mastery VALUES (?,?,?)", (self.fingerprint,key,bpm))
         self.db.commit()

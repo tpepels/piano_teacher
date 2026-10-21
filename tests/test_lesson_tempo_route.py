@@ -161,3 +161,31 @@ def test_consolidated_legacy_route_has_final_perform_even_when_grouped():
     assert len([e for e in legacy.exercises if e.kind == "learn"]) == 1
     assert legacy.exercises[-1].kind == "perform"
     assert legacy.exercises[-1].phrase.notes == p.notes
+
+
+def test_stage_tempo_is_restored_when_navigating_away_and_back(tmp_path):
+    from piano_teacher.server import PracticeEngine
+    piece=make_piece(6)
+    engine=PracticeEngine(tmp_path,enable_midi=False)
+    engine.plan=LearningPlan(piece)
+    engine.fingerprint="remember-previous-stage"
+    stage_one=engine.plan.identity
+    engine.control("tempo_up")
+    first_bpm=engine.plan.bpm
+    engine.control("next")
+    assert engine.plan.identity != stage_one
+    assert engine.plan.bpm == engine.plan.start_bpm
+    engine.control("previous")
+    assert engine.plan.identity == stage_one
+    assert engine.plan.bpm == first_bpm
+    engine.db.close()
+    reopened=PracticeEngine(tmp_path,enable_midi=False)
+    reopened.plan=LearningPlan(piece)
+    reopened.fingerprint="remember-previous-stage"
+    reopened._restore()
+    assert reopened.plan.identity == stage_one
+    assert reopened.plan.bpm == first_bpm
+    reopened.control("next")
+    reopened.control("previous")
+    assert reopened.plan.bpm == first_bpm
+    reopened.db.close()
