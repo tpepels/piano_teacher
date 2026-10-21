@@ -41,6 +41,8 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
 
     original_notes = {}
     part_staves = defaultdict(set)
+    voice_hands = defaultdict(set)
+    measure_voice_hands = defaultdict(set)
     source_parts = source.findall("part")
     for pi, part in enumerate(source_parts):
         for mi, measure in enumerate(part.findall("measure")):
@@ -50,7 +52,11 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                 sid = f"xml-p{pi}-m{mi}-e{ordinal}"
                 original_notes[sid] = child
                 if sid in targets:
-                    part_staves[(pi, child.findtext("staff", "1"))].add(hands[sid])
+                    hand = hands[sid]
+                    voice = child.findtext("voice", "1")
+                    part_staves[(pi, child.findtext("staff", "1"))].add(hand)
+                    voice_hands[(pi, voice)].add(hand)
+                    measure_voice_hands[(pi, mi, voice)].add(hand)
 
     # Slur numbers are local to the original part and voice; the same number
     # may be used simultaneously by two voices or across two staves.
@@ -132,11 +138,26 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                         cursor += Fraction(child.findtext("duration", "0")) / divisions
                 elif child.tag == "direction":
                     source_staff = child.findtext("staff")
-                    candidate_hands = (
-                        part_staves.get((pi, source_staff), set()) if source_staff
-                        else set().union(*(v for (index,_),v in part_staves.items()
-                                           if index == pi))
-                    )
+                    source_voice = child.findtext("voice")
+                    if source_staff:
+                        # An explicit staff remains authoritative. A voice
+                        # restriction, when present, must not contradict it.
+                        candidate_hands = set(part_staves.get((pi, source_staff), set()))
+                        if source_voice:
+                            matching = (measure_voice_hands.get((pi, mi, source_voice))
+                                        or voice_hands.get((pi, source_voice), set()))
+                            if matching:
+                                candidate_hands &= matching
+                    elif source_voice:
+                        # One MusicXML part can contain both piano hands.
+                        # A voice-specific direction must not be discarded
+                        # solely because the part has two active staves.
+                        candidate_hands = set(
+                            measure_voice_hands.get((pi, mi, source_voice))
+                            or voice_hands.get((pi, source_voice), set()))
+                    else:
+                        candidate_hands = set().union(
+                            *(v for (index, _), v in part_staves.items() if index == pi))
                     # Unstaffed directions in ambiguous piano grand staves
                     # cannot be placed safely on either generated hand.
                     if len(candidate_hands) != 1:
