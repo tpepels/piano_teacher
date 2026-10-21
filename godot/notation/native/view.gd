@@ -1180,6 +1180,51 @@ func _paint_expressions(left: float, right: float, clock: float,
                 head.x,y,gap*.9,ink,true)
 
 
+func _paint_hairpins(left: float, right: float, clock: float,
+        playhead_x: float, gap: float) -> void:
+    # Wedge lines are structural ink, like pedal lines and volta brackets.
+    # Original endpoints stay on the score's fixed beat timeline, and a
+    # clipped screen viewport displays the exact same interpolated slope.
+    var pending: Dictionary = {}
+    for mark in source_expressions:
+        if str(mark.get("kind", "")) != "hairpin":
+            continue
+        var hand: String = str(mark.get("hand", "right"))
+        var key: String = hand+"|"+str(mark.get("number", "1"))
+        var kind: String = str(mark.get("value", ""))
+        if kind in ["crescendo", "diminuendo"]:
+            pending[key] = mark
+            continue
+        if kind != "stop" or not pending.has(key):
+            continue
+        var start: Dictionary = pending[key]
+        pending.erase(key)
+        var begin: float = float(start.get("beat", 0.0))
+        var end: float = float(mark.get("beat", 0.0))
+        if end <= begin or begin > right+.5 or end < left-.5:
+            continue
+        var first_x: float = timeline.screen_x(
+            begin, clock, playhead_x, play_from_beat)+gap*.48
+        var last_x: float = timeline.screen_x(
+            end, clock, playhead_x, play_from_beat)-gap*.25
+        if last_x <= first_x:
+            continue
+        var x0: float = maxf(-gap, first_x)
+        var x1: float = minf(size.x+gap, last_x)
+        if x1 <= x0:
+            continue
+        var open_start: float = gap*.06 if str(start.get("value")) == "crescendo" else gap*.47
+        var open_end: float = gap*.47 if str(start.get("value")) == "crescendo" else gap*.06
+        var t0: float = clampf((x0-first_x)/(last_x-first_x), 0.0, 1.0)
+        var t1: float = clampf((x1-first_x)/(last_x-first_x), 0.0, 1.0)
+        var half0: float = lerpf(open_start,open_end,t0)*.5
+        var half1: float = lerpf(open_start,open_end,t1)*.5
+        var y: float = _staff_center(hand)+gap*3.55
+        var ink: Color = _ink(hand)
+        draw_line(Vector2(x0,y-half0),Vector2(x1,y-half1),ink,1.3,true)
+        draw_line(Vector2(x0,y+half0),Vector2(x1,y+half1),ink,1.3,true)
+
+
 func _paint_volta_endings(left: float, right: float, clock: float,
         playhead_x: float, gap: float) -> void:
     # Volta brackets are structural rule lines with an engraved text label;
@@ -1427,6 +1472,7 @@ func _draw() -> void:
     _paint_slurs(playhead_x,camera_clock,gap)
     _paint_tuplet_brackets(camera_clock,playhead_x,gap)
     _paint_expressions(left,right,camera_clock,playhead_x,gap)
+    _paint_hairpins(left,right,camera_clock,playhead_x,gap)
     _paint_grace_notes(gap)
     draw_line(Vector2(playhead_x,_staff_center("right")-gap*3.8),
         Vector2(playhead_x,_staff_center("left")+gap*3.7),

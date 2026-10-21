@@ -18,6 +18,7 @@ from xml.etree import ElementTree as ET
 NATIVE_ARTICULATIONS = frozenset({"staccato", "tenuto", "accent"})
 NATIVE_DYNAMICS = frozenset({"p", "pp", "ppp", "mp", "mf", "f", "ff", "fff"})
 NATIVE_PEDAL_TYPES = frozenset({"start", "stop"})
+NATIVE_HAIRPIN_TYPES = frozenset({"crescendo", "diminuendo", "stop"})
 
 
 def _native_notation(element: ET.Element) -> bool:
@@ -30,6 +31,13 @@ def _native_notation(element: ET.Element) -> bool:
 def _native_direction(element: ET.Element) -> bool:
     if element.tag == "dynamics":
         return len(element) == 1 and element[0].tag in NATIVE_DYNAMICS and not element[0].attrib
+    if element.tag == "wedge":
+        # Only ordinary matched wedge pairs. Niente, spread overrides,
+        # dashed wedges and other source embellishments stay in Verovio.
+        number = element.get("number", "1")
+        return (element.get("type") in NATIVE_HAIRPIN_TYPES
+                and number.isdigit() and 1 <= int(number) <= 128
+                and set(element.attrib) <= {"type", "number"})
     if element.tag == "pedal":
         return (element.get("type") in NATIVE_PEDAL_TYPES
                 and element.get("number", "1") == "1"
@@ -264,4 +272,31 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                                       for group in types for type_ in group
                                       if not _native_direction(type_) or
                                       child.get("placement", "below") != "below")
+    # A partial hairpin must never appear as an arbitrary open wedge. An
+    # excerpt, shortened variant, or unpaired source mark is still faithfully
+    # handled by the original Verovio page instead of guessed native ink.
+    hairpins = defaultdict(list)
+    for (hand, number), measure in generated.items():
+        for ordinal, direction in enumerate(measure.findall("direction")):
+            for wedge in direction.findall("./direction-type/wedge"):
+                hairpins[hand].append((
+                    number, int(direction.findtext("offset", "0")), ordinal,
+                    wedge.get("number", "1"), wedge.get("type", "")))
+    for marks in hairpins.values():
+        open_wedges = {}
+        for measure, offset, ordinal, number, kind in sorted(marks):
+            position = (measure, offset)
+            if kind in {"crescendo", "diminuendo"}:
+                if number in open_wedges:
+                    unrendered.add("direction:wedge")
+                open_wedges[number] = position
+            elif kind == "stop":
+                started = open_wedges.pop(number, None)
+                if started is None or position <= started:
+                    unrendered.add("direction:wedge")
+            else:
+                unrendered.add("direction:wedge")
+        if open_wedges:
+            unrendered.add("direction:wedge")
+
     return ET.tostring(output, encoding="unicode"), tuple(sorted(unrendered))

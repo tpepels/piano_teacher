@@ -11,6 +11,7 @@ from xml.etree import ElementTree as ET
 from .lesson import DIVISIONS, LessonScore
 from .source_annotations import (
     NATIVE_ARTICULATIONS, NATIVE_DYNAMICS, NATIVE_PEDAL_TYPES,
+    NATIVE_HAIRPIN_TYPES,
 )
 
 
@@ -65,6 +66,14 @@ def native_expressions(score: LessonScore, grid: tuple[float, ...]) -> list[dict
                                         "kind": "dynamic", "value": mark.tag,
                                         "hand": hand, "beat": beat,
                                     })
+                            elif kind.tag == "wedge" and (
+                                    kind.get("type") in NATIVE_HAIRPIN_TYPES):
+                                result.append({
+                                    "kind": "hairpin",
+                                    "value": kind.get("type"),
+                                    "number": kind.get("number", "1"),
+                                    "hand": hand, "beat": beat,
+                                })
                             elif kind.tag == "pedal" and (
                                     kind.get("type") in NATIVE_PEDAL_TYPES):
                                 result.append({
