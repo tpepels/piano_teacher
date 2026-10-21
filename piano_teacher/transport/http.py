@@ -81,8 +81,14 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             # Godot cancelled this request; the response socket is already gone.
             return
-        except Exception as exc:
+        except (KeyError, ValueError, TypeError, RuntimeError) as exc:
             self._json_error(400, str(exc))
+        except Exception as exc:
+            # Unexpected backend errors should be visible as server failures,
+            # not misreported to Godot as malformed client requests.
+            import traceback
+            traceback.print_exc()
+            self._json_error(500, f"Piano Teacher could not complete this request: {exc}")
 
     def do_POST(self):
         try:
