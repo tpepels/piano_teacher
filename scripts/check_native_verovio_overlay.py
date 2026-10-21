@@ -70,6 +70,7 @@ def fixture() -> tuple[dict, object]:
             "native_required_slur_pairs", "native_slurs_complete",
             "native_required_beam_groups", "native_beams_complete")},
         "first_bar": FIRST_BAR, "last_bar": LAST_BAR,
+        "xml": score.musicxml,
     }, engraving
 
 
@@ -163,13 +164,8 @@ def run(out: Path, godot: str) -> dict:
     out.mkdir(parents=True,exist_ok=True)
     data, engraving = fixture()
     model = data["model"]
-    (out/"score.musicxml").write_text(
-        # Preserve the exact score used by BOTH renderers.
-        # The source passage is not a prettier independently re-quantized copy.
-        __import__("xml.etree.ElementTree",fromlist=["ElementTree"]).tostring(
-            __import__("xml.etree.ElementTree",fromlist=["ElementTree"]).fromstring(
-                data.get("xml", "<empty/>")
-            ),encoding="unicode") if False else "", encoding="utf8")
+    # Preserve the actual lesson MusicXML as the single reference score.
+    (out/"score.musicxml").write_text(data.pop("xml"),encoding="utf-8")
     (out/"fixture.json").write_text(json.dumps(data))
     for page, svg in enumerate(engraving.pages):
         (out/f"verovio-{page}.svg").write_text(svg)
