@@ -51,7 +51,11 @@ def test_polyphonic_padding_rest_is_hidden_without_changing_note_clock():
     assert sorted((n["source_id"], n["beat"]) for n in displayed if n["is_attack"]) == [
         ("lower", 0.0), ("upper", 1.0)
     ]
-    assert len([n for n in displayed if n["kind"] == "rest"]) == 1
+    # The inactive left staff retains one visible whole-bar rest; the
+    # active RH retains only its primary-voice rest.
+    assert [(n["staff"], n["voice"]) for n in displayed if n["kind"] == "rest"] == [
+        ("right", "1"), ("left", "1")
+    ]
     assert len(model["notes"]) == 2
     assert {n["id"] for n in model["notes"]} == {"lower", "upper"}
 
