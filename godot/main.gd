@@ -117,6 +117,7 @@ var title_label: Label
 var passage_label: Label
 var hand_label: Label
 var speed_label: Label
+var tempo_up_button: Button
 var feedback_label: Label
 var progress_label: Label
 var device_button: Button
@@ -1374,6 +1375,11 @@ func _build_interface() -> void:
     progress_label.clip_text = true
     progress_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     challenge_bar.add_child(progress_label)
+    tempo_up_button = _button("+5 BPM", func(): _send_action({"action":"tempo_up"}),
+        false, "settings")
+    tempo_up_button.tooltip_text = "Advance this stage's tempo without changing its target or awarding clean passes"
+    tempo_up_button.size_flags_horizontal = Control.SIZE_SHRINK_END
+    challenge_bar.add_child(tempo_up_button)
     game_streak = GameStreak.new()
     challenge_bar.add_child(game_streak)
     # Navigation is deliberately outside the three transport buttons.
@@ -1948,8 +1954,9 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
         var face := Design.bordered_surface(Design.PINE if selected else Design.PANEL_RECESSED, 6, .6 if selected else .25)
         face.border_color = Design.TEAL if selected else Color(Design.SAGE, .3)
         label.add_theme_stylebox_override("normal", face)
-    lesson_summary.text = "%d of %d stages completed · three clean performances at your target tempo" % [
-        int(parsed.get("completed_steps", 0)), int(parsed.get("total_steps", 0))]
+    lesson_summary.text = "%d of %d stages completed · %d clean performances at your target tempo" % [
+        int(parsed.get("completed_steps", 0)), int(parsed.get("total_steps", 0)),
+        int(last_state.get("clean_runs_required", 3))]
     lesson_description.text = "Learn the notes. Bring the hands together. Make it music."
     for child in lesson_rows.get_children():
         lesson_rows.remove_child(child)
@@ -2468,6 +2475,10 @@ func _process(_delta: float) -> void:
         score_overlay.queue_redraw()
         note_reactions.queue_redraw()
     apply_tempo_button.disabled = action_pending
+    if tempo_up_button != null:
+        tempo_up_button.disabled = (action_pending or not bool(last_state.get("loaded",false))
+            or not bool(last_state.get("can_increase_tempo",false))
+            or str(last_state.get("phase","")) in ["count_in","playing","loading"])
     # Start Listen WAV on the actual negative-to-zero beat crossing at
     # frame rate, not on the next 150ms HTTP state poll. This preserves the
     # first note AND keeps its attack aligned with the engraved notehead.
@@ -2835,6 +2846,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         else:
             passage_label.text = "%s · %s" % [kind, bar_text]
     _update_note_feedback_hud(parsed)
+    if tempo_up_button != null:
+        tempo_up_button.text = "+%d BPM" % int(parsed.get("manual_tempo_step_bpm", 5))
+        tempo_up_button.disabled = (action_pending or not bool(parsed.get("can_increase_tempo",false))
+            or phase in ["count_in","playing","loading"])
     speed_label.text = "%d BPM" % int(parsed.get("bpm", 0))
     if int(parsed.get("bpm", 0)) != int(parsed.get("target_bpm", parsed.get("bpm", 0))):
         speed_label.text += " · target %d" % int(parsed.get("target_bpm", 0))
@@ -2994,11 +3009,13 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     elif phase == "feedback" and not bool(parsed.get("auto", false)) and not str(parsed.get("device", "")).is_empty():
         lesson_info_label.text = "Review the red notes · play a new piano key to retry."
     if not learning:
-        progress_label.text = "Clean runs %d of 3 at %d BPM" % [int(parsed.get("streak", 0)), int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
+        var needed_runs: int = int(parsed.get("clean_runs_required", 3))
+        progress_label.text = "Clean runs %d of %d at %d BPM" % [
+            int(parsed.get("streak", 0)), needed_runs, int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
         if bool(parsed.get("warmup", false)):
             var name: String = "Both hands" if str(parsed.get("hand", "")) == "both" else str(parsed.get("hand", "")).capitalize() + " hand"
-            progress_label.text = "%s · %d of 3 clean runs · Next hand unlocks when mastered" % [
-                name, int(parsed.get("streak", 0))]
+            progress_label.text = "%s · %d of %d clean runs · Next hand unlocks when mastered" % [
+                name, int(parsed.get("streak", 0)), needed_runs]
         if str(parsed.get("mode", "")) == "perform":
             progress_label.text = "Perform · keep going to the end; review follows"
         elif str(parsed.get("mode", "")) == "listen":

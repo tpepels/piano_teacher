@@ -9,6 +9,7 @@ const OFF := Design.SAGE
 const BAD := Design.CORAL
 
 var value := 0
+var required := 3
 var state := "idle"
 var reveal := 0.0
 var unlock_wave := -1.0
@@ -35,9 +36,11 @@ func _notification(what: int) -> void:
         set_process(false)
 
 func present(info: Dictionary) -> void:
-    var next_value := clampi(int(info.get("streak", 0)), 0, 3)
+    var next_total := maxi(1, int(info.get("required", 3)))
+    var next_value := clampi(int(info.get("streak", 0)), 0, next_total)
     var next_state := str(info.get("kind", "idle"))
-    if next_value != value or next_state != state:
+    if next_value != value or next_state != state or required != next_total:
+        required = next_total
         value = next_value
         state = next_state
         reveal = 1.0 if state == "success" and value > 0 else 0.0
@@ -78,21 +81,21 @@ func _draw() -> void:
     if w < 58.0 or size.y < 20.0:
         return
     var mid: float = size.y * .5
-    var span: float = minf(45.0, (w - 36.0) / 3.0)
-    var first: float = (w - span * 2.0) * .5
-    var segment_width: float = minf(33.0, span - 9.0)
+    var span: float = minf(45.0, (w - 36.0) / maxf(1.0,float(required)))
+    var first: float = (w - span * float(required-1)) * .5
+    var segment_width: float = maxf(4.0, minf(33.0, span - 9.0))
     var filled_tone: Color = BAD if state == "retry" else ON
     var dim_tone := Color("#36544B")
 
-    draw_line(Vector2(first, mid), Vector2(first + span * 2.0, mid),
+    draw_line(Vector2(first, mid), Vector2(first + span * float(required-1), mid),
         Color(OFF, .43), 2.0, true)
     if unlock_wave >= 0.0:
-        var wave_x: float = lerpf(first - 14.0, first + span * 2.0 + 14.0, unlock_wave)
+        var wave_x: float = lerpf(first - 14.0, first + span * float(required-1) + 14.0, unlock_wave)
         draw_line(Vector2(first, mid), Vector2(wave_x, mid),
             Color(ON, .68), 3.2, true)
         draw_circle(Vector2(wave_x, mid), 7.0, Color(ON, .08))
         draw_circle(Vector2(wave_x, mid), 3.1, Color(ON, .92))
-    for i in range(3):
+    for i in range(required):
         var p := Vector2(first + span * float(i), mid)
         var filled: bool = i < value and state != "preview"
         var flash: float = reveal if filled and i == value - 1 and state == "success" else 0.0

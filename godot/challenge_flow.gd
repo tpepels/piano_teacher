@@ -11,7 +11,8 @@ static func present(state: Dictionary) -> Dictionary:
         return {"visible":false, "label":"", "detail":"", "kind":"idle"}
     var name: String = str(state.get("hand", "right"))
     var hand: String = "BOTH HANDS" if name == "both" else name.to_upper() + " HAND"
-    var raw_streak: int = clampi(int(state.get("streak", 0)), 0, 3)
+    var required: int = maxi(1, int(state.get("clean_runs_required", 3)))
+    var raw_streak: int = clampi(int(state.get("streak", 0)), 0, required)
     var phase: String = str(state.get("phase", "ready"))
     if mode == "learn":
         var teaching: Dictionary = state.get("teaching", {}) if state.get("teaching") is Dictionary else {}
@@ -25,35 +26,35 @@ static func present(state: Dictionary) -> Dictionary:
         return {"visible":true,
             "label":context + " · " + hand,
             "detail":"%d of %d notes found · timing comes later" % [done, total],
-            "kind":"learn", "streak":raw_streak}
+            "kind":"learn", "streak":raw_streak,"required":required}
     if bool(state.get("preview_only", false)):
         return {"visible":true, "label":"%s · PREVIEW" % hand,
             "detail":"MIDI piano required to earn clean runs",
-            "kind":"preview", "streak":0}
+            "kind":"preview", "streak":0,"required":required}
     var result: Variant = state.get("take_result")
     if phase == "feedback" and result is Dictionary:
         if bool(result.get("clean", false)):
-            var completed: int = mini(3, raw_streak + 1)
-            var detail := "Three clean full passes unlock the next stage"
+            var completed: int = mini(required, raw_streak + 1)
+            var detail := "%d clean target-tempo passes unlock the next stage" % required
             var seconds = state.get("transition_in_seconds")
             if seconds != null and bool(state.get("auto", false)):
                 detail = "Next automatically in %.1f s" % maxf(0.0, float(seconds))
             return {"visible":true,
-                "label":"✓ CLEAN PASS · %s · %d/3" % [hand, completed],
+                "label":"✓ CLEAN PASS · %s · %d/%d" % [hand, completed,required],
                 "detail":detail,
-                "kind":"success", "streak":completed}
+                "kind":"success", "streak":completed,"required":required}
         return {"visible":true,
             "label":"RETRY · %s" % hand,
             "detail":"Review the red notes; the clean-run streak resets",
-            "kind":"retry", "streak":0}
+            "kind":"retry", "streak":0,"required":required}
     if phase == "recovering":
         return {"visible":true, "label":"SHORT RETRY · %s" % hand,
             "detail":str(state.get("next_action", "Practise the difficult bars again")),
-            "kind":"recovering", "streak":raw_streak}
-    var label := "%s · %d/3 CLEAN" % [hand, raw_streak]
-    var detail := "Play this short challenge three times cleanly"
+            "kind":"recovering", "streak":raw_streak,"required":required}
+    var label := "%s · %d/%d CLEAN" % [hand, raw_streak,required]
+    var detail := "Play this short challenge %d times cleanly at target tempo" % required
     if bool(state.get("warmup", false)):
-        detail = "Next hand unlocks after three clean runs"
+        detail = "Next hand unlocks after %d clean runs" % required
         if name == "both":
             detail = "Final stage · master both hands together"
     if phase == "paused":
@@ -65,7 +66,7 @@ static func present(state: Dictionary) -> Dictionary:
     elif phase == "loading":
         detail = "Preparing the next short challenge"
     return {"visible":true, "label":label,
-            "detail":detail, "kind":"progress", "streak":raw_streak}
+            "detail":detail, "kind":"progress", "streak":raw_streak,"required":required}
 
 
 static func newly_unlocked(previous: Dictionary, current: Dictionary) -> String:

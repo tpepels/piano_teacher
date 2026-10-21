@@ -439,19 +439,23 @@ func _paint_meter_above_staff(measure: Dictionary, x: float,
 
 func _paint_ledger(x: float, y: float, step: int,
         bottom: float, gap: float, ink: Color) -> void:
+    # At this staff size a fixed ±14 px rule almost disappears under
+    # real Verovio notehead ink. Let each ledger line extend clearly.
+    var half_width: float = maxf(18.0,gap*.95)
+    var weight: float = maxf(1.6,gap*.075)
     if step < 0:
         var line_step: int = -2
         while line_step >= step:
             var line_y: float = Geometry.note_y(line_step, bottom, gap)
-            draw_line(Vector2(x-14.0, line_y),
-                Vector2(x+14.0, line_y), Color(ink, .70), 1.35, true)
+            draw_line(Vector2(x-half_width,line_y),
+                Vector2(x+half_width,line_y), Color(ink,.94), weight,true)
             line_step -= 2
     elif step > 8:
         var line_step: int = 10
         while line_step <= step:
             var line_y: float = Geometry.note_y(line_step, bottom, gap)
-            draw_line(Vector2(x-14.0, line_y),
-                Vector2(x+14.0, line_y), Color(ink, .70), 1.35, true)
+            draw_line(Vector2(x-half_width,line_y),
+                Vector2(x+half_width,line_y), Color(ink,.94), weight,true)
             line_step += 2
 
 func _paint_accidental(x: float, y: float,
@@ -800,8 +804,8 @@ func _event_ink_rect(event: Dictionary, gap: float,
     var step: int = Geometry.staff_step(event.get("spelling",{}),
         _clef_for(str(event.get("staff","right")),_measure_for(event)))
     if step <= -2 or step >= 10:
-        left = minf(left,head_x-14.0)
-        right = maxf(right,head_x+14.0)
+        left = minf(left,head_x-maxf(18.0,gap*.95))
+        right = maxf(right,head_x+maxf(18.0,gap*.95))
         var staff_bottom: float = _staff_center(str(event.get("staff","right")))+2.0*gap
         if step <= -2:
             top = minf(top,Geometry.note_y(-2,staff_bottom,gap)-.675)
