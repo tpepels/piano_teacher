@@ -37,3 +37,36 @@ def test_exception_during_import_returns_json_and_server_survives(tmp_path, monk
         server.server_close()
         thread.join(timeout=2)
         engine.db.close()
+
+
+def test_unexpected_get_failure_returns_500_and_next_request_succeeds():
+    class State:
+        requests = 0
+        def state(self):
+            self.requests += 1
+            if self.requests == 1:
+                raise OSError("backend state unavailable")
+            return {"loaded": False}
+
+    class IsolatedHandler(Handler):
+        engine = State()
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), IsolatedHandler)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{server.server_port}/state"
+    try:
+        try:
+            with urlopen(url, timeout=3):
+                raise AssertionError("Expected a server failure")
+        except HTTPError as error:
+            assert error.code == 500
+            assert "backend state unavailable" in json.loads(error.read())["error"]
+        with urlopen(url, timeout=3) as response:
+            assert response.status == 200
+            assert json.load(response) == {"loaded": False}
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
