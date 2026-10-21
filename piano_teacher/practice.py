@@ -5,6 +5,7 @@ from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Literal
 from .music import Note, Phrase, Piece
+from .lesson_settings import SETTINGS
 
 
 @dataclass(frozen=True)
@@ -59,8 +60,9 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote]) ->
     expected = [n for n in phrase.notes if hand == "both" or n.hand == hand]
     unused = set(range(len(played)))
     assessments: list[NoteAssessment] = []
-    onset_tolerance = 0.100
-    search_window = max(0.35, 0.65 * seconds_per_beat)
+    onset_tolerance = SETTINGS.grading_onset_tolerance_seconds
+    search_window = max(SETTINGS.grading_match_window_min_seconds,
+                        SETTINGS.grading_match_window_beats * seconds_per_beat)
     for note in expected:
         start = (note.start - phrase.start) * seconds_per_beat
         duration = (min(note.end, phrase.end) - note.start) * seconds_per_beat
@@ -81,7 +83,8 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote]) ->
             status = "short"  # key never released
         else:
             actual = max(0, event.release - event.onset)
-            tolerance = max(0.055, duration * 0.20)
+            tolerance = max(SETTINGS.grading_duration_floor_seconds,
+                            duration * SETTINGS.grading_duration_tolerance_fraction)
             if actual < duration - tolerance:
                 status = "short"
             elif actual > duration + tolerance:

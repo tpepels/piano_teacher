@@ -26,6 +26,12 @@ class LessonSettings:
     recovery_tempo_multiplier: float
     guided_recovery_after_failures: int
     feedback_seconds: float
+    grading_onset_tolerance_seconds: float
+    grading_duration_tolerance_fraction: float
+    grading_duration_floor_seconds: float
+    grading_match_window_min_seconds: float
+    grading_match_window_beats: float
+    count_in_max_seconds: float
 
 
 def load_lesson_settings(path: Path | None = None) -> LessonSettings:
@@ -50,6 +56,12 @@ def load_lesson_settings(path: Path | None = None) -> LessonSettings:
             or data.warmup_recovery_errors < 1
             or data.guided_recovery_after_failures < 1
             or data.feedback_seconds < 0
+            or data.grading_onset_tolerance_seconds <= 0
+            or not 0 < data.grading_duration_tolerance_fraction <= 1
+            or data.grading_duration_floor_seconds <= 0
+            or data.grading_match_window_min_seconds < data.grading_onset_tolerance_seconds
+            or data.grading_match_window_beats <= 0
+            or data.count_in_max_seconds <= 0
             or not 0 < data.start_tempo_fraction <= 1
             or data.automatic_tempo_multiplier <= 1
             or not 0 < data.recovery_tempo_multiplier < 1):

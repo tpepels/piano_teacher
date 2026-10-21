@@ -11,5 +11,11 @@
   "warmup_recovery_errors": 2,
   "recovery_tempo_multiplier": 0.9,
   "guided_recovery_after_failures": 2,
-  "feedback_seconds": 1.5
+  "feedback_seconds": 1.5,
+  "grading_onset_tolerance_seconds": 0.1,
+  "grading_duration_tolerance_fraction": 0.2,
+  "grading_duration_floor_seconds": 0.055,
+  "grading_match_window_min_seconds": 0.35,
+  "grading_match_window_beats": 0.65,
+  "count_in_max_seconds": 4
 }
