@@ -133,6 +133,7 @@ var lesson_requested_fingerprint := ""
 var feedback_label: Label
 var progress_label: Label
 var device_button: Button
+var device_menu_requested := false
 var start_button: Button
 var score_view: TextureRect
 var score_overlay: ScoreOverlay
@@ -345,7 +346,13 @@ func _ready() -> void:
     scan_timer.timeout.connect(func():
         if current_screen == "home" or current_screen == "library":
             _request_library()
-        if current_screen == "practice" or current_screen == "settings":
+        # The backend independently checks the chosen MIDI port every
+        # MIDI_SCAN_SECONDS and reconnects the saved piano if needed. Repeating
+        # ALSA enumeration in the Practice UI adds device-probe warnings and
+        # lock contention without improving hotplug detection. Only discover
+        # a new device while none is connected, in Settings, or on explicit tap.
+        if current_screen == "settings" or (current_screen == "practice"
+                and str(last_state.get("device", "")).is_empty()):
             _request_devices()
     )
     add_child(scan_timer)
@@ -4077,9 +4084,16 @@ func _request_devices() -> void:
 func _on_devices(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     device_pending = false
     if code != 200:
+        # Failed ALSA discovery previously disappeared silently, leaving a
+        # stale device picker. Give a diagnostic in Settings without
+        # interrupting a running practice take.
+        device_menu_requested = false
+        if current_screen == "settings" and settings_message != null:
+            settings_message.text = "MIDI device scan failed: " + _http_failure(code, body)
         return
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
+        device_menu_requested = false
         return
     device_names = parsed.get("devices", [])
     device_menu.clear()
@@ -4092,11 +4106,16 @@ func _on_devices(_result: int, code: int, _headers: PackedStringArray, body: Pac
         var saved: String = str(preferences.get("midi_device", ""))
         if device_names.has(saved) and not saved.is_empty() and not saved.to_lower().contains("midi through"):
             _choose_device(device_names.find(saved))
+    if device_menu_requested:
+        # Populate from this fresh response before showing the popup. The
+        # former implementation opened stale items while scanning asynchronously.
+        device_menu_requested = false
+        device_menu.position = Vector2i(device_button.get_screen_position()) + Vector2i(0, int(device_button.size.y))
+        device_menu.popup()
 
 func _show_devices() -> void:
+    device_menu_requested = true
     _request_devices()
-    device_menu.position = Vector2i(device_button.get_screen_position()) + Vector2i(0, int(device_button.size.y))
-    device_menu.popup()
 
 func _choose_device(id: int) -> void:
     if id == -2:
