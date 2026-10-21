@@ -68,7 +68,10 @@ class _Synth:
             self.synth = self.lib.new_fluid_synth(self.settings)
             if not self.synth:
                 raise RuntimeError("Cannot initialise FluidSynth")
-            sfid = self.lib.fluid_synth_sfload(self.synth, os.fsencode(font), 1)
+            # Do not reset all 16 MIDI channels for a piano-only SF2:
+            # channel 9 normally requests an absent percussion preset.
+            # We select the only channel we render (0) explicitly below.
+            sfid = self.lib.fluid_synth_sfload(self.synth, os.fsencode(font), 0)
             if sfid < 0:
                 raise RuntimeError(f"FluidSynth could not load the piano SoundFont: {font}")
             if self.lib.fluid_synth_program_select(self.synth, 0, sfid, 0, 0) < 0:

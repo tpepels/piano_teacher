@@ -113,3 +113,46 @@ def test_projected_expressions_render_through_real_verovio(tmp_path):
     assert engraving.pages
     assert any("svg" in page for page in engraving.pages)
     assert len(engraving.layout["notes"]) == 3
+
+
+def test_unstaffed_voice_directions_follow_the_correct_grand_staff_hand(tmp_path):
+    # A single MusicXML piano part contains two independent voices/staves.
+    # Directions specify a voice but do not repeat its staff number.
+    xml = """<score-partwise version="4.0">
+      <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+      <part id="P1"><measure number="1">
+        <attributes><divisions>10080</divisions>
+          <time><beats>4</beats><beat-type>4</beat-type></time>
+          <staves>2</staves>
+          <clef number="1"><sign>G</sign><line>2</line></clef>
+          <clef number="2"><sign>F</sign><line>4</line></clef>
+        </attributes>
+        <direction><direction-type><dynamics><p/></dynamics></direction-type>
+          <voice>1</voice></direction>
+        <direction><direction-type><dynamics><mf/></dynamics></direction-type>
+          </direction>
+        <note><pitch><step>C</step><octave>5</octave></pitch>
+          <duration>40320</duration><voice>1</voice><type>whole</type><staff>1</staff></note>
+        <backup><duration>40320</duration></backup>
+        <direction><direction-type><dynamics><f/></dynamics></direction-type>
+          <voice>2</voice></direction>
+        <note><pitch><step>C</step><octave>3</octave></pitch>
+          <duration>40320</duration><voice>2</voice><type>whole</type><staff>2</staff></note>
+      </measure></part></score-partwise>"""
+    path = tmp_path / "piano-voices.musicxml"
+    path.write_text(xml, encoding="utf-8")
+    piece = load_musicxml(path, bpm=80)
+    assert {n.hand for n in piece.notes} == {"left", "right"}
+
+    full, root = _lesson(piece, piece.notes)
+    assert root.find("./part[@id='RH']/measure/direction/direction-type/dynamics/p") is not None
+    assert root.find("./part[@id='LH']/measure/direction/direction-type/dynamics/f") is not None
+    assert root.find(".//direction-type/dynamics/mf") is None
+    assert "direction:dynamics" in full.unrendered_expressions
+
+    # Omitting the right-hand attack must not send its expression to the left.
+    left = tuple(n for n in piece.notes if n.hand == "left")
+    _, simplified = _lesson(piece, left)
+    assert simplified.find("./part[@id='LH']/measure/direction/direction-type/dynamics/f") is not None
+    assert simplified.find(".//direction-type/dynamics/p") is None
+
