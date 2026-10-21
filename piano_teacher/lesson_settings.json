@@ -1,0 +1,15 @@
+{
+  "focus_measures": 2,
+  "start_tempo_fraction": 0.4,
+  "automatic_tempo_multiplier": 1.1,
+  "manual_tempo_step_bpm": 5,
+  "minimum_tempo_step_bpm": 1,
+  "minimum_bpm": 12,
+  "maximum_bpm": 300,
+  "clean_runs_to_master": 3,
+  "recovery_errors_in_window": 5,
+  "warmup_recovery_errors": 2,
+  "recovery_tempo_multiplier": 0.9,
+  "guided_recovery_after_failures": 2,
+  "feedback_seconds": 1.5
+}

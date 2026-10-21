@@ -7,6 +7,7 @@ import json
 import math
 from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant, generate_variants
+from .lesson_settings import SETTINGS
 
 @dataclass(frozen=True)
 class Exercise:
@@ -65,12 +66,28 @@ def _course_phrases(piece: Piece) -> tuple[Phrase, ...]:
     return tuple(groups)
 
 
+def _focus_phrases(piece: Piece) -> tuple[Phrase, ...]:
+    """Use the original measure grid, including meter changes and pickups."""
+    if not piece.bar_boundaries:
+        return piece.phrases  # Historical fixtures already contain source units.
+    groups = []
+    boundaries = piece.bar_boundaries
+    for start_index in range(0, len(boundaries) - 1, SETTINGS.focus_measures):
+        end_index = min(len(boundaries) - 1, start_index + SETTINGS.focus_measures)
+        begin, end = boundaries[start_index], boundaries[end_index]
+        notes = tuple(n for n in piece.notes if begin-1e-7 <= n.start < end-1e-7)
+        if notes:
+            groups.append(Phrase(len(groups) + 1, start_index + 1,
+                                 end_index, begin, end, notes))
+    return tuple(groups)
+
+
 def build_exercises(piece: Piece, *, consolidate: bool = True) -> tuple[Exercise, ...]:
     """Learn sections, bridge their boundaries, then perform the complete source.
 
     The original two-bar sequence remains reconstructible for old progress.
     """
-    phrases = _course_phrases(piece) if consolidate else piece.phrases
+    phrases = _course_phrases(piece) if consolidate else _focus_phrases(piece)
     exercises: list[Exercise] = []
     for index, phrase in enumerate(phrases):
         exercises.append(Exercise("learn", phrase, f"learn:{phrase.first_bar}-{phrase.last_bar}"))
@@ -131,12 +148,12 @@ class LearningPlan:
         self.piece = piece
         self.warmup = warmup
         if warmup:
-            # Short three-stage course, with full eight-bar phrases.
+            # Warm-ups retain their deliberately complete phrase.
             duration = piece.bar_boundaries[-1] if piece.bar_boundaries else max(n.end for n in piece.notes)
             bars = len(piece.bar_boundaries) - 1 if piece.bar_boundaries else piece.phrases[-1].last_bar
             self.exercises = (Exercise("warmup", Phrase(0, 1, bars, 0.0, duration, piece.notes), "warmup:all"),)
         else:
-            self.exercises = build_exercises(piece)
+            self.exercises = build_exercises(piece, consolidate=False)
         if not self.exercises:
             raise ValueError("Piece has no practice passages")
         self.index = 0
@@ -150,13 +167,13 @@ class LearningPlan:
         self.mastered: dict[str, int] = {}
         self._lesson_steps_cache: tuple[LessonStep, ...] | None = None
 
-    route_version = 2
+    route_version = 3
 
     @property
     def start_bpm(self) -> int:
         if self.warmup:
             return min(getattr(self, "target_bpm", self.piece.bpm), self.piece.bpm)
-        return min(getattr(self, "target_bpm", self.piece.bpm), max(12, round(self.piece.bpm * 0.4)))
+        return min(getattr(self, "target_bpm", self.piece.bpm), max(SETTINGS.minimum_bpm, round(self.piece.bpm * SETTINGS.start_tempo_fraction)))
 
     @property
     def exercise(self) -> Exercise:
@@ -291,11 +308,23 @@ class LearningPlan:
         self.bpm = self.start_bpm
 
     def set_bpm(self, bpm: int) -> None:
-        if bpm < 12 or bpm > 300:
-            raise ValueError("BPM must be between 12 and 300")
+        if bpm < SETTINGS.minimum_bpm or bpm > SETTINGS.maximum_bpm:
+            raise ValueError(f"BPM must be between {SETTINGS.minimum_bpm} and {SETTINGS.maximum_bpm}")
         self.bpm = bpm
         self.target_bpm = bpm
         self.streak = self.failures = 0
+
+    def increase_tempo(self) -> int:
+        """Learner skips the slow tempo rungs, not the proof of mastery.
+
+        A manual increase is persisted for this source unit/hand/variant and
+        counts towards its target, but never awards a clean run or a new step.
+        """
+        if self.bpm < self.target_bpm:
+            self.bpm = min(self.target_bpm, self.bpm + SETTINGS.manual_tempo_step_bpm)
+            self.streak = 0
+            self.failures = 0
+        return self.bpm
 
     def apply_result(self, *, correct: int, total: int, extras: int = 0) -> str:
         """A clean run restores tempo; three target-speed clean runs confer mastery.
@@ -313,11 +342,11 @@ class LearningPlan:
         self.failures = 0
         if self.bpm < self.target_bpm:
             self.streak = 0
-            self.bpm = min(self.target_bpm, max(self.bpm + 1, round(self.bpm * 1.10)))
+            self.bpm = min(self.target_bpm, max(self.bpm + SETTINGS.minimum_tempo_step_bpm, round(self.bpm * SETTINGS.automatic_tempo_multiplier)))
             return f"Tempo increased to {self.bpm} BPM"
         self.streak += 1
-        if self.streak < 3:
-            return f"Clean pass {self.streak}/3 - repeat"
+        if self.streak < SETTINGS.clean_runs_to_master:
+            return f"Clean pass {self.streak}/{SETTINGS.clean_runs_to_master} - repeat"
         self.streak = 0
         previous = self.identity
         self.mastered[previous] = self.target_bpm

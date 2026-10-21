@@ -1,5 +1,6 @@
 """Student-facing decisions around the existing timed assessment policy."""
 from __future__ import annotations
+from .lesson_settings import SETTINGS
 
 
 def next_full_attempt(plan, result) -> str:
@@ -7,11 +8,11 @@ def next_full_attempt(plan, result) -> str:
     if not result.clean:
         return "Let's try the whole passage again."
     if plan.bpm < plan.target_bpm:
-        following = min(plan.target_bpm, max(plan.bpm + 1, round(plan.bpm * 1.10)))
+        following = min(plan.target_bpm, max(plan.bpm + SETTINGS.minimum_tempo_step_bpm, round(plan.bpm * SETTINGS.automatic_tempo_multiplier)))
         return f"Clean passage — restore tempo to {following} BPM toward {plan.target_bpm} BPM."
     streak = plan.streak + 1
-    if streak < 3:
-        return f"Clean pass {streak}/3 — play the whole passage again."
+    if streak < SETTINGS.clean_runs_to_master:
+        return f"Clean pass {streak}/{SETTINGS.clean_runs_to_master} — play the passage again."
     if plan.variant_index + 1 < len(plan.variants):
         following = plan.variants[plan.variant_index + 1]
         if any(sum(abs(other.start-note.start) < 1e-6 for other in following.notes) > 1
@@ -28,4 +29,4 @@ def next_full_attempt(plan, result) -> str:
         action = "now learn the next passage"
     else:
         action = "passage mastered"
-    return f"Clean pass 3/3 — {action}."
+    return f"Clean pass {SETTINGS.clean_runs_to_master}/{SETTINGS.clean_runs_to_master} — {action}."

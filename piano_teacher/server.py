@@ -39,6 +39,7 @@ from .live_input_view import LiveInputView
 from .hardware_probe import HardwareProbe
 from .instruction import next_full_attempt
 from .learner_state import LearnerStateStore, guided_units, next_guided_unit, placement_candidate
+from .lesson_settings import SETTINGS
 
 
 class PracticeEngine:
@@ -56,7 +57,7 @@ class PracticeEngine:
         self.next_boundary_beat = 0.0
         self.pending_rewind: float | None = None
         self._rewind_requires_layout = False
-        self.feedback_seconds = 1.5
+        self.feedback_seconds = SETTINGS.feedback_seconds
         self.recovery_notice: dict | None = None
         self.paused = False
         self.paused_at = 0.0
@@ -408,9 +409,9 @@ class PracticeEngine:
                               and p.active_phrase.start == old_variant.phrase.start
                               and p.active_phrase.end == old_variant.phrase.end
                               and p.active_phrase.notes == old_variant.notes)
-            p.set_bpm(max(12, min(300, int(row[4] or p.piece.bpm))))
-            p.bpm = max(12, min(p.target_bpm, int(row[2])))
-            p.streak = min(2, max(0, int(row[3]))) if equivalent else 0
+            p.set_bpm(max(SETTINGS.minimum_bpm, min(SETTINGS.maximum_bpm, int(row[4] or p.piece.bpm))))
+            p.bpm = max(SETTINGS.minimum_bpm, min(p.target_bpm, int(row[2])))
+            p.streak = min(SETTINGS.clean_runs_to_master-1, max(0, int(row[3]))) if equivalent else 0
         for key,bpm in self.db.execute("SELECT exercise,bpm FROM mastery WHERE fingerprint=?",(self.fingerprint,)):
             p.mastered[key]=bpm
         # Preserve legacy rows, and recognize them only when the exact same
@@ -1302,13 +1303,15 @@ class PracticeEngine:
                 self.open_from_beat = 0.0
             elif action == "tempo":
                 p.set_bpm(int(kwargs["bpm"]))
+            elif action == "tempo_up":
+                p.increase_tempo()
             else:
                 raise ValueError(f"Unsupported action: {action}")
             self.score_revision+=1
             self.feedback="Ready"
             self.next_action="Start when you are ready."
             if was_guided:
-                if action == "tempo":
+                if action in ("tempo", "tempo_up"):
                     recovery = guided_return is not None and guided_return[0] == p.identity
                     if recovery:
                         self.retry_range = guided_retry_range
@@ -1407,12 +1410,13 @@ class PracticeEngine:
                 decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
                     self.recorder.presses if self.recorder else [],
                     from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
-                    beats_per_bar=beats_per_bar, threshold=2,
+                    beats_per_bar=beats_per_bar, threshold=SETTINGS.warmup_recovery_errors,
                     window_start_beat=chunk_start_at_end(grid,self.next_boundary_beat))
             else:
                 decision=check_rolling_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
                     self.recorder.presses if self.recorder else [],
-                    from_beat=self.play_from_beat, end_beat=self.next_boundary_beat, grid=grid)
+                    from_beat=self.play_from_beat, end_beat=self.next_boundary_beat, grid=grid,
+                    threshold=SETTINGS.recovery_errors_in_window)
             if decision is not None:
                 # Capture marks at the performance tempo, not at the slower
                 # BPM selected for the next retry. Re-scaling the recorded
@@ -1438,7 +1442,7 @@ class PracticeEngine:
                 self.plan.streak=0
                 self.plan.failures+=1
                 before=self.plan.bpm
-                self.plan.bpm=max(12,round(before*.9))
+                self.plan.bpm=max(SETTINGS.minimum_bpm,round(before*SETTINGS.recovery_tempo_multiplier))
                 self._rewind_requires_layout = self.plan.bpm != before
                 self._save()
                 self.pending_rewind=decision.restart_beat
@@ -1453,7 +1457,7 @@ class PracticeEngine:
                 key = (self.plan.identity, decision.restart_beat, decision.end_beat)
                 self._trouble_count = self._trouble_count + 1 if key == self._trouble_key else 1
                 self._trouble_key = key
-                self._guided_recovery_pending = self._trouble_count >= 2
+                self._guided_recovery_pending = self._trouble_count >= SETTINGS.guided_recovery_after_failures
                 self.retry_range = {
                     "first_bar": bar_number_at(grid, decision.restart_beat, phrase.first_bar),
                     "last_bar": phrase.first_bar + next(i for i, beat in enumerate(grid)
@@ -1727,7 +1731,10 @@ class PracticeEngine:
                     "lesson_step":p.lesson_step_number,"lesson_steps":len(p.lesson_steps),
                     "lesson_steps_mastered":p.lesson_steps_mastered,
                     "hand":p.hand,"hands":list(p.hands),"bpm":p.bpm,"original_bpm":p.piece.bpm,"target_bpm":p.target_bpm,
-                    "streak":p.streak,"mastered":len(p.mastered),"phase":phase,
+                    "streak":p.streak,"clean_runs_required":SETTINGS.clean_runs_to_master,
+                    "manual_tempo_step_bpm":SETTINGS.manual_tempo_step_bpm,
+                    "can_increase_tempo":p.bpm < p.target_bpm,
+                    "mastered":len(p.mastered),"phase":phase,
                     "auto":self.auto,
                     "take_result": ({"clean": bool(self.pending_result.clean),
                                      "correct": self.pending_result.correct,
