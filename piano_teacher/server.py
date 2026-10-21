@@ -141,6 +141,9 @@ class PracticeEngine:
             fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL,
             bpm INTEGER NOT NULL,
             PRIMARY KEY (fingerprint,stage_key))""")
+        self.db.execute("""CREATE TABLE IF NOT EXISTS repeat_tempo_credit (
+            fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL,
+            PRIMARY KEY (fingerprint,stage_key))""")
         self.db.commit()
         self.learner_store = LearnerStateStore(self.db)
 
@@ -426,6 +429,11 @@ class PracticeEngine:
             if any(step.key == key for step in p.lesson_steps):
                 p.stage_tempos[key] = max(SETTINGS.minimum_bpm,
                                           min(p.target_bpm,int(bpm)))
+        for (key,) in self.db.execute(
+                "SELECT stage_key FROM repeat_tempo_credit WHERE fingerprint=?",
+                (self.fingerprint,)):
+            if key in p.stage_tempos:
+                p.transferable_tempos.add(key)
         # A current session may predate per-stage tempos; retain its exact
         # judged tempo, but only when the stage can be identified reliably.
         if row is not None:
@@ -458,6 +466,8 @@ class PracticeEngine:
             # ladders on later navigation or after restarting the app.
             self.db.execute("DELETE FROM stage_tempos WHERE fingerprint=?",
                             (self.fingerprint,))
+            self.db.execute("DELETE FROM repeat_tempo_credit WHERE fingerprint=?",
+                            (self.fingerprint,))
         self.db.execute("INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (self.fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm,p.variant_index,
                          p.route_version,p.identity,p.exercise.phrase.first_bar,p.exercise.phrase.last_bar,
@@ -466,6 +476,9 @@ class PracticeEngine:
         for key, bpm in p.stage_tempos.items():
             self.db.execute("INSERT OR REPLACE INTO stage_tempos VALUES (?,?,?)",
                             (self.fingerprint,key,bpm))
+        for key in p.transferable_tempos:
+            self.db.execute("INSERT OR REPLACE INTO repeat_tempo_credit VALUES (?,?)",
+                            (self.fingerprint,key))
         for key, bpm in p.mastered.items():
             self.db.execute("INSERT OR REPLACE INTO mastery VALUES (?,?,?)", (self.fingerprint,key,bpm))
         self.db.commit()

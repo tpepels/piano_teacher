@@ -58,7 +58,7 @@ def test_manual_tempo_skips_rungs_not_clean_credit_and_is_bounded():
         result = p.apply_result(correct=2,total=2)
     assert identity in p.mastered
     assert "next passage" in result
-    assert p.exercise.phrase.first_bar == 3 and p.bpm == 44
+    assert p.exercise.phrase.first_bar == 3 and p.bpm == 110  # Exactly repeated music inherits the proven tempo
 
 
 def test_manual_tempo_does_not_reduce_target_or_promote_repeated_motive():
@@ -174,7 +174,7 @@ def test_stage_tempo_is_restored_when_navigating_away_and_back(tmp_path):
     first_bpm=engine.plan.bpm
     engine.control("next")
     assert engine.plan.identity != stage_one
-    assert engine.plan.bpm == engine.plan.start_bpm
+    assert engine.plan.bpm == first_bpm  # Same motif in the next source unit
     engine.control("previous")
     assert engine.plan.identity == stage_one
     assert engine.plan.bpm == first_bpm
