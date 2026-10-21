@@ -98,6 +98,25 @@ def readability_errors(model: dict, diagnostics: dict) -> list[str]:
     if diagnostics["unavoidable_rest_overlaps"]:
         errors.append("Native rests collide with other voice ink")
     events = model["notation_events"]
+    tiny_rests = [n for n in events if n["kind"] == "rest" and
+                  n["note_type"] in {"32nd","64th","128th"}]
+    if len(tiny_rests) > 2:
+        errors.append("Excessive tiny printed rests in Autumn Leaves "
+                      "(%d; maximum 2)" % len(tiny_rests))
+    gap = float(diagnostics.get("staff_gap", 0.0))
+    if gap <= 0.0:
+        errors.append("Native staff has no valid layout scale")
+    else:
+        centers = diagnostics.get("staff_centers", {})
+        for frame in diagnostics.get("frames", []):
+            for rest in frame.get("rests", []):
+                staff = str(rest.get("hand", ""))
+                if staff not in centers:
+                    errors.append("Rest has no native staff: "+str(rest["id"]))
+                    continue
+                if abs(float(rest["y"])-float(centers[staff])) > 3.2*gap:
+                    errors.append("Rest displaced too far from its staff: "+
+                                  str(rest["id"]))
     if any(n["kind"] == "note" and n["dots"] > 2 for n in events):
         errors.append("Unconventional triple/quadruple-dot notation returned "
                       "in the reported MIDI passage")
