@@ -189,3 +189,31 @@ def test_stage_tempo_is_restored_when_navigating_away_and_back(tmp_path):
     reopened.control("previous")
     assert reopened.plan.bpm == first_bpm
     reopened.db.close()
+
+
+def test_changing_global_target_invalidates_old_stage_tempo_ladders(tmp_path):
+    from piano_teacher.server import PracticeEngine
+    piece = make_piece(4)
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    engine.plan = LearningPlan(piece)
+    engine.fingerprint = "target-change-ladders"
+    engine.control("tempo_up")
+    engine.control("next")
+    engine.control("tempo_up")
+    engine.control("tempo", bpm=80)
+    assert engine.plan.target_bpm == 80
+    engine.control("previous")
+    assert engine.plan.bpm == 32
+    engine.db.close()
+
+    reopened = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        reopened.plan = LearningPlan(piece)
+        reopened.fingerprint = "target-change-ladders"
+        reopened._restore()
+        assert reopened.plan.bpm == 32
+        assert reopened.plan.target_bpm == 80
+        reopened.control("next")
+        assert reopened.plan.bpm == 32
+    finally:
+        reopened.db.close()
