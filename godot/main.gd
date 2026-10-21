@@ -120,6 +120,7 @@ var speed_label: Label
 var tempo_up_button: Button
 var tempo_down_button: Button
 var practice_step_picker: OptionButton
+var practice_step_controls: HBoxContainer
 var practice_step_previous_button: Button
 var practice_step_next_button: Button
 var practice_step_entries: Array = []
@@ -1383,10 +1384,23 @@ func _build_interface() -> void:
     progress_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     progress_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     challenge_bar.add_child(progress_label)
+    # Stage navigation floats within the existing score stage. Putting
+    # it in the progress row enlarges the entire Practice minimum width,
+    # clipping transport and the MIDI keyboard on 800x600 desktops.
+    practice_step_controls = HBoxContainer.new()
+    practice_step_controls.name = "PracticeStepControls"
+    practice_step_controls.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+    practice_step_controls.offset_left = -332.0
+    practice_step_controls.offset_right = -12.0
+    practice_step_controls.offset_top = 10.0
+    practice_step_controls.offset_bottom = 50.0
+    practice_step_controls.add_theme_constant_override("separation", 5)
+    practice_step_controls.z_index = 6
+    score_frame.add_child(practice_step_controls)
     practice_step_previous_button = _button("‹", func(): _navigate_practice_step(-1), false, "navigation")
     practice_step_previous_button.custom_minimum_size = Vector2(38, 38)
     practice_step_previous_button.tooltip_text = "Previous lesson step (hand and note level)"
-    challenge_bar.add_child(practice_step_previous_button)
+    practice_step_controls.add_child(practice_step_previous_button)
     practice_step_picker = OptionButton.new()
     practice_step_picker.name = "PracticeLessonStepPicker"
     practice_step_picker.custom_minimum_size = Vector2(225, 38)
@@ -1396,11 +1410,11 @@ func _build_interface() -> void:
     practice_step_picker.disabled = true
     practice_step_picker.tooltip_text = "Choose any lesson step directly, without earning mastery"
     practice_step_picker.item_selected.connect(_on_practice_step_selected)
-    challenge_bar.add_child(practice_step_picker)
+    practice_step_controls.add_child(practice_step_picker)
     practice_step_next_button = _button("›", func(): _navigate_practice_step(1), false, "navigation")
     practice_step_next_button.custom_minimum_size = Vector2(38, 38)
     practice_step_next_button.tooltip_text = "Next lesson step (hand and note level)"
-    challenge_bar.add_child(practice_step_next_button)
+    practice_step_controls.add_child(practice_step_next_button)
     tempo_down_button = _button("-5 BPM", func(): _send_action({"action":"tempo_down"}),
         false, "settings")
     tempo_down_button.tooltip_text = "Slow this lesson step without changing its song target"
@@ -1650,12 +1664,16 @@ func _update_responsive_layout() -> void:
         _update_hand_stages(last_state)
     if practice_header == null:
         return
-    # The practice step selector must not inflate the whole page's minimum
-    # width on a small 800px desktop. Streak remains visible; duplicate
-    # prose progress yields its space to the actual step controls.
+    # Floating navigation never changes the Practice row's intrinsic size.
     var compact_steps: bool = width < 1250.0
-    progress_label.visible = not compact_steps
-    practice_step_picker.custom_minimum_size.x = 140.0 if width < 850.0 else 180.0 if compact_steps else 225.0
+    progress_label.visible = true
+    if practice_step_controls != null:
+        var controls_width: float = 235.0 if width < 850.0 else 275.0 if compact_steps else 330.0
+        practice_step_controls.offset_left = -controls_width - 12.0
+        practice_step_controls.offset_right = -12.0
+        practice_step_picker.custom_minimum_size.x = controls_width - 98.0
+        for arrow in [practice_step_previous_button, practice_step_next_button]:
+            arrow.custom_minimum_size.x = 40.0
     for bpm_button in [tempo_down_button, tempo_up_button]:
         bpm_button.custom_minimum_size.x = 84.0 if compact_steps else 100.0
     practice_header.add_theme_constant_override("separation", 10 if width < 950.0 else 20)
@@ -2387,7 +2405,7 @@ func _update_hand_stages(state: Dictionary) -> void:
     var stages: Array = state.get("hand_stages", [])
     # Transport changes must not add/remove a layout row: doing so changes
     # the score's zoom and moves its notes at Start and Pause.
-    practice_stage_bar.visible = not stages.is_empty()
+    practice_stage_bar.visible = not stages.is_empty() and size.x >= 1150.0
     if stages == presented_hand_stages:
         return
     presented_hand_stages = stages.duplicate(true)
