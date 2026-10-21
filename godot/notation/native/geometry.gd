@@ -2,13 +2,13 @@ extends RefCounted
 # Deterministic engraving-independent geometry for Phase C.
 # No texture, Verovio resource, frame clock or audio timing dependency.
 const STEPS := {"C":0, "D":1, "E":2, "F":3, "G":4, "A":5, "B":6}
-const SUPPORTED := ["whole", "half", "quarter", "eighth", "16th", "32nd", "64th"]
-const BEAM_LEVELS := {"eighth":1, "16th":2, "32nd":3, "64th":4}
+const SUPPORTED := ["whole", "half", "quarter", "eighth", "16th", "32nd", "64th", "128th"]
+const BEAM_LEVELS := {"eighth":1, "16th":2, "32nd":3, "64th":4, "128th":5}
 const BARLINE_STYLES := ["regular", "light-light", "light-heavy",
     "heavy-light", "heavy-heavy", "heavy", "none", "dashed", "dotted",
     "tick", "short"]
 const NOTE_BEATS := {"whole":4.0,"half":2.0,"quarter":1.0,
-    "eighth":.5,"16th":.25,"32nd":.125,"64th":.0625}
+    "eighth":.5,"16th":.25,"32nd":.125,"64th":.0625,"128th":.03125}
 
 static func dotted_multiplier(dots: int) -> float:
     var result := 1.0
@@ -88,8 +88,8 @@ static func supported(model: Dictionary) -> String:
         var duration: String = str(event.get("note_type", ""))
         if kind not in ["note", "rest"] or duration not in SUPPORTED:
             return "Unsupported music value: " + duration
-        if int(event.get("dots", 0)) < 0 or int(event.get("dots", 0)) > 2:
-            return "More than two rhythm dots are not supported"
+        if int(event.get("dots", 0)) < 0 or int(event.get("dots", 0)) > 4:
+            return "More than four rhythm dots are not supported"
         if not valid_modification(event):
             return "Invalid or unrepresentable tuplet time ratio"
         for mark in event.get("tuplet_marks", []):

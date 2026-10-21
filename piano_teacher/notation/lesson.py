@@ -58,15 +58,29 @@ def _pitch(parent: ET.Element, value: int, spelling=None) -> None:
     ET.SubElement(p, "octave").text = str(octave)
 
 
-def _type(duration: int) -> tuple[str, bool] | None:
-    # Spell ordinary durations. Compound values are split before emission.
-    lengths = {4: "whole", 2: "half", 1: "quarter", .5: "eighth",
-               .25: "16th", .125: "32nd", .0625: "64th"}
-    for beats, label in lengths.items():
-        if duration == round(beats * DIVISIONS):
-            return label, False
-        if duration == round(beats * DIVISIONS * 1.5):
-            return label, True
+_NOTE_VALUES = ((Fraction(4), "whole"), (Fraction(2), "half"),
+                (Fraction(1), "quarter"), (Fraction(1, 2), "eighth"),
+                (Fraction(1, 4), "16th"), (Fraction(1, 8), "32nd"),
+                (Fraction(1, 16), "64th"), (Fraction(1, 32), "128th"))
+
+
+def _dotted_ticks(beats: Fraction, dots: int) -> int | None:
+    # 10080 divisions cannot express every small multiply-dotted value.
+    # Generate only mathematically exact ticks; never round an onset.
+    duration = beats * DIVISIONS * sum(
+        (Fraction(1, 2 ** position) for position in range(dots + 1)),
+        Fraction(0))
+    return int(duration) if duration.denominator == 1 else None
+
+
+def _type(duration: int) -> tuple[str, int] | None:
+    # One to four dots are supported when the source rhythm is exactly
+    # expressible on our fixed tick grid; otherwise preserve its duration
+    # using the existing precise time-modification path.
+    for beats, label in _NOTE_VALUES:
+        for dots in range(5):
+            if _dotted_ticks(beats, dots) == duration:
+                return label, dots
     return None
 
 
@@ -74,9 +88,10 @@ def _duration_parts(duration: int) -> tuple[int, ...]:
     """Spell compounds without relying on Verovio to infer missing types."""
     if _tuplet_type(duration) is not None:
         return (duration,)
-    ordinary = sorted({round(beats * DIVISIONS * dot)
-                       for beats in (4, 2, 1, .5, .25, .125, .0625)
-                       for dot in (1, 1.5)}, reverse=True)
+    ordinary = sorted({
+        length for beats, _ in _NOTE_VALUES for dots in range(5)
+        if (length := _dotted_ticks(beats, dots)) is not None
+    }, reverse=True)
     parts = []
     remaining = duration
     for length in ordinary:
@@ -94,7 +109,7 @@ def _duration_parts(duration: int) -> tuple[int, ...]:
 
 
 def _tuplet_type(duration: int):
-    for beats,label in ((4,'whole'),(2,'half'),(1,'quarter'),(.5,'eighth'),(.25,'16th'),(.125,'32nd'),(.0625,'64th')):
+    for beats,label in ((4,'whole'),(2,'half'),(1,'quarter'),(.5,'eighth'),(.25,'16th'),(.125,'32nd'),(.0625,'64th'),(.03125,'128th')):
         for actual,normal in ((3,2),(5,4),(7,4),(9,8)):
             ticks = beats*DIVISIONS*normal/actual
             if abs(ticks-round(ticks)) < 1e-8 and duration == round(ticks):
@@ -119,7 +134,7 @@ def _append_note(measure: ET.Element, pitch: int | None, duration: int,
     spelling = _type(duration)
     if spelling:
         ET.SubElement(el, "type").text = spelling[0]
-        if spelling[1]:
+        for _ in range(spelling[1]):
             ET.SubElement(el, "dot")
     else:
         # MIDI onsets can lie between ordinary note values. MusicXML duration
@@ -131,7 +146,7 @@ def _append_note(measure: ET.Element, pitch: int | None, duration: int,
             ratio = Fraction(normal, actual)
         else:
             bases = ((4, "whole"), (2, "half"), (1, "quarter"),
-                     (.5, "eighth"), (.25, "16th"), (.125, "32nd"), (.0625, "64th"))
+                     (.5, "eighth"), (.25, "16th"), (.125, "32nd"), (.0625, "64th"), (.03125, "128th"))
             beats, label = min(bases, key=lambda value: abs(value[0] * DIVISIONS-duration))
             ratio = Fraction(duration, round(beats * DIVISIONS))
         ET.SubElement(el, "type").text = label

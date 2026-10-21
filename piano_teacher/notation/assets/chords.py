@@ -18,7 +18,7 @@ VERSION = 7
 _STEPS = {"C":0,"D":1,"E":2,"F":3,"G":4,"A":5,"B":6}
 _LETTERS = "CDEFGAB"
 _BEATS = {"whole":4.0,"half":2.0,"quarter":1.0,"eighth":.5,
-          "16th":.25,"32nd":.125,"64th":.0625}
+          "16th":.25,"32nd":.125,"64th":.0625,"128th":.03125}
 
 
 def diatonic(spelling: dict) -> int:
