@@ -164,3 +164,34 @@ def test_safe_installer_extracts_only_real_sf2_member(tmp_path):
     assert not (tmp_path / "instrument.sf2").exists()
     with pytest.raises(FileExistsError):
         installer.install(out, source=archive.as_uri())
+
+
+def test_single_piano_soundfont_never_resets_unused_percussion_channel(monkeypatch, tmp_path):
+    # Match the C API contract without needing an installed FluidSynth/SF2.
+    calls = []
+    class FakeFunction:
+        def __init__(self, name):
+            self.name = name
+            self.restype = None
+            self.argtypes = None
+        def __call__(self, *args):
+            calls.append((self.name, args))
+            return {"new_fluid_settings": 1, "new_fluid_synth": 2,
+                    "fluid_synth_sfload": 3}.get(self.name, 0)
+    class FakeLib:
+        def __init__(self):
+            self.functions = {}
+        def __getattr__(self, name):
+            return self.functions.setdefault(name, FakeFunction(name))
+
+    lib = FakeLib()
+    monkeypatch.setattr(sample_piano.ct.util, "find_library", lambda _: "libstub.so")
+    monkeypatch.setattr(sample_piano.ct, "CDLL", lambda _: lib)
+    font = tmp_path / "piano.sf2"
+    synth = sample_piano._Synth(font, 44100)
+    try:
+        assert ("fluid_synth_sfload", (2, font.__fspath__().encode(), 0)) in calls
+        assert ("fluid_synth_program_select", (2, 0, 3, 0, 0)) in calls
+    finally:
+        synth.close()
+
