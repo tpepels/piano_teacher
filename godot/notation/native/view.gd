@@ -153,6 +153,15 @@ func load_score(candidate: Dictionary) -> bool:
     # measure. Start at the selected density and let the full authentic
     # ink rectangles below determine the minimum safe whole-score scale.
     # Onset positions remain perfectly linear; no note is shifted in time.
+    # Retain the original hard rejection for pathological near-coincident
+    # distinct attacks (<~.003 beats): no compositor may pretend that an
+    # unrenderable source has enough clearance simply because registers differ.
+    if Geometry.required_density(
+            timeline.model.get("notation_events", []), configured_density,
+            timeline.MAX_SCORE_PIXELS_PER_BEAT) < 0.0:
+        failure_reason = "Rhythm too dense for one fixed native horizontal scale"
+        notice = failure_reason
+        return false
     var density: float = configured_density
     if not timeline.set_score_density(density):
         failure_reason = timeline.last_error
