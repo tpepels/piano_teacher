@@ -121,6 +121,8 @@ func run() -> void:
                 var frame := root.get_texture().get_image()
                 var pixels := Vector2(frame.get_size()) / root.get_visible_rect().size
                 var panel: Rect2 = app.score_frame.get_global_rect()
+                check(not app.practice_step_controls.get_global_rect().intersects(panel),
+                    "%s %s: lesson navigation reserves space outside notation" % [dimensions, hand])
                 var transform: Transform2D = app.score_content.get_global_transform_with_canvas()
                 var rails: Array = app.score_layout.systems[0].staff_lines
                 for index in range(rails.size()):
