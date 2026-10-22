@@ -207,8 +207,13 @@ func load_score(candidate: Dictionary) -> bool:
     # distance or hide/shift a source accidental.
     var ink_density: float = density
     var fits_density := false
-    var max_usable_density: float = maxf(1.0,
-        size.x*(1.0-PLAYHEAD_FRACTION)/MIN_LOOKAHEAD_BEATS)
+    # The hidden Practice canvas is sometimes loaded before Godot assigns
+    # its first Control width. A zero-width value must not force every
+    # passage through five extremely expensive candidate engravings.
+    # Use the standard desktop viewport for that brief pre-layout state.
+    var viewport_width: float = size.x if size.x >= 640.0 else 1536.0
+    var max_usable_density: float = (
+        viewport_width*(1.0-PLAYHEAD_FRACTION)/MIN_LOOKAHEAD_BEATS)
     var fallbacks: Array = []
     for candidate_gap in [MAX_STAFF_GAP,17.0,14.0,11.0,8.5]:
         var tested_gap: float = float(candidate_gap)
