@@ -60,6 +60,10 @@ frozen discovery inventory. No filename selects a musical exception.
   do not move recovered rails. Antialiasing, erased/moved rules and authentic
   captured-pixel mutations have dedicated regressions. Pitch and glyph confidence
   thresholds are unchanged; inseparable dense evidence remains unverified.
+- Differential rest evidence cannot credit the same changed pixels to two source
+  identities in one frame, even when controls have different names or differ by
+  one pixel. Such identities remain ambiguous. Distinct displaced rests retain
+  credit, and different clocks can legitimately reuse the same playhead pixels.
 
 These corrections preserve original performance data and the existing continuous
 scrolling/fixed-playhead architecture. Semantic metadata adds no visual credit.

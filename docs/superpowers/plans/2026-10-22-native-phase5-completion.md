@@ -29,17 +29,17 @@ claims about written notation. Functional fixes and cleanup use separate commits
   #38 remain draft and unmerged. Main currently has no branch protection.
 - [x] Create isolated Phase 5 worktree from Phase 4, preserving original local
   files and copying the ten newly discovered MIDI files without changing bytes.
-- [ ] Add hash-bound MIDI discovery and supplemental whole-piece evaluation,
+- [x] Add hash-bound MIDI discovery and supplemental whole-piece evaluation,
   reusing both independent auditors and the existing fail-closed aggregator.
   Regressions cover added/deleted/changed sources, duplicate identities,
   missing modes, runtime failures and unsupported transcription.
-- [ ] Reproduce authored secondary-voice rest loss; add regressions before
+- [x] Reproduce authored secondary-voice rest loss; add regressions before
   correcting projection while retaining suppression of synthetic gap clutter.
-- [ ] Inventory legacy callers and remove only demonstrably unused code.
+- [x] Inventory legacy callers and remove only demonstrably unused code.
   Validate necessary reference engraving and diagnostic paths remain intact.
-- [ ] Run every discovered score in all three modes. Separate musical defects,
+- [x] Run every discovered score in all three modes. Separate musical defects,
   visual defects, unsupported constructs and framework limitations in findings.
-- [ ] Correct confirmed new defects with regressions and repeat targeted checks.
+- [x] Correct confirmed new defects with regressions and repeat targeted checks.
 - [ ] Run full application, notation, mutation and release checks locally;
   preserve coverage and provenance, record actual limitations and performance.
 - [ ] Review integrated changes, batch logical commits, then use final hosted

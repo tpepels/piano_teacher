@@ -258,6 +258,7 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
     for event in written:
         written_by[round(float(event["beat"]),8),event["staff"],event["voice"]].append(event)
     failures, measured = [], []
+    identity_deltas = defaultdict(list)
     coverage = dict(expected=len(written), verified=0, ambiguous=0,
                     unsupported=0, unverified=0, mismatch=0)
 
@@ -341,6 +342,9 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
                     raise ValueError("intervention changed pixels outside the rest onset region")
                 if xs.max()-xs.min() > gap*4 or ys.max()-ys.min() > gap*9:
                     raise ValueError("intervention changed more than a single bounded rest/dot contour")
+                # Preserve full-frame pixel addresses, without contour trimming
+                # or registration: different voices must not reuse one glyph.
+                identity_deltas[beat].append((row, np.flatnonzero(delta)))
                 # Font expectation is read independently of fixture assets.
                 scores = {name.removeprefix("rest_"):round(_compare_isolated_masks(
                     delta, _rest_template_mask(glyph,gap)),4)
@@ -377,10 +381,27 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
                 failures.append(f"{key} {identity}: {exc}")
             coverage[row["status"]] += 1
             measured.append(row)
+    for beat, candidates in identity_deltas.items():
+        shared = set()
+        for index, (_row, pixels) in enumerate(candidates):
+            for other_index in range(index):
+                other_pixels = candidates[other_index][1]
+                if np.intersect1d(pixels, other_pixels, assume_unique=True).size:
+                    shared.update((index, other_index))
+        for index in sorted(shared):
+            row = candidates[index][0]
+            if row["status"] not in ("verified", "ambiguous"):
+                continue
+            coverage[row["status"]] -= 1
+            row.update(status="ambiguous", reason=
+                       "Same-frame rest interventions share changed pixels; source identities are inseparable")
+            coverage["ambiguous"] += 1
+            failures.append(f"{beat} {row['source_id']}: {row['reason']}")
     return {"passed":not failures, "complete":coverage["verified"] == len(written),
             "written_active_rests":len(written),
             "image_rest_glyphs_verified":coverage["verified"],
-            "intrinsically_indistinguishable_half_whole":coverage["ambiguous"],
+            "intrinsically_indistinguishable_half_whole":sum(
+                r["status"] == "ambiguous" and r.get("type_ambiguity", False) for r in measured),
             "coverage":coverage, "failures":failures, "measured":measured,
             "scope":"visible isolated contour against external Verovio font; full-frame repeat and restore invariance",
             "limitation":"contour proof does not establish rest placement, dots, half/whole identity or absence of overlaps"}
