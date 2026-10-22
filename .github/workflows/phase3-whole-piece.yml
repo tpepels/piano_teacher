@@ -1,27 +1,50 @@
 name: Phase 3 whole-piece audit and detector mutations
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      revision:
+        required: true
+        type: string
+    outputs:
+      revision:
+        description: Full commit SHA accepted by all four detector suites
+        value: ${{ jobs.mutations-gate.outputs.revision }}
+
+permissions:
+  contents: read
 
 jobs:
   phase3-semantic-mutations:
-    name: Independent semantic mutations and corpus accounting
+    name: Phase 1 and Phase 3 semantic detector mutations
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Install independent source audit dependencies
         run: python -m pip install -e '.[godot,test]'
-      - name: Semantic corruption and aggregation regressions
-        run: python -m pytest -q tests/test_notation_proof_phase1.py tests/test_phase3_semantics.py tests/test_phase3_corpus_aggregation.py
+      - name: Collect then run semantic detector mutations
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: |
+          python scripts/record_notation_mutations.py --suite semantic \
+            --revision "$REVISION" --out /tmp/notation-mutations/semantic
+      - name: Preserve semantic registry and raw JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notation-mutations-semantic
+          path: /tmp/notation-mutations/semantic/
+          if-no-files-found: warn
+          retention-days: 30
 
   phase3-visual-mutations:
-    name: Independent visual mutations and actual rest isolation
+    name: Phase 2 and Phase 3 visual detector mutations
     runs-on: ubuntu-latest
     container: archlinux:latest
     timeout-minutes: 35
@@ -29,16 +52,110 @@ jobs:
       - name: Install real Godot renderer and test environment
         run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision }}
       - name: Install application and Python audit dependencies
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install -e '.[godot,test]'
-      - name: Visual detector mutations and full-score window accounting
-        run: .venv/bin/python -m pytest -q tests/test_phase3_whole_piece_coverage.py tests/test_phase3_independent_pixels.py tests/test_phase3_rest_differences.py tests/test_phase3_visual_coverage.py tests/test_phase3_raster_matching.py tests/test_phase3_capture_provenance.py
-      - name: Real Godot baseline and deliberately wrong rest captures
+      - name: Collect then run visual detector mutations
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: |
+          .venv/bin/python scripts/record_notation_mutations.py --suite visual \
+            --revision "$REVISION" --out /tmp/notation-mutations/visual
+      - name: Preserve visual registry and raw JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notation-mutations-visual
+          path: /tmp/notation-mutations/visual/
+          if-no-files-found: warn
+          retention-days: 30
+
+  phase3-real-rest-mutations:
+    name: Real Godot framebuffer rest isolation
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 35
+    steps:
+      - name: Install actual Godot renderer and test environment
+        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision }}
+      - name: Install application and Python audit dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e '.[godot,test]'
+      - name: Collect then run real-rest mutations even if visual mutations fail
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
           PIANO_REAL_PIXEL_TESTS: "1"
+          REVISION: ${{ inputs.revision }}
         run: |
           xvfb-run -a -s "-screen 0 1600x1000x24" \
-            .venv/bin/python -m pytest -q tests/test_phase3_real_rest_protocol.py
+            .venv/bin/python scripts/record_notation_mutations.py --suite real_rest \
+            --revision "$REVISION" --out /tmp/notation-mutations/real_rest
+      - name: Preserve real-rest registry and raw JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notation-mutations-real_rest
+          path: /tmp/notation-mutations/real_rest/
+          if-no-files-found: warn
+          retention-days: 30
+
+  phase4-release-contract:
+    name: Phase 4 release policy and workflow contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install policy collection and test dependencies
+        run: python -m pip install -e '.[godot,test]'
+      - name: Collect then run every Phase 4 contract at this revision
+        env:
+          REVISION: ${{ inputs.revision }}
+        run: |
+          python scripts/record_notation_mutations.py --suite release_contract \
+            --revision "$REVISION" --out /tmp/notation-mutations/release_contract
+      - name: Preserve release-contract registry and raw JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notation-mutations-release_contract
+          path: /tmp/notation-mutations/release_contract/
+          if-no-files-found: warn
+          retention-days: 30
+
+  mutations-gate:
+    name: Require all four mutation suites without skips
+    needs: [phase3-semantic-mutations, phase3-visual-mutations, phase3-real-rest-mutations, phase4-release-contract]
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      revision: ${{ steps.decision.outputs.revision }}
+    steps:
+      - id: decision
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          REVISION: ${{ inputs.revision }}
+          EVENT_REVISION: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import json, os, re
+          results = json.loads(os.environ['RESULTS'])
+          if len(results) != 4 or any(job['result'] != 'success' for job in results.values()):
+              raise SystemExit('All four mutation suites must execute and pass')
+          revision = os.environ['REVISION']
+          if not re.fullmatch(r'[0-9a-f]{40}', revision) or revision != os.environ['EVENT_REVISION']:
+              raise SystemExit('Mutation revision differs from this event')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write(f'revision={revision}\n')
+          PY
