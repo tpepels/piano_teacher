@@ -240,3 +240,113 @@ def prove_beam_ink(original_xml: str, generated_xml: str,folder: Path) -> dict:
             errors.append(f"Beam between {at-.25} and {at+.25} not found in native pixels")
     return {"passed":not errors,"beamed_pairs":len(checks),
             "bridges":checks,"errors":errors}
+
+
+def _match_note_template(pixels: np.ndarray, entry: dict, gap: float,
+                         x: float, y: float) -> float:
+    import base64
+    bounds=entry["bounds"]
+    width=max(1,round(bounds[2]*gap/250))
+    height=max(1,round(bounds[3]*gap/250))
+    rgba=Image.open(BytesIO(base64.b64decode(entry["png_base64"]))).convert("RGBA")
+    rgba=rgba.resize((width,height),Image.Resampling.BILINEAR)
+    template=np.asarray(rgba)[:,:,3]>96
+    count=int(template.sum())
+    best=0.0
+    for dx in range(-4,5):
+        for dy in range(-4,5):
+            left=round(x+bounds[0]*gap/250+dx)
+            top=round(y+bounds[1]*gap/250+dy)
+            if left<0 or top<0 or left+width>=pixels.shape[1] or top+height>=pixels.shape[0]:
+                continue
+            crop=pixels[top:top+height,left:left+width]
+            score=2*int(np.count_nonzero(crop&template))/(count+int(crop.sum())+1e-9)
+            best=max(score,best)
+    return best
+
+
+def prove_note_rhythm_ink(original_xml: str, generated_xml: str,folder: Path) -> dict:
+    """Check whole/half/quarter/eighth silhouettes and augmentation dots."""
+    src=read_written_score(original_xml)
+    gen=read_written_score(generated_xml)
+    expected=[e for e in src.symbols if e["kind"]=="note" and e["staff"]=="right"]
+    actual=[e for e in gen.symbols if e["kind"]=="note" and e["staff"]=="right"]
+    sig=lambda e:(round(float(e["beat"]),6), e["note_type"],e["dots"],e["spelling"])
+    errors=[]
+    if Counter(map(sig,expected))!=Counter(map(sig,actual)):
+        errors.append("Original written note types/dots/spelling diverge from generated score")
+    if not expected:
+        errors.append("No source note rhythms exercised")
+    atlas=json.loads((folder/"fixture.json").read_text())["assets"]
+    note_templates=atlas["native_note_templates"]
+    fonts=atlas["native_glyphs"]
+    clef=_staff_clefs(src)["right"]
+    candidate_names=("whole","half_up","quarter_up","eighth_up","16th_up")
+    records=[]
+    dots_checked=0
+    for item in expected:
+        beat=float(item["beat"])
+        image_path=folder/f"native-{beat:.2f}.png"
+        if not image_path.exists():
+            errors.append(f"Rhythm beat {beat}: screenshot missing")
+            continue
+        image=Image.open(image_path)
+        staff=detect_staff_lines(image)["right"]
+        y=expected_y(staff,item["spelling"],clef)
+        x=round(image.width*PLAYHEAD)
+        pixels=bright(image)
+        ranked=sorted(((name,round(_match_note_template(
+            pixels,note_templates[name],staff.gap,x,y),4))
+                for name in candidate_names), key=lambda p:p[1],reverse=True)
+        expected_glyph=item["note_type"]+("_up" if item["note_type"]!="whole" else "")
+        if expected_glyph not in note_templates:
+            errors.append(f"Unsupported note sprite {expected_glyph}")
+            continue
+        _check_match(f"rhythm beat {beat}",expected_glyph,ranked,errors,records)
+        if item["dots"]:
+            # A separate Verovio augmentation-dot outline must appear to
+            # the right of the head, independent of its note sprite.
+            ranked_dot=classify_symbol(image,fonts,("augmentation_dot",),
+                x+staff.gap*1.05,y-staff.gap*.24,staff.gap,centered=True,
+                dxs=range(-6,7),dys=range(-5,6))
+            dot_score=ranked_dot[0][1]
+            dots_checked+=1
+            if dot_score<.72:
+                errors.append(f"Missing augmentation-dot ink beat {beat} ({dot_score:.3f})")
+    return {"passed":not errors,"written_notes":len(expected),
+            "dots_checked":dots_checked,"matched":records,"errors":errors}
+
+
+def prove_slur_ink(original_xml: str, generated_xml: str,folder: Path) -> dict:
+    from xml.etree import ElementTree as ET
+    source=ET.fromstring(original_xml)
+    generated=ET.fromstring(generated_xml)
+    source_marks=[(m.get("type"),m.get("number","1"))
+                  for m in source.findall(".//notations/slur")]
+    generated_marks=[(m.get("type"),m.get("number","1"))
+                  for m in generated.findall(".//notations/slur")]
+    errors=[]
+    if source_marks != generated_marks or source_marks != [("start","1"),("stop","1")]:
+        errors.append("Original slur endpoints are missing or changed")
+    # Scan the physical midpoint away from note stems and noteheads. The
+    # slur contour spans a D4-to-E4 interior interval in original MusicXML.
+    frame=folder/"native-1.50.png"
+    if not frame.is_file():
+        errors.append("Missing middle-of-slur Godot screenshot")
+        return {"passed":False,"errors":errors}
+    image=Image.open(frame)
+    staves=detect_staff_lines(image)
+    score=read_written_score(original_xml)
+    clef=_staff_clefs(score)["right"]
+    notes={float(e["beat"]):e for e in score.symbols if e["kind"]=="note"
+           and e["staff"]=="right"}
+    low=min(expected_y(staves["right"],notes[i]["spelling"],clef)
+            for i in (1.0,2.0))
+    high=max(expected_y(staves["right"],notes[i]["spelling"],clef)
+             for i in (1.0,2.0))
+    gap=staves["right"].gap
+    candidate=bridge_ink(image,range(round(low-3.5*gap),round(high+3.5*gap)))
+    if candidate<7:
+        errors.append(f"No source-expected slur curve at native image midpoint ({candidate})")
+    return {"passed":not errors,"slur_marks":len(source_marks),
+            "bridge_pixels":candidate,"errors":errors}
