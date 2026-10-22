@@ -10,6 +10,7 @@ import argparse
 from collections import Counter
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -68,11 +69,14 @@ def grouped(jobs, dimension):
 
 
 def _expected_nodeids(files):
-    result = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", *files],
-                            cwd=ROOT, text=True, capture_output=True, timeout=120)
+    result = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "--color=no",
+                             "-o", "addopts=", *files],
+                            cwd=ROOT, env={**os.environ, "PYTEST_ADDOPTS": ""},
+                            text=True, capture_output=True, timeout=120)
     if result.returncode:
         raise ValueError("Mutation collection failed: " + (result.stdout + result.stderr)[-2000:])
-    nodes = [line.strip() for line in result.stdout.splitlines() if "::test_" in line]
+    prefixes = tuple(path + "::" for path in files)
+    nodes = [line.strip() for line in result.stdout.splitlines() if line.strip().startswith(prefixes)]
     if not nodes or len(set(nodes)) != len(nodes):
         raise ValueError("Mutation collection empty or duplicated")
     return nodes
