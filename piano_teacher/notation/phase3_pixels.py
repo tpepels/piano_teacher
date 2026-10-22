@@ -14,12 +14,11 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 import json
-import numpy as np
 
 from PIL import Image
 
 from .proof import read_written_score
-from .pixel_proof import detect_staff_lines, expected_y, observed_notehead_ys
+from .pixel_proof import detect_staff_lines, expected_y
 from .symbol_pixel_proof import bright, _match_glyph
 
 
