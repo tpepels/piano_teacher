@@ -22,6 +22,10 @@ import hashlib
 import platform
 import subprocess
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 from piano_teacher.score import import_piece
 # Imported as a script in CI and as a package module in pytest.
 if __package__:

@@ -62,3 +62,8 @@ No existing publishing workflow exists as of this change.
   The same setting now covers the pre-existing integration/curriculum container
   jobs. Unavailable Git metadata yields an explicit unverified snapshot instead
   of aborting artifact creation; matching unavailable snapshots grant no credit.
+- Hosted visual runs exposed a standalone CLI namespace import failure after
+  successful captures. The runner now bootstraps the repository root before
+  application imports; an isolated-interpreter regression reproduces the old
+  failure. A direct actual-Godot pickup audit now emits its canonical summary
+  and correctly exits incomplete (2 verified, 11 unsupported obligations).

@@ -28,6 +28,18 @@ def test_container_provenance_uses_an_explicit_exact_workspace_trust_step():
             checkout = next(i for i, step in enumerate(steps) if step.get("uses", "").startswith("actions/checkout@"))
             command = 'git config --global --add safe.directory "$GITHUB_WORKSPACE"'
             assert steps[checkout + 1].get("run") == command
+
+
+def test_standalone_visual_cli_bootstraps_uninstalled_scripts_namespace(tmp_path):
+    script = ROOT / "scripts/audit_phase3_whole_pieces.py"
+    code = ("import runpy,sys; "
+            f"sys.path.insert(0, {str(ROOT / 'scripts')!r}); "
+            f"runpy.run_path({str(script)!r}); "
+            "from scripts.notation_release_provenance import current_provenance; "
+            "assert len(current_provenance()['revision']) == 40")
+    result = subprocess.run([sys.executable, "-I", "-c", code], cwd=tmp_path,
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stdout + result.stderr
 SEMANTIC_FILES = (
     "tests/test_notation_proof_phase1.py",
     "tests/test_phase3_semantics.py",
