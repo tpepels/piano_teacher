@@ -43,6 +43,44 @@ geometric tolerances; fail if any score symbols are never exercised at all.
 Mutation testing must prove that moving one notehead by one staff step or
 hiding a symbol is caught.
 
+### Phase 2 — implemented common-notation image gate (PR #36)
+
+Actual 1536 × 520 Godot screenshots are captured by the production native
+compositor, not the retired raster renderer. Independent original-MusicXML
+parsing supplies pitches, clefs, onset times, rest/note values, accidentals,
+explicit beam group boundaries, tie continuations and slur endpoints.
+
+The automated image oracle detects:
+- All 64 notehead/staff positions in two two-hand reference pieces (16 isolated
+  notes and 48 chord members in 16 captured frames);
+- Written quarter, half, eighth and whole REST outlines: atlas glyph
+  classification distinguishes exact silhouettes, not merely nearby pixels;
+- Sharp, flat and natural accidental shapes at their source pitches;
+- Whole, half, quarter, eighth + real flag silhouettes and dotted-quarter
+  augmentation mark;
+- Horizontal ink bridges for explicitly written beams, an intermeasure tie
+  and a slur, including independent source-versus-generated-group checks.
+
+Tests physically remove or move notehead ink, erase staff rails, replace a
+rest glyph, or erase continuous marks; negative cases must fail. Artifacts
+include every screenshot and the original and generated MusicXML alongside
+per-glyph scores and structured errors. The beam tests revealed a REAL
+source-to-lesson notation defect: authored <beam> groups were discarded,
+resulting in flagged eighths. Projection now preserves complete groups by
+source-note ID, hand/voice and unchanged rhythmic duration; incomplete
+practice variants do not emit broken groups.
+
+**Phase 2 acceptance scope:** the common glyph and connective classes listed
+above, tested as standalone independently authored scores; zero unmatched
+source features in those cases, zero image mismatches, passing mutations and
+full application integration. Scores or notation classes outside that set
+are NOT certified as image-perfect.
+
+Whole-piece coverage, dense overlapping voices, unusual clefs, tuplets and
+complex curved marks remain explicitly assigned to Phase 3. This distinction
+must survive in CI summaries; a Phase 2 pass must never be presented as
+proof of correct sheet music across the entire repertoire.
+
 ## Phase 3 — Whole-piece coverage, not chosen excerpts
 
 Audit *all* measures of each bundled score in right/left/both settings,

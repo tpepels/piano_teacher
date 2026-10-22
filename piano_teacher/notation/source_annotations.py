@@ -93,6 +93,83 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                     voice_hands[(pi, voice)].add(hand)
                     measure_voice_hands[(pi, mi, voice)].add(hand)
 
+    # Preserve source-authored beam groups only when ALL their notes survive
+    # in the same generated hand, measure and voice with the same written
+    # duration. We must not silently replace explicit 8th-note beams with
+    # isolated flags. Shortened lessons can legitimately lose a partial
+    # group: never leave an orphan beam begin/end in those variants.
+    groups = defaultdict(list)
+    group_indices = defaultdict(int)
+    for pi, part in enumerate(source_parts):
+        for mi, measure in enumerate(part.findall("measure")):
+            for ordinal, original in enumerate(measure):
+                if original.tag != "note" or original.find("pitch") is None:
+                    continue
+                sid = f"xml-p{pi}-m{mi}-e{ordinal}"
+                for mark in original.findall("beam"):
+                    group_key = (pi, mi, original.findtext("voice", "1"),
+                                 original.findtext("staff", "1"),
+                                 mark.get("number", "1"))
+                    if (mark.text or "").strip() == "begin":
+                        group_indices[group_key] += 1
+                    groups[(*group_key, group_indices[group_key])].append(
+                        (sid, mark.text or ""))
+    for group_key, members in groups.items():
+        # Each original group MUST have one begin, an end, and no splits.
+        # Chord members cannot independently start beams.
+        kinds = [kind.strip() for _, kind in members]
+        if len(members) < 2 or kinds[0] != "begin" or kinds[-1] != "end" or (
+                any(kind not in ("continue", "begin", "end")
+                    or (0 < i < len(kinds)-1 and kind != "continue")
+                    for i, kind in enumerate(kinds))):
+            continue
+        translated = []
+        for sid, _kind in members:
+            original = original_notes.get(sid)
+            dest = targets.get(sid)
+            if original is None or dest is None:
+                break
+            if original.find("chord") is not None or (
+                    original.findtext("type") != dest.findtext("type")):
+                break
+            # Never attach source beams to an attack whose exercise rhythm
+            # changed during simplification/quantization.
+            original_duration = original.findtext("duration")
+            generated_duration = dest.findtext("duration")
+            if not original_duration or not generated_duration:
+                break
+            translated.append((dest, original, sid))
+        if len(translated) != len(members):
+            continue
+        if len({(hands[sid], dest.findtext("voice", "1"))
+                for dest, _src, sid in translated}) != 1:
+            continue
+        source_divisions = None
+        # Source and generated division units may differ, so verify each
+        # duration as a Fraction of a quarter note.
+        pi, mi, *_ = group_key
+        for tag in source_parts[pi].findall("measure")[mi].findall("attributes/divisions"):
+            source_divisions = int(tag.text)
+        if source_divisions is None:
+            for prior in source_parts[pi].findall("measure")[:mi]:
+                for tag in prior.findall("attributes/divisions"):
+                    source_divisions = int(tag.text)
+        if not source_divisions:
+            continue
+        valid = True
+        for dest, original, _sid in translated:
+            if (Fraction(int(original.findtext("duration")),source_divisions)
+                    != Fraction(int(dest.findtext("duration")),10080)):
+                valid = False
+                break
+        if not valid:
+            continue
+        for (dest, original, _sid), (_sid2, kind) in zip(translated,members):
+            if dest.findall("beam"):
+                raise ValueError("Conflicting source beam marks in generated score")
+            for original_mark in original.findall("beam"):
+                dest.append(deepcopy(original_mark))
+
     # Slur numbers are local to the original part and voice; the same number
     # may be used simultaneously by two voices or across two staves.
     paired_slurs = set()
