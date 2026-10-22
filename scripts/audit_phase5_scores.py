@@ -122,8 +122,13 @@ def audit_visual(name: str, index: int, hand: str, destination: Path,
         elements = result['visual_elements']
     except Exception as exc:
         errors.append(dict(score=name, error=f'{type(exc).__name__}: {exc}'))
-        elements = [dict(row, status='unverified', reason=str(exc))
+        elements = [dict(row, status='unsupported',
+                         reason='MIDI does not uniquely specify a written score')
                     for row in source_inventory(None, hand, source_name=name)]
+        elements.append(dict(id=f'{name}:{hand}:capture', construct='window_capture',
+                             status='unverified', source=dict(id=name, measure=None,
+                                                             staff=hand, voice=None),
+                             reason=f'{type(exc).__name__}: {exc}'))
     return dict(schema_version=1, verification_kind='visual', source=name,
                 source_index=index, source_sha256=sha256(path.read_bytes()).hexdigest(),
                 hand=hand, passed=not errors,

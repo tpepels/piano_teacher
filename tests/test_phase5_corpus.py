@@ -103,3 +103,19 @@ def test_existing_pinned_corpus_is_not_replaced():
     from scripts.aggregate_phase3_corpus import PINNED_SOURCES
     assert len(PINNED_SOURCES) == 17
     assert PINNED_SOURCES[9].endswith('xml_parallel_tied_voices.musicxml')
+
+
+def test_semantic_runtime_failure_retains_every_original_obligation(tmp_path, monkeypatch):
+    from scripts import audit_phase3_semantics as runner
+    from piano_teacher.notation.semantic_contract import source_inventory
+    def failure(*args, **kwargs):
+        raise RuntimeError('deliberate importer failure')
+    monkeypatch.setattr(runner, 'import_piece', failure)
+    name = runner.ALL_SOURCES[7]
+    expected = source_inventory(runner.source_path(name))
+    result = runner.audit_source(name, source_index=7, artifact_dir=tmp_path)
+    by_id = {row['id']: row for row in result['elements']}
+    assert set(row['id'] for row in expected) <= by_id.keys()
+    assert all(by_id[row['id']]['status']=='unverified' for row in expected)
+    assert result['coverage']['verified'] == 0
+    assert not result['passed'] and not result['complete']

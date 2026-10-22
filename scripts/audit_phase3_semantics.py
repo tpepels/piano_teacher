@@ -72,6 +72,7 @@ def audit_source(name: str, *, source_index: int, hand: str = 'both',
     if artifact_dir is not None:
         artifact_dir = Path(artifact_dir)
         artifact_dir.mkdir(parents=True, exist_ok=True)
+    inventory = []
 
     def retain(key, filename, data):
         if artifact_dir is not None:
@@ -112,7 +113,15 @@ def audit_source(name: str, *, source_index: int, hand: str = 'both',
         ledger = _Ledger()
         ledger.add('pipeline', 'runtime_error', dict(id=f'source:{source_index}'),
                    'auditable original/generated/native score', f'{type(exc).__name__}: {exc}')
-        return {**metadata, **ledger.report(), 'runtime_error': f'{type(exc).__name__}: {exc}'}
+        # Preserve the original denominator at the producer as well as at the
+        # independent aggregator. An importer/model crash cannot erase source
+        # obligations from a standalone case artifact.
+        ledger.elements.extend({**row, 'status': 'unsupported'
+                                if row['construct']=='midi_written_transcription' else 'unverified',
+                                'reason': f'Pipeline failed before verification: {type(exc).__name__}: {exc}'}
+                               for row in inventory)
+        return {**metadata, **ledger.report(), 'source_inventory': inventory,
+                'runtime_error': f'{type(exc).__name__}: {exc}'}
 
 
 def main(argv=None) -> int:
