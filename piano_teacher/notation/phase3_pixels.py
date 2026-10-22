@@ -88,10 +88,10 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                            "head_half" if kind=="half" else "head_black")
                     # Seconds in a chord are deliberately displaced
                     # horizontally by the engraver; they may also overlap
-                    # another head mask and lower silhouette agreement.
+                    # another head mask and lower silhouette agreement.\n                    # Thirds also have overlapping head silhouettes because\n                    # the font head height exceeds one staff-space.
                     adjacent=any(
                         other is not note and
-                        abs(other_y-target) <= .55*staves[staff].gap
+                        abs(other_y-target) <= 1.05*staves[staff].gap
                         for other_y,other in pitches
                     )
                     x_search=range(-32,33) if adjacent else range(-16,17)
