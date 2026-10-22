@@ -63,7 +63,7 @@ CASES = (
               "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 1, 2, "right"),
     AuditCase("chopin-5-6-both",
               "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 5, 6,
-              min_lookahead_beats=1.75),
+              min_lookahead_beats=1.75, features=("triplet_turn",)),
     AuditCase("danny-boy-1-2-both", "Danny_Boy(Bill_Evans_Ver_).midi", 1, 2),
     AuditCase("merry-go-round-1-2-both", "Merry-Go-Round-of-Life.midi", 1, 2),
     AuditCase("peace-piece-1-2-both", "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi", 1, 2),
@@ -163,6 +163,20 @@ def feature_errors(model: dict, case: AuditCase) -> list[str]:
     simultaneous = Counter((e.get("staff"), e.get("beat"), e.get("voice"))
                            for e in notes)
     measures = model.get("measures", [])
+    pitched = sorted((e for e in notes if e.get("staff") == "right"),
+                     key=lambda e:float(e.get("beat",0)))
+    def matched_turn():
+        for i in range(len(pitched)-2):
+            group = pitched[i:i+3]
+            if not all(e.get("note_type") == "32nd" and
+                       (e.get("time_modification") or {}).get("actual") == 3 and
+                       (e.get("time_modification") or {}).get("normal") == 2
+                       for e in group):
+                continue
+            if all(abs(float(group[j+1]["beat"])-float(group[j]["beat"])
+                       -1.0/12.0) < 2e-6 for j in (0,1)):
+                return True
+        return False
     observed = {
         "chords": any(count > 1 for count in simultaneous.values()),
         "ties": any(not e.get("is_attack", True) for e in notes),
@@ -170,6 +184,7 @@ def feature_errors(model: dict, case: AuditCase) -> list[str]:
         "grandstaff": {"left", "right"} <= {e.get("staff") for e in notes},
         "key_change": len({tuple(sorted(m["keys"].items())) for m in measures}) > 1,
         "rests": sum(e["kind"] == "rest" for e in events) >= 2,
+        "triplet_turn": matched_turn() if "triplet_turn" in case.features else False,
     }
     return [f"{case.name} stopped exercising required {feature} notation"
             for feature in case.features if not observed.get(feature, False)]
