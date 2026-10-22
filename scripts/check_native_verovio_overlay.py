@@ -303,10 +303,28 @@ def draw_overlay(reference: Image.Image, native: Image.Image,
     return n
 
 
-def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
+def run(out: Path, godot: str, case: AuditCase = CASES[0],
+        *, all_symbols: bool = False) -> dict:
     out.mkdir(parents=True,exist_ok=True)
     data, engraving = fixture(case)
     model = data["model"]
+    if all_symbols:
+        # Every score symbol is positioned at the playhead in at least one
+        # actual native frame. Every measure is also sampled even if silent.
+        # No best-effort subset or fixed four-frame sampling is permitted.
+        onsets = {round(float(e["beat"]), 8)
+                  for e in model["notation_events"]
+                  if e["kind"] in {"note", "rest"}}
+        measure_starts = {round(float(m["start_beat"]), 8)
+                          for m in model["measures"]}
+        data["sample_beats"] = sorted(onsets | measure_starts)
+        data["phase3_full"] = True
+        if not data["sample_beats"]:
+            raise AssertionError("Full-score witness has no sample clocks")
+        if len(data["sample_beats"]) > 256:
+            raise AssertionError(
+                f"Window has {len(data['sample_beats'])} onsets: split into smaller "
+                "measure windows rather than silently sampling a subset")
     # Preserve the actual lesson MusicXML as the single reference score.
     (out/"score.musicxml").write_text(data.pop("xml"),encoding="utf-8")
     (out/"fixture.json").write_text(json.dumps(data))
@@ -366,10 +384,53 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
                     30 < rest["x"] < screenshot.width-30):
                 if visible_ink(screenshot,rest["x"],rest["y"],26) < 7:
                     errors.append("Missing native rest pixels: "+str(rest["id"]))
-        frame["reference_notes_overlaid"] = draw_overlay(
-            reference.copy(),screenshot,refnotes,heads,
-            out/f"overlay-{frame['clock']:.2f}.png")
+        # Hundreds of full-score frames do not require hundreds of mostly
+        # redundant overlay PNGs. Phase 2 retains the full editorial overlays.
+        if not all_symbols:
+            frame["reference_notes_overlaid"] = draw_overlay(
+                reference.copy(),screenshot,refnotes,heads,
+                out/f"overlay-{frame['clock']:.2f}.png")
         registered_ids.update(set(heads) & reference_ids)
+    full_coverage = None
+    if all_symbols:
+        all_notes = {str(e["id"]) for e in model["notation_events"]
+                     if e["kind"] == "note"}
+        all_rests = {str(e["id"]) for e in model["notation_events"]
+                     if e["kind"] == "rest"}
+        registered_rests = {str(rest["id"]) for frame in report["frames"]
+                            for rest in frame["rests"]}
+        missed_notes = sorted(all_notes - rendered_ids)
+        missed_rests = sorted(all_rests - registered_rests)
+        unexpected_notes = sorted(rendered_ids - all_notes)
+        unexpected_rests = sorted(registered_rests - all_rests)
+        sampled_measures = set()
+        for measure in model["measures"]:
+            start = float(measure["start_beat"])
+            if any(abs(float(frame["clock"]) - start) <= 0.0000001
+                   for frame in report["frames"]):
+                sampled_measures.add(int(measure["number"]))
+        missed_measures = sorted(
+            {int(m["number"]) for m in model["measures"]} - sampled_measures)
+        full_coverage = {
+            "measure_count": len(model["measures"]),
+            "sampled_measures": len(sampled_measures),
+            "source_noteheads": len(all_notes),
+            "unique_rendered_noteheads": len(rendered_ids),
+            "source_rests": len(all_rests),
+            "unique_rendered_rests": len(registered_rests),
+            "screenshot_count": len(report["frames"]),
+            "missing_notes": missed_notes,
+            "missing_rests": missed_rests,
+            "missing_measure_starts": missed_measures,
+            "unexpected_notes": unexpected_notes,
+            "unexpected_rests": unexpected_rests,
+            "witness_type": "Godot identity + per-note/rest ink proximity; "
+                "not yet independent whole-piece symbol-classification",
+        }
+        if any((missed_notes, missed_rests, missed_measures,
+                unexpected_notes, unexpected_rests)):
+            errors.append(f"{case.name}: incomplete whole-window coverage: "
+                          + json.dumps(full_coverage,sort_keys=True))
     if checked == 0:
         errors.append("No on-screen native noteheads were checked")
     if active_pixel_samples == 0:
@@ -396,6 +457,7 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
                             if n["kind"] == "note"), default=0),
         "rest_overlap_count":report["unavoidable_rest_overlaps"],
         "errors":errors,
+        "whole_window_coverage":full_coverage,
     }
     (out/"audit.json").write_text(json.dumps(summary,indent=2)+"\n")
     if errors:
