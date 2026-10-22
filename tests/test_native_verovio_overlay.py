@@ -2,7 +2,7 @@
 from PIL import Image, ImageDraw
 
 from scripts.check_native_verovio_overlay import (
-    MAX_AUTUMN_DENSITY, readability_errors, visible_ink,
+    CASES, MAX_AUTUMN_DENSITY, readability_errors, selected_cases, visible_ink,
 )
 
 
@@ -86,3 +86,41 @@ def test_native_rest_a_long_way_off_its_staff_is_detected():
     }]
     assert any("displaced too far" in error for error in
                readability_errors(_model(),report))
+
+def test_real_overlay_corpus_is_pinned_to_every_bundled_midi():
+    from scripts.check_user_midi_visual_regression import CASES as MIDI_CASES
+    expected_files = {filename for filename, hand in MIDI_CASES}
+    assert {case.filename for case in CASES} == expected_files
+    assert len(CASES) >= 9
+    assert len({case.name for case in CASES}) == len(CASES)
+    assert any(case.name == "autumn-7-8-both" and
+               case.max_density == MAX_AUTUMN_DENSITY for case in CASES)
+    assert any(case.filename.startswith("Chopin") and
+               case.first_bar > 1 for case in CASES)
+    assert {"left", "right", "both"} <= {case.hand for case in CASES}
+    assert all(case.first_bar > 0 and case.last_bar >= case.first_bar
+               for case in CASES)
+
+
+def test_overlay_case_selector_never_silently_drops_the_hard_passage():
+    assert selected_cases() == CASES
+    assert [case.name for case in selected_cases("autumn-7-8")] == [
+        "autumn-7-8-both"]
+    assert len(selected_cases("Chopin")) == 2
+    import pytest
+    with pytest.raises(ValueError, match="No native overlay cases"):
+        selected_cases("not-a-real-midi")
+
+
+def test_per_case_density_and_rest_budgets_are_isolated():
+    from scripts.check_native_verovio_overlay import AuditCase
+    easy = AuditCase("other", "test.midi", 1, 2, max_density=500,
+                     max_tiny_rests=5, max_dots=4)
+    test_model = _model()
+    test_model["notation_events"][0]["dots"] = 3
+    report = _report()
+    report["density"] = 438.68
+    assert readability_errors(test_model, report, easy) == []
+    assert any("px/beat" in error for error in
+               readability_errors(test_model, report, CASES[0]))
+
