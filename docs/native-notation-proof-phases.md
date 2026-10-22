@@ -83,6 +83,13 @@ proof of correct sheet music across the entire repertoire.
 
 ## Phase 3 — Whole-piece coverage, not chosen excerpts
 
+**PR #37 remains an incomplete proof.** A successful capture or detector check
+does not certify a whole score. The completion gate separately requires every
+semantic and visual ledger element to be `verified`; `ambiguous`, `unsupported`,
+`unverified` and `mismatch` all block it. See
+[the Phase 3 framework and findings](native-notation-phase3-framework-2026-10-22.md)
+for the implemented contracts, reproducible commands and remaining gaps.
+
 Audit *all* measures of each bundled score in right/left/both settings,
 repeat with independent MusicXML reference scores covering ordinary piano
 notation (single notes, chords, rests, rhythm values, dots, beam groupings,

@@ -56,6 +56,8 @@ func _audit() -> void:
         "unavoidable_rest_overlaps": renderer.unavoidable_rest_overlaps,
         "frames": [],
         "rest_difference_controls": [],
+        "rest_difference_protocol": 2,
+        "rest_difference_frames": [],
     }
     var samples: Array = fixture.get("sample_beats", [0.0, 1.5, 3.5, 5.5])
     for point in samples:
@@ -85,6 +87,13 @@ func _audit() -> void:
         # rest Y coordinate. Source ID is only used to select what to hide,
         # never to supply expected glyph type, shape or screen geometry.
         if bool(fixture.get("phase3_full",false)):
+            # A no-op frame detects clock/animation drift independently of
+            # the rest intervention. Preserve full frames so unrelated changes
+            # outside the old 160px crop cannot be hidden from the oracle.
+            await process_frame
+            await RenderingServer.frame_post_draw
+            var repeat_file := "repeat-%.5f.png" % at
+            view.get_texture().get_image().save_png(folder.path_join(repeat_file))
             var visible_rests: Array = []
             for candidate in renderer.ordered_events:
                 if str(candidate.get("kind","")) != "rest":
@@ -104,11 +113,9 @@ func _audit() -> void:
                 await process_frame
                 await RenderingServer.frame_post_draw
                 var control: Image = view.get_texture().get_image()
-                var rect := Rect2i(roundi(renderer.size.x*.42)-80,0,160,520)
-                var crop: Image = control.get_region(rect)
                 var control_file: String = ("rest-without-%d-%.5f.png" % [
                     rest_index,at])
-                if crop.is_empty() or crop.save_png(
+                if control.is_empty() or control.save_png(
                         folder.path_join(control_file)) != OK:
                     failures.append("Cannot capture suppressed rest "+control_file)
                 result["rest_difference_controls"].append({
@@ -121,6 +128,14 @@ func _audit() -> void:
                 renderer.ordered_events = original_events
                 renderer.queue_redraw()
             renderer.ordered_events = original_events
+            renderer.queue_redraw()
+            await process_frame
+            await process_frame
+            await RenderingServer.frame_post_draw
+            var restored_file := "restored-%.5f.png" % at
+            view.get_texture().get_image().save_png(folder.path_join(restored_file))
+            result["rest_difference_frames"].append({
+                "clock":at,"repeat_file":repeat_file,"restored_file":restored_file})
         var heads: Dictionary = {}
         for identifier in renderer.drawn_noteheads:
             var xy: Vector2 = renderer.drawn_noteheads[identifier]

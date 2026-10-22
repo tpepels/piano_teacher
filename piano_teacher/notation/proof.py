@@ -12,6 +12,10 @@ Two separate questions are checked:
 
 Neither check establishes correct *pixels*. The Phase 2 native compositor
 audit must independently check displayed glyph geometry and visibility.
+
+The legacy Phase 1 gates below retain their original attack/inventory scope.
+Phase 3's original written-event comparisons, coverage ledger and unsupported
+source inventory are implemented in semantic_contract.py using this reader.
 """
 from __future__ import annotations
 
@@ -32,6 +36,9 @@ class WrittenScore:
     keys: tuple[tuple, ...]
     clefs: tuple[tuple, ...]
     bars: tuple[float, ...]
+    measures: tuple[dict, ...] = ()
+    uncovered: tuple[dict, ...] = ()
+    issues: tuple[dict, ...] = ()
 
 
 def _hand(part_id: str, part_name: str, part_index: int, staff: str) -> str:
@@ -48,15 +55,18 @@ def _q(value) -> float:
     return round(float(value), 8)
 
 
-def read_written_score(xml: str) -> WrittenScore:
+def read_written_score(xml: str, *, strict: bool = True) -> WrittenScore:
     """Read MusicXML facts without using any piano_teacher parser.
 
     The score must be partwise. Tracks voices with MusicXML backup/forward and
     chord semantics; collapses tied continuation notes into held source notes.
-    Unpitched percussion and grace notes are deliberately outside this first
-    audit and must not be claimed as covered.
+    Unsupported attributes, percussion and grace notes are retained in
+    ``uncovered`` and must not be claimed as compared. ``strict=False`` retains
+    malformed generated tie/empty-measure facts for discrepancy reporting.
     """
     root = ET.fromstring(xml)
+    for element in root.iter():
+        element.tag = element.tag.rsplit("}", 1)[-1]
     if root.tag != "score-partwise":
         raise ValueError("Notation proof requires score-partwise MusicXML")
     names = {p.get("id"): p.findtext("part-name", "")
@@ -68,29 +78,69 @@ def read_written_score(xml: str) -> WrittenScore:
     lengths = [Fraction(0) for _ in range(count)]
     raw = []
     meters, keys, clefs = [], [], []
+    structures, uncovered, issues = [], [], []
+    segment_ids = set()
     for part_index, part in enumerate(parts):
         division = 1
         pid = part.get("id", "")
         name = names.get(pid, "")
+        current_meter = None
+        current_keys, current_clefs = {}, {}
+        part_start = Fraction(0)
         for bar_index, bar in enumerate(part.findall("measure")):
+            initial_meter = current_meter
+            initial_keys = current_keys.copy()
+            initial_clefs = current_clefs.copy()
             position = Fraction(0)
             high_water = Fraction(0)
             last_onset = None
-            for element in bar:
+            label = bar.get("number", str(bar_index + 1))
+            metadata = []
+            for ordinal, element in enumerate(bar):
+                identity = dict(id=f"xml-p{part_index}-m{bar_index}-e{ordinal}",
+                                xml_id=element.get("id"), part=pid,
+                                part_index=part_index, measure=label,
+                                measure_index=bar_index,
+                                staff=element.findtext("staff", "1"),
+                                voice=element.findtext("voice", "1"),
+                                ordinal=ordinal)
                 if element.tag == "attributes":
+                    for attribute in element:
+                        if attribute.tag not in ("divisions", "time", "key", "clef"):
+                            uncovered.append(dict(source={**identity, "voice": None, "staff": None},
+                                construct=attribute.tag,
+                                reason=f"MusicXML attribute {attribute.tag} is not compared",
+                                xml=ET.tostring(attribute, encoding="unicode")))
                     div = element.findtext("divisions")
                     if div is not None:
                         division = int(div)
                         if division <= 0:
                             raise ValueError("Nonpositive MusicXML divisions")
                     for time in element.findall("time"):
-                        meters.append((bar_index, (int(time.findtext("beats")),
-                                                    int(time.findtext("beat-type")))))
+                        current_meter = (int(time.findtext("beats")),
+                                         int(time.findtext("beat-type")))
+                        meters.append((bar_index, current_meter))
+                        metadata.append(dict(kind="meter", onset=_q(position), value=current_meter,
+                            hand=None, source={**identity, "voice": None, "staff": None}))
                     for key in element.findall("key"):
+                        current_keys[key.get("number", "1")] = int(key.findtext("fifths", "0"))
+                        metadata.append(dict(kind="key", onset=_q(position),
+                                             staff=key.get("number", "1"),
+                                             hand=_hand(pid, name, part_index, key.get("number", "1")),
+                                             source={**identity, "voice": None, "staff": key.get("number", "1")},
+                                             value=current_keys[key.get("number", "1")]))
                         keys.append((bar_index, _hand(pid, name, part_index,
                                         key.get("number", "1")),
                                      int(key.findtext("fifths", "0"))))
                     for clef in element.findall("clef"):
+                        current_clefs[clef.get("number", "1")] = (
+                            clef.findtext("sign"), int(clef.findtext("line", "2")),
+                            int(clef.findtext("clef-octave-change", "0")))
+                        metadata.append(dict(kind="clef", onset=_q(position),
+                                             staff=clef.get("number", "1"),
+                                             hand=_hand(pid, name, part_index, clef.get("number", "1")),
+                                             source={**identity, "voice": None, "staff": clef.get("number", "1")},
+                                             value=current_clefs[clef.get("number", "1")]))
                         clefs.append((bar_index, _hand(pid, name, part_index,
                                           clef.get("number", "1")),
                                       clef.findtext("sign"),
@@ -105,7 +155,26 @@ def read_written_score(xml: str) -> WrittenScore:
                         raise ValueError("Negative MusicXML voice cursor")
                     high_water = max(high_water, position)
                     continue
-                if element.tag != "note" or element.find("grace") is not None:
+                if element.tag != "note":
+                    if element.tag not in ("print",):
+                        uncovered.append(dict(source=identity, construct=element.tag,
+                                              reason="Outside timed written-event contract"))
+                    continue
+                identifier = element.get("id")
+                if identifier:
+                    if identifier in segment_ids:
+                        issues.append(dict(source=identity, reason=f"Duplicate written segment identity: {identifier}"))
+                    segment_ids.add(identifier)
+                if element.find("grace") is not None:
+                    uncovered.append(dict(source=identity, construct="grace_notes",
+                                          reason="Untimed ornament not compared by this contract"))
+                    continue
+                if element.find("unpitched") is not None:
+                    uncovered.append(dict(source=identity, construct="unpitched_notes",
+                                          reason="Unpitched notation is not supported"))
+                    duration = Fraction(element.findtext("duration", "0")) / division
+                    position += duration
+                    high_water = max(high_water, position)
                     continue
                 duration_text = element.findtext("duration")
                 if duration_text is None:
@@ -127,23 +196,42 @@ def read_written_score(xml: str) -> WrittenScore:
                     step = pitched.findtext("step")
                     if step not in SEMITONES:
                         raise ValueError("Invalid pitch step in source")
-                    alter = int(pitched.findtext("alter", "0"))
+                    alteration = Fraction(pitched.findtext("alter", "0"))
+                    if alteration.denominator != 1:
+                        raise ValueError("Unsupported microtonal source pitch")
+                    alter = int(alteration)
                     octave = int(pitched.findtext("octave"))
                     spelling = (step, alter, octave)
                     pitch = (octave + 1) * 12 + SEMITONES[step] + alter
                 elif element.find("rest") is None:
                     raise ValueError("Unsupported unpitched XML event")
                 modification = element.find("time-modification")
+                sound_ties = {t.get("type") for t in element.findall("tie")}
+                written_ties = {t.get("type") for t in element.findall("notations/tied")}
+                if sound_ties and written_ties and sound_ties != written_ties:
+                    issues.append(dict(source=identity, reason="Sound and written ties disagree"))
+                tie_types = sound_ties or written_ties
+                for mark in element.findall("notations/*"):
+                    if mark.tag not in ("tied", "tuplet"):
+                        uncovered.append(dict(source=identity, construct=mark.tag,
+                                              reason="Source notation outside this contract"))
                 raw.append(dict(
-                    index=bar_index, measure=int(bar.get("number", str(bar_index + 1))),
+                    index=bar_index, measure=(int(label) if label.lstrip("-").isdigit()
+                                              else bar_index + 1),
+                    source=identity, part=pid, part_index=part_index,
+                    raw_staff=identity["staff"],
                     onset=onset, duration=duration, staff=staff,
                     voice=element.findtext("voice", "1"), pitch=pitch,
                     spelling=spelling, id=element.get("id"),
                     kind="note" if pitched is not None else "rest",
                     note_type=element.findtext("type"),
                     dots=len(element.findall("dot")), chord=chord,
-                    tie_start=any(t.get("type") == "start" for t in element.findall("tie")),
-                    tie_stop=any(t.get("type") == "stop" for t in element.findall("tie")),
+                    tie_start="start" in tie_types, tie_stop="stop" in tie_types,
+                    tied_marks=tuple(tuple(sorted(t.attrib.items()))
+                                     for t in element.findall("notations/tied")),
+                    beams=tuple((t.get("number", "1"), (t.text or "").strip(),
+                                 tuple(sorted((k, v) for k, v in t.attrib.items() if k != "number")))
+                                for t in element.findall("beam")),
                     accidental=element.findtext("accidental"),
                     time_modification=(
                         (int(modification.findtext("actual-notes")),
@@ -153,13 +241,31 @@ def read_written_score(xml: str) -> WrittenScore:
                                         t.get("bracket", "no"),
                                         t.get("show-number", "actual"))
                                        for t in element.findall("notations/tuplet")),
+                    tuplet_extras=tuple(tuple(sorted((k, v) for k, v in t.attrib.items()
+                        if k not in ("type", "number", "bracket", "show-number")))
+                        for t in element.findall("notations/tuplet")),
                     visible=element.get("print-object") != "no",
                 ))
             lengths[bar_index] = max(lengths[bar_index], high_water)
+            structures.append(dict(
+                source=dict(id=f"xml-p{part_index}-m{bar_index}", part=pid,
+                            part_index=part_index, measure=label,
+                            measure_index=bar_index, staff=None, voice=None),
+                index=bar_index, label=label, part=pid, part_index=part_index,
+                start_beat=_q(part_start), end_beat=_q(part_start + high_water),
+                duration=_q(high_water), meter=current_meter,
+                keys={_hand(pid, name, part_index, s): value for s, value in current_keys.items()},
+                clefs={_hand(pid, name, part_index, s): value for s, value in current_clefs.items()},
+                metadata=metadata, implicit=bar.get("implicit", "no")))
+            structures[-1].update(initial_meter=initial_meter,
+                initial_keys={_hand(pid, name, part_index, s): v for s, v in initial_keys.items()},
+                initial_clefs={_hand(pid, name, part_index, s): v for s, v in initial_clefs.items()})
+            part_start += high_water
     boundaries = [Fraction(0)]
     for length in lengths:
         if length <= 0:
-            raise ValueError("Empty source measure")
+            if strict:
+                raise ValueError("Empty source measure")
         boundaries.append(boundaries[-1] + length)
     for entry in raw:
         entry["beat"] = boundaries[entry["index"]] + entry["onset"]
@@ -168,30 +274,47 @@ def read_written_score(xml: str) -> WrittenScore:
     for entry in sorted(raw, key=lambda e: (e["beat"], e["index"])):
         if entry["kind"] != "note":
             continue
-        tie_key = (entry["staff"], entry["voice"], entry["pitch"])
+        tie_key = (entry["part_index"], entry["raw_staff"], entry["voice"], entry["pitch"])
         end = entry["beat"] + entry["duration"]
         if entry["tie_stop"]:
             if tie_key not in open_ties:
-                raise ValueError("Orphan source tie")
-            index = open_ties[tie_key]
-            source_notes[index]["end"] = end
+                if strict:
+                    raise ValueError("Orphan source tie")
+                issues.append(dict(source=entry["source"], reason="Orphan source tie"))
+                index = len(source_notes)
+                source_notes.append(dict(staff=entry["staff"], pitch=entry["pitch"],
+                                         spelling=entry["spelling"], beat=entry["beat"],
+                                         end=end, source=entry["source"]))
+            else:
+                index = open_ties[tie_key]
+                if source_notes[index]["end"] != entry["beat"]:
+                    if strict:
+                        raise ValueError("Non-contiguous source tie")
+                    issues.append(dict(source=entry["source"], reason="Non-contiguous source tie"))
+                source_notes[index]["end"] = end
         else:
             index = len(source_notes)
             source_notes.append(dict(
                 staff=entry["staff"], pitch=entry["pitch"],
-                spelling=entry["spelling"], beat=entry["beat"], end=end))
+                spelling=entry["spelling"], beat=entry["beat"], end=end,
+                source=entry["source"]))
+        entry["attack_id"] = source_notes[index]["source"]["id"]
         if entry["tie_start"]:
             open_ties[tie_key] = index
         else:
             open_ties.pop(tie_key, None)
     if open_ties:
-        raise ValueError("Unterminated source tie")
+        if strict:
+            raise ValueError("Unterminated source tie")
+        for index in open_ties.values():
+            issues.append(dict(source=source_notes[index]["source"], reason="Unterminated source tie"))
     canonical = tuple(sorted((
         n["staff"], _q(n["beat"]), _q(n["end"] - n["beat"]),
         n["pitch"], n["spelling"]) for n in source_notes
     ))
     return WrittenScore(canonical, tuple(raw), tuple(meters), tuple(keys),
-                        tuple(clefs), tuple(_q(x) for x in boundaries))
+                        tuple(clefs), tuple(_q(x) for x in boundaries),
+                        tuple(structures), tuple(uncovered), tuple(issues))
 
 
 def _native_notes(model: dict) -> Counter:

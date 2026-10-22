@@ -1,0 +1,1706 @@
+{
+  "date": "2026-10-22",
+  "status": "blocked",
+  "complete": false,
+  "production_renderer_modified": false,
+  "pinned_sources": 17,
+  "hand_modes": [
+    "both",
+    "right",
+    "left"
+  ],
+  "cases_per_boundary": 51,
+  "boundaries": {
+    "semantic": {
+      "reports": 51,
+      "no_evidence_failures": 48,
+      "complete_cases": 0,
+      "coverage": {
+        "expected": 204657,
+        "verified": 199260,
+        "ambiguous": 42,
+        "unsupported": 5325,
+        "unverified": 0,
+        "mismatch": 30
+      },
+      "source_inventory_accounting_errors": 0,
+      "cases": [
+        {
+          "source_index": 0,
+          "source": "Ala_\u2013_Joep_Beving.midi",
+          "source_sha256": "1067787fafc2f511ccd866c3b1790a880201b7ee51064ba616e7a0b62d5de71c",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 4664,
+            "ambiguous": 2,
+            "unsupported": 25,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 4691
+          }
+        },
+        {
+          "source_index": 0,
+          "source": "Ala_\u2013_Joep_Beving.midi",
+          "source_sha256": "1067787fafc2f511ccd866c3b1790a880201b7ee51064ba616e7a0b62d5de71c",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 4664,
+            "ambiguous": 2,
+            "unsupported": 25,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 4691
+          }
+        },
+        {
+          "source_index": 0,
+          "source": "Ala_\u2013_Joep_Beving.midi",
+          "source_sha256": "1067787fafc2f511ccd866c3b1790a880201b7ee51064ba616e7a0b62d5de71c",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 4664,
+            "ambiguous": 2,
+            "unsupported": 25,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 4691
+          }
+        },
+        {
+          "source_index": 1,
+          "source": "Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi",
+          "source_sha256": "014a441640077d9aaa8f8378e405d57f7c2eed15cd4ee832b214738f42fb4d25",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 4825,
+            "ambiguous": 2,
+            "unsupported": 200,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 5027
+          }
+        },
+        {
+          "source_index": 1,
+          "source": "Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi",
+          "source_sha256": "014a441640077d9aaa8f8378e405d57f7c2eed15cd4ee832b214738f42fb4d25",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 4825,
+            "ambiguous": 2,
+            "unsupported": 200,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 5027
+          }
+        },
+        {
+          "source_index": 1,
+          "source": "Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi",
+          "source_sha256": "014a441640077d9aaa8f8378e405d57f7c2eed15cd4ee832b214738f42fb4d25",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 4825,
+            "ambiguous": 2,
+            "unsupported": 200,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 5027
+          }
+        },
+        {
+          "source_index": 2,
+          "source": "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+          "source_sha256": "2c303b0e43d79b40dc9850846738b2e0c43799347f6f4ac77d0f2e8e6dcb6bb9",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 9268,
+            "ambiguous": 2,
+            "unsupported": 15,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 9285
+          }
+        },
+        {
+          "source_index": 2,
+          "source": "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+          "source_sha256": "2c303b0e43d79b40dc9850846738b2e0c43799347f6f4ac77d0f2e8e6dcb6bb9",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 9268,
+            "ambiguous": 2,
+            "unsupported": 15,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 9285
+          }
+        },
+        {
+          "source_index": 2,
+          "source": "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+          "source_sha256": "2c303b0e43d79b40dc9850846738b2e0c43799347f6f4ac77d0f2e8e6dcb6bb9",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 9268,
+            "ambiguous": 2,
+            "unsupported": 15,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 9285
+          }
+        },
+        {
+          "source_index": 3,
+          "source": "Danny_Boy(Bill_Evans_Ver_).midi",
+          "source_sha256": "088155e12d875b789d6675e526f6581a93d08f8e3ea67b955011a9db758817f0",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 2374,
+            "ambiguous": 2,
+            "unsupported": 11,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 2387
+          }
+        },
+        {
+          "source_index": 3,
+          "source": "Danny_Boy(Bill_Evans_Ver_).midi",
+          "source_sha256": "088155e12d875b789d6675e526f6581a93d08f8e3ea67b955011a9db758817f0",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 2374,
+            "ambiguous": 2,
+            "unsupported": 11,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 2387
+          }
+        },
+        {
+          "source_index": 3,
+          "source": "Danny_Boy(Bill_Evans_Ver_).midi",
+          "source_sha256": "088155e12d875b789d6675e526f6581a93d08f8e3ea67b955011a9db758817f0",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 2374,
+            "ambiguous": 2,
+            "unsupported": 11,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 2387
+          }
+        },
+        {
+          "source_index": 4,
+          "source": "Merry-Go-Round-of-Life.midi",
+          "source_sha256": "58da911f75c8c2ee137b9e269439dcfb04b6f914f40749948aba93a434dc0048",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 17449,
+            "ambiguous": 2,
+            "unsupported": 146,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 17597
+          }
+        },
+        {
+          "source_index": 4,
+          "source": "Merry-Go-Round-of-Life.midi",
+          "source_sha256": "58da911f75c8c2ee137b9e269439dcfb04b6f914f40749948aba93a434dc0048",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 17449,
+            "ambiguous": 2,
+            "unsupported": 146,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 17597
+          }
+        },
+        {
+          "source_index": 4,
+          "source": "Merry-Go-Round-of-Life.midi",
+          "source_sha256": "58da911f75c8c2ee137b9e269439dcfb04b6f914f40749948aba93a434dc0048",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 17449,
+            "ambiguous": 2,
+            "unsupported": 146,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 17597
+          }
+        },
+        {
+          "source_index": 5,
+          "source": "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi",
+          "source_sha256": "56cb46d35d29febe7361fa7b907eec07f44fea12ca3c2bbcb09a8cb60da7a33a",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 17678,
+            "ambiguous": 2,
+            "unsupported": 1277,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 18957
+          }
+        },
+        {
+          "source_index": 5,
+          "source": "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi",
+          "source_sha256": "56cb46d35d29febe7361fa7b907eec07f44fea12ca3c2bbcb09a8cb60da7a33a",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 17678,
+            "ambiguous": 2,
+            "unsupported": 1277,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 18957
+          }
+        },
+        {
+          "source_index": 5,
+          "source": "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi",
+          "source_sha256": "56cb46d35d29febe7361fa7b907eec07f44fea12ca3c2bbcb09a8cb60da7a33a",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 17678,
+            "ambiguous": 2,
+            "unsupported": 1277,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 18957
+          }
+        },
+        {
+          "source_index": 6,
+          "source": "Waltz_for_Debby.midi",
+          "source_sha256": "3178818aef68a40ffbe04cf4b6b2a62a7b3cdc54ca154c6930c9ddb9f4b579e5",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 5232,
+            "ambiguous": 2,
+            "unsupported": 66,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 5300
+          }
+        },
+        {
+          "source_index": 6,
+          "source": "Waltz_for_Debby.midi",
+          "source_sha256": "3178818aef68a40ffbe04cf4b6b2a62a7b3cdc54ca154c6930c9ddb9f4b579e5",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 5232,
+            "ambiguous": 2,
+            "unsupported": 66,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 5300
+          }
+        },
+        {
+          "source_index": 6,
+          "source": "Waltz_for_Debby.midi",
+          "source_sha256": "3178818aef68a40ffbe04cf4b6b2a62a7b3cdc54ca154c6930c9ddb9f4b579e5",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 5232,
+            "ambiguous": 2,
+            "unsupported": 66,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 5300
+          }
+        },
+        {
+          "source_index": 7,
+          "source": "tests/fixtures/musical_fidelity/xml_pickup.musicxml",
+          "source_sha256": "531b079c47c44b008274feac7c6c4d8cd000d5d7b8dcb4048e6304643d029f51",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 53,
+            "ambiguous": 0,
+            "unsupported": 5,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 58
+          }
+        },
+        {
+          "source_index": 7,
+          "source": "tests/fixtures/musical_fidelity/xml_pickup.musicxml",
+          "source_sha256": "531b079c47c44b008274feac7c6c4d8cd000d5d7b8dcb4048e6304643d029f51",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 53,
+            "ambiguous": 0,
+            "unsupported": 5,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 58
+          }
+        },
+        {
+          "source_index": 7,
+          "source": "tests/fixtures/musical_fidelity/xml_pickup.musicxml",
+          "source_sha256": "531b079c47c44b008274feac7c6c4d8cd000d5d7b8dcb4048e6304643d029f51",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 53,
+            "ambiguous": 0,
+            "unsupported": 5,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 58
+          }
+        },
+        {
+          "source_index": 8,
+          "source": "tests/fixtures/musical_fidelity/xml_mixed_meter.musicxml",
+          "source_sha256": "1156368870dc1dcd0c7aa4850eeab524bfac9b3007bdf3624176d26843499294",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 59,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 60
+          }
+        },
+        {
+          "source_index": 8,
+          "source": "tests/fixtures/musical_fidelity/xml_mixed_meter.musicxml",
+          "source_sha256": "1156368870dc1dcd0c7aa4850eeab524bfac9b3007bdf3624176d26843499294",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 59,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 60
+          }
+        },
+        {
+          "source_index": 8,
+          "source": "tests/fixtures/musical_fidelity/xml_mixed_meter.musicxml",
+          "source_sha256": "1156368870dc1dcd0c7aa4850eeab524bfac9b3007bdf3624176d26843499294",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 59,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 60
+          }
+        },
+        {
+          "source_index": 9,
+          "source": "tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml",
+          "source_sha256": "ce269dac9e04a654f4865fdf998d89cef808a94b9f869bb893eb69932adc3689",
+          "hand": "both",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "verified": 108,
+            "ambiguous": 0,
+            "unsupported": 5,
+            "unverified": 0,
+            "mismatch": 10,
+            "expected": 123
+          }
+        },
+        {
+          "source_index": 9,
+          "source": "tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml",
+          "source_sha256": "ce269dac9e04a654f4865fdf998d89cef808a94b9f869bb893eb69932adc3689",
+          "hand": "left",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "verified": 108,
+            "ambiguous": 0,
+            "unsupported": 5,
+            "unverified": 0,
+            "mismatch": 10,
+            "expected": 123
+          }
+        },
+        {
+          "source_index": 9,
+          "source": "tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml",
+          "source_sha256": "ce269dac9e04a654f4865fdf998d89cef808a94b9f869bb893eb69932adc3689",
+          "hand": "right",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "verified": 108,
+            "ambiguous": 0,
+            "unsupported": 5,
+            "unverified": 0,
+            "mismatch": 10,
+            "expected": 123
+          }
+        },
+        {
+          "source_index": 10,
+          "source": "tests/fixtures/musical_fidelity/xml_chord_ties.musicxml",
+          "source_sha256": "f4215c12d5c52849ccd0d187fe6f4c68fcc2d38c3f5de7bbf7e9c7e69ca61db2",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 131,
+            "ambiguous": 0,
+            "unsupported": 7,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 138
+          }
+        },
+        {
+          "source_index": 10,
+          "source": "tests/fixtures/musical_fidelity/xml_chord_ties.musicxml",
+          "source_sha256": "f4215c12d5c52849ccd0d187fe6f4c68fcc2d38c3f5de7bbf7e9c7e69ca61db2",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 131,
+            "ambiguous": 0,
+            "unsupported": 7,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 138
+          }
+        },
+        {
+          "source_index": 10,
+          "source": "tests/fixtures/musical_fidelity/xml_chord_ties.musicxml",
+          "source_sha256": "f4215c12d5c52849ccd0d187fe6f4c68fcc2d38c3f5de7bbf7e9c7e69ca61db2",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 131,
+            "ambiguous": 0,
+            "unsupported": 7,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 138
+          }
+        },
+        {
+          "source_index": 11,
+          "source": "tests/fixtures/musical_fidelity/xml_keys_spelling.musicxml",
+          "source_sha256": "5fb3141da25d723328b422ab8dd13d63389d9caa6f43a65497d8c52eeb334c74",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 61,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 62
+          }
+        },
+        {
+          "source_index": 11,
+          "source": "tests/fixtures/musical_fidelity/xml_keys_spelling.musicxml",
+          "source_sha256": "5fb3141da25d723328b422ab8dd13d63389d9caa6f43a65497d8c52eeb334c74",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 61,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 62
+          }
+        },
+        {
+          "source_index": 11,
+          "source": "tests/fixtures/musical_fidelity/xml_keys_spelling.musicxml",
+          "source_sha256": "5fb3141da25d723328b422ab8dd13d63389d9caa6f43a65497d8c52eeb334c74",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 61,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 62
+          }
+        },
+        {
+          "source_index": 12,
+          "source": "tests/fixtures/musical_fidelity/xml_crossed_named_hands.musicxml",
+          "source_sha256": "2faf9f24103d4bc9eacb208498ea4126980b3cf60a2b2c4e8167a5bda1288490",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 47,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 48
+          }
+        },
+        {
+          "source_index": 12,
+          "source": "tests/fixtures/musical_fidelity/xml_crossed_named_hands.musicxml",
+          "source_sha256": "2faf9f24103d4bc9eacb208498ea4126980b3cf60a2b2c4e8167a5bda1288490",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 47,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 48
+          }
+        },
+        {
+          "source_index": 12,
+          "source": "tests/fixtures/musical_fidelity/xml_crossed_named_hands.musicxml",
+          "source_sha256": "2faf9f24103d4bc9eacb208498ea4126980b3cf60a2b2c4e8167a5bda1288490",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 47,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 48
+          }
+        },
+        {
+          "source_index": 13,
+          "source": "tests/fixtures/musical_fidelity/xml_grandstaff_voices.musicxml",
+          "source_sha256": "1d7f36d83f2b2e166605430c971b89c3bde0195a096a1f85b251a7182d9b621f",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 42,
+            "ambiguous": 0,
+            "unsupported": 2,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 44
+          }
+        },
+        {
+          "source_index": 13,
+          "source": "tests/fixtures/musical_fidelity/xml_grandstaff_voices.musicxml",
+          "source_sha256": "1d7f36d83f2b2e166605430c971b89c3bde0195a096a1f85b251a7182d9b621f",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 42,
+            "ambiguous": 0,
+            "unsupported": 2,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 44
+          }
+        },
+        {
+          "source_index": 13,
+          "source": "tests/fixtures/musical_fidelity/xml_grandstaff_voices.musicxml",
+          "source_sha256": "1d7f36d83f2b2e166605430c971b89c3bde0195a096a1f85b251a7182d9b621f",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 42,
+            "ambiguous": 0,
+            "unsupported": 2,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 44
+          }
+        },
+        {
+          "source_index": 14,
+          "source": "tests/fixtures/musical_fidelity/xml_trailing_rests.musicxml",
+          "source_sha256": "7b0f4d43ae167f784c110a99649e7d16441c094caf1da3078927722f12e8af64",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 90,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 91
+          }
+        },
+        {
+          "source_index": 14,
+          "source": "tests/fixtures/musical_fidelity/xml_trailing_rests.musicxml",
+          "source_sha256": "7b0f4d43ae167f784c110a99649e7d16441c094caf1da3078927722f12e8af64",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 90,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 91
+          }
+        },
+        {
+          "source_index": 14,
+          "source": "tests/fixtures/musical_fidelity/xml_trailing_rests.musicxml",
+          "source_sha256": "7b0f4d43ae167f784c110a99649e7d16441c094caf1da3078927722f12e8af64",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 90,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 91
+          }
+        },
+        {
+          "source_index": 15,
+          "source": "tests/fixtures/musical_fidelity/xml_quintuplets.musicxml",
+          "source_sha256": "475fdd100f64d658791627bf73ce0aaf62376916a10d013ef2a0485aa5cbda3b",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 108,
+            "ambiguous": 0,
+            "unsupported": 11,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 119
+          }
+        },
+        {
+          "source_index": 15,
+          "source": "tests/fixtures/musical_fidelity/xml_quintuplets.musicxml",
+          "source_sha256": "475fdd100f64d658791627bf73ce0aaf62376916a10d013ef2a0485aa5cbda3b",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 108,
+            "ambiguous": 0,
+            "unsupported": 11,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 119
+          }
+        },
+        {
+          "source_index": 15,
+          "source": "tests/fixtures/musical_fidelity/xml_quintuplets.musicxml",
+          "source_sha256": "475fdd100f64d658791627bf73ce0aaf62376916a10d013ef2a0485aa5cbda3b",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 108,
+            "ambiguous": 0,
+            "unsupported": 11,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 119
+          }
+        },
+        {
+          "source_index": 16,
+          "source": "tests/fixtures/musical_fidelity/xml_long_multipage.musicxml",
+          "source_sha256": "59d0c0dbc54aff612636bcecd7cb9db8c9a0ba12d2b77ad0b571ad841d435b16",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 4231,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 4232
+          }
+        },
+        {
+          "source_index": 16,
+          "source": "tests/fixtures/musical_fidelity/xml_long_multipage.musicxml",
+          "source_sha256": "59d0c0dbc54aff612636bcecd7cb9db8c9a0ba12d2b77ad0b571ad841d435b16",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 4231,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 4232
+          }
+        },
+        {
+          "source_index": 16,
+          "source": "tests/fixtures/musical_fidelity/xml_long_multipage.musicxml",
+          "source_sha256": "59d0c0dbc54aff612636bcecd7cb9db8c9a0ba12d2b77ad0b571ad841d435b16",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "verified": 4231,
+            "ambiguous": 0,
+            "unsupported": 1,
+            "unverified": 0,
+            "mismatch": 0,
+            "expected": 4232
+          }
+        }
+      ]
+    },
+    "visual": {
+      "reports": 51,
+      "no_evidence_failures": 41,
+      "complete_cases": 0,
+      "coverage": {
+        "expected": 88832,
+        "verified": 11336,
+        "ambiguous": 7136,
+        "unsupported": 70020,
+        "unverified": 336,
+        "mismatch": 4
+      },
+      "source_inventory_accounting_errors": 0,
+      "cases": [
+        {
+          "source_index": 0,
+          "source": "Ala_\u2013_Joep_Beving.midi",
+          "source_sha256": "1067787fafc2f511ccd866c3b1790a880201b7ee51064ba616e7a0b62d5de71c",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 3043,
+            "verified": 599,
+            "ambiguous": 70,
+            "unsupported": 2374,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 0,
+          "source": "Ala_\u2013_Joep_Beving.midi",
+          "source_sha256": "1067787fafc2f511ccd866c3b1790a880201b7ee51064ba616e7a0b62d5de71c",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 2041,
+            "verified": 360,
+            "ambiguous": 70,
+            "unsupported": 1611,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 0,
+          "source": "Ala_\u2013_Joep_Beving.midi",
+          "source_sha256": "1067787fafc2f511ccd866c3b1790a880201b7ee51064ba616e7a0b62d5de71c",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 1370,
+            "verified": 239,
+            "ambiguous": 0,
+            "unsupported": 1131,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 1,
+          "source": "Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi",
+          "source_sha256": "014a441640077d9aaa8f8378e405d57f7c2eed15cd4ee832b214738f42fb4d25",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 4062,
+            "verified": 461,
+            "ambiguous": 280,
+            "unsupported": 3321,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 1,
+          "source": "Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi",
+          "source_sha256": "014a441640077d9aaa8f8378e405d57f7c2eed15cd4ee832b214738f42fb4d25",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 2011,
+            "verified": 211,
+            "ambiguous": 133,
+            "unsupported": 1667,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 1,
+          "source": "Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi",
+          "source_sha256": "014a441640077d9aaa8f8378e405d57f7c2eed15cd4ee832b214738f42fb4d25",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 2359,
+            "verified": 250,
+            "ambiguous": 147,
+            "unsupported": 1962,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 2,
+          "source": "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+          "source_sha256": "2c303b0e43d79b40dc9850846738b2e0c43799347f6f4ac77d0f2e8e6dcb6bb9",
+          "hand": "both",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "expected": 5949,
+            "verified": 1052,
+            "ambiguous": 283,
+            "unsupported": 4607,
+            "unverified": 7,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 2,
+          "source": "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+          "source_sha256": "2c303b0e43d79b40dc9850846738b2e0c43799347f6f4ac77d0f2e8e6dcb6bb9",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 3433,
+            "verified": 529,
+            "ambiguous": 260,
+            "unsupported": 2644,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 2,
+          "source": "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+          "source_sha256": "2c303b0e43d79b40dc9850846738b2e0c43799347f6f4ac77d0f2e8e6dcb6bb9",
+          "hand": "right",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "expected": 2708,
+            "verified": 523,
+            "ambiguous": 23,
+            "unsupported": 2155,
+            "unverified": 7,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 3,
+          "source": "Danny_Boy(Bill_Evans_Ver_).midi",
+          "source_sha256": "088155e12d875b789d6675e526f6581a93d08f8e3ea67b955011a9db758817f0",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 1479,
+            "verified": 267,
+            "ambiguous": 78,
+            "unsupported": 1134,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 3,
+          "source": "Danny_Boy(Bill_Evans_Ver_).midi",
+          "source_sha256": "088155e12d875b789d6675e526f6581a93d08f8e3ea67b955011a9db758817f0",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 517,
+            "verified": 107,
+            "ambiguous": 12,
+            "unsupported": 398,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 3,
+          "source": "Danny_Boy(Bill_Evans_Ver_).midi",
+          "source_sha256": "088155e12d875b789d6675e526f6581a93d08f8e3ea67b955011a9db758817f0",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 1045,
+            "verified": 160,
+            "ambiguous": 66,
+            "unsupported": 819,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 4,
+          "source": "Merry-Go-Round-of-Life.midi",
+          "source_sha256": "58da911f75c8c2ee137b9e269439dcfb04b6f914f40749948aba93a434dc0048",
+          "hand": "both",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "expected": 10790,
+            "verified": 1479,
+            "ambiguous": 1043,
+            "unsupported": 8221,
+            "unverified": 47,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 4,
+          "source": "Merry-Go-Round-of-Life.midi",
+          "source_sha256": "58da911f75c8c2ee137b9e269439dcfb04b6f914f40749948aba93a434dc0048",
+          "hand": "left",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "expected": 6409,
+            "verified": 662,
+            "ambiguous": 810,
+            "unsupported": 4915,
+            "unverified": 22,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 4,
+          "source": "Merry-Go-Round-of-Life.midi",
+          "source_sha256": "58da911f75c8c2ee137b9e269439dcfb04b6f914f40749948aba93a434dc0048",
+          "hand": "right",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "expected": 5522,
+            "verified": 818,
+            "ambiguous": 233,
+            "unsupported": 4447,
+            "unverified": 24,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 5,
+          "source": "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi",
+          "source_sha256": "56cb46d35d29febe7361fa7b907eec07f44fea12ca3c2bbcb09a8cb60da7a33a",
+          "hand": "both",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "expected": 13352,
+            "verified": 1165,
+            "ambiguous": 1428,
+            "unsupported": 10642,
+            "unverified": 117,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 5,
+          "source": "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi",
+          "source_sha256": "56cb46d35d29febe7361fa7b907eec07f44fea12ca3c2bbcb09a8cb60da7a33a",
+          "hand": "left",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "expected": 4888,
+            "verified": 376,
+            "ambiguous": 572,
+            "unsupported": 3928,
+            "unverified": 12,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 5,
+          "source": "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi",
+          "source_sha256": "56cb46d35d29febe7361fa7b907eec07f44fea12ca3c2bbcb09a8cb60da7a33a",
+          "hand": "right",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "expected": 8838,
+            "verified": 794,
+            "ambiguous": 856,
+            "unsupported": 7088,
+            "unverified": 100,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 6,
+          "source": "Waltz_for_Debby.midi",
+          "source_sha256": "3178818aef68a40ffbe04cf4b6b2a62a7b3cdc54ca154c6930c9ddb9f4b579e5",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 3145,
+            "verified": 384,
+            "ambiguous": 372,
+            "unsupported": 2389,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 6,
+          "source": "Waltz_for_Debby.midi",
+          "source_sha256": "3178818aef68a40ffbe04cf4b6b2a62a7b3cdc54ca154c6930c9ddb9f4b579e5",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 1591,
+            "verified": 209,
+            "ambiguous": 115,
+            "unsupported": 1267,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 6,
+          "source": "Waltz_for_Debby.midi",
+          "source_sha256": "3178818aef68a40ffbe04cf4b6b2a62a7b3cdc54ca154c6930c9ddb9f4b579e5",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 1926,
+            "verified": 175,
+            "ambiguous": 257,
+            "unsupported": 1494,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 7,
+          "source": "tests/fixtures/musical_fidelity/xml_pickup.musicxml",
+          "source_sha256": "531b079c47c44b008274feac7c6c4d8cd000d5d7b8dcb4048e6304643d029f51",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 13,
+            "verified": 2,
+            "ambiguous": 0,
+            "unsupported": 11,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 7,
+          "source": "tests/fixtures/musical_fidelity/xml_pickup.musicxml",
+          "source_sha256": "531b079c47c44b008274feac7c6c4d8cd000d5d7b8dcb4048e6304643d029f51",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 7,
+            "verified": 0,
+            "ambiguous": 0,
+            "unsupported": 7,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 7,
+          "source": "tests/fixtures/musical_fidelity/xml_pickup.musicxml",
+          "source_sha256": "531b079c47c44b008274feac7c6c4d8cd000d5d7b8dcb4048e6304643d029f51",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 11,
+            "verified": 2,
+            "ambiguous": 0,
+            "unsupported": 9,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 8,
+          "source": "tests/fixtures/musical_fidelity/xml_mixed_meter.musicxml",
+          "source_sha256": "1156368870dc1dcd0c7aa4850eeab524bfac9b3007bdf3624176d26843499294",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 16,
+            "verified": 2,
+            "ambiguous": 0,
+            "unsupported": 14,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 8,
+          "source": "tests/fixtures/musical_fidelity/xml_mixed_meter.musicxml",
+          "source_sha256": "1156368870dc1dcd0c7aa4850eeab524bfac9b3007bdf3624176d26843499294",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 8,
+            "verified": 0,
+            "ambiguous": 0,
+            "unsupported": 8,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 8,
+          "source": "tests/fixtures/musical_fidelity/xml_mixed_meter.musicxml",
+          "source_sha256": "1156368870dc1dcd0c7aa4850eeab524bfac9b3007bdf3624176d26843499294",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 14,
+            "verified": 2,
+            "ambiguous": 0,
+            "unsupported": 12,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 9,
+          "source": "tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml",
+          "source_sha256": "ce269dac9e04a654f4865fdf998d89cef808a94b9f869bb893eb69932adc3689",
+          "hand": "both",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "expected": 33,
+            "verified": 2,
+            "ambiguous": 3,
+            "unsupported": 26,
+            "unverified": 0,
+            "mismatch": 2
+          }
+        },
+        {
+          "source_index": 9,
+          "source": "tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml",
+          "source_sha256": "ce269dac9e04a654f4865fdf998d89cef808a94b9f869bb893eb69932adc3689",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 7,
+            "verified": 0,
+            "ambiguous": 0,
+            "unsupported": 7,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 9,
+          "source": "tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml",
+          "source_sha256": "ce269dac9e04a654f4865fdf998d89cef808a94b9f869bb893eb69932adc3689",
+          "hand": "right",
+          "passed": false,
+          "complete": false,
+          "coverage": {
+            "expected": 31,
+            "verified": 2,
+            "ambiguous": 3,
+            "unsupported": 24,
+            "unverified": 0,
+            "mismatch": 2
+          }
+        },
+        {
+          "source_index": 10,
+          "source": "tests/fixtures/musical_fidelity/xml_chord_ties.musicxml",
+          "source_sha256": "f4215c12d5c52849ccd0d187fe6f4c68fcc2d38c3f5de7bbf7e9c7e69ca61db2",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 32,
+            "verified": 0,
+            "ambiguous": 7,
+            "unsupported": 25,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 10,
+          "source": "tests/fixtures/musical_fidelity/xml_chord_ties.musicxml",
+          "source_sha256": "f4215c12d5c52849ccd0d187fe6f4c68fcc2d38c3f5de7bbf7e9c7e69ca61db2",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 7,
+            "verified": 0,
+            "ambiguous": 0,
+            "unsupported": 7,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 10,
+          "source": "tests/fixtures/musical_fidelity/xml_chord_ties.musicxml",
+          "source_sha256": "f4215c12d5c52849ccd0d187fe6f4c68fcc2d38c3f5de7bbf7e9c7e69ca61db2",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 30,
+            "verified": 0,
+            "ambiguous": 7,
+            "unsupported": 23,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 11,
+          "source": "tests/fixtures/musical_fidelity/xml_keys_spelling.musicxml",
+          "source_sha256": "5fb3141da25d723328b422ab8dd13d63389d9caa6f43a65497d8c52eeb334c74",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 16,
+            "verified": 2,
+            "ambiguous": 0,
+            "unsupported": 14,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 11,
+          "source": "tests/fixtures/musical_fidelity/xml_keys_spelling.musicxml",
+          "source_sha256": "5fb3141da25d723328b422ab8dd13d63389d9caa6f43a65497d8c52eeb334c74",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 8,
+            "verified": 0,
+            "ambiguous": 0,
+            "unsupported": 8,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 11,
+          "source": "tests/fixtures/musical_fidelity/xml_keys_spelling.musicxml",
+          "source_sha256": "5fb3141da25d723328b422ab8dd13d63389d9caa6f43a65497d8c52eeb334c74",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 14,
+            "verified": 2,
+            "ambiguous": 0,
+            "unsupported": 12,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 12,
+          "source": "tests/fixtures/musical_fidelity/xml_crossed_named_hands.musicxml",
+          "source_sha256": "2faf9f24103d4bc9eacb208498ea4126980b3cf60a2b2c4e8167a5bda1288490",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 12,
+            "verified": 2,
+            "ambiguous": 0,
+            "unsupported": 10,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 12,
+          "source": "tests/fixtures/musical_fidelity/xml_crossed_named_hands.musicxml",
+          "source_sha256": "2faf9f24103d4bc9eacb208498ea4126980b3cf60a2b2c4e8167a5bda1288490",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 9,
+            "verified": 1,
+            "ambiguous": 0,
+            "unsupported": 8,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 12,
+          "source": "tests/fixtures/musical_fidelity/xml_crossed_named_hands.musicxml",
+          "source_sha256": "2faf9f24103d4bc9eacb208498ea4126980b3cf60a2b2c4e8167a5bda1288490",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 9,
+            "verified": 1,
+            "ambiguous": 0,
+            "unsupported": 8,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 13,
+          "source": "tests/fixtures/musical_fidelity/xml_grandstaff_voices.musicxml",
+          "source_sha256": "1d7f36d83f2b2e166605430c971b89c3bde0195a096a1f85b251a7182d9b621f",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 9,
+            "verified": 2,
+            "ambiguous": 0,
+            "unsupported": 7,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 13,
+          "source": "tests/fixtures/musical_fidelity/xml_grandstaff_voices.musicxml",
+          "source_sha256": "1d7f36d83f2b2e166605430c971b89c3bde0195a096a1f85b251a7182d9b621f",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 6,
+            "verified": 1,
+            "ambiguous": 0,
+            "unsupported": 5,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 13,
+          "source": "tests/fixtures/musical_fidelity/xml_grandstaff_voices.musicxml",
+          "source_sha256": "1d7f36d83f2b2e166605430c971b89c3bde0195a096a1f85b251a7182d9b621f",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 6,
+            "verified": 1,
+            "ambiguous": 0,
+            "unsupported": 5,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 14,
+          "source": "tests/fixtures/musical_fidelity/xml_trailing_rests.musicxml",
+          "source_sha256": "7b0f4d43ae167f784c110a99649e7d16441c094caf1da3078927722f12e8af64",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 24,
+            "verified": 1,
+            "ambiguous": 3,
+            "unsupported": 20,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 14,
+          "source": "tests/fixtures/musical_fidelity/xml_trailing_rests.musicxml",
+          "source_sha256": "7b0f4d43ae167f784c110a99649e7d16441c094caf1da3078927722f12e8af64",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 10,
+            "verified": 0,
+            "ambiguous": 0,
+            "unsupported": 10,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 14,
+          "source": "tests/fixtures/musical_fidelity/xml_trailing_rests.musicxml",
+          "source_sha256": "7b0f4d43ae167f784c110a99649e7d16441c094caf1da3078927722f12e8af64",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 21,
+            "verified": 1,
+            "ambiguous": 3,
+            "unsupported": 17,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 15,
+          "source": "tests/fixtures/musical_fidelity/xml_quintuplets.musicxml",
+          "source_sha256": "475fdd100f64d658791627bf73ce0aaf62376916a10d013ef2a0485aa5cbda3b",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 34,
+            "verified": 5,
+            "ambiguous": 1,
+            "unsupported": 28,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 15,
+          "source": "tests/fixtures/musical_fidelity/xml_quintuplets.musicxml",
+          "source_sha256": "475fdd100f64d658791627bf73ce0aaf62376916a10d013ef2a0485aa5cbda3b",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 4,
+            "verified": 0,
+            "ambiguous": 0,
+            "unsupported": 4,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 15,
+          "source": "tests/fixtures/musical_fidelity/xml_quintuplets.musicxml",
+          "source_sha256": "475fdd100f64d658791627bf73ce0aaf62376916a10d013ef2a0485aa5cbda3b",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 33,
+            "verified": 5,
+            "ambiguous": 1,
+            "unsupported": 27,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 16,
+          "source": "tests/fixtures/musical_fidelity/xml_long_multipage.musicxml",
+          "source_sha256": "59d0c0dbc54aff612636bcecd7cb9db8c9a0ba12d2b77ad0b571ad841d435b16",
+          "hand": "both",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 868,
+            "verified": 240,
+            "ambiguous": 0,
+            "unsupported": 628,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 16,
+          "source": "tests/fixtures/musical_fidelity/xml_long_multipage.musicxml",
+          "source_sha256": "59d0c0dbc54aff612636bcecd7cb9db8c9a0ba12d2b77ad0b571ad841d435b16",
+          "hand": "left",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 291,
+            "verified": 48,
+            "ambiguous": 0,
+            "unsupported": 243,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        },
+        {
+          "source_index": 16,
+          "source": "tests/fixtures/musical_fidelity/xml_long_multipage.musicxml",
+          "source_sha256": "59d0c0dbc54aff612636bcecd7cb9db8c9a0ba12d2b77ad0b571ad841d435b16",
+          "hand": "right",
+          "passed": true,
+          "complete": false,
+          "coverage": {
+            "expected": 771,
+            "verified": 192,
+            "ambiguous": 0,
+            "unsupported": 579,
+            "unverified": 0,
+            "mismatch": 0
+          }
+        }
+      ]
+    }
+  },
+  "validation": {
+    "focused_tests_passed": 318,
+    "real_godot_rest_mutations_passed": 3,
+    "full_suite_passed": 1284,
+    "full_suite_skipped": 5,
+    "full_suite_baseline_failures": [
+      "test_instructional_journey.py::test_real_student_prepares_recovers_masters_listens_performs_and_revisits",
+      "test_modes_journey.py::test_real_listen_pcm_and_all_missed_perform_end_with_actionable_summary",
+      "test_source_fidelity.py::test_supplied_full_piece_keeps_all_source_attacks_and_legacy_stage_identity",
+      "test_staff_visibility.py::test_active_staves_are_white_through_countin_and_scrolling"
+    ]
+  },
+  "capture": {
+    "windows": 513,
+    "native_pngs": 13032,
+    "rest_control_pngs": 1242
+  },
+  "known_source_defect": {
+    "source_index": 9,
+    "source": "tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml",
+    "original_ids": [
+      "xml-p0-m0-e3",
+      "xml-p0-m1-e4"
+    ],
+    "description": "Visible authored secondary-voice rests become hidden in generated XML and disappear from native notation events"
+  },
+  "full_coverage_claim": false
+}

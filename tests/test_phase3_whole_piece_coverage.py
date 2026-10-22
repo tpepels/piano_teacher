@@ -6,6 +6,7 @@ import pytest
 from scripts.audit_phase3_whole_pieces import (
     BUNDLED_MIDI, measure_windows, verify_complete_windows,
 )
+from scripts import audit_phase3_whole_pieces as audit
 
 
 def _witness(first: int, last: int) -> dict:
@@ -95,3 +96,38 @@ def test_incomplete_counts_cannot_hide_behind_empty_error_lists(field,value):
     row=_witness(1,4)
     row["whole_window_coverage"][field]=value
     assert not verify_complete_windows(4,[row])["passed"]
+
+
+def test_capture_failure_retains_each_original_construct_as_unverified(tmp_path):
+    from pathlib import Path
+    source=Path(__file__).parent/"fixtures/musical_fidelity/xml_chord_ties.musicxml"
+    rows=audit.unverified_window_elements(source,"score.musicxml","both",1,2,tmp_path,"capture failed")
+    assert len(rows)>10
+    assert len({r["id"] for r in rows})==len(rows)
+    assert all(r["status"]=="unverified" for r in rows)
+    assert {"pitch","tie","rest","clef","measure"} <= {r["construct"] for r in rows}
+
+
+def test_failed_midi_capture_preserves_inherent_written_score_limitation(tmp_path):
+    rows=audit.unverified_window_elements(tmp_path/"piece.mid","piece.mid","left",1,4,tmp_path,"capture failed")
+    sentinel=next(row for row in rows if row["construct"]=="midi_written_transcription")
+    assert sentinel["status"]=="unsupported"
+    assert "MIDI" in sentinel["reason"]
+
+
+def test_attack_free_tail_is_captured_with_preceding_measures():
+    from types import SimpleNamespace
+    piece=SimpleNamespace(bar_boundaries=tuple(range(10)),
+                          notes=[SimpleNamespace(start=0),SimpleNamespace(start=4)])
+    windows=audit.piece_measure_windows(piece,4)
+    assert windows==((1,4),(5,9))
+    assert [bar for first,last in windows for bar in range(first,last+1)]==list(range(1,10))
+
+
+def test_opening_silence_and_empty_middle_windows_are_not_skipped():
+    from types import SimpleNamespace
+    piece=SimpleNamespace(bar_boundaries=tuple(range(14)),
+                          notes=[SimpleNamespace(start=5),SimpleNamespace(start=12)])
+    windows=audit.piece_measure_windows(piece,4)
+    assert windows==((1,12),(13,13))
+    assert [bar for first,last in windows for bar in range(first,last+1)]==list(range(1,14))
