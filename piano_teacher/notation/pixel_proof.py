@@ -115,15 +115,22 @@ def expected_y(staff: RasterStaff, spelling: tuple[str, int, int],
                clef: tuple[str, int, int]) -> float:
     """Independent diatonic staff-step calculation, no Godot geometry calls."""
     sign, line, octave_change = clef
-    if (sign, line, octave_change) == ("G", 2, 0):
-        bottom_letter, bottom_octave = "E", 4
-    elif (sign, line, octave_change) == ("F", 4, 0):
-        bottom_letter, bottom_octave = "G", 2
-    else:
-        raise ValueError(f"Pixel probe does not certify clef {clef!r}")
-    step, _alter, octave = spelling
-    steps = (octave - bottom_octave) * 7 + DIATONIC[step] - DIATONIC[bottom_letter]
-    return staff.bottom - (steps * staff.gap / 2)
+    # Independent clef references from conventional Western staff notation:
+    # the G clef wraps G4, the F clef brackets F3, and a C clef identifies
+    # middle C (C4). The declared line can vary across all five staff lines;
+    # octave-change clefs sound one or two octaves above/below their glyph.
+    anchors={"G":("G",4),"F":("F",3),"C":("C",4)}
+    if sign not in anchors or not 1 <= line <= 5 or not -2 <= octave_change <= 2:
+        raise ValueError(f"Unsupported written clef {clef!r}")
+    reference_step,reference_octave=anchors[sign]
+    reference_octave+=octave_change
+    step,_alter,octave=spelling
+    if step not in DIATONIC:
+        raise ValueError(f"Unknown written pitch step {step!r}")
+    ref_index=7*reference_octave+DIATONIC[reference_step]
+    written_index=7*octave+DIATONIC[step]
+    origin=staff.bottom-(line-1)*staff.gap
+    return origin-(written_index-ref_index)*staff.gap/2
 
 
 def ink_row_profile(picture: Image.Image, x: int, lo: int, hi: int) -> list[int]:
