@@ -209,7 +209,8 @@ def _append_event(measure: ET.Element, tones: list, duration: int,
 
 
 def _render_measure(measure: ET.Element, lanes: list[list[tuple]], length: int,
-                    bar_start: int, bindings: dict, counts: dict) -> None:
+                    bar_start: int, bindings: dict, counts: dict,
+                    hide_performance_micro_rests: bool = False) -> None:
     for lane_idx, events in enumerate(lanes or [[]]):
         if lane_idx:
             backup = ET.SubElement(measure, "backup")
@@ -221,8 +222,14 @@ def _render_measure(measure: ET.Element, lanes: list[list[tuple]], length: int,
             first, last = start < bar_start, end > bar_start+length
             start, end = max(start, bar_start)-bar_start, min(end, bar_start+length)-bar_start
             if start > position:
+                # Tiny key-release gaps from live MIDI are not intentional
+                # written rests. Preserve the exact MusicXML voice cursor
+                # without printing a distracting 32nd/64th rest. Explicit
+                # MusicXML and opening silence stay fully visible.
+                micro_gap = (hide_performance_micro_rests and position > 0
+                             and start-position <= DIVISIONS//8)
                 _append_event(measure, [None], start-position, lane_idx+1,
-                              hidden_rest=lane_idx > 0)
+                              hidden_rest=lane_idx > 0 or micro_gap)
             _append_event(measure, tones, end-start, lane_idx+1,
                           begin_tie=first, end_tie=last, display_start=bar_start+start,
                           bindings=bindings, counts=counts)
@@ -382,45 +389,6 @@ def _spelling(note, fifths):
     return None
 
 
-def _midi_swing_onsets(phrase, hand):
-    """Display a strongly established swung eighth on the written offbeat.
-
-    Performance MIDI for Autumn Leaves places hundreds of genuine swung
-    attacks on beat fractions .6, not .5. Printing these literally creates
-    scattered tiny rests and six-to-five duration ratios. Recognize the
-    repeated pattern across an independent part/voice; preserve exact source
-    onsets for performance grading, and leave isolated rubato untouched.
-    """
-    # Detect the rhythmic feel for the *piano*, not independently for each
-    # staff. In Autumn Leaves the right hand establishes swing throughout the
-    # passage but a left-hand accompaniment may contain only one swung
-    # offbeat. Requiring three left-hand attacks retained its literal 0.6 beat
-    # and generated a stray 32nd rest against the right hand's 0.5 notation.
-    all_times = sorted({round(note.start, 9) for note in phrase.notes})
-    swung = [t for t in all_times if abs((t % 1.0)-.6) <= .015]
-    downbeats = [t for t in all_times if min(t % 1.0,1-t % 1.0) < .015]
-    straight = [t for t in all_times if abs((t % 1.0)-.5) <= .015]
-    if len(swung) < 3 or len(downbeats) < 2 or len(swung) < 2*len(straight):
-        return {}
-    by_lane = defaultdict(set)
-    for note in phrase.notes:
-        if note.hand == hand:
-            by_lane[(note.track, note.voice)].add(round(note.start, 9))
-    snapped = {}
-    for owner, attacks in by_lane.items():
-        times = sorted(attacks)
-        for t in times:
-            if abs((t % 1.0)-.6) > .015:
-                continue
-            display = round(t-.1, 8)
-            # Preserve any independent voice already playing an attack on
-            # that offbeat. Do not invent a same-lane unison or new note.
-            if any(abs(other-display) < .03 for other in times if other != t):
-                continue
-            snapped[(*owner,round(t-phrase.start,9))] = _ticks(display-phrase.start)
-    return snapped
-
-
 def _midi_ornament_onsets(phrase, hand):
     """Recognize nearly exact 32nd-triplet runs in performed MIDI.
 
@@ -461,10 +429,13 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
     groups = defaultdict(list)
     attacks = {}
     identities = set()
-    swing_onsets = {} if from_source_musicxml else _midi_swing_onsets(phrase, hand)
+    # A swung offbeat at MIDI beat .6 must reach the playhead at .6, not
+    # .5: at the 40 BPM practice tempo that shift is 150 ms, larger than
+    # the grader's onset tolerance. Only MIDI-tick-sized ornament noise may
+    # move the displayed onset; rest clutter is handled independently.
     triplet_onsets = {} if from_source_musicxml else _midi_ornament_onsets(
         phrase, hand)
-    ornament_onsets = {**swing_onsets, **triplet_onsets}
+    ornament_onsets = triplet_onsets
     for index, note in enumerate(phrase.notes):
         if note.hand != hand:
             continue
@@ -487,8 +458,7 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
         attacks[key] = note.start-phrase.start
         display_key = (
             note.track,note.voice,round(note.start-phrase.start,9))
-        timing = ("triplet" if display_key in triplet_onsets else
-                  "swing_eighth" if display_key in swing_onsets else "exact")
+        timing = "triplet" if display_key in triplet_onsets else "exact"
         groups[note.track,note.voice,start,end].append({
             'source_id':source,'source_beat':note.start-phrase.start,
             'pitch':note.pitch,'hand':hand,'note':note,
@@ -680,7 +650,9 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             last_meter = (beats, beat_type)
             last_key, last_clef = key_value, chosen_clef
             append_barline(measure,source_beat,"left")
-            _render_measure(measure,lanes,bar_end-bar_start,bar_start,bindings,counts)
+            _render_measure(measure,lanes,bar_end-bar_start,bar_start,bindings,
+                            counts,
+                            hide_performance_micro_rests=not bool(source_musicxml))
             _write_accidentals(measure,active_key.fifths if active_key else 0)
             _write_tuplet_groups(measure)
             append_barline(measure,phrase.start+grid[b+1],"right")
