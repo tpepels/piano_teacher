@@ -93,6 +93,19 @@ def verify_complete_windows(number_of_bars: int,
         if witness["sampled_measures"] != witness["measure_count"]:
             errors.append(f"Uncaptured measure(s) {row['first_bar']}-"
                           f"{row['last_bar']}")
+        if witness["measure_count"] != row["last_bar"] - row["first_bar"] + 1:
+            errors.append(f"Window reports wrong number of measures for "
+                          f"{row['first_bar']}-{row['last_bar']}")
+        if (witness["source_noteheads"] !=
+                witness["unique_rendered_noteheads"]):
+            errors.append(f"Not all notes were visibly recorded in "
+                          f"{row['first_bar']}-{row['last_bar']}")
+        if witness["source_rests"] != witness["unique_rendered_rests"]:
+            errors.append(f"Not all rests were visibly recorded in "
+                          f"{row['first_bar']}-{row['last_bar']}")
+        if witness["screenshot_count"] < witness["measure_count"]:
+            errors.append(f"Too few actual frames to cover measures "
+                          f"{row['first_bar']}-{row['last_bar']}")
         source_notes += witness["source_noteheads"]
         source_rests += witness["source_rests"]
         frames += witness["screenshot_count"]
