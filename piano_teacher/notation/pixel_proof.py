@@ -88,10 +88,15 @@ def _staff_stroke_ink(brightness: np.ndarray, center: float) -> int:
         run += above.astype(np.int16) + below.astype(np.int16)
     thin = (run <= 2) & (core - strip.min(axis=0) >= 5)
     common = []
-    for colors, usable in zip(np.array_split(core, len(regions)),
-                              np.array_split(thin, len(regions))):
-        common.append(np.bincount(colors[usable], minlength=256) / len(colors))
-    if float(np.minimum.reduce(common).max()) < .25:
+    for colors, usable, visible in zip(np.array_split(core, len(regions)),
+                                       np.array_split(thin, len(regions)),
+                                       np.array_split(ink > 0, len(regions))):
+        # Flat occluding heads supply no vertical evidence. Among columns
+        # that do, a majority in every region must agree on the same core.
+        # A tapered curve's rare level crossing cannot define a horizontal
+        # rule merely because its center differs by one quantization level.
+        common.append(np.bincount(colors[usable], minlength=256) / max(1, int(visible.sum())))
+    if float(np.minimum.reduce(common).max()) <= .5:
         raise AssertionError('Image staff rule has no consistent thin horizontal core')
     return reference
 

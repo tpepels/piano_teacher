@@ -152,6 +152,22 @@ def test_replacing_every_rule_with_equal_curves_cannot_certify_a_staff(both_stav
         detect_staff_lines(image)
 
 
+@pytest.mark.parametrize('both_staves', (False, True))
+@pytest.mark.parametrize('color', ((230, 240, 234), RAIL))
+@pytest.mark.parametrize('width,taper', ((1, 0), (2, 0), (3, 1), (3, 8)))
+def test_thin_or_tapered_curves_cannot_supply_horizontal_staff_evidence(both_staves, color, width, taper):
+    image = _frame()
+    draw = ImageDraw.Draw(image)
+    for y in RAILS if both_staves else RAILS[5:]:
+        draw.line((0, y, 1535, y), fill=BACKGROUND)
+        points = [(x, y + round(3 * ((x - 768) / 768) ** 2)) for x in range(1536)]
+        draw.line(points, fill=tuple(v - taper for v in color), width=width)
+        if taper:
+            draw.line(points, fill=color, width=1)
+    with pytest.raises(AssertionError, match='staff'):
+        detect_staff_lines(image)
+
+
 def test_same_gray_curved_stroke_is_not_a_straight_thin_rule():
     image = _frame()
     draw = ImageDraw.Draw(image)
