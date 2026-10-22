@@ -61,6 +61,12 @@ def aggregate(folder: Path, *, scores: int = 17) -> dict:
                                   "independent raster pitch not passed")
                 if pixels.get("image_pitch_verified") != pixels.get("written_active_noteheads"):
                     errors.append(f"{index}/{hand}: unverified written notehead")
+                rest_proof=witness.get("independent_image_rests",{})
+                if not rest_proof.get("passed") or (
+                        rest_proof.get("image_rest_glyphs_verified")
+                        != rest_proof.get("written_active_rests")):
+                    errors.append(f"{index}/{hand}: independently classified "
+                                  "rest-glyph coverage incomplete")
                 if witness.get("missing_measure_starts") or witness.get("missing_notes") or witness.get("missing_rests"):
                     errors.append(f"{index}/{hand}: missing native screenshot/identity")
             if name.endswith(".musicxml"):
