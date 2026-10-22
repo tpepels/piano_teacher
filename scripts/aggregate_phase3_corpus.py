@@ -117,7 +117,7 @@ def _account_inventory(data, required, errors, *, boundary, midi):
         for position, row in enumerate(elements):
             if (isinstance(row, dict) and isinstance(row.get("source"), dict)
                     and row["source"].get("origin") == "original"
-                    and row.get("id") not in expected_ids):
+                    and (not isinstance(row.get("id"), str) or row["id"] not in expected_ids)):
                 errors.append(f"Unexpected original source inventory element: {row.get('id')}")
                 elements[position] = {**row, "reported_status": row.get("status"),
                                       "status": "unverified", "reason": "Element absent from pinned original inventory"}

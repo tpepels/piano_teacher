@@ -87,6 +87,17 @@ def test_missing_report_restores_measure_denominator(evidence):
     assert after["categories"]["visual"]["coverage"]["unverified"] > 0
 
 
+def test_malformed_visual_id_yields_a_blocked_report_with_preserved_inventory(evidence):
+    before = run(evidence)
+    path = _path(evidence[0], kind="visual")
+    data = json.loads(path.read_text())
+    data["elements"][0]["id"] = []
+    path.write_text(json.dumps(data))
+    result = run(evidence)
+    assert not result["release_ready"]
+    assert result["categories"]["visual"]["coverage"]["expected"] >= before["categories"]["visual"]["coverage"]["expected"]
+
+
 @pytest.mark.parametrize("change", ["revision", "inputs_sha256", "absent"])
 def test_reports_from_other_revision_or_oracle_cannot_be_relabelled(evidence, change):
     path = _path(evidence[0], kind="semantic")
@@ -130,6 +141,8 @@ def mutation_evidence(tmp_path, monkeypatch):
     file.parent.mkdir()
     file.write_text("def test_detector(): pass\n")
     monkeypatch.setattr(release, "ROOT", tmp_path)
+    monkeypatch.setattr(release, "current_provenance", lambda: {
+        "revision": REVISION, "inputs_sha256": "b" * 64, "clean": True})
     monkeypatch.setitem(sys.modules, "scripts.record_notation_mutations", SimpleNamespace(SUITES={"semantic": files}))
     monkeypatch.setattr(release, "_expected_nodeids", lambda files: ["tests/test_detector.py::test_detector"])
     folder = tmp_path / "mutations" / "semantic"
@@ -138,6 +151,7 @@ def mutation_evidence(tmp_path, monkeypatch):
     junit.write_text('<testsuites><testsuite tests="1"><testcase classname="tests.test_detector" name="test_detector"/></testsuite></testsuites>')
     manifest = folder / "suite.json"
     manifest.write_text(json.dumps({"schema_version": 1, "revision": REVISION, "suite": "semantic",
+        "provenance": release.current_provenance(), "provenance_after": release.current_provenance(),
         "junit_path": junit.name, "junit_sha256": sha256(junit.read_bytes()).hexdigest(),
         "expected_nodeids": ["tests/test_detector.py::test_detector"],
         "test_files_sha256": {files[0]: sha256(file.read_bytes()).hexdigest()}}))
@@ -148,7 +162,7 @@ def test_actual_complete_mutation_execution_is_required(mutation_evidence):
     assert release.validate_mutations(mutation_evidence[0], REVISION)["complete"]
 
 
-@pytest.mark.parametrize("mutation", ["skipped", "failure", "error", "absent", "duplicate", "revision", "test_hash", "junit_hash", "expected_subset"])
+@pytest.mark.parametrize("mutation", ["skipped", "failure", "error", "absent", "duplicate", "revision", "test_hash", "junit_hash", "expected_subset", "declared_failure", "declared_tests", "bad_counter", "dirty_execution", "different_inputs", "changed_during_tests", "absent_provenance"])
 def test_mutation_record_cannot_hide_missing_failed_or_stale_tests(mutation_evidence, mutation):
     folder, manifest, junit = mutation_evidence
     data = json.loads(manifest.read_text())
@@ -164,6 +178,20 @@ def test_mutation_record_cannot_hide_missing_failed_or_stale_tests(mutation_evid
         data["test_files_sha256"] = {}
     elif mutation == "expected_subset":
         data["expected_nodeids"] = []
+    elif mutation == "declared_failure":
+        junit.write_text(junit.read_text().replace('tests="1"', 'tests="1" failures="1"'))
+    elif mutation == "declared_tests":
+        junit.write_text(junit.read_text().replace('tests="1"', 'tests="2"'))
+    elif mutation == "bad_counter":
+        junit.write_text(junit.read_text().replace('tests="1"', 'tests="NaN"'))
+    elif mutation == "dirty_execution":
+        data["provenance"]["clean"] = False
+    elif mutation == "different_inputs":
+        data["provenance"]["inputs_sha256"] = "c" * 64
+    elif mutation == "changed_during_tests":
+        data["provenance_after"]["inputs_sha256"] = "c" * 64
+    elif mutation == "absent_provenance":
+        data.pop("provenance")
     if mutation != "junit_hash":
         data["junit_sha256"] = sha256(junit.read_bytes()).hexdigest()
     else:

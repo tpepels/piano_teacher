@@ -89,6 +89,7 @@ def validate_mutations(folder, revision):
     except ImportError as exc:
         return {"complete": False, "errors": [f"Mutation registry unavailable: {exc}"], "suites": []}
     folder = Path(folder)
+    expected_provenance = current_provenance()
     for name, files in SUITES.items():
         row = {"suite": name, "complete": False, "errors": []}
         suites.append(row)
@@ -102,6 +103,11 @@ def validate_mutations(folder, revision):
             data = read_json(path)
             if type(data.get("schema_version")) is not int or data["schema_version"] != 1 or data.get("revision") != revision:
                 raise ValueError("Mutation schema/revision mismatch")
+            if (expected_provenance.get("clean") is not True
+                    or expected_provenance.get("revision") != revision
+                    or data.get("provenance") != expected_provenance
+                    or data.get("provenance_after") != expected_provenance):
+                raise ValueError("Mutation execution provenance differs from clean release inputs")
             expected = _expected_nodeids(files)
             if Counter(data.get("expected_nodeids", [])) != Counter(expected):
                 raise ValueError("Mutation expected-node inventory differs from current required suite")
@@ -116,6 +122,17 @@ def validate_mutations(folder, revision):
                 raise ValueError("Mutation JUnit digest mismatch")
             root = ET.fromstring(content)
             testcases = list(root.iter("testcase"))
+            for suite in root.iter():
+                if suite.tag not in ("testsuite", "testsuites"):
+                    continue
+                actual_counts = {"tests": len(list(suite.iter("testcase"))),
+                                 **{tag + "s" if tag != "skipped" else tag: len(list(suite.iter(tag)))
+                                    for tag in ("failure", "error", "skipped")}}
+                for key, value in actual_counts.items():
+                    declared = suite.get(key)
+                    if declared is not None and (not re.fullmatch(r"0|[1-9][0-9]*", declared)
+                                                 or int(declared) != value):
+                        raise ValueError(f"Mutation JUnit {key} counter disagrees with executed cases")
             actual = [r.get("classname", "").replace(".", "/") + ".py::" + r.get("name", "") for r in testcases]
             if Counter(actual) != Counter(expected):
                 raise ValueError("Missing, duplicate or unexpected executed mutation tests")
