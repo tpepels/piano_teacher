@@ -14,6 +14,11 @@ const NOTE_INK := Design.SCORE_INK
 const DIM_INK := Design.STAFF_MUTED
 const PREVIEW_LIGHT := Design.MINT
 const MAX_STAFF_GAP := 22.0
+# A piano learner needs upcoming notation in view. Preserve the largest
+# authentic staff that leaves at least this many beats to the right of the
+# fixed playhead. No temporal warping, font imitation or overlap is allowed.
+const MIN_LOOKAHEAD_BEATS := 1.75
+const MIN_READABLE_STAFF_GAP := 14.0
 
 var glyphs = VerovioGlyphs.new()
 var native_ready := false
@@ -193,30 +198,60 @@ func load_score(candidate: Dictionary) -> bool:
     if not failure_reason.is_empty():
         notice = failure_reason
         return false
-    # A source can have genuine near-simultaneous attacks on the same stave.
-    # Choose ONE score-wide density and ONE staff gap up front. Shrink ink
-    # progressively instead of falling back merely because the old 17 px
-    # minimum still demands >8192 pixels/beat after rest re-layout.
-    # Never clip density: that would hide colliding source noteheads.
+    # Genuine adjacent 32nd-triplet notes before a printed accidental can
+    # force very wide beat spacing. A full 22px staff previously won the
+    # first-feasible test even when only ~1.4 future beats fit on-screen.
+    # Evaluate smaller *authentic* Verovio glyph scales before choosing;
+    # use the largest staff that preserves reading context. Crucially each
+    # candidate recomputes true ink collision clearance; never just cap BPM
+    # distance or hide/shift a source accidental.
     var ink_density: float = density
     var fits_density := false
+    var max_usable_density: float = maxf(1.0,
+        size.x*(1.0-PLAYHEAD_FRACTION)/MIN_LOOKAHEAD_BEATS)
+    var fallbacks: Array = []
     for candidate_gap in [MAX_STAFF_GAP,17.0,14.0,11.0,8.5]:
-        _layout_rest_lanes(float(candidate_gap),density)
-        var trial: float = _required_ink_density(density,float(candidate_gap))
+        var tested_gap: float = float(candidate_gap)
+        _layout_rest_lanes(tested_gap,density)
+        var trial: float = _required_ink_density(density,tested_gap)
         var first_witness: Dictionary = ink_density_witness.duplicate(true)
-        _layout_rest_lanes(float(candidate_gap),trial)
-        var second_trial: float = _required_ink_density(trial,float(candidate_gap))
+        _layout_rest_lanes(tested_gap,trial)
+        var second_trial: float = _required_ink_density(trial,tested_gap)
         var second_witness: Dictionary = ink_density_witness.duplicate(true)
         var final_witness: Dictionary = second_witness if second_trial > trial else first_witness
         trial = maxf(trial,second_trial)
-        if is_finite(trial) and trial <= timeline.MAX_SCORE_PIXELS_PER_BEAT:
-            selected_density_witness = final_witness.duplicate(true)
-            selected_density_witness["staff_gap"] = float(candidate_gap)
-            selected_density_witness["selected_density"] = trial
-            staff_gap_limit = float(candidate_gap)
-            ink_density = trial
-            fits_density = true
-            break
+        if not is_finite(trial) or trial > timeline.MAX_SCORE_PIXELS_PER_BEAT:
+            continue
+        var candidate: Dictionary = {
+            "gap":tested_gap, "density":trial, "witness":final_witness}
+        fallbacks.append(candidate)
+        if tested_gap >= MIN_READABLE_STAFF_GAP and trial > max_usable_density:
+            continue
+        staff_gap_limit = tested_gap
+        ink_density = trial
+        selected_density_witness = final_witness.duplicate(true)
+        fits_density = true
+        break
+    if not fits_density and not fallbacks.is_empty():
+        # An exceptionally dense score may not permit the target lookahead
+        # at a legible staff size. Prefer the smallest scale still >=14px.
+        # Never select an arbitrary sub-legible size solely to pass a metric.
+        var alternate: Dictionary = fallbacks[-1]
+        for option in fallbacks:
+            if float(option["gap"]) >= MIN_READABLE_STAFF_GAP:
+                alternate = option
+        staff_gap_limit = float(alternate["gap"])
+        ink_density = float(alternate["density"])
+        selected_density_witness = alternate["witness"].duplicate(true)
+        fits_density = true
+    if fits_density:
+        selected_density_witness["staff_gap"] = staff_gap_limit
+        selected_density_witness["selected_density"] = ink_density
+        selected_density_witness["available_lookahead_beats"] = (
+            size.x*(1.0-PLAYHEAD_FRACTION)/ink_density)
+        # The accepted scale can be different from the last trial; use the
+        # corresponding rest lanes instead of stale rejected-candidate lanes.
+        _layout_rest_lanes(staff_gap_limit,ink_density)
     if not fits_density:
         failure_reason = "Source glyph ink cannot fit within the fixed musical timeline"
         notice = failure_reason
