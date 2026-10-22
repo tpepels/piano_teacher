@@ -164,9 +164,9 @@ def feature_errors(model: dict, case: AuditCase) -> list[str]:
     measures = model.get("measures", [])
     observed = {
         "chords": any(count > 1 for count in simultaneous.values()),
-        "ties": any(not e["is_attack"] for e in notes),
+        "ties": any(not e.get("is_attack", True) for e in notes),
         "tuplets": any(e.get("time_modification") for e in notes),
-        "grandstaff": {"left", "right"} <= {e["staff"] for e in notes},
+        "grandstaff": {"left", "right"} <= {e.get("staff") for e in notes},
         "key_change": len({tuple(sorted(m["keys"].items())) for m in measures}) > 1,
         "rests": sum(e["kind"] == "rest" for e in events) >= 2,
     }
