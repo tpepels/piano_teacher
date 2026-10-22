@@ -1,0 +1,37 @@
+name: Phase 3 whole-piece native audit
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  phase3-whole-piece-pilot:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 35
+    steps:
+      - name: Install real Godot renderer and test environment
+        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
+      - uses: actions/checkout@v4
+      - name: Install application and Python audit dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e '.[godot,test]'
+      - name: Mutation tests for full-score evidence accounting
+        run: .venv/bin/python -m pytest -q tests/test_phase3_whole_piece_coverage.py
+      - name: Pilot - cover every measure and notation onset in Danny Boy
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            .venv/bin/python scripts/audit_phase3_whole_pieces.py \
+            --only Danny_Boy --window-bars 4 --out /tmp/phase3-whole-score
+      - name: Publish per-measure native PNGs and full provenance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-danny-boy-full-score-pilot
+          path: /tmp/phase3-whole-score/
+          if-no-files-found: warn
+          retention-days: 14
