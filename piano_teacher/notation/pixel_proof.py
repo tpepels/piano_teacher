@@ -13,6 +13,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 from piano_teacher.notation.proof import read_written_score
@@ -32,18 +33,47 @@ class RasterStaff:
         return self.lines[-1]
 
 
-def _staff_row_values(picture: Image.Image) -> list[float]:
-    """A rail spans the viewport; score symbols affect few sampled columns."""
-    im = picture.convert("RGB")
-    width, height = im.size
-    columns = list(range(20, min(150, width // 4), 12))
-    columns += list(range(max(width - 160, width * 3 // 4), width - 20, 12))
-    pixels = im.load()
-    # A real rule crosses nearly every sampled X; localized clef/accidental
-    # ink does not. Use the lower quartile rather than the mean so a bright
-    # symbol in one part of the viewport cannot masquerade as a staff rail.
-    return [sorted(max(pixels[x, y]) for x in columns)[len(columns) // 4]
-            for y in range(height)]
+def _staff_row_values(brightness: np.ndarray) -> list[float]:
+    """Require long horizontal ink across the viewport, including its middle.
+
+    Long ties can occupy both edges at the same Y while leaving the middle
+    clear. Sampling only those edges promotes the curves into rail peaks and
+    hides nearby gray rules behind their bright shoulders. Require the lower
+    quartile in *each* viewport quarter: a central shallow curve must not
+    substitute for a missing rail either. Taking the minimum retains only
+    horizontal ink supported across all four regions. No lattice can supply
+    an absent row.
+    """
+    regions = np.array_split(brightness, min(4, brightness.shape[1]), axis=1)
+    values = []
+    for region in regions:
+        quartile = region.shape[1] // 4
+        values.append(np.partition(region, quartile, axis=1)[:, quartile])
+    return np.minimum.reduce(values).astype(float).tolist()
+
+
+def _staff_stroke_ink(brightness: np.ndarray, center: float) -> int:
+    """Measure a rule's vertical ink from pixels before reducing across X.
+
+    Integrating first preserves a curved stroke's bright core even when its
+    antialiased edge alone makes the row-profile peak. A seven-row strip fits
+    inside the minimum 8px rail gap. Each column supplies its own background;
+    the least contaminated region supplies the gray rule's stroke weight.
+    """
+    y = round(center)
+    strip = brightness[y - 3:y + 4].astype(np.int16)
+    ink = (strip - strip.min(axis=0)).sum(axis=0)
+    regions = np.array_split(ink, min(4, len(ink)))
+    weights = []
+    for region in regions:
+        # A flat bright glyph can cover the entire strip in a column. Such
+        # columns provide no vertical rail contrast, not a zero-weight rule.
+        visible = region[region > 0]
+        if not len(visible):
+            return 0
+        quartile = len(visible) // 4
+        weights.append(int(np.partition(visible, quartile)[quartile]))
+    return min(weights)
 
 
 def detect_staff_lines(picture: Image.Image) -> dict[str, RasterStaff]:
@@ -52,7 +82,12 @@ def detect_staff_lines(picture: Image.Image) -> dict[str, RasterStaff]:
     The line must be brighter than its neighbors several pixels above/below;
     this is independent of the native engine's stored staff gap/center.
     """
-    values = _staff_row_values(picture)
+    pixels = np.asarray(picture.convert("RGB"))[:, 20:-20]
+    if pixels.shape[1] == 0:
+        raise AssertionError("Image too narrow to measure staff rails")
+    brightness = np.maximum(np.maximum(pixels[:, :, 0], pixels[:, :, 1]),
+                            pixels[:, :, 2])
+    values = _staff_row_values(brightness)
     peaks = []
     for y in range(20, picture.height - 20):
         shoulder = (values[y - 4] + values[y + 4]) / 2
@@ -98,6 +133,15 @@ def detect_staff_lines(picture: Image.Image) -> dict[str, RasterStaff]:
     if chosen is None:
         raise AssertionError(
             f"Image has no two complete five-line staff rails: {candidates}")
+    # Each staff must support its own shared gray stroke, including minority
+    # evidence. Active and inactive staves can have different ink strengths.
+    # A majority of bright ties cannot redefine a staff's remaining gray ink.
+    # Integrated ink tolerates subpixel phase and 8-bit rounding; foreground
+    # contours with inconsistent stroke weight leave the image unverified.
+    for staff in chosen:
+        rail_ink = [_staff_stroke_ink(brightness, y) for y in staff]
+        if min(rail_ink) <= 0 or max(rail_ink) >= 2 * min(rail_ink):
+            raise AssertionError("Image staff rails have inconsistent gray stroke ink")
     result = {}
     for hand, selected in zip(("right", "left"), chosen):
         spacings = [b - a for a, b in zip(selected, selected[1:])]

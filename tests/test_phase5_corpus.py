@@ -121,6 +121,7 @@ def test_phase5_regressions_are_required_release_mutations():
             'tests/test_phase5_midi_contract.py', 'tests/test_phase5_midi_overlaps.py',
             'tests/test_phase5_written_metadata.py'} <= set(SUITES['semantic'])
     assert 'tests/test_phase5_corpus.py' in SUITES['release_contract']
+    assert 'tests/test_phase5_staff_detection.py' in SUITES['visual']
 
 
 def test_semantic_runtime_failure_retains_every_original_obligation(tmp_path, monkeypatch):

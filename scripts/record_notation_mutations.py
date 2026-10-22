@@ -45,6 +45,7 @@ SUITES = {
         "tests/test_phase3_visual_coverage.py",
         "tests/test_phase3_raster_matching.py",
         "tests/test_phase3_capture_provenance.py",
+        "tests/test_phase5_staff_detection.py",
     ),
     "real_rest": ("tests/test_phase3_real_rest_protocol.py",),
     "release_contract": tuple(
