@@ -133,7 +133,7 @@ def verify_complete_windows(number_of_bars: int,
 
 
 def audit_piece(name: str, directory: Path, godot: str,
-                *, max_bars: int) -> dict:
+                *, max_bars: int, hand: str = "both") -> dict:
     source = ROOT / (name if "/" in name else "midi/" + name)
     piece, _ = import_piece(source)
     measure_count = len(piece.bar_boundaries)-1
@@ -143,7 +143,7 @@ def audit_piece(name: str, directory: Path, godot: str,
     reports = []
     for first,last in parts:
         case=AuditCase(f"phase3-{source.stem}-{first:03d}-{last:03d}",
-                       name,first,last,"both")
+                       name,first,last,hand)
         out = directory / f"measures-{first:03d}-{last:03d}"
         print(f"PHASE3 {name}: measures {first}-{last}/{measure_count}",
               flush=True)
@@ -157,6 +157,7 @@ def audit_piece(name: str, directory: Path, godot: str,
     # may be larger due to tied continuation segments.
     combined["original_source_note_attacks"]=len(piece.notes)
     combined["piece"]=name
+    combined["hand"]=hand
     combined["windows"]=reports
     if source.suffix == ".musicxml":
         # Whole-piece, independent source semantics. Window-level evidence
@@ -194,14 +195,23 @@ def main() -> int:
     parser.add_argument("--out",type=Path,required=True)
     group=parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--only",help="Pilot score filename substring")
+    group.add_argument("--index",type=int,
+                       help="Zero-based index into the pinned 17-score corpus")
     group.add_argument("--all",action="store_true",
                        help="Attempt all seven MIDI pieces plus all supported MusicXML scores")
     parser.add_argument("--window-bars",type=int,default=4)
+    parser.add_argument("--hand",choices=("both","right","left"),default="both",
+                        help="Render full piece using this real Practice hand mode")
     args=parser.parse_args()
     args.out.mkdir(parents=True,exist_ok=True)
-    selected=(ALL_SOURCES if args.all else tuple(
-        name for name in ALL_SOURCES
-        if args.only.lower() in name.lower()))
+    if args.index is not None:
+        if not 0 <= args.index < len(ALL_SOURCES):
+            parser.error(f"Corpus index {args.index} outside 0..{len(ALL_SOURCES)-1}")
+        selected = (ALL_SOURCES[args.index],)
+    else:
+        selected=(ALL_SOURCES if args.all else tuple(
+            name for name in ALL_SOURCES
+            if args.only.lower() in name.lower()))
     if not selected:
         parser.error(f"No explicitly pinned score matches {args.only!r}")
     godot=shutil.which("godot") or shutil.which("godot4")
@@ -212,15 +222,17 @@ def main() -> int:
     for name in selected:
         try:
             result=audit_piece(name,args.out/Path(name).stem,godot,
-                               max_bars=args.window_bars)
+                               max_bars=args.window_bars,hand=args.hand)
             results.append(result)
         except Exception as exc:
             errors.append({"score":name,"error":str(exc)})
             print(f"PHASE3 FAILURE {name}: {exc}",file=sys.stderr,flush=True)
     report={
         "phase":3,
+        "hand":args.hand,
         "passed":not errors,
-        "corpus_fully_audited":set(selected)==set(ALL_SOURCES) and not errors,
+        "corpus_fully_audited":set(selected)==set(ALL_SOURCES)
+            and not errors,
         "scores_total":len(ALL_SOURCES),
         "bundled_midi_total":len(BUNDLED_MIDI),
         "musicxml_reference_total":len(MUSICXML_REFERENCE),
