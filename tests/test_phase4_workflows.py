@@ -17,6 +17,17 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = "a" * 40
+
+
+def test_container_provenance_uses_an_explicit_exact_workspace_trust_step():
+    for filename in ("phase3-corpus.yml", "phase3-whole-piece.yml", "pixel-proof.yml"):
+        for job in workflow(filename)["jobs"].values():
+            if "container" not in job:
+                continue
+            steps = job["steps"]
+            checkout = next(i for i, step in enumerate(steps) if step.get("uses", "").startswith("actions/checkout@"))
+            command = 'git config --global --add safe.directory "$GITHUB_WORKSPACE"'
+            assert steps[checkout + 1].get("run") == command
 SEMANTIC_FILES = (
     "tests/test_notation_proof_phase1.py",
     "tests/test_phase3_semantics.py",

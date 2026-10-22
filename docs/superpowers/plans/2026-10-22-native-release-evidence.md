@@ -54,3 +54,8 @@ No existing publishing workflow exists as of this change.
 - Real historical 102-case evidence was consumed as a negative release test:
   absent revision provenance removed verified credit and blocked readiness.
   Historical evidence was never relabeled or promoted to a current-head pass.
+- First hosted CI passed semantic and release-contract suites but exposed Git's
+  container ownership check: checkout's temporary safe-directory config did not
+  persist into later shell steps. Container jobs now explicitly trust only
+  `GITHUB_WORKSPACE`; a failing workflow-contract regression protects the order.
+  Revision, clean-tree and input-hash checks remain strict.

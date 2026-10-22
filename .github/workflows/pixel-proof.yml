@@ -26,6 +26,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.revision }}
+      - name: Trust the exact container workspace for provenance
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Bind actual Phase 2 audits to the immutable event checkout
         id: revision
         env:
