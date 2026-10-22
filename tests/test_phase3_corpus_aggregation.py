@@ -22,6 +22,11 @@ def _report(tmp_path, index, hand, *, score=None, pixel_passed=True):
                 "whole_window_coverage":{
                     "missing_notes":[],"missing_rests":[],
                     "missing_measure_starts":[],
+                    "independent_image_rests":{
+                        "passed":True,
+                        "written_active_rests":3,
+                        "image_rest_glyphs_verified":3,
+                    },
                     "independent_image_pitch":{
                         "passed":pixel_passed,
                         "written_active_noteheads":note_count,
