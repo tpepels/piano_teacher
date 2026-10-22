@@ -120,3 +120,25 @@ def test_display_notation_is_never_allowed_to_change_the_grading_clock():
         build_score_model(replace(score,note_bindings=restored),
                           boundaries=(0.0,4.0))
 
+
+def test_sparse_left_hand_inherits_established_swing_without_phantom_rest():
+    from piano_teacher.notation.lesson import _midi_swing_onsets
+    right_starts = (0.0, .6, 1.0, 1.6, 2.0, 2.6, 3.0)
+    right = tuple(Note(s,s+.35,72,0,0,"right",f"rh-{i}")
+                  for i,s in enumerate(right_starts))
+    # One isolated left-hand offbeat is not enough to infer swing *alone*,
+    # but clearly shares the piano's established swung grid.
+    left = Note(2.6,3.1,48,1,0,"left","single-left-offbeat")
+    phrase = Phrase(1,1,1,0.0,4.0,(*right,left))
+    assert _midi_swing_onsets(phrase,"left")[(1,0,2.6)] == 25200
+    score = build_lesson_score(phrase,boundaries=(0.0,4.0))
+    tagged = [v for v in score.note_bindings.values()
+              if v["source_id"] == "single-left-offbeat" and v["is_attack"]]
+    assert len(tagged) == 1
+    assert tagged[0]["source_beat"] == 2.6
+    assert tagged[0]["display_beat"] == 2.5
+    model = build_score_model(score,boundaries=(0.0,4.0))
+    assert len(model["notes"]) == len(right)+1
+    assert any(e["kind"] == "note" and e["staff"] == "left"
+               and e["beat"] == 2.5 for e in model["notation_events"])
+
