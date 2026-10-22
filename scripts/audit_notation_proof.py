@@ -21,12 +21,11 @@ from piano_teacher.score import import_piece
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "tests" / "fixtures" / "musical_fidelity"
-SOURCES = (
-    "xml_chord_ties.musicxml",
-    "xml_grandstaff_voices.musicxml",
-    "xml_keys_spelling.musicxml",
-    "xml_quintuplets.musicxml",
-)
+# Audit the entire supported MusicXML corpus, including the multipage
+# fixture. Future additions are picked up without editing this file.
+MANIFEST = json.loads((CORPUS / "manifest.json").read_text())
+SOURCES = tuple(c["file"] for c in MANIFEST["supported"]
+                if c["file"].endswith(".musicxml"))
 
 
 def audit_source(path: Path) -> dict:
