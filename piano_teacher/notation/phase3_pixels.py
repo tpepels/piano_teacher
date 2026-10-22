@@ -71,11 +71,11 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
             continue
         for staff,notes in hands.items():
             try:
-                pitches=sorted((
-                    expected_y(staves[staff],note["spelling"],
-                        _clef_at(written,note["index"],staff)),
-                    note) for note in notes
-                ,key=lambda pair:pair[0])
+                pitches=sorted([
+                    (expected_y(staves[staff],note["spelling"],
+                        _clef_at(written,note["index"],staff)),note)
+                    for note in notes
+                ],key=lambda pair:pair[0])
                 # Hollow half/whole heads do not create the filled image-
                 # width peaks used for quarter/eighth/chord notes. Verify
                 # their full native image mask against Verovio reference.
