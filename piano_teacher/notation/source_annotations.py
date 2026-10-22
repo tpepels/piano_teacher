@@ -99,6 +99,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
     # isolated flags. Shortened lessons can legitimately lose a partial
     # group: never leave an orphan beam begin/end in those variants.
     groups = defaultdict(list)
+    group_indices = defaultdict(int)
     for pi, part in enumerate(source_parts):
         for mi, measure in enumerate(part.findall("measure")):
             for ordinal, original in enumerate(measure):
@@ -109,7 +110,10 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                     group_key = (pi, mi, original.findtext("voice", "1"),
                                  original.findtext("staff", "1"),
                                  mark.get("number", "1"))
-                    groups[group_key].append((sid, mark.text or ""))
+                    if (mark.text or "").strip() == "begin":
+                        group_indices[group_key] += 1
+                    groups[(*group_key, group_indices[group_key])].append(
+                        (sid, mark.text or ""))
     for group_key, members in groups.items():
         # Each original group MUST have one begin, an end, and no splits.
         # Chord members cannot independently start beams.
