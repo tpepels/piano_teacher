@@ -48,6 +48,7 @@ class AuditCase:
     max_density: float = 640.0
     max_tiny_rests: int = 8
     max_dots: int = 2
+    features: tuple[str, ...] = ()
 
 
 # Explicit, pinned real MIDI corpus. Case changes require an intentional
@@ -65,7 +66,26 @@ CASES = (
     AuditCase("merry-go-round-1-2-both", "Merry-Go-Round-of-Life.midi", 1, 2),
     AuditCase("peace-piece-1-2-both", "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi", 1, 2),
     AuditCase("waltz-1-2-both", "Waltz_for_Debby.midi", 1, 2),
+    AuditCase("fidelity-chord-ties",
+              "tests/fixtures/musical_fidelity/xml_chord_ties.musicxml",
+              1, 2, features=("chords","ties")),
+    AuditCase("fidelity-quintuplets",
+              "tests/fixtures/musical_fidelity/xml_quintuplets.musicxml",
+              1, 1, "right", features=("tuplets",)),
+    AuditCase("fidelity-grandstaff",
+              "tests/fixtures/musical_fidelity/xml_grandstaff_voices.musicxml",
+              1, 1, features=("grandstaff",)),
+    AuditCase("fidelity-key-change",
+              "tests/fixtures/musical_fidelity/xml_keys_spelling.musicxml",
+              1, 2, "right", features=("key_change",)),
+    AuditCase("fidelity-sparse-rests",
+              "tests/fixtures/musical_fidelity/midi_sparse_rests.mid",
+              1, 2, "right", features=("rests",)),
+    AuditCase("fidelity-midi-triplets",
+              "tests/fixtures/musical_fidelity/midi_triplets.mid",
+              1, 1, "right", features=("tuplets",)),
 )
+
 
 
 def selected_cases(only: str | None = None) -> tuple[AuditCase, ...]:
@@ -77,7 +97,9 @@ def selected_cases(only: str | None = None) -> tuple[AuditCase, ...]:
 
 
 def fixture(case: AuditCase = CASES[0]) -> tuple[dict, object]:
-    piece, _ = import_piece(ROOT / "midi" / case.filename)
+    source = ROOT / (case.filename if "/" in case.filename
+                     else "midi/" + case.filename)
+    piece, _ = import_piece(source)
     assert 1 <= case.first_bar <= case.last_bar < len(piece.bar_boundaries)
     first = piece.bar_boundaries[case.first_bar - 1]
     end = piece.bar_boundaries[case.last_bar]
@@ -129,10 +151,30 @@ def visible_ink(image: Image.Image, x: float, y: float, radius: int = 11) -> int
     return matches
 
 
+def feature_errors(model: dict, case: AuditCase) -> list[str]:
+    """Independently assert that each named challenging fixture tests its goal."""
+    events = model["notation_events"]
+    notes = [e for e in events if e["kind"] == "note"]
+    from collections import Counter
+    simultaneous = Counter((e["staff"], e["beat"], e["voice"])
+                           for e in notes)
+    measures = model["measures"]
+    observed = {
+        "chords": any(count > 1 for count in simultaneous.values()),
+        "ties": any(not e["is_attack"] for e in notes),
+        "tuplets": any(e.get("time_modification") for e in notes),
+        "grandstaff": {"left", "right"} <= {e["staff"] for e in notes},
+        "key_change": len({tuple(sorted(m["keys"].items())) for m in measures}) > 1,
+        "rests": sum(e["kind"] == "rest" for e in events) >= 2,
+    }
+    return [f"{case.name} stopped exercising required {feature} notation"
+            for feature in case.features if not observed.get(feature, False)]
+
+
 def readability_errors(model: dict, diagnostics: dict,
                        case: AuditCase = CASES[0]) -> list[str]:
     """Fail on known engraving defects, with explicit per-passage budgets."""
-    errors = []
+    errors = feature_errors(model, case)
     if diagnostics["density"] > case.max_density:
         errors.append(f"{case.name} inflated to {diagnostics['density']:.1f} "
                       f"px/beat (max {case.max_density:.1f})")
