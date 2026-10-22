@@ -130,3 +130,77 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                         "note glyph shapes in dense passages",
                         "individual beam/tie/slur masks in complex overlaps"],
     }
+
+
+
+def verify_all_rest_pixels(generated_xml: str, folder: Path,
+                           *, hand: str = "both") -> dict:
+    """Independently classify each source-written rest in native PNG pixels.
+
+    Unlike renderer diagnostic rest coordinates, the only anchors are the
+    actual screenshot staff lines, the physical fixed playhead and source
+    XML rest onsets/types. A search over conventional voice/lane Y does not
+    assume the native renderer's internal rest placement.
+    """
+    from .symbol_pixel_proof import classify_symbol, REST_TYPES
+
+    if hand not in ("both","left","right"):
+        raise ValueError("Invalid practice hand mode")
+    score=read_written_score(generated_xml)
+    written=[s for s in score.symbols
+             if s["kind"]=="rest" and s["visible"]
+             and (hand=="both" or s["staff"]==hand)]
+    atlas=json.loads((folder/"fixture.json").read_text())["assets"]["native_glyphs"]
+    names=tuple("rest_"+name for name in REST_TYPES if "rest_"+name in atlas)
+    checked=0
+    failures=[]
+    details=[]
+    for event in written:
+        kind="rest_"+str(event["note_type"])
+        beat=round(float(event["beat"]),8)
+        if kind not in names:
+            failures.append(f"{beat} {event['staff']}: unsupported written "
+                            f"rest type {event['note_type']}")
+            continue
+        frame=folder/f"native-{beat:.5f}.png"
+        if not frame.is_file():
+            failures.append(f"{beat} {event['staff']}: missing screenshot "
+                            f"for source rest")
+            continue
+        with Image.open(frame) as raw:
+            picture=raw.convert("RGB")
+        try:
+            staves=detect_staff_lines(picture)
+            staff=staves[event["staff"]]
+            center=(staff.lines[0]+staff.lines[-1])/2
+            search=classify_symbol(
+                picture,atlas,names,
+                round(picture.width*.42),center,staff.gap,
+                centered=True,dxs=range(-13,14,2),
+                dys=range(-70,71,3))
+            best,score=search[0]
+            runner_up=search[1][1] if len(search)>1 else 0.0
+            details.append({
+                "beat":beat,"staff":event["staff"],"written":kind,
+                "found":best,"score":score,
+                "runner_up":runner_up,
+            })
+            if best==kind and score>=.69 and score-runner_up>=.03:
+                checked+=1
+            else:
+                failures.append(
+                    f"{beat} {event['staff']}: written {kind}, image "
+                    f"{best} confidence {score:.3f} vs {runner_up:.3f}")
+        except (ValueError,AssertionError,KeyError) as exc:
+            failures.append(f"{beat} {event['staff']}: {exc}")
+    if checked!=len(written):
+        failures.append(f"Independent rest-glyph image coverage "
+                        f"{checked}/{len(written)}")
+    return {
+        "passed":not failures,
+        "written_active_rests":len(written),
+        "image_rest_glyphs_verified":checked,
+        "failures":failures,"measured":details,
+        "scope":"Exact original Verovio rest glyph silhouette at "
+                "XML-defined beat near image-detected staff",
+    }
