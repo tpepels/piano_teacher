@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 from piano_teacher.notation.pixel_proof import (
-    detect_staff_lines, expected_y, observed_notehead_y, verify_pixel_frames,
+    detect_staff_lines, expected_y, observed_notehead_y, observed_notehead_ys, verify_pixel_frames,
 )
 
 SOURCE = Path(__file__).parent / "fixtures" / "native_pixel_pitch_probe.musicxml"
@@ -64,7 +64,7 @@ def test_erasing_actual_notehead_pixels_fails():
     image = frame(missing="right")
     staves = detect_staff_lines(image)
     import pytest
-    with pytest.raises(AssertionError, match="one isolated quarter-note"):
+    with pytest.raises(AssertionError, match="no measurable notehead ink"):
         observed_notehead_y(image, "right", staves["right"])
 
 
@@ -101,3 +101,22 @@ def test_image_validator_ignores_native_reported_positions(tmp_path):
     observed, _ = observed_notehead_y(bad, "right", staffs["right"])
     target = expected_y(staffs["right"], ("E", 0, 4), ("G", 2, 0))
     assert abs(observed - target) > 5
+
+
+def test_chord_pixels_produce_multiple_independent_image_centres():
+    image = frame()
+    draw = ImageDraw.Draw(image)
+    x = round(image.width * .42)
+    # A written C-E-G chord has heads two staff steps (one gap) apart.
+    for y in (180, 160):
+        draw.ellipse((x-10, y-5, x+10, y+5), fill=(230, 240, 234))
+    staves = detect_staff_lines(image)
+    assert observed_notehead_ys(image, "right", staves["right"]) == [160, 180, 200]
+
+
+def test_missing_chord_tone_is_detectable_in_pixel_inventory():
+    image = frame()
+    staves = detect_staff_lines(image)
+    measured = observed_notehead_ys(image, "right", staves["right"])
+    assert len(measured) == 1
+    assert len(measured) != 3
