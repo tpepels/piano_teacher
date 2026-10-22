@@ -108,7 +108,9 @@ def test_display_notation_is_never_allowed_to_change_the_grading_clock():
     score = build_lesson_score(phrase,boundaries=(0.0,4.0))
     assert build_score_model(score,boundaries=(0.0,4.0))
     bindings = {key:value.copy() for key,value in score.note_bindings.items()}
-    modified = next(v for v in bindings.values() if v["notation_timing"] == "triplet")
+    modified = next(v for v in bindings.values() if
+                    v["notation_timing"] == "triplet" and
+                    abs(v["display_beat"]-v["source_beat"]) > 1e-5)
     modified["notation_timing"] = "exact"
     with pytest.raises(ValueError, match="scoring onset"):
         build_score_model(replace(score,note_bindings=bindings),
