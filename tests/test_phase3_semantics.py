@@ -215,10 +215,21 @@ def test_grace_and_unpitched_events_are_explicitly_uncovered():
     assert not result['complete']
 
 
-def test_real_secondary_voice_rests_are_reported_as_defects_not_exceptions():
+def test_real_secondary_voice_rest_loss_is_detected_after_projection_fix(tmp_path):
     from scripts.audit_phase3_semantics import audit_source
     result = audit_source('tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml',
-                          source_index=9, hand='both')
+                          source_index=9, hand='both', artifact_dir=tmp_path)
+    assert result['passed'], result['discrepancies']
+    generated = ET.fromstring((tmp_path / 'generated.musicxml').read_text())
+    model = json.loads((tmp_path / 'model.json').read_text())
+    for note in generated.findall('./part[@id="RH"]/measure/note'):
+        if note.find('rest') is not None and note.findtext('voice') == '2':
+            note.set('print-object', 'no')
+    model['notation_events'] = [event for event in model['notation_events']
+                               if not (event['staff']=='right' and event['kind']=='rest'
+                                       and event['voice']=='2')]
+    result = audit((FIXTURES/'xml_parallel_tied_voices.musicxml').read_text(),
+                   ET.tostring(generated, encoding='unicode'), model)
     rows = bad_rows(result, 'written_rests', 'original->generated')
     assert any(e['source']['voice'] == '2' and e['source']['measure'] == '1' for e in rows)
     assert any(e['source']['voice'] == '2' and e['source']['measure'] == '2' for e in rows)

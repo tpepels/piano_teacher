@@ -10,7 +10,7 @@ from collections import defaultdict
 import hashlib
 import math
 from xml.etree import ElementTree as ET
-from ..music import Phrase, source_note_id
+from ..music import Note, Phrase, _assign_hands, _named_hand, source_note_id
 from ..measure_grid import phrase_grid
 from .source_annotations import project_annotations
 
@@ -190,7 +190,7 @@ def _append_event(measure: ET.Element, tones: list, duration: int,
         for chord_index, tone in enumerate(tones):
             pitch = tone['pitch'] if tone is not None else None
             identifier = None
-            if tone is not None:
+            if pitch is not None:
                 source = tone['source_id']
                 segment = counts.get(source, 0)
                 identifier = 'pt' + hashlib.sha256(source.encode()).hexdigest()[:32] + 's' + str(segment)
@@ -204,7 +204,8 @@ def _append_event(measure: ET.Element, tones: list, duration: int,
                          begin_tie=begin_tie or index > 0,
                          end_tie=end_tie or index < len(parts)-1,
                          spelling=tone.get('spelling') if tone else None,
-                         identifier=identifier, hidden_rest=hidden_rest)
+                         identifier=identifier,
+                         hidden_rest=hidden_rest or bool(tone and tone.get('hidden_rest')))
         position += length
 
 
@@ -237,6 +238,95 @@ def _render_measure(measure: ET.Element, lanes: list[list[tuple]], length: int,
         if position < length:
             _append_event(measure, [None], length-position, lane_idx+1,
                           hidden_rest=lane_idx > 0)
+
+
+def _project_authored_rests(source_musicxml: str, phrase: Phrase, lanes: list,
+                            hand: str) -> None:
+    """Restore source rests to their imported voice, separately from gap padding."""
+    if not source_musicxml:
+        return
+    destinations = {}
+    for lane in lanes:
+        # One source voice may need extra synthetic lanes for overlapping
+        # notes. Its authored rests belong to just one lane, never all of them.
+        destinations.setdefault(lane[0][2][0]['note'].voice, lane)
+    source = ET.fromstring(source_musicxml)
+    for element in source.iter():
+        element.tag = element.tag.rsplit('}', 1)[-1]
+    names = {part.get('id'): part.findtext('part-name', '')
+             for part in source.findall('part-list/score-part')}
+    tracks, track_names, source_staffs = {}, {}, defaultdict(set)
+    source_notes, rests = [], []
+    for pi, part in enumerate(source.findall('part')):
+        divisions, offset = Fraction(1), Fraction(0)
+        for mi, measure in enumerate(part.findall('measure')):
+            cursor = extent = previous = Fraction(0)
+            for ordinal, element in enumerate(measure):
+                if element.tag == 'attributes' and element.find('divisions') is not None:
+                    divisions = Fraction(element.findtext('divisions'))
+                elif element.tag in ('backup', 'forward'):
+                    duration = Fraction(element.findtext('duration')) / divisions
+                    cursor += duration if element.tag == 'forward' else -duration
+                    extent = max(extent, cursor)
+                elif element.tag == 'note' and element.find('grace') is None:
+                    duration = Fraction(element.findtext('duration')) / divisions
+                    onset = previous if element.find('chord') is not None else cursor
+                    if element.find('chord') is None:
+                        previous = cursor
+                        cursor += duration
+                    extent = max(extent, cursor, onset + duration)
+                    staff = element.findtext('staff', '1')
+                    source_staffs[pi].add(staff)
+                    if (pi, staff) not in tracks:
+                        tracks[pi, staff] = len(tracks)
+                        track_names[tracks[pi, staff]] = names.get(part.get('id'), '')
+                    track = tracks[pi, staff]
+                    owner = f"xml-p{pi}-s{staff}-v{element.findtext('voice', '1')}"
+                    absolute_start, absolute_end = float(offset + onset), float(offset + onset + duration)
+                    if element.find('rest') is not None:
+                        rests.append((pi, staff, track, owner, absolute_start, absolute_end, element))
+                    elif element.find('pitch') is not None:
+                        ties = element.findall('tie') or element.findall('notations/tied')
+                        if any(tie.get('type') == 'stop' for tie in ties):
+                            continue  # Hand policy counts original attacks, not tie segments.
+                        pitch = element.find('pitch')
+                        value = ((int(Fraction(pitch.findtext('octave'))) + 1) * 12
+                                 + dict(C=0, D=2, E=4, F=5, G=7, A=9, B=11)[pitch.findtext('step')]
+                                 + int(Fraction(pitch.findtext('alter', '0'))))
+                        source_notes.append(Note(absolute_start, absolute_end, value, track, 0,
+                            source_id=f'xml-p{pi}-m{mi}-e{ordinal}', voice=owner))
+            offset += extent
+    # Resolve empty voices from the whole source's staff/hand policy. The
+    # active phrase may contain no attack at all from that voice or staff.
+    for (pi, staff), track in tracks.items():
+        if len(source_staffs[pi]) == 2 and _named_hand(track_names[track]) is None:
+            track_names[track] = 'Right hand' if staff == '1' else 'Left hand'
+    voice_hands, staff_hands = defaultdict(set), defaultdict(set)
+    for note in _assign_hands(source_notes, track_names, 60):
+        voice_hands[note.voice].add(note.hand)
+        staff_hands[note.track].add(note.hand)
+    for pi, staff, track, owner, absolute_start, absolute_end, element in rests:
+        candidates = voice_hands[owner] or staff_hands[track]
+        rest_hand = (_named_hand(track_names[track])
+                     or (next(iter(candidates)) if len(candidates) == 1 else None)
+                     or ('left' if staff == '2' or pi > 0 else 'right'))
+        if rest_hand != hand:
+            continue
+        start = _ticks(max(absolute_start, phrase.start) - phrase.start)
+        end = _ticks(min(absolute_end, phrase.end) - phrase.start)
+        if end <= start:
+            continue
+        lane = destinations.get(owner)
+        if lane is None:
+            lane = []
+            destinations[owner] = lane
+            lanes.append(lane)
+        if any(a < end and b > start for a, b, _ in lane):
+            continue
+        lane.append((start, end, [{'pitch': None,
+            'hidden_rest': element.get('print-object') == 'no'}]))
+    for lane in lanes:
+        lane.sort(key=lambda event: (event[0], event[1]))
 
 
 def _key_alters(fifths: int) -> dict:
@@ -505,7 +595,8 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
             if not from_source_musicxml and rounded > end and end-start >= DIVISIONS:
                 tolerance = max(tolerance,.25) if rounded in {
                     _ticks(boundary) for boundary in grid} else tolerance
-            if (_tuplet_type(end-start) is None and rounded > start
+            if (not from_source_musicxml
+                    and _tuplet_type(end-start) is None and rounded > start
                     and abs(rounded-end) <= _ticks(tolerance)):
                 end = min(rounded,_ticks(phrase.end-phrase.start),
                           lane[i+1][0] if i+1 < len(lane)
@@ -516,7 +607,7 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
                 # not useful additional rest instructions. Extend display only
                 # to the next attack in this stable lane, within this measure.
                 # Source notes, attack bindings and assessed releases stay exact.
-                if (0 < following-end <= DIVISIONS/64
+                if (not from_source_musicxml and 0 < following-end <= DIVISIONS/64
                         and not any(end <= _ticks(boundary) < following for boundary in grid)):
                     end = following
             lane[i] = (start,end,tones)
@@ -600,6 +691,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                 for tone in tones:
                     attack_key = next((key for key in reversed(keys) if key.beat <= tone['note'].start+1e-7),None)
                     tone['spelling'] = _spelling(tone['note'],attack_key.fifths if attack_key else 0)
+        _project_authored_rests(source_musicxml, phrase, lanes, hand)
         for change in (*keys,*clefs):
             if phrase.start < change.beat < phrase.end and not any(abs(change.beat-phrase.start-beat)<1e-7 for beat in grid):
                 raise ValueError('Mid-measure source key/clef changes are not supported in generated lessons')
