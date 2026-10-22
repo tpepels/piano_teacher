@@ -83,3 +83,15 @@ def test_corpus_is_pinned_to_all_seven_bundled_midi_files():
 def test_invalid_window_request_fails_closed(bars,window):
     with pytest.raises(ValueError):
         measure_windows(bars,window)
+
+
+@pytest.mark.parametrize("field,value",[
+    ("unique_rendered_noteheads",0),
+    ("unique_rendered_rests",0),
+    ("screenshot_count",0),
+    ("measure_count",3),
+])
+def test_incomplete_counts_cannot_hide_behind_empty_error_lists(field,value):
+    row=_witness(1,4)
+    row["whole_window_coverage"][field]=value
+    assert not verify_complete_windows(4,[row])["passed"]
