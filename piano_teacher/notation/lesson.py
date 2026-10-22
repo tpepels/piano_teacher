@@ -382,10 +382,48 @@ def _spelling(note, fifths):
     return None
 
 
+def _midi_ornament_onsets(phrase, hand):
+    """Recognize nearly exact 32nd-triplet runs in performed MIDI.
+
+    Imported performances can land one original MIDI tick before a regular
+    triplet grid. Printing those as isolated 64th/6:5 tuplets makes a genuine
+    Chopin turn illegible and also forces excessive note/accidental spacing.
+    Only correct the *display* onsets of a complete four-attack pattern; the
+    untouched source beats in note bindings remain authoritative for grading.
+    Unstructured expressive timing and original MusicXML are unaffected.
+    """
+    by_lane = defaultdict(set)
+    for note in phrase.notes:
+        if note.hand == hand:
+            by_lane[(note.track, note.voice)].add(
+                round(note.start-phrase.start, 9))
+    result = {}
+    unit = Fraction(1, 12)
+    tolerance = .004
+    for owner, attacks in by_lane.items():
+        times = sorted(attacks)
+        for i in range(len(times)-3):
+            origin = round(times[i]*4)/4
+            # Require the complete ornament to begin/end on the quarter
+            # subdivisions; don't invent triplets from random expressive
+            # rubato or arbitrary isolated note pairs.
+            if abs(times[i]-origin) > tolerance:
+                continue
+            if any(abs(times[i+j]-(origin+float(unit)*j)) > tolerance
+                   for j in range(4)):
+                continue
+            for j in range(4):
+                result[(*owner,times[i+j])] = _ticks(
+                    origin+float(unit)*j)
+    return result
+
+
 def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
     groups = defaultdict(list)
     attacks = {}
     identities = set()
+    ornament_onsets = {} if from_source_musicxml else _midi_ornament_onsets(
+        phrase, hand)
     for index, note in enumerate(phrase.notes):
         if note.hand != hand:
             continue
@@ -395,10 +433,14 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
         identities.add(source)
         if not all(math.isfinite(value) for value in (note.start,note.end)) or not phrase.start <= note.start < min(note.end,phrase.end):
             raise ValueError('Source note attack/duration is outside the active phrase')
-        start, end = _ticks(note.start-phrase.start), _ticks(min(note.end,phrase.end)-phrase.start)
+        original_start = _ticks(note.start-phrase.start)
+        start = ornament_onsets.get(
+            (note.track,note.voice,round(note.start-phrase.start,9)),
+            original_start)
+        end = _ticks(min(note.end,phrase.end)-phrase.start)
         if end <= start:
             raise ValueError('Source note duration cannot be represented at notation resolution')
-        key = (note.track,note.voice,start)
+        key = (note.track,note.voice,original_start)
         if key in attacks and abs(attacks[key]-(note.start-phrase.start)) > 1e-12:
             raise ValueError('Distinct source attacks collide at notation quantization resolution')
         attacks[key] = note.start-phrase.start
