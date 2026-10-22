@@ -158,7 +158,11 @@ def test_dense_chopin_requires_usable_forward_reading_context():
                readability_errors(_model(), report, chopin))
     report["density"] = 500
     report["density_witness"]["available_lookahead_beats"] = 1.78
-    assert readability_errors(_model(), report, chopin) == []
+    # This synthetic model intentionally has no Chopin triplet; the
+    # separate feature-loss test covers that constraint. Here verify only
+    # the reading-context regression, without weakening either audit.
+    assert not any("beats ahead" in problem for problem in
+                   readability_errors(_model(), report, chopin))
 
 
 def test_collision_explanation_identifies_real_source_ink_pair():
