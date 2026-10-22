@@ -341,6 +341,8 @@ def main(argv=None) -> int:
     report["environment"]={"python":platform.python_version(),
         "godot":subprocess.check_output([godot,"--version"],text=True).strip(),
         "framebuffer":[1536,520],"rest_difference_protocol":2}
+    from scripts.notation_release_provenance import current_provenance
+    report["provenance"]=current_provenance()
     (args.out/"summary.json").write_text(json.dumps(report,indent=2)+"\n")
     print("PHASE3 REPORT:",report["scores_passed"],"passed,",len(errors),
           "failed; corpus complete:",report["corpus_fully_audited"],flush=True)
