@@ -57,7 +57,7 @@ def test_native_mode_is_canonical_and_unsupported_music_reverts_to_legacy():
     assert 'draw_arc(' not in native
     assert 'draw_circle(' not in native
     assert 'def native_glyphs' in (ROOT / "piano_teacher/notation/assets/glyphs.py").read_text()
-    assert 'from .notation.assets.glyphs import (' in (ROOT / "piano_teacher/notation_symbols.py").read_text()
+    assert 'from ..notation.assets.glyphs import native_glyphs, preparation_symbols' in preparation
     assert 'parsed.get("native_glyphs", {})' in app
     assert 'glyph_catalog, note_catalog, tie_catalog, chord_catalog,' in app
     assert 'glyphs.paint_note(self, kind, normal_up, x, y, gap, ink)' in native

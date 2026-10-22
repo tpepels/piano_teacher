@@ -1,4 +1,4 @@
-"""Phase C2 group-beam geometry and constant-axis regression."""
+"""Phase C2 source-engraved beam geometry and constant-axis regression."""
 import shutil
 import subprocess
 import os
@@ -25,10 +25,7 @@ def test_native_eighth_sixteenth_beams_in_simple_and_compound_meters():
 
 
 def test_beaming_uses_semantic_beat_and_never_verovio_x():
-    geometry = (ROOT / "godot/notation/native/geometry.gd").read_text()
     renderer = (ROOT / "godot/notation/native/view.gd").read_text()
-    assert "static func beam_groups(model: Dictionary)" in geometry
-    assert "static func beat_group_length(meter: Array)" in geometry
     assert "func _paint_beams(data: Dictionary, gap: float)" in renderer
     index = (ROOT / "godot/notation/native/score_index.gd").read_text()
     assert 'var beam_groups: Array = source_beams.get("groups",[])' in index

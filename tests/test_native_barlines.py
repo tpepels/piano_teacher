@@ -4,9 +4,9 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from piano_teacher.lesson_score import build_lesson_score
+from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.music import Note, Phrase
-from piano_teacher.score_model import build_score_model
+from piano_teacher.notation.model import build_score_model
 
 
 def score():
@@ -117,7 +117,7 @@ def test_imported_musicxml_barlines_survive_disk_cache_and_reengraving(tmp_path)
     import hashlib
 
     from piano_teacher.preprocessing_cache import PreprocessingCache
-    from piano_teacher.xml_import import load_musicxml
+    from piano_teacher.importing.musicxml import load_musicxml
 
     source = with_barlines(score(), [
         ("RH", 0, "right", "light-light", ""),

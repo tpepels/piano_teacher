@@ -2,7 +2,7 @@
 import pytest
 from piano_teacher import server
 from piano_teacher.learning import LearningPlan
-from piano_teacher.lesson_score import LessonScore
+from piano_teacher.notation.lesson import LessonScore
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.score import EngravedScore
 from piano_teacher.practice import PlayedNote, evaluate

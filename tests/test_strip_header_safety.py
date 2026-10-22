@@ -5,7 +5,7 @@ game simulation. Godot's separate renderer test checks the actual PNG ink.
 """
 from xml.etree import ElementTree as ET
 
-from piano_teacher.lesson_score import build_lesson_score
+from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.music import Note, Phrase
 from piano_teacher.score import _can_remove_repeated_system_headers
 

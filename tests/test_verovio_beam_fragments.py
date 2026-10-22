@@ -4,7 +4,7 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from piano_teacher.preprocessing_cache import PreprocessingCache
-from piano_teacher.verovio_beam_fragments import (
+from piano_teacher.notation.assets.beams import (
     _filter_beam_svg, beam_fragments, extract_beam_fragments,
     expected_beam_groups,
 )
@@ -160,7 +160,7 @@ def test_two_real_musicxml_eighths_produce_native_verovio_beam(monkeypatch):
 def test_diagnostic_svg_bounding_boxes_do_not_create_fake_notes():
     # Verovio's real svgBoundingBoxes output uses e.g. class="note
     # content-bounding-box" alongside each genuine note.
-    from piano_teacher.verovio_beam_fragments import _note_ids
+    from piano_teacher.notation.assets.beams import _note_ids
     group = ET.fromstring('''<g class="beam">
       <g class="note" id="n1"/>
       <g class="note content-bounding-box" id="cbbox-n1"/>

@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from piano_teacher.preprocessing_cache import PreprocessingCache
-from piano_teacher.verovio_tuplet_fragments import (
+from piano_teacher.notation.assets.tuplets import (
     semantic_tuplets, extract_tuplets, tuplet_fragments, isolate, source_ids,
 )
 
@@ -123,14 +123,14 @@ def test_real_verovio_exports_explicit_triplet_bracket(with_chords):
                  ET.fromstring(original).iter()
                  if "tuplet" in n.get("class","").lower()]
         print("ACTUAL_VEROVIO_TUPLET_CLASSES",classes[:20])
-        from piano_teacher.verovio_tuplet_fragments import crop_art
+        from piano_teacher.notation.assets.tuplets import crop_art
         from piano_teacher.score_geometry import parse_svg_geometry
         geom=parse_svg_geometry(original)
         first=geom.elements["n1"]
         last=geom.elements["n3"]
         space=geom.staff_systems[first[2]]["staff_lines"]
         print("ACTUAL_TUPLET_ANCHORS",first,last,"staff",space)
-        from piano_teacher.verovio_tuplet_fragments import isolate, source_ids
+        from piano_teacher.notation.assets.tuplets import isolate, source_ids
         tree=ET.fromstring(original)
         for node in tree.iter():
             if node.get("class")=="tuplet":

@@ -3,7 +3,6 @@ extends RefCounted
 # No texture, Verovio resource, frame clock or audio timing dependency.
 const STEPS := {"C":0, "D":1, "E":2, "F":3, "G":4, "A":5, "B":6}
 const SUPPORTED := ["whole", "half", "quarter", "eighth", "16th", "32nd", "64th", "128th"]
-const BEAM_LEVELS := {"eighth":1, "16th":2, "32nd":3, "64th":4, "128th":5}
 const BARLINE_STYLES := ["regular", "light-light", "light-heavy",
     "heavy-light", "heavy-heavy", "heavy", "none", "dashed", "dotted",
     "tick", "short"]
@@ -34,8 +33,6 @@ static func valid_modification(event: Dictionary) -> bool:
         dotted_multiplier(dots) * float(normal)/float(actual)
     return absf(expected-float(event.get("duration_beats", -1.0))) < .0003
 
-static func beam_level(note_type: String) -> int:
-    return int(BEAM_LEVELS.get(note_type, 0))
 const HEAD_HALF_WIDTH := 9.2
 const MIN_ATTACK_SEPARATION := 25.0
 const ACCIDENTAL_GLYPHS := {"sharp":"acc_sharp","flat":"acc_flat",
@@ -196,123 +193,14 @@ static func event_positions(model: Dictionary, density: float) -> Dictionary:
     return result
 
 
-# C2: conventional beaming is a semantic grouping, never a scroll operation.
-# Only group unambiguous beats: ordinary meters by quarter beat and 6/8,
-# 9/8, 12/8 by dotted-quarter beat. Ambiguous irregular meters leave flags.
-static func beat_group_length(meter: Array) -> float:
-    if meter.size() < 2:
-        return 0.0
-    var numerator: int = int(meter[0])
-    var denominator: int = int(meter[1])
-    if denominator == 8 and numerator in [3, 6, 9, 12]:
-        return 1.5
-    if denominator == 2 and numerator in [2, 3, 4]:
-        return 2.0
-    if denominator == 4 and numerator in [2, 3, 4]:
-        return 1.0
-    if denominator == 8 and numerator in [2, 4]:
-        return 1.0
-    if denominator == 16 and numerator in [2, 4]:
-        return .5
-    return 0.0
-
-static func _beam_finish(group: Array, output: Array) -> void:
-    if group.size() >= 2:
-        output.append(group.duplicate())
-
-static func beam_groups(model: Dictionary) -> Array:
-    # Sequence by staff, voice and bar. Rests, unbeamable durations, ties
-    # and gaps break groups; chord tones share the leader's beam/stem.
-    var lanes: Dictionary = {}
-    var measures: Dictionary = {}
-    for measure in model.get("measures", []):
-        if measure is Dictionary:
-            measures[int(measure.get("number", 0))] = measure
-    for event in model.get("notation_events", []):
-        if not event is Dictionary:
-            continue
-        var staff: String = str(event.get("staff", ""))
-        var voice: String = str(event.get("voice", "1"))
-        var number: int = int(event.get("measure", 0))
-        var key: String = staff + "|" + voice + "|" + str(number)
-        if not lanes.has(key):
-            lanes[key] = {"measure":number, "events":[]}
-        if bool(event.get("chord", false)):
-            continue
-        lanes[key]["events"].append(event)
-    var tuplet_membership: Dictionary = {}
-    var serial := 0
-    for group in tuplet_groups(model):
-        var events: Array = group.get("events", [])
-        if events.size() >= 2:
-            for event in events:
-                tuplet_membership[str(event.get("id", ""))] = serial
-            serial += 1
-    var output: Array = []
-    for key in lanes:
-        var measure: Dictionary = measures.get(int(lanes[key]["measure"]), {})
-        var length: float = beat_group_length(measure.get("meter", []))
-        var conventional_grouping: bool = length > 0.0
-        if length <= 0.0:
-            # Even an irregular meter can contain an explicitly grouped
-            # MusicXML tuplet. Do not guess beams for its other notes.
-            length = 1.0
-        var ordered: Array = lanes[key]["events"]
-        ordered.sort_custom(func(a, b): return float(a["beat"]) < float(b["beat"]))
-        var current: Array = []
-        var current_group := ""
-        var previous_end := -INF
-        var begin: float = float(measure.get("start_beat", 0.0))
-        for event in ordered:
-            var at: float = float(event.get("beat", -1.0))
-            var duration: float = float(event.get("duration_beats", 0.0))
-            var short: bool = str(event.get("kind", "")) == "note" and \
-                beam_level(str(event.get("note_type", ""))) > 0 and \
-                duration > 0.0 and duration <= .75 and \
-                (conventional_grouping or tuplet_membership.has(
-                    str(event.get("id", ""))))
-            var unit: int = int(floor((at-begin+.000001)/length))
-            # Notes may end on the next group boundary but not cross it.
-            var stays: bool = at+duration <= begin+float(unit+1)*length+.00001
-            var grouping: String = ("tuplet:" + str(tuplet_membership[
-                str(event.get("id", ""))]) if tuplet_membership.has(
-                str(event.get("id", ""))) else "meter:" + str(unit))
-            if grouping.begins_with("tuplet:"):
-                stays = true
-            var consecutive: bool = absf(at-previous_end) <= .0001
-            if not short or not stays or (not current.is_empty() and \
-                    (grouping != current_group or not consecutive)):
-                _beam_finish(current, output)
-                current = []
-            if short and stays:
-                current.append(event)
-                current_group = grouping
-                previous_end = at+duration
-            else:
-                previous_end = -INF
-        _beam_finish(current, output)
-    return output
-
+# Beam membership and stem direction come from source engraving metadata
+# in score_index.gd; geometry must not infer alternate groups from meter.
 static func beamed_ids(groups: Array) -> Dictionary:
     var lookup: Dictionary = {}
     for group in groups:
         for event in group:
             lookup[str(event.get("id", ""))] = true
     return lookup
-
-static func stem_up(group: Array, model: Dictionary) -> bool:
-    if group.is_empty():
-        return true
-    var measure_by_number: Dictionary = {}
-    for measure in model.get("measures", []):
-        measure_by_number[int(measure.get("number", 0))] = measure
-    var total := 0.0
-    for event in group:
-        var m: Dictionary = measure_by_number.get(int(event.get("measure", 0)), {})
-        var clef: Dictionary = m.get("clefs", {}).get(str(event.get("staff", "right")), {})
-        total += float(staff_step(event.get("spelling", {}), clef))
-    return total/float(group.size()) < 4.0
-
 
 # Key signatures use the circle-of-fifths order. Their steps are measured
 # against each clef, never repeated at one arbitrary y like a text label.

@@ -85,11 +85,6 @@ func run() -> void:
             "Conventional quintuplet labels actual count")
         check(Geometry.tuplet_label(tuplets[1]) == "3",
             "Conventional triplet labels actual count")
-    var beams: Array = Geometry.beam_groups(model)
-    check(beams.size() == 2, "Explicit tuplets are grouped, not split on beats")
-    if beams.size() == 2:
-        check(beams[0].size() == 5 and beams[1].size() == 3,
-            "Tuplet beams match exactly their semantic groups")
     var player = Renderer.new()
     get_root().add_child(player)
     player.size = Vector2(1280,470)
@@ -102,6 +97,12 @@ func run() -> void:
         load("res://tests/native_glyph_fixture.gd").tuplet_catalogue()),
         "Unit test has Verovio-shaped placeholder textures")
     check(player.load_score(model),"Native renderer accepts 5:4, 3:2, double dots")
+    var beams: Array = []
+    for group in player.beam_groups:
+        beams.append(group.map(func(e):return e["id"]))
+    check(beams == [["five0","five1","five2","five3","five4"],
+        ["three0","three1","three2"]],
+        "Tuplet beams retain source membership across quarter-beat boundaries")
     check(player.native_ready and player.notation_tuplets.size() == 2,
         "Tuplets retain the original semantic source grouping")
     check(player.glyphs.has_tuplet("three0|three1|three2",true),

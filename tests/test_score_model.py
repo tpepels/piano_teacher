@@ -11,10 +11,10 @@ from http.server import ThreadingHTTPServer
 
 import pytest
 
-from piano_teacher.lesson_score import build_lesson_score
+from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.music import Note, Phrase, Piece, KeySignature
 from piano_teacher.practice import evaluate, PlayedNote
-from piano_teacher.score_model import SCHEMA, build_score_model
+from piano_teacher.notation.model import SCHEMA, build_score_model
 from piano_teacher.learning import LearningPlan
 from piano_teacher.server import Handler, PracticeEngine
 

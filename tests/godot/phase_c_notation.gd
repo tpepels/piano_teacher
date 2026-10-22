@@ -116,7 +116,7 @@ func run() -> void:
         "Native notes never render without an authenticated Verovio glyph atlas")
     # Synthetic 2x2 SVG paths below are a UNIT-TEST DOUBLE for placement and
     # transport math; real MIDI desktop tests require actual installed
-    # Verovio glyphs from Python's notation_symbols.native_glyphs().
+    # Verovio glyphs from Python's notation.assets.glyphs.native_glyphs().
     var atlas_script = load("res://notation/native/glyphs.gd")
     var sample_glyphs: Dictionary = {}
     for name in atlas_script.REQUIRED:

@@ -11,7 +11,7 @@ import pytest
 
 from piano_teacher.exercise_generator import generate_variants
 from piano_teacher.feedback import project_assessment
-from piano_teacher.lesson_score import build_lesson_score
+from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.lesson_validation import require_lesson_alignment
 from piano_teacher.music import Phrase
 from piano_teacher.practice import Assessment, NoteAssessment, PlayedNote, evaluate

@@ -5,7 +5,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import pytest
-from piano_teacher.notation_symbols import preparation_symbols
+from piano_teacher.notation.assets.glyphs import preparation_symbols
 
 ROOT=Path(__file__).resolve().parents[1]
 
