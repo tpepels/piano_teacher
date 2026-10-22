@@ -391,6 +391,17 @@ def _midi_swing_onsets(phrase, hand):
     repeated pattern across an independent part/voice; preserve exact source
     onsets for performance grading, and leave isolated rubato untouched.
     """
+    # Detect the rhythmic feel for the *piano*, not independently for each
+    # staff. In Autumn Leaves the right hand establishes swing throughout the
+    # passage but a left-hand accompaniment may contain only one swung
+    # offbeat. Requiring three left-hand attacks retained its literal 0.6 beat
+    # and generated a stray 32nd rest against the right hand's 0.5 notation.
+    all_times = sorted({round(note.start, 9) for note in phrase.notes})
+    swung = [t for t in all_times if abs((t % 1.0)-.6) <= .015]
+    downbeats = [t for t in all_times if min(t % 1.0,1-t % 1.0) < .015]
+    straight = [t for t in all_times if abs((t % 1.0)-.5) <= .015]
+    if len(swung) < 3 or len(downbeats) < 2 or len(swung) < 2*len(straight):
+        return {}
     by_lane = defaultdict(set)
     for note in phrase.notes:
         if note.hand == hand:
@@ -398,15 +409,12 @@ def _midi_swing_onsets(phrase, hand):
     snapped = {}
     for owner, attacks in by_lane.items():
         times = sorted(attacks)
-        swung = [t for t in times if abs((t % 1.0)-.6) <= .015]
-        downbeats = [t for t in times if min(t % 1.0,1-t % 1.0) < .015]
-        straight = [t for t in times if abs((t % 1.0)-.5) <= .015]
-        # Minimum evidence avoids rewriting a lone expressive anticipation,
-        # irregular tuplets or authentic straight eighth-note passages.
-        if len(swung) < 3 or len(downbeats) < 2 or len(swung) < 2*len(straight):
-            continue
-        for t in swung:
+        for t in times:
+            if abs((t % 1.0)-.6) > .015:
+                continue
             display = round(t-.1, 8)
+            # Preserve any independent voice already playing an attack on
+            # that offbeat. Do not invent a same-lane unison or new note.
             if any(abs(other-display) < .03 for other in times if other != t):
                 continue
             snapped[(*owner,round(t-phrase.start,9))] = _ticks(display-phrase.start)
