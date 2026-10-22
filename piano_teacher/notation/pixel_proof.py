@@ -138,8 +138,8 @@ def ink_row_profile(picture: Image.Image, x: int, lo: int, hi: int) -> list[int]
             for yy in range(lo, hi)]
 
 
-def observed_notehead_y(image: Image.Image, hand: str,
-                        staff: RasterStaff) -> tuple[float, list[tuple[float, int]]]:
+def observed_notehead_ys(image: Image.Image, hand: str,
+                         staff: RasterStaff) -> list[float]:
     x = round(image.width * PLAYHEAD_FRACTION)
     if x - 13 < 0 or x + 13 >= image.width:
         raise AssertionError("Playhead outside captured frame")
@@ -159,11 +159,21 @@ def observed_notehead_y(image: Image.Image, hand: str,
             groups[-1].append(y)
     candidates = [(sum(g) / len(g), max(row_counts[y - lo] for y in g))
                   for g in groups if len(g) >= 3]
-    if len(candidates) != 1:
+    if not candidates:
+        raise AssertionError(
+            f"{hand}: no measurable notehead ink at the playhead")
+    return sorted(y for y, _strength in candidates)
+
+
+def observed_notehead_y(image: Image.Image, hand: str,
+                        staff: RasterStaff) -> tuple[float, list[tuple[float, int]]]:
+    """Backward-compatible strict singleton helper used by mutation tests."""
+    all_ys = observed_notehead_ys(image, hand, staff)
+    if len(all_ys) != 1:
         raise AssertionError(
             f"{hand}: expected one isolated quarter-note head at playhead, "
-            f"detected {len(candidates)} candidates: {candidates}")
-    return candidates[0][0], candidates
+            f"detected {len(all_ys)} candidates: {all_ys}")
+    return all_ys[0], [(all_ys[0], 1)]
 
 
 def verify_pixel_frames(original_xml: str, screenshots: dict[float, Path],
@@ -174,15 +184,13 @@ def verify_pixel_frames(original_xml: str, screenshots: dict[float, Path],
     """
     reference = read_written_score(original_xml)
     notes = [s for s in reference.symbols if s["kind"] == "note"]
-    by_beat: dict[float, dict] = defaultdict(dict)
+    by_beat: dict[float, dict] = defaultdict(lambda: defaultdict(list))
     for symbol in notes:
         beat = float(symbol["beat"])
         hand = symbol["staff"]
-        if hand in by_beat[beat]:
-            raise ValueError("Pixel probe must have exactly one note per hand per beat")
         if symbol["note_type"] != "quarter" or symbol["spelling"] is None:
-            raise ValueError("Pixel probe supports isolated written quarter notes only")
-        by_beat[beat][hand] = symbol
+            raise ValueError("Pixel probe supports written quarter-note heads only")
+        by_beat[beat][hand].append(symbol)
     if set(by_beat) != set(screenshots):
         raise AssertionError(f"Missing or extra frame beats: expected {sorted(by_beat)}, got {sorted(screenshots)}")
     clefs = {}
@@ -200,26 +208,33 @@ def verify_pixel_frames(original_xml: str, screenshots: dict[float, Path],
         except AssertionError as exc:
             failures.append(f"{beat}: {exc}")
             continue
-        for hand, symbol in by_beat[beat].items():
+        for hand, symbols in by_beat[beat].items():
             try:
                 if hand not in clefs:
                     raise ValueError(f"Missing source clef for {hand}")
-                target = expected_y(staves[hand], symbol["spelling"], clefs[hand])
-                actual, candidates = observed_notehead_y(image, hand, staves[hand])
-                difference = abs(actual - target)
-                error_in_steps = difference / (staves[hand].gap / 2)
-                result = {"beat": beat, "hand": hand, "spelling": symbol["spelling"],
-                          "expected_y": round(target, 2), "actual_y": round(actual, 2),
-                          "staff_gap": round(staves[hand].gap, 2),
-                          "error_staff_steps": round(error_in_steps, 3)}
-                checked.append(result)
-                if error_in_steps > tolerance_staff_steps:
-                    failures.append(f"{beat} {hand}: actual notehead at y={actual:.1f}, "
-                                    f"written pitch requires y={target:.1f}; "
-                                    f"error={error_in_steps:.2f} staff steps")
+                targets = sorted((expected_y(staves[hand], item["spelling"], clefs[hand]),
+                                  item["spelling"]) for item in symbols)
+                measured = observed_notehead_ys(image, hand, staves[hand])
+                if len(targets) != len(measured):
+                    raise AssertionError(
+                        f"{hand}: {len(measured)} image-space notehead centres for "
+                        f"{len(targets)} written notes; centres={measured}")
+                for (target, spelling), actual in zip(targets, measured):
+                    difference = abs(actual - target)
+                    error_in_steps = difference / (staves[hand].gap / 2)
+                    result = {"beat": beat, "hand": hand, "spelling": spelling,
+                              "expected_y": round(target, 2), "actual_y": round(actual, 2),
+                              "staff_gap": round(staves[hand].gap, 2),
+                              "error_staff_steps": round(error_in_steps, 3)}
+                    checked.append(result)
+                    if error_in_steps > tolerance_staff_steps:
+                        failures.append(f"{beat} {hand}: actual head at y={actual:.1f}, "
+                                        f"written pitch requires y={target:.1f}; "
+                                        f"error={error_in_steps:.2f} staff steps")
             except (AssertionError, ValueError) as exc:
                 failures.append(f"{beat} {hand}: {exc}")
-    expected_count = sum(len(v) for v in by_beat.values())
+    expected_count = sum(len(notes) for hands in by_beat.values()
+                         for notes in hands.values())
     if len(checked) != expected_count:
         failures.append(f"Only {len(checked)}/{expected_count} noteheads independently measured")
     return {
@@ -227,5 +242,5 @@ def verify_pixel_frames(original_xml: str, screenshots: dict[float, Path],
         "notes_checked_from_pixels": len(checked), "frames": len(screenshots),
         "measured": checked, "failures": failures,
         "method": "Original MusicXML diatonic pitch vs image-detected ten staff rails and image-detected wide notehead ink; fixed physical playhead; no renderer notehead/staff geometry",
-        "not_verified": ["glyph shapes", "stems/beams", "ties", "rests", "chords", "accidental symbols", "dense passages", "whole-piece coverage"],
+        "not_verified": ["glyph shapes", "stems/beams", "ties", "rests", "accidental symbols", "dense passages", "whole-piece coverage"],
     }
