@@ -2,7 +2,8 @@
 from PIL import Image, ImageDraw
 
 from scripts.check_native_verovio_overlay import (
-    CASES, MAX_AUTUMN_DENSITY, readability_errors, selected_cases, visible_ink,
+    CASES, MAX_AUTUMN_DENSITY, feature_errors, readability_errors,
+    selected_cases, visible_ink,
 )
 
 
@@ -90,8 +91,12 @@ def test_native_rest_a_long_way_off_its_staff_is_detected():
 def test_real_overlay_corpus_is_pinned_to_every_bundled_midi():
     from scripts.check_user_midi_visual_regression import CASES as MIDI_CASES
     expected_files = {filename for filename, hand in MIDI_CASES}
-    assert {case.filename for case in CASES} == expected_files
-    assert len(CASES) >= 9
+    assert {case.filename for case in CASES if "/" not in case.filename} == expected_files
+    assert len(CASES) >= 15
+    assert sum("/" in case.filename for case in CASES) >= 6
+    assert {"chords", "ties", "tuplets", "grandstaff", "key_change", "rests"} <= {
+        feature for case in CASES for feature in case.features
+    }
     assert len({case.name for case in CASES}) == len(CASES)
     assert any(case.name == "autumn-7-8-both" and
                case.max_density == MAX_AUTUMN_DENSITY for case in CASES)
@@ -124,3 +129,14 @@ def test_per_case_density_and_rest_budgets_are_isolated():
     assert any("px/beat" in error for error in
                readability_errors(test_model, report, CASES[0]))
 
+
+
+def test_challenging_corpus_does_not_pass_if_feature_disappears():
+    from scripts.check_native_verovio_overlay import AuditCase
+    case = AuditCase("broken-tuplets", "demo.musicxml", 1, 1,
+                     features=("tuplets",))
+    assert feature_errors(_model(), case) == [
+        "broken-tuplets stopped exercising required tuplets notation"]
+    event = _model()
+    event["notation_events"][0]["time_modification"] = {"actual": 3, "normal": 2}
+    assert feature_errors(event, case) == []
