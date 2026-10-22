@@ -358,12 +358,15 @@ def _invalid_constant(value):
 
 
 def aggregate(folder: Path, *, scores: int = 17, kind: str = "complete", include_elements: bool = False,
-              required_provenance: dict | None = None) -> dict:
+              required_provenance: dict | None = None,
+              source_names: tuple[str, ...] | None = None, source_root: Path | None = None) -> dict:
     """Require every pinned case, with independently recomputed status totals.
 
     ``scores`` selects a pinned prefix for small regression fixtures only; the
     CLI always requires all 17. Each boundary has its own 51-job denominator.
     ``passed`` here is the complete corpus gate, not a detector's narrower flag.
+    Supplemental, independently pinned inventories may reuse the validators via
+    ``source_names``; release callers and the CLI retain the original corpus.
     """
     errors = []
     jobs = []
@@ -376,11 +379,18 @@ def aggregate(folder: Path, *, scores: int = 17, kind: str = "complete", include
     if kind not in ("complete", "semantic", "visual"):
         errors.append(f"Unknown verification kind {kind!r}")
         kinds = ()
-    if not _count(scores, minimum=1) or scores > len(PINNED_SOURCES):
+    pinned = PINNED_SOURCES if source_names is None else source_names
+    if (not isinstance(pinned, tuple) or not pinned
+            or any(not isinstance(s, str) or not s or Path(s).is_absolute()
+                   or '..' in Path(s).parts for s in pinned)
+            or len(set(pinned)) != len(pinned)):
+        errors.append("Invalid supplemental source inventory")
+        pinned = ()
+    if not _count(scores, minimum=1) or scores > len(pinned):
         errors.append("Invalid pinned corpus denominator")
         scores = 0
-    for index, source in enumerate(PINNED_SOURCES[:scores]):
-        source_file = ROOT / (source if "/" in source else "midi/" + source)
+    for index, source in enumerate(pinned[:scores]):
+        source_file = (source_root or ROOT) / (source if "/" in source else "midi/" + source)
         try:
             digest = sha256(source_file.read_bytes()).hexdigest()
         except OSError as exc:
