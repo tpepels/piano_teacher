@@ -400,10 +400,16 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
         # Return genuine JSON value types, not Python tuples that change
         # shape when the HTTP layer serializes the payload.
         "measures": [{**asdict(m), "meter": list(m.meter)} for m in measures],
-        "notes": [{**asdict(note), "spelling": (
+        "notes": [{**vars(note), "spelling": (
             list(note.spelling) if note.spelling is not None else None)}
             for note in notes],
-        "notation_events": [{**asdict(symbol), "tuplet_marks": [
+        # Copy owned mutable fields once. Recursively copying the immutable
+        # metadata tuples before converting them to JSON repeats that work.
+        "notation_events": [{**vars(symbol),
+            "spelling": dict(symbol.spelling) if symbol.spelling is not None else None,
+            "time_modification": (dict(symbol.time_modification)
+                                  if symbol.time_modification is not None else None),
+            "tuplet_marks": [
             dict(mark) for mark in symbol.tuplet_marks], "beams": [
                 [level, value, [list(attribute) for attribute in attributes]]
                 for level, value, attributes in symbol.beams],
