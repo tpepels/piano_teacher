@@ -110,7 +110,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                                  original.findtext("staff", "1"),
                                  mark.get("number", "1"))
                     groups[group_key].append((sid, mark.text or ""))
-    for members in groups.values():
+    for group_key, members in groups.items():
         # Each original group MUST have one begin, an end, and no splits.
         # Chord members cannot independently start beams.
         kinds = [kind.strip() for _, kind in members]
@@ -143,7 +143,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
         source_divisions = None
         # Source and generated division units may differ, so verify each
         # duration as a Fraction of a quarter note.
-        pi, mi, *_ = next(k for k, v in groups.items() if v is members)
+        pi, mi, *_ = group_key
         for tag in source_parts[pi].findall("measure")[mi].findall("attributes/divisions"):
             source_divisions = int(tag.text)
         if source_divisions is None:
@@ -154,8 +154,8 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
             continue
         valid = True
         for dest, original, _sid in translated:
-            if (Fraction(original.findtext("duration"),source_divisions)
-                    != Fraction(dest.findtext("duration"),10080)):
+            if (Fraction(int(original.findtext("duration")),source_divisions)
+                    != Fraction(int(dest.findtext("duration")),10080)):
                 valid = False
                 break
         if not valid:
