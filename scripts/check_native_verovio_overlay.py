@@ -56,7 +56,8 @@ class AuditCase:
 # review: CI must never silently drop a hard score or select easy passages.
 CASES = (
     AuditCase("autumn-7-8-both", AUTUMN_FILE, 7, 8,
-              max_density=MAX_AUTUMN_DENSITY, max_tiny_rests=2),
+              max_density=MAX_AUTUMN_DENSITY, max_tiny_rests=2,
+              features=("swing_offbeats",)),
     AuditCase("autumn-1-2-right", AUTUMN_FILE, 1, 2, "right"),
     AuditCase("ala-1-2-left", "Ala_–_Joep_Beving.midi", 1, 2, "left"),
     AuditCase("chopin-1-2-right",
@@ -177,7 +178,14 @@ def feature_errors(model: dict, case: AuditCase) -> list[str]:
                        -1.0/12.0) < 2e-6 for j in (0,1)):
                 return True
         return False
+    source_onsets = {e["id"]:float(e["onset_beats"])
+                     for e in model.get("notes",[])}
+    swung = sum(1 for e in notes if e.get("is_attack") and
+                e.get("source_id") in source_onsets
+                and abs((source_onsets[e["source_id"]] % 1.0)-.6)<.015
+                and abs((float(e.get("beat",0.0)) % 1.0)-.5)<.015)
     observed = {
+        "swing_offbeats": swung >= 2,
         "chords": any(count > 1 for count in simultaneous.values()),
         "ties": any(not e.get("is_attack", True) for e in notes),
         "tuplets": any(e.get("time_modification") for e in notes),
