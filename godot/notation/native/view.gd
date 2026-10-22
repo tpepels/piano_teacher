@@ -227,9 +227,9 @@ func load_score(candidate: Dictionary) -> bool:
         trial = maxf(trial,second_trial)
         if not is_finite(trial) or trial > timeline.MAX_SCORE_PIXELS_PER_BEAT:
             continue
-        var candidate: Dictionary = {
+        var fit_option: Dictionary = {
             "gap":tested_gap, "density":trial, "witness":final_witness}
-        fallbacks.append(candidate)
+        fallbacks.append(fit_option)
         if tested_gap >= MIN_READABLE_STAFF_GAP and trial > max_usable_density:
             continue
         staff_gap_limit = tested_gap
