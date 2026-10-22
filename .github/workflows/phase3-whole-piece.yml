@@ -27,6 +27,21 @@ jobs:
           xvfb-run -a -s "-screen 0 1600x1000x24" \
             .venv/bin/python scripts/audit_phase3_whole_pieces.py \
             --only Danny_Boy --window-bars 4 --out /tmp/phase3-whole-score
+      - name: Original MusicXML score - verify both independent notation and native pixels
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            .venv/bin/python scripts/audit_phase3_whole_pieces.py \
+            --only xml_chord_ties --window-bars 4 --out /tmp/phase3-musicxml
+      - name: Publish independent MusicXML provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-musicxml-whole-score-pilot
+          path: /tmp/phase3-musicxml/
+          if-no-files-found: warn
+          retention-days: 14
       - name: Publish per-measure native PNGs and full provenance report
         if: always()
         uses: actions/upload-artifact@v4
