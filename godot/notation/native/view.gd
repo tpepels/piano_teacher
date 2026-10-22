@@ -32,6 +32,8 @@ var notation_tuplets: Array = []
 # Each frame then visits only visible onsets, beams and ties.
 var measure_by_number: Dictionary = {}
 var ordered_events: Array = []
+var ink_density_witness: Dictionary = {}
+var selected_density_witness: Dictionary = {}
 var attached_grace_notes: Array = []
 var source_expressions: Array = []
 var expression_note_index: Dictionary = {}
@@ -68,6 +70,8 @@ func clear_score() -> void:
     notation_tuplets.clear()
     measure_by_number.clear()
     ordered_events.clear()
+    ink_density_witness.clear()
+    selected_density_witness.clear()
     attached_grace_notes.clear()
     source_expressions.clear()
     expression_note_index.clear()
@@ -199,9 +203,16 @@ func load_score(candidate: Dictionary) -> bool:
     for candidate_gap in [MAX_STAFF_GAP,17.0,14.0,11.0,8.5]:
         _layout_rest_lanes(float(candidate_gap),density)
         var trial: float = _required_ink_density(density,float(candidate_gap))
+        var first_witness: Dictionary = ink_density_witness.duplicate(true)
         _layout_rest_lanes(float(candidate_gap),trial)
-        trial = maxf(trial,_required_ink_density(trial,float(candidate_gap)))
+        var second_trial: float = _required_ink_density(trial,float(candidate_gap))
+        var second_witness: Dictionary = ink_density_witness.duplicate(true)
+        var final_witness: Dictionary = second_witness if second_trial > trial else first_witness
+        trial = maxf(trial,second_trial)
         if is_finite(trial) and trial <= timeline.MAX_SCORE_PIXELS_PER_BEAT:
+            selected_density_witness = final_witness.duplicate(true)
+            selected_density_witness["staff_gap"] = float(candidate_gap)
+            selected_density_witness["selected_density"] = trial
             staff_gap_limit = float(candidate_gap)
             ink_density = trial
             fits_density = true
@@ -863,10 +874,12 @@ func _required_ink_density(preferred: float, gap: float = MAX_STAFF_GAP) -> floa
         var ink: Rect2 = _event_ink_rect(event,gap,heads,accidentals)
         if not staves[staff].has(beat):
             staves[staff][beat] = []
-        staves[staff][beat].append(ink)
+        staves[staff][beat].append({"ink":ink, "event":event})
         minimum_left = minf(minimum_left,ink.position.x)
         maximum_right = maxf(maximum_right,ink.end.x)
     var density: float = preferred
+    var witness: Dictionary = {"reason":"configured-density",
+        "required_density":preferred,"staff_gap":gap}
     var reach: float = (maximum_right-minimum_left+gap*.2)/preferred
     for staff in staves:
         var onsets: Array = staves[staff].keys()
@@ -876,14 +889,44 @@ func _required_ink_density(preferred: float, gap: float = MAX_STAFF_GAP) -> floa
                 var distance: float = float(onsets[i])-float(onsets[j])
                 if distance > reach:
                     break
-                for previous in staves[staff][onsets[j]]:
-                    for current in staves[staff][onsets[i]]:
+                for previous_item in staves[staff][onsets[j]]:
+                    for current_item in staves[staff][onsets[i]]:
+                        var previous: Rect2 = previous_item["ink"]
+                        var current: Rect2 = current_item["ink"]
                         # Close clocks alone do not imply touching ink:
                         # separate voices/ledger registers may be clear in Y.
                         if current.position.y >= previous.end.y+gap*.1 or \
                                 previous.position.y >= current.end.y+gap*.1:
                             continue
-                        density = maxf(density,(previous.end.x-current.position.x+gap*.2)/distance)
+                        var necessary: float = (previous.end.x-current.position.x+
+                            gap*.2)/distance
+                        if necessary > density:
+                            density = necessary
+                            var prev_event: Dictionary = previous_item["event"]
+                            var next_event: Dictionary = current_item["event"]
+                            witness = {
+                                "reason":"horizontal-ink-clearance",
+                                "required_density":necessary,
+                                "staff_gap":gap,
+                                "previous_id":str(prev_event.get("id","")),
+                                "next_id":str(next_event.get("id","")),
+                                "previous_kind":str(prev_event.get("kind","")),
+                                "next_kind":str(next_event.get("kind","")),
+                                "previous_type":str(prev_event.get("note_type","")),
+                                "next_type":str(next_event.get("note_type","")),
+                                "previous_voice":str(prev_event.get("voice","")),
+                                "next_voice":str(next_event.get("voice","")),
+                                "previous_pitch":str(prev_event.get("spelling",{})),
+                                "next_pitch":str(next_event.get("spelling",{})),
+                                "previous_beat":float(onsets[j]),
+                                "next_beat":float(onsets[i]),
+                                "beat_separation":distance,
+                                "previous_rect":[previous.position.x,
+                                    previous.position.y,previous.size.x,previous.size.y],
+                                "next_rect":[current.position.x,
+                                    current.position.y,current.size.x,current.size.y]
+                            }
+    ink_density_witness = witness
     return density
 
 
