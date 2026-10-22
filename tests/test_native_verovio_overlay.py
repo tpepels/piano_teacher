@@ -140,3 +140,46 @@ def test_challenging_corpus_does_not_pass_if_feature_disappears():
     event = _model()
     event["notation_events"][0]["time_modification"] = {"actual": 3, "normal": 2}
     assert feature_errors(event, case) == []
+
+
+def test_dense_chopin_requires_usable_forward_reading_context():
+    from scripts.check_native_verovio_overlay import CASES
+    chopin = next(c for c in CASES if c.name == "chopin-5-6-both")
+    assert chopin.min_lookahead_beats == 1.75
+    # The previous "fix" merely raised the permitted density to 700. That
+    # would accept <1.4 beats of visible musical future.
+    assert chopin.max_density < 650.6
+    report = _report()
+    report.update({
+        "density": 650.6,
+        "density_witness": {"available_lookahead_beats":1.37}
+    })
+    assert any("beats ahead" in message for message in
+               readability_errors(_model(), report, chopin))
+    report["density"] = 500
+    report["density_witness"]["available_lookahead_beats"] = 1.78
+    # This synthetic model intentionally has no Chopin triplet; the
+    # separate feature-loss test covers that constraint. Here verify only
+    # the reading-context regression, without weakening either audit.
+    assert not any("beats ahead" in problem for problem in
+                   readability_errors(_model(), report, chopin))
+
+
+def test_collision_explanation_identifies_real_source_ink_pair():
+    # The native renderer's load-time witness is attached to a source-
+    # backed note identity rather than a magic density threshold. This
+    # keeps the next regression actionable.
+    witness = {
+        "reason":"horizontal-ink-clearance",
+        "previous_kind":"note","next_kind":"note",
+        "previous_beat":8.16458333,"next_beat":8.25,
+        "required_density":650.6,
+        "previous_rect":[-14.8,130.4,29.7,130.4],
+        "next_rect":[-36.3,122.2,51.2,105.4],
+    }
+    separation = witness["next_beat"]-witness["previous_beat"]
+    required = ((witness["previous_rect"][0]+witness["previous_rect"][2])
+                - witness["next_rect"][0] + 22*.2) / separation
+    assert required == __import__("pytest").approx(
+        witness["required_density"], rel=.006)
+

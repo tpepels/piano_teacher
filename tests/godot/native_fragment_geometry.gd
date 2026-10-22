@@ -146,8 +146,24 @@ func run() -> void:
         "Actual Peace Piece ten-to-one 64th stays native at one larger global scale")
     if renderer.native_ready:
         var tiny_density: float = renderer.timeline.pixels_per_beat
-        check(tiny_density >= 3999.0 and tiny_density <= 8192.0,
-            "Source .00625 beat gap receives at least 25 px without moving its onset")
+        # The staff now scales down when 22px glyphs would show almost no
+        # forward music. A fixed 25px gap was an artificial pixel policy;
+        # the safety invariant is actual source-Verovio ink separation.
+        check(tiny_density > 96.0 and tiny_density <= 8192.0,
+            "Near-coincident source events require an explicit global scale")
+        var tiny_gap: float = renderer._gap()
+        var tiny_heads: Dictionary = renderer._engraved_head_offsets(tiny_gap)
+        var tiny_accidentals: Dictionary = Geometry.accidental_offsets(
+            renderer.ordered_events,tiny_gap,tiny_heads,
+            renderer.glyphs.bounds)
+        var left_ink: Rect2 = renderer._event_ink_rect(
+            attack,tiny_gap,tiny_heads,tiny_accidentals)
+        var right_ink: Rect2 = renderer._event_ink_rect(
+            continuation,tiny_gap,tiny_heads,tiny_accidentals)
+        left_ink.position.x += 3.99375*tiny_density
+        right_ink.position.x += 4.0*tiny_density
+        check(not left_ink.intersects(right_ink.grow(tiny_gap*.06)),
+            "Two close tied source notes retain genuine visible ink clearance")
         check(renderer.tie_pairs.size() == 1 and renderer.ordered_events == [attack,continuation],
             "Tiny attack, original source identity and tied continuation all survive")
         var x0: float = renderer.timeline.screen_x(3.99375,4.0,500.0)

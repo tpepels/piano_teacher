@@ -49,20 +49,22 @@ class AuditCase:
     max_tiny_rests: int = 8
     max_dots: int = 2
     features: tuple[str, ...] = ()
+    min_lookahead_beats: float = 0.0
 
 
 # Explicit, pinned real MIDI corpus. Case changes require an intentional
 # review: CI must never silently drop a hard score or select easy passages.
 CASES = (
     AuditCase("autumn-7-8-both", AUTUMN_FILE, 7, 8,
-              max_density=MAX_AUTUMN_DENSITY, max_tiny_rests=2),
+              max_density=MAX_AUTUMN_DENSITY, max_tiny_rests=2,
+              features=("aligned_swing",)),
     AuditCase("autumn-1-2-right", AUTUMN_FILE, 1, 2, "right"),
     AuditCase("ala-1-2-left", "Ala_–_Joep_Beving.midi", 1, 2, "left"),
     AuditCase("chopin-1-2-right",
               "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 1, 2, "right"),
     AuditCase("chopin-5-6-both",
               "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 5, 6,
-              max_density=700.0),
+              min_lookahead_beats=1.75, features=("triplet_turn",)),
     AuditCase("danny-boy-1-2-both", "Danny_Boy(Bill_Evans_Ver_).midi", 1, 2),
     AuditCase("merry-go-round-1-2-both", "Merry-Go-Round-of-Life.midi", 1, 2),
     AuditCase("peace-piece-1-2-both", "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi", 1, 2),
@@ -162,25 +164,61 @@ def feature_errors(model: dict, case: AuditCase) -> list[str]:
     simultaneous = Counter((e.get("staff"), e.get("beat"), e.get("voice"))
                            for e in notes)
     measures = model.get("measures", [])
+    pitched = sorted((e for e in notes if e.get("staff") == "right"),
+                     key=lambda e:float(e.get("beat",0)))
+    def matched_turn():
+        for i in range(len(pitched)-2):
+            group = pitched[i:i+3]
+            if not all(e.get("note_type") == "32nd" and
+                       (e.get("time_modification") or {}).get("actual") == 3 and
+                       (e.get("time_modification") or {}).get("normal") == 2
+                       for e in group):
+                continue
+            if all(abs(float(group[j+1]["beat"])-float(group[j]["beat"])
+                       -1.0/12.0) < 2e-6 for j in (0,1)):
+                return True
+        return False
+    source_onsets = {e["id"]:float(e.get("onset_beats",0.0))
+                     for e in model.get("notes",[])}
+    swung = sum(1 for e in notes if e.get("is_attack") and
+                e.get("source_id") in source_onsets
+                and abs((source_onsets[e["source_id"]] % 1.0)-.6)<.015
+                and abs(float(e.get("beat",0.0))-
+                        source_onsets[e["source_id"]]) < .004)
     observed = {
+        "aligned_swing": swung >= 2,
         "chords": any(count > 1 for count in simultaneous.values()),
         "ties": any(not e.get("is_attack", True) for e in notes),
         "tuplets": any(e.get("time_modification") for e in notes),
         "grandstaff": {"left", "right"} <= {e.get("staff") for e in notes},
         "key_change": len({tuple(sorted(m["keys"].items())) for m in measures}) > 1,
         "rests": sum(e["kind"] == "rest" for e in events) >= 2,
+        "triplet_turn": matched_turn() if "triplet_turn" in case.features else False,
     }
     return [f"{case.name} stopped exercising required {feature} notation"
             for feature in case.features if not observed.get(feature, False)]
 
 
+# The generic readability checks must also work with tiny synthetic unit-test
+# models; feature-presence requirements belong only to explicitly selected
+# real passages, not to every call of the shared checker.
+GENERIC_CASE = AuditCase("generic", AUTUMN_FILE, 7, 8,
+                         max_density=MAX_AUTUMN_DENSITY, max_tiny_rests=2)
+
+
 def readability_errors(model: dict, diagnostics: dict,
-                       case: AuditCase = CASES[0]) -> list[str]:
+                       case: AuditCase = GENERIC_CASE) -> list[str]:
     """Fail on known engraving defects, with explicit per-passage budgets."""
     errors = feature_errors(model, case)
     if diagnostics["density"] > case.max_density:
         errors.append(f"{case.name} inflated to {diagnostics['density']:.1f} "
                       f"px/beat (max {case.max_density:.1f})")
+    if case.min_lookahead_beats:
+        available = float(diagnostics.get("density_witness", {}).get(
+            "available_lookahead_beats", 0.0))
+        if available + 1e-5 < case.min_lookahead_beats:
+            errors.append(f"{case.name}: only {available:.2f} beats ahead "
+                          f"(minimum {case.min_lookahead_beats:.2f})")
     if diagnostics["unavoidable_rest_overlaps"]:
         errors.append("Native rests collide with other voice ink")
     events = model["notation_events"]
@@ -344,7 +382,9 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
     summary = {
         "source":f"{case.filename}, measures {case.first_bar}-{case.last_bar}, {case.hand}",
         "case":case.name,
-        "density":report["density"],"native_notehead_samples":checked,
+        "density":report["density"],
+        "density_witness":report.get("density_witness", {}),
+        "native_notehead_samples":checked,
         "reference_source_note_count":len(refnotes),
         "distinct_native_noteheads":len(rendered_ids),
         "active_notehead_pixel_samples":active_pixel_samples,
@@ -381,7 +421,9 @@ def main() -> int:
             summary = run(directory, godot, case)
             results.append(summary)
             print(f"PASS {case.name}: {summary['native_notehead_samples']} pixels "
-                  f"checked; {summary['density']:.1f} px/beat",flush=True)
+                  f"checked; {summary['density']:.1f} px/beat; limiting ink: "
+                  + json.dumps(summary["density_witness"],sort_keys=True),
+                  flush=True)
         except Exception as exc:
             errors.append({"case":case.name,"error":str(exc)})
             print(f"FAIL {case.name}: {exc}",file=sys.stderr,flush=True)

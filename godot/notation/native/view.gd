@@ -14,6 +14,11 @@ const NOTE_INK := Design.SCORE_INK
 const DIM_INK := Design.STAFF_MUTED
 const PREVIEW_LIGHT := Design.MINT
 const MAX_STAFF_GAP := 22.0
+# A piano learner needs upcoming notation in view. Preserve the largest
+# authentic staff that leaves at least this many beats to the right of the
+# fixed playhead. No temporal warping, font imitation or overlap is allowed.
+const MIN_LOOKAHEAD_BEATS := 1.75
+const MIN_READABLE_STAFF_GAP := 14.0
 
 var glyphs = VerovioGlyphs.new()
 var native_ready := false
@@ -32,6 +37,8 @@ var notation_tuplets: Array = []
 # Each frame then visits only visible onsets, beams and ties.
 var measure_by_number: Dictionary = {}
 var ordered_events: Array = []
+var ink_density_witness: Dictionary = {}
+var selected_density_witness: Dictionary = {}
 var attached_grace_notes: Array = []
 var source_expressions: Array = []
 var expression_note_index: Dictionary = {}
@@ -68,6 +75,8 @@ func clear_score() -> void:
     notation_tuplets.clear()
     measure_by_number.clear()
     ordered_events.clear()
+    ink_density_witness.clear()
+    selected_density_witness.clear()
     attached_grace_notes.clear()
     source_expressions.clear()
     expression_note_index.clear()
@@ -189,23 +198,65 @@ func load_score(candidate: Dictionary) -> bool:
     if not failure_reason.is_empty():
         notice = failure_reason
         return false
-    # A source can have genuine near-simultaneous attacks on the same stave.
-    # Choose ONE score-wide density and ONE staff gap up front. Shrink ink
-    # progressively instead of falling back merely because the old 17 px
-    # minimum still demands >8192 pixels/beat after rest re-layout.
-    # Never clip density: that would hide colliding source noteheads.
+    # Genuine adjacent 32nd-triplet notes before a printed accidental can
+    # force very wide beat spacing. A full 22px staff previously won the
+    # first-feasible test even when only ~1.4 future beats fit on-screen.
+    # Evaluate smaller *authentic* Verovio glyph scales before choosing;
+    # use the largest staff that preserves reading context. Crucially each
+    # candidate recomputes true ink collision clearance; never just cap BPM
+    # distance or hide/shift a source accidental.
     var ink_density: float = density
     var fits_density := false
+    # The hidden Practice canvas is sometimes loaded before Godot assigns
+    # its first Control width. A zero-width value must not force every
+    # passage through five extremely expensive candidate engravings.
+    # Use the standard desktop viewport for that brief pre-layout state.
+    var viewport_width: float = size.x if size.x >= 640.0 else 1536.0
+    var max_usable_density: float = (
+        viewport_width*(1.0-PLAYHEAD_FRACTION)/MIN_LOOKAHEAD_BEATS)
+    var fallbacks: Array = []
     for candidate_gap in [MAX_STAFF_GAP,17.0,14.0,11.0,8.5]:
-        _layout_rest_lanes(float(candidate_gap),density)
-        var trial: float = _required_ink_density(density,float(candidate_gap))
-        _layout_rest_lanes(float(candidate_gap),trial)
-        trial = maxf(trial,_required_ink_density(trial,float(candidate_gap)))
-        if is_finite(trial) and trial <= timeline.MAX_SCORE_PIXELS_PER_BEAT:
-            staff_gap_limit = float(candidate_gap)
-            ink_density = trial
-            fits_density = true
-            break
+        var tested_gap: float = float(candidate_gap)
+        _layout_rest_lanes(tested_gap,density)
+        var trial: float = _required_ink_density(density,tested_gap)
+        var first_witness: Dictionary = ink_density_witness.duplicate(true)
+        _layout_rest_lanes(tested_gap,trial)
+        var second_trial: float = _required_ink_density(trial,tested_gap)
+        var second_witness: Dictionary = ink_density_witness.duplicate(true)
+        var final_witness: Dictionary = second_witness if second_trial > trial else first_witness
+        trial = maxf(trial,second_trial)
+        if not is_finite(trial) or trial > timeline.MAX_SCORE_PIXELS_PER_BEAT:
+            continue
+        var fit_option: Dictionary = {
+            "gap":tested_gap, "density":trial, "witness":final_witness}
+        fallbacks.append(fit_option)
+        if tested_gap >= MIN_READABLE_STAFF_GAP and trial > max_usable_density:
+            continue
+        staff_gap_limit = tested_gap
+        ink_density = trial
+        selected_density_witness = final_witness.duplicate(true)
+        fits_density = true
+        break
+    if not fits_density and not fallbacks.is_empty():
+        # An exceptionally dense score may not permit the target lookahead
+        # at a legible staff size. Prefer the smallest scale still >=14px.
+        # Never select an arbitrary sub-legible size solely to pass a metric.
+        var alternate: Dictionary = fallbacks[-1]
+        for option in fallbacks:
+            if float(option["gap"]) >= MIN_READABLE_STAFF_GAP:
+                alternate = option
+        staff_gap_limit = float(alternate["gap"])
+        ink_density = float(alternate["density"])
+        selected_density_witness = alternate["witness"].duplicate(true)
+        fits_density = true
+    if fits_density:
+        selected_density_witness["staff_gap"] = staff_gap_limit
+        selected_density_witness["selected_density"] = ink_density
+        selected_density_witness["available_lookahead_beats"] = (
+            size.x*(1.0-PLAYHEAD_FRACTION)/ink_density)
+        # The accepted scale can be different from the last trial; use the
+        # corresponding rest lanes instead of stale rejected-candidate lanes.
+        _layout_rest_lanes(staff_gap_limit,ink_density)
     if not fits_density:
         failure_reason = "Source glyph ink cannot fit within the fixed musical timeline"
         notice = failure_reason
@@ -863,10 +914,12 @@ func _required_ink_density(preferred: float, gap: float = MAX_STAFF_GAP) -> floa
         var ink: Rect2 = _event_ink_rect(event,gap,heads,accidentals)
         if not staves[staff].has(beat):
             staves[staff][beat] = []
-        staves[staff][beat].append(ink)
+        staves[staff][beat].append({"ink":ink, "event":event})
         minimum_left = minf(minimum_left,ink.position.x)
         maximum_right = maxf(maximum_right,ink.end.x)
     var density: float = preferred
+    var witness: Dictionary = {"reason":"configured-density",
+        "required_density":preferred,"staff_gap":gap}
     var reach: float = (maximum_right-minimum_left+gap*.2)/preferred
     for staff in staves:
         var onsets: Array = staves[staff].keys()
@@ -876,14 +929,44 @@ func _required_ink_density(preferred: float, gap: float = MAX_STAFF_GAP) -> floa
                 var distance: float = float(onsets[i])-float(onsets[j])
                 if distance > reach:
                     break
-                for previous in staves[staff][onsets[j]]:
-                    for current in staves[staff][onsets[i]]:
+                for previous_item in staves[staff][onsets[j]]:
+                    for current_item in staves[staff][onsets[i]]:
+                        var previous: Rect2 = previous_item["ink"]
+                        var current: Rect2 = current_item["ink"]
                         # Close clocks alone do not imply touching ink:
                         # separate voices/ledger registers may be clear in Y.
                         if current.position.y >= previous.end.y+gap*.1 or \
                                 previous.position.y >= current.end.y+gap*.1:
                             continue
-                        density = maxf(density,(previous.end.x-current.position.x+gap*.2)/distance)
+                        var necessary: float = (previous.end.x-current.position.x+
+                            gap*.2)/distance
+                        if necessary > density:
+                            density = necessary
+                            var prev_event: Dictionary = previous_item["event"]
+                            var next_event: Dictionary = current_item["event"]
+                            witness = {
+                                "reason":"horizontal-ink-clearance",
+                                "required_density":necessary,
+                                "staff_gap":gap,
+                                "previous_id":str(prev_event.get("id","")),
+                                "next_id":str(next_event.get("id","")),
+                                "previous_kind":str(prev_event.get("kind","")),
+                                "next_kind":str(next_event.get("kind","")),
+                                "previous_type":str(prev_event.get("note_type","")),
+                                "next_type":str(next_event.get("note_type","")),
+                                "previous_voice":str(prev_event.get("voice","")),
+                                "next_voice":str(next_event.get("voice","")),
+                                "previous_pitch":str(prev_event.get("spelling",{})),
+                                "next_pitch":str(next_event.get("spelling",{})),
+                                "previous_beat":float(onsets[j]),
+                                "next_beat":float(onsets[i]),
+                                "beat_separation":distance,
+                                "previous_rect":[previous.position.x,
+                                    previous.position.y,previous.size.x,previous.size.y],
+                                "next_rect":[current.position.x,
+                                    current.position.y,current.size.x,current.size.y]
+                            }
+    ink_density_witness = witness
     return density
 
 

@@ -196,7 +196,7 @@ def _append_event(measure: ET.Element, tones: list, duration: int,
                 identifier = 'pt' + hashlib.sha256(source.encode()).hexdigest()[:32] + 's' + str(segment)
                 if identifier in bindings:
                     raise ValueError('Duplicate emitted source-note identity')
-                bindings[identifier] = {key: tone[key] for key in ('source_id','source_beat','pitch','hand')}
+                bindings[identifier] = {key: tone[key] for key in ('source_id','source_beat','pitch','hand','notation_timing')}
                 bindings[identifier].update(is_attack=segment == 0, segment_index=segment,
                                              display_beat=position/DIVISIONS)
                 counts[source] = segment+1
@@ -209,7 +209,8 @@ def _append_event(measure: ET.Element, tones: list, duration: int,
 
 
 def _render_measure(measure: ET.Element, lanes: list[list[tuple]], length: int,
-                    bar_start: int, bindings: dict, counts: dict) -> None:
+                    bar_start: int, bindings: dict, counts: dict,
+                    hide_performance_micro_rests: bool = False) -> None:
     for lane_idx, events in enumerate(lanes or [[]]):
         if lane_idx:
             backup = ET.SubElement(measure, "backup")
@@ -221,8 +222,14 @@ def _render_measure(measure: ET.Element, lanes: list[list[tuple]], length: int,
             first, last = start < bar_start, end > bar_start+length
             start, end = max(start, bar_start)-bar_start, min(end, bar_start+length)-bar_start
             if start > position:
+                # Tiny key-release gaps from live MIDI are not intentional
+                # written rests. Preserve the exact MusicXML voice cursor
+                # without printing a distracting 32nd/64th rest. Explicit
+                # MusicXML and opening silence stay fully visible.
+                micro_gap = (hide_performance_micro_rests and position > 0
+                             and start-position <= DIVISIONS//8)
                 _append_event(measure, [None], start-position, lane_idx+1,
-                              hidden_rest=lane_idx > 0)
+                              hidden_rest=lane_idx > 0 or micro_gap)
             _append_event(measure, tones, end-start, lane_idx+1,
                           begin_tie=first, end_tie=last, display_start=bar_start+start,
                           bindings=bindings, counts=counts)
@@ -382,10 +389,53 @@ def _spelling(note, fifths):
     return None
 
 
+def _midi_ornament_onsets(phrase, hand):
+    """Recognize nearly exact 32nd-triplet runs in performed MIDI.
+
+    Imported performances can land one original MIDI tick before a regular
+    triplet grid. Printing those as isolated 64th/6:5 tuplets makes a genuine
+    Chopin turn illegible and also forces excessive note/accidental spacing.
+    Only correct the *display* onsets of a complete four-attack pattern; the
+    untouched source beats in note bindings remain authoritative for grading.
+    Unstructured expressive timing and original MusicXML are unaffected.
+    """
+    by_lane = defaultdict(set)
+    for note in phrase.notes:
+        if note.hand == hand:
+            by_lane[(note.track, note.voice)].add(
+                round(note.start-phrase.start, 9))
+    result = {}
+    unit = Fraction(1, 12)
+    tolerance = .004
+    for owner, attacks in by_lane.items():
+        times = sorted(attacks)
+        for i in range(len(times)-3):
+            origin = round(times[i]*4)/4
+            # Require the complete ornament to begin/end on the quarter
+            # subdivisions; don't invent triplets from random expressive
+            # rubato or arbitrary isolated note pairs.
+            if abs(times[i]-origin) > tolerance:
+                continue
+            if any(abs(times[i+j]-(origin+float(unit)*j)) > tolerance
+                   for j in range(4)):
+                continue
+            for j in range(4):
+                result[(*owner,times[i+j])] = _ticks(
+                    origin+float(unit)*j)
+    return result
+
+
 def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
     groups = defaultdict(list)
     attacks = {}
     identities = set()
+    # A swung offbeat at MIDI beat .6 must reach the playhead at .6, not
+    # .5: at the 40 BPM practice tempo that shift is 150 ms, larger than
+    # the grader's onset tolerance. Only MIDI-tick-sized ornament noise may
+    # move the displayed onset; rest clutter is handled independently.
+    triplet_onsets = {} if from_source_musicxml else _midi_ornament_onsets(
+        phrase, hand)
+    ornament_onsets = triplet_onsets
     for index, note in enumerate(phrase.notes):
         if note.hand != hand:
             continue
@@ -395,15 +445,24 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
         identities.add(source)
         if not all(math.isfinite(value) for value in (note.start,note.end)) or not phrase.start <= note.start < min(note.end,phrase.end):
             raise ValueError('Source note attack/duration is outside the active phrase')
-        start, end = _ticks(note.start-phrase.start), _ticks(min(note.end,phrase.end)-phrase.start)
+        original_start = _ticks(note.start-phrase.start)
+        start = ornament_onsets.get(
+            (note.track,note.voice,round(note.start-phrase.start,9)),
+            original_start)
+        end = _ticks(min(note.end,phrase.end)-phrase.start)
         if end <= start:
             raise ValueError('Source note duration cannot be represented at notation resolution')
-        key = (note.track,note.voice,start)
+        key = (note.track,note.voice,original_start)
         if key in attacks and abs(attacks[key]-(note.start-phrase.start)) > 1e-12:
             raise ValueError('Distinct source attacks collide at notation quantization resolution')
         attacks[key] = note.start-phrase.start
-        groups[note.track,note.voice,start,end].append({'source_id':source,'source_beat':note.start-phrase.start,
-                                                      'pitch':note.pitch,'hand':hand,'note':note})
+        display_key = (
+            note.track,note.voice,round(note.start-phrase.start,9))
+        timing = "triplet" if display_key in triplet_onsets else "exact"
+        groups[note.track,note.voice,start,end].append({
+            'source_id':source,'source_beat':note.start-phrase.start,
+            'pitch':note.pitch,'hand':hand,'note':note,
+            'notation_timing':timing})
     events = []
     for (track, voice, start, end), tones in groups.items():
         remaining = sorted(tones,key=lambda tone:(tone['pitch'],tone['source_id']))
@@ -591,7 +650,9 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             last_meter = (beats, beat_type)
             last_key, last_clef = key_value, chosen_clef
             append_barline(measure,source_beat,"left")
-            _render_measure(measure,lanes,bar_end-bar_start,bar_start,bindings,counts)
+            _render_measure(measure,lanes,bar_end-bar_start,bar_start,bindings,
+                            counts,
+                            hide_performance_micro_rests=not bool(source_musicxml))
             _write_accidentals(measure,active_key.fifths if active_key else 0)
             _write_tuplet_groups(measure)
             append_barline(measure,phrase.start+grid[b+1],"right")
