@@ -35,11 +35,9 @@ class WrittenScore:
 
 
 def _hand(part_id: str, part_name: str, part_index: int, staff: str) -> str:
-    if staff == "2":
-        return "left"
-    if staff == "1":
-        return "right"
-    if part_id == "LH" or "left" in part_name.lower():
+    # A separate LH part uses local staff number 1; it is still the left
+    # hand. An original single grand-staff part uses staff number 2 for LH.
+    if staff == "2" or part_id == "LH" or "left" in part_name.lower():
         return "left"
     if part_id == "RH" or "right" in part_name.lower():
         return "right"
