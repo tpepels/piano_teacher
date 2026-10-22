@@ -10,7 +10,7 @@ from pathlib import Path
 import shutil
 import subprocess
 from check_native_verovio_overlay import AuditCase, ROOT, fixture
-from piano_teacher.notation.symbol_pixel_proof import (prove_rest_ink, prove_accidental_ink, prove_beam_ink, prove_tie_ink)
+from piano_teacher.notation.symbol_pixel_proof import (prove_rest_ink, prove_accidental_ink, prove_beam_ink, prove_tie_ink, prove_note_rhythm_ink, prove_slur_ink)
 
 CASES = (
     (AuditCase("written-rests", "tests/fixtures/native_pixel_rest_probe.musicxml",
@@ -21,6 +21,10 @@ CASES = (
                1, 2, "both"), (0.25,0.75,1.25,1.75,2.25,2.75,3.25,3.75)),
     (AuditCase("source-ties", "tests/fixtures/native_pixel_tie_probe.musicxml",
                1, 2, "both"), (0,1,2,3,4)),
+    (AuditCase("written-rhythms", "tests/fixtures/native_pixel_rhythm_probe.musicxml",
+               1, 3, "both"), (0,4,6,7,7.5,8,9.5,10)),
+    (AuditCase("source-slur", "tests/fixtures/native_pixel_slur_probe.musicxml",
+               1, 2, "both"), (1.5,)),
 )
 
 def capture_all(out: Path, godot: str | None = None) -> list[dict]:
@@ -31,7 +35,9 @@ def capture_all(out: Path, godot: str | None = None) -> list[dict]:
     proofs = {"written-rests":prove_rest_ink,
               "written-accidentals":prove_accidental_ink,
               "source-beams":prove_beam_ink,
-              "source-ties":prove_tie_ink}
+              "source-ties":prove_tie_ink,
+              "written-rhythms":prove_note_rhythm_ink,
+              "source-slur":prove_slur_ink}
     failing = []
     for case, beats in CASES:
         path = out / case.name
