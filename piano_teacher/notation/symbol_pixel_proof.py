@@ -302,7 +302,31 @@ def prove_note_rhythm_ink(original_xml: str, generated_xml: str,folder: Path) ->
         if expected_glyph not in note_templates:
             errors.append(f"Unsupported note sprite {expected_glyph}")
             continue
-        _check_match(f"rhythm beat {beat}",expected_glyph,ranked,errors,records)
+        if item["note_type"]=="eighth":
+            # A quarter sprite is a subset of the eighth sprite. Pixel-Dice
+            # alone can rank the smaller quarter higher even with an authentic
+            # flag visibly present. Check the *additional flag ink*, far to
+            # the right of the narrow stem, and require a strong eighth match.
+            top=max(0,round(y-3.8*staff.gap))
+            bottom=max(top,round(y-.7*staff.gap))
+            flag_pixels=int(pixels[top:bottom,
+                round(x+.82*staff.gap):round(x+1.9*staff.gap)].sum())
+            expected_score=dict(ranked).get(expected_glyph,0.0)
+            records.append({"symbol":f"rhythm beat {beat}","expected":expected_glyph,
+                            "observed":expected_glyph if flag_pixels>=30 else "unflagged",
+                            "score":expected_score,"flag_pixels":flag_pixels})
+            if expected_score<.8 or flag_pixels<30:
+                errors.append(f"Missing authentic eighth flag at beat {beat}: "
+                              f"template={expected_score:.3f}, flag_pixels={flag_pixels}")
+        else:
+            _check_match(f"rhythm beat {beat}",expected_glyph,ranked,errors,records)
+            if item["note_type"] in ("quarter","half","whole"):
+                top=max(0,round(y-3.8*staff.gap))
+                bottom=max(top,round(y-.7*staff.gap))
+                unexpected=int(pixels[top:bottom,
+                    round(x+.82*staff.gap):round(x+1.9*staff.gap)].sum())
+                if unexpected>=30:
+                    errors.append(f"Unexpected flag on {item['note_type']} beat {beat}")
         if item["dots"]:
             # A separate Verovio augmentation-dot outline must appear to
             # the right of the head, independent of its note sprite.
