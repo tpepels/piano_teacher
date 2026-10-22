@@ -100,3 +100,23 @@ def test_isolated_offbeat_rubato_is_never_assumed_to_be_swing():
     score = build_lesson_score(phrase, boundaries=(0.0,4.0))
     assert any(abs(b["display_beat"]-.6)<1e-8
                for b in score.note_bindings.values() if b["is_attack"])
+
+
+def test_display_notation_is_never_allowed_to_change_the_grading_clock():
+    from dataclasses import replace
+    phrase = _turn()
+    score = build_lesson_score(phrase,boundaries=(0.0,4.0))
+    assert build_score_model(score,boundaries=(0.0,4.0))
+    bindings = {key:value.copy() for key,value in score.note_bindings.items()}
+    modified = next(v for v in bindings.values() if v["notation_timing"] == "triplet")
+    modified["notation_timing"] = "exact"
+    with pytest.raises(ValueError, match="scoring onset"):
+        build_score_model(replace(score,note_bindings=bindings),
+                          boundaries=(0.0,4.0))
+    restored = {key:value.copy() for key,value in score.note_bindings.items()}
+    changed = next(v for v in restored.values() if v["notation_timing"] == "triplet")
+    changed["source_beat"] += .05
+    with pytest.raises(ValueError, match="grading onset"):
+        build_score_model(replace(score,note_bindings=restored),
+                          boundaries=(0.0,4.0))
+
