@@ -142,7 +142,7 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
     XML rest onsets/types. A search over conventional voice/lane Y does not
     assume the native renderer's internal rest placement.
     """
-    from .symbol_pixel_proof import classify_symbol, REST_TYPES
+    from .symbol_pixel_proof import REST_TYPES
 
     if hand not in ("both","left","right"):
         raise ValueError("Invalid practice hand mode")
@@ -173,13 +173,25 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
             staves=detect_staff_lines(picture)
             staff=staves[event["staff"]]
             center=(staff.lines[0]+staff.lines[-1])/2
-            search=classify_symbol(
-                picture,atlas,names,
-                round(picture.width*.42),center,staff.gap,
-                centered=True,dxs=range(-13,14,2),
-                dys=range(-70,71,3))
-            best,score=search[0]
-            runner_up=search[1][1] if len(search)>1 else 0.0
+            # Music convention distinguishes whole (hanging from the
+            # fourth line) from half (sitting on the middle line). Their
+            # nearly identical rectangle ink CANNOT be classified if the
+            # validator searches arbitrary Y positions for both.
+            # The expected staff offsets are derived from notation
+            # convention, not the renderer's rest Y telemetry.
+            pixels=bright(picture)
+            scored=[]
+            for name in names:
+                name_anchor=center-staff.gap if name=="rest_whole" else center
+                match=_match_glyph(
+                    pixels,atlas[name],staff.gap,
+                    round(picture.width*.42),name_anchor,
+                    centered=True,dxs=range(-13,14,2),
+                    dys=range(-7,8,2))
+                scored.append((name,round(match,4)))
+            scored.sort(key=lambda pair:pair[1],reverse=True)
+            best,score=scored[0]
+            runner_up=scored[1][1] if len(scored)>1 else 0.0
             details.append({
                 "beat":beat,"staff":event["staff"],"written":kind,
                 "found":best,"score":score,
