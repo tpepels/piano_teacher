@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import subprocess
 from check_native_verovio_overlay import AuditCase, ROOT, fixture
+from piano_teacher.notation.symbol_pixel_proof import (prove_rest_ink, prove_accidental_ink, prove_beam_ink, prove_tie_ink)
 
 CASES = (
     (AuditCase("written-rests", "tests/fixtures/native_pixel_rest_probe.musicxml",
@@ -27,6 +28,11 @@ def capture_all(out: Path, godot: str | None = None) -> list[dict]:
     if not godot:
         raise RuntimeError("Actual native Godot is required")
     captured = []
+    proofs = {"written-rests":prove_rest_ink,
+              "written-accidentals":prove_accidental_ink,
+              "source-beams":prove_beam_ink,
+              "source-ties":prove_tie_ink}
+    failing = []
     for case, beats in CASES:
         path = out / case.name
         path.mkdir(parents=True, exist_ok=True)
@@ -47,9 +53,22 @@ def capture_all(out: Path, godot: str | None = None) -> list[dict]:
         screenshots={float(b):path/f"native-{b:.2f}.png" for b in beats}
         if any(not p.is_file() for p in screenshots.values()):
             raise RuntimeError(f"{case.name}: missing a mandatory screenshot")
+        original=(ROOT/case.filename).read_text(encoding="utf-8")
+        proof=proofs[case.name](original,xml,path)
+        (path/"symbol-proof.json").write_text(json.dumps(proof,indent=2)+"\\n")
+        if not proof["passed"]:
+            failing.append({"case":case.name,"errors":proof["errors"]})
         captured.append({"case":case.name,"path":str(path),
-                         "beats":list(beats),"screenshots":len(screenshots)})
-        print(f"Native captured {case.name}: {len(screenshots)} frames",flush=True)
+                         "beats":list(beats),"screenshots":len(screenshots),
+                         "pixel_passed":proof["passed"]})
+        print(f"Native {case.name}: {len(screenshots)} frames; "
+              f"independent image proof={proof['passed']}",flush=True)
+        for problem in proof["errors"]:
+            print("FAIL",case.name,problem,flush=True)
+    (out/"symbol-proof-summary.json").write_text(json.dumps(
+        {"passed":not failing,"scores":captured,"errors":failing},indent=2)+"\\n")
+    if failing:
+        raise AssertionError(f"Independent symbol image checks failed: {failing}")
     return captured
 
 def main():
