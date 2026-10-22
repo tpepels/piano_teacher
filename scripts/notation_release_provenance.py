@@ -8,8 +8,19 @@ INPUTS = ("piano_teacher", "godot", "scripts", "tests", ".github", "pyproject.to
 
 
 def current_provenance() -> dict:
+    try:
+        return _snapshot()
+    except (OSError, subprocess.SubprocessError) as exc:
+        detail = getattr(exc, "stderr", b"") or b""
+        if isinstance(detail, bytes):
+            detail = detail.decode(errors="replace").strip()
+        return {"revision": None, "inputs_sha256": None, "clean": False,
+                "errors": [f"Release provenance unavailable: {exc}; {detail}"]}
+
+
+def _snapshot() -> dict:
     def git(*args):
-        return subprocess.check_output(["git", *args], cwd=ROOT)
+        return subprocess.check_output(["git", *args], cwd=ROOT, stderr=subprocess.PIPE)
     revision = git("rev-parse", "HEAD").decode().strip()
     paths = sorted(p for p in git("ls-files", "-z", "--", *INPUTS).decode().split("\0")
                    if p and not p.startswith("godot/.godot/"))

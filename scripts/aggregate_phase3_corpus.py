@@ -448,7 +448,8 @@ def aggregate(folder: Path, *, scores: int = 17, kind: str = "complete", include
                 trusted_identity = (identity_ok and digest is not None and data.get("source_sha256") == digest
                                     and type(data.get("schema_version")) is int and data["schema_version"] == 1
                                     and data.get("verification_kind") == boundary and data.get("hand") == hand)
-                if required_provenance is not None and data.get("provenance") != required_provenance:
+                if required_provenance is not None and (required_provenance.get("clean") is not True
+                                                       or data.get("provenance") != required_provenance):
                     job_errors.append("Report provenance differs from required immutable release inputs")
                     trusted_identity = False
                 if not trusted_identity:

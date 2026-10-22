@@ -169,7 +169,7 @@ def build_report(reports, evidence, mutations, *, revision, manual_review=None, 
     if not re.fullmatch(r"[0-9a-f]{40}", revision) or provenance["revision"] != revision:
         blockers.append("Release revision differs from the checked-out immutable revision")
     if provenance.get("clean") is not True:
-        blockers.append("Release inputs contain uncommitted changes")
+        blockers.append("Release inputs are uncommitted or their provenance is unavailable")
     for job in aggregate["jobs"]:
         prefix = "phase3-semantic-report" if job["verification_kind"] == "semantic" else "phase3-report"
         path = reports / f"{prefix}-{job['source_index']}-{job['hand']}" / "summary.json"

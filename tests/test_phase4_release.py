@@ -113,6 +113,19 @@ def test_reports_from_other_revision_or_oracle_cannot_be_relabelled(evidence, ch
     assert any("provenance" in error.lower() for error in report["blockers"])
 
 
+def test_matching_unavailable_provenance_never_grants_verified_credit(evidence, monkeypatch):
+    unavailable = {"revision": None, "inputs_sha256": None, "clean": False, "errors": ["Git unavailable"]}
+    monkeypatch.setattr(release, "current_provenance", lambda: unavailable)
+    for path in evidence[0].glob("*/summary.json"):
+        data = json.loads(path.read_text())
+        data["provenance"] = unavailable
+        path.write_text(json.dumps(data))
+    report = run(evidence)
+    assert not report["release_ready"]
+    assert report["coverage"]["verified"] == 0
+    assert report["coverage"]["unverified"] == report["coverage"]["expected"]
+
+
 def test_failed_mutations_or_missing_artifacts_cannot_be_overridden_by_manual_review(evidence, monkeypatch):
     monkeypatch.setattr(release, "validate_mutations", lambda *args: {"complete": False, "errors": ["Skipped mutation"], "suites": []})
     result = release.build_report(*evidence, revision=REVISION,

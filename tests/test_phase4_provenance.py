@@ -51,3 +51,12 @@ def test_generated_godot_editor_cache_does_not_change_verification_inputs(reposi
     cache.parent.mkdir(parents=True)
     cache.write_text("generated editor state\n")
     assert provenance.current_provenance() == before
+
+
+def test_unavailable_git_metadata_preserves_an_explicit_blocked_snapshot(tmp_path, monkeypatch):
+    monkeypatch.setattr(provenance, "ROOT", tmp_path)
+    result = provenance.current_provenance()
+    assert result["clean"] is False
+    assert result["revision"] is None
+    assert result["inputs_sha256"] is None
+    assert result["errors"]

@@ -59,3 +59,6 @@ No existing publishing workflow exists as of this change.
   persist into later shell steps. Container jobs now explicitly trust only
   `GITHUB_WORKSPACE`; a failing workflow-contract regression protects the order.
   Revision, clean-tree and input-hash checks remain strict.
+  The same setting now covers the pre-existing integration/curriculum container
+  jobs. Unavailable Git metadata yields an explicit unverified snapshot instead
+  of aborting artifact creation; matching unavailable snapshots grant no credit.

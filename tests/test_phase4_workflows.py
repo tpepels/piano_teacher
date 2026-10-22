@@ -20,7 +20,7 @@ REVISION = "a" * 40
 
 
 def test_container_provenance_uses_an_explicit_exact_workspace_trust_step():
-    for filename in ("phase3-corpus.yml", "phase3-whole-piece.yml", "pixel-proof.yml"):
+    for filename in (path.name for path in (ROOT / ".github/workflows").glob("*.yml")):
         for job in workflow(filename)["jobs"].values():
             if "container" not in job:
                 continue
