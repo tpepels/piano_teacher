@@ -47,3 +47,38 @@ jobs:
           path: /tmp/phase3-corpus/
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Publish compact source and image coverage result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-report-${{ matrix.index }}-${{ matrix.hand }}
+          path: /tmp/phase3-corpus/summary.json
+          if-no-files-found: warn
+          retention-days: 21
+
+  whole-corpus-gate:
+    name: All 17 sources, all three hand modes
+    needs: original-scores
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch compact per-score evidence (not all screenshots)
+        uses: actions/download-artifact@v4
+        with:
+          pattern: phase3-report-*
+          path: /tmp/phase3-reports
+      - name: Reject any missing or unverified score or hand mode
+        run: |
+          python scripts/aggregate_phase3_corpus.py \
+            --root /tmp/phase3-reports \
+            --out /tmp/phase3-final-report.json
+      - name: Publish corpus report even when coverage is incomplete
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-corpus-coverage
+          path: /tmp/phase3-final-report.json
+          if-no-files-found: warn
+          retention-days: 21
