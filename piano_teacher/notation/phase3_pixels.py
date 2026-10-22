@@ -12,6 +12,7 @@ as verified. This currently certifies pitch positions, not all engravings.
 """
 from __future__ import annotations
 from collections import defaultdict
+from functools import lru_cache
 from pathlib import Path
 import json
 
@@ -133,19 +134,25 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
 
 
 
-def _rest_template_mask(glyph: dict, gap: float):
-    """Rasterize the original Verovio SVG at the *measured image* staff scale."""
+@lru_cache(maxsize=128)
+def _render_rest_svg(svg: str, width: int, height: int):
+    """Cache identical authentic font masks across thousands of full-score rests."""
     from io import BytesIO
     import cairosvg
     import numpy as np
 
-    bounds=glyph["bounds"]
-    width=max(1,round(float(bounds[2])*gap/250))
-    height=max(1,round(float(bounds[3])*gap/250))
-    png=cairosvg.svg2png(bytestring=glyph["svg"].encode(),
+    png=cairosvg.svg2png(bytestring=svg.encode(),
                          output_width=width,output_height=height)
     alpha=np.asarray(Image.open(BytesIO(png)).convert("RGBA"))[:,:,3]
     return alpha >= 80
+
+
+def _rest_template_mask(glyph: dict, gap: float):
+    """Rasterize the original Verovio SVG at the *measured image* staff scale."""
+    bounds=glyph["bounds"]
+    width=max(1,round(float(bounds[2])*gap/250))
+    height=max(1,round(float(bounds[3])*gap/250))
+    return _render_rest_svg(glyph["svg"],width,height)
 
 
 def _compare_isolated_masks(observed, reference) -> float:
