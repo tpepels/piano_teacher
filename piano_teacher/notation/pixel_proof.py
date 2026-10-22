@@ -39,7 +39,10 @@ def _staff_row_values(picture: Image.Image) -> list[float]:
     columns = list(range(20, min(150, width // 4), 12))
     columns += list(range(max(width - 160, width * 3 // 4), width - 20, 12))
     pixels = im.load()
-    return [sum(max(pixels[x, y]) for x in columns) / len(columns)
+    # A real rule crosses nearly every sampled X; localized clef/accidental
+    # ink does not. Use the lower quartile rather than the mean so a bright
+    # symbol in one part of the viewport cannot masquerade as a staff rail.
+    return [sorted(max(pixels[x, y]) for x in columns)[len(columns) // 4]
             for y in range(height)]
 
 
@@ -61,15 +64,47 @@ def detect_staff_lines(picture: Image.Image) -> dict[str, RasterStaff]:
             clusters.append([y])
         else:
             clusters[-1].append(y)
-    lines = [sum(group) / len(group) for group in clusters]
-    if len(lines) != 10:
-        raise AssertionError(f"Image has {len(lines)} detected staff rails; expected exactly ten: {lines}")
+    candidates = [sum(group) / len(group) for group in clusters]
+
+    # Recover two *five-line regular lattices*. Line candidates outside those
+    # lattices may be notation marks or antialiasing and must not count as
+    # staves. A deleted real rule leaves no complete five-line lattice.
+    quintets = []
+    for first in candidates:
+        for fifth in candidates:
+            gap = (fifth - first) / 4
+            if not 8 <= gap <= 32:
+                continue
+            selected = []
+            for index in range(5):
+                location = first + gap * index
+                nearby = [v for v in candidates if abs(v - location) <= 2]
+                if not nearby:
+                    break
+                selected.append(min(nearby, key=lambda v: abs(v - location)))
+            if len(selected) == 5 and len(set(selected)) == 5:
+                variation = sum(abs((selected[i+1] - selected[i]) - gap)
+                                for i in range(4))
+                quintets.append((variation, tuple(selected)))
+    quintets.sort(key=lambda q: q[0])
+    chosen = None
+    for _error, upper in quintets:
+        for _error2, lower in quintets:
+            if lower[0] - upper[-1] >= 2 * ((upper[-1] - upper[0]) / 4):
+                chosen = (upper, lower)
+                break
+        if chosen is not None:
+            break
+    if chosen is None:
+        raise AssertionError(
+            f"Image has no two complete five-line staff rails: {candidates}")
     result = {}
-    for hand, selected in (("right", lines[:5]), ("left", lines[5:])):
+    for hand, selected in zip(("right", "left"), chosen):
         spacings = [b - a for a, b in zip(selected, selected[1:])]
         gap = sum(spacings) / 4
         if not 8 <= gap <= 32 or any(abs(s - gap) > 2.0 for s in spacings):
-            raise AssertionError(f"Image {hand} rails do not form a five-line staff: {selected}")
+            raise AssertionError(
+                f"Image {hand} rails do not form a five-line staff: {selected}")
         result[hand] = RasterStaff(hand, tuple(selected), gap)
     if result["left"].lines[0] - result["right"].lines[-1] < 2 * result["right"].gap:
         raise AssertionError("Image staves overlap")
