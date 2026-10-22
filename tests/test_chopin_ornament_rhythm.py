@@ -61,3 +61,42 @@ def test_explicit_source_musicxml_notation_is_never_heuristically_rewritten():
     lanes = _phrase_lanes(phrase,"right",from_source_musicxml=True)
     onsets = sorted(start for lane in lanes for start,_,_ in lane)
     assert onsets == [round(n.start*10080) for n in phrase.notes]
+
+
+
+def test_repeated_midi_swing_becomes_readable_eighths_without_moving_source():
+    from piano_teacher.notation.lesson import _midi_swing_onsets
+    starts = (0.0, 0.6, 1.0, 1.6, 2.0, 2.6, 3.0)
+    notes = tuple(Note(
+        start, start+(.35 if start % 1 > .5 else .48),
+        65+i, 0, 0, "right", f"swing-{i}")
+        for i,start in enumerate(starts))
+    phrase = Phrase(1,1,1,0.0,4.0,notes)
+    swing = _midi_swing_onsets(phrase,"right")
+    assert sorted(swing.values()) == [5040,15120,25200]
+    score = build_lesson_score(phrase, boundaries=(0.0,4.0))
+    recorded = {round(binding["source_beat"],5):binding["display_beat"]
+                for binding in score.note_bindings.values() if binding["is_attack"]}
+    assert recorded[.6] == pytest.approx(.5)
+    assert recorded[1.6] == pytest.approx(1.5)
+    assert recorded[2.6] == pytest.approx(2.5)
+    assert recorded[1.0] == pytest.approx(1.0)
+    model = build_score_model(score, boundaries=(0.0,4.0))
+    assert len(model["notes"]) == len(notes)
+    assert sorted(n["onset_beats"] for n in model["notes"]) == list(starts)
+    assert all(n["dots"] <= 2 for n in model["notation_events"]
+               if n["kind"] == "note")
+
+
+def test_isolated_offbeat_rubato_is_never_assumed_to_be_swing():
+    from piano_teacher.notation.lesson import _midi_swing_onsets
+    notes = (
+        Note(0.0,.45,60,0,0,"right","first"),
+        Note(.6,.94,62,0,0,"right","second"),
+        Note(1.0,1.5,64,0,0,"right","third"),
+    )
+    phrase = Phrase(1,1,1,0.0,4.0,notes)
+    assert not _midi_swing_onsets(phrase,"right")
+    score = build_lesson_score(phrase, boundaries=(0.0,4.0))
+    assert any(abs(b["display_beat"]-.6)<1e-8
+               for b in score.note_bindings.values() if b["is_attack"])
