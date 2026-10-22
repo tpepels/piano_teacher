@@ -139,12 +139,30 @@ def test_unsupported_xml_attacks_raise_meaningful_errors(tmp_path, body, message
     ([mido.Message('note_off', note=60, time=997)], 'No pitched MIDI notes found'),
     ([mido.Message('note_on', note=60, velocity=80), mido.Message('note_off', note=60)], 'No pitched MIDI notes found'),
     ([mido.Message('note_on', note=60, velocity=80), mido.Message('note_on', note=60, velocity=80, time=10),
-      mido.Message('note_off', note=60, time=100), mido.Message('note_off', note=60, time=100)], 'overlapping MIDI note'),
+      mido.Message('note_off', note=60, time=100)], 'unterminated MIDI note'),
 ])
 def test_midi_with_no_sounding_notes_or_unrepairable_pairings_still_fails(tmp_path, events, message):
     path = write_midi(tmp_path/'unsupported.mid', [events])
     with pytest.raises(ValueError, match=message):
         music.load_midi(path)
+
+
+@pytest.mark.parametrize('release_kind', ['note_off', 'note_on'])
+def test_general_midi_overlap_uses_fifo_without_claiming_unique_pairing(tmp_path, release_kind):
+    path = write_midi(tmp_path/'overlap.mid', [[
+        mido.Message('note_on', note=60, velocity=80),
+        mido.Message('note_on', note=60, velocity=80, time=10),
+        mido.Message(release_kind, note=60, velocity=0, time=100),
+        mido.Message(release_kind, note=60, velocity=0, time=100),
+    ]])
+    piece, _ = import_piece(path)
+    assert [(n.source_id, n.start, n.end, n.pitch, n.velocity) for n in piece.notes] == [
+        ('midi-t0-e0', 0, 110/997, 60, 80),
+        ('midi-t0-e1', 10/997, 210/997, 60, 80),
+    ]
+    assert len(piece.import_warnings) == 1
+    warning = piece.import_warnings[0]
+    assert 'Ambiguous' in warning and 'FIFO' in warning and 'not uniquely' in warning
 
 
 def test_conflicting_xml_measure_grids_are_rejected_before_constructing_a_piece(tmp_path):
@@ -220,12 +238,17 @@ def test_supplied_full_piece_keeps_all_source_attacks_and_legacy_stage_identity(
     if not source.is_file():
         pytest.skip('The local 2,346-note user import is unavailable')
     piece = music.load_midi(source)
-    plan = LearningPlan(piece)
+    # This regression pins the historical consolidated course. Since 8b4c043,
+    # the default is the separate two-measure route (756 steps for this file).
+    plan = LearningPlan(piece, consolidate=True)
     assert len(piece.notes) == len({note.source_id for note in piece.notes}) == 2346
     assert len(piece.bar_boundaries)-1 == 237 and piece.bar_boundaries[-1] == 712
     assert len(plan.lesson_steps) == 301
-    # Recorded from f5e1957's original importer over this exact supplied MIDI.
-    digest = hashlib.sha256(json.dumps([step.key for step in plan.lesson_steps], separators=(',', ':')).encode()).hexdigest()
+    # Recorded from f5e1957's original importer and route 2 over this exact MIDI.
+    # Normalize only the later route-version prefix, retaining all original
+    # passage/hand/variant keys and their source-event signatures unchanged.
+    legacy_keys = [step.key.replace('course:3:', 'course:2:', 1) for step in plan.lesson_steps]
+    digest = hashlib.sha256(json.dumps(legacy_keys, separators=(',', ':')).encode()).hexdigest()
     assert digest == 'c7940fab7bc768f4f4fadd722ddd216a3174bd2785eb7687e69492c7df0c8c81'
     assert plan.exercises[-1].phrase.notes == piece.notes
 

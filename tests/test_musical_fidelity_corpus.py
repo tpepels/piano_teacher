@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import xml.etree.ElementTree as ET
 
+import mido
 import pytest
 
 from piano_teacher.exercise_generator import generate_variants
@@ -24,6 +25,7 @@ CORPUS = Path(__file__).parent / "fixtures" / "musical_fidelity"
 MANIFEST = json.loads((CORPUS / "manifest.json").read_text())
 SUPPORTED = MANIFEST["supported"]
 UNSUPPORTED = MANIFEST["unsupported"]
+AMBIGUOUS = MANIFEST["ambiguous"]
 
 
 def number(value):
@@ -191,6 +193,61 @@ def test_actual_corpus_variants_engraving_evaluation_feedback(case, tmp_path):
 def test_actual_corpus_rejects_ambiguous_or_unsupported_input(case):
     with pytest.raises(ValueError, match=case["error"]):
         import_piece(CORPUS / case["file"])
+
+
+def check_ambiguous_source_facts(case):
+    """Check raw endpoints and stated FIFO policy, never expected written XML."""
+    source = CORPUS / case["file"]
+    raw = mido.MidiFile(source)
+    assert raw.ticks_per_beat == case["ticks_per_beat"]
+    raw_attacks, raw_releases = Counter(), Counter()
+    for track_index, track in enumerate(raw.tracks):
+        tick = 0
+        for ordinal, message in enumerate(track):
+            tick += message.time
+            if message.type not in ("note_on", "note_off"):
+                continue
+            key = (track_index, message.channel, message.note, tick)
+            if message.type == "note_on" and message.velocity:
+                raw_attacks[key + (message.velocity, f"midi-t{track_index}-e{ordinal}")] += 1
+            else:
+                raw_releases[key] += 1
+    attacks = Counter((a["track"], a["channel"], a["pitch"], a["tick"],
+                       a["velocity"], a["source_id"]) for a in case["attacks"])
+    releases = Counter((r["track"], r["channel"], r["pitch"], r["tick"])
+                       for r in case["releases"])
+    assert raw_attacks == attacks
+    assert raw_releases == releases
+    piece, _ = import_piece(source)
+    ppq = case["ticks_per_beat"]
+    assert Counter((n.track, n.channel, n.pitch, n.start, n.velocity, n.source_id)
+                   for n in piece.notes) == Counter(
+        (track, channel, pitch, tick/ppq, velocity, identity)
+        for track, channel, pitch, tick, velocity, identity in attacks.elements())
+    assert Counter((n.track, n.channel, n.pitch, n.end) for n in piece.notes) == Counter(
+        (track, channel, pitch, tick/ppq) for track, channel, pitch, tick in releases.elements())
+    assert Counter((n.source_id, n.end) for n in piece.notes) == Counter(
+        (identity, tick/ppq) for identity, tick in case["fifo_pairs"])
+    assert len(piece.import_warnings) == case["overlapping_attacks"]
+    assert all("Ambiguous" in w and "FIFO" in w and "not uniquely" in w
+               for w in piece.import_warnings)
+    return dict(file=case["file"], source_attacks=len(piece.notes),
+                source_releases=sum(releases.values()), pairing_policy="fifo",
+                import_warnings=list(piece.import_warnings))
+
+
+@pytest.mark.parametrize("case", AMBIGUOUS, ids=lambda case: case["file"])
+def test_actual_corpus_imports_ambiguous_fifo_without_dropping_endpoints(case):
+    check_ambiguous_source_facts(case)
+
+
+def test_manifest_classifies_every_source_once():
+    listed = Counter(case["file"] for group in (SUPPORTED, UNSUPPORTED, AMBIGUOUS)
+                     for case in group)
+    sources = {path.name for path in CORPUS.iterdir()
+               if path.suffix in (".mid", ".midi", ".musicxml", ".xml", ".mxl")}
+    assert set(listed) == sources
+    assert all(count == 1 for count in listed.values())
 
 
 def test_imported_source_identity_is_independent_of_filesystem_path(tmp_path):

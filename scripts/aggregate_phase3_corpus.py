@@ -112,6 +112,11 @@ def _account_inventory(data, required, errors, *, boundary, midi):
                 errors.append("MIDI written transcription must remain unsupported; performance bytes do not specify a written score")
                 elements[position] = {**elements[position], "reported_status": row.get("status"),
                                       "status": "unverified", "reason": "MIDI written transcription cannot be independently verified"}
+            if midi and expected['construct']=='midi_note_pairing' and row.get('status')=='verified':
+                errors.append('Overlapping MIDI note pairing must remain ambiguous')
+                elements[position] = {**elements[position], 'reported_status': row.get('status'),
+                                      'status': 'unverified',
+                                      'reason': 'Original MIDI overlap cannot establish unique attack/release pairing'}
     if boundary == "visual" and not midi:
         expected_ids = {row["id"] for row in required}
         for position, row in enumerate(elements):
