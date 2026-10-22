@@ -105,6 +105,14 @@ def test_existing_pinned_corpus_is_not_replaced():
     assert PINNED_SOURCES[9].endswith('xml_parallel_tied_voices.musicxml')
 
 
+def test_phase5_regressions_are_required_release_mutations():
+    from scripts.record_notation_mutations import SUITES
+    assert {'tests/test_phase5_authored_rests.py', 'tests/test_phase5_beam_metadata.py',
+            'tests/test_phase5_midi_contract.py', 'tests/test_phase5_midi_overlaps.py',
+            'tests/test_phase5_written_metadata.py'} <= set(SUITES['semantic'])
+    assert 'tests/test_phase5_corpus.py' in SUITES['release_contract']
+
+
 def test_semantic_runtime_failure_retains_every_original_obligation(tmp_path, monkeypatch):
     from scripts import audit_phase3_semantics as runner
     from piano_teacher.notation.semantic_contract import source_inventory
