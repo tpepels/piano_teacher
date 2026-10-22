@@ -137,17 +137,21 @@ def run(output: Path, resolution: tuple[int, int] = (1536, 960)) -> dict:
                 assert "demo" in initial, "Listen demo contract is required"
                 assert initial["bpm"] == initial["target_bpm"] == 240
                 identity = engine.plan.identity
-                assert initial["lesson_level"] == "skeleton" and len(engine.plan.active_variant.notes) == 13
+                assert engine.plan.exercise.kind == "connect"
+                assert (engine.plan.active_phrase.first_bar, engine.plan.active_phrase.last_bar) == (1, 4)
+                assert (initial["first_bar"], initial["last_bar"]) == (1, 2)
+                assert initial["learner"]["total_units"] == 2 and initial["mastered"] == 0
+                assert initial["lesson_level"] == "original" and len(engine.plan.active_variant.notes) == 26
                 until(lambda text: "MODES_STAGE:audio-playing" in text,"real AudioStreamWAV playback")
                 listening = engine.state()
                 assert listening["mode"] == "listen" and listening["running"]
-                assert listening["required_notes"] == 13 and listening["duration_beats"] == 16
+                assert listening["required_notes"] == 26 and listening["duration_beats"] == 16
                 assert engine.recorder is None and engine.pending_result is None
                 assert listening["mastered"] == listening["streak"] == 0
                 demo = listening["demo"]
                 assert demo["stage_key"] == identity
                 assert demo["source_ids"] == [f"{identity}:{index}" for index in engine.plan.active_variant.source_indices]
-                assert len(demo["source_ids"]) == 13
+                assert len(demo["source_ids"]) == 26
                 assert demo["ready"] and demo["token"] and demo["url"].startswith("/demo.wav?token=")
                 with urlopen("http://127.0.0.1:8765"+demo["url"],timeout=15) as response:
                     raw = response.read()
@@ -166,7 +170,7 @@ def run(output: Path, resolution: tuple[int, int] = (1536, 960)) -> dict:
                 until(lambda text: "MODES_STAGE:perform-playing" in text,"normal Perform mode selection")
                 start = engine.state()
                 assert start["mode"] == "perform" and start["running"] and start["bpm"] == 240
-                assert not start["preview_only"] and start["required_notes"] == 13
+                assert not start["preview_only"] and start["required_notes"] == 26
                 perform_id = start["transport_id"]
                 last_beat = start["clock_beat"]
                 while True:
@@ -182,8 +186,8 @@ def run(output: Path, resolution: tuple[int, int] = (1536, 960)) -> dict:
                     until(lambda text: True,"live performance")
                     time.sleep(.005)
                 summary = state["performance_summary"]
-                assert summary["accuracy_percent"] == 0 and summary["correct"] == 0 and summary["total"] == 13
-                assert summary["missed_pitches"] == [72,74,76,77] and summary["early"] == summary["late"] == 0
+                assert summary["accuracy_percent"] == 0 and summary["correct"] == 0 and summary["total"] == summary["missed"] == 26
+                assert summary["missed_pitches"] == [67,69,71,72,74,76,77] and summary["early"] == summary["late"] == 0
                 assert summary["extra_notes"] == 0 and summary["weakest_bars"]
                 weak = summary["weakest_bars"][0]
                 assert weak["errors"] >= 5 and weak["first_bar"] == 3 and weak["last_bar"] == 4

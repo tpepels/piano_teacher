@@ -170,6 +170,25 @@ func run() -> void:
     app.open_mode.select(0)
     press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait","import enters generated Learn")
+    # The default first lesson is bars 1-2. Explicitly choose the full-source
+    # connection using the existing lesson picker so Listen/Perform include
+    # the opening rest, internal rest and held ending in bars 3-4.
+    await wait_for(func(): return not app.lesson_pending and not app.action_pending \
+        and not app.practice_step_picker.disabled,"normal lesson picker is ready")
+    var full_step := -1
+    for index in range(app.practice_step_entries.size()):
+        var step: Dictionary = app.practice_step_entries[index]
+        if str(step.get("kind","")) == "connect" and int(step.get("first_bar",0)) == 1 \
+                and int(step.get("last_bar",0)) == 4 and str(step.get("level","")) == "original":
+            full_step = index
+            break
+    check(full_step >= 0,"Lesson picker exposes the full four-bar original connection")
+    if full_step >= 0:
+        app.practice_step_picker.select(full_step)
+        app.practice_step_picker.item_selected.emit(full_step)
+    await wait_for(func(): return score_ready() and not app.action_pending and phase() == "guided_wait" \
+        and int(app.last_state.get("lesson_step",0)) == full_step+1,
+        "explicit full-source connection is selected without mastery")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,"choose tempo")
     await wait_for(func(): return not app.action_pending and not app.apply_tempo_button.disabled,"Pause acknowledged and tempo control enabled")
