@@ -431,6 +431,25 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
                 unexpected_notes, unexpected_rests)):
             errors.append(f"{case.name}: incomplete whole-window coverage: "
                           + json.dumps(full_coverage,sort_keys=True))
+    if all_symbols:
+        # Unlike the legacy overlay, this check reads the WRITTEN pitches
+        # from MusicXML, then extracts staff lines and notehead positions
+        # directly from PNG pixels. No Godot head/staff Y is permitted.
+        from piano_teacher.notation.phase3_pixels import verify_all_notehead_pixels
+        independent = verify_all_notehead_pixels(
+            (out/"score.musicxml").read_text(encoding="utf-8"),out,
+            hand=case.hand)
+        full_coverage["independent_image_pitch"] = {
+            key:value for key,value in independent.items() if key!="measured"
+        }
+        (out/"independent-pixels.json").write_text(
+            json.dumps(independent,indent=2)+"\n")
+        if not independent["passed"]:
+            errors.extend(f"Independent native pixel check: {message}"
+                          for message in independent["failures"][:30])
+            if len(independent["failures"])>30:
+                errors.append(f"And {len(independent['failures'])-30} more independent "
+                              "pixel errors (see independent-pixels.json)")
     if checked == 0:
         errors.append("No on-screen native noteheads were checked")
     if active_pixel_samples == 0:
