@@ -178,7 +178,7 @@ def feature_errors(model: dict, case: AuditCase) -> list[str]:
                        -1.0/12.0) < 2e-6 for j in (0,1)):
                 return True
         return False
-    source_onsets = {e["id"]:float(e["onset_beats"])
+    source_onsets = {e["id"]:float(e.get("onset_beats",0.0))
                      for e in model.get("notes",[])}
     swung = sum(1 for e in notes if e.get("is_attack") and
                 e.get("source_id") in source_onsets
@@ -198,8 +198,15 @@ def feature_errors(model: dict, case: AuditCase) -> list[str]:
             for feature in case.features if not observed.get(feature, False)]
 
 
+# The generic readability checks must also work with tiny synthetic unit-test
+# models; feature-presence requirements belong only to explicitly selected
+# real passages, not to every call of the shared checker.
+GENERIC_CASE = AuditCase("generic", AUTUMN_FILE, 7, 8,
+                         max_density=MAX_AUTUMN_DENSITY, max_tiny_rests=2)
+
+
 def readability_errors(model: dict, diagnostics: dict,
-                       case: AuditCase = CASES[0]) -> list[str]:
+                       case: AuditCase = GENERIC_CASE) -> list[str]:
     """Fail on known engraving defects, with explicit per-passage budgets."""
     errors = feature_errors(model, case)
     if diagnostics["density"] > case.max_density:
