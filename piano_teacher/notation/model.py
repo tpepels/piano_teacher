@@ -359,18 +359,13 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
                 raise ValueError("Source MIDI grading onset was altered")
             display_shift = event.beat - source.onset_beats
             if abs(display_shift) > _TOLERANCE:
-                # MIDI jazz swing and measured triplet turns have a distinct
-                # *notation* onset. Grading still uses source.onset_beats.
-                # Never silently accept arbitrary source-time drift.
+                # Only sub-grid MIDI tick jitter in a complete 32nd-note
+                # triplet may shift visual onset. Jazz swing deviations are
+                # musically intentional and must remain synced with the
+                # fixed playhead and actual grading clock.
                 kind = binding.get("notation_timing", "exact")
-                if kind == "swing_eighth":
-                    valid = (-.115 <= display_shift <= -.085 and
-                             abs(event.beat * 2 - round(event.beat * 2)) < .00001)
-                elif kind == "triplet":
-                    valid = (abs(display_shift) <= .004 and
-                             abs(event.beat * 12 - round(event.beat * 12)) < .00001)
-                else:
-                    valid = False
+                valid = (kind == "triplet" and abs(display_shift) <= .004
+                         and abs(event.beat * 12 - round(event.beat * 12)) < .00001)
                 if not valid:
                     raise ValueError(
                         "Printed attack differs from the MIDI scoring onset")
