@@ -382,6 +382,37 @@ def _spelling(note, fifths):
     return None
 
 
+def _midi_swing_onsets(phrase, hand):
+    """Display a strongly established swung eighth on the written offbeat.
+
+    Performance MIDI for Autumn Leaves places hundreds of genuine swung
+    attacks on beat fractions .6, not .5. Printing these literally creates
+    scattered tiny rests and six-to-five duration ratios. Recognize the
+    repeated pattern across an independent part/voice; preserve exact source
+    onsets for performance grading, and leave isolated rubato untouched.
+    """
+    by_lane = defaultdict(set)
+    for note in phrase.notes:
+        if note.hand == hand:
+            by_lane[(note.track, note.voice)].add(round(note.start, 9))
+    snapped = {}
+    for owner, attacks in by_lane.items():
+        times = sorted(attacks)
+        swung = [t for t in times if abs((t % 1.0)-.6) <= .015]
+        downbeats = [t for t in times if min(t % 1.0,1-t % 1.0) < .015]
+        straight = [t for t in times if abs((t % 1.0)-.5) <= .015]
+        # Minimum evidence avoids rewriting a lone expressive anticipation,
+        # irregular tuplets or authentic straight eighth-note passages.
+        if len(swung) < 3 or len(downbeats) < 2 or len(swung) < 2*len(straight):
+            continue
+        for t in swung:
+            display = round(t-.1, 8)
+            if any(abs(other-display) < .03 for other in times if other != t):
+                continue
+            snapped[(*owner,round(t-phrase.start,9))] = _ticks(display-phrase.start)
+    return snapped
+
+
 def _midi_ornament_onsets(phrase, hand):
     """Recognize nearly exact 32nd-triplet runs in performed MIDI.
 
@@ -422,8 +453,10 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
     groups = defaultdict(list)
     attacks = {}
     identities = set()
-    ornament_onsets = {} if from_source_musicxml else _midi_ornament_onsets(
-        phrase, hand)
+    ornament_onsets = {}
+    if not from_source_musicxml:
+        ornament_onsets = _midi_swing_onsets(phrase, hand)
+        ornament_onsets.update(_midi_ornament_onsets(phrase, hand))
     for index, note in enumerate(phrase.notes):
         if note.hand != hand:
             continue
