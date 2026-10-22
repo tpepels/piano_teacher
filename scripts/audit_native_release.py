@@ -154,7 +154,13 @@ def validate_evidence(path, reports, revision):
         return {"complete": False, "errors": [f"Evidence validation failed: {exc}"], "cases": []}
 
 
-def build_report(reports, evidence, mutations, *, revision, manual_review=None):
+def validate_prerequisites(path, revision):
+    """Require and independently replay the existing actual Phase 2 probes."""
+    from scripts.validate_prior_notation import validate_prior_notation
+    return validate_prior_notation(path, revision, current_provenance())
+
+
+def build_report(reports, evidence, mutations, *, revision, manual_review=None, prerequisites=None):
     reports = Path(reports)
     provenance = current_provenance()
     aggregate = corpus.aggregate(reports, scores=len(corpus.PINNED_SOURCES), include_elements=True,
@@ -191,12 +197,16 @@ def build_report(reports, evidence, mutations, *, revision, manual_review=None):
         }
     artifact_result = validate_evidence(evidence, reports, revision)
     mutation_result = validate_mutations(mutations, revision)
+    prior_result = validate_prerequisites(prerequisites, revision)
     blockers.extend(artifact_result["errors"])
     blockers.extend(mutation_result["errors"])
+    blockers.extend(prior_result["errors"])
     if artifact_result.get("complete") is not True:
         blockers.append("Reproducible artifact evidence incomplete")
     if mutation_result.get("complete") is not True:
         blockers.append("Required mutation evidence incomplete")
+    if prior_result.get("complete") is not True:
+        blockers.append("Required prior-phase actual pixel evidence incomplete")
     ready = not blockers and aggregate["complete"]
     return {
         "schema_version": 1, "report_kind": "native_notation_release", "policy_version": POLICY_VERSION,
@@ -207,7 +217,7 @@ def build_report(reports, evidence, mutations, *, revision, manual_review=None):
                   "beyond_corpus_verified": False},
         "decision": "release_ready" if ready else "blocked", "required_cases": aggregate["required_jobs"],
         "categories": categories, "coverage": aggregate["coverage"],
-        "evidence": artifact_result, "mutations": mutation_result, "blockers": blockers,
+        "evidence": artifact_result, "mutations": mutation_result, "prior_phases": prior_result, "blockers": blockers,
         "manual_review": {"affects_automated_decision": False, "editorial_record": manual_review},
         "claim": "Only the pinned 17-source, three-hand corpus is eligible. Every independent semantic and visual obligation, artifact and required mutation must be verified; unsupported, ambiguous and unverified are blockers. Manual editorial review cannot override this decision.",
     }
@@ -230,11 +240,13 @@ def main():
     parser.add_argument("--reports", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
     parser.add_argument("--mutations", type=Path, required=True)
+    parser.add_argument("--prerequisites", type=Path, required=True)
     parser.add_argument("--revision", required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--markdown", type=Path)
     args = parser.parse_args()
-    report = build_report(args.reports, args.evidence, args.mutations, revision=args.revision)
+    report = build_report(args.reports, args.evidence, args.mutations, revision=args.revision,
+                          prerequisites=args.prerequisites)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     if args.markdown:

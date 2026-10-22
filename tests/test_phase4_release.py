@@ -36,6 +36,7 @@ def evidence(tmp_path, monkeypatch):
                                    "complete": True, "errors": [], "cases": cases}))
     monkeypatch.setattr(release, "validate_evidence", lambda *args: {"complete": True, "errors": [], "cases": cases})
     monkeypatch.setattr(release, "validate_mutations", lambda *args: {"complete": True, "errors": [], "suites": []})
+    monkeypatch.setattr(release, "validate_prerequisites", lambda *args: {"complete": True, "errors": []})
     return reports, manifest, tmp_path / "mutations"
 
 
@@ -119,6 +120,14 @@ def test_failed_mutations_or_missing_artifacts_cannot_be_overridden_by_manual_re
     assert not result["release_ready"]
     assert result["manual_review"]["affects_automated_decision"] is False
     assert "Skipped mutation" in result["blockers"]
+
+
+def test_phase2_actual_rendering_is_a_required_independent_release_prerequisite(evidence, monkeypatch):
+    monkeypatch.setattr(release, "validate_prerequisites", lambda *args: {
+        "complete": False, "errors": ["Phase 2 actual native screenshot evidence failed"]})
+    result = run(evidence)
+    assert not result["release_ready"]
+    assert result["prior_phases"]["complete"] is False
 
 
 def test_normalized_ledger_is_exposed_by_existing_aggregator(evidence):

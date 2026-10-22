@@ -108,6 +108,7 @@ python scripts/package_notation_evidence.py --reports /tmp/reports \
   --raw /tmp/raw --out /tmp/evidence --revision "$TESTED_REVISION"
 python scripts/audit_native_release.py --reports /tmp/reports \
   --evidence /tmp/evidence/evidence-manifest.json --mutations /tmp/mutations \
+  --prerequisites /tmp/prior-phases/prerequisites.json \
   --revision "$TESTED_REVISION" --out /tmp/release.json \
   --markdown /tmp/release.md
 ```
@@ -116,6 +117,37 @@ python scripts/audit_native_release.py --reports /tmp/reports \
 reports without release provenance are useful diagnostic evidence but cannot
 certify a newer revision. CI produces the required mutation manifests and raw
 JUnit alongside the corpus evidence; no manual success manifest is accepted.
+
+## CI and release enforcement
+
+`phase4.yml` runs the same reusable `native-release-gate.yml` used by
+`native-release.yml`. That gate calls the existing Phase 3 corpus and mutation
+workflows. The corpus runs once per gate invocation: 51 independent semantic
+reports and a 51-case visual matrix with fail-fast disabled. Phase 1 source
+mutations and Phase 2 pixel detector tests remain in the required registry.
+The reusable Phase 2 workflow also captures its eight actual native pitch,
+chord and symbol probes. The release report independently replays those existing
+image oracles on the preserved PNGs and requires their clean revision provenance.
+
+The report/packaging job runs even when upstream audits fail, so a red gate
+still produces the coverage decision, manifest, original sources, native
+captures and raw mutation JUnit. Downloads may fail without stopping diagnostic
+collection; the validators then account for the missing evidence and block.
+Audit and release-decision steps cannot ignore failures.
+
+The final gate requires successful corpus, mutations and report jobs, plus
+their exact event revision. The native release workflow accepts `native-v*`
+tags; manual dispatch must select that same existing tag. Building a Python
+distribution and native Godot source candidate requires the passing gate.
+Publishing a draft requires the same gate and candidate revision, checks the
+candidate checksums, and resolves the remote tag again before publishing.
+No release/tag is created by framework tests or normal PR checks.
+
+Evidence artifacts are retained for 30 days in CI. Download and archive them
+before expiry when preserving a release dossier. The draft publishing path is
+deliberately unreachable while the current corpus is blocked. The ordinary
+application integration and earlier standalone proof workflows remain separate
+checks; their success cannot override the native release gate.
 
 ## Current limitations
 
