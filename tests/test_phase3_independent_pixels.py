@@ -88,3 +88,18 @@ def test_hand_mode_checks_only_active_hand(tmp_path):
     assert right["passed"] and left["passed"]
     assert right["image_pitch_verified"]==8
     assert left["image_pitch_verified"]==8
+
+
+
+def test_independent_clef_reference_covers_common_alternate_clefs():
+    staff=RasterStaff("right",(120,140,160,180,200),20)
+    # Treble G4 and bass F3 sit on their respective declared lines.
+    assert expected_y(staff,("G",0,4),("G",2,0))==180
+    assert expected_y(staff,("F",0,3),("F",4,0))==140
+    # Alto C4 (C-clef line 3) and soprano C4 (line 1).
+    assert expected_y(staff,("C",0,4),("C",3,0))==160
+    assert expected_y(staff,("C",0,4),("C",1,0))==200
+    # A treble 8vb note sounds an octave below the reference glyph.
+    assert expected_y(staff,("G",0,3),("G",2,-1))==180
+    # Ledger step G3 in ordinary treble must be below the five-line rail.
+    assert expected_y(staff,("G",0,3),("G",2,0))==250
