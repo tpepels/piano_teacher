@@ -131,6 +131,11 @@ notes for PCM Listen and uninterrupted Perform. Production grading and recovery
 thresholds are unchanged. The complete application run, independent mutation
 registries and corpus reports remain separate evidence.
 
+The preparation-ink comparison isolates the wall-clock animated anticipation cue
+in both frames, as it already does for the playhead. An identical repeated
+baseline is required before the preparation intervention. Changing cue tint
+cannot masquerade as removed notation; the 98% ink-retention threshold remains.
+
 ## Reproduction
 
 Use the project's test environment, actual Godot, and software OpenGL with an X
