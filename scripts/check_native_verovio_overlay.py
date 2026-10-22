@@ -15,7 +15,7 @@ the score or a requirement that notation moves at varying speeds.
 from __future__ import annotations
 
 import argparse
-from io import BytesIO
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import shutil
@@ -32,20 +32,58 @@ from piano_teacher.raster import rasterize_score
 from piano_teacher.score import import_piece, render_layout
 
 ROOT = Path(__file__).resolve().parents[1]
-AUTUMN = ROOT / "midi/Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi"
-FIRST_BAR, LAST_BAR = 7, 8
-# A human-readable score must not revert to the 438+ px/beat observed in
-# the user screenshot. Keep a conservative margin for unavoidable real ink.
+AUTUMN_FILE = "Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi"
+# Preserve the regression threshold that would have caught the 438px/beat
+# user screenshot. More complex pieces use independently specified budgets.
 MAX_AUTUMN_DENSITY = 400.0
 
 
-def fixture() -> tuple[dict, object]:
-    piece, _ = import_piece(AUTUMN)
-    first = piece.bar_boundaries[FIRST_BAR - 1]
-    end = piece.bar_boundaries[LAST_BAR]
+@dataclass(frozen=True)
+class AuditCase:
+    name: str
+    filename: str
+    first_bar: int
+    last_bar: int
+    hand: str = "both"
+    max_density: float = 640.0
+    max_tiny_rests: int = 8
+    max_dots: int = 2
+
+
+# Explicit, pinned real MIDI corpus. Case changes require an intentional
+# review: CI must never silently drop a hard score or select easy passages.
+CASES = (
+    AuditCase("autumn-7-8-both", AUTUMN_FILE, 7, 8,
+              max_density=MAX_AUTUMN_DENSITY, max_tiny_rests=2),
+    AuditCase("autumn-1-2-right", AUTUMN_FILE, 1, 2, "right"),
+    AuditCase("ala-1-2-left", "Ala_–_Joep_Beving.midi", 1, 2, "left"),
+    AuditCase("chopin-1-2-right",
+              "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 1, 2, "right"),
+    AuditCase("chopin-5-6-both",
+              "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 5, 6),
+    AuditCase("danny-boy-1-2-both", "Danny_Boy(Bill_Evans_Ver_).midi", 1, 2),
+    AuditCase("merry-go-round-1-2-both", "Merry-Go-Round-of-Life.midi", 1, 2),
+    AuditCase("peace-piece-1-2-both", "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi", 1, 2),
+    AuditCase("waltz-1-2-both", "Waltz_for_Debby.midi", 1, 2),
+)
+
+
+def selected_cases(only: str | None = None) -> tuple[AuditCase, ...]:
+    matches = tuple(c for c in CASES if not only or only.lower() in c.name.lower()
+                    or only.lower() in c.filename.lower())
+    if not matches:
+        raise ValueError(f"No native overlay cases match {only!r}")
+    return matches
+
+
+def fixture(case: AuditCase = CASES[0]) -> tuple[dict, object]:
+    piece, _ = import_piece(ROOT / "midi" / case.filename)
+    assert 1 <= case.first_bar <= case.last_bar < len(piece.bar_boundaries)
+    first = piece.bar_boundaries[case.first_bar - 1]
+    end = piece.bar_boundaries[case.last_bar]
     notes = tuple(n for n in piece.notes if first <= n.start < end)
-    assert notes, "Real Autumn Leaves source passage unexpectedly empty"
-    phrase = Phrase(1, FIRST_BAR, LAST_BAR, first, end, notes)
+    assert notes, f"{case.name}: source passage unexpectedly empty"
+    phrase = Phrase(1, case.first_bar, case.last_bar, first, end, notes)
     score = build_lesson_score(
         phrase, boundaries=piece.bar_boundaries,
         time_signatures=piece.time_signatures,
@@ -56,8 +94,8 @@ def fixture() -> tuple[dict, object]:
         source_musicxml=piece.source_musicxml,
     )
     model = build_score_model(score, boundaries=piece.bar_boundaries,
-                              hand="both")
-    engraving = render_layout(score, FIRST_BAR, LAST_BAR, "both",
+                              hand=case.hand)
+    engraving = render_layout(score, case.first_bar, case.last_bar, case.hand,
                               total_beats=end-first, bpm=40, continuous=True)
     atlas = assemble_layout(engraving, native_notes=True, native_model=model,
                             notation_xml=score.musicxml)
@@ -69,7 +107,9 @@ def fixture() -> tuple[dict, object]:
             "native_tuplet_fragments", "native_slur_fragments",
             "native_required_slur_pairs", "native_slurs_complete",
             "native_required_beam_groups", "native_beams_complete")},
-        "first_bar": FIRST_BAR, "last_bar": LAST_BAR,
+        "first_bar": case.first_bar, "last_bar": case.last_bar,
+        "sample_beats": [round(i * (end-first) / 4, 8) for i in range(4)],
+        "hand": case.hand,
         "xml": score.musicxml,
     }, engraving
 
@@ -89,20 +129,21 @@ def visible_ink(image: Image.Image, x: float, y: float, radius: int = 11) -> int
     return matches
 
 
-def readability_errors(model: dict, diagnostics: dict) -> list[str]:
-    """Strict gates for an actual reported problem, not generic MIDI guesses."""
+def readability_errors(model: dict, diagnostics: dict,
+                       case: AuditCase = CASES[0]) -> list[str]:
+    """Fail on known engraving defects, with explicit per-passage budgets."""
     errors = []
-    if diagnostics["density"] > MAX_AUTUMN_DENSITY:
-        errors.append("Autumn Leaves inflated to %.1f px/beat (max %.1f)"
-                      % (diagnostics["density"], MAX_AUTUMN_DENSITY))
+    if diagnostics["density"] > case.max_density:
+        errors.append(f"{case.name} inflated to {diagnostics['density']:.1f} "
+                      f"px/beat (max {case.max_density:.1f})")
     if diagnostics["unavoidable_rest_overlaps"]:
         errors.append("Native rests collide with other voice ink")
     events = model["notation_events"]
     tiny_rests = [n for n in events if n["kind"] == "rest" and
                   n["note_type"] in {"32nd","64th","128th"}]
-    if len(tiny_rests) > 2:
-        errors.append("Excessive tiny printed rests in Autumn Leaves "
-                      "(%d; maximum 2)" % len(tiny_rests))
+    if len(tiny_rests) > case.max_tiny_rests:
+        errors.append("Excessive tiny printed rests in %s (%d; maximum %d)" %
+                      (case.name, len(tiny_rests), case.max_tiny_rests))
     gap = float(diagnostics.get("staff_gap", 0.0))
     if gap <= 0.0:
         errors.append("Native staff has no valid layout scale")
@@ -117,9 +158,9 @@ def readability_errors(model: dict, diagnostics: dict) -> list[str]:
                 if abs(float(rest["y"])-float(centers[staff])) > 3.2*gap:
                     errors.append("Rest displaced too far from its staff: "+
                                   str(rest["id"]))
-    if any(n["kind"] == "note" and n["dots"] > 2 for n in events):
+    if any(n["kind"] == "note" and n["dots"] > case.max_dots for n in events):
         errors.append("Unconventional triple/quadruple-dot notation returned "
-                      "in the reported MIDI passage")
+                      f"in {case.name}")
     note_ids = {n["id"] for n in events if n["kind"] == "note"}
     source_ids = {n["id"] for n in model["notes"]}
     graded = {n["source_id"] for n in events
@@ -179,9 +220,9 @@ def draw_overlay(reference: Image.Image, native: Image.Image,
     return n
 
 
-def run(out: Path, godot: str) -> dict:
+def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
     out.mkdir(parents=True,exist_ok=True)
-    data, engraving = fixture()
+    data, engraving = fixture(case)
     model = data["model"]
     # Preserve the actual lesson MusicXML as the single reference score.
     (out/"score.musicxml").write_text(data.pop("xml"),encoding="utf-8")
@@ -198,15 +239,31 @@ def run(out: Path, godot: str) -> dict:
     assert result.returncode == 0 and "NATIVE_VEROVIO_OVERLAY_FAILURES:0" in result.stdout, (
         "Actual native renderer failed:\n"+(result.stdout+result.stderr)[-9000:])
     report = json.loads((out/"native-overlay-report.json").read_text())
-    errors = readability_errors(model, report)
+    errors = readability_errors(model, report, case)
     reference = Image.open(out/"verovio-0.png")
     refnotes = engraving.layout["notes"]
+    printed_ids = {n["id"] for n in model["notation_events"] if n["kind"] == "note"}
+    reference_ids = {n["id"] for n in refnotes}
+    if reference_ids != printed_ids:
+        errors.append(f"{case.name}: Verovio/native note IDs differ: "
+                      f"{len(reference_ids)} reference, {len(printed_ids)} native")
     checked = 0
+    rendered_ids = set()
+    registered_ids = set()
     for frame in report["frames"]:
         screenshot = Image.open(out/frame["file"])
         heads = frame["noteheads"]
+        expected = frame.get("expected_noteheads", {})
+        for ident, expected_x in expected.items():
+            if ident not in heads:
+                errors.append(f"{case.name}: Native omitted visible note {ident} "
+                              f"at {frame['clock']:.3f}")
+            elif abs(heads[ident][0] - expected_x) > 2.4 * report["staff_gap"]:
+                errors.append(f"{case.name}: Printed onset drift for {ident} "
+                              f"at {frame['clock']:.3f}")
         for ident, (x,y) in heads.items():
             if 20 < x < screenshot.width-20 and 20 < y < screenshot.height-20:
+                rendered_ids.add(ident)
                 checked += 1
                 if visible_ink(screenshot,x,y) < 5:
                     errors.append(f"Missing rendered native notehead {ident} "
@@ -217,15 +274,27 @@ def run(out: Path, godot: str) -> dict:
                     errors.append("Missing native rest pixels: "+str(rest["id"]))
         frame["reference_notes_overlaid"] = draw_overlay(
             reference.copy(),screenshot,refnotes,heads,
-            out/f"overlay-{frame['clock']:.1f}.png")
+            out/f"overlay-{frame['clock']:.2f}.png")
+        registered_ids.update(set(heads) & reference_ids)
     if checked == 0:
         errors.append("No on-screen native noteheads were pixel-verified")
-    if not any(f["reference_notes_overlaid"] for f in report["frames"]):
+    if not registered_ids:
         errors.append("Original Verovio identities never aligned with native frames")
+    if rendered_ids - reference_ids:
+        errors.append(f"Native rendered {len(rendered_ids-reference_ids)} "
+                      "notes absent from Verovio")
     summary = {
-        "source":"Bill Evans Autumn Leaves, measures 7-8, both hands",
+        "source":f"{case.filename}, measures {case.first_bar}-{case.last_bar}, {case.hand}",
+        "case":case.name,
         "density":report["density"],"native_notehead_samples":checked,
         "reference_source_note_count":len(refnotes),
+        "distinct_native_noteheads":len(rendered_ids),
+        "registered_noteheads":len(registered_ids),
+        "tiny_rests":sum(1 for n in model["notation_events"] if
+                         n["kind"] == "rest" and n["note_type"] in
+                         {"32nd","64th","128th"}),
+        "maximum_dots":max((n["dots"] for n in model["notation_events"]
+                            if n["kind"] == "note"), default=0),
         "rest_overlap_count":report["unavoidable_rest_overlaps"],
         "errors":errors,
     }
@@ -239,12 +308,31 @@ def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out",type=Path,
                         default=Path("/tmp/piano-native-verovio-overlay"))
+    parser.add_argument("--only", help="Case name or MIDI filename substring")
     a=parser.parse_args()
     godot=shutil.which("godot") or shutil.which("godot4")
     if not godot:
         parser.error("Actual Godot 4 renderer is required")
-    print(json.dumps(run(a.out,godot),indent=2),flush=True)
-    return 0
+    cases = selected_cases(a.only)
+    results = []
+    errors = []
+    for case in cases:
+        directory = a.out / case.name
+        try:
+            summary = run(directory, godot, case)
+            results.append(summary)
+            print(f"PASS {case.name}: {summary['native_notehead_samples']} pixels "
+                  f"checked; {summary['density']:.1f} px/beat",flush=True)
+        except Exception as exc:
+            errors.append({"case":case.name,"error":str(exc)})
+            print(f"FAIL {case.name}: {exc}",file=sys.stderr,flush=True)
+    a.out.mkdir(parents=True,exist_ok=True)
+    (a.out/"summary.json").write_text(json.dumps({
+        "passed":len(results),"failed":len(errors),"results":results,
+        "failures":errors},indent=2)+"\n")
+    print(f"Native Verovio overlay: {len(results)} passed, "
+          f"{len(errors)} failed",flush=True)
+    return 1 if errors else 0
 
 
 if __name__=="__main__":
