@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from fractions import Fraction
 from collections import defaultdict
+from copy import deepcopy
 import hashlib
 import math
 from xml.etree import ElementTree as ET
@@ -182,6 +183,24 @@ def _append_note(measure: ET.Element, pitch: int | None, duration: int,
 def _append_event(measure: ET.Element, tones: list, duration: int,
                   voice: int, *, begin_tie=False, end_tie=False, display_start=0,
                   bindings=None, counts=None, hidden_rest=False) -> None:
+    # Authored rest spelling is not derivable from length: a full-measure
+    # rest in 3/4 uses a whole-rest glyph, rather than a dotted half rest.
+    # Keep its complete written representation when the event is uncut.
+    authored = tones[0].get('authored_rest') if len(tones)==1 and tones[0] else None
+    if (authored is not None and duration==tones[0]['authored_duration']
+            and not begin_tie and not end_tie):
+        event = deepcopy(authored)
+        event.attrib.pop('id', None)
+        event.find('duration').text = str(duration)
+        voice_tag = event.find('voice')
+        if voice_tag is None:
+            voice_tag = ET.Element('voice')
+            event.insert(list(event).index(event.find('duration'))+1, voice_tag)
+        voice_tag.text = str(voice)
+        for staff_tag in event.findall('staff'):
+            event.remove(staff_tag)  # Generated hand parts each contain one staff.
+        measure.append(event)
+        return
     parts = _duration_parts(duration)
     position = display_start
     for index, length in enumerate(parts):
@@ -324,6 +343,7 @@ def _project_authored_rests(source_musicxml: str, phrase: Phrase, lanes: list,
         if any(a < end and b > start for a, b, _ in lane):
             continue
         lane.append((start, end, [{'pitch': None,
+            'authored_rest': element, 'authored_duration': _ticks(absolute_end-absolute_start),
             'hidden_rest': element.get('print-object') == 'no'}]))
     for lane in lanes:
         lane.sort(key=lambda event: (event[0], event[1]))

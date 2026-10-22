@@ -67,6 +67,28 @@ def test_authored_trailing_rest_measures_survive_without_pitched_attacks():
             for event in rests] == [(1, 3, 1), (4, 4, 0), (8, 4, 0)]
 
 
+def test_authored_full_measure_rest_keeps_whole_glyph_in_three_four(tmp_path):
+    path = tmp_path / 'measure-rest.musicxml'
+    path.write_text('''<score-partwise><part-list><score-part id="RH">
+    <part-name>Right Hand</part-name></score-part></part-list><part id="RH">
+    <measure number="1"><attributes><divisions>1</divisions>
+    <time><beats>3</beats><beat-type>4</beat-type></time>
+    <clef><sign>G</sign><line>2</line></clef></attributes>
+    <note><pitch><step>C</step><octave>4</octave></pitch><duration>3</duration>
+    <voice>1</voice><type>half</type><dot/></note><backup><duration>3</duration></backup>
+    <note><rest measure="yes"/><duration>3</duration><voice>2</voice><type>whole</type></note>
+    </measure></part></score-partwise>''')
+    piece, score = compile_source(path)
+    rest_note = ET.fromstring(score.musicxml).find('./part[@id="RH"]/measure/note[rest]')
+    assert rest_note.findtext('type')=='whole'
+    assert rest_note.find('rest').get('measure')=='yes'
+    assert not rest_note.findall('dot')
+    assert rest_note.findtext('duration')==str(3*DIVISIONS)
+    model = build_score_model(score, boundaries=piece.bar_boundaries)
+    report = verify_musicxml_contract(path.read_text(),score.musicxml,model)
+    assert report['passed'],report['discrepancies']
+
+
 def write_source(tmp_path, voice_two):
     path = tmp_path / "authored.musicxml"
     path.write_text('''<score-partwise><part-list><score-part id="P0">
