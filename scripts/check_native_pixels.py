@@ -16,7 +16,7 @@ import shutil
 import subprocess
 
 from piano_teacher.notation.pixel_proof import verify_pixel_frames
-from scripts.check_native_verovio_overlay import AuditCase, ROOT, fixture
+from check_native_verovio_overlay import AuditCase, ROOT, fixture
 
 PROBE = AuditCase(
     "independent-grand-staff-pixel-pitch",
