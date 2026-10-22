@@ -43,6 +43,22 @@ geometric tolerances; fail if any score symbols are never exercised at all.
 Mutation testing must prove that moving one notehead by one staff step or
 hiding a symbol is caught.
 
+### Phase 2 implementation checkpoint (PR #36)
+
+The first real-pixel gate verifies 16 isolated notes and 48 ordinary triad
+tones, over 16 frames from two independently authored MusicXML sources.
+It locates staff lines and *actual notehead ink peaks* in PNGs captured by the
+canonical Godot renderer. Expected diatonic positions, clefs, onset groupings
+and chord inventories come from the original source MusicXML, not from Godot's
+notehead/staff telemetry. Image-mutation tests shift and delete pixels and
+show the validator rejects them.
+
+Passing this gate establishes staff-pitch image correctness **only for these
+supported regular patterns**. It does not establish complete Phase 2,
+professional engraving, glyph type correctness, or every score's accuracy.
+Remaining tasks include independent rest/accidental/beam/tie geometry checks
+and regression testing of actual dense score frames.
+
 ## Phase 3 — Whole-piece coverage, not chosen excerpts
 
 Audit *all* measures of each bundled score in right/left/both settings,
