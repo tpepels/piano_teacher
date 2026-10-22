@@ -16,12 +16,11 @@ from piano_teacher.score import import_piece
 
 
 FIXTURES = Path(__file__).parent / "fixtures" / "musical_fidelity"
-SCORES = (
-    "xml_chord_ties.musicxml",
-    "xml_grandstaff_voices.musicxml",
-    "xml_keys_spelling.musicxml",
-    "xml_quintuplets.musicxml",
-)
+# The independent oracle automatically includes every supported original
+# MusicXML score; adding fixtures must not silently reduce audit coverage.
+MANIFEST = __import__("json").loads((FIXTURES / "manifest.json").read_text())
+SCORES = tuple(c["file"] for c in MANIFEST["supported"]
+               if c["file"].endswith(".musicxml"))
 
 
 def _full_original(filename: str):
