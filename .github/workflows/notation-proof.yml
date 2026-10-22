@@ -1,0 +1,32 @@
+name: Independent notation proof (phase 1)
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  score-semantics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install score engine and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[godot,test]'
+      - name: Check independent original-score oracle and deliberate corruptions
+        run: python -m pytest -q tests/test_notation_proof_phase1.py
+      - name: Produce source-to-native semantic evidence
+        if: always()
+        run: python scripts/audit_notation_proof.py --out /tmp/notation-proof/phase1.json
+      - name: Archive evidence and explicitly unverified areas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase1-independent-score-evidence
+          path: /tmp/notation-proof/phase1.json
+          if-no-files-found: warn
+          retention-days: 30
