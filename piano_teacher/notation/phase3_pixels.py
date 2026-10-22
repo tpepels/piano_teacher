@@ -20,7 +20,7 @@ from PIL import Image
 
 from .proof import read_written_score
 from .pixel_proof import detect_staff_lines, expected_y, observed_notehead_ys
-from .symbol_pixel_proof import bright, _match_note_template
+from .symbol_pixel_proof import bright, _match_glyph
 
 
 def _clef_at(reference, bar: int, hand: str):
@@ -53,7 +53,7 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
             continue
         by_clock[round(float(symbol["beat"]),8)][staff].append(symbol)
     atlas=json.loads((folder/"fixture.json").read_text())["assets"]
-    templates=atlas["native_note_templates"]
+    glyphs=atlas["native_glyphs"]
     verified=0
     failures=[]
     details=[]
@@ -76,55 +76,34 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                         _clef_at(written,note["index"],staff)),note)
                     for note in notes
                 ],key=lambda pair:pair[0])
-                # Hollow half/whole heads do not create the filled image-
-                # width peaks used for quarter/eighth/chord notes. Verify
-                # their full native image mask against Verovio reference.
-                filled=[item for item in pitches
-                        if item[1]["note_type"] not in {"half","whole"}]
-                hollow=[item for item in pitches
-                        if item[1]["note_type"] in {"half","whole"}]
-                if filled:
-                    measured=observed_notehead_ys(image,staff,staves[staff])
-                    if len(measured)!=len(filled):
-                        failures.append(f"{clock} {staff}: image filled-head count "
-                                        f"{len(measured)} vs {len(filled)} "
-                                        f"independently written filled heads")
+                # Use the source type to select the original independent
+                # Verovio notehead outline. Hollow heads cannot be counted
+                # as filled peaks; closely touching filled heads can merge.
+                # Compare each actual head silhouette in native PNG pixels
+                # at its MusicXML-derived diatonic position.
+                raster=bright(image)
+                xpos=round(image.width*.42)
+                for target,note in pitches:
+                    kind=note["note_type"]
+                    glyph=("head_whole" if kind=="whole" else
+                           "head_half" if kind=="half" else "head_black")
+                    score=_match_glyph(
+                        raster,glyphs[glyph],staves[staff].gap,
+                        xpos,target,centered=True,
+                        dxs=range(-16,17),dys=range(-4,5))
+                    # Calibrated globally against missing/one-staff-step
+                    # shifted heads. No per-score tolerances or exemptions.
+                    if score < .79:
+                        failures.append(
+                            f"{clock} {staff} {note['spelling']}: "
+                            f"wrong/missing {glyph} silhouette at written "
+                            f"staff position (image score={score:.3f})")
                     else:
-                        for (target,note),observed in zip(filled,measured):
-                            steps=abs(observed-target)/(staves[staff].gap/2)
-                            if steps>tolerance_staff_steps:
-                                failures.append(
-                                    f"{clock} {staff} {note['spelling']}: image y="
-                                    f"{observed:.2f}, expected={target:.2f}; "
-                                    f"{steps:.2f} staff steps")
-                            else:
-                                verified+=1
-                            details.append({"beat":clock,"staff":staff,
-                                            "spelling":note["spelling"],
-                                            "observed_y":round(observed,2),
-                                            "expected_y":round(target,2),
-                                            "error_steps":round(steps,3),
-                                            "head_type":"filled"})
-                if hollow:
-                    raster=bright(image)
-                    xpos=round(image.width*.42)
-                    for target,note in hollow:
-                        kind=note["note_type"]
-                        options=(("whole",) if kind=="whole"
-                                 else ("half_up","half_down"))
-                        score=max(_match_note_template(raster,templates[name],
-                                  staves[staff].gap,xpos,target)
-                                  for name in options)
-                        if score < .66:
-                            failures.append(f"{clock} {staff} {note['spelling']}: "
-                                            f"missing hollow {kind} head at "
-                                            f"written position (mask={score:.3f})")
-                        else:
-                            verified+=1
-                        details.append({"beat":clock,"staff":staff,
-                                        "spelling":note["spelling"],
-                                        "score":round(score,3),
-                                        "head_type":kind})
+                        verified+=1
+                    details.append({"beat":clock,"staff":staff,
+                                    "spelling":note["spelling"],
+                                    "glyph":glyph,"match":round(score,3),
+                                    "target_y":round(target,2)})
             except (ValueError,AssertionError,TypeError) as exc:
                 failures.append(f"{clock} {staff}: {exc}")
     total=sum(len(notes) for hands in by_clock.values() for notes in hands.values())
