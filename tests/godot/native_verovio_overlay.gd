@@ -45,6 +45,7 @@ func _audit() -> void:
         return
     var result := {
         "density": renderer.timeline.pixels_per_beat,
+        "density_witness": renderer.selected_density_witness.duplicate(true),
         "staff_gap": renderer._gap(),
         "width": renderer.size.x,
         "height": renderer.size.y,
@@ -103,6 +104,9 @@ func _audit() -> void:
             "rests": rests,
             "visible_symbols": renderer.visible_symbols
         })
+    print("NATIVE_DENSITY_DIAGNOSTIC:", str(fixture.get("first_bar", 0)),
+        "-", str(fixture.get("last_bar", 0)), " ",
+        JSON.stringify(result["density_witness"]))
     var output := FileAccess.open(folder.path_join("native-overlay-report.json"),FileAccess.WRITE)
     if output == null:
         failures.append("Cannot save native audit metadata")
