@@ -64,44 +64,6 @@ def test_explicit_source_musicxml_notation_is_never_heuristically_rewritten():
 
 
 
-def test_repeated_midi_swing_becomes_readable_eighths_without_moving_source():
-    from piano_teacher.notation.lesson import _midi_swing_onsets
-    starts = (0.0, 0.6, 1.0, 1.6, 2.0, 2.6, 3.0)
-    notes = tuple(Note(
-        start, start+(.35 if start % 1 > .5 else .48),
-        65+i, 0, 0, "right", f"swing-{i}")
-        for i,start in enumerate(starts))
-    phrase = Phrase(1,1,1,0.0,4.0,notes)
-    swing = _midi_swing_onsets(phrase,"right")
-    assert sorted(swing.values()) == [5040,15120,25200]
-    score = build_lesson_score(phrase, boundaries=(0.0,4.0))
-    recorded = {round(binding["source_beat"],5):binding["display_beat"]
-                for binding in score.note_bindings.values() if binding["is_attack"]}
-    assert recorded[.6] == pytest.approx(.5)
-    assert recorded[1.6] == pytest.approx(1.5)
-    assert recorded[2.6] == pytest.approx(2.5)
-    assert recorded[1.0] == pytest.approx(1.0)
-    model = build_score_model(score, boundaries=(0.0,4.0))
-    assert len(model["notes"]) == len(notes)
-    assert sorted(n["onset_beats"] for n in model["notes"]) == list(starts)
-    assert all(n["dots"] <= 2 for n in model["notation_events"]
-               if n["kind"] == "note")
-
-
-def test_isolated_offbeat_rubato_is_never_assumed_to_be_swing():
-    from piano_teacher.notation.lesson import _midi_swing_onsets
-    notes = (
-        Note(0.0,.45,60,0,0,"right","first"),
-        Note(.6,.94,62,0,0,"right","second"),
-        Note(1.0,1.5,64,0,0,"right","third"),
-    )
-    phrase = Phrase(1,1,1,0.0,4.0,notes)
-    assert not _midi_swing_onsets(phrase,"right")
-    score = build_lesson_score(phrase, boundaries=(0.0,4.0))
-    assert any(abs(b["display_beat"]-.6)<1e-8
-               for b in score.note_bindings.values() if b["is_attack"])
-
-
 def test_display_notation_is_never_allowed_to_change_the_grading_clock():
     from dataclasses import replace
     phrase = _turn()
@@ -123,24 +85,43 @@ def test_display_notation_is_never_allowed_to_change_the_grading_clock():
                           boundaries=(0.0,4.0))
 
 
-def test_sparse_left_hand_inherits_established_swing_without_phantom_rest():
-    from piano_teacher.notation.lesson import _midi_swing_onsets
-    right_starts = (0.0, .6, 1.0, 1.6, 2.0, 2.6, 3.0)
-    right = tuple(Note(s,s+.35,72,0,0,"right",f"rh-{i}")
-                  for i,s in enumerate(right_starts))
-    # One isolated left-hand offbeat is not enough to infer swing *alone*,
-    # but clearly shares the piano's established swung grid.
-    left = Note(2.6,3.1,48,1,0,"left","single-left-offbeat")
-    phrase = Phrase(1,1,1,0.0,4.0,(*right,left))
-    assert _midi_swing_onsets(phrase,"left")[(1,0,2.6)] == 25200
-    score = build_lesson_score(phrase,boundaries=(0.0,4.0))
-    tagged = [v for v in score.note_bindings.values()
-              if v["source_id"] == "single-left-offbeat" and v["is_attack"]]
-    assert len(tagged) == 1
-    assert tagged[0]["source_beat"] == 2.6
-    assert tagged[0]["display_beat"] == 2.5
-    model = build_score_model(score,boundaries=(0.0,4.0))
-    assert len(model["notes"]) == len(right)+1
-    assert any(e["kind"] == "note" and e["staff"] == "left"
-               and e["beat"] == 2.5 for e in model["notation_events"])
 
+def test_swing_keeps_true_playhead_alignment_and_hides_inferred_micro_rest():
+    # A swung attack at .6 would miss the start-tempo 100ms grading window
+    # if displayed at .5 (150ms at 40 BPM). Never rewrite its onset.
+    notes = (
+        Note(0.0,.5,72,0,0,"right","first"),
+        Note(.6,.95,74,0,0,"right","swing"),
+        Note(1.0,1.49,76,0,0,"right","third"),
+    )
+    phrase = Phrase(1,1,1,0.0,4.0,notes)
+    score = build_lesson_score(phrase,boundaries=(0.0,4.0))
+    model = build_score_model(score,boundaries=(0.0,4.0))
+    tagged = [b for b in score.note_bindings.values()
+              if b["source_id"] == "swing" and b["is_attack"]]
+    assert len(tagged) == 1
+    assert tagged[0]["display_beat"] == pytest.approx(.6,abs=1e-8)
+    assert tagged[0]["source_beat"] == pytest.approx(.6,abs=1e-8)
+    assert model["notes"][1]["onset_beats"] == pytest.approx(.6)
+    root = ET.fromstring(score.musicxml)
+    # No rest glyph from the .1 beat inferred performance release gap.
+    right_rests = root.findall("./part[@id='RH']/measure/note[@print-object='no']/rest")
+    assert right_rests
+    assert all(e["beat"] != pytest.approx(.5)
+               for e in model["notation_events"] if e["kind"]=="rest"
+               and e["staff"]=="right")
+
+
+def test_explicit_musicxml_still_shows_small_written_rests():
+    from piano_teacher.notation.lesson import _render_measure
+    measure = ET.Element("measure")
+    _render_measure(measure, [[
+        (0,5040,[{"source_id":"a","source_beat":0.0,"pitch":72,
+                 "hand":"right","spelling":None,"notation_timing":"exact"}]),
+        (6048,10080,[{"source_id":"b","source_beat":.6,"pitch":74,
+                      "hand":"right","spelling":None,"notation_timing":"exact"}]),
+    ]],40320,0,{}, {}, hide_performance_micro_rests=False)
+    # The gap is explicitly printed in original MusicXML mode.
+    assert [e for e in measure.findall("note")
+            if e.find("rest") is not None and
+            e.get("print-object") != "no"]
