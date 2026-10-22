@@ -69,7 +69,11 @@ func _audit() -> void:
         await process_frame
         await RenderingServer.frame_post_draw
         var frame: Image = view.get_texture().get_image()
-        var filename: String = "native-%.2f.png" % at
+        # Quarter-note subdivisions can be closer than .01 beats. Use
+        # precise filenames in Phase 3 to prevent one frame overwriting
+        # another; preserve Phase 2's existing artifact names.
+        var filename: String = ("native-%.5f.png" if bool(fixture.get(
+            "phase3_full",false)) else "native-%.2f.png") % at
         if frame.is_empty() or frame.save_png(folder.path_join(filename)) != OK:
             failures.append("Cannot capture " + filename)
         var heads: Dictionary = {}
