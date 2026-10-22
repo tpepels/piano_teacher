@@ -43,3 +43,14 @@ No existing publishing workflow exists as of this change.
   capture artifacts are available locally for integration validation.
 - Underlying renderer is not release-ready: known lost authored rests and
   unsupported/ambiguous/unverified obligations remain explicitly recorded.
+- Release policy/provenance implemented with red/green regressions. Independent
+  review reproduced and fixed dirty mutation execution being accepted and an
+  unhashable visual element ID crashing aggregation. Mutation snapshots now bind
+  both ends of execution; malformed inventories retain blocked diagnostics.
+- Actual Phase 2 probes are also a release prerequisite, replayed through the
+  existing image oracles. All eight probes passed locally (64 independently
+  measured noteheads and 53 frames). Invalid literal-newline JSON endings in
+  the legacy pitch runner were reproduced and corrected; tolerances unchanged.
+- Real historical 102-case evidence was consumed as a negative release test:
+  absent revision provenance removed verified credit and blocked readiness.
+  Historical evidence was never relabeled or promoted to a current-head pass.

@@ -69,4 +69,6 @@ def validate_prior_notation(path, revision, provenance):
         # Artifact corruption and oracle/runtime errors must preserve a blocked
         # decision, never interrupt the consolidated diagnostic report.
         errors.append(f"Phase 2 actual rendering: {type(exc).__name__}: {exc}")
-    return {"complete": not errors, "errors": errors, "checks": checks, "files": files}
+    return {"complete": not errors, "errors": errors, "checks": checks, "files": files,
+            "adds_coverage_credit": False,
+            "scope": "Supplemental replay of existing Phase 2 probes; never promotes whole-corpus ledger statuses"}

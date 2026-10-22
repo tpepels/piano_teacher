@@ -128,6 +128,8 @@ mutations and Phase 2 pixel detector tests remain in the required registry.
 The reusable Phase 2 workflow also captures its eight actual native pitch,
 chord and symbol probes. The release report independently replays those existing
 image oracles on the preserved PNGs and requires their clean revision provenance.
+These earlier bounded probes add no whole-corpus coverage credit and cannot
+replace Phase 3's independent external-glyph or every-element obligations.
 
 The report/packaging job runs even when upstream audits fail, so a red gate
 still produces the coverage decision, manifest, original sources, native
