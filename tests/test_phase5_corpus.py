@@ -105,6 +105,16 @@ def test_existing_pinned_corpus_is_not_replaced():
     assert PINNED_SOURCES[9].endswith('xml_parallel_tied_voices.musicxml')
 
 
+def test_absent_detector_is_not_a_proven_unsupported_application_feature():
+    row = dict(status='unsupported', verification_kind='visual', construct='stem',
+               source=dict(id='n1'), reason='No independent pixel detector for stem')
+    findings = audit.classify_findings([row])
+    assert findings['unsupported_features'] == []
+    assert findings['unsupported_features_assessment'] == 'not_established_by_verification_status'
+    assert findings['framework_limitations'] == [row]
+    assert not findings['visual_defects'] and not findings['semantic_defects']
+
+
 def test_phase5_regressions_are_required_release_mutations():
     from scripts.record_notation_mutations import SUITES
     assert {'tests/test_phase5_authored_rests.py', 'tests/test_phase5_beam_metadata.py',

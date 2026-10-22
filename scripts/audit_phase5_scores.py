@@ -65,6 +65,24 @@ def validate_inventory(inventory: dict, directory: Path) -> list[str]:
     return errors
 
 
+def classify_findings(rows: list[dict]) -> dict:
+    # A boundary's unsupported status describes its evidence, not the
+    # application's capability. Absence of a detector cannot prove that a
+    # renderer lacks that feature. Preserve the rows and their exact reasons.
+    return {
+        'semantic_defects': [row for row in rows if row['status']=='mismatch'
+                             and row['verification_kind']=='semantic'
+                             and row['construct'] != 'runtime_error'],
+        'visual_defects': [row for row in rows if row['status']=='mismatch'
+                           and row['verification_kind']=='visual'],
+        'unsupported_features': [],
+        'unsupported_features_assessment': 'not_established_by_verification_status',
+        'framework_limitations': [row for row in rows
+            if row['status'] in ('unsupported', 'unverified', 'ambiguous')
+            or row['construct']=='runtime_error'],
+    }
+
+
 def summarize(inventory: dict, reports: Path, *, kind: str = 'complete') -> dict:
     from scripts.audit_native_release import grouped, empty_coverage, add_coverage
     errors = validate_inventory(inventory, ROOT / 'midi')
@@ -87,17 +105,7 @@ def summarize(inventory: dict, reports: Path, *, kind: str = 'complete') -> dict
             **{f'by_{dimension}': grouped(jobs, dimension)
                for dimension in ('score', 'hand', 'measure', 'feature')})
     report['categories'] = categories
-    gaps = report['unverified_elements']
-    report['findings'] = {
-        'semantic_defects': [row for row in gaps if row['status']=='mismatch'
-                             and row['verification_kind']=='semantic'
-                             and row['construct'] != 'runtime_error'],
-        'visual_defects': [row for row in gaps if row['status']=='mismatch'
-                           and row['verification_kind']=='visual'],
-        'unsupported_features': [row for row in gaps if row['status']=='unsupported'],
-        'framework_limitations': [row for row in gaps if row['status'] in ('unverified','ambiguous')
-                                 or row['construct']=='runtime_error'],
-    }
+    report['findings'] = classify_findings(report['unverified_elements'])
     if errors:
         report.update(passed=False, complete=False, status='blocked')
     return report
