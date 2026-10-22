@@ -196,7 +196,7 @@ def _append_event(measure: ET.Element, tones: list, duration: int,
                 identifier = 'pt' + hashlib.sha256(source.encode()).hexdigest()[:32] + 's' + str(segment)
                 if identifier in bindings:
                     raise ValueError('Duplicate emitted source-note identity')
-                bindings[identifier] = {key: tone[key] for key in ('source_id','source_beat','pitch','hand')}
+                bindings[identifier] = {key: tone[key] for key in ('source_id','source_beat','pitch','hand','notation_timing')}
                 bindings[identifier].update(is_attack=segment == 0, segment_index=segment,
                                              display_beat=position/DIVISIONS)
                 counts[source] = segment+1
@@ -453,10 +453,10 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
     groups = defaultdict(list)
     attacks = {}
     identities = set()
-    ornament_onsets = {}
-    if not from_source_musicxml:
-        ornament_onsets = _midi_swing_onsets(phrase, hand)
-        ornament_onsets.update(_midi_ornament_onsets(phrase, hand))
+    swing_onsets = {} if from_source_musicxml else _midi_swing_onsets(phrase, hand)
+    triplet_onsets = {} if from_source_musicxml else _midi_ornament_onsets(
+        phrase, hand)
+    ornament_onsets = {**swing_onsets, **triplet_onsets}
     for index, note in enumerate(phrase.notes):
         if note.hand != hand:
             continue
@@ -477,8 +477,14 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
         if key in attacks and abs(attacks[key]-(note.start-phrase.start)) > 1e-12:
             raise ValueError('Distinct source attacks collide at notation quantization resolution')
         attacks[key] = note.start-phrase.start
-        groups[note.track,note.voice,start,end].append({'source_id':source,'source_beat':note.start-phrase.start,
-                                                      'pitch':note.pitch,'hand':hand,'note':note})
+        display_key = (
+            note.track,note.voice,round(note.start-phrase.start,9))
+        timing = ("triplet" if display_key in triplet_onsets else
+                  "swing_eighth" if display_key in swing_onsets else "exact")
+        groups[note.track,note.voice,start,end].append({
+            'source_id':source,'source_beat':note.start-phrase.start,
+            'pitch':note.pitch,'hand':hand,'note':note,
+            'notation_timing':timing})
     events = []
     for (track, voice, start, end), tones in groups.items():
         remaining = sorted(tones,key=lambda tone:(tone['pitch'],tone['source_id']))
