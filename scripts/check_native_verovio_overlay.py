@@ -153,12 +153,14 @@ def visible_ink(image: Image.Image, x: float, y: float, radius: int = 11) -> int
 
 def feature_errors(model: dict, case: AuditCase) -> list[str]:
     """Independently assert that each named challenging fixture tests its goal."""
+    if not case.features:
+        return []
     events = model["notation_events"]
     notes = [e for e in events if e["kind"] == "note"]
     from collections import Counter
-    simultaneous = Counter((e["staff"], e["beat"], e["voice"])
+    simultaneous = Counter((e.get("staff"), e.get("beat"), e.get("voice"))
                            for e in notes)
-    measures = model["measures"]
+    measures = model.get("measures", [])
     observed = {
         "chords": any(count > 1 for count in simultaneous.values()),
         "ties": any(not e["is_attack"] for e in notes),
