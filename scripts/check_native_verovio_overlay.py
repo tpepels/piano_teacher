@@ -452,8 +452,13 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
                               "pixel errors (see independent-pixels.json)")
     if checked == 0:
         errors.append("No on-screen native noteheads were checked")
-    if active_pixel_samples == 0:
+    active_written_notes = sum(
+        1 for event in model["notation_events"]
+        if event["kind"] == "note" and is_active(event["staff"]))
+    if active_pixel_samples == 0 and active_written_notes:
         errors.append("No active-hand noteheads were pixel-verified")
+    # A hand with no written notes is a valid silent practice mode, not
+    # evidence of missing pixels. Its rests still require screenshot coverage.
     if not registered_ids:
         errors.append("Original Verovio identities never aligned with native frames")
     if rendered_ids - reference_ids:
