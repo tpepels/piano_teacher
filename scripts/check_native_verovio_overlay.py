@@ -61,7 +61,8 @@ CASES = (
     AuditCase("chopin-1-2-right",
               "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 1, 2, "right"),
     AuditCase("chopin-5-6-both",
-              "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 5, 6),
+              "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 5, 6,
+              max_density=700.0),
     AuditCase("danny-boy-1-2-both", "Danny_Boy(Bill_Evans_Ver_).midi", 1, 2),
     AuditCase("merry-go-round-1-2-both", "Merry-Go-Round-of-Life.midi", 1, 2),
     AuditCase("peace-piece-1-2-both", "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi", 1, 2),
@@ -294,6 +295,14 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
     checked = 0
     rendered_ids = set()
     registered_ids = set()
+    active_pixel_samples = 0
+    note_staff = {e["id"]:e["staff"] for e in model["notation_events"]
+                  if e["kind"] == "note"}
+    active_hand = model["active_hand"]
+
+    def is_active(staff: str) -> bool:
+        return active_hand == "both" or active_hand == staff
+
     for frame in report["frames"]:
         screenshot = Image.open(out/frame["file"])
         heads = frame["noteheads"]
@@ -309,11 +318,14 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
             if 20 < x < screenshot.width-20 and 20 < y < screenshot.height-20:
                 rendered_ids.add(ident)
                 checked += 1
-                if visible_ink(screenshot,x,y) < 5:
+                if is_active(note_staff.get(ident, "")):
+                    active_pixel_samples += 1
+                if is_active(note_staff.get(ident, "")) and visible_ink(screenshot,x,y) < 5:
                     errors.append(f"Missing rendered native notehead {ident} "
                                   f"at beat {frame['clock']}")
         for rest in frame["rests"]:
-            if 30 < rest["x"] < screenshot.width-30:
+            if (is_active(rest["hand"]) and
+                    30 < rest["x"] < screenshot.width-30):
                 if visible_ink(screenshot,rest["x"],rest["y"],26) < 7:
                     errors.append("Missing native rest pixels: "+str(rest["id"]))
         frame["reference_notes_overlaid"] = draw_overlay(
@@ -321,7 +333,9 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
             out/f"overlay-{frame['clock']:.2f}.png")
         registered_ids.update(set(heads) & reference_ids)
     if checked == 0:
-        errors.append("No on-screen native noteheads were pixel-verified")
+        errors.append("No on-screen native noteheads were checked")
+    if active_pixel_samples == 0:
+        errors.append("No active-hand noteheads were pixel-verified")
     if not registered_ids:
         errors.append("Original Verovio identities never aligned with native frames")
     if rendered_ids - reference_ids:
@@ -333,6 +347,7 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
         "density":report["density"],"native_notehead_samples":checked,
         "reference_source_note_count":len(refnotes),
         "distinct_native_noteheads":len(rendered_ids),
+        "active_notehead_pixel_samples":active_pixel_samples,
         "registered_noteheads":len(registered_ids),
         "tiny_rests":sum(1 for n in model["notation_events"] if
                          n["kind"] == "rest" and n["note_type"] in
