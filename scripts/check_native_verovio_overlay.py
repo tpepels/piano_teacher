@@ -344,7 +344,9 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
     summary = {
         "source":f"{case.filename}, measures {case.first_bar}-{case.last_bar}, {case.hand}",
         "case":case.name,
-        "density":report["density"],"native_notehead_samples":checked,
+        "density":report["density"],
+        "density_witness":report.get("density_witness", {}),
+        "native_notehead_samples":checked,
         "reference_source_note_count":len(refnotes),
         "distinct_native_noteheads":len(rendered_ids),
         "active_notehead_pixel_samples":active_pixel_samples,
@@ -381,7 +383,9 @@ def main() -> int:
             summary = run(directory, godot, case)
             results.append(summary)
             print(f"PASS {case.name}: {summary['native_notehead_samples']} pixels "
-                  f"checked; {summary['density']:.1f} px/beat",flush=True)
+                  f"checked; {summary['density']:.1f} px/beat; limiting ink: "
+                  + json.dumps(summary["density_witness"],sort_keys=True),
+                  flush=True)
         except Exception as exc:
             errors.append({"case":case.name,"error":str(exc)})
             print(f"FAIL {case.name}: {exc}",file=sys.stderr,flush=True)
