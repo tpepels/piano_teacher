@@ -20,7 +20,8 @@ facts must fail. Produce per-piece JSON with covered quantities and failures.
 
 **Out of scope:** individual drawn pixels; beaming/slur/ornament positioning;
 full MusicXML layout semantics; MIDI's inherently ambiguous written rhythms.
-The seed corpus is only four known MusicXML fixtures, not the full repertoire.
+The corpus includes all ten supported MusicXML fixtures from the manifest,
+including the 240-note multipage score; it is still not the full repertoire.
 A failure must be corrected or explicitly classified as an unsupported feature,
 not made to pass by widening numerical tolerances.
 
