@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from collections import defaultdict
 from copy import deepcopy
+from functools import lru_cache
 import hashlib
 import math
 from xml.etree import ElementTree as ET
@@ -259,16 +260,13 @@ def _render_measure(measure: ET.Element, lanes: list[list[tuple]], length: int,
                           hidden_rest=lane_idx > 0)
 
 
-def _project_authored_rests(source_musicxml: str, phrase: Phrase, lanes: list,
-                            hand: str) -> None:
-    """Restore source rests to their imported voice, separately from gap padding."""
-    if not source_musicxml:
-        return
-    destinations = {}
-    for lane in lanes:
-        # One source voice may need extra synthetic lanes for overlapping
-        # notes. Its authored rests belong to just one lane, never all of them.
-        destinations.setdefault(lane[0][2][0]['note'].voice, lane)
+@lru_cache(maxsize=16)
+def _authored_source_rests(source_musicxml: str) -> tuple:
+    """Read source-only rest facts once per exact XML text, across exercises.
+
+    Cached elements are private and read-only; emission always deep-copies
+    them before changing duration, voice or staff.
+    """
     source = ET.fromstring(source_musicxml)
     for element in source.iter():
         element.tag = element.tag.rsplit('}', 1)[-1]
@@ -324,11 +322,26 @@ def _project_authored_rests(source_musicxml: str, phrase: Phrase, lanes: list,
     for note in _assign_hands(source_notes, track_names, 60):
         voice_hands[note.voice].add(note.hand)
         staff_hands[note.track].add(note.hand)
+    result = []
     for pi, staff, track, owner, absolute_start, absolute_end, element in rests:
         candidates = voice_hands[owner] or staff_hands[track]
         rest_hand = (_named_hand(track_names[track])
                      or (next(iter(candidates)) if len(candidates) == 1 else None)
                      or ('left' if staff == '2' or pi > 0 else 'right'))
+        result.append((rest_hand, owner, absolute_start, absolute_end, element))
+    return tuple(result)
+
+
+def _project_authored_rests(source_musicxml: str, phrase: Phrase, lanes: list,
+                            hand: str) -> None:
+    """Restore source rests to their imported voice, separately from gap padding."""
+    if not source_musicxml:
+        return
+    destinations = {}
+    for lane in lanes:
+        # Extra overlapping lanes must not duplicate a source voice's rests.
+        destinations.setdefault(lane[0][2][0]['note'].voice, lane)
+    for rest_hand, owner, absolute_start, absolute_end, element in _authored_source_rests(source_musicxml):
         if rest_hand != hand:
             continue
         start = _ticks(max(absolute_start, phrase.start) - phrase.start)
