@@ -55,10 +55,12 @@ func _audit() -> void:
         "unavoidable_rest_overlaps": renderer.unavoidable_rest_overlaps,
         "frames": [],
     }
-    for at in [0.0, 1.5, 3.5, 5.5]:
+    var samples: Array = fixture.get("sample_beats", [0.0, 1.5, 3.5, 5.5])
+    for point in samples:
+        var at: float = float(point)
         renderer.present({
             "running": true, "paused": true,
-            "bpm": 40.0, "hand": "both",
+            "bpm": 40.0, "hand": str(fixture.get("hand","both")),
             "transport_id": 19, "count_in_beats": 0.0,
             "play_from_beat": 0.0
         }, at)
@@ -66,7 +68,7 @@ func _audit() -> void:
         await process_frame
         await RenderingServer.frame_post_draw
         var frame: Image = view.get_texture().get_image()
-        var filename: String = "native-%.1f.png" % at
+        var filename: String = "native-%.2f.png" % at
         if frame.is_empty() or frame.save_png(folder.path_join(filename)) != OK:
             failures.append("Cannot capture " + filename)
         var heads: Dictionary = {}
@@ -75,6 +77,14 @@ func _audit() -> void:
             heads[str(identifier)] = [xy.x, xy.y]
         var rests: Array = []
         var camera_x: float = renderer.size.x*.42
+        var expected_heads: Dictionary = {}
+        for event in renderer.ordered_events:
+            if str(event.get("kind", "")) != "note":
+                continue
+            var expected_x: float = renderer.timeline.screen_x(
+                float(event.get("beat", 0.0)),at,camera_x)
+            if expected_x > 20.0 and expected_x < renderer.size.x-20.0:
+                expected_heads[str(event.get("id", ""))] = expected_x
         for event in renderer.ordered_events:
             if str(event.get("kind","")) != "rest":
                 continue
@@ -89,7 +99,8 @@ func _audit() -> void:
             })
         result["frames"].append({
             "clock": at, "file": filename,
-            "noteheads": heads, "rests": rests,
+            "noteheads": heads, "expected_noteheads": expected_heads,
+            "rests": rests,
             "visible_symbols": renderer.visible_symbols
         })
     var output := FileAccess.open(folder.path_join("native-overlay-report.json"),FileAccess.WRITE)
