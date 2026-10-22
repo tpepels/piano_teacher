@@ -110,8 +110,7 @@ def audit_piece(name: str, directory: Path, godot: str,
     reports = []
     for first,last in parts:
         case=AuditCase(f"phase3-{source.stem}-{first:03d}-{last:03d}",
-                       name,first,last,"both",max_density=100000,
-                       max_tiny_rests=100000,max_dots=4)
+                       name,first,last,"both")
         out = directory / f"measures-{first:03d}-{last:03d}"
         print(f"PHASE3 {name}: measures {first}-{last}/{measure_count}",
               flush=True)
