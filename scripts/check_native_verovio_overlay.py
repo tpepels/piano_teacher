@@ -435,10 +435,25 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
         # Unlike the legacy overlay, this check reads the WRITTEN pitches
         # from MusicXML, then extracts staff lines and notehead positions
         # directly from PNG pixels. No Godot head/staff Y is permitted.
-        from piano_teacher.notation.phase3_pixels import verify_all_notehead_pixels
+        from piano_teacher.notation.phase3_pixels import (
+            verify_all_notehead_pixels, verify_all_rest_pixels)
+        engraving_xml=(out/"score.musicxml").read_text(encoding="utf-8")
         independent = verify_all_notehead_pixels(
-            (out/"score.musicxml").read_text(encoding="utf-8"),out,
-            hand=case.hand)
+            engraving_xml,out,hand=case.hand)
+        rests_independent = verify_all_rest_pixels(
+            engraving_xml,out,hand=case.hand)
+        full_coverage["independent_image_rests"] = {
+            key:value for key,value in rests_independent.items()
+            if key!="measured"
+        }
+        (out/"independent-rests.json").write_text(
+            json.dumps(rests_independent,indent=2)+"\n")
+        if not rests_independent["passed"]:
+            errors.extend(f"Independent rest glyph: {message}"
+                          for message in rests_independent["failures"][:30])
+            if len(rests_independent["failures"])>30:
+                errors.append(f"And {len(rests_independent['failures'])-30} "
+                              "more rest image failures (see independent-rests.json)")
         full_coverage["independent_image_pitch"] = {
             key:value for key,value in independent.items() if key!="measured"
         }
