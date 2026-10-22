@@ -49,6 +49,7 @@ class AuditCase:
     max_tiny_rests: int = 8
     max_dots: int = 2
     features: tuple[str, ...] = ()
+    min_lookahead_beats: float = 0.0
 
 
 # Explicit, pinned real MIDI corpus. Case changes require an intentional
@@ -62,7 +63,7 @@ CASES = (
               "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 1, 2, "right"),
     AuditCase("chopin-5-6-both",
               "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 5, 6,
-              max_density=700.0),
+              min_lookahead_beats=1.75),
     AuditCase("danny-boy-1-2-both", "Danny_Boy(Bill_Evans_Ver_).midi", 1, 2),
     AuditCase("merry-go-round-1-2-both", "Merry-Go-Round-of-Life.midi", 1, 2),
     AuditCase("peace-piece-1-2-both", "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi", 1, 2),
@@ -181,6 +182,12 @@ def readability_errors(model: dict, diagnostics: dict,
     if diagnostics["density"] > case.max_density:
         errors.append(f"{case.name} inflated to {diagnostics['density']:.1f} "
                       f"px/beat (max {case.max_density:.1f})")
+    if case.min_lookahead_beats:
+        available = float(diagnostics.get("density_witness", {}).get(
+            "available_lookahead_beats", 0.0))
+        if available + 1e-5 < case.min_lookahead_beats:
+            errors.append(f"{case.name}: only {available:.2f} beats ahead "
+                          f"(minimum {case.min_lookahead_beats:.2f})")
     if diagnostics["unavoidable_rest_overlaps"]:
         errors.append("Native rests collide with other voice ink")
     events = model["notation_events"]
