@@ -86,13 +86,24 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                     kind=note["note_type"]
                     glyph=("head_whole" if kind=="whole" else
                            "head_half" if kind=="half" else "head_black")
+                    # Seconds in a chord are deliberately displaced
+                    # horizontally by the engraver; they may also overlap
+                    # another head mask and lower silhouette agreement.
+                    adjacent=any(
+                        other is not note and
+                        abs(other_y-target) <= .55*staves[staff].gap
+                        for other_y,other in pitches
+                    )
+                    x_search=range(-32,33) if adjacent else range(-16,17)
                     score=_match_glyph(
                         raster,glyphs[glyph],staves[staff].gap,
                         xpos,target,centered=True,
-                        dxs=range(-16,17),dys=range(-4,5))
-                    # Calibrated globally against missing/one-staff-step
-                    # shifted heads. No per-score tolerances or exemptions.
-                    if score < .79:
+                        dxs=x_search,dys=range(-4,5))
+                    # One global overlapping-second allowance, never a
+                    # score-specific pitch or passage exception. The
+                    # independent one-staff-step mutation test remains.
+                    threshold=.75 if adjacent else .79
+                    if score < threshold:
                         failures.append(
                             f"{clock} {staff} {note['spelling']}: "
                             f"wrong/missing {glyph} silhouette at written "
