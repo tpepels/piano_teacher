@@ -1,0 +1,45 @@
+name: Phase 3 full corpus native proof
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  original-scores:
+    name: Whole score ${{ matrix.index }} / ${{ matrix.hand }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      max-parallel: 7
+      matrix:
+        index: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        hand: [both]
+    steps:
+      - name: Install actual Godot rendering, Verovio and test dependencies
+        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
+      - uses: actions/checkout@v4
+      - name: Install source-independent notation audit
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e '.[godot,test]'
+      - name: Whole score - all measures, noteheads, rests, and pixels
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            .venv/bin/python scripts/audit_phase3_whole_pieces.py \
+            --index ${{ matrix.index }} \
+            --hand ${{ matrix.hand }} \
+            --window-bars 4 \
+            --out /tmp/phase3-corpus
+      - name: Publish score-wise complete PNG and notation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-score-${{ matrix.index }}-${{ matrix.hand }}
+          path: /tmp/phase3-corpus/
+          if-no-files-found: warn
+          retention-days: 7
