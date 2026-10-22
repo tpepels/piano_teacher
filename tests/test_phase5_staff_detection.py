@@ -139,6 +139,19 @@ def test_a_majority_of_bright_curves_cannot_define_the_gray_rule_reference():
         detect_staff_lines(image)
 
 
+@pytest.mark.parametrize('both_staves', (False, True))
+@pytest.mark.parametrize('color', ((230, 240, 234), RAIL))
+def test_replacing_every_rule_with_equal_curves_cannot_certify_a_staff(both_staves, color):
+    image = _frame()
+    draw = ImageDraw.Draw(image)
+    for y in RAILS if both_staves else RAILS[5:]:
+        draw.line((0, y, 1535, y), fill=BACKGROUND)
+        draw.line([(x, y + round(3 * ((x - 768) / 768) ** 2))
+                   for x in range(1536)], fill=color, width=3)
+    with pytest.raises(AssertionError, match='staff'):
+        detect_staff_lines(image)
+
+
 def test_same_gray_curved_stroke_is_not_a_straight_thin_rule():
     image = _frame()
     draw = ImageDraw.Draw(image)

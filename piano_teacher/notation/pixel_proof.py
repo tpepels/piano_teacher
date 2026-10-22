@@ -62,7 +62,8 @@ def _staff_stroke_ink(brightness: np.ndarray, center: float) -> int:
     """
     y = round(center)
     strip = brightness[y - 3:y + 4].astype(np.int16)
-    ink = (strip - strip.min(axis=0)).sum(axis=0)
+    contrast = strip - strip.min(axis=0)
+    ink = contrast.sum(axis=0)
     regions = np.array_split(ink, min(4, len(ink)))
     weights = []
     for region in regions:
@@ -73,7 +74,26 @@ def _staff_stroke_ink(brightness: np.ndarray, center: float) -> int:
             return 0
         quartile = len(visible) // 4
         weights.append(int(np.partition(visible, quartile)[quartile]))
-    return min(weights)
+    reference = min(weights)
+    # Equal curves can agree in stroke weight and form a regular lattice.
+    # Require a common thin horizontal core at the candidate row as well.
+    # Adjacent bright ties need not be absent: they must not replace that core.
+    core = strip[3]
+    equal = strip == core[None, :]
+    run = np.ones(len(core), dtype=np.int16)
+    above = below = np.ones(len(core), dtype=bool)
+    for step in range(1, 4):
+        above = above & equal[3-step]
+        below = below & equal[3+step]
+        run += above.astype(np.int16) + below.astype(np.int16)
+    thin = (run <= 2) & (core - strip.min(axis=0) >= 5)
+    common = []
+    for colors, usable in zip(np.array_split(core, len(regions)),
+                              np.array_split(thin, len(regions))):
+        common.append(np.bincount(colors[usable], minlength=256) / len(colors))
+    if float(np.minimum.reduce(common).max()) < .25:
+        raise AssertionError('Image staff rule has no consistent thin horizontal core')
+    return reference
 
 
 def detect_staff_lines(picture: Image.Image) -> dict[str, RasterStaff]:
