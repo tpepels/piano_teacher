@@ -22,7 +22,11 @@ import shutil
 import sys
 
 from piano_teacher.score import import_piece
-from check_native_verovio_overlay import ROOT, AuditCase, run
+# Imported as a script in CI and as a package module in pytest.
+if __package__:
+    from scripts.check_native_verovio_overlay import ROOT, AuditCase, run
+else:
+    from check_native_verovio_overlay import ROOT, AuditCase, run
 
 # Explicit, pinned set. Never discover just the easiest files and call that
 # complete corpus coverage. The report lists missing/unrun scores by name.
