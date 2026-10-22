@@ -353,8 +353,27 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
             if event.source_id in attacks:
                 raise ValueError("One source attack has multiple printed attacks")
             attacks[event.source_id] = event
-            if abs(event.beat - sources[event.source_id].onset_beats) > _TOLERANCE:
-                raise ValueError("Printed attack differs from the MIDI scoring onset")
+            source = sources[event.source_id]
+            binding = score.note_bindings[event.id]
+            if abs(binding["source_beat"] - source.onset_beats) > _TOLERANCE:
+                raise ValueError("Source MIDI grading onset was altered")
+            display_shift = event.beat - source.onset_beats
+            if abs(display_shift) > _TOLERANCE:
+                # MIDI jazz swing and measured triplet turns have a distinct
+                # *notation* onset. Grading still uses source.onset_beats.
+                # Never silently accept arbitrary source-time drift.
+                kind = binding.get("notation_timing", "exact")
+                if kind == "swing_eighth":
+                    valid = (-.115 <= display_shift <= -.085 and
+                             abs(event.beat * 2 - round(event.beat * 2)) < .00001)
+                elif kind == "triplet":
+                    valid = (abs(display_shift) <= .004 and
+                             abs(event.beat * 12 - round(event.beat * 12)) < .00001)
+                else:
+                    valid = False
+                if not valid:
+                    raise ValueError(
+                        "Printed attack differs from the MIDI scoring onset")
     if set(attacks) != set(sources):
         raise ValueError("Engraved lesson and MIDI grading have different note sets")
     model = {
