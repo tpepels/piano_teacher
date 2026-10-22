@@ -150,7 +150,15 @@ def observed_notehead_ys(image: Image.Image, hand: str,
     else:
         lo, hi = round((image.height * .52)), image.height - 30
     row_counts = ink_row_profile(image, x, lo, hi)
-    rows = [lo + i for i, n in enumerate(row_counts) if n >= 7]
+    peak_width = max(row_counts, default=0)
+    if peak_width < 9:
+        raise AssertionError(f"{hand}: no measurable notehead ink at the playhead")
+    # Tertian chord noteheads can TOUCH vertically (head height can exceed
+    # their one-staff-space separation). Split peaks of *horizontal notehead
+    # width* instead of grouping all connected bright rows. A narrow stem
+    # cannot create such a wide plateau.
+    high_ink = max(7, int(peak_width * .82 + .999))
+    rows = [lo + i for i, n in enumerate(row_counts) if n >= high_ink]
     groups: list[list[int]] = []
     for y in rows:
         if not groups or y - groups[-1][-1] > 2:
