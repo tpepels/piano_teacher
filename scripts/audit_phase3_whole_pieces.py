@@ -22,6 +22,12 @@ import shutil
 import sys
 
 from piano_teacher.score import import_piece
+from piano_teacher.music import Phrase
+from piano_teacher.notation.lesson import build_lesson_score
+from piano_teacher.notation.model import build_score_model
+from piano_teacher.notation.proof import (
+    verify_original_musicxml, verify_generated_engraving
+)
 # Imported as a script in CI and as a package module in pytest.
 if __package__:
     from scripts.check_native_verovio_overlay import ROOT, AuditCase, run
@@ -39,6 +45,16 @@ BUNDLED_MIDI = (
     "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi",
     "Waltz_for_Debby.midi",
 )
+
+# MusicXML is the only source format that independently specifies a written
+# score. Include every explicitly supported reference case, not just excerpts
+# chosen because they render well.
+MANIFEST = json.loads((ROOT/"tests/fixtures/musical_fidelity/manifest.json").read_text())
+MUSICXML_REFERENCE = tuple(
+    "tests/fixtures/musical_fidelity/" + case["file"]
+    for case in MANIFEST["supported"] if case["file"].endswith(".musicxml")
+)
+ALL_SOURCES = BUNDLED_MIDI + MUSICXML_REFERENCE
 
 
 def measure_windows(number_of_bars: int, max_bars: int = 4) -> tuple[tuple[int,int], ...]:
@@ -105,7 +121,7 @@ def verify_complete_windows(number_of_bars: int,
 
 def audit_piece(name: str, directory: Path, godot: str,
                 *, max_bars: int) -> dict:
-    source = ROOT / "midi" / name
+    source = ROOT / (name if "/" in name else "midi/" + name)
     piece, _ = import_piece(source)
     measure_count = len(piece.bar_boundaries)-1
     if measure_count < 1 or not piece.notes:
@@ -129,6 +145,29 @@ def audit_piece(name: str, directory: Path, godot: str,
     combined["original_source_note_attacks"]=len(piece.notes)
     combined["piece"]=name
     combined["windows"]=reports
+    if source.suffix == ".musicxml":
+        # Whole-piece, independent source semantics. Window-level evidence
+        # alone could agree with a wrongly transcribed generated score.
+        full_phrase = Phrase(1,1,measure_count,
+                             piece.bar_boundaries[0],
+                             piece.bar_boundaries[-1],piece.notes)
+        full_score = build_lesson_score(
+            full_phrase,boundaries=piece.bar_boundaries,
+            time_signatures=piece.time_signatures,
+            key_signatures=piece.key_signatures,
+            clef_changes=piece.clef_changes,
+            barlines=piece.barlines,source_musicxml=piece.source_musicxml)
+        full_model = build_score_model(full_score,
+                                      boundaries=piece.bar_boundaries)
+        original = verify_original_musicxml(source.read_text(),full_model)
+        generated = verify_generated_engraving(
+            full_score.musicxml,full_model)
+        combined["independent_original_musicxml"]=original
+        combined["independent_generated_symbol_inventory"]=generated
+        if not original["passed"] or not generated["passed"]:
+            combined["passed"]=False
+            combined["errors"].extend(original["errors"])
+            combined["errors"].extend(generated["errors"])
     (directory/"whole-piece.json").write_text(
         json.dumps(combined,indent=2)+"\n",encoding="utf-8")
     if not combined["passed"]:
@@ -143,12 +182,12 @@ def main() -> int:
     group=parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--only",help="Pilot score filename substring")
     group.add_argument("--all",action="store_true",
-                       help="Attempt every one of the seven bundled pieces")
+                       help="Attempt all seven MIDI pieces plus all supported MusicXML scores")
     parser.add_argument("--window-bars",type=int,default=4)
     args=parser.parse_args()
     args.out.mkdir(parents=True,exist_ok=True)
-    selected=(BUNDLED_MIDI if args.all else tuple(
-        name for name in BUNDLED_MIDI
+    selected=(ALL_SOURCES if args.all else tuple(
+        name for name in ALL_SOURCES
         if args.only.lower() in name.lower()))
     if not selected:
         parser.error(f"No explicitly pinned score matches {args.only!r}")
@@ -168,10 +207,12 @@ def main() -> int:
     report={
         "phase":3,
         "passed":not errors,
-        "corpus_fully_audited":set(selected)==set(BUNDLED_MIDI) and not errors,
-        "bundled_scores_total":len(BUNDLED_MIDI),
-        "bundled_scores_attempted":list(selected),
-        "bundled_scores_not_attempted":sorted(set(BUNDLED_MIDI)-set(selected)),
+        "corpus_fully_audited":set(selected)==set(ALL_SOURCES) and not errors,
+        "scores_total":len(ALL_SOURCES),
+        "bundled_midi_total":len(BUNDLED_MIDI),
+        "musicxml_reference_total":len(MUSICXML_REFERENCE),
+        "scores_attempted":list(selected),
+        "scores_not_attempted":sorted(set(ALL_SOURCES)-set(selected)),
         "scores_passed":len(results),"scores_failed":errors,
         "scores":results,
         "limitations":[
@@ -180,7 +221,8 @@ def main() -> int:
             "MIDI does not uniquely specify written notation or rhythmic spelling",
             "Whole-piece cross-hand, key/clef/voice and symbol-type comparisons "
             "will be added as separate independent image checks",
-            "Source MusicXML reference corpus is not yet included in this pilot",
+            "Independent original-source MusicXML semantic checks are run on "
+            "each MusicXML source; most remain unattempted in pilot mode",
         ],
     }
     (args.out/"summary.json").write_text(json.dumps(report,indent=2)+"\n")
