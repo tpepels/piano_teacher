@@ -104,6 +104,12 @@ a unique correct written score.
 Gate: 100% of supported source events have independent semantic and visual
 evidence; every unsupported construct is named and never silently dropped.
 
+Phase 5 remediation preserves the authored secondary-voice rests found by this
+framework, adds independently compared native written metadata, and accounts for
+ambiguous MIDI overlaps without dropping physical endpoints. Historical Phase 3
+findings remain historical evidence; use a fresh revision-bound report for the
+current decision.
+
 ## Phase 4 — CI release evidence
 
 The [release evidence framework](native-notation-phase4-release-evidence.md)
@@ -120,3 +126,16 @@ editorial review separately from automated claims.
 Release gate: supported scores have **zero unresolved correctness
 discrepancies**. Failing scores block the native renderer release rather than
 being removed from the corpus or granted score-specific exemptions.
+
+## Phase 5 — Real-score remediation and cleanup
+
+The [Phase 5 record](native-notation-phase5-remediation.md) describes the expanded
+local MIDI inventory, functional corrections, regression coverage and retained
+limitations. The original pinned release corpus remains required; the additional
+real-score assessment keeps its own complete source/hand/category denominator.
+Removing unused facades and inferred beaming does not remove the live Verovio
+source-asset and fallback paths still needed by unsupported notation.
+
+Project completion and merging remain conditional on the required checks.
+Unsupported transcription, ambiguous pairing and missing visual detectors cannot
+be relabeled as verified to satisfy that condition.

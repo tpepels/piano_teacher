@@ -3,8 +3,9 @@
 Phase 4 enforces evidence completeness; it does not repair the renderer or
 extend the detectors' musical scope. This branch depends on draft PR #37.
 The native renderer currently remains **blocked for release**. Phase 3 found
-two authored secondary-voice rests lost during lesson projection, and large
-parts of the visual notation inventory remain unsupported or ambiguous.
+two authored secondary-voice rests lost during lesson projection; the
+[Phase 5 remediation](native-notation-phase5-remediation.md) corrects that loss.
+Large parts of the visual notation inventory remain unsupported or ambiguous.
 
 ## Decision rule
 
@@ -153,8 +154,9 @@ checks; their success cannot override the native release gate.
 
 ## Current limitations
 
-- The known authored-rest loss is a genuine renderer pipeline discrepancy;
-  it remains a release blocker and is documented in the Phase 3 framework.
+- Phase 5 corrects the authored-rest loss documented in the Phase 3 framework.
+  Fresh revision-bound evidence is still required; the correction alone cannot
+  resolve unsupported or ambiguous notation.
 - Dense one-to-one symbol assignment, rest placement, general extra/overlapping
   ink, many engraved connectors and rhythm aspects remain incomplete.
 - Glyph diagnostics cannot establish full readability beyond detector scope.

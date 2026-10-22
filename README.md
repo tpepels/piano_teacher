@@ -4,6 +4,13 @@ An offline Linux piano teacher built with Godot 4 and Python. Import your own
 MIDI or MusicXML, learn simplified passages, restore the original notes, then
 connect the passages into a complete performance. All progress stays local.
 
+Native notation uses a continuous score timeline and a fixed playhead.
+Independent semantic and screenshot verification have separate coverage ledgers;
+passing application tests does not certify an entire score. See the
+[verification phases](docs/native-notation-proof-phases.md),
+[strict release decision](docs/native-notation-phase4-release-evidence.md), and
+[Phase 5 real-score remediation and limitations](docs/native-notation-phase5-remediation.md).
+
 The interface follows `moodboard.png`: forest, pine and charcoal surfaces,
 serif music titles, white active staves, a restrained teal timing line and a
 five-part progress rail. Library, Lesson Path and Settings share a dedicated
