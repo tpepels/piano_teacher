@@ -114,9 +114,18 @@ def test_chord_pixels_produce_multiple_independent_image_centres():
     assert observed_notehead_ys(image, "right", staves["right"]) == [160, 180, 200]
 
 
-def test_missing_chord_tone_is_detectable_in_pixel_inventory():
+def test_erasing_one_chord_tone_changes_measured_pixel_inventory():
     image = frame()
-    staves = detect_staff_lines(image)
-    measured = observed_notehead_ys(image, "right", staves["right"])
-    assert len(measured) == 1
-    assert len(measured) != 3
+    draw = ImageDraw.Draw(image)
+    x = round(image.width * .42)
+    draw.ellipse((x-10, 175, x+10, 185), fill=(230, 240, 234))
+    draw.ellipse((x-10, 155, x+10, 165), fill=(230, 240, 234))
+    staffs = detect_staff_lines(image)
+    assert len(observed_notehead_ys(image, "right", staffs["right"])) == 3
+
+    # Deliberately erase the top tone from the actual image. The bottom two
+    # stay in place, and the source still expects three separate noteheads.
+    draw.rectangle((x-13, 152, x+13, 168), fill=(16, 41, 35))
+    # Restore the native staff rule passing through the erased glyph.
+    draw.line((x-13, 160, x+13, 160), fill=(73, 83, 77), width=1)
+    assert len(observed_notehead_ys(image, "right", staffs["right"])) == 2
