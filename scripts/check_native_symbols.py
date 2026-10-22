@@ -55,7 +55,7 @@ def capture_all(out: Path, godot: str | None = None) -> list[dict]:
             raise RuntimeError(f"{case.name}: missing a mandatory screenshot")
         original=(ROOT/case.filename).read_text(encoding="utf-8")
         proof=proofs[case.name](original,xml,path)
-        (path/"symbol-proof.json").write_text(json.dumps(proof,indent=2)+"\\n")
+        (path/"symbol-proof.json").write_text(json.dumps(proof,indent=2)+chr(10))
         if not proof["passed"]:
             failing.append({"case":case.name,"errors":proof["errors"]})
         captured.append({"case":case.name,"path":str(path),
@@ -66,7 +66,7 @@ def capture_all(out: Path, godot: str | None = None) -> list[dict]:
         for problem in proof["errors"]:
             print("FAIL",case.name,problem,flush=True)
     (out/"symbol-proof-summary.json").write_text(json.dumps(
-        {"passed":not failing,"scores":captured,"errors":failing},indent=2)+"\\n")
+        {"passed":not failing,"scores":captured,"errors":failing},indent=2)+chr(10))
     if failing:
         raise AssertionError(f"Independent symbol image checks failed: {failing}")
     return captured
