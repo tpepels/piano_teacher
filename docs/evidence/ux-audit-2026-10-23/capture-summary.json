@@ -1,0 +1,385 @@
+{
+  "schema_version": 1,
+  "report_kind": "ux_editorial_review",
+  "base_revision": "25777ad16506f052e7e2ebac6b2e2c4d00c2a5fb",
+  "affects_automated_notation_release_decision": false,
+  "scope": "Actual application composition and interaction; not independent whole-score notation certification",
+  "captures": [
+    {
+      "file": "practice-desktop.png",
+      "sha256": "a42db7e2136bc7211c8e6f4ff339236320ce551df1e9d6eac4b958d613a93c6f",
+      "raw_source": "final-ala/1920x1080/workflow_both.png"
+    },
+    {
+      "file": "practice-compact.png",
+      "sha256": "8ee0d94d2ed741f3f94ef9e489c5c6025d180124fd3b318dc56ac5b81ef49ba8",
+      "raw_source": "final-native-input/800x600/workflow_both.png"
+    },
+    {
+      "file": "chopin-compact.png",
+      "sha256": "e0922846a0a04c7ff4e3ad040a9502bd612b8f6bf9ea3a3fe7489459b7fb13d4",
+      "raw_source": "final-chopin-hands/800x600/workflow_both.png"
+    },
+    {
+      "file": "moonlight-compact.png",
+      "sha256": "25562f39da0eceb52030e648c4901bc2eeae49ef7d027af39fb3d6172d2acb76",
+      "raw_source": "final-moonlight/800x600/practice_playing.png"
+    },
+    {
+      "file": "library-desktop.png",
+      "sha256": "c36138e6c8168312fa4481bac8769c36395afa1d4157f05048c2200b192160a1",
+      "raw_source": "final-ala/1920x1080/library.png"
+    },
+    {
+      "file": "lesson-path-desktop.png",
+      "sha256": "f13d70f767d15163bb3d63f612ff7c2b994f63b78cc99ab95685149270cf19bf",
+      "raw_source": "final-ala/1920x1080/lesson_path.png"
+    },
+    {
+      "file": "settings-desktop.png",
+      "sha256": "1d53a36400de1678d7996cdd11edde89454230e0178c4d7b628c3a9f325a6df1",
+      "raw_source": "final-ala/1920x1080/settings.png"
+    },
+    {
+      "file": "before-navigation-compact.png",
+      "sha256": "2147d29ba4c38fbb4705cad321d1c3ed26d05bda1396e41f84df886a5a30b890",
+      "raw_source": "baseline-chopin/800x600/practice_ready.png"
+    }
+  ],
+  "runs": [
+    {
+      "folder": "final-ala",
+      "file": "/home/tom/Projects/piano_teacher_ux_audit/midi/Ala_\u2013_Joep_Beving.midi",
+      "measure": 9,
+      "status": "passed",
+      "runs": [
+        {
+          "viewport": [
+            1920,
+            1080
+          ],
+          "display_server": "X11",
+          "native_input": false,
+          "captures": [
+            "practice_ready",
+            "practice_playing",
+            "practice_paused",
+            "library",
+            "lesson_path",
+            "settings"
+          ],
+          "workflow_checks": [
+            "manual_minus_five",
+            "manual_plus_five",
+            "next_step",
+            "previous_step",
+            "picker_backwards",
+            "right",
+            "left",
+            "both",
+            "count_in",
+            "pause",
+            "paused_minus_five",
+            "retry",
+            "listen",
+            "return_to_practice",
+            "keyboard_play_pause"
+          ],
+          "failures": []
+        },
+        {
+          "viewport": [
+            1280,
+            800
+          ],
+          "display_server": "X11",
+          "native_input": false,
+          "captures": [
+            "practice_ready",
+            "practice_playing",
+            "practice_paused",
+            "library",
+            "lesson_path",
+            "settings"
+          ],
+          "workflow_checks": [
+            "manual_minus_five",
+            "manual_plus_five",
+            "next_step",
+            "previous_step",
+            "picker_backwards",
+            "right",
+            "left",
+            "both",
+            "count_in",
+            "pause",
+            "paused_minus_five",
+            "retry",
+            "listen",
+            "return_to_practice",
+            "keyboard_play_pause"
+          ],
+          "failures": []
+        },
+        {
+          "viewport": [
+            800,
+            600
+          ],
+          "display_server": "X11",
+          "native_input": false,
+          "captures": [
+            "practice_ready",
+            "practice_playing",
+            "practice_paused",
+            "library",
+            "lesson_path",
+            "settings"
+          ],
+          "workflow_checks": [
+            "manual_minus_five",
+            "manual_plus_five",
+            "next_step",
+            "previous_step",
+            "picker_backwards",
+            "right",
+            "left",
+            "both",
+            "count_in",
+            "pause",
+            "paused_minus_five",
+            "retry",
+            "listen",
+            "return_to_practice",
+            "keyboard_play_pause"
+          ],
+          "failures": []
+        }
+      ]
+    },
+    {
+      "folder": "final-chopin",
+      "file": "/home/tom/Projects/piano_teacher_ux_audit/midi/Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+      "measure": 1,
+      "status": "passed",
+      "runs": [
+        {
+          "viewport": [
+            1920,
+            1080
+          ],
+          "display_server": "X11",
+          "native_input": false,
+          "captures": [
+            "practice_ready",
+            "practice_playing",
+            "practice_paused",
+            "library",
+            "lesson_path",
+            "settings"
+          ],
+          "workflow_checks": [],
+          "failures": []
+        },
+        {
+          "viewport": [
+            1280,
+            800
+          ],
+          "display_server": "X11",
+          "native_input": false,
+          "captures": [
+            "practice_ready",
+            "practice_playing",
+            "practice_paused",
+            "library",
+            "lesson_path",
+            "settings"
+          ],
+          "workflow_checks": [],
+          "failures": []
+        },
+        {
+          "viewport": [
+            800,
+            600
+          ],
+          "display_server": "X11",
+          "native_input": false,
+          "captures": [
+            "practice_ready",
+            "practice_playing",
+            "practice_paused",
+            "library",
+            "lesson_path",
+            "settings"
+          ],
+          "workflow_checks": [],
+          "failures": []
+        }
+      ]
+    },
+    {
+      "folder": "final-chopin-hands",
+      "file": "/home/tom/Projects/piano_teacher_ux_audit/midi/Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+      "measure": 9,
+      "status": "passed",
+      "runs": [
+        {
+          "viewport": [
+            1920,
+            1080
+          ],
+          "display_server": "X11",
+          "native_input": false,
+          "captures": [
+            "practice_ready",
+            "practice_playing",
+            "practice_paused",
+            "library",
+            "lesson_path",
+            "settings"
+          ],
+          "workflow_checks": [
+            "manual_minus_five",
+            "manual_plus_five",
+            "next_step",
+            "previous_step",
+            "picker_backwards",
+            "right",
+            "left",
+            "both",
+            "count_in",
+            "pause",
+            "paused_minus_five",
+            "retry",
+            "listen",
+            "return_to_practice",
+            "keyboard_play_pause"
+          ],
+          "failures": []
+        },
+        {
+          "viewport": [
+            800,
+            600
+          ],
+          "display_server": "X11",
+          "native_input": false,
+          "captures": [
+            "practice_ready",
+            "practice_playing",
+            "practice_paused",
+            "library",
+            "lesson_path",
+            "settings"
+          ],
+          "workflow_checks": [
+            "manual_minus_five",
+            "manual_plus_five",
+            "next_step",
+            "previous_step",
+            "picker_backwards",
+            "right",
+            "left",
+            "both",
+            "count_in",
+            "pause",
+            "paused_minus_five",
+            "retry",
+            "listen",
+            "return_to_practice",
+            "keyboard_play_pause"
+          ],
+          "failures": []
+        }
+      ]
+    },
+    {
+      "folder": "final-moonlight",
+      "file": "/home/tom/Projects/piano_teacher_ux_audit/midi/Moonlight_Sonata_I.midi",
+      "measure": 9,
+      "status": "passed",
+      "runs": [
+        {
+          "viewport": [
+            1920,
+            1080
+          ],
+          "display_server": "X11",
+          "native_input": false,
+          "captures": [
+            "practice_ready",
+            "practice_playing",
+            "practice_paused",
+            "library",
+            "lesson_path",
+            "settings"
+          ],
+          "workflow_checks": [],
+          "failures": []
+        },
+        {
+          "viewport": [
+            800,
+            600
+          ],
+          "display_server": "X11",
+          "native_input": false,
+          "captures": [
+            "practice_ready",
+            "practice_playing",
+            "practice_paused",
+            "library",
+            "lesson_path",
+            "settings"
+          ],
+          "workflow_checks": [],
+          "failures": []
+        }
+      ]
+    },
+    {
+      "folder": "final-native-input",
+      "file": "/home/tom/Projects/piano_teacher_ux_audit/midi/Ala_\u2013_Joep_Beving.midi",
+      "measure": 9,
+      "status": "passed",
+      "runs": [
+        {
+          "viewport": [
+            800,
+            600
+          ],
+          "display_server": "X11",
+          "native_input": true,
+          "captures": [
+            "practice_ready",
+            "practice_playing",
+            "practice_paused",
+            "library",
+            "lesson_path",
+            "settings"
+          ],
+          "workflow_checks": [
+            "manual_minus_five",
+            "manual_plus_five",
+            "next_step",
+            "previous_step",
+            "picker_backwards",
+            "right",
+            "left",
+            "both",
+            "count_in",
+            "pause",
+            "paused_minus_five",
+            "retry",
+            "listen",
+            "return_to_practice",
+            "keyboard_play_pause"
+          ],
+          "failures": []
+        }
+      ]
+    }
+  ]
+}

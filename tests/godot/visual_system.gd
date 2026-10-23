@@ -55,6 +55,21 @@ func _verify() -> void:
         check(button.focus_mode == Control.FOCUS_ALL and
             button.get_theme_stylebox("focus") is StyleBoxFlat,
             "Button " + role + " maintains a visible keyboard-focus style")
+    for caption in ["‹", "›", "←", "→"]:
+        var arrow := ActionButton.new()
+        arrow.text = caption
+        host.add_child(arrow)
+        arrow.configure("navigation")
+        var normal := arrow.get_theme_stylebox("normal") as StyleBoxFlat
+        check(not arrow._has_symbol() and normal.content_margin_left == normal.content_margin_right,
+            "Arrow-only navigation has one centered direction: " + caption)
+        check(arrow.get_combined_minimum_size().x <= (40 if caption in ["‹", "›"] else 48),
+            "Arrow-only navigation fits its compact 40px target: " + caption)
+    var labeled_navigation := ActionButton.new()
+    labeled_navigation.text = "Next passage"
+    host.add_child(labeled_navigation)
+    labeled_navigation.configure("navigation")
+    check(labeled_navigation._has_symbol(), "Labeled navigation retains its direction icon")
     var row := MusicRow.new()
     host.add_child(row)
     await process_frame
