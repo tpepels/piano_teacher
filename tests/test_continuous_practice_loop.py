@@ -137,3 +137,20 @@ def test_native_renderer_reuses_source_score_for_visible_loop_copies():
     assert "for pass_index in range(first_pass, last_pass + 1)" in native
     assert "visual_scroll_beat-pass_start-play_from_beat" in native
     assert "visual_scroll_beat" in base
+
+
+def test_start_does_not_replace_source_engraving_at_slow_learning_bpm(tmp_path):
+    app = engine(tmp_path)
+    try:
+        # Source engraving is immutable at 110 BPM while practice starts 40.
+        app._layout_cache = object()
+        app._layout_bpm = app.plan.piece.bpm
+        assert app.plan.bpm != app._layout_bpm
+        before = app.score_revision
+        app.control("start")
+        assert app.running
+        assert app.count_in_beats > 0.0
+        assert app.score_revision == before
+        assert app.awaiting_score_revision is None
+    finally:
+        app.db.close()
