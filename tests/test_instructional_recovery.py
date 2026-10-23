@@ -257,9 +257,17 @@ def test_no_device_preview_never_enters_retry_or_guided_recovery(lesson):
     e, now, grid = lesson(30, True, connected=False)
     now[0] = e.run_at + grid[-1]*60/e.plan.bpm + .22
     state = e.state()
-    assert state['phase'] == 'ready' and not state['guided_recovery']
+    assert state['phase'] == 'preview_gap' and not state['guided_recovery']
+    assert state['preview_only'] and not state['running']
     assert state['retry_range'] is None and state['mastered'] == 0
+    assert state['take_result'] is None
     assert 'piano' in state['next_action'].lower()
+    revision = e.score_revision
+    now[0] = e.next_at + .01
+    repeated = e.state()
+    assert repeated['phase'] == 'playing' and repeated['preview_only']
+    assert repeated['retry_range'] is None and not repeated['guided_recovery']
+    assert repeated['mastered'] == 0 and repeated['revision'] == revision
 
 
 def finish_take(e, now, end, *, jitter=True):

@@ -42,10 +42,19 @@ def test_timeline_moves_at_exact_tempo_even_without_piano(tmp_path, monkeypatch)
         assert engine.state()["phase"] == "playing"
         t[0] = downbeat + 12.3
         done = engine.state()
-        assert done["phase"] == "ready"
-        assert done["running"] is False
-        assert "Timing preview complete" in done["feedback"]
-        assert done["mastered"] == 0
+        assert done["phase"] == "preview_gap"
+        assert done["running"] is False and done["preview_only"]
+        assert done["visual_scroll_speed"] > 0
+        assert "repeating after one empty measure" in done["feedback"]
+        assert done["mastered"] == 0 and done["take_result"] is None
+        assert engine.plan.index == 0
+        revision = engine.score_revision
+        t[0] = engine.next_at + .01
+        repeated = engine.state()
+        assert repeated["phase"] == "playing" and repeated["preview_only"]
+        assert repeated["count_in_beats"] == 0
+        assert repeated["revision"] == revision
+        assert repeated["mastered"] == 0
         assert engine.plan.index == 0
     finally:
         engine.db.close()
