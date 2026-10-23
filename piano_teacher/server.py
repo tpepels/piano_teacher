@@ -402,7 +402,7 @@ class PracticeEngine:
             else:
                 # Old integer positions refer to the old two-bar route. Never
                 # interpret them as positions in the new consolidated course.
-                legacy_exercises = build_exercises(p.piece, consolidate=False)
+                legacy_exercises = build_exercises(p.piece, consolidate=False, adaptive_focus=False)
                 old = legacy_exercises[min(max(0, int(row[0])), len(legacy_exercises) - 1)]
                 hand = row[1] if row[1] in ("right", "left", "both") else "both"
                 old_variants = generate_variants(old.phrase, hand)

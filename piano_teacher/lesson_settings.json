@@ -18,5 +18,7 @@
   "grading_match_window_min_seconds": 0.35,
   "grading_match_window_beats": 0.65,
   "count_in_max_seconds": 4,
-  "repeated_tempo_min_attacks": 2
+  "repeated_tempo_min_attacks": 2,
+  "focus_min_onsets": 2,
+  "focus_max_measures": 8
 }

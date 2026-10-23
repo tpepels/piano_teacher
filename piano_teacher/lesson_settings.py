@@ -14,6 +14,8 @@ from pathlib import Path
 @dataclass(frozen=True)
 class LessonSettings:
     focus_measures: int
+    focus_min_onsets: int
+    focus_max_measures: int
     repeated_tempo_min_attacks: int
     start_tempo_bpm: int
     automatic_tempo_steps: int
@@ -49,7 +51,9 @@ def load_lesson_settings(path: Path | None = None) -> LessonSettings:
         elif type(value) not in (float, int) or not math.isfinite(value):
             raise ValueError(f"{key} must be a finite number")
     data = LessonSettings(**raw)
-    if (data.focus_measures < 1 or data.repeated_tempo_min_attacks < 1 or data.minimum_bpm < 1
+    if (data.focus_measures < 1 or data.focus_min_onsets < 1
+            or data.focus_max_measures < data.focus_measures
+            or data.repeated_tempo_min_attacks < 1 or data.minimum_bpm < 1
             or data.maximum_bpm < data.minimum_bpm
             or data.clean_runs_to_master < 1 or data.manual_tempo_step_bpm < 1
             or data.minimum_tempo_step_bpm < 1

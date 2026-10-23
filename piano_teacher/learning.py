@@ -1,5 +1,6 @@
-"""A compact course with two-bar focus work for difficult musical material."""
+"""A compact course with variable focus length for sparse musical material."""
 from __future__ import annotations
+from bisect import bisect_right
 from collections import Counter
 from dataclasses import dataclass
 import hashlib
@@ -67,28 +68,63 @@ def _course_phrases(piece: Piece) -> tuple[Phrase, ...]:
     return tuple(groups)
 
 
-def _focus_phrases(piece: Piece) -> tuple[Phrase, ...]:
-    """Use the original measure grid, including meter changes and pickups."""
+def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]:
+    """Keep a short focus by default; extend it when attacks are very sparse.
+
+    Count distinct attack times rather than noteheads: an entire chord is one
+    action for the learner. Never split a source measure or exceed the configured
+    measure cap. The fixed route is retained solely for older saved sessions.
+    """
     if not piece.bar_boundaries:
         return piece.phrases  # Historical fixtures already contain source units.
-    groups = []
     boundaries = piece.bar_boundaries
-    for start_index in range(0, len(boundaries) - 1, SETTINGS.focus_measures):
-        end_index = min(len(boundaries) - 1, start_index + SETTINGS.focus_measures)
-        begin, end = boundaries[start_index], boundaries[end_index]
-        notes = tuple(n for n in piece.notes if begin-1e-7 <= n.start < end-1e-7)
-        if notes:
-            groups.append(Phrase(len(groups) + 1, start_index + 1,
-                                 end_index, begin, end, notes))
+    bars = len(boundaries) - 1
+    notes_by_bar: list[list] = [[] for _ in range(bars)]
+    onsets_by_bar: list[set[float]] = [set() for _ in range(bars)]
+    for note in piece.notes:
+        bar = bisect_right(boundaries, note.start + 1e-7) - 1
+        if 0 <= bar < bars and boundaries[bar] - 1e-7 <= note.start < boundaries[bar + 1] - 1e-7:
+            notes_by_bar[bar].append(note)
+            onsets_by_bar[bar].add(round(note.start, 6))
+
+    def onsets(first: int, last: int) -> int:
+        return len(set().union(*onsets_by_bar[first:last]))
+
+    ranges: list[tuple[int, int]] = []
+    start = 0
+    while start < bars:
+        end = min(bars, start + SETTINGS.focus_measures)
+        if adaptive:
+            while (end < bars and end - start < SETTINGS.focus_max_measures
+                   and onsets(start, end) < SETTINGS.focus_min_onsets):
+                end = min(bars, start + SETTINGS.focus_max_measures,
+                          end + SETTINGS.focus_measures)
+        ranges.append((start, end))
+        start = end
+
+    # Avoid a final one-action fragment when its preceding unit has room.
+    if adaptive and len(ranges) > 1:
+        first, last = ranges[-1]
+        previous_first, _ = ranges[-2]
+        if (0 < onsets(first, last) < SETTINGS.focus_min_onsets
+                and last - previous_first <= SETTINGS.focus_max_measures):
+            ranges[-2:] = [(previous_first, last)]
+
+    groups: list[Phrase] = []
+    for first, last in ranges:
+        selected = tuple(n for bar in notes_by_bar[first:last] for n in bar)
+        if selected:
+            groups.append(Phrase(len(groups) + 1, first + 1, last,
+                                 boundaries[first], boundaries[last], selected))
     return tuple(groups)
 
-
-def build_exercises(piece: Piece, *, consolidate: bool = True) -> tuple[Exercise, ...]:
+def build_exercises(piece: Piece, *, consolidate: bool = True,
+                    adaptive_focus: bool = True) -> tuple[Exercise, ...]:
     """Learn sections, bridge their boundaries, then perform the complete source.
 
     The original two-bar sequence remains reconstructible for old progress.
     """
-    phrases = _course_phrases(piece) if consolidate else _focus_phrases(piece)
+    phrases = _course_phrases(piece) if consolidate else _focus_phrases(piece, adaptive=adaptive_focus)
     exercises: list[Exercise] = []
     for index, phrase in enumerate(phrases):
         exercises.append(Exercise("learn", phrase, f"learn:{phrase.first_bar}-{phrase.last_bar}"))
@@ -96,14 +132,26 @@ def build_exercises(piece: Piece, *, consolidate: bool = True) -> tuple[Exercise
             prev = phrases[index - 1]
             # Do not imply continuity if there is a silent/gapped passage.
             if prev.last_bar + 1 == phrase.first_bar:
-                first_bar = max(prev.first_bar, prev.last_bar - 1) if consolidate else prev.first_bar
-                last_bar = min(phrase.last_bar, phrase.first_bar + 1) if consolidate else phrase.last_bar
-                # Use source units rather than guessed equal-duration measures.
-                source = [p for p in piece.phrases if p.first_bar >= first_bar and p.last_bar <= last_bar]
-                start, end = (source[0].start, source[-1].end) if source else (prev.start, phrase.end)
+                # Connect the last two source measures of the preceding
+                # focus to the first two of the next, even for long sparse units.
+                first_bar = max(prev.first_bar, prev.last_bar - 1)
+                last_bar = min(phrase.last_bar, phrase.first_bar + 1)
+                if piece.bar_boundaries:
+                    start = piece.bar_boundaries[first_bar - 1]
+                    end = piece.bar_boundaries[last_bar]
+                else:
+                    source = [p for p in piece.phrases
+                              if p.first_bar >= first_bar and p.last_bar <= last_bar]
+                    start, end = (source[0].start, source[-1].end) if source else (prev.start, phrase.end)
                 joined = Phrase(0, first_bar, last_bar, start, end,
                                 tuple(n for n in piece.notes if start <= n.start < end))
-                exercises.append(Exercise("connect", joined, f"connect:{joined.first_bar}-{joined.last_bar}"))
+                # A bridge must contain an attack on each side of the seam.
+                # With widely spaced notes, adjacent printed measures can
+                # be silent; do not create a misleading one-sided exercise.
+                if (any(n.start < phrase.start for n in joined.notes)
+                        and any(n.start >= phrase.start for n in joined.notes)):
+                    exercises.append(Exercise("connect", joined,
+                                              f"connect:{joined.first_bar}-{joined.last_bar}"))
     last_release = max((n.end for n in piece.notes), default=phrases[-1].end) if phrases else 0.0
     source_end = piece.bar_boundaries[-1] if piece.bar_boundaries else last_release
     source_start = piece.bar_boundaries[0] if piece.bar_boundaries else 0.0
