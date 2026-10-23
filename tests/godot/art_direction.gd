@@ -44,6 +44,8 @@ var dimensions := Vector2i(1920, 1080)
 var geometry_only := false
 var render := false
 var deadline_ms := 0
+var workflow_checks: Array[String] = []
+var workflow_captures: Array = []
 const EPSILON := 2.0
 
 func _initialize() -> void:
@@ -64,7 +66,10 @@ func write_report() -> void:
         "window_geometry": window_geometry(),
         "display_server": DisplayServer.get_name(), "render": render,
         "network_requests": int(app.get("network_requests")) if geometry_only and app != null else -1,
-        "captures": captures, "failures": failures}
+        "captures": captures, "failures": failures,
+        "exercise_controls": bool(config.get("exercise_controls", false)),
+        "native_input": bool(config.get("native_input", false)),
+        "workflow_checks": workflow_checks, "workflow_captures": workflow_captures}
     var file := FileAccess.open(output.path_join("art-direction.json"), FileAccess.WRITE)
     if file == null:
         push_error("Cannot write art-direction.json: " + error_string(FileAccess.get_open_error()))
@@ -549,6 +554,211 @@ func http_journey() -> bool:
             return false
         if not await capture("lesson_path" if destination == "lesson" else destination):
             return false
+    if bool(config.get("exercise_controls", false)):
+        return await practice_control_journey()
+    return true
+
+func click_control(control: BaseButton) -> bool:
+    var ancestor := control.get_parent()
+    while ancestor != null:
+        if ancestor is ScrollContainer:
+            ancestor.ensure_control_visible(control)
+        ancestor = ancestor.get_parent()
+    await settled()
+    check(control.is_visible_in_tree() and not control.disabled, "Control is available: " + control.text)
+    if not control.is_visible_in_tree() or control.disabled:
+        return false
+    for pressed in [true, false]:
+        var event := InputEventMouseButton.new()
+        event.button_index = MOUSE_BUTTON_LEFT
+        event.pressed = pressed
+        event.position = control.get_global_rect().get_center()
+        root.push_input(event, true)
+        await process_frame
+    return true
+
+func press_key(code: Key) -> void:
+    for pressed in [true, false]:
+        var event := InputEventKey.new()
+        event.keycode = code
+        event.pressed = pressed
+        Input.parse_input_event(event)
+        await process_frame
+
+func native_picker_backwards() -> bool:
+    # Target only this fixture's X11 window on its isolated display. Real X
+    # events let Godot route input into the separate native PopupMenu window.
+    check(DisplayServer.get_name() == "X11", "Native popup input requires X11")
+    if DisplayServer.get_name() != "X11": return false
+    var windows: Array = []
+    var status := OS.execute("xdotool", PackedStringArray(["search", "--onlyvisible",
+        "--pid", str(OS.get_process_id()), "--name", "^Practice UX " + str(OS.get_process_id()) + "$"]), windows, true)
+    check(status == 0 and not windows.is_empty(), "Find only this audit's native window")
+    if status != 0 or windows.is_empty(): return false
+    var window_id := ""
+    for line in str(windows[0]).split("\n"):
+        if line.strip_edges().is_valid_int():
+            window_id = line.strip_edges()
+            break
+    check(not window_id.is_empty(), "Find numeric native window identity")
+    if window_id.is_empty(): return false
+    var point: Vector2 = screen_rect(app.practice_step_picker).get_center()
+    var details: Array = []
+    status = OS.execute("xdotool", PackedStringArray(["windowfocus", "--sync", window_id,
+        "mousemove", "--window", window_id, str(int(point.x)), str(int(point.y)), "click", "1"]), details, true)
+    check(status == 0, "Native mouse opens lesson picker")
+    if status != 0: return false
+    if not await wait_until(func() -> bool: return app.practice_step_picker.get_popup().visible, "actual native lesson popup"): return false
+    var popup: PopupMenu = app.practice_step_picker.get_popup()
+    # A native menu may start without keyboard focus when the pointer is
+    # outside its rows. Read actual UI focus, then reach the desired item using
+    # real keys; never set selection or emit its signal in this path.
+    if popup.get_focused_item() < 0:
+        status = OS.execute("xdotool", PackedStringArray(["key", "--clearmodifiers", "Down"]), details, true)
+        if not await wait_until(func() -> bool: return popup.get_focused_item() >= 0, "popup keyboard focus"): return false
+    var delta: int = int(app.last_state.get("lesson_step", 0)) - 2 - popup.get_focused_item()
+    var keys := PackedStringArray(["key", "--clearmodifiers"])
+    for index in range(absi(delta)):
+        keys.append("Down" if delta > 0 else "Up")
+    keys.append("Return")
+    status = OS.execute("xdotool", keys, details, true)
+    check(status == 0, "Native keyboard chooses previous popup item")
+    return status == 0
+
+func workflow_ready(label: String) -> bool:
+    return await wait_until(func() -> bool:
+        return requests_idle() and native_is_ready() and str(app.last_state.get("phase", "")) == "ready",
+        label)
+
+func workflow_record(label: String) -> void:
+    await settled()
+    var sample := {"name": label, "phase": app.last_state.get("phase"),
+        "hand": app.last_state.get("hand"), "bpm": app.last_state.get("bpm"),
+        "step": app.last_state.get("lesson_step"), "revision": app.revision,
+        "screenshot": null}
+    if label == "listen":
+        sample["audio_playing"] = app.demo_player.player.playing
+        sample["pcm_bytes"] = app.demo_player.player.stream.data.size() if app.demo_player.player.stream is AudioStreamWAV else 0
+    if render:
+        RenderingServer.force_draw()
+        var image := root.get_texture().get_image()
+        var filename := "workflow_" + label + ".png"
+        check(image != null and image.get_size() == dimensions, label + ": raw workflow viewport")
+        if image != null:
+            check(image.save_png(output.path_join(filename)) == OK, label + ": save workflow viewport")
+            sample["screenshot"] = filename
+    workflow_captures.append(sample)
+    write_report()
+
+func practice_control_journey() -> bool:
+    app._navigate("practice")
+    if not await wait_until(func() -> bool: return requests_idle() and native_is_ready(), "Practice controls loaded"):
+        return false
+    var original_step := int(app.last_state.get("lesson_step", 0))
+    var original_bpm := int(app.last_state.get("bpm", 0))
+    var target_bpm := int(app.last_state.get("target_bpm", 0))
+    check(original_step > 1, "Review source allows backward lesson selection")
+    if not await click_control(app.tempo_down_button): return false
+    if not await workflow_ready("visible -5 BPM acknowledged"): return false
+    check(int(app.last_state.get("bpm", 0)) == original_bpm - 5, "Visible -5 BPM changes current tempo by exactly five")
+    check(int(app.last_state.get("target_bpm", 0)) == target_bpm, "Manual tempo preserves automatic target")
+    workflow_checks.append("manual_minus_five")
+    await workflow_record("manual_minus_five")
+    if not await click_control(app.tempo_up_button): return false
+    if not await workflow_ready("visible +5 BPM acknowledged"): return false
+    check(int(app.last_state.get("bpm", 0)) == original_bpm, "Visible +5 BPM restores tempo")
+    workflow_checks.append("manual_plus_five")
+    if not await click_control(app.practice_step_next_button): return false
+    if not await workflow_ready("next lesson step"): return false
+    check(int(app.last_state.get("lesson_step", 0)) == original_step + 1, "Next selects following step")
+    workflow_checks.append("next_step")
+    if not await click_control(app.practice_step_previous_button): return false
+    if not await workflow_ready("previous lesson step"): return false
+    check(int(app.last_state.get("lesson_step", 0)) == original_step, "Previous returns to the prior step")
+    check(int(app.last_state.get("bpm", 0)) == original_bpm, "Returning step restores its saved manual tempo")
+    workflow_checks.append("previous_step")
+    var picker_revision: int = app.revision
+    if bool(config.get("native_input", false)):
+        if not await native_picker_backwards(): return false
+    else:
+        # Headless coverage checks the selection binding, independently of the
+        # rendered X11 journey which exercises the native popup itself.
+        app.practice_step_picker.select(original_step - 2)
+        app.practice_step_picker.item_selected.emit(original_step - 2)
+    if not await wait_until(func() -> bool:
+        return requests_idle() and native_is_ready() and app.revision > picker_revision,
+        "picker backward selection"): return false
+    check(int(app.last_state.get("lesson_step", 0)) == original_step - 1,
+        "Picker selects the requested earlier step: actual %d expected %d" % [int(app.last_state.get("lesson_step", 0)), original_step - 1])
+    if int(app.last_state.get("lesson_step", 0)) != original_step - 1: return false
+    workflow_checks.append("picker_backwards")
+    # The preceding entry may be a connection passage (Both only). Return to
+    # this source's Learn passage before exercising its three hand choices.
+    if not await click_control(app.practice_step_next_button): return false
+    if not await workflow_ready("restore source step before hand choices"): return false
+    check(int(app.last_state.get("lesson_step", 0)) == original_step, "Restore source lesson step")
+    # Switch away first so the Right check must click its real control too.
+    app._navigate("lesson")
+    if not await wait_until(func() -> bool: return requests_idle(), "initial hand choices loaded"): return false
+    if not await click_control(app.hand_buttons["left"]): return false
+    if not await workflow_ready("switch away before testing Right control"): return false
+    for hand in ["right", "left", "both"]:
+        app._navigate("lesson")
+        if not await wait_until(func() -> bool: return requests_idle(), "hand choices loaded"): return false
+        if str(app.last_state.get("hand", "")) != hand:
+            if not await click_control(app.hand_buttons[hand]): return false
+        else:
+            app._navigate("practice")
+        if not await workflow_ready(hand + " hand notation ready"): return false
+        check(app.current_screen == "practice" and str(app.last_state.get("hand", "")) == hand,
+            hand + ": real hand selection acknowledged")
+        workflow_checks.append(hand)
+        await workflow_record(hand)
+    if not await click_control(app.start_button): return false
+    if not await wait_until(func() -> bool: return str(app.last_state.get("phase", "")) == "count_in", "real count-in"): return false
+    check(app.tempo_down_button.disabled and app.tempo_up_button.disabled, "Manual tempo is guarded during count-in")
+    workflow_checks.append("count_in")
+    await workflow_record("count_in")
+    if not await wait_until(func() -> bool: return str(app.last_state.get("phase", "")) == "playing", "count-in completes"): return false
+    if not await click_control(app.start_button): return false
+    if not await wait_until(func() -> bool: return requests_idle() and str(app.last_state.get("phase", "")) == "paused", "visible Pause"): return false
+    workflow_checks.append("pause")
+    var paused_bpm := int(app.last_state.get("bpm", 0))
+    if not await click_control(app.tempo_down_button): return false
+    if not await workflow_ready("paused -5 BPM"): return false
+    check(int(app.last_state.get("bpm", 0)) == paused_bpm - 5, "Paused -5 BPM is preserved as a direct manual control")
+    workflow_checks.append("paused_minus_five")
+    # A manual change intentionally abandons the old take. Retry becomes
+    # available once another real attempt exists, rather than on a blank Ready.
+    if not await click_control(app.start_button): return false
+    if not await wait_until(func() -> bool: return requests_idle() and str(app.last_state.get("phase", "")) == "count_in", "manually paced take starts"): return false
+    var previous_transport := int(app.last_state.get("transport_id", -1))
+    if not await click_control(app.practice_retry_button): return false
+    if not await wait_until(func() -> bool:
+        return requests_idle() and str(app.last_state.get("phase", "")) == "count_in" and \
+            int(app.last_state.get("transport_id", -1)) > previous_transport,
+        "Retry starts fresh count-in"): return false
+    check(int(app.last_state.get("bpm", 0)) == paused_bpm - 5, "Retry preserves manually chosen BPM")
+    workflow_checks.append("retry")
+    if not await click_control(app.listen_button): return false
+    if not await wait_until(func() -> bool:
+        return requests_idle() and str(app.last_state.get("mode", "")) == "listen" and \
+            app.demo_player.loaded and app.demo_player.player.playing and \
+            app.demo_player.player.stream is AudioStreamWAV and app.demo_player.player.stream.data.size() > 10000,
+        "Listen downloads and plays actual PCM audio"): return false
+    workflow_checks.append("listen")
+    await workflow_record("listen")
+    if not await click_control(app.listen_button): return false
+    if not await workflow_ready("Listen returns to Practice"): return false
+    check(str(app.last_state.get("mode", "")) == "practice", "Listen returns to unscored ready Practice")
+    workflow_checks.append("return_to_practice")
+    app.start_button.release_focus()
+    await press_key(KEY_SPACE)
+    if not await wait_until(func() -> bool: return str(app.last_state.get("phase", "")) == "count_in", "Space starts Practice"): return false
+    await press_key(KEY_P)
+    if not await wait_until(func() -> bool: return str(app.last_state.get("phase", "")) == "paused", "P pauses Practice"): return false
+    workflow_checks.append("keyboard_play_pause")
+    await workflow_record("keyboard_paused")
     return true
 
 func run() -> void:
@@ -567,6 +777,8 @@ func run() -> void:
     dimensions = Vector2i(int(config["size"][0]), int(config["size"][1]))
     geometry_only = str(config.get("mode", "http")) == "geometry"
     render = bool(config.get("render", false))
+    if bool(config.get("native_input", false)):
+        root.title = "Practice UX " + str(OS.get_process_id())
     deadline_ms = Time.get_ticks_msec() + int(float(config.get("timeout_seconds", 90)) * 1000.0)
     check(OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1",
         "PIANO_TEACHER_NATIVE_NOTATION=1 is explicitly required")

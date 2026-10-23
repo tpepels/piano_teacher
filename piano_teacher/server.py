@@ -1361,6 +1361,18 @@ class PracticeEngine:
             p=self.plan
             if not p:
                 raise ValueError("Open a piece first")
+            if action == "select_step":
+                number = kwargs.get("number")
+                # Retain integer strings/whole floats, without truncating a step.
+                if (isinstance(number, bool) or not isinstance(number, (int, float, str))
+                        or (isinstance(number, float) and not number.is_integer())):
+                    raise ValueError("Choose a whole lesson step number")
+                try:
+                    number = int(number)
+                except ValueError:
+                    raise ValueError("Choose a whole lesson step number") from None
+                if not 1 <= number <= len(p.lesson_steps):
+                    raise ValueError("Lesson step out of bounds")
             was_guided = self.mode == "learn"
             guided_start = self.guided_range[0] if self.guided_range is not None else 0.0
             guided_return = self._guided_return
@@ -1369,7 +1381,7 @@ class PracticeEngine:
             self._reset_trouble()
             if action == "select_step":
                 self.open_from_beat = 0.0
-                p.select_step(int(kwargs["number"]))
+                p.select_step(number)
             elif action == "next":
                 self.open_from_beat = 0.0
                 p.jump(1)

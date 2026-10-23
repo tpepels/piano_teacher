@@ -74,7 +74,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Install graphical test dependencies
-        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
+        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa xdotool
       - uses: actions/checkout@v4
       - name: Install application
         run: |
@@ -94,6 +94,22 @@ jobs:
           xvfb-run -a -s "-screen 0 1600x1000x24" \
             .venv/bin/python scripts/smoke_learning_ui.py \
             --output-dir /tmp/piano-full-learning-ui
+      - name: Preserve manual BPM alongside real Practice controls and native notation
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          PIANO_TEACHER_NATIVE_NOTATION: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1920x1080x24" \
+            .venv/bin/python scripts/review_art_direction.py --render --exercise-controls --native-input \
+            --output /tmp/piano-practice-ux
+      - name: Upload Practice control and composition evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: piano-practice-ux
+          path: /tmp/piano-practice-ux
+          if-no-files-found: warn
+          retention-days: 14
       - name: Upload guided learning and pause-screen captures
         if: always()
         uses: actions/upload-artifact@v4

@@ -42,6 +42,10 @@ func _background() -> Color:
 
 
 func _has_symbol() -> bool:
+    # An arrow caption already communicates direction. A second icon also
+    # reserves unwanted space and can contradict a Previous chevron.
+    if action_role == "navigation" and text in ["‹", "›", "←", "→"]:
+        return false
     return action_role in ["navigation", "utility", "listen", "settings", "review", "danger", "library"]
 
 func _skin() -> void:

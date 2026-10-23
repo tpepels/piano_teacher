@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from collections import defaultdict
+from collections import defaultdict, deque
 from statistics import median
 import re
 import mido
@@ -170,9 +170,10 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     source_end_tick = 0
     discarded_zero_duration = 0
     discarded_orphan_releases = 0
+    overlap_warnings: list[str] = []
     for track_idx, track in enumerate(midi.tracks):
         tick = 0
-        open_notes: dict[tuple[int, int], tuple[int, int, int]] = {}
+        open_notes: dict[tuple[int, int], deque[tuple[int, int, int]]] = {}
         for ordinal, msg in enumerate(track):
             tick += msg.time
             if msg.type == "track_name":
@@ -192,10 +193,21 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
             key = (msg.channel, msg.note)
             if msg.type == "note_on" and msg.velocity > 0:
                 if key in open_notes:
-                    raise ValueError(f"overlapping MIDI note on track {track_idx}, channel {msg.channel}, pitch {msg.note}; use separate voices/channels")
-                open_notes[key] = tick, ordinal, msg.velocity
+                    overlap_warnings.append(
+                        f"Ambiguous overlapping MIDI notes on track {track_idx}, "
+                        f"channel {msg.channel}, pitch {msg.note}: attack "
+                        f"midi-t{track_idx}-e{ordinal} at tick {tick}; releases paired "
+                        "FIFO (oldest attack first). All attack/release times retained; "
+                        "individual pairing is not uniquely specified by MIDI.")
+                open_notes.setdefault(key, deque()).append((tick, ordinal, msg.velocity))
             elif key in open_notes:
-                start_tick, attack, attack_velocity = open_notes.pop(key)
+                # MIDI 1.0 releases carry channel/pitch but no attack identity.
+                # FIFO preserves every source endpoint without truncating an
+                # earlier note on a repeated attack or inventing written voices.
+                # Overlapping pairings remain explicitly ambiguous above.
+                start_tick, attack, attack_velocity = open_notes[key].popleft()
+                if not open_notes[key]:
+                    del open_notes[key]
                 if tick == start_tick:
                     # Some piano MIDI exports contain instantaneous placeholder
                     # note pairs. They have no sounding duration and cannot be
@@ -250,7 +262,7 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
         key_contexts[signature.beat] = context
     end = max(max(n.end for n in notes), source_end_tick / ticks)
     boundaries = _bar_boundaries(end, changes)
-    warnings = []
+    warnings = list(overlap_warnings)
     if discarded_zero_duration:
         warnings.append(
             f"Skipped {discarded_zero_duration} zero-duration MIDI note(s) with no audible length.")

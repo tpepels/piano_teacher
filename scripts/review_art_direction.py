@@ -77,6 +77,36 @@ def validate_report(report: dict, size: tuple[int, int], *, output: Path,
     check_window_geometry(report.get("window_geometry", {}), "window")
     require(not report.get("failures", ["Missing failure evidence"]),
             "Composition failures: " + json.dumps(report.get("failures")))
+    if report.get("exercise_controls"):
+        require(type(report.get("native_input")) is bool, "Missing Practice input provenance")
+        if report["native_input"]:
+            require(render and report.get("display_server") == "X11", "Native popup input needs rendered X11 evidence")
+        require(report.get("workflow_checks") == [
+            "manual_minus_five", "manual_plus_five", "next_step", "previous_step",
+            "picker_backwards", "right", "left", "both", "count_in", "pause",
+            "paused_minus_five", "retry", "listen", "return_to_practice", "keyboard_play_pause",
+        ], "Missing or incomplete real Practice control journey")
+        workflows = report.get("workflow_captures", [])
+        require([row.get("name") for row in workflows] == [
+            "manual_minus_five", "right", "left", "both", "count_in", "listen", "keyboard_paused",
+        ], "Missing Practice workflow capture evidence")
+        for row in workflows:
+            name = row["name"]
+            require(row.get("revision", -1) >= 0 and row.get("bpm", 0) > 0 and row.get("step", 0) > 0,
+                    f"{name}: missing workflow state")
+            if name in ("right", "left", "both"):
+                require(row.get("hand") == name and row.get("phase") == "ready", f"{name}: wrong hand evidence")
+            if name == "listen":
+                require(row.get("audio_playing") is True and row.get("pcm_bytes", 0) > 10000,
+                        "Listen: missing actual PCM playback evidence")
+            if render:
+                require(row.get("screenshot") == f"workflow_{name}.png", f"{name}: missing workflow PNG")
+                with (output / row["screenshot"]).open("rb") as file:
+                    header = file.read(24)
+                require(header[:8] == b"\x89PNG\r\n\x1a\n" and header[12:16] == b"IHDR" and
+                        struct.unpack(">II", header[16:24]) == size, f"{name}: invalid or reduced workflow PNG")
+            else:
+                require(row.get("screenshot") is None, f"{name}: unexpected workflow PNG")
     samples = report.get("captures", [])
     require([sample.get("name") for sample in samples] == list(CAPTURES),
             "Expected exactly six ordered application captures")
@@ -203,6 +233,10 @@ def run_capture(godot: str, size: tuple[int, int], config: dict, env: dict,
     if result.returncode or any(token in transcript for token in ERROR_TOKENS):
         raise RuntimeError(f"Godot failed for {size[0]}x{size[1]}; see {output / 'godot.log'}; "
                            f"composition failures: {report.get('failures', 'no report')}")
+    if report.get("exercise_controls", False) is not bool(config.get("exercise_controls", False)):
+        raise RuntimeError("Godot did not run the requested Practice control journey")
+    if report.get("native_input", False) is not bool(config.get("native_input", False)):
+        raise RuntimeError("Godot did not run the requested native popup input")
     validate_report(report, size, output=output, require_native=config["mode"] == "http",
                     render=config["render"])
     return report
@@ -213,6 +247,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", "--output-dir", type=Path, default=Path("/tmp/piano-art-direction"))
     parser.add_argument("--render", action="store_true", help="Visible Godot windows and raw full-resolution PNGs")
     parser.add_argument("--geometry-only", action="store_true", help="Supplied state, no HTTP or native ink claim")
+    parser.add_argument("--exercise-controls", action="store_true", help="Exercise real Practice controls after the six views")
+    parser.add_argument("--native-input", action="store_true", help="Use real X11 mouse/keyboard for the native lesson popup (xdotool)")
     parser.add_argument("--file", type=Path, default=ROOT / "midi/Ala_–_Joep_Beving.midi")
     parser.add_argument("--measure", type=int, default=9)
     parser.add_argument("--sizes", type=resolution, nargs="+", default=list(DEFAULT_SIZES),
@@ -225,6 +261,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--timeout must be finite and >=10; --measure must be positive")
     if args.render and args.geometry_only:
         parser.error("--render requires the real HTTP application")
+    if args.exercise_controls and args.geometry_only:
+        parser.error("--exercise-controls requires the real HTTP application")
+    if args.native_input and (not args.exercise_controls or not args.render or not shutil.which("xdotool")):
+        parser.error("--native-input requires --render --exercise-controls and xdotool")
     if len(args.sizes) > 3 or len(set(args.sizes)) != len(args.sizes):
         parser.error("Choose at most three distinct resolutions")
     godot = shutil.which("godot") or shutil.which("godot4")
@@ -269,6 +309,8 @@ def main(argv: list[str] | None = None) -> int:
             api("/control", deadline, {"action": "tempo", "bpm": 120})
         for size in args.sizes:
             config = {"mode": summary["mode"], "size": list(size), "render": args.render,
+                      "exercise_controls": args.exercise_controls,
+                      "native_input": args.native_input,
                       "output": str(output / f"{size[0]}x{size[1]}")}
             if backend is not None:
                 if backend.poll() is not None:

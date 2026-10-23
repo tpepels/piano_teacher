@@ -1,0 +1,136 @@
+[
+  {
+    "file": "Ala_\u2013_Joep_Beving.midi",
+    "status": "loaded",
+    "notes": 660,
+    "warnings": []
+  },
+  {
+    "file": "Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi",
+    "status": "loaded",
+    "notes": 555,
+    "warnings": []
+  },
+  {
+    "file": "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+    "status": "loaded",
+    "notes": 1299,
+    "warnings": []
+  },
+  {
+    "file": "Clair_de_Lune_\u2013_Debussy.midi",
+    "status": "loaded",
+    "notes": 1491,
+    "warnings": []
+  },
+  {
+    "file": "Danny_Boy(Bill_Evans_Ver_).midi",
+    "status": "loaded",
+    "notes": 331,
+    "warnings": []
+  },
+  {
+    "file": "Gymnop\u00e9die_No_1_\u2013_Satie.midi",
+    "status": "loaded",
+    "notes": 455,
+    "warnings": []
+  },
+  {
+    "file": "J_S_Bach_-_Invention_No_1_(BWV_772).midi",
+    "status": "loaded",
+    "notes": 472,
+    "warnings": [
+      "Skipped 1 zero-duration MIDI note(s) with no audible length."
+    ]
+  },
+  {
+    "file": "Le_Pianiste_virtuose_-_Premi\u00e8re_partie_(1-20)_-_C_L_Hanon.midi",
+    "status": "loaded",
+    "notes": 18058,
+    "warnings": []
+  },
+  {
+    "file": "Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt.midi",
+    "status": "loaded",
+    "notes": 1885,
+    "warnings": []
+  },
+  {
+    "file": "Merry-Go-Round-of-Life.midi",
+    "status": "loaded",
+    "notes": 2346,
+    "warnings": []
+  },
+  {
+    "file": "Moonlight_Sonata_I.midi",
+    "status": "loaded",
+    "notes": 1164,
+    "warnings": [
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 64: attack midi-t0-e227 at tick 15680; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 59: attack midi-t0-e393 at tick 26880; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 54: attack midi-t0-e619 at tick 42240; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 68: attack midi-t0-e773 at tick 52320; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 69: attack midi-t0-e781 at tick 52800; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 66: attack midi-t0-e789 at tick 53280; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 56: attack midi-t0-e801 at tick 54240; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 57: attack midi-t0-e809 at tick 54720; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 54: attack midi-t0-e817 at tick 55200; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 73: attack midi-t0-e831 at tick 56160; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 76: attack midi-t0-e839 at tick 56640; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 73: attack midi-t0-e847 at tick 57120; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 57: attack midi-t0-e1009 at tick 70080; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 51: attack midi-t0-e1013 at tick 70240; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 49: attack midi-t0-e1019 at tick 70560; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 48: attack midi-t0-e1027 at tick 71040; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 51: attack midi-t0-e1041 at tick 72000; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 49: attack midi-t0-e1049 at tick 72480; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 48: attack midi-t0-e1057 at tick 72960; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 50: attack midi-t0-e1071 at tick 73920; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 49: attack midi-t0-e1079 at tick 74400; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 48: attack midi-t0-e1087 at tick 74880; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 64: attack midi-t0-e1257 at tick 86720; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI.",
+      "Ambiguous overlapping MIDI notes on track 0, channel 0, pitch 61: attack midi-t0-e1661 at tick 113600; releases paired FIFO (oldest attack first). All attack/release times retained; individual pairing is not uniquely specified by MIDI."
+    ]
+  },
+  {
+    "file": "Mozart_-_Piano_Sonata_No_16_in_C_Major,_K_545,_1st_Movement.midi",
+    "status": "loaded",
+    "notes": 2730,
+    "warnings": []
+  },
+  {
+    "file": "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi",
+    "status": "loaded",
+    "notes": 1990,
+    "warnings": [
+      "Ignored 33 unmatched MIDI note-off event(s).",
+      "Ignored implausible time signature(s): 131/4 at beat 184.5."
+    ]
+  },
+  {
+    "file": "Prelude_I_in_C_major,_BWV_846_-_Well_Tempered_Clavier_[First_Book].midi",
+    "status": "loaded",
+    "notes": 549,
+    "warnings": []
+  },
+  {
+    "file": "Prelude_in_C-sharp_Minor,_Opus_3_No_2_\u2013_Sergei_Rachmaninoff.midi",
+    "status": "loaded",
+    "notes": 1717,
+    "warnings": []
+  },
+  {
+    "file": "The_Entertainer_-_Scott_Joplin.midi",
+    "status": "loaded",
+    "notes": 1997,
+    "warnings": []
+  },
+  {
+    "file": "Waltz_for_Debby.midi",
+    "status": "loaded",
+    "notes": 726,
+    "warnings": [
+      "Skipped 3 zero-duration MIDI note(s) with no audible length."
+    ]
+  }
+]

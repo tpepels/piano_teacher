@@ -139,7 +139,7 @@ def test_unsupported_xml_attacks_raise_meaningful_errors(tmp_path, body, message
     ([mido.Message('note_off', note=60, time=997)], 'No pitched MIDI notes found'),
     ([mido.Message('note_on', note=60, velocity=80), mido.Message('note_off', note=60)], 'No pitched MIDI notes found'),
     ([mido.Message('note_on', note=60, velocity=80), mido.Message('note_on', note=60, velocity=80, time=10),
-      mido.Message('note_off', note=60, time=100), mido.Message('note_off', note=60, time=100)], 'overlapping MIDI note'),
+      mido.Message('note_off', note=60, time=100)], 'unterminated MIDI note'),
 ])
 def test_midi_with_no_sounding_notes_or_unrepairable_pairings_still_fails(tmp_path, events, message):
     path = write_midi(tmp_path/'unsupported.mid', [events])
@@ -220,12 +220,16 @@ def test_supplied_full_piece_keeps_all_source_attacks_and_legacy_stage_identity(
     if not source.is_file():
         pytest.skip('The local 2,346-note user import is unavailable')
     piece = music.load_midi(source)
-    plan = LearningPlan(piece)
+    assert len(LearningPlan(piece).lesson_steps) == 756
+    # This fixture pins the historical consolidated course; the default route
+    # now uses two-measure units and is checked separately above.
+    plan = LearningPlan(piece, consolidate=True)
     assert len(piece.notes) == len({note.source_id for note in piece.notes}) == 2346
     assert len(piece.bar_boundaries)-1 == 237 and piece.bar_boundaries[-1] == 712
     assert len(plan.lesson_steps) == 301
     # Recorded from f5e1957's original importer over this exact supplied MIDI.
-    digest = hashlib.sha256(json.dumps([step.key for step in plan.lesson_steps], separators=(',', ':')).encode()).hexdigest()
+    legacy_keys = [step.key.replace('course:3:', 'course:2:', 1) for step in plan.lesson_steps]
+    digest = hashlib.sha256(json.dumps(legacy_keys, separators=(',', ':')).encode()).hexdigest()
     assert digest == 'c7940fab7bc768f4f4fadd722ddd216a3174bd2785eb7687e69492c7df0c8c81'
     assert plan.exercises[-1].phrase.notes == piece.notes
 
