@@ -1372,8 +1372,11 @@ class PracticeEngine:
                 if self.mode == "learn" and self.teaching is not None:
                     self.teaching.resume(now=time.monotonic())
                     self.paused = False
-                elif self.running:
-                    # MIDI timestamps and the visual clock share this origin.
+                elif (self.running or self._preview_loop_pending
+                      or (self.pending_result is not None and self.auto)):
+                    # Keep all forward-moving views on the same paused clock:
+                    # count-in/playing, the empty preview bar, and the
+                    # successful-take gap before the next repetition.
                     self.run_at += duration
                 if self.next_at:
                     self.next_at += duration
