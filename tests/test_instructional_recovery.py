@@ -479,3 +479,26 @@ def test_resume_preserves_instructional_feedback_during_automatic_transition(les
     assert resumed['phase'] == context
     assert resumed['feedback'] == before['feedback']
     assert resumed['next_action'] == before['next_action']
+
+
+def test_five_error_recovery_animates_backward_on_same_score(lesson):
+    # Actual timestamped note_on/off callbacks, not an injected decision.
+    e, now, grid = lesson()
+    revision = e.score_revision
+    first = fail_later_chunk(e, now, grid)
+    assert first["phase"] == "recovering"
+    assert first["visual_scroll_speed"] < 0
+    assert first["visual_target_beat"] == pytest.approx(grid[2])
+    assert first["visual_scroll_beat"] > first["visual_target_beat"]
+    assert first["revision"] == revision
+    now[0] = e.next_at - .05
+    nearly = e.state()
+    assert nearly["visual_scroll_beat"] >= grid[2]
+    assert nearly["visual_scroll_beat"] < first["visual_scroll_beat"]
+    now[0] = e.next_at + .01
+    repeated = e.state()
+    assert repeated["phase"] == "playing"
+    assert repeated["play_from_beat"] == pytest.approx(grid[2])
+    assert repeated["visual_scroll_beat"] == pytest.approx(grid[2], abs=.1)
+    assert repeated["revision"] == revision
+    assert repeated["count_in_beats"] == 0

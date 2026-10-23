@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 import time
+import pytest
 
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
@@ -152,5 +153,95 @@ def test_start_does_not_replace_source_engraving_at_slow_learning_bpm(tmp_path):
         assert app.count_in_beats > 0.0
         assert app.score_revision == before
         assert app.awaiting_score_revision is None
+    finally:
+        app.db.close()
+
+
+def test_manual_tempo_changes_keep_native_notation_revision(tmp_path):
+    app = engine(tmp_path)
+    try:
+        # Simulate an already rendered native score at its source tempo.
+        native_layout = object()
+        app._layout_cache = native_layout
+        app._layout_bpm = app.plan.piece.bpm
+        revision = app.score_revision
+        app.control("tempo_down")
+        assert app.plan.bpm == app.plan.start_bpm - 5
+        assert app.score_revision == revision
+        assert app._layout_cache is native_layout
+        app.control("tempo_up")
+        assert app.plan.bpm == app.plan.start_bpm
+        assert app.score_revision == revision
+        app.control("tempo", bpm=95)
+        assert app.score_revision == revision
+        app.control("start")
+        assert app.running
+        assert app.awaiting_score_revision is None
+        assert app.score_revision == revision
+    finally:
+        app.db.close()
+
+
+def test_paused_empty_measure_resumes_at_identical_visual_position(tmp_path, monkeypatch):
+    from piano_teacher import server
+    now = [100.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: now[0])
+    app = engine(tmp_path)
+    try:
+        app.start()
+        duration = app.plan.active_phrase.end - app.plan.active_phrase.start
+        now[0] = app.run_at + (duration + 1) * 60 / app.plan.bpm
+        before = app.state()
+        assert app._preview_loop_pending
+        assert before["visual_scroll_speed"] > 0
+        position = before["visual_scroll_beat"]
+        deadline = app.next_at
+        app.control("pause")
+        now[0] += 45
+        assert app.state()["visual_scroll_beat"] == pytest.approx(position)
+        app.control("resume")
+        assert app.state()["visual_scroll_beat"] == pytest.approx(position)
+        assert app.next_at == pytest.approx(deadline + 45)
+        now[0] = app.next_at + .01
+        after = app.state()
+        assert after["running"]
+        assert after["visual_scroll_beat"] == pytest.approx(duration + app.visual_gap_beats,
+                                                              abs=.1)
+    finally:
+        app.db.close()
+
+
+def test_paused_rewind_resumes_without_skipping_backward_frames(tmp_path, monkeypatch):
+    from piano_teacher import server
+    now = [100.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: now[0])
+    app = engine(tmp_path)
+    try:
+        app._piano_connected = lambda: True
+        app.start()
+        app.running = False
+        app.pending_rewind = 4.0
+        app._visual_rewind_from = 8.0
+        app._visual_rewind_to = 4.0
+        app._visual_rewind_at = now[0]
+        app._visual_rewind_seconds = 2.0
+        app.next_at = now[0] + 2.0
+        now[0] += .5
+        before = app.state()
+        assert before["phase"] == "recovering"
+        assert before["visual_scroll_speed"] < 0
+        position = before["visual_scroll_beat"]
+        app.control("pause")
+        now[0] += 20
+        assert app.state()["visual_scroll_beat"] == pytest.approx(position)
+        app.control("resume")
+        assert app.state()["visual_scroll_beat"] == pytest.approx(position)
+        now[0] += .25
+        assert 4 < app.state()["visual_scroll_beat"] < position
+        now[0] = app.next_at + .01
+        after = app.state()
+        assert after["phase"] == "playing"
+        assert after["play_from_beat"] == 4.0
+        assert after["visual_scroll_beat"] == pytest.approx(4.0, abs=.1)
     finally:
         app.db.close()

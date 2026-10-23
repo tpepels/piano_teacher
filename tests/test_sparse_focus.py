@@ -131,7 +131,7 @@ def test_sparse_right_hand_is_not_hidden_by_busy_left_hand():
     assert plan.hands == ("left", "both")
     assert plan.hand == "left"
     early = [s for s in plan.lesson_steps if s.kind == "learn" and s.first_bar == 1]
-    assert [s.hand for s in early] == ["left", "both"]
+    assert list(dict.fromkeys(s.hand for s in early)) == ["left", "both"]
     assert {n.source_id for n in plan.exercises[0].phrase.notes} == {
         "rh-1", "lh-1", "lh-2", "lh-3"}
 
@@ -149,8 +149,8 @@ def test_sparse_left_hand_is_not_hidden_by_busy_right_hand():
     plan = LearningPlan(song)
     assert plan.active_phrase.last_bar == 2
     assert plan.hands == ("right", "both")
-    assert [s.hand for s in plan.lesson_steps
-            if s.kind == "learn" and s.first_bar == 1] == ["right", "both"]
+    assert list(dict.fromkeys(s.hand for s in plan.lesson_steps
+            if s.kind == "learn" and s.first_bar == 1)) == ["right", "both"]
     assert any(n.source_id == "lh-1" for n in plan.exercises[0].phrase.notes)
 
 
@@ -257,3 +257,32 @@ def test_maximum_never_allows_sparse_tail_to_overflow_previous_passage():
                or e.phrase.first_bar == e.phrase.last_bar for e in learned)
     assert [n.source_id for e in learned for n in e.phrase.notes] == [
         n.source_id for n in song.notes]
+
+
+def test_actual_ala_first_passage_chooses_left_then_both():
+    from piano_teacher.music import load_midi
+    song = load_midi(Path(__file__).parents[1] / "midi" / "Ala_–_Joep_Beving.midi")
+    plan = LearningPlan(song)
+    assert (plan.active_phrase.first_bar, plan.active_phrase.last_bar) == (1, 2)
+    assert plan.hands == ("left", "both")
+    first = [s for s in plan.lesson_steps
+             if s.kind == "learn" and s.first_bar == 1]
+    assert list(dict.fromkeys(s.hand for s in first)) == ["left", "both"]
+    assert {note.hand for note in plan.exercises[0].phrase.notes} == {"left", "right"}
+
+
+def test_sparse_both_hands_with_distinct_attacks_skips_both_solo_drills():
+    notes = (Note(0, 1, 72, 0, 0, "right"),
+             Note(1, 2, 48, 1, 0, "left"))
+    song = Piece("Two sparse hands", 80, notes, (),
+                 bar_boundaries=(0, 4, 8))
+    plan = LearningPlan(song)
+    assert plan.hands == ("both",)
+    assert all(step.hand == "both" for step in plan.lesson_steps)
+
+
+def test_single_available_hand_never_disappears_at_maximum_length():
+    song = piece_with_onsets(16, (0, 32))
+    plan = LearningPlan(song)
+    assert plan.hands == ("right",)
+    assert plan.lesson_steps[0].hand == "right"
