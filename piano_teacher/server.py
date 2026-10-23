@@ -84,6 +84,15 @@ class PracticeEngine:
         self.course_guided = False
         self._guided_prepared = False
         self.transport_id = 0
+        # Presentation alone uses an unrolled timeline. MIDI grading always
+        # stays on the original source phrase and original beat coordinates.
+        self.visual_offset_beats = 0.0
+        self._preview_loop_pending = False
+        self._visual_rewind_from: float | None = None
+        self._visual_rewind_to: float | None = None
+        self._visual_rewind_at = 0.0
+        self._visual_rewind_seconds = SETTINGS.feedback_seconds
+        self._retry_previous_pass = False
         self.mode = "practice"
         self.teaching = None
         self.guided_range: tuple[float, float] | None = None
@@ -93,6 +102,7 @@ class PracticeEngine:
         self.preview_only = False
         self.count_in_beats = 0
         self.count_in_bar_beats = 4.0
+        self.visual_gap_beats = 4.0
         self.count_in_meter = [4, 4]
         self.feedback = "Open a MIDI or MusicXML file"
         self.score_revision = 0
@@ -529,6 +539,13 @@ class PracticeEngine:
         self.running=False
         self.auto=False
         self.preview_only=False
+        self.visual_offset_beats = 0.0
+        self._preview_loop_pending = False
+        self._visual_rewind_from = None
+        self._visual_rewind_to = None
+        self._visual_rewind_at = 0.0
+        self._visual_rewind_seconds = SETTINGS.feedback_seconds
+        self._retry_previous_pass = False
         self.count_in_beats=0
         self.next_at=0
         self.awaiting_score_revision=None
@@ -1082,12 +1099,16 @@ class PracticeEngine:
             self.open_from_beat = 0.0
             self.performance_summary = None
             self.review_stage_identity = None
-        if (p.identity, p.bpm) != before:
+        # Native engraving depends on source notation, not playback BPM.
+        # Do not discard the score model at every successful tempo increment.
+        if p.identity != before[0]:
             self.score_revision += 1
+            self.visual_offset_beats = 0.0
         self._save()
         return message
 
-    def start(self, *, from_beat: float | None = None, mode: str = "practice"):
+    def start(self, *, from_beat: float | None = None, mode: str = "practice",
+              loop_continuation: bool = False):
         with self.lock:
             if self.plan is None:
                 raise ValueError("Open a piece first")
@@ -1112,6 +1133,10 @@ class PracticeEngine:
             self.transport_id+=1
             self.live_input.reset_attempt()
             self.running=True
+            self._preview_loop_pending = False
+            self._visual_rewind_from = None
+            self._visual_rewind_to = None
+            self._retry_previous_pass = False
             self.auto=mode == "practice" and not self.preview_only
             self.next_at=0
             self.awaiting_score_revision=None
@@ -1135,7 +1160,11 @@ class PracticeEngine:
             if meter is not None:
                 self.count_in_meter = list(meter)
                 self.count_in_bar_beats = meter[0] * 4 / meter[1]
-            self.count_in_beats = lead_in_beats(self.count_in_bar_beats, self.plan.bpm)
+            # The empty staff measure BETWEEN loops already provides the
+            # preparation interval. Do not prepend another count-in measure.
+            self.visual_gap_beats = grid[-1] - grid[-2]
+            self.count_in_beats = (0.0 if loop_continuation else
+                lead_in_beats(self.count_in_bar_beats, self.plan.bpm))
             self.next_boundary_beat=next_chunk_end(grid,self.play_from_beat)
             self.run_at=time.monotonic()+self.count_in_beats*60/self.plan.bpm
             self.feedback="Count in, then play"
@@ -1451,6 +1480,12 @@ class PracticeEngine:
                 self.feedback = "Example complete"
                 self.next_action = "Choose Learn to find the notes, or Practice to play the rhythm."
             return
+        if self._preview_loop_pending:
+            if self.next_at and now >= self.next_at:
+                duration = self.plan.active_phrase.end - self.plan.active_phrase.start
+                self.visual_offset_beats += duration + self.visual_gap_beats
+                self.start(loop_continuation=True)
+            return
         if self.pending_result is not None:
             if self.auto and self.next_at and now >= self.next_at:
                 previous_revision = self.score_revision
@@ -1470,7 +1505,13 @@ class PracticeEngine:
                         self.feedback = "Preparing next passage"
                         self.next_at = 0
                     else:
-                        self.start()
+                        # Clean takes advance to the appended copy. Failed
+                        # takes rewind the SAME copy (already animated during
+                        # feedback); there is no jump/re-engrave on retry.
+                        if not self._retry_previous_pass:
+                            duration = self.plan.active_phrase.end - self.plan.active_phrase.start
+                            self.visual_offset_beats += duration + self.visual_gap_beats
+                        self.start(loop_continuation=True)
                 else:
                     self.next_at=0
                     self.auto=False
@@ -1483,13 +1524,12 @@ class PracticeEngine:
                 if self._guided_recovery_pending:
                     self._begin_learn(from_beat=self.pending_rewind, recovery=True)
                 elif self._rewind_requires_layout:
-                    self.score_revision += 1
-                    self.awaiting_score_revision = self.score_revision
+                    # Only actual notation changes require a new model;
+                    # a lower tempo must not replace the scrolling score.
                     self._rewind_requires_layout = False
-                    self.next_at = 0
-                    self.feedback = "Preparing retry"
+                    self.start(from_beat=self.pending_rewind, loop_continuation=True)
                 else:
-                    self.start(from_beat=self.pending_rewind)
+                    self.start(from_beat=self.pending_rewind, loop_continuation=True)
             return
         if not self.running or self.paused or now < self.run_at:
             return
@@ -1540,9 +1580,13 @@ class PracticeEngine:
                 self.plan.failures+=1
                 before=self.plan.bpm
                 self.plan.bpm=max(SETTINGS.minimum_bpm,round(before*SETTINGS.recovery_tempo_multiplier))
-                self._rewind_requires_layout = self.plan.bpm != before
+                self._rewind_requires_layout = False
                 self._save()
                 self.pending_rewind=decision.restart_beat
+                self._visual_rewind_from = self.visual_offset_beats + score_beat
+                self._visual_rewind_to = self.visual_offset_beats + decision.restart_beat
+                self._visual_rewind_at = now
+                self._visual_rewind_seconds = max(.05, self.feedback_seconds)
                 self.recovery_notice = {
                     "kind": "slowdown", "errors": decision.errors,
                     "missed": decision.missed, "wrong": decision.wrong,
@@ -1580,11 +1624,14 @@ class PracticeEngine:
         if now < self.run_at+duration+0.20:
             return
         if self.preview_only:
-            # Never grade an empty MIDI recording or retry forever simply
-            # because the user's piano has not been connected yet.
-            self._stop()
-            self.feedback = "Timing preview complete - connect a USB MIDI piano for scoring"
-            self.next_action = "Connect your piano to learn and receive feedback."
+            # A preview loops visually just like graded practice, but never
+            # invents notes, clean runs, mastery or a MIDI recording.
+            self.running = False
+            self._preview_loop_pending = True
+            gap_seconds = self.visual_gap_beats * 60 / self.plan.bpm
+            self.next_at = self.run_at + total_beats * 60 / self.plan.bpm + gap_seconds
+            self.feedback = "Timing preview - repeating after one empty measure"
+            self.next_action = "Connect your MIDI piano to earn clean runs."
             return
         active_phrase=Phrase(phrase.number,phrase.first_bar,phrase.last_bar,
             phrase.start+self.play_from_beat,phrase.start+ending,
@@ -1645,6 +1692,15 @@ class PracticeEngine:
             self.next_at=now+self.feedback_seconds
             return
         self.pending_result=result
+        if not result.clean and self.auto:
+            # Repeated wrong takes traverse backward over the visible source
+            # instead of teleporting to beat zero or appending failed copies.
+            self._retry_previous_pass = True
+            self._visual_rewind_from = self.visual_offset_beats + total_beats
+            self._visual_rewind_to = self.visual_offset_beats + self.play_from_beat
+            self._visual_rewind_at = now
+            self._visual_rewind_seconds = max(self.feedback_seconds,
+                min(4.0, total_beats * 60.0 / self.plan.bpm / 3.0))
         if not result.clean:
             # Failure breaks consecutive clean takes immediately, even if
             # Start/Restart/Stop discards this feedback before its commit.
@@ -1654,7 +1710,12 @@ class PracticeEngine:
             if self.is_builtin_warmup:
                 self.auto = False  # Keep the beginner-study review available.
         self.next_action=next_full_attempt(self.plan, result)
-        self.next_at=now+self.feedback_seconds if self.auto else 0
+        self.next_at = (now + self._visual_rewind_seconds
+            if self.auto and self._retry_previous_pass else
+            max(now + self.feedback_seconds,
+                self.run_at + total_beats * 60 / self.plan.bpm
+                + self.visual_gap_beats * 60 / self.plan.bpm)
+            if self.auto else 0)
 
     def _phase(self, now: float) -> str:
         if self.paused:
@@ -1806,6 +1867,32 @@ class PracticeEngine:
                 "count": len(live_errors),
                 "source_id": latest_error.get("source_id", ""),
             } if latest_error is not None else None)
+            # The absolute visual axis is separate from grading beat and
+            # remains continuous as a new attempt is scheduled.
+            visual_length = p.active_phrase.end - p.active_phrase.start
+            visual_gap = self.visual_gap_beats
+            visual_speed = 0.0
+            visual_target = self.visual_offset_beats + visual_length
+            visual_position = self.visual_offset_beats + self.play_from_beat
+            if self.running:
+                visual_position += elapsed * p.bpm / 60.0
+            elif self._visual_rewind_from is not None:
+                visual_target = self._visual_rewind_to
+                seconds = max(.05, self._visual_rewind_seconds)
+                visual_progress = min(1.0, max(0.0, (now - self._visual_rewind_at) / seconds))
+                visual_position = self._visual_rewind_from + (
+                    self._visual_rewind_to - self._visual_rewind_from) * visual_progress
+                visual_speed = ((self._visual_rewind_to - self._visual_rewind_from)
+                                / seconds if visual_progress < 1.0 else 0.0)
+            elif ((self.pending_result is not None and self.auto) or
+                    self._preview_loop_pending):
+                # Keep scrolling through the EMPTY source-measure gap. No new
+                # notation is requested until the lesson stage itself changes.
+                visual_target = self.visual_offset_beats + visual_length + visual_gap
+                visual_position = min(visual_target, self.visual_offset_beats
+                    + max(visual_length, (now - self.run_at) * p.bpm / 60.0))
+                visual_speed = (p.bpm / 60.0 if visual_position < visual_target else 0.0)
+            # When idle, leave the score stationary at the ready/retry target.
             result = {**input_activity,"mode":self.mode,"teaching":None,"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "clock_sampled_at_ms": sampled_at * 1000.0,
                     "first_bar":ex.phrase.first_bar,"last_bar":ex.phrase.last_bar,
@@ -1849,6 +1936,12 @@ class PracticeEngine:
                     "lead_in_bars":1,"play_from_beat":self.play_from_beat,
                     "recovery_beat":self.pending_rewind,
                     "clock_beat":elapsed*p.bpm/60 if self.running else 0.0,
+                    "visual_offset_beats":self.visual_offset_beats,
+                    "visual_scroll_beat":visual_position,
+                    "visual_target_beat":visual_target,
+                    "visual_scroll_speed":visual_speed,
+                    "visual_gap_beats":visual_gap,
+                    "score_loop_enabled":self.mode == "practice" and ex.kind != "perform",
                     "paused":self.paused,"transport_id":self.transport_id,
                     "awaiting_score_revision":self.awaiting_score_revision,
                     "count_in_beats":self.count_in_beats if self.running else 0,
@@ -1938,7 +2031,7 @@ class PracticeEngine:
                     and self._layout_revision == self.score_revision and self._layout_cache is not None):
                 return self._layout_cache
             if (self._layout_revision != self.score_revision or self._layout_cache is None
-                    or self._layout_bpm != p.bpm):
+                    or self._layout_bpm != p.piece.bpm):
                 phrase=self.display_phrase()
                 notation=build_lesson_score(phrase, boundaries=p.piece.bar_boundaries,
                                             time_signatures=p.piece.time_signatures,
@@ -1960,7 +2053,7 @@ class PracticeEngine:
                 self._layout_cache_key = self.preprocessing.key(
                     "engraving", "readable-midi-engraving-v2", self.fingerprint, p.identity,
                     phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
-                    p.hand, p.bpm, compact_exercise,
+                    p.hand, p.piece.bpm, compact_exercise,
                     tuple((n.source_id, n.start, n.end, n.pitch, n.hand)
                           for n in phrase.notes))
                 cached = self.preprocessing.read_json("engraving", self._layout_cache_key)
@@ -1982,7 +2075,7 @@ class PracticeEngine:
                         layout = None
                 if layout is None:
                     layout = render_layout(notation,phrase.first_bar,phrase.last_bar,p.hand,
-                                           total_beats=phrase.end - phrase.start, bpm=p.bpm,
+                                           total_beats=phrase.end - phrase.start, bpm=p.piece.bpm,
                                            continuous=compact_exercise)
                     require_lesson_alignment(phrase, layout.layout, p.hand)
                     self.preprocessing.write_json("engraving", self._layout_cache_key,
@@ -1992,7 +2085,7 @@ class PracticeEngine:
                 self._layout_cache = layout
                 self._page_png.clear()
                 self._layout_revision=self.score_revision
-                self._layout_bpm=p.bpm
+                self._layout_bpm=p.piece.bpm
             return self._layout_cache
 
     def engraved(self, page: int = 0) -> str:

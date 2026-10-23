@@ -1407,40 +1407,15 @@ func _visible_events(left: float, right: float) -> Array:
     return results
 
 
-func _draw() -> void:
-    if size.x < 100.0 or size.y < 100.0:
-        return
-    draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
+# Paint at most the source passages intersecting the viewport. There are
+# no cloned notes or IDs in the semantic model, MIDI evaluator or glyph atlas.
+# Offsetting the camera instead of the music preserves exact source timing,
+# beam/tie geometry and existing per-viewport binary search.
+func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float) -> void:
     var font: Font = ThemeDB.fallback_font
-    if not native_ready or not timeline.has_score():
-        draw_string(font,Vector2(20.0,size.y*.5),
-            notice if not notice.is_empty() else "Loading native score",
-            HORIZONTAL_ALIGNMENT_LEFT,-1,15,NOTE_INK)
-        return
-    var gap: float = _gap()
-    var playhead_x: float = size.x * PLAYHEAD_FRACTION
-    var camera_clock: float = clock_beat if running or paused else 0.0
-    var current: float = timeline.musical_beat(camera_clock,play_from_beat)
-    var left: float = current-playhead_x/timeline.pixels_per_beat
-    var right: float = left+size.x/timeline.pixels_per_beat
-    # A quiet pool of light marks the strike without hiding any engraved ink.
-    var top: float = _staff_center("right")-gap*3.8
-    var bottom: float = _staff_center("left")+gap*3.7
-    var breath: float = .5+.5*cos(clock_beat*TAU) if running and not paused else 0.0
-    for radius in [20.0, 10.0, 4.0]:
-        draw_rect(Rect2(playhead_x-radius, top, radius*2.0, bottom-top),
-            Color(PREVIEW_LIGHT, .012+breath*.004))
-    # Always draw ten native rules; no copied or stitched raster systems.
-    for staff in ["right","left"]:
-        var center: float = _staff_center(staff)
-        var ink: Color = _ink(staff)
-        for line_index in range(5):
-            var y: float = center+(float(line_index)-2.0)*gap
-            draw_line(Vector2(0,y),Vector2(size.x,y),
-                Color(ink,.34),1.3,true)
-    # The count-in runs on the same clock, but its leading boundary is
-    # intentionally NOT a printed barline: it sits before the clef/header
-    # and used to look like an orphaned vertical rule in the score.
+    var current: float = timeline.musical_beat(camera_clock, play_from_beat)
+    var left: float = current - playhead_x/timeline.pixels_per_beat
+    var right: float = left + size.x/timeline.pixels_per_beat
     var previous_measure: Dictionary = {}
     for measure in timeline.measures:
         var at: float = float(measure.get("start_beat",0.0))
@@ -1567,6 +1542,63 @@ func _draw() -> void:
     _paint_expressions(left,right,camera_clock,playhead_x,gap)
     _paint_hairpins(left,right,camera_clock,playhead_x,gap)
     _paint_grace_notes(gap)
+
+func _draw() -> void:
+    if size.x < 100.0 or size.y < 100.0:
+        return
+    draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
+    var font: Font = ThemeDB.fallback_font
+    if not native_ready or not timeline.has_score():
+        draw_string(font,Vector2(20.0,size.y*.5),
+            notice if not notice.is_empty() else "Loading native score",
+            HORIZONTAL_ALIGNMENT_LEFT,-1,15,NOTE_INK)
+        return
+    var gap: float = _gap()
+    var playhead_x: float = size.x * PLAYHEAD_FRACTION
+    var camera_clock: float = clock_beat if running or paused else 0.0
+    var current: float = timeline.musical_beat(camera_clock,play_from_beat)
+    var left: float = current-playhead_x/timeline.pixels_per_beat
+    var right: float = left+size.x/timeline.pixels_per_beat
+    # A quiet pool of light marks the strike without hiding any engraved ink.
+    var top: float = _staff_center("right")-gap*3.8
+    var bottom: float = _staff_center("left")+gap*3.7
+    var breath: float = .5+.5*cos(clock_beat*TAU) if running and not paused else 0.0
+    for radius in [20.0, 10.0, 4.0]:
+        draw_rect(Rect2(playhead_x-radius, top, radius*2.0, bottom-top),
+            Color(PREVIEW_LIGHT, .012+breath*.004))
+    # Always draw ten native rules; no copied or stitched raster systems.
+    for staff in ["right","left"]:
+        var center: float = _staff_center(staff)
+        var ink: Color = _ink(staff)
+        for line_index in range(5):
+            var y: float = center+(float(line_index)-2.0)*gap
+            draw_line(Vector2(0,y),Vector2(size.x,y),
+                Color(ink,.34),1.3,true)
+    # The count-in runs on the same clock, but its leading boundary is
+    # intentionally NOT a printed barline: it sits before the clef/header
+    # and used to look like an orphaned vertical rule in the score.
+    # Continuous sheet: the same immutable source engraving is reused for
+    # successive passes. Between them one *empty source measure* is left on
+    # the horizontal axis, with unbroken grand-staff rules underneath.
+    if score_loop_enabled and not timeline.measures.is_empty():
+        var final_measure: Dictionary = timeline.measures[-1]
+        var empty_bar_beats: float = maxf(.25,
+            float(final_measure.get("end_beat", timeline.duration_beats)) -
+            float(final_measure.get("start_beat", timeline.duration_beats-4.0)))
+        var stride: float = timeline.duration_beats + empty_bar_beats
+        var virtual_left: float = visual_scroll_beat - playhead_x / timeline.pixels_per_beat
+        var virtual_right: float = virtual_left + size.x / timeline.pixels_per_beat
+        var first_pass: int = maxi(0, floori(virtual_left / stride) - 1)
+        var last_pass: int = maxi(first_pass, ceili(virtual_right / stride) + 1)
+        for pass_index in range(first_pass, last_pass + 1):
+            var pass_start: float = pass_index * stride
+            if pass_start > virtual_right+.7 or \
+                    pass_start+timeline.duration_beats < virtual_left-.7:
+                continue
+            _paint_source_pass(visual_scroll_beat-pass_start-play_from_beat,
+                playhead_x, gap)
+    else:
+        _paint_source_pass(camera_clock, playhead_x, gap)
     draw_line(Vector2(playhead_x,_staff_center("right")-gap*3.8),
         Vector2(playhead_x,_staff_center("left")+gap*3.7),
         PREVIEW_LIGHT,2.0,true)

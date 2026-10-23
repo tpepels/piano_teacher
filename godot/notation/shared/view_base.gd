@@ -16,6 +16,8 @@ var timeline = Timeline.new()
 var clock_beat := 0.0
 var play_from_beat := 0.0
 var count_in_beats := 0.0
+var visual_scroll_beat := 0.0
+var score_loop_enabled := false
 var active_hand := "both"
 var bpm := 60.0
 var transport_id := -1
@@ -34,6 +36,7 @@ func clear_score() -> void:
     timeline = Timeline.new()
     timeline.set_density(density)
     notice = "Waiting for /score/model"
+    visual_scroll_beat = 0.0
     queue_redraw()
 
 func load_score(candidate: Dictionary) -> bool:
@@ -60,8 +63,10 @@ func set_density_from_env() -> bool:
         return false
     return true
 
-func present(state: Dictionary, transport_beat: float) -> void:
+func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
     var next_clock: float = transport_beat
+    var next_visual: float = visual_beat if is_finite(visual_beat) else transport_beat + float(state.get("play_from_beat", 0.0))
+    var next_loop: bool = bool(state.get("score_loop_enabled", false))
     var next_from: float = float(state.get("play_from_beat", 0.0))
     var next_count: float = maxf(0.0, float(state.get("count_in_beats", 0.0)))
     var next_hand: String = str(state.get("hand", "both"))
@@ -70,12 +75,15 @@ func present(state: Dictionary, transport_beat: float) -> void:
     var next_running: bool = bool(state.get("running", false))
     var next_paused: bool = bool(state.get("paused", false))
     if (absf(clock_beat-next_clock) > .00001 or
+        absf(visual_scroll_beat-next_visual) > .00001 or score_loop_enabled != next_loop or
         absf(play_from_beat-next_from) > .00001 or
         absf(count_in_beats-next_count) > .00001 or
         active_hand != next_hand or absf(bpm-next_bpm) > .001 or
         transport_id != next_transport or running != next_running or
         paused != next_paused):
         clock_beat = next_clock
+        visual_scroll_beat = next_visual
+        score_loop_enabled = next_loop
         play_from_beat = next_from
         count_in_beats = next_count
         active_hand = next_hand

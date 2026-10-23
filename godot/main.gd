@@ -406,6 +406,28 @@ func _transport_beat_now() -> float:
         beat += elapsed * float(last_state.get("bpm", 60.0)) / 60.0
     return beat
 
+# Projection only: never change the backend's local MIDI grading clock.
+# Across repeats the model is drawn at consecutive positions on one infinite
+# visual axis. During feedback/recovery the server supplies the desired scroll
+# direction; extrapolate its last snapshot between HTTP state polls.
+func _unrolled_score_beat(transport_clock: float) -> float:
+    if not last_state.has("visual_offset_beats"):
+        return NAN
+    if bool(last_state.get("running", false)):
+        return float(last_state.get("visual_offset_beats", 0.0)) \
+            + float(last_state.get("play_from_beat", 0.0)) + transport_clock
+    var observed: float = float(last_state.get("visual_scroll_beat", 0.0))
+    if bool(last_state.get("paused", false)):
+        return observed
+    var speed: float = float(last_state.get("visual_scroll_speed", 0.0))
+    if absf(speed) < .000001:
+        return observed
+    var age: float = maxf(0.0, float(Time.get_ticks_msec() - last_state_tick) / 1000.0)
+    var target: float = float(last_state.get("visual_target_beat", observed))
+    return minf(target, observed + speed * age) if speed > 0.0 \
+        else maxf(target, observed + speed * age)
+
+
 func _update_count_in() -> void:
     if last_state.is_empty() or not bool(last_state.get("running", false)):
         game_count_in.present(0.0, 4, false, false)
@@ -2677,7 +2699,9 @@ func _process(_delta: float) -> void:
     # count-in. No Verovio X positions or per-note speed correction.
     if timeline_preview_enabled and timeline_preview != null \
             and bool(last_state.get("loaded", false)):
-        timeline_preview.present(last_state, _transport_beat_now())
+        var score_clock: float = _transport_beat_now()
+        timeline_preview.present(last_state, score_clock,
+            _unrolled_score_beat(score_clock))
     # The stage's lighting follows exactly the musical beat used by the
     # moving Verovio notation. Preview/Listen use a neutral pulse; neither
     # this visual beat nor its glow can create grading events.
