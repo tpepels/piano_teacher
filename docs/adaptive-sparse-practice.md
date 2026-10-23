@@ -4,7 +4,11 @@ Imported music normally uses two source measures per learning passage. If a
 two-measure block has fewer than `focus_min_onsets` **distinct attack times**,
 the learning path adds more complete source measures, up to
 `focus_max_measures`. Notes played as a chord at the same instant count as
-one rhythmic event. Dense passages retain their original two-measure focus.
+one rhythmic event. The threshold is evaluated separately for **each hand**:
+several left-hand attacks do not justify a one-note right-hand practice step.
+The simplified skeleton/outline stages are also skipped if they would contain
+fewer attacks than the threshold while the original stage contains enough.
+Dense passages retain their original two-measure focus.
 
 The defaults in `piano_teacher/lesson_settings.json` are:
 

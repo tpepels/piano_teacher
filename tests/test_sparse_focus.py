@@ -110,3 +110,60 @@ def test_sparse_focus_settings_reject_invalid_values(tmp_path, key, value):
 
 from pathlib import Path
 SETTINGS_PATH = Path(__file__).parents[1] / "piano_teacher" / "lesson_settings.json"
+
+
+def test_sparse_right_hand_is_not_hidden_by_busy_left_hand():
+    # The old algorithm saw four global attack times and kept bars 1-2.
+    # The student saw just one RH note because LH notes are greyed/omitted.
+    boundaries = (0.0, 4.0, 8.0, 12.0, 16.0)
+    notes = (
+        Note(0, 6, 72, 0, 0, "right", "rh-1"),
+        Note(1, 2, 48, 1, 0, "left", "lh-1"),
+        Note(2, 3, 50, 1, 0, "left", "lh-2"),
+        Note(3, 4, 52, 1, 0, "left", "lh-3"),
+        Note(8, 9, 74, 0, 0, "right", "rh-2"),
+        Note(10, 11, 53, 1, 0, "left", "lh-4"),
+    )
+    song = Piece("Ala-style sparse right hand", 110, notes, (), bar_boundaries=boundaries)
+    plan = LearningPlan(song)
+    assert plan.active_phrase.first_bar == 1
+    assert plan.active_phrase.last_bar == 4
+    assert plan.hand == "right"
+    assert len({n.start for n in plan.active_variant.notes}) == 2
+    assert [(n.source_id, n.start) for n in plan.active_variant.notes] == [
+        ("rh-1", 0), ("rh-2", 8)]
+
+
+def test_sparse_left_hand_is_not_hidden_by_busy_right_hand():
+    boundaries = (0.0, 4.0, 8.0, 12.0, 16.0)
+    notes = (
+        Note(0, 1, 70, 0, 0, "right", "rh-1"),
+        Note(1, 2, 72, 0, 0, "right", "rh-2"),
+        Note(2, 3, 74, 0, 0, "right", "rh-3"),
+        Note(3, 4, 48, 1, 0, "left", "lh-1"),
+        Note(12, 13, 50, 1, 0, "left", "lh-2"),
+    )
+    song = Piece("Sparse left hand", 110, notes, (), bar_boundaries=boundaries)
+    plan = LearningPlan(song)
+    assert plan.active_phrase.last_bar == 4
+    left = [s for s in plan.lesson_steps if s.hand == "left" and s.kind == "learn"]
+    assert left
+    assert left[0].first_bar == 1 and left[0].last_bar == 4
+    assert left[0].required_notes == 2
+
+
+def test_do_not_offer_a_single_attack_skeleton_before_a_fuller_exercise():
+    # Two distinct notes in one beat are sometimes collapsed to one note by
+    # the skeleton generator, even when the passage itself is long enough.
+    song = piece_with_onsets(2, (0.1, 0.5))
+    plan = LearningPlan(song)
+    assert plan.active_phrase.last_bar == 2
+    assert [s.level for s in plan.lesson_steps if s.kind == "learn"] == ["original"]
+    assert len(plan.active_variant.notes) == 2
+
+
+def test_sparse_hand_at_maximum_length_does_not_extend_unboundedly():
+    song = piece_with_onsets(16, (0, 32))
+    assert [(e.phrase.first_bar, e.phrase.last_bar)
+            for e in build_exercises(song, consolidate=False) if e.kind == "learn"] == [
+                (1, 8), (9, 16)]

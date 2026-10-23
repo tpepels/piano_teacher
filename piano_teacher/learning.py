@@ -80,15 +80,27 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]
     boundaries = piece.bar_boundaries
     bars = len(boundaries) - 1
     notes_by_bar: list[list] = [[] for _ in range(bars)]
-    onsets_by_bar: list[set[float]] = [set() for _ in range(bars)]
+    # Practice steps split by hand, so a busy left hand must not make a
+    # one-note right-hand step look sufficiently dense (or vice versa).
+    onsets_by_bar: list[dict[str, set[float]]] = [
+        {"right": set(), "left": set()} for _ in range(bars)
+    ]
     for note in piece.notes:
         bar = bisect_right(boundaries, note.start + 1e-7) - 1
         if 0 <= bar < bars and boundaries[bar] - 1e-7 <= note.start < boundaries[bar + 1] - 1e-7:
             notes_by_bar[bar].append(note)
-            onsets_by_bar[bar].add(round(note.start, 6))
+            onsets_by_bar[bar][note.hand].add(round(note.start, 6))
 
     def onsets(first: int, last: int) -> int:
-        return len(set().union(*onsets_by_bar[first:last]))
+        return len(set().union(*(onsets_by_bar[bar][hand]
+                                 for bar in range(first, last)
+                                 for hand in ("right", "left"))))
+
+    def sparse_for_a_hand(first: int, last: int) -> bool:
+        return any(0 < len(set().union(*(onsets_by_bar[bar][hand]
+                                         for bar in range(first, last))))
+                   < SETTINGS.focus_min_onsets
+                   for hand in ("right", "left"))
 
     ranges: list[tuple[int, int]] = []
     start = 0
@@ -96,7 +108,8 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]
         end = min(bars, start + SETTINGS.focus_measures)
         if adaptive:
             while (end < bars and end - start < SETTINGS.focus_max_measures
-                   and onsets(start, end) < SETTINGS.focus_min_onsets):
+                   and (onsets(start, end) < SETTINGS.focus_min_onsets
+                        or sparse_for_a_hand(start, end))):
                 end = min(bars, start + SETTINGS.focus_max_measures,
                           end + SETTINGS.focus_measures)
         ranges.append((start, end))
@@ -268,6 +281,14 @@ class LearningPlan:
                 variants = (skeleton, original)
         notes = variants[-1].notes if variants else ()
         onsets = sorted({round(n.start, 6) for n in notes})
+        # A simplified skeleton must not create a one-note lesson when the
+        # original exercise has more playable attacks. Such a stage adds no
+        # useful practice and looks like an accidental short passage.
+        if len(onsets) >= SETTINGS.focus_min_onsets:
+            variants = tuple(v for v in variants
+                             if v.level == "original"
+                             or len({round(n.start, 6) for n in v.notes})
+                                >= SETTINGS.focus_min_onsets)
         trivial = (len(onsets) == len(notes)
                    and len(notes) <= max(1.0, exercise.phrase.end - exercise.phrase.start)
                    and all(b - a >= .5 - 1e-6 for a, b in zip(onsets, onsets[1:]))
