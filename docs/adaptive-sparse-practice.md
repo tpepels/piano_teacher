@@ -21,3 +21,27 @@ before a boundary and first two after it, rather than entire extended passages.
 The final complete performance, saved-source progress recovery, independent
 two-measure error windows, tempo ladder, and manual ±5 BPM controls remain in
 place. Change the JSON settings and restart the backend to adjust these targets.
+
+### Upper attack budget and single-measure simplification
+
+`focus_max_attacks: 8` limits the number of distinct rhythmic onset times in
+ordinary learning passages, including simultaneous attacks across both hands.
+The lesson planner shortens a too-dense passage at a **whole source-measure
+boundary**, even to a single measure, without moving any notes. The previous
+`focus_min_onsets` and `focus_max_measures` still apply; expansion never
+exceeds the attack budget. Too-dense connections are omitted, rather than
+silently becoming overlarge exercises.
+
+If one source measure already exceeds the limit, it stays one measure. Its
+learning steps use the existing *skeleton → outline → original* progression.
+Early stages select nested subsets of the original attack times, preserving
+all notes in each selected chord and the original durations and pitches.
+The **original** stage remains deliberately unlimited and contains every
+source note, as does the final whole-piece performance. Otherwise a literal
+maximum would make it impossible to learn the original music. No scoring
+credit transfers between the simplified and full stages. The active tempo
+ladder and manual ±5 BPM controls are unchanged.
+
+The maximum is for learning material, not a promise that every single
+original measure or the final performance can fit within the cap. Legacy
+session migration can reconstruct the historical non-adaptive grouping.

@@ -15,6 +15,7 @@ from pathlib import Path
 class LessonSettings:
     focus_measures: int
     focus_min_onsets: int
+    focus_max_attacks: int
     focus_max_measures: int
     repeated_tempo_min_attacks: int
     start_tempo_bpm: int
@@ -52,6 +53,7 @@ def load_lesson_settings(path: Path | None = None) -> LessonSettings:
             raise ValueError(f"{key} must be a finite number")
     data = LessonSettings(**raw)
     if (data.focus_measures < 1 or data.focus_min_onsets < 1
+            or data.focus_max_attacks < data.focus_min_onsets
             or data.focus_max_measures < data.focus_measures
             or data.repeated_tempo_min_attacks < 1 or data.minimum_bpm < 1
             or data.maximum_bpm < data.minimum_bpm

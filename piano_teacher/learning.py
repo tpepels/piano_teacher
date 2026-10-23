@@ -96,6 +96,11 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]
                                  for bar in range(first, last)
                                  for hand in ("right", "left"))))
 
+    def within_attack_limit(first: int, last: int) -> bool:
+        # The union of onset times is the number of rhythmic attacks a
+        # both-hands learner would need. Individual hands are subsets.
+        return onsets(first, last) <= SETTINGS.focus_max_attacks
+
     def sparse_for_a_hand(first: int, last: int) -> bool:
         return any(0 < len(set().union(*(onsets_by_bar[bar][hand]
                                          for bar in range(first, last))))
@@ -113,11 +118,23 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]
             start = end
             continue
         if adaptive:
-            while (end < bars and end - start < SETTINGS.focus_max_measures
+            # Stop before a measure that would exceed the attack budget.
+            # A single dense measure cannot be split at a barline: its
+            # individual practice variants are simplified separately.
+            while end > start + 1 and not within_attack_limit(start, end):
+                end -= 1
+            while (end < bars and end-start < SETTINGS.focus_max_measures
                    and (onsets(start, end) < SETTINGS.focus_min_onsets
                         or sparse_for_a_hand(start, end))):
-                end = min(bars, start + SETTINGS.focus_max_measures,
-                          end + SETTINGS.focus_measures)
+                proposed = min(bars, start + SETTINGS.focus_max_measures,
+                               end + SETTINGS.focus_measures)
+                if not within_attack_limit(start, proposed):
+                    # Try one more full measure if a two-measure increment
+                    # would be too dense. Never split a musical measure.
+                    proposed = end + 1
+                if proposed <= end or not within_attack_limit(start, proposed):
+                    break
+                end = proposed
         ranges.append((start, end))
         start = end
 
@@ -126,7 +143,8 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]
         first, last = ranges[-1]
         previous_first, _ = ranges[-2]
         if (0 < onsets(first, last) < SETTINGS.focus_min_onsets
-                and last - previous_first <= SETTINGS.focus_max_measures):
+                and last - previous_first <= SETTINGS.focus_max_measures
+                and within_attack_limit(previous_first, last)):
             ranges[-2:] = [(previous_first, last)]
 
     groups: list[Phrase] = []
@@ -168,7 +186,9 @@ def build_exercises(piece: Piece, *, consolidate: bool = True,
                 # With widely spaced notes, adjacent printed measures can
                 # be silent; do not create a misleading one-sided exercise.
                 if (any(n.start < phrase.start for n in joined.notes)
-                        and any(n.start >= phrase.start for n in joined.notes)):
+                        and any(n.start >= phrase.start for n in joined.notes)
+                        and len({round(n.start, 6) for n in joined.notes})
+                            <= SETTINGS.focus_max_attacks):
                     exercises.append(Exercise("connect", joined,
                                               f"connect:{joined.first_bar}-{joined.last_bar}"))
     last_release = max((n.end for n in piece.notes), default=phrases[-1].end) if phrases else 0.0
@@ -190,6 +210,58 @@ def build_exercises(piece: Piece, *, consolidate: bool = True,
         combined = Phrase(0, first_bar, last_bar, start, end, piece.notes)
         exercises.append(Exercise("perform", combined, "perform:all"))
     return tuple(exercises)
+
+
+
+def _sample_attack_times(times: list[float], limit: int) -> set[float]:
+    """Choose source attacks across the whole measure, including its ends."""
+    if len(times) <= limit:
+        return set(times)
+    if limit <= 1:
+        return {times[0]}
+    return {times[round(i * (len(times) - 1) / (limit - 1))]
+            for i in range(limit)}
+
+
+def _dense_single_measure_variants(phrase: Phrase, hand: str) -> tuple[ExerciseVariant, ...]:
+    """Learn a too-dense source measure in nested subsets, then all notes.
+
+    No MIDI note is synthesized or moved, and the final stage contains the
+    complete original source, even though it necessarily exceeds the budget.
+    A chord counts once because notes at the same onset remain together.
+    """
+    indexed = [(i, n) for i, n in enumerate(phrase.notes)
+               if hand == "both" or n.hand == hand]
+    times = sorted({round(n.start, 6) for _, n in indexed})
+    limit = SETTINGS.focus_max_attacks
+    if len(times) <= limit:
+        return generate_variants(phrase, hand)
+    # Existing on-beat skeleton provides musically meaningful landmarks;
+    # spread additional attacks evenly rather than shifting MIDI timing.
+    generated = generate_variants(phrase, hand)
+    foundation_size = max(2, limit // 2)
+    foundation_times = sorted({round(n.start, 6) for n in generated[0].notes})
+    foundation = _sample_attack_times(foundation_times, foundation_size)
+    if len(foundation) < min(foundation_size, len(times)):
+        foundation.update(_sample_attack_times(times, foundation_size))
+        if len(foundation) > foundation_size:
+            foundation = _sample_attack_times(sorted(foundation), foundation_size)
+    extra = [t for t in times if t not in foundation]
+    outline = foundation | _sample_attack_times(extra, limit - len(foundation))
+    variants: list[ExerciseVariant] = []
+    for level, selected_times in (
+        ("skeleton", foundation), ("outline", outline),
+        ("original", set(times)),
+    ):
+        chosen = [(i, n) for i, n in indexed
+                  if round(n.start, 6) in selected_times]
+        indices = tuple(i for i, _ in chosen)
+        if variants and indices == variants[-1].source_indices:
+            continue
+        subset = Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
+                        phrase.start, phrase.end, tuple(n for _, n in chosen))
+        variants.append(ExerciseVariant(level, subset, indices))
+    return tuple(variants)
 
 
 @dataclass(frozen=True)
@@ -276,7 +348,14 @@ class LearningPlan:
     @staticmethod
     def _stage_variants(exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
         variants = generate_variants(exercise.phrase, hand)
-        if hand == "both" or exercise.kind != "learn":
+        if exercise.kind != "learn":
+            return variants[-1:]
+        if (exercise.phrase.first_bar == exercise.phrase.last_bar
+                and len({round(n.start, 6) for n in exercise.phrase.notes
+                         if hand == "both" or n.hand == hand})
+                    > SETTINGS.focus_max_attacks):
+            return _dense_single_measure_variants(exercise.phrase, hand)
+        if hand == "both":
             return variants[-1:]
         if len(variants) == 3:
             skeleton, outline, original = variants

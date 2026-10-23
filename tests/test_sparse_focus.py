@@ -97,7 +97,8 @@ def test_manual_five_bpm_controls_and_step_navigation_survive_sparse_grouping():
 
 
 @pytest.mark.parametrize("key,value", [
-    ("focus_min_onsets", 0), ("focus_max_measures", 0), ("focus_max_measures", 1),
+    ("focus_min_onsets", 0), ("focus_max_attacks", 0),
+    ("focus_max_attacks", 1), ("focus_max_measures", 0), ("focus_max_measures", 1),
 ])
 def test_sparse_focus_settings_reject_invalid_values(tmp_path, key, value):
     import json
@@ -178,3 +179,80 @@ def test_silent_introduction_is_not_absorbed_into_first_focus_passage():
     assert complete.kind == "perform"
     assert (complete.phrase.start, complete.phrase.end) == (0, 12)
     assert complete.phrase.notes == song.notes
+
+
+def test_max_attacks_splits_dense_two_measure_passage_at_real_measure_boundary():
+    song = piece_with_onsets(4, (*[i * .35 for i in range(10)],
+                                 4, 5, 6, 7, 8, 8.5, 9, 9.5, 10,
+                                 12, 13, 14))
+    learned = [e for e in build_exercises(song, consolidate=False) if e.kind == "learn"]
+    assert [(e.phrase.first_bar, e.phrase.last_bar) for e in learned] == [
+        (1, 1), (2, 2), (3, 4)]
+    assert [len({n.start for n in ex.phrase.notes}) for ex in learned] == [10, 4, 8]
+    assert [n.source_id for ex in learned for n in ex.phrase.notes] == [
+        n.source_id for n in song.notes]
+
+
+def test_one_overfull_measure_has_bounded_nested_stages_and_full_original():
+    song = piece_with_onsets(1, [i * .18 for i in range(20)])
+    plan = LearningPlan(song)
+    assert plan.exercise.phrase.first_bar == plan.exercise.phrase.last_bar == 1
+    variants = plan.variants
+    assert [v.level for v in variants] == ["skeleton", "outline", "original"]
+    times = [{round(n.start, 6) for n in v.notes} for v in variants]
+    assert 2 <= len(times[0]) < len(times[1]) <= SETTINGS.focus_max_attacks
+    assert times[0] < times[1] < times[2]
+    assert variants[-1].notes == song.notes
+    assert tuple(v.source_indices for v in variants)[-1] == tuple(range(20))
+
+
+def test_single_measure_dense_chords_are_preserved_at_selected_onsets():
+    attacks = [i * .3 for i in range(12)]
+    notes = tuple(
+        Note(t, t + .2, 60 + pitch, 0, 0, "right", f"n-{i}-{pitch}")
+        for i, t in enumerate(attacks) for pitch in (0, 4, 7))
+    song = Piece("Dense chords", 120, notes,
+                 (Phrase(1, 1, 1, 0, 4, notes),),
+                 bar_boundaries=(0, 4))
+    plan = LearningPlan(song)
+    for variant in plan.variants[:-1]:
+        selected = {round(n.start, 6) for n in variant.notes}
+        assert len(selected) <= SETTINGS.focus_max_attacks
+        assert all(sum(round(n.start, 6) == onset for n in variant.notes) == 3
+                   for onset in selected)
+    assert len(plan.variants[-1].notes) == len(notes)
+
+
+def test_both_hands_union_counts_rhythm_attacks_and_simplifies_together():
+    right = tuple(Note(i*.25, i*.25+.1, 70+i, 0, 0, "right", f"r-{i}")
+                  for i in range(8))
+    left = tuple(Note(i*.25+.125, i*.25+.2, 40+i, 1, 0, "left", f"l-{i}")
+                 for i in range(8))
+    notes = tuple(sorted(right+left, key=lambda n: n.start))
+    song = Piece("Busy both hands", 100, notes,
+                 (Phrase(1, 1, 1, 0, 4, notes),), bar_boundaries=(0, 4))
+    plan = LearningPlan(song)
+    plan.set_hand("both")
+    assert [v.level for v in plan.variants] == ["skeleton", "outline", "original"]
+    assert all(len({n.start for n in v.notes}) <= SETTINGS.focus_max_attacks
+               for v in plan.variants[:-1])
+    assert plan.variants[-1].notes == notes
+
+
+def test_two_dense_chords_count_as_only_two_attacks():
+    song = piece_with_onsets(2, [0]*10 + [4]*10)
+    learned = [e for e in build_exercises(song, consolidate=False)
+               if e.kind == "learn"]
+    assert len(learned) == 1
+    assert learned[0].phrase.last_bar == 2
+    assert LearningPlan(song).variants[-1].notes == song.notes
+
+
+def test_maximum_never_allows_sparse_tail_to_overflow_previous_passage():
+    song = piece_with_onsets(5, [i*.5 for i in range(8)] + [8, 12, 16])
+    learned = [e for e in build_exercises(song, consolidate=False)
+               if e.kind == "learn"]
+    assert all(len({n.start for n in e.phrase.notes}) <= SETTINGS.focus_max_attacks
+               or e.phrase.first_bar == e.phrase.last_bar for e in learned)
+    assert [n.source_id for e in learned for n in e.phrase.notes] == [
+        n.source_id for n in song.notes]

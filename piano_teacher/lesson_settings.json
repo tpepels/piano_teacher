@@ -20,5 +20,6 @@
   "count_in_max_seconds": 4,
   "repeated_tempo_min_attacks": 2,
   "focus_min_onsets": 2,
-  "focus_max_measures": 8
+  "focus_max_measures": 8,
+  "focus_max_attacks": 8
 }
