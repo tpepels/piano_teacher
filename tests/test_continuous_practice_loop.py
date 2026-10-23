@@ -247,3 +247,20 @@ def test_paused_rewind_resumes_without_skipping_backward_frames(tmp_path, monkey
         assert after["visual_scroll_beat"] == pytest.approx(4.0, abs=.1)
     finally:
         app.db.close()
+
+
+def test_open_at_measure_shows_selected_source_before_pressing_start(tmp_path):
+    app = engine(tmp_path)
+    try:
+        app.control("open_at", bar=2, mode="practice")
+        ready = app.state()
+        assert ready["phase"] == "ready"
+        assert ready["first_bar"] == 1
+        assert ready["selected_start_bar"] == 2
+        assert ready["play_from_beat"] == pytest.approx(4.0)
+        app.control("start")
+        playing = app.state()
+        assert playing["play_from_beat"] == pytest.approx(4.0)
+        assert playing["selected_start_bar"] == 2
+    finally:
+        app.db.close()

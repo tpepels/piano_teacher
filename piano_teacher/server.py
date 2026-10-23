@@ -824,6 +824,11 @@ class PracticeEngine:
         return_context = self._guided_return
         retry_range = self.retry_range
         self._stop()
+        # An idle score selected with Open at measure N must already point
+        # at that source measure. Start later uses the same origin.
+        phrase = self.plan.active_phrase
+        self.play_from_beat = max(0.0, min(
+            self.open_from_beat, phrase.end - phrase.start - 1e-6))
         if return_context is not None and return_context[0] == self.plan.identity:
             self.pending_rewind = return_context[1]
             self.retry_range = retry_range
