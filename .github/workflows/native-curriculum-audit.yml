@@ -35,6 +35,8 @@ jobs:
       - name: Install Godot and native notation dependencies
         run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango
       - uses: actions/checkout@v4
+      - name: Trust the exact container workspace for provenance
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install application
         run: |
           python -m venv .venv

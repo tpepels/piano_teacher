@@ -106,6 +106,11 @@ evidence; every unsupported construct is named and never silently dropped.
 
 ## Phase 4 — CI release evidence
 
+The [release evidence framework](native-notation-phase4-release-evidence.md)
+combines the independent categories under a versioned, revision-bound decision.
+The native renderer remains **blocked**: a passing framework or mutation suite
+does not resolve Phase 3's authored-rest discrepancies or coverage gaps.
+
 Combine Phases 1–3 into one machine-readable, versioned audit summary.
 Run mutation checks regularly; publish source engraving, native viewport
 captures, symbol-level diffs and failure exemplars as artifacts. Apply the

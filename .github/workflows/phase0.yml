@@ -13,6 +13,8 @@ jobs:
       - name: Install dependencies
         run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid
       - uses: actions/checkout@v4
+      - name: Trust the exact container workspace for provenance
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install application
         run: |
           python -m venv .venv
@@ -76,6 +78,8 @@ jobs:
       - name: Install graphical test dependencies
         run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
       - uses: actions/checkout@v4
+      - name: Trust the exact container workspace for provenance
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install application
         run: |
           python -m venv .venv

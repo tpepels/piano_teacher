@@ -28,6 +28,7 @@ from piano_teacher.notation.semantic_contract import (
     _Ledger, combine_reports, verify_generated_contract, verify_midi_performance,
     verify_musicxml_contract, source_inventory,
 )
+from scripts.notation_release_provenance import current_provenance
 
 # Same pinned ordering as audit_phase3_whole_pieces, without importing its
 # screenshots, native assets, Verovio or Godot orchestration. The manifest is
@@ -66,7 +67,8 @@ def audit_source(name: str, *, source_index: int, hand: str = 'both',
                  artifact_dir: Path | None = None) -> dict:
     path = source_path(name)
     metadata = dict(schema_version=1, verification_kind='semantic', source_index=source_index,
-                    source=name, source_sha256=None, hand=hand, environment=_environment(), artifacts={})
+                    source=name, source_sha256=None, hand=hand, environment=_environment(), artifacts={},
+                    provenance=current_provenance())
     if artifact_dir is not None:
         artifact_dir = Path(artifact_dir)
         artifact_dir.mkdir(parents=True, exist_ok=True)

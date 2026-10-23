@@ -1,25 +1,54 @@
 name: Independent native pixels (phase 2)
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_call:
+    inputs:
+      revision:
+        required: true
+        type: string
+    outputs:
+      revision:
+        description: Exact event revision inspected by the actual Phase 2 native audits
+        value: ${{ jobs.native-image-pitch.outputs.revision }}
+
+permissions:
+  contents: read
 
 jobs:
   native-image-pitch:
     runs-on: ubuntu-latest
     container: archlinux:latest
     timeout-minutes: 20
+    outputs:
+      revision: ${{ steps.revision.outputs.revision }}
     steps:
       - name: Install actual native renderer and screenshot dependencies
         run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision }}
+      - name: Trust the exact container workspace for provenance
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Bind actual Phase 2 audits to the immutable event checkout
+        id: revision
+        env:
+          REVISION: ${{ inputs.revision }}
+          EVENT_REVISION: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import os, re, subprocess
+          revision = os.environ['REVISION']
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if not re.fullmatch(r'[0-9a-f]{40}', revision) or revision != actual or revision != os.environ['EVENT_REVISION']:
+              raise SystemExit('Phase 2 requires the exact immutable event checkout')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write(f'revision={revision}\n')
+          PY
       - name: Install application
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install -e '.[godot,test]'
-      - name: Prove pixel detector fails on displaced, erased, or broken notation
-        run: .venv/bin/python -m pytest -q tests/test_native_pixel_proof.py tests/test_source_beam_pixel_fidelity.py tests/test_native_symbol_pixel_proof.py
       - name: Independently inspect native Godot PNGs for actual note positions
+        if: always()
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
@@ -27,6 +56,7 @@ jobs:
             .venv/bin/python scripts/check_native_pixels.py \
             --out /tmp/piano-independent-pixels
       - name: Capture additional independent native notation specimens
+        if: always()
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |

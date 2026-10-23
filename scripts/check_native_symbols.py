@@ -9,7 +9,12 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
-from check_native_verovio_overlay import AuditCase, ROOT, fixture
+import sys
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from scripts.check_native_verovio_overlay import AuditCase, fixture
+from scripts.notation_release_provenance import current_provenance
 from piano_teacher.notation.symbol_pixel_proof import (prove_rest_ink, prove_accidental_ink, prove_beam_ink, prove_tie_ink, prove_note_rhythm_ink, prove_slur_ink)
 
 CASES = (
@@ -32,6 +37,7 @@ def capture_all(out: Path, godot: str | None = None) -> list[dict]:
     if not godot:
         raise RuntimeError("Actual native Godot is required")
     captured = []
+    provenance = current_provenance()
     proofs = {"written-rests":prove_rest_ink,
               "written-accidentals":prove_accidental_ink,
               "source-beams":prove_beam_ink,
@@ -72,7 +78,8 @@ def capture_all(out: Path, godot: str | None = None) -> list[dict]:
         for problem in proof["errors"]:
             print("FAIL",case.name,problem,flush=True)
     (out/"symbol-proof-summary.json").write_text(json.dumps(
-        {"passed":not failing,"scores":captured,"errors":failing},indent=2)+chr(10))
+        {"passed":not failing,"scores":captured,"errors":failing,
+         "provenance":provenance,"provenance_after":current_provenance()},indent=2)+chr(10))
     if failing:
         raise AssertionError(f"Independent symbol image checks failed: {failing}")
     return captured

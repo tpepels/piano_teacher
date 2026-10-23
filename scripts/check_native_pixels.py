@@ -14,9 +14,15 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from piano_teacher.notation.pixel_proof import verify_pixel_frames
-from check_native_verovio_overlay import AuditCase, ROOT, fixture
+from scripts.check_native_verovio_overlay import AuditCase, fixture
+from scripts.notation_release_provenance import current_provenance
 
 PROBES = (
     AuditCase("independent-grand-staff-pixel-pitch",
@@ -38,6 +44,7 @@ def main() -> int:
         parser.error("Actual Godot renderer is mandatory: cannot skip pixel proof")
     args.out.mkdir(parents=True, exist_ok=True)
     results = []
+    provenance = current_provenance()
     for probe in PROBES:
         folder = args.out / probe.name
         folder.mkdir(parents=True, exist_ok=True)
@@ -67,7 +74,7 @@ def main() -> int:
                 source = (ROOT / probe.filename).read_text(encoding="utf-8")
                 report = verify_pixel_frames(source, frames)
                 report["name"] = probe.name
-        (folder / "pixel-proof-report.json").write_text(json.dumps(report, indent=2) + "\\n")
+        (folder / "pixel-proof-report.json").write_text(json.dumps(report, indent=2) + "\n")
         results.append(report)
         print(f"{probe.name}: "
               f"{report.get('notes_checked_from_pixels', 0)}/"
@@ -76,6 +83,7 @@ def main() -> int:
         for entry in report.get("failures", []):
             print("FAIL", entry, flush=True)
     totals = {
+        "provenance": provenance, "provenance_after": current_provenance(),
         "passed": all(r["passed"] for r in results),
         "probes": len(results),
         "image_verified_noteheads": sum(r.get("notes_checked_from_pixels", 0)
@@ -84,7 +92,7 @@ def main() -> int:
         "results": [{"name": r["name"], "passed": r["passed"],
                      "failures": r.get("failures", [])} for r in results],
     }
-    (args.out / "summary.json").write_text(json.dumps(totals, indent=2) + "\\n")
+    (args.out / "summary.json").write_text(json.dumps(totals, indent=2) + "\n")
     return 0 if totals["passed"] else 1
 
 

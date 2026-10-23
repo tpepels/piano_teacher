@@ -1,0 +1,140 @@
+name: Gated native release candidate
+
+on:
+  push:
+    tags: ['native-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing native-v tag matching the selected workflow tag
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  exact-release-gate:
+    name: Exact native release gate
+    uses: ./.github/workflows/native-release-gate.yml
+    with:
+      revision: ${{ github.sha }}
+
+  release-context:
+    name: Validate native tag and immutable event revision
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+      revision: ${{ steps.tag.outputs.revision }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - id: tag
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+          REVISION: ${{ github.sha }}
+        run: |
+          python - <<'PY'
+          import os, re, subprocess
+          tag, revision = os.environ['REF_NAME'], os.environ['REVISION']
+          if os.environ['REF_TYPE'] != 'tag' or not tag.startswith('native-v'):
+              raise SystemExit('Select an existing native-v tag to release')
+          if os.environ['EVENT_NAME'] == 'workflow_dispatch' and os.environ['REQUESTED_TAG'] != tag:
+              raise SystemExit('Dispatch tag must match the selected workflow tag')
+          if not re.fullmatch(r'[0-9a-f]{40}', revision):
+              raise SystemExit('Release requires an immutable full commit SHA')
+          actual = subprocess.check_output(['git', 'rev-parse', f'refs/tags/{tag}^{{commit}}'], text=True).strip()
+          if actual != revision:
+              raise SystemExit('Native release tag differs from the tested event revision')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write(f'tag={tag}\nrevision={revision}\n')
+          PY
+
+  build-candidate:
+    name: Build distribution and native Godot source only after the gate
+    needs: [exact-release-gate, release-context]
+    if: >-
+      needs.exact-release-gate.result == 'success' &&
+      needs.release-context.result == 'success' &&
+      needs.exact-release-gate.outputs.revision == github.sha &&
+      needs.exact-release-gate.outputs.revision == needs.release-context.outputs.revision
+    runs-on: ubuntu-latest
+    outputs:
+      revision: ${{ steps.build.outputs.revision }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.exact-release-gate.outputs.revision }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install distribution builder
+        run: python -m pip install build
+      - name: Build Python distribution and native Godot source archive
+        id: build
+        env:
+          REVISION: ${{ needs.exact-release-gate.outputs.revision }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$REVISION"
+          python -m build --outdir /tmp/native-candidate
+          git archive --format=tar.gz --prefix="piano-teacher-native-$REVISION/" \
+            --output="/tmp/native-candidate/piano-teacher-native-$REVISION.tar.gz" \
+            "$REVISION" godot piano_teacher scripts midi pyproject.toml run.sh
+          printf '%s\n' "$REVISION" > /tmp/native-candidate/revision.txt
+          cd /tmp/native-candidate
+          sha256sum ./* > SHA256SUMS
+          printf 'revision=%s\n' "$REVISION" >> "$GITHUB_OUTPUT"
+      - name: Preserve gated candidate without publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-release-candidate
+          path: /tmp/native-candidate/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-draft:
+    name: Publish a draft only for a passing exact native gate
+    needs: [exact-release-gate, release-context, build-candidate]
+    if: >-
+      needs.exact-release-gate.result == 'success' &&
+      needs.release-context.result == 'success' &&
+      needs.build-candidate.result == 'success' &&
+      needs.exact-release-gate.outputs.revision == github.sha &&
+      needs.exact-release-gate.outputs.revision == needs.release-context.outputs.revision &&
+      needs.exact-release-gate.outputs.revision == needs.build-candidate.outputs.revision
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: native-release-candidate
+          path: /tmp/native-candidate
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase4-native-release-report
+          path: /tmp/native-report
+      - name: Verify candidate revision and current remote tag, then create draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.release-context.outputs.tag }}
+          REVISION: ${{ needs.exact-release-gate.outputs.revision }}
+        run: |
+          test "$(cat /tmp/native-candidate/revision.txt)" = "$REVISION"
+          cd /tmp/native-candidate
+          sha256sum --check SHA256SUMS
+          remote_revision="$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)"
+          test "$remote_revision" = "$REVISION"
+          gh release create "$TAG" /tmp/native-candidate/* \
+            --repo "$GH_REPO" --draft --verify-tag --target "$REVISION" \
+            --title "Native $TAG" --notes-file /tmp/native-report/native-release.md

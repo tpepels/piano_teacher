@@ -1,13 +1,18 @@
 name: Phase 3 independent semantic and visual corpus proof
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_call:
+    inputs:
+      revision:
+        required: true
+        type: string
+    outputs:
+      revision:
+        description: Full commit SHA accepted by the complete corpus gate
+        value: ${{ jobs.whole-corpus-gate.outputs.revision }}
 
-concurrency:
-  group: phase3-corpus-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+permissions:
+  contents: read
 
 jobs:
   semantic-scores:
@@ -16,6 +21,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision }}
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -32,7 +39,7 @@ jobs:
           name: phase3-semantic-reports
           path: /tmp/phase3-semantics/
           if-no-files-found: warn
-          retention-days: 21
+          retention-days: 30
 
   visual-scores:
     name: Visual ${{ matrix.index }} / ${{ matrix.hand }}
@@ -49,6 +56,10 @@ jobs:
       - name: Install actual Godot rendering and test dependencies
         run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision }}
+      - name: Trust the exact container workspace for provenance
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install independent screenshot audits
         run: |
           python -m venv .venv
@@ -68,7 +79,7 @@ jobs:
           name: phase3-visual-score-${{ matrix.index }}-${{ matrix.hand }}
           path: /tmp/phase3-visual/
           if-no-files-found: warn
-          retention-days: 7
+          retention-days: 30
       - name: Publish compact visual coverage ledger
         if: always()
         uses: actions/upload-artifact@v4
@@ -76,7 +87,7 @@ jobs:
           name: phase3-report-${{ matrix.index }}-${{ matrix.hand }}
           path: /tmp/phase3-visual/summary.json
           if-no-files-found: warn
-          retention-days: 21
+          retention-days: 30
 
   semantic-corpus-gate:
     name: Semantic coverage - all 17 sources and three modes
@@ -85,6 +96,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision }}
       - name: Fetch semantic ledgers
         continue-on-error: true
         uses: actions/download-artifact@v4
@@ -104,7 +117,7 @@ jobs:
           name: phase3-semantic-corpus-coverage
           path: /tmp/phase3-semantic-coverage.json
           if-no-files-found: warn
-          retention-days: 21
+          retention-days: 30
 
   visual-corpus-gate:
     name: Visual coverage - all 17 sources and three modes
@@ -113,6 +126,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision }}
       - name: Fetch compact visual ledgers
         continue-on-error: true
         uses: actions/download-artifact@v4
@@ -132,15 +147,19 @@ jobs:
           name: phase3-visual-corpus-coverage
           path: /tmp/phase3-visual-coverage.json
           if-no-files-found: warn
-          retention-days: 21
+          retention-days: 30
 
   whole-corpus-gate:
     name: Complete independent notation - all 17 sources and three modes
     needs: [semantic-corpus-gate, visual-corpus-gate]
     if: always()
     runs-on: ubuntu-latest
+    outputs:
+      revision: ${{ steps.revision.outputs.revision }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.revision }}
       - name: Fetch independent semantic evidence
         continue-on-error: true
         uses: actions/download-artifact@v4
@@ -166,4 +185,23 @@ jobs:
           name: phase3-corpus-coverage
           path: /tmp/phase3-final-report.json
           if-no-files-found: warn
-          retention-days: 21
+          retention-days: 30
+      - name: Bind the passing corpus to this run's exact commit
+        id: revision
+        env:
+          REVISION: ${{ inputs.revision }}
+          EVENT_REVISION: ${{ github.sha }}
+          SEMANTIC_RESULT: ${{ needs.semantic-corpus-gate.result }}
+          VISUAL_RESULT: ${{ needs.visual-corpus-gate.result }}
+        run: |
+          python - <<'PY'
+          import os, re, subprocess
+          revision = os.environ['REVISION']
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if not re.fullmatch(r'[0-9a-f]{40}', revision) or revision != actual or revision != os.environ['EVENT_REVISION']:
+              raise SystemExit('Corpus revision differs from the event commit')
+          if any(os.environ[key] != 'success' for key in ('SEMANTIC_RESULT', 'VISUAL_RESULT')):
+              raise SystemExit('Both corpus gates must pass')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write(f'revision={revision}\n')
+          PY

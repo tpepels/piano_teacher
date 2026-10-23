@@ -117,14 +117,14 @@ def _account_inventory(data, required, errors, *, boundary, midi):
         for position, row in enumerate(elements):
             if (isinstance(row, dict) and isinstance(row.get("source"), dict)
                     and row["source"].get("origin") == "original"
-                    and row.get("id") not in expected_ids):
+                    and (not isinstance(row.get("id"), str) or row["id"] not in expected_ids)):
                 errors.append(f"Unexpected original source inventory element: {row.get('id')}")
                 elements[position] = {**row, "reported_status": row.get("status"),
                                       "status": "unverified", "reason": "Element absent from pinned original inventory"}
     return {**data, "elements": elements}
 
 
-def _ledger(data, errors):
+def _ledger(data, errors, *, normalized=None):
     elements = data.get("elements")
     if not isinstance(elements, list) or not elements:
         errors.append("Missing/empty every-element ledger; pitch/rest counts alone do not verify notation")
@@ -160,6 +160,8 @@ def _ledger(data, errors):
             valid = False
         effective = status if valid else "unverified"
         counts[effective] += 1
+        if normalized is not None:
+            normalized.append({**row, "status": effective})
         construct_counts = constructs.setdefault(construct, _empty_coverage())
         construct_counts["expected"] += 1
         construct_counts[effective] += 1
@@ -355,7 +357,8 @@ def _invalid_constant(value):
     raise ValueError(f"Nonfinite JSON value: {value}")
 
 
-def aggregate(folder: Path, *, scores: int = 17, kind: str = "complete") -> dict:
+def aggregate(folder: Path, *, scores: int = 17, kind: str = "complete", include_elements: bool = False,
+              required_provenance: dict | None = None) -> dict:
     """Require every pinned case, with independently recomputed status totals.
 
     ``scores`` selects a pinned prefix for small regression fixtures only; the
@@ -445,13 +448,20 @@ def aggregate(folder: Path, *, scores: int = 17, kind: str = "complete") -> dict
                 trusted_identity = (identity_ok and digest is not None and data.get("source_sha256") == digest
                                     and type(data.get("schema_version")) is int and data["schema_version"] == 1
                                     and data.get("verification_kind") == boundary and data.get("hand") == hand)
+                if required_provenance is not None and (required_provenance.get("clean") is not True
+                                                       or data.get("provenance") != required_provenance):
+                    job_errors.append("Report provenance differs from required immutable release inputs")
+                    trusted_identity = False
                 if not trusted_identity:
                     accounted["elements"] = [
                         {**row, "reported_status": row["status"], "status": "unverified",
                          "reason": "Report provenance does not match the pinned source, schema and hand"}
                         if isinstance(row, dict) and row.get("status") == "verified" else row
                         for row in accounted["elements"]]
-                coverage, gaps, per_construct = _ledger(accounted, job_errors)
+                normalized = [] if include_elements else None
+                coverage, gaps, per_construct = _ledger(accounted, job_errors, normalized=normalized)
+                if include_elements:
+                    job["elements"] = normalized
                 job["coverage"] = coverage
                 for key, value in coverage.items():
                     totals[key] += value
