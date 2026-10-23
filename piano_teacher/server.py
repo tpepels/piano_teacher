@@ -1340,9 +1340,10 @@ class PracticeEngine:
                     self.control("practice")
                     return
                 if (self.plan is not None and self._layout_cache is not None
-                        and self._layout_bpm != self.plan.bpm):
-                    # Restart can interrupt slower-tempo feedback before its
-                    # scheduled retry. Render that spacing before its clock.
+                        and self._layout_bpm != self.plan.piece.bpm):
+                    # Only a genuinely different source engraving needs a
+                    # new model. Tempo changes reuse the exact same score
+                    # with a different transport speed.
                     self._stop()
                     self.score_revision += 1
                     self.awaiting_score_revision = self.score_revision
