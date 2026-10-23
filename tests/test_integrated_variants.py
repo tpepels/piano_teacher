@@ -32,7 +32,10 @@ def test_three_clean_runs_then_reveal_more_chord_notes():
     p.set_bpm(100)
     for _ in range(3):
         p.apply_result(correct=4,total=4)
-    assert p.hand=="left" and p.active_variant.level=="skeleton"
+    # The LH has one distinct chord attack: a solo one-chord lesson is
+    # omitted. That chord remains in the mandatory both-hands original.
+    assert p.hand=="both" and p.active_variant.level=="original"
+    assert len(p.active_phrase.notes) == len(piece().notes)
 
 
 def test_failure_resets_current_stage_streak():

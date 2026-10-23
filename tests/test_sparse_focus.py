@@ -143,6 +143,9 @@ def test_sparse_left_hand_is_not_hidden_by_busy_right_hand():
         Note(1, 2, 72, 0, 0, "right", "rh-2"),
         Note(2, 3, 74, 0, 0, "right", "rh-3"),
         Note(3, 4, 48, 1, 0, "left", "lh-1"),
+        # Keep a complete independent second passage, so the sparse tail
+        # merger has no reason to absorb bars 3-4 into bars 1-2.
+        Note(8, 9, 76, 0, 0, "right", "rh-4"),
         Note(12, 13, 50, 1, 0, "left", "lh-2"),
     )
     song = Piece("Sparse left hand", 110, notes, (), bar_boundaries=boundaries)

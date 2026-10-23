@@ -228,7 +228,10 @@ def test_manual_change_abandons_transport_and_uncommitted_take(tmp_path, action,
         assert not state["running"] and not state["paused"] and not state["auto"]
         assert state["take_result"] is None
         assert state["awaiting_score_revision"] is None
-        assert state["revision"] == before["revision"] + 1
+        # Playback-only tempo changes reuse source notation. Changing to a
+        # different lesson step must still request a new score revision.
+        assert state["revision"] == (before["revision"] + 1
+                                     if action == "select_step" else before["revision"])
         assert engine.pending_result is None and engine.recorder is None
         assert engine.next_at == 0
         # A delayed renderer acknowledgement must not restart the abandoned take.
