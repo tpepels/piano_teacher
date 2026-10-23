@@ -8,6 +8,10 @@ var transport_active := false
 var guided_active := false
 var image_size := Vector2.ZERO
 var marks: Array = []
+var staff_lines: Array = []
+var _feedback_context := ""
+var _previous_status: Dictionary = {}
+var _confirmed_at: Dictionary = {}
 var active_page := -1
 var crop_origin := Vector2.ZERO
 var crop_size := Vector2.ONE
@@ -95,7 +99,7 @@ func _draw_preparation() -> void:
     # Preserve the complete opening accidental/ledger ink, not only its
     # notehead. These bounds come from the actual engraved source glyphs.
     draw_rect(Rect2(margin_left, top - 16.0, maxf(0.0, mask_end - margin_left),
-                    bottom - top + 32.0), Design.PANEL, true)
+                    bottom - top + 32.0), Design.SCORE, true)
     var ink := Color(Design.SLATE, .52)
     for sy in lines:
         draw_line(Vector2(margin_left, sy), Vector2(first_x, sy), ink, 1.1, true)
@@ -128,43 +132,94 @@ func _draw_preparation_clef(hand: String, x: float, lines: Array[float], first_l
         draw_string(ThemeDB.fallback_font, Vector2(x + gap * .35, y), "8" if absi(octaves) == 1 else "15", HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(9, roundi(gap * 1.4)), Design.STONE)
 
 
+func _marker_key(marker: Dictionary) -> String:
+    return str(marker.get("source_id", marker.get("note_id", marker.get("id",
+        "%s/%s/%s" % [marker.get("page",0),marker.get("x",0),marker.get("y",0)]))))
+
+
+func update_feedback(incoming: Array, context: String) -> void:
+    if context != _feedback_context:
+        _previous_status.clear()
+        _confirmed_at.clear()
+        _feedback_context = context
+    marks = incoming
+    var current: Dictionary = {}
+    for marker in marks:
+        var key := _marker_key(marker)
+        var status := str(marker.get("status", ""))
+        current[key] = status
+        if status in ["correct", "assisted"] and _previous_status.get(key, "") != status:
+            _confirmed_at[key] = Time.get_ticks_msec()
+    _previous_status = current
+    set_process(not _confirmed_at.is_empty())
+    queue_redraw()
+
+
+func _process(_delta: float) -> void:
+    var now := Time.get_ticks_msec()
+    for key in _confirmed_at.keys():
+        if now - int(_confirmed_at[key]) >= 850:
+            _confirmed_at.erase(key)
+    queue_redraw()
+    if _confirmed_at.is_empty():
+        set_process(false)
+
+
+func _staff_gap() -> float:
+    if staff_lines.size() >= 2:
+        return absf(_sheet_xy(0,float(staff_lines[1])).y - _sheet_xy(0,float(staff_lines[0])).y)
+    return 0.0
+
+
+func _draw_check(at: Vector2, color: Color) -> void:
+    draw_polyline(PackedVector2Array([at + Vector2(-4,0), at + Vector2(-1,3), at + Vector2(5,-4)]),color,2.2,true)
+
+
 func _draw() -> void:
     if image_size.x <= 0.0 or image_size.y <= 0.0:
         return
     _draw_preparation()
-    # A faint green ring confirms correct notes; stronger colour markers
-    # distinguish mistakes without altering the underlying engraving.
-    var palette := {
-        "correct": Color("#4A987B"), "assisted": Color("#C8AC7C"), "expected": Design.TEAL, "wrong": Color("#BB4A4A"),
-        "missed": Color("#BB4A4A"), "extra": Color("#BB4A4A"),
-        "early": Color("#BA852B"), "late": Color("#BA852B"),
-        "short": Color("#8660AF"), "long": Color("#8660AF")
-    }
-    var labels := {"wrong":"×", "missed":"!", "extra":"+",
-                   "early":"←", "late":"→", "short":"−", "long":"+"}
+    var palette := {"correct": Design.TEAL, "assisted": Design.WARM,
+        "expected": Design.TEAL, "wrong": Design.WARM, "missed": Design.ERROR,
+        "extra": Design.ERROR, "early": Design.WARM, "late": Design.WARM,
+        "short": Design.WARM, "long": Design.WARM}
+    var labels := {"missed":"!", "extra":"+", "early":"←", "late":"→", "short":"−", "long":"+"}
+    var gap := _staff_gap()
+    var radius := clampf(gap * .85, 9.0, 20.0) if gap > 0 else 12.0
     for marker in marks:
         if int(marker.get("page", -1)) != active_page:
             continue
-        var status: String = str(marker.get("status", ""))
-        var color: Color = palette.get(status, Color("#BB4A4A"))
-        var center: Vector2 = _sheet_xy(float(marker.get("x", 0.0)), float(marker.get("y", 0.0)))
-        if status == "expected":
-            draw_arc(center, 12.0, 0.0, TAU, 24, color, 2.5, true)
-            draw_circle(center + Vector2(0, -18), 3.0, color)
-        elif status == "assisted":
-            draw_arc(center, 10.0, 0.0, TAU, 24, color, 2.0, true)
-            draw_string(ThemeDB.fallback_font, center + Vector2(12, -9), "?", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, color)
-        elif status == "correct":
-            draw_arc(center, 9.0, 0.0, TAU, 20, Color(color, .37), 1.5, true)
-            draw_string(ThemeDB.fallback_font, center + Vector2(12, -9), "✓", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, color)
+        var status := str(marker.get("status", ""))
+        var color: Color = palette.get(status, Design.ERROR)
+        var center := _sheet_xy(float(marker.get("x",0)),float(marker.get("y",0)))
+        # Verovio's glyph origin is the left of the notehead. Center only the
+        # visual badge around its body; the timing beam keeps the exact origin.
+        center.x += gap * .6
+        var badge := center + Vector2(radius+5,-radius-4)
+        if status in ["expected", "wrong"]:
+            # Outline the target without painting over its notehead or stem.
+            var outline := Design.surface(Color.TRANSPARENT, int(radius))
+            outline.set_border_width_all(2)
+            outline.border_color = color
+            draw_style_box(outline, Rect2(center-Vector2(radius*1.3,radius),Vector2(radius*2.6,radius*2)))
+            if status == "expected":
+                var tip := center + Vector2(0,-radius-5)
+                draw_colored_polygon(PackedVector2Array([tip,tip+Vector2(-4,-6),tip+Vector2(4,-6)]),color)
+            else:
+                draw_line(badge+Vector2(-3,-3),badge+Vector2(3,3),color,2,true)
+                draw_line(badge+Vector2(-3,3),badge+Vector2(3,-3),color,2,true)
+        elif status in ["correct", "assisted"]:
+            draw_arc(center,radius,0,TAU,32,Color(color,.65),1.8,true)
+            _draw_check(badge,color)
+            var key := _marker_key(marker)
+            if _confirmed_at.has(key):
+                var progress := clampf(float(Time.get_ticks_msec()-int(_confirmed_at[key]))/850.0,0,1)
+                draw_arc(center,radius+3+progress*14,0,TAU,40,Color(color,(1-progress)*.7),2,true)
         else:
-            var radius := 12.0 if status == "missed" else 10.0
-            draw_arc(center, radius, 0.0, TAU, 24, color, 2.5, true)
-            var symbol: String = str(labels.get(status, "!"))
-            var font: Font = ThemeDB.fallback_font
-            draw_string(font, center + Vector2(12, -9), symbol, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, color)
+            draw_arc(center,radius,0,TAU,32,color,2,true)
+            draw_string(ThemeDB.fallback_font,badge,str(labels.get(status,"!")),HORIZONTAL_ALIGNMENT_LEFT,-1,16,color)
             if status == "extra":
-                draw_string(font, center + Vector2(12, 5), str(marker.get("label", "")), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, color)
+                draw_string(ThemeDB.fallback_font,center+Vector2(radius+5,12),str(marker.get("label","")),HORIZONTAL_ALIGNMENT_LEFT,-1,12,color)
     if showing and not guided_active and not cursor.is_empty() and int(cursor.get("page", -1)) == active_page:
         var x: float = float(cursor.get("x", 0.0))
         var top: float = float(cursor.get("top", 0.0))
@@ -173,6 +228,7 @@ func _draw() -> void:
         var end: Vector2 = _sheet_xy(x, bottom)
         # The timing rule follows the clock's BPM, including silent beats.
         var cyan := Design.TEAL if transport_active else Design.SAGE
-        draw_line(start, end, Color(cyan, .09), 16.0, true)
-        draw_line(start, end, Color(cyan, .18), 7.0, true)
+        draw_line(start, end, Color(cyan, .06), 26.0, true)
+        draw_line(start, end, Color(cyan, .16), 9.0, true)
         draw_line(start, end, cyan, 2.5, true)
+        draw_colored_polygon(PackedVector2Array([start + Vector2(0,5),start+Vector2(-5,-3),start+Vector2(5,-3)]),cyan)

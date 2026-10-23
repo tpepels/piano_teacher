@@ -57,6 +57,7 @@ var passage_label: Label
 var hand_label: Label
 var speed_label: Label
 var feedback_label: Label
+var reading_status: Label
 var progress_label: Label
 var device_button: Button
 var start_button: Button
@@ -297,6 +298,8 @@ func _layout_moving_score(delta: float = 0.0) -> void:
     if score_view.texture == null or score_frame == null or score_content == null:
         return
     score_overlay.preparation_clefs = score_layout.get("staff_clefs", {})
+    if not score_layout.get("systems", []).is_empty():
+        score_overlay.staff_lines = score_layout["systems"][0].get("staff_lines", [])
     var viewport: Vector2 = score_frame.size
     var image: Vector2 = score_overlay.image_size
     if viewport.x < 10.0 or viewport.y < 10.0 or image.x <= 0.0 or image.y <= 0.0:
@@ -386,7 +389,7 @@ func _button(label: String, callback: Callable, primary := false) -> Button:
     # Short controls must fit their text; library rows override width.
     button.custom_minimum_size = Vector2(mini(220, maxi(96, 42 + label.length() * 9)), 45)
     var style := StyleBoxFlat.new()
-    style.bg_color = Design.PINE if primary else Design.PANEL
+    style.bg_color = ACCENT if primary else Design.PANEL
     style.set_corner_radius_all(8)
     style.set_border_width_all(1)
     style.border_color = Design.SAGE if primary else Color(Design.SAGE, .4)
@@ -394,7 +397,7 @@ func _button(label: String, callback: Callable, primary := false) -> Button:
     style.content_margin_right = 18
     button.add_theme_stylebox_override("normal", style)
     var hover := style.duplicate() as StyleBoxFlat
-    hover.bg_color = Design.SAGE if primary else Design.PINE
+    hover.bg_color = ACCENT.lightened(.12) if primary else Design.PINE
     button.add_theme_stylebox_override("hover", hover)
     button.add_theme_stylebox_override("pressed", hover)
     var disabled_style := style.duplicate() as StyleBoxFlat
@@ -404,12 +407,21 @@ func _button(label: String, callback: Callable, primary := false) -> Button:
     focus.set_border_width_all(2)
     focus.border_color = ACCENT
     button.add_theme_stylebox_override("focus", focus)
-    button.add_theme_color_override("font_color", INK)
-    button.add_theme_color_override("font_hover_color", INK.lightened(.15))
+    button.add_theme_color_override("font_color", Design.SCORE if primary else INK)
+    button.add_theme_color_override("font_hover_color", Design.SCORE if primary else INK.lightened(.15))
+    button.add_theme_color_override("font_pressed_color", Design.SCORE if primary else INK)
+    button.add_theme_color_override("font_focus_color", Design.SCORE if primary else INK)
     button.add_theme_color_override("font_disabled_color", MUTED)
     button.add_theme_font_size_override("font_size", 15)
     button.pressed.connect(callback)
     return button
+
+func _quiet_button(button: Button) -> void:
+    var normal := button.get_theme_stylebox("normal").duplicate() as StyleBoxFlat
+    normal.bg_color = Color.TRANSPARENT
+    normal.set_border_width_all(0)
+    button.add_theme_stylebox_override("normal", normal)
+    button.add_theme_stylebox_override("disabled", normal)
 
 func _screen(name: String) -> MarginContainer:
     var panel := MarginContainer.new()
@@ -686,6 +698,9 @@ func _build_interface() -> void:
     practice_navigation.add_child(_button("Lesson path", func(): _navigate("lesson")))
     practice_settings_button = _button("Settings", func(): _navigate("settings"))
     practice_navigation.add_child(practice_settings_button)
+    for child in practice_navigation.get_children():
+        if child is Button and child != mode_choice and child != hints_toggle:
+            _quiet_button(child)
 
     practice_header = HBoxContainer.new()
     practice_header.add_theme_constant_override("separation", 20)
@@ -714,9 +729,12 @@ func _build_interface() -> void:
     hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     hand_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
     tempo.add_child(hand_label)
-    lesson_info_label = _label("", 14, INK)
-    practice_layout.add_child(lesson_info_label)
     var score_panel := _card()
+    var score_style := Design.surface(Design.SCORE, 12)
+    score_style.set_border_width_all(1)
+    score_style.border_color = Color(Design.SAGE, .25)
+    score_style.set_content_margin_all(0)
+    score_panel.add_theme_stylebox_override("panel", score_style)
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(score_panel)
     var score_margin := _card_body(score_panel, 26)
@@ -724,6 +742,24 @@ func _build_interface() -> void:
     var score_region := VBoxContainer.new()
     score_region.add_theme_constant_override("separation", 8)
     score_margin.add_child(score_region)
+    var reading_header := HBoxContainer.new()
+    reading_header.add_theme_constant_override("separation", 16)
+    score_region.add_child(reading_header)
+    reading_status = _label("READY", 12, ACCENT, true)
+    reading_status.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    reading_status.custom_minimum_size.x = 92
+    reading_status.autowrap_mode = TextServer.AUTOWRAP_OFF
+    reading_header.add_child(reading_status)
+    feedback_label = _label("Choose a piece to begin", 18, INK, true)
+    feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    reading_header.add_child(feedback_label)
+    count_in_display = _label("GET READY", 18, ACCENT, true)
+    count_in_display.size_flags_horizontal = Control.SIZE_SHRINK_END
+    count_in_display.autowrap_mode = TextServer.AUTOWRAP_OFF
+    count_in_display.visible = false
+    reading_header.add_child(count_in_display)
+    lesson_info_label = _label("", 13, MUTED)
+    score_region.add_child(lesson_info_label)
     var score_area := Control.new()
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
     score_area.custom_minimum_size = Vector2(0, 170)
@@ -760,26 +796,14 @@ func _build_interface() -> void:
     score_retry_button = _button("Retry score", _retry_score)
     score_retry_button.visible = false
     status_content.add_child(score_retry_button)
-    # A compact, unobtrusive cue. A huge centred numeral hid the movement.
-    count_in_display = _label("GET READY", 18, ACCENT, true)
-    count_in_display.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-    count_in_display.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-    count_in_display.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    count_in_display.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-    count_in_display.offset_left = 22.0
-    count_in_display.offset_right = -22.0
-    count_in_display.offset_top = 12.0
-    count_in_display.offset_bottom = 52.0
-    count_in_display.visible = false
-    score_frame.add_child(count_in_display)
     hint_keyboard = HintKeyboard.new()
     score_region.add_child(hint_keyboard)
     practice_progress = ProgressBar.new()
     practice_progress.show_percentage = false
     practice_progress.max_value = 1.0
-    practice_progress.custom_minimum_size = Vector2(0, 5)
+    practice_progress.custom_minimum_size = Vector2(0, 3)
     practice_progress.add_theme_stylebox_override("background", Design.surface(Design.PANEL, 3))
-    practice_progress.add_theme_stylebox_override("fill", Design.surface(Design.SAGE, 3))
+    practice_progress.add_theme_stylebox_override("fill", Design.surface(ACCENT, 3))
     (practice_progress.get_theme_stylebox("background") as StyleBoxFlat).set_content_margin_all(0)
     (practice_progress.get_theme_stylebox("fill") as StyleBoxFlat).set_content_margin_all(0)
     practice_layout.add_child(practice_progress)
@@ -789,10 +813,6 @@ func _build_interface() -> void:
     progress_label = _label("", 14, MUTED)
     progress_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     information.add_child(progress_label)
-    feedback_label = _label("Ready", 14, MUTED)
-    feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    information.add_child(feedback_label)
     performance_review = VBoxContainer.new()
     performance_review.visible = false
     information.add_child(performance_review)
@@ -818,6 +838,9 @@ func _build_interface() -> void:
     controls.add_child(stop_button)
     controls.add_child(_button("Restart", _restart_practice))
     controls.add_child(_button("Next →", func(): _send_action({"action": "next"})))
+    for child in controls.get_children():
+        if child is Button and child != start_button:
+            _quiet_button(child)
     _build_lesson_screen()
 
     folder_dialog = FileDialog.new()
@@ -872,7 +895,7 @@ func _update_responsive_layout() -> void:
     if practice_controls != null:
         practice_controls.columns = 3 if width < 700 else 5
         var compact := size.y < 720.0
-        practice_layout_box.add_theme_constant_override("separation", 9 if compact else 19)
+        practice_layout_box.add_theme_constant_override("separation", 8 if compact else 14)
         score_frame.custom_minimum_size.y = 140 if compact else 170
         for side in ["left", "right", "top", "bottom"]:
             score_margin_box.add_theme_constant_override("margin_" + side, 10 if compact else 26)
@@ -883,7 +906,9 @@ func _update_responsive_layout() -> void:
                     control_width = 180 if child == start_button else 140
                 child.custom_minimum_size = Vector2(control_width, 38 if compact else 45)
                 child.add_theme_font_size_override("font_size", 13 if width < 900 else 15)
-        title_label.add_theme_font_size_override("font_size", 22 if width < 900 else 27)
+        title_label.add_theme_font_size_override("font_size", 21 if width < 900 else 24)
+        feedback_label.add_theme_font_size_override("font_size", 15 if compact else 18)
+        count_in_display.add_theme_font_size_override("font_size", 15 if compact else 18)
 
 func _build_lesson_screen() -> void:
     var page := _screen("Lesson")
@@ -1383,13 +1408,12 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     elif phase == "recovering":
         feedback_label.text = str(parsed.get("feedback", "Short break before retry"))
     elif phase == "count_in":
-        feedback_label.text = "Follow the moving staff · play at the teal line"
+        feedback_label.text = "Follow the pulse. Get ready to play."
     elif phase == "playing":
-        var midi_count: int = int(parsed.get("midi_notes", 0))
         if bool(parsed.get("preview_only", false)):
             feedback_label.text = "Timing preview · connect your piano to enable scoring"
         else:
-            feedback_label.text = "Playing · %d MIDI notes received" % midi_count if midi_count > 0 else "Playing · listening for your piano"
+            feedback_label.text = "Keep the pulse. Play at the line."
     else:
         feedback_label.text = str(parsed.get("feedback", ""))
     if str(parsed.get("mode", "")) == "listen":
@@ -1398,10 +1422,10 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             feedback_label.text = "Listen paused · Space to resume"
         if demo_player != null and bool(demo_player.get("audio_error")):
             feedback_label.text = "Listen audio could not load. Choose Listen to try again."
-    feedback_label.tooltip_text = feedback_label.text
     var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
     if unpositioned > 0:
         feedback_label.text += " · %d unpositioned note(s)" % unpositioned
+    feedback_label.tooltip_text = feedback_label.text
     if not learning:
         progress_label.text = "Clean runs %d of 3 at %d BPM" % [int(parsed.get("streak", 0)), int(parsed.get("target_bpm", parsed.get("bpm", 0)))]
         if str(parsed.get("mode", "")) == "perform":
@@ -1428,7 +1452,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     score_overlay.marks = []
     for marker in parsed.get("feedback_marks", []):
         score_overlay.marks.append(ScoreStrip.map_point(marker, score_layout) if score_layout.has("strip_size") else marker)
-    score_overlay.queue_redraw()
+    score_overlay.update_feedback(score_overlay.marks, "%s/%s" % [parsed.get("revision",0),parsed.get("transport_id",0)])
+    _update_reading_cue(parsed)
     var new_revision := int(parsed.get("revision", 0))
     if new_revision != revision:
         revision = new_revision
@@ -1450,6 +1475,49 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         if current_page != target_page and layout_revision == revision:
             _request_score(target_page)
     _refresh_score_status()
+
+func _update_reading_cue(state: Dictionary) -> void:
+    var phase: String = str(state.get("phase", "ready"))
+    var mode: String = str(state.get("mode", "practice"))
+    var teaching: Dictionary = state.get("teaching", {}) if state.get("teaching") is Dictionary else {}
+    var cue := "READY"
+    var color := ACCENT
+    if phase == "paused":
+        cue = "PAUSED"
+        color = MUTED
+    elif phase == "loading":
+        cue = "PREPARING"
+        color = MUTED
+    elif phase == "disconnected":
+        cue = "CONNECT"
+        color = Design.WARM
+    elif phase == "guided_complete":
+        cue = "NOTES FOUND"
+    elif mode == "learn":
+        cue = "YOUR TURN"
+        if str(teaching.get("hint_reason", "")) == "wrong_note":
+            cue = "TRY AGAIN"
+            color = Design.WARM
+    elif phase == "count_in":
+        cue = "GET READY"
+    elif mode == "listen":
+        cue = "LISTEN"
+    elif phase in ["feedback", "recovering"]:
+        cue = "REVIEW"
+        color = Design.WARM
+    elif phase == "playing":
+        cue = "PREVIEW" if bool(state.get("preview_only", false)) else "KEEP TIME"
+    reading_status.text = cue
+    reading_status.add_theme_color_override("font_color", color)
+    hints_toggle.visible = mode == "learn"
+    # Keep one immediate instruction. Transition details remain visible when
+    # the learner needs to know which bars/tempo will come next.
+    var show_detail := phase in ["feedback", "recovering", "loading", "paused"] \
+        or (mode != "learn" and phase in ["ready", "disconnected"]) \
+        or bool(state.get("guided_recovery", false))
+    # Retain the line's space so count-in, playing and pause share one scale.
+    if not show_detail:
+        lesson_info_label.text = ""
 
 func _request_layout() -> void:
     if layout_pending:

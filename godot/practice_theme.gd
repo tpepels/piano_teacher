@@ -7,6 +7,9 @@ const SAGE := Color("#5B7068")
 const SLATE := Color("#8B9A92")
 const STONE := Color("#C4CDC6")
 const TEAL := Color("#70C4AD")
+const SCORE := Color("#202925")
+const WARM := Color("#E4B880")
+const ERROR := Color("#E59A90")
 
 static func surface(color: Color, radius: int = 8) -> StyleBoxFlat:
     var box := StyleBoxFlat.new()
@@ -50,7 +53,7 @@ render_mode unshaded;
 void fragment() {
     vec4 sample_color = texture(TEXTURE, UV);
     float ink = 1.0 - dot(sample_color.rgb, vec3(0.2126, 0.7152, 0.0722));
-    COLOR = vec4(vec3(0.769, 0.804, 0.776), sample_color.a * ink);
+    COLOR = vec4(vec3(0.875, 0.906, 0.878), sample_color.a * ink);
 }
 """
     var material := ShaderMaterial.new()
