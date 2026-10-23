@@ -1355,7 +1355,7 @@ class PracticeEngine:
                 if self.paused:
                     raise ValueError("Cannot pause an exercise that is already paused")
                 context = self._phase(time.monotonic())
-                if context not in ("playing", "count_in", "feedback", "recovering", "loading", "guided_wait"):
+                if context not in ("playing", "count_in", "feedback", "recovering", "loading", "guided_wait", "preview_gap"):
                     raise ValueError("Cannot pause unless an exercise is playing or preparing")
                 self.pause_context = context
                 self.paused_at = time.monotonic()
@@ -1735,6 +1735,8 @@ class PracticeEngine:
             return "count_in" if now < self.run_at else "playing"
         if self.mode == "perform" and self.performance_summary is not None:
             return "performance_complete"
+        if self._preview_loop_pending:
+            return "preview_gap"
         if self.mode == "practice" and self.review_session_complete and self.performance_summary is not None:
             return "review"
         return ("feedback" if self.pending_result is not None else "loading" if self.awaiting_score_revision is not None

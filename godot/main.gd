@@ -882,7 +882,8 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
     # An idle screen or paused lesson does not need the same redraw budget
     # as a scrolling score. This never changes Python-owned audio, tempo
     # or MIDI grading, only how often the Godot display is presented.
-    var active: bool = bool(state.get("running", false)) \
+    var active: bool = (bool(state.get("running", false)) \
+        or absf(float(state.get("visual_scroll_speed", 0.0))) > .000001) \
         and not bool(state.get("paused", false)) \
         and current_screen == "practice"
     var target_fps: int = 60 if active else 30
@@ -905,7 +906,7 @@ func _navigate(screen: String) -> void:
             and last_control_action in ["start", "restart", "resume", "score_ready",
             "learn", "learn_retry", "practice", "listen", "perform"])
         if (phase in ["count_in", "playing", "guided_wait", "feedback",
-                      "recovering", "loading"] or starting):
+                      "recovering", "loading", "preview_gap"] or starting):
             _send_action({"action": "pause"})
     current_screen = screen
     for destination in screen_navigation:
@@ -4034,7 +4035,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         call_deferred("_open_library_piece", queued, queued_resume)
 
 func _has_active_transport() -> bool:
-    return bool(last_state.get("running", false)) or str(last_state.get("phase", "")) in ["count_in", "playing", "paused", "feedback", "recovering", "loading"]
+    return bool(last_state.get("running", false)) or str(last_state.get("phase", "")) in ["count_in", "playing", "paused", "feedback", "recovering", "loading", "preview_gap"]
 
 func _listen_or_return_to_practice() -> void:
     # Listen is a one-tap reversible action, never a scored take.

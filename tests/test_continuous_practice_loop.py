@@ -193,11 +193,13 @@ def test_paused_empty_measure_resumes_at_identical_visual_position(tmp_path, mon
         now[0] = app.run_at + (duration + 1) * 60 / app.plan.bpm
         before = app.state()
         assert app._preview_loop_pending
+        assert before["phase"] == "preview_gap"
         assert before["visual_scroll_speed"] > 0
         position = before["visual_scroll_beat"]
         deadline = app.next_at
         app.control("pause")
         now[0] += 45
+        assert app.state()["phase"] == "paused"
         assert app.state()["visual_scroll_beat"] == pytest.approx(position)
         app.control("resume")
         assert app.state()["visual_scroll_beat"] == pytest.approx(position)
