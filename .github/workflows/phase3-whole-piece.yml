@@ -1,0 +1,44 @@
+name: Phase 3 whole-piece audit and detector mutations
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  phase3-semantic-mutations:
+    name: Independent semantic mutations and corpus accounting
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install independent source audit dependencies
+        run: python -m pip install -e '.[godot,test]'
+      - name: Semantic corruption and aggregation regressions
+        run: python -m pytest -q tests/test_notation_proof_phase1.py tests/test_phase3_semantics.py tests/test_phase3_corpus_aggregation.py
+
+  phase3-visual-mutations:
+    name: Independent visual mutations and actual rest isolation
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 35
+    steps:
+      - name: Install real Godot renderer and test environment
+        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
+      - uses: actions/checkout@v4
+      - name: Install application and Python audit dependencies
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e '.[godot,test]'
+      - name: Visual detector mutations and full-score window accounting
+        run: .venv/bin/python -m pytest -q tests/test_phase3_whole_piece_coverage.py tests/test_phase3_independent_pixels.py tests/test_phase3_rest_differences.py tests/test_phase3_visual_coverage.py tests/test_phase3_raster_matching.py tests/test_phase3_capture_provenance.py
+      - name: Real Godot baseline and deliberately wrong rest captures
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          PIANO_REAL_PIXEL_TESTS: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            .venv/bin/python -m pytest -q tests/test_phase3_real_rest_protocol.py

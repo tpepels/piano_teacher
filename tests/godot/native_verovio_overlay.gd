@@ -55,6 +55,9 @@ func _audit() -> void:
         },
         "unavoidable_rest_overlaps": renderer.unavoidable_rest_overlaps,
         "frames": [],
+        "rest_difference_controls": [],
+        "rest_difference_protocol": 2,
+        "rest_difference_frames": [],
     }
     var samples: Array = fixture.get("sample_beats", [0.0, 1.5, 3.5, 5.5])
     for point in samples:
@@ -69,9 +72,70 @@ func _audit() -> void:
         await process_frame
         await RenderingServer.frame_post_draw
         var frame: Image = view.get_texture().get_image()
-        var filename: String = "native-%.2f.png" % at
+        # Quarter-note subdivisions can be closer than .01 beats. Use
+        # precise filenames in Phase 3 to prevent one frame overwriting
+        # another; preserve Phase 2's existing artifact names.
+        var filename: String = ("native-%.5f.png" if bool(fixture.get(
+            "phase3_full",false)) else "native-%.2f.png") % at
         if frame.is_empty() or frame.save_png(folder.path_join(filename)) != OK:
             failures.append("Cannot capture " + filename)
+        # Phase 3 controlled pixel experiment: capture a second rendering
+        # with exactly ONE written rest hidden, leaving the actual score,
+        # staff, noteheads, voice lanes and camera position unchanged.
+        # The Python oracle subtracts those two *real* PNGs. It cannot
+        # accept an unrelated note/flag as a rest or trust the renderer's
+        # rest Y coordinate. Source ID is only used to select what to hide,
+        # never to supply expected glyph type, shape or screen geometry.
+        if bool(fixture.get("phase3_full",false)):
+            # A no-op frame detects clock/animation drift independently of
+            # the rest intervention. Preserve full frames so unrelated changes
+            # outside the old 160px crop cannot be hidden from the oracle.
+            await process_frame
+            await RenderingServer.frame_post_draw
+            var repeat_file := "repeat-%.5f.png" % at
+            view.get_texture().get_image().save_png(folder.path_join(repeat_file))
+            var visible_rests: Array = []
+            for candidate in renderer.ordered_events:
+                if str(candidate.get("kind","")) != "rest":
+                    continue
+                if absf(float(candidate.get("beat",0.0))-at) < .0000001:
+                    visible_rests.append(candidate)
+            var original_events: Array = renderer.ordered_events.duplicate()
+            for rest_index in range(visible_rests.size()):
+                var suppressed: Dictionary = visible_rests[rest_index]
+                var reduced: Array = []
+                for candidate in original_events:
+                    if str(candidate.get("id","")) != str(suppressed.get("id","")):
+                        reduced.append(candidate)
+                renderer.ordered_events = reduced
+                renderer.queue_redraw()
+                await process_frame
+                await process_frame
+                await RenderingServer.frame_post_draw
+                var control: Image = view.get_texture().get_image()
+                var control_file: String = ("rest-without-%d-%.5f.png" % [
+                    rest_index,at])
+                if control.is_empty() or control.save_png(
+                        folder.path_join(control_file)) != OK:
+                    failures.append("Cannot capture suppressed rest "+control_file)
+                result["rest_difference_controls"].append({
+                    "id":str(suppressed.get("id","")),
+                    "staff":str(suppressed.get("staff","")),
+                    "voice":str(suppressed.get("voice","")),
+                    "clock":at,
+                    "file":control_file
+                })
+                renderer.ordered_events = original_events
+                renderer.queue_redraw()
+            renderer.ordered_events = original_events
+            renderer.queue_redraw()
+            await process_frame
+            await process_frame
+            await RenderingServer.frame_post_draw
+            var restored_file := "restored-%.5f.png" % at
+            view.get_texture().get_image().save_png(folder.path_join(restored_file))
+            result["rest_difference_frames"].append({
+                "clock":at,"repeat_file":repeat_file,"restored_file":restored_file})
         var heads: Dictionary = {}
         for identifier in renderer.drawn_noteheads:
             var xy: Vector2 = renderer.drawn_noteheads[identifier]

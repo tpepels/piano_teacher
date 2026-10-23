@@ -21,6 +21,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import hashlib
 
 from PIL import Image, ImageDraw
 
@@ -303,26 +304,104 @@ def draw_overlay(reference: Image.Image, native: Image.Image,
     return n
 
 
-def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
+def capture_dependency_hash(root: Path = ROOT) -> str:
+    """Include shared theme/resources as well as notation-specific scripts."""
+    sources=[root/"tests/godot/native_verovio_overlay.gd"]
+    sources.extend(p for p in (root/"godot").rglob("*")
+                   if p.is_file() and ".godot" not in p.relative_to(root/"godot").parts
+                   and p.suffix in {".gd",".gdshader",".gdshaderinc",".tscn",".tres",".godot"})
+    digest=hashlib.sha256()
+    for path in sorted(sources):
+        digest.update(path.relative_to(root).as_posix().encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def validate_capture_manifest(folder: Path, *, dependency_hash: str, godot_version: str) -> None:
+    manifest=json.loads((folder/"capture-manifest.json").read_text())
+    if manifest.get("renderer_dependencies_sha256")!=dependency_hash:
+        raise AssertionError("Cached renderer dependencies changed or are unrecorded")
+    if manifest.get("godot")!=godot_version:
+        raise AssertionError("Cached Godot engine version differs from the current engine")
+    captures=manifest.get("screenshots")
+    if not isinstance(captures,list) or not captures:
+        raise AssertionError("Cached capture manifest has no actual screenshot hashes")
+    for entry in captures:
+        if hashlib.sha256((folder/entry["file"]).read_bytes()).hexdigest()!=entry["sha256"]:
+            raise AssertionError(f"Cached actual screenshot changed: {entry['file']}")
+
+
+def run(out: Path, godot: str, case: AuditCase = CASES[0],
+        *, all_symbols: bool = False, strict: bool = True,
+        reuse_captures: bool = False) -> dict:
     out.mkdir(parents=True,exist_ok=True)
     data, engraving = fixture(case)
     model = data["model"]
+    if all_symbols:
+        # Every score symbol is positioned at the playhead in at least one
+        # actual native frame. Every measure is also sampled even if silent.
+        # No best-effort subset or fixed four-frame sampling is permitted.
+        from piano_teacher.notation.proof import read_written_score
+        written = read_written_score(data["xml"])
+        onsets = {round(float(e["beat"]), 8) for e in written.symbols}
+        measure_starts = set(written.bars[:-1])
+        data["sample_beats"] = sorted(onsets | measure_starts)
+        data["phase3_full"] = True
+        if not data["sample_beats"]:
+            raise AssertionError("Full-score witness has no sample clocks")
+        if len({f"{at:.5f}" for at in data["sample_beats"]}) != len(data["sample_beats"]):
+            raise AssertionError("Distinct source onsets would overwrite a screenshot filename")
+        if len(data["sample_beats"]) > 256:
+            raise AssertionError(
+                f"Window has {len(data['sample_beats'])} onsets: split into smaller "
+                "measure windows rather than silently sampling a subset")
     # Preserve the actual lesson MusicXML as the single reference score.
-    (out/"score.musicxml").write_text(data.pop("xml"),encoding="utf-8")
+    xml=data.pop("xml")
+    capture_sources=[ROOT/"tests/godot/native_verovio_overlay.gd",
+                     *sorted((ROOT/"godot/notation").rglob("*.gd"))]
+    data["capture_protocol_sha256"]=hashlib.sha256(b"".join(
+        p.relative_to(ROOT).as_posix().encode()+p.read_bytes()
+        for p in capture_sources)).hexdigest()
+    if reuse_captures:
+        if json.loads((out/"fixture.json").read_text()) != data or (
+                (out/"score.musicxml").read_text()!=xml):
+            raise AssertionError("Cached capture provenance does not match current source/layout/protocol")
+        validate_capture_manifest(out,dependency_hash=capture_dependency_hash(),
+            godot_version=subprocess.check_output([godot,"--version"],text=True).strip())
+    (out/"score.musicxml").write_text(xml,encoding="utf-8")
     (out/"fixture.json").write_text(json.dumps(data))
     for page, svg in enumerate(engraving.pages):
         (out/f"verovio-{page}.svg").write_text(svg)
         (out/f"verovio-{page}.png").write_bytes(rasterize_score(svg,width=2400))
-    result = subprocess.run([
-        godot, "--path",str(ROOT/"godot"),"--rendering-method","gl_compatibility",
-        "--script",str(ROOT/"tests/godot/native_verovio_overlay.gd"),
-        "--",str(out/"fixture.json"),str(out)],
-        capture_output=True,text=True,timeout=180)
-    (out/"godot.log").write_text(result.stdout+result.stderr)
-    assert result.returncode == 0 and "NATIVE_VEROVIO_OVERLAY_FAILURES:0" in result.stdout, (
-        "Actual native renderer failed:\n"+(result.stdout+result.stderr)[-9000:])
+    if not reuse_captures:
+        result = subprocess.run([
+            godot, "--path",str(ROOT/"godot"),"--rendering-method","gl_compatibility",
+            "--script",str(ROOT/"tests/godot/native_verovio_overlay.gd"),
+            "--",str(out/"fixture.json"),str(out)],
+            capture_output=True,text=True,timeout=180)
+        (out/"godot.log").write_text(result.stdout+result.stderr)
+        assert result.returncode == 0 and "NATIVE_VEROVIO_OVERLAY_FAILURES:0" in result.stdout, (
+            "Actual native renderer failed:\n"+(result.stdout+result.stderr)[-9000:])
+        import platform
+        import verovio
+        captures=[{"file":p.name,"sha256":hashlib.sha256(p.read_bytes()).hexdigest()}
+                  for pattern in ("native-*.png","rest-without-*.png","repeat-*.png","restored-*.png")
+                  for p in sorted(out.glob(pattern))]
+        manifest={"capture_protocol_sha256":data["capture_protocol_sha256"],
+                  "renderer_dependencies_sha256":capture_dependency_hash(),
+                  "python":platform.python_version(),
+                  "verovio":verovio.toolkit().getVersion(),
+                  "godot":subprocess.check_output([godot,"--version"],text=True).strip(),
+                  "screenshots":captures}
+        (out/"capture-manifest.json").write_text(json.dumps(manifest,indent=2)+"\n")
     report = json.loads((out/"native-overlay-report.json").read_text())
-    errors = readability_errors(model, report, case)
+    legacy_diagnostics = readability_errors(model, report, case)
+    # The older editorial audit uses renderer geometry and per-passage
+    # readability budgets. Those are diagnostics, not independent evidence
+    # that legitimate full-piece notation is incorrect.
+    errors = [] if all_symbols else list(legacy_diagnostics)
     reference = Image.open(out/"verovio-0.png")
     refnotes = engraving.layout["notes"]
     printed_ids = {n["id"] for n in model["notation_events"] if n["kind"] == "note"}
@@ -366,14 +445,96 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
                     30 < rest["x"] < screenshot.width-30):
                 if visible_ink(screenshot,rest["x"],rest["y"],26) < 7:
                     errors.append("Missing native rest pixels: "+str(rest["id"]))
-        frame["reference_notes_overlaid"] = draw_overlay(
-            reference.copy(),screenshot,refnotes,heads,
-            out/f"overlay-{frame['clock']:.2f}.png")
+        # Hundreds of full-score frames do not require hundreds of mostly
+        # redundant overlay PNGs. Phase 2 retains the full editorial overlays.
+        if not all_symbols:
+            frame["reference_notes_overlaid"] = draw_overlay(
+                reference.copy(),screenshot,refnotes,heads,
+                out/f"overlay-{frame['clock']:.2f}.png")
         registered_ids.update(set(heads) & reference_ids)
+    full_coverage = None
+    if all_symbols:
+        all_notes = {str(e["id"]) for e in model["notation_events"]
+                     if e["kind"] == "note"}
+        all_rests = {str(e["id"]) for e in model["notation_events"]
+                     if e["kind"] == "rest"}
+        registered_rests = {str(rest["id"]) for frame in report["frames"]
+                            for rest in frame["rests"]}
+        missed_notes = sorted(all_notes - rendered_ids)
+        missed_rests = sorted(all_rests - registered_rests)
+        unexpected_notes = sorted(rendered_ids - all_notes)
+        unexpected_rests = sorted(registered_rests - all_rests)
+        sampled_measures = set()
+        for measure in model["measures"]:
+            start = float(measure["start_beat"])
+            if any(abs(float(frame["clock"]) - start) <= 0.0000001
+                   for frame in report["frames"]):
+                sampled_measures.add(int(measure["number"]))
+        missed_measures = sorted(
+            {int(m["number"]) for m in model["measures"]} - sampled_measures)
+        full_coverage = {
+            "measure_count": len(model["measures"]),
+            "sampled_measures": len(sampled_measures),
+            "source_noteheads": len(all_notes),
+            "unique_rendered_noteheads": len(rendered_ids),
+            "source_rests": len(all_rests),
+            "unique_rendered_rests": len(registered_rests),
+            "screenshot_count": len(report["frames"]),
+            "missing_notes": missed_notes,
+            "missing_rests": missed_rests,
+            "missing_measure_starts": missed_measures,
+            "unexpected_notes": unexpected_notes,
+            "unexpected_rests": unexpected_rests,
+            "witness_type": "Godot identity + per-note/rest ink proximity; "
+                "not yet independent whole-piece symbol-classification",
+        }
+        if any((missed_notes, missed_rests, missed_measures,
+                unexpected_notes, unexpected_rests)):
+            errors.append(f"{case.name}: incomplete whole-window coverage: "
+                          + json.dumps(full_coverage,sort_keys=True))
+    if all_symbols:
+        # Unlike the legacy overlay, this check reads the WRITTEN pitches
+        # from MusicXML, then extracts staff lines and notehead positions
+        # directly from PNG pixels. No Godot head/staff Y is permitted.
+        from piano_teacher.notation.phase3_pixels import (
+            verify_all_notehead_pixels, verify_all_rest_pixels)
+        engraving_xml=(out/"score.musicxml").read_text(encoding="utf-8")
+        independent = verify_all_notehead_pixels(
+            engraving_xml,out,hand=case.hand)
+        rests_independent = verify_all_rest_pixels(
+            engraving_xml,out,hand=case.hand)
+        full_coverage["independent_image_rests"] = {
+            key:value for key,value in rests_independent.items()
+            if key!="measured"
+        }
+        (out/"independent-rests.json").write_text(
+            json.dumps(rests_independent,indent=2)+"\n")
+        if not rests_independent["passed"]:
+            errors.extend(f"Independent rest glyph: {message}"
+                          for message in rests_independent["failures"][:30])
+            if len(rests_independent["failures"])>30:
+                errors.append(f"And {len(rests_independent['failures'])-30} "
+                              "more rest image failures (see independent-rests.json)")
+        full_coverage["independent_image_pitch"] = {
+            key:value for key,value in independent.items() if key!="measured"
+        }
+        (out/"independent-pixels.json").write_text(
+            json.dumps(independent,indent=2)+"\n")
+        if not independent["passed"]:
+            errors.extend(f"Independent native pixel check: {message}"
+                          for message in independent["failures"][:30])
+            if len(independent["failures"])>30:
+                errors.append(f"And {len(independent['failures'])-30} more independent "
+                              "pixel errors (see independent-pixels.json)")
     if checked == 0:
         errors.append("No on-screen native noteheads were checked")
-    if active_pixel_samples == 0:
+    active_written_notes = sum(
+        1 for event in model["notation_events"]
+        if event["kind"] == "note" and is_active(event["staff"]))
+    if active_pixel_samples == 0 and active_written_notes:
         errors.append("No active-hand noteheads were pixel-verified")
+    # A hand with no written notes is a valid silent practice mode, not
+    # evidence of missing pixels. Its rests still require screenshot coverage.
     if not registered_ids:
         errors.append("Original Verovio identities never aligned with native frames")
     if rendered_ids - reference_ids:
@@ -396,9 +557,12 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0]) -> dict:
                             if n["kind"] == "note"), default=0),
         "rest_overlap_count":report["unavoidable_rest_overlaps"],
         "errors":errors,
+        "passed":not errors,
+        "legacy_renderer_diagnostics":legacy_diagnostics,
+        "whole_window_coverage":full_coverage,
     }
     (out/"audit.json").write_text(json.dumps(summary,indent=2)+"\n")
-    if errors:
+    if errors and strict:
         raise AssertionError("\n".join(errors))
     return summary
 

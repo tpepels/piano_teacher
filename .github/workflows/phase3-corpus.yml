@@ -1,0 +1,169 @@
+name: Phase 3 independent semantic and visual corpus proof
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: phase3-corpus-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semantic-scores:
+    name: Semantics - all 17 sources and three hand modes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install semantic score audit dependencies
+        run: python -m pip install -e '.[godot,test]'
+      - name: Original to generated and native semantics - 51 independent reports
+        run: |
+          python scripts/audit_phase3_semantics.py \
+            --all --all-hands --out /tmp/phase3-semantics
+      - name: Publish all 51 original, generated, native and ledger artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-semantic-reports
+          path: /tmp/phase3-semantics/
+          if-no-files-found: warn
+          retention-days: 21
+
+  visual-scores:
+    name: Visual ${{ matrix.index }} / ${{ matrix.hand }}
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 65
+    strategy:
+      fail-fast: false
+      max-parallel: 9
+      matrix:
+        index: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        hand: [both, right, left]
+    steps:
+      - name: Install actual Godot rendering and test dependencies
+        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa
+      - uses: actions/checkout@v4
+      - name: Install independent screenshot audits
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e '.[godot,test]'
+      - name: Capture every measure and report every visual construct
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            .venv/bin/python scripts/audit_phase3_whole_pieces.py \
+            --index ${{ matrix.index }} --hand ${{ matrix.hand }} \
+            --window-bars 4 --out /tmp/phase3-visual
+      - name: Publish complete PNG and visual notation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-visual-score-${{ matrix.index }}-${{ matrix.hand }}
+          path: /tmp/phase3-visual/
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Publish compact visual coverage ledger
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-report-${{ matrix.index }}-${{ matrix.hand }}
+          path: /tmp/phase3-visual/summary.json
+          if-no-files-found: warn
+          retention-days: 21
+
+  semantic-corpus-gate:
+    name: Semantic coverage - all 17 sources and three modes
+    needs: semantic-scores
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch semantic ledgers
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: phase3-semantic-reports
+          path: /tmp/phase3-reports
+      - name: Reject every missing or nonverified semantic element
+        if: always()
+        run: |
+          python scripts/aggregate_phase3_corpus.py \
+            --kind semantic --root /tmp/phase3-reports \
+            --out /tmp/phase3-semantic-coverage.json
+      - name: Publish complete semantic diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-semantic-corpus-coverage
+          path: /tmp/phase3-semantic-coverage.json
+          if-no-files-found: warn
+          retention-days: 21
+
+  visual-corpus-gate:
+    name: Visual coverage - all 17 sources and three modes
+    needs: visual-scores
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch compact visual ledgers
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: phase3-report-*
+          path: /tmp/phase3-reports
+      - name: Reject every missing window or nonverified visual element
+        if: always()
+        run: |
+          python scripts/aggregate_phase3_corpus.py \
+            --kind visual --root /tmp/phase3-reports \
+            --out /tmp/phase3-visual-coverage.json
+      - name: Publish complete visual diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-visual-corpus-coverage
+          path: /tmp/phase3-visual-coverage.json
+          if-no-files-found: warn
+          retention-days: 21
+
+  whole-corpus-gate:
+    name: Complete independent notation - all 17 sources and three modes
+    needs: [semantic-corpus-gate, visual-corpus-gate]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch independent semantic evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: phase3-semantic-reports
+          path: /tmp/phase3-reports
+      - name: Fetch independent visual evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          pattern: phase3-report-*
+          path: /tmp/phase3-reports
+      - name: Require both complete independent boundaries
+        if: always()
+        run: |
+          python scripts/aggregate_phase3_corpus.py \
+            --kind complete --root /tmp/phase3-reports \
+            --out /tmp/phase3-final-report.json
+      - name: Publish complete corpus report even when blocked
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-corpus-coverage
+          path: /tmp/phase3-final-report.json
+          if-no-files-found: warn
+          retention-days: 21

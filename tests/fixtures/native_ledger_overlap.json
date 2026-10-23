@@ -1,0 +1,18 @@
+{
+  "source": "midi/Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+  "source_sha256": "2c303b0e43d79b40dc9850846738b2e0c43799347f6f4ac77d0f2e8e6dcb6bb9",
+  "first_bar": 33,
+  "last_bar": 36,
+  "clock": 0,
+  "hand": "both",
+  "image_sha256": "8114e03887f8cea2feafe0145dc2c19501b1f6b3588cab4fa72580c3a8b97b5f",
+  "godot": "4.7.2.stable.arch_linux.ed1daf0bf",
+  "verovio": "5.7.0-7135340",
+  "capture_protocol_sha256": "c4a8b45ca41bdd6a812c37d662fff3743ed60336f79bb2ef2d011f7960c4dd2d",
+  "renderer_dependencies_sha256": "eda9ba856705a92c25075d1457d875327eb8c3b3095a6b8ca2861801e03232c7",
+  "expected_right_heads": [
+    "B5 half",
+    "B6 half"
+  ],
+  "purpose": "Actual correct ledger/stem overlap must not be reported as a proven wrong pitch from weak Dice evidence"
+}
