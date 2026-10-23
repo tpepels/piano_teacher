@@ -167,3 +167,14 @@ def test_sparse_hand_at_maximum_length_does_not_extend_unboundedly():
     assert [(e.phrase.first_bar, e.phrase.last_bar)
             for e in build_exercises(song, consolidate=False) if e.kind == "learn"] == [
                 (1, 8), (9, 16)]
+
+
+def test_silent_introduction_is_not_absorbed_into_first_focus_passage():
+    song = piece_with_onsets(3, (8,))
+    exercises = build_exercises(song, consolidate=False)
+    first = next(e for e in exercises if e.kind == "learn")
+    assert (first.phrase.first_bar, first.phrase.start) == (3, 8)
+    complete = exercises[-1]
+    assert complete.kind == "perform"
+    assert (complete.phrase.start, complete.phrase.end) == (0, 12)
+    assert complete.phrase.notes == song.notes

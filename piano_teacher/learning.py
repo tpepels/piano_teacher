@@ -106,6 +106,12 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]
     start = 0
     while start < bars:
         end = min(bars, start + SETTINGS.focus_measures)
+        if onsets(start, end) == 0:
+            # Preserve source introduction/trailing rests for the complete
+            # performance instead of padding a sparse practice unit with
+            # entirely silent opening measures.
+            start = end
+            continue
         if adaptive:
             while (end < bars and end - start < SETTINGS.focus_max_measures
                    and (onsets(start, end) < SETTINGS.focus_min_onsets
