@@ -145,6 +145,34 @@ def test_complete_gate_requires_semantic_and_visual_reports_separately(tmp_path)
     assert _aggregate(tmp_path, "complete")["passed"]
 
 
+def test_well_formed_incomplete_evidence_has_separate_integrity_and_coverage_results(tmp_path):
+    _complete(tmp_path, kind="semantic")
+    data = json.loads(_path(tmp_path, kind="semantic").read_text())
+    data["elements"][-1]["status"] = "unsupported"
+    data["coverage"]["verified"] -= 1
+    data["coverage"]["unsupported"] += 1
+    data["complete"] = False
+    _save(tmp_path, data, kind="semantic")
+    result = _aggregate(tmp_path, "semantic")
+    assert result["integrity_complete"] is True
+    assert result["integrity_errors"] == []
+    assert result["coverage_errors"]
+    assert result["complete"] is False
+    assert result["passed"] is False
+
+
+def test_missing_inventory_is_an_integrity_failure_not_just_incomplete_coverage(tmp_path):
+    _complete(tmp_path, kind="semantic")
+    data = json.loads(_path(tmp_path, kind="semantic").read_text())
+    data["elements"].pop()
+    data["coverage"]["expected"] -= 1
+    data["coverage"]["verified"] -= 1
+    _save(tmp_path, data, kind="semantic")
+    result = _aggregate(tmp_path, "semantic")
+    assert result["integrity_complete"] is False
+    assert any("inventory missing" in error for error in result["integrity_errors"])
+
+
 def test_missing_single_hand_job_fails_closed(tmp_path):
     _complete(tmp_path)
     _path(tmp_path, 1, "left").unlink()

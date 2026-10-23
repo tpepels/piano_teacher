@@ -10,6 +10,7 @@ import pytest
 
 from scripts import aggregate_phase3_corpus as aggregation
 from scripts import audit_native_release as release
+from piano_teacher.notation import support_policy
 from test_phase3_corpus_aggregation import pinned_test_corpus, _complete, _path
 
 REVISION = "a" * 40
@@ -146,6 +147,40 @@ def test_phase2_actual_rendering_is_a_required_independent_release_prerequisite(
 def test_normalized_ledger_is_exposed_by_existing_aggregator(evidence):
     result = aggregation.aggregate(evidence[0], scores=2, include_elements=True)
     assert sum(len(job["elements"]) for job in result["jobs"]) == result["coverage"]["expected"]
+
+
+def test_release_uses_supported_scope_without_claiming_complete_coverage(evidence, monkeypatch):
+    aggregate = aggregation.aggregate(evidence[0], scores=2, include_elements=True,
+                                      required_provenance=release.current_provenance())
+    job = aggregate["jobs"][0]
+    job["elements"][-1]["status"] = "unsupported"
+    job["coverage"]["verified"] -= 1
+    job["coverage"]["unsupported"] += 1
+    job["complete"] = False
+    aggregate["coverage"]["verified"] -= 1
+    aggregate["coverage"]["unsupported"] += 1
+    aggregate.update(complete=False, passed=False, errors=["Incomplete authorial notation"],
+                     coverage_errors=["Incomplete authorial notation"])
+    # This test isolates release integration. Exact MIDI classification and rule
+    # proof/replay have separate adversarial tests and cannot be overridden by
+    # producer fields in production.
+    scope = support_policy.assess_jobs(aggregate["jobs"])
+    scope.update(passed=True, blockers=[], limitations=[{"reason_code": "test_source_limitation"}])
+    monkeypatch.setattr(aggregation, "aggregate", lambda *args, **kwargs: aggregate)
+    monkeypatch.setattr(support_policy, "assess_jobs", lambda jobs: scope)
+    result = run(evidence)
+    assert result["release_ready"] is True
+    assert result["verification_complete"] is False
+    assert result["categories"]["semantic"]["complete"] is False
+    assert result["coverage"]["unsupported"] == 1
+    assert result["supported_scope"]["limitations"] == scope["limitations"]
+
+
+def test_supported_scope_never_overrides_missing_inventory_or_artifact_integrity(evidence, monkeypatch):
+    _path(evidence[0], kind="semantic").unlink()
+    monkeypatch.setattr(support_policy, "assess_jobs", lambda jobs: {
+        "passed": True, "complete": True, "blockers": [], "limitations": []})
+    assert not run(evidence)["release_ready"]
 
 
 def test_semantic_producer_records_revision_and_verification_input_digest(monkeypatch):

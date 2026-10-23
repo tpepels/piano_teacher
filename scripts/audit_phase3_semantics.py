@@ -96,10 +96,19 @@ def audit_source(name: str, *, source_index: int, hand: str = 'both',
             default_clefs=infer_piece_clefs(piece.notes) if not piece.source_musicxml else None)
         retain('generated', 'generated.musicxml', score.musicxml.encode('utf-8'))
         model = build_score_model(score, boundaries=piece.bar_boundaries, hand=hand)
+        if path.suffix.lower() in ('.mid', '.midi'):
+            # Observed warning input is audited against independently decoded
+            # source dispositions, never treated as a proof assertion.
+            model['import_warnings'] = list(piece.import_warnings)
         retain('native', 'model.json', (json.dumps(model, indent=2) + '\n').encode('utf-8'))
         if path.suffix.lower() in ('.mid', '.midi'):
-            result = combine_reports(verify_midi_performance(captured, model, hand=hand),
+            midi_report = verify_midi_performance(captured, model, hand=hand,
+                                                   generated_xml=score.musicxml)
+            result = combine_reports(midi_report,
                                      verify_generated_contract(score.musicxml, model))
+            result['midi_transcription_rules'] = midi_report['midi_transcription_rules']
+            retain('midi_transcription_rules', 'midi-transcription-rules.json',
+                   (json.dumps(result['midi_transcription_rules'], indent=2) + '\n').encode('utf-8'))
         else:
             result = verify_musicxml_contract(source_bytes.decode('utf-8'), score.musicxml,
                                               model, hand=hand)

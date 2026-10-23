@@ -7,6 +7,7 @@ No renderer metadata or detector-produced coordinates define expectations.
 """
 from __future__ import annotations
 
+from hashlib import sha256
 from pathlib import Path
 
 import numpy as np
@@ -294,5 +295,75 @@ def test_actual_gray_rail_ink_is_required_even_when_the_other_four_form_a_lattic
         pixels[y, mask] = (16, 37, 31)
         if mutation == "move":
             pixels[y + 6, mask] = gray
+    with pytest.raises(AssertionError, match="staff"):
+        detect_staff_lines(Image.fromarray(pixels))
+
+
+@pytest.fixture(params=(
+    pytest.param(("native_staff_peace_piece_long_ties.png",
+                  "a2950c71e32325cbdbdf07d66bafb06f03839a82b67b5ce973d7d2bb6727fb2c"),
+                 id="peace-piece"),
+    pytest.param(("native_staff_merry_go_round_long_ties.png",
+                  "4ecbc53e39b2824d7fbc51e55f9e5dbd3895f5642aa0d4ac727a1cdd4702fbfd"),
+                 id="merry-go-round"),
+))
+def retained_long_tie_frame(request):
+    # Unmodified protocol-2 captures from the 4d9c1ba local dossier:
+    # reference/phase3-report-5-both/Peace_Piece_-_Bill_Evans_(Piano_Solo)/
+    #   measures-049-052/native-2.84375.png
+    # reference/phase3-report-4-both/Merry-Go-Round-of-Life/
+    #   measures-233-237/native-5.03125.png
+    filename, digest = request.param
+    path = Path(__file__).parent / "fixtures" / filename
+    assert sha256(path.read_bytes()).hexdigest() == digest
+    with Image.open(path) as image:
+        return image.convert("RGB")
+
+
+def test_retained_long_ties_do_not_hide_the_ten_visible_rails(retained_long_tie_frame):
+    staves = detect_staff_lines(retained_long_tie_frame)
+    # Literal row centers inspected in both PNGs, independent of the detector
+    # and renderer. These rails are 11px apart; the long ties are not rails.
+    assert staves["right"].lines == pytest.approx((164.5, 175.5, 186.5, 197.5, 208.5))
+    assert staves["left"].lines == pytest.approx((336.5, 347.5, 358.5, 369.5, 380.5))
+
+
+@pytest.mark.parametrize("first_row", (164, 175, 186, 197, 208, 336, 347, 358, 369, 380))
+@pytest.mark.parametrize("mutation", ("erase", "move"))
+def test_each_retained_rail_needs_its_gray_pixels_despite_long_ties(
+        retained_long_tie_frame, first_row, mutation):
+    pixels = np.array(retained_long_tie_frame)
+    # The two literal antialiased gray colors sampled from these captures.
+    # Remove only original rail ink, preserving brighter ties and noteheads.
+    colors = ((56, 75, 69), (90, 107, 101))
+    if first_row >= 336:
+        colors = colors[::-1]
+    for y, gray in zip((first_row, first_row + 1), colors):
+        mask = np.all(pixels[y] == gray, axis=1)
+        assert int(mask.sum()) > 600
+        pixels[y, mask] = (16, 37, 31)
+        if mutation == "move":
+            pixels[y + 6, mask] = gray
+    with pytest.raises(AssertionError, match="staff"):
+        detect_staff_lines(Image.fromarray(pixels))
+
+
+@pytest.mark.parametrize("first_row", (208, 347))
+def test_two_row_gray_curve_cannot_replace_a_retained_rail(
+        retained_long_tie_frame, first_row):
+    pixels = np.array(retained_long_tie_frame)
+    colors = ((56, 75, 69), (90, 107, 101))
+    if first_row == 347:
+        colors = colors[::-1]
+    for y, gray in zip((first_row, first_row + 1), colors):
+        pixels[y, np.all(pixels[y] == gray, axis=1)] = (16, 37, 31)
+    # Preserve the exact two-row antialiasing but curve the replacement.
+    # Existing foreground contours stay untouched; a gray curve still cannot
+    # supply the missing horizontal rail underneath them.
+    for x in range(1536):
+        offset = round(3 * ((x - 768) / 768) ** 2)
+        for y, gray in zip((first_row + offset, first_row + offset + 1), colors):
+            if np.array_equal(pixels[y, x], (16, 37, 31)):
+                pixels[y, x] = gray
     with pytest.raises(AssertionError, match="staff"):
         detect_staff_lines(Image.fromarray(pixels))

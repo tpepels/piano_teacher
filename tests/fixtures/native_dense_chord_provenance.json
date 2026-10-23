@@ -1,0 +1,18 @@
+{
+  "description": "Unmodified retained protocol-2 frames for independent dense notehead assignment; expectations come from original authored MusicXML, not renderer geometry.",
+  "evidence_revision": "4d9c1badfed336b877cb9a42f6ada31f417912d3",
+  "original_musicxml": "musical_fidelity/xml_chord_ties.musicxml",
+  "original_musicxml_sha256": "f4215c12d5c52849ccd0d187fe6f4c68fcc2d38c3f5de7bbf7e9c7e69ca61db2",
+  "frames": [
+    {
+      "fixture": "native_dense_whole_chord.png",
+      "retained_frame": "/home/tom/Projects/piano_teacher_phase5_evidence/visual-final/reference/phase3-report-10-both/xml_chord_ties/measures-001-002/native-0.00000.png",
+      "sha256": "c487dabeb2a94a7dba5ae2223e298da91dd398117195ce6feb312f0bf974109a"
+    },
+    {
+      "fixture": "native_dense_half_chord.png",
+      "retained_frame": "/home/tom/Projects/piano_teacher_phase5_evidence/visual-final/reference/phase3-report-10-both/xml_chord_ties/measures-001-002/native-4.00000.png",
+      "sha256": "9f0dab5b50f80cf52f3778236fac2edde3fa67e8091651ec386ad83c9bb206b7"
+    }
+  ]
+}

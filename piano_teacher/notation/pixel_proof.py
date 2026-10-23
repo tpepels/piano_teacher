@@ -52,6 +52,44 @@ def _staff_row_values(brightness: np.ndarray) -> list[float]:
     return np.minimum.reduce(values).astype(float).tolist()
 
 
+def _split_staff_core_is_visible(brightness: np.ndarray, center: float,
+                                 reference: int) -> bool:
+    """Require exposed, matching two-row rail profiles in every quarter.
+
+    A fractional row candidate can be an antialiased rule split across two
+    rows. Compare the complete core with the already measured stroke weight,
+    rather than crediting only a thin edge of a wider tapered curve. Brighter
+    overlapping ink is inconclusive, while dark gaps remain counterevidence.
+    """
+    first = int(center)
+    if center == first:
+        return False
+    strip = brightness[first - 2:first + 4].astype(np.int16)
+    core = strip[2:4]
+    # Nearby ties can fill the short strip, leaving the rail itself as its
+    # minimum. Obtain the baseline from observed pixels elsewhere in the same
+    # column, without assuming a background color or renderer coordinates.
+    background = brightness.min(axis=0).astype(np.int16)
+    core_ink = (core - background).sum(axis=0)
+    low, high = core.min(axis=0), core.max(axis=0)
+    run = np.full(len(low), 2, dtype=np.int16)
+    above = below = np.ones(len(low), dtype=bool)
+    for step in (1, 2):
+        above = above & (strip[2-step] >= low) & (strip[2-step] <= high)
+        below = below & (strip[3+step] >= low) & (strip[3+step] <= high)
+        run += above.astype(np.int16) + below.astype(np.int16)
+    usable = (run == 2) & (low - background >= 5) & (core_ink == reference)
+    visible = (strip.max(axis=0) > strip.min(axis=0)) & (core_ink <= reference)
+    profiles = core[0].astype(np.int32) * 256 + core[1]
+    common = []
+    for values, measured, exposed in zip(np.array_split(profiles, 4),
+                                          np.array_split(usable, 4),
+                                          np.array_split(visible, 4)):
+        common.append(np.bincount(values[measured], minlength=256**2)
+                      / max(1, int(exposed.sum())))
+    return float(np.minimum.reduce(common).max()) > .5
+
+
 def _staff_stroke_ink(brightness: np.ndarray, center: float) -> int:
     """Measure a rule's vertical ink from pixels before reducing across X.
 
@@ -97,7 +135,11 @@ def _staff_stroke_ink(brightness: np.ndarray, center: float) -> int:
         # rule merely because its center differs by one quantization level.
         common.append(np.bincount(colors[usable], minlength=256) / max(1, int(visible.sum())))
     if float(np.minimum.reduce(common).max()) <= .5:
-        raise AssertionError('Image staff rule has no consistent thin horizontal core')
+        # Rounding a split rule to just one row discards the other half of
+        # its antialiasing and treats foreground there as absent rail ink.
+        # Accept only a complete two-row profile with independent pixel proof.
+        if not _split_staff_core_is_visible(brightness, center, reference):
+            raise AssertionError('Image staff rule has no consistent thin horizontal core')
     return reference
 
 

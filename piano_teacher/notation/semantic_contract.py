@@ -568,7 +568,8 @@ def verify_musicxml_contract(original_xml: str, generated_xml: str, native_model
     return ledger.report()
 
 
-def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both') -> dict:
+def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both',
+                            generated_xml: str | None = None) -> dict:
     """Decode original MIDI ticks with Mido; never call the application loader.
 
     This proves physical attacks/releases/dynamics, not a unique transcription.
@@ -581,6 +582,11 @@ def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both'
         raise ValueError('No supported common MIDI quarter-note timeline')
     if hand not in ('both', 'right', 'left'):
         raise ValueError('Invalid hand')
+    # Local import keeps the independent rule checker free of this ledger and
+    # of every production importer/lesson/model implementation.
+    from .midi_transcription_rules import RULE_VERSION, REQUIRED_RULES, verify_midi_transcription
+    rule_report = verify_midi_transcription(path, generated_xml, native_model, hand=hand)
+    dispositions_verified = rule_report['complete'] and rule_report['passed']
     ledger = _Ledger()
     _beam_metadata(ledger, native_model, 'original->native')
     notes, names, attack_tracks = [], {}, set()
@@ -616,7 +622,12 @@ def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both'
                            evidence=dict(attack_id=attack['id'], release_tick=tick))
                 if start == tick:
                     ledger.add('original->native', 'midi_performance', attack,
-                               status='unsupported', reason='Zero duration is not a timed piano attack')
+                               'skip zero-duration pair with warning and no native/generated attack',
+                               'independently verified disposition' if dispositions_verified else None,
+                               status='verified' if dispositions_verified else 'unverified',
+                               reason='Zero-duration ignore policy requires complete independent rule evidence',
+                               evidence=dict(rule_version=RULE_VERSION, rule='warning_dispositions',
+                                             release_id=identity['id']))
                     continue
                 notes.append(dict(id=attack['id'], source=attack, track=track_index,
                                   channel=msg.channel, midi_pitch=msg.note, velocity=velocity,
@@ -624,7 +635,11 @@ def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both'
                                   duration_beats=Fraction(tick-start, midi.ticks_per_beat)))
             else:
                 ledger.add('original->native', 'midi_release', identity,
-                           status='unsupported', reason='Release has no source attack to compare')
+                           'ignore orphan release with warning and no fabricated attack',
+                           'independently verified disposition' if dispositions_verified else None,
+                           status='verified' if dispositions_verified else 'unverified',
+                           reason='Orphan-release ignore policy requires complete independent rule evidence',
+                           evidence=dict(rule_version=RULE_VERSION, rule='warning_dispositions'))
         for pending in opened.values():
             for _, _, attack in pending:
                 ledger.add('original->native', 'midi_performance', attack,
@@ -673,7 +688,18 @@ def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both'
                    'Only physical key release compared; sustain/sostenuto sounding durations unverified')
     ledger.add('original->written', 'midi_written_transcription', dict(id='midi:written-transcription'),
                status='unsupported', reason='MIDI has no independently authored written score to compare')
-    return ledger.report()
+    ledger.add('original->written', 'midi_transcription_rules', dict(id='midi:transcription-rules'),
+               dict(rule_version=RULE_VERSION, required_rules=list(REQUIRED_RULES), complete=True, passed=True),
+               dict(rule_version=rule_report['rule_version'], required_rules=list(rule_report['rules']),
+                    complete=rule_report['complete'], passed=rule_report['passed']),
+               status='unverified' if not generated_xml else
+                      'verified' if dispositions_verified else
+                      'mismatch' if not rule_report['passed'] else 'unverified',
+               reason='Independent documented transcription policy; no claim of authored written notation',
+               evidence=dict(rule_version=RULE_VERSION, rule_report=rule_report))
+    report = ledger.report()
+    report['midi_transcription_rules'] = rule_report
+    return report
 
 
 def verify_generated_contract(generated_xml: str, native_model: dict) -> dict:
@@ -816,6 +842,7 @@ def source_inventory(path: str | Path) -> list[dict]:
                           'measure_structure', 'pedal_sounding_duration'):
             ledger.add('original->written', construct, dict(id=f'midi:unspecified:{construct}'))
         ledger.add('original->written', 'midi_written_transcription', dict(id='midi:written-transcription'))
+        ledger.add('original->written', 'midi_transcription_rules', dict(id='midi:transcription-rules'))
     else:
         original = read_written_score(path.read_text(encoding='utf-8'), strict=False)
         authored = _authored_tuplet_events(original.symbols)
