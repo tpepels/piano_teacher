@@ -114,8 +114,8 @@ SETTINGS_PATH = Path(__file__).parents[1] / "piano_teacher" / "lesson_settings.j
 
 
 def test_sparse_right_hand_is_not_hidden_by_busy_left_hand():
-    # The old algorithm saw four global attack times and kept bars 1-2.
-    # The student saw just one RH note because LH notes are greyed/omitted.
+    # The busy LH gives a worthwhile two-measure task. Do not extend merely
+    # to create a RH-only task with two attacks much later in the piece.
     boundaries = (0.0, 4.0, 8.0, 12.0, 16.0)
     notes = (
         Note(0, 6, 72, 0, 0, "right", "rh-1"),
@@ -127,12 +127,13 @@ def test_sparse_right_hand_is_not_hidden_by_busy_left_hand():
     )
     song = Piece("Ala-style sparse right hand", 110, notes, (), bar_boundaries=boundaries)
     plan = LearningPlan(song)
-    assert plan.active_phrase.first_bar == 1
-    assert plan.active_phrase.last_bar == 4
-    assert plan.hand == "right"
-    assert len({n.start for n in plan.active_variant.notes}) == 2
-    assert [(n.source_id, n.start) for n in plan.active_variant.notes] == [
-        ("rh-1", 0), ("rh-2", 8)]
+    assert (plan.active_phrase.first_bar, plan.active_phrase.last_bar) == (1, 2)
+    assert plan.hands == ("left", "both")
+    assert plan.hand == "left"
+    early = [s for s in plan.lesson_steps if s.kind == "learn" and s.first_bar == 1]
+    assert [s.hand for s in early] == ["left", "both"]
+    assert {n.source_id for n in plan.exercises[0].phrase.notes} == {
+        "rh-1", "lh-1", "lh-2", "lh-3"}
 
 
 def test_sparse_left_hand_is_not_hidden_by_busy_right_hand():
@@ -146,11 +147,11 @@ def test_sparse_left_hand_is_not_hidden_by_busy_right_hand():
     )
     song = Piece("Sparse left hand", 110, notes, (), bar_boundaries=boundaries)
     plan = LearningPlan(song)
-    assert plan.active_phrase.last_bar == 4
-    left = [s for s in plan.lesson_steps if s.hand == "left" and s.kind == "learn"]
-    assert left
-    assert left[0].first_bar == 1 and left[0].last_bar == 4
-    assert left[0].required_notes == 2
+    assert plan.active_phrase.last_bar == 2
+    assert plan.hands == ("right", "both")
+    assert [s.hand for s in plan.lesson_steps
+            if s.kind == "learn" and s.first_bar == 1] == ["right", "both"]
+    assert any(n.source_id == "lh-1" for n in plan.exercises[0].phrase.notes)
 
 
 def test_do_not_offer_a_single_attack_skeleton_before_a_fuller_exercise():

@@ -1377,6 +1377,11 @@ class PracticeEngine:
                     self.run_at += duration
                 if self.next_at:
                     self.next_at += duration
+                # Paused state freezes the frame at paused_at. Move the
+                # independent rewind clock by the same amount so resuming
+                # does not skip the remaining backward travel.
+                if self._visual_rewind_from is not None:
+                    self._visual_rewind_at += duration
                 self.paused_at = 0.0
                 self.paused = False
                 self.pause_context = None
@@ -1434,7 +1439,10 @@ class PracticeEngine:
                 p.decrease_tempo()
             else:
                 raise ValueError(f"Unsupported action: {action}")
-            self.score_revision+=1
+            # Native notation is engraved in source coordinates: changing
+            # only playback BPM must not invalidate the score/reload Godot.
+            if action not in ("tempo", "tempo_up", "tempo_down"):
+                self.score_revision+=1
             self.feedback="Ready"
             self.next_action="Start when you are ready."
             if was_guided:

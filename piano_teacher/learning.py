@@ -101,12 +101,6 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]
         # both-hands learner would need. Individual hands are subsets.
         return onsets(first, last) <= SETTINGS.focus_max_attacks
 
-    def sparse_for_a_hand(first: int, last: int) -> bool:
-        return any(0 < len(set().union(*(onsets_by_bar[bar][hand]
-                                         for bar in range(first, last))))
-                   < SETTINGS.focus_min_onsets
-                   for hand in ("right", "left"))
-
     ranges: list[tuple[int, int]] = []
     start = 0
     while start < bars:
@@ -123,9 +117,11 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]
             # individual practice variants are simplified separately.
             while end > start + 1 and not within_attack_limit(start, end):
                 end -= 1
+            # An underused hand is introduced with BOTH hands instead of
+            # forcing an overlong one-note solo lesson. Extend only when
+            # the whole passage has too few distinct attacks.
             while (end < bars and end-start < SETTINGS.focus_max_measures
-                   and (onsets(start, end) < SETTINGS.focus_min_onsets
-                        or sparse_for_a_hand(start, end))):
+                   and onsets(start, end) < SETTINGS.focus_min_onsets):
                 proposed = min(bars, start + SETTINGS.focus_max_measures,
                                end + SETTINGS.focus_measures)
                 if not within_attack_limit(start, proposed):
@@ -264,6 +260,24 @@ def _dense_single_measure_variants(phrase: Phrase, hand: str) -> tuple[ExerciseV
     return tuple(variants)
 
 
+def _hands_for_learning(exercise: Exercise) -> tuple[str, ...]:
+    """Omit unproductive solo-hand drills, never omit their source notes.
+
+    For two-hand passages, a hand needs the configured minimum number of
+    distinct rhythmic onsets to justify its own stage. Both hands together
+    always remain in the course. If only one hand exists, keep that solo
+    stage, including a genuine one-attack passage at the length limit.
+    """
+    available = {note.hand for note in exercise.phrase.notes}
+    individual = tuple(hand for hand in ("right", "left") if hand in available)
+    if len(individual) < 2:
+        return individual
+    useful = tuple(hand for hand in individual
+                   if len({round(note.start, 6) for note in exercise.phrase.notes
+                           if note.hand == hand}) >= SETTINGS.focus_min_onsets)
+    return useful + ("both",)
+
+
 @dataclass(frozen=True)
 class LessonStep:
     """One teachable stage; three clean target-tempo passes earn mastery."""
@@ -330,9 +344,7 @@ class LearningPlan:
             return ("right", "left", "both")
         if self.exercise.kind != "learn":
             return ("both",)
-        available = {n.hand for n in self.exercise.phrase.notes}
-        individual = tuple(h for h in ("right", "left") if h in available)
-        return individual + (("both",) if len(individual) > 1 else ())
+        return _hands_for_learning(self.exercise)
 
     @property
     def hand(self) -> str:
@@ -395,10 +407,10 @@ class LearningPlan:
         if self._lesson_steps_cache is None:
             steps: list[LessonStep] = []
             for index, ex in enumerate(self.exercises):
-                if ex.kind in ("learn", "warmup"):
-                    available = {note.hand for note in ex.phrase.notes}
-                    individual = tuple(hand for hand in ("right", "left") if hand in available)
-                    hands = individual + (("both",) if len(individual) > 1 else ())
+                if ex.kind == "learn":
+                    hands = _hands_for_learning(ex)
+                elif ex.kind == "warmup":
+                    hands = ("right", "left", "both")
                 else:
                     hands = ("both",)
                 for hand in hands:

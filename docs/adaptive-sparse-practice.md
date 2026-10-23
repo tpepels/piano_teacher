@@ -4,8 +4,15 @@ Imported music normally uses two source measures per learning passage. If a
 two-measure block has fewer than `focus_min_onsets` **distinct attack times**,
 the learning path adds more complete source measures, up to
 `focus_max_measures`. Notes played as a chord at the same instant count as
-one rhythmic event. The threshold is evaluated separately for **each hand**:
-several left-hand attacks do not justify a one-note right-hand practice step.
+one rhythmic event. Length expansion uses the union of attacks across both
+hands; the upper attack budget always wins over further expansion.
+Once passage boundaries are chosen, solo-hand stages require at least
+`focus_min_onsets` attacks **in that hand** when both hands participate.
+A sparse solo hand is omitted, with its original notes retained in the
+mandatory both-hands stage. Thus one sparse RH attack plus five LH attacks
+means LH → Both; the mirror case means RH → Both. If neither hand reaches
+the minimum but the combined passage does, teach Both alone. If only one
+hand has any notes, preserve its solo stage even at the measure limit.
 The simplified skeleton/outline stages are also skipped if they would contain
 fewer attacks than the threshold while the original stage contains enough.
 Dense passages retain their original two-measure focus.
