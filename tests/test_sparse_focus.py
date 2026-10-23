@@ -249,7 +249,14 @@ def test_two_dense_chords_count_as_only_two_attacks():
                if e.kind == "learn"]
     assert len(learned) == 1
     assert learned[0].phrase.last_bar == 2
-    assert LearningPlan(song).variants[-1].notes == song.notes
+    # The generator intentionally orders simultaneous chord tones by pitch,
+    # not source MIDI insertion order. Every unmodified source note must still
+    # appear exactly once in the original stage.
+    variant = LearningPlan(song).variants[-1]
+    assert len(variant.notes) == len(song.notes)
+    assert {n.source_id: n for n in variant.notes} == {
+        n.source_id: n for n in song.notes}
+    assert set(variant.source_indices) == set(range(len(song.notes)))
 
 
 def test_maximum_never_allows_sparse_tail_to_overflow_previous_passage():

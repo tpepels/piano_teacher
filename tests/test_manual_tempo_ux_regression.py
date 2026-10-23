@@ -251,6 +251,7 @@ def test_manual_tempo_without_piano_remains_ungraded_preview(tmp_path, action):
     with _engine(tmp_path) as engine:
         engine.control(action)
         bpm, stage = engine.plan.bpm, engine.plan.identity
+        revision = engine.score_revision
         engine.control("start")
         assert engine.state()["phase"] == "count_in"
         assert engine.preview_only
@@ -262,10 +263,24 @@ def test_manual_tempo_without_piano_remains_ungraded_preview(tmp_path, action):
         phrase = engine.plan.active_phrase
         engine.run_at = time.monotonic() - (phrase.end - phrase.start) * 60 / bpm - 1
         finished = engine.state()
-        assert finished["phase"] == "ready"
+        assert finished["phase"] == "preview_gap"
+        assert finished["preview_only"] and finished["score_loop_enabled"]
         assert not finished["running"] and not finished["auto"]
         assert finished["take_result"] is None and finished["streak"] == 0
         assert finished["bpm"] == bpm and finished["target_bpm"] == 113
+        assert finished["revision"] == revision
+        assert engine.plan.identity == stage
+        _assert_no_mastery(engine)
+        # Finishing the empty source measure starts another ungraded copy,
+        # without awarding a clean run or reloading the original notation.
+        engine.next_at = time.monotonic() - .01
+        repeated = engine.state()
+        assert repeated["phase"] == "playing" and repeated["preview_only"]
+        assert repeated["count_in_beats"] == 0
+        assert repeated["visual_offset_beats"] == pytest.approx(
+            phrase.end - phrase.start + engine.visual_gap_beats)
+        assert repeated["revision"] == revision
+        assert repeated["bpm"] == bpm
         assert engine.plan.identity == stage
         _assert_no_mastery(engine)
 

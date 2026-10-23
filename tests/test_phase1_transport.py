@@ -116,6 +116,8 @@ def test_invalid_pause_and_resume_rejected(harness):
 def test_paused_preview_never_advances_learning(harness):
     e, t = harness
     e.start()
+    revision = e.score_revision
+    stage = e.plan.identity
     t[0] = 105
     e.control('pause')
     t[0] = 407
@@ -123,8 +125,19 @@ def test_paused_preview_never_advances_learning(harness):
     e.control('resume')
     t[0] = 420.3
     state = e.state()
-    assert state['phase'] == 'ready' and not state['running']
-    assert state['mastered'] == 0
+    assert state['phase'] == 'preview_gap' and not state['running']
+    assert state['preview_only'] and not state['auto']
+    assert state['take_result'] is None
+    assert state['mastered'] == 0 and state['streak'] == 0
+    # The paused duration cannot cause a graded completion or an extra
+    # score reload. The preview can still loop after its empty measure.
+    t[0] = e.next_at + .01
+    repeated = e.state()
+    assert repeated['phase'] == 'playing' and repeated['preview_only']
+    assert repeated['revision'] == revision
+    assert repeated['count_in_beats'] == 0
+    assert repeated['mastered'] == 0 and repeated['streak'] == 0
+    assert e.plan.identity == stage
 
 
 def test_godot_uses_one_clock_and_freezes_on_pause():
