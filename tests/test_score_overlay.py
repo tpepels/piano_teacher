@@ -13,7 +13,7 @@ def test_godot_preparation_overlay_loads_visible_symbols_and_draws_fractional_co
     godot = shutil.which("godot") or shutil.which("godot4")
     if not godot:
         pytest.skip("Godot 4 is unavailable")
-    from piano_teacher.notation_symbols import preparation_symbols
+    from piano_teacher.notation.assets.glyphs import preparation_symbols
 
     (tmp_path / "symbols.json").write_text(json.dumps(preparation_symbols()))
     script = tmp_path / "check_overlay.gd"

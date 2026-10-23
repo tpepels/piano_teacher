@@ -84,7 +84,8 @@ def test_real_verovio_grace_engraving_keeps_only_scored_source_anchors(tmp_path)
         score = _lesson(piece, piece.notes)
         engraved = render_layout(score, 1, 1, "both",
             total_beats=4, bpm=80)
-        assert engraved.pages and "<svg" in engraved.pages[0]
+        assert engraved.pages
+        assert ET.fromstring(engraved.pages[0]).tag == '{http://www.w3.org/2000/svg}svg'
         assert len(engraved.layout["notes"]) == 2
         assert {item["source_id"] for item in engraved.layout["notes"]} == {
             note.source_id for note in piece.notes}

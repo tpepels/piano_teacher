@@ -52,7 +52,7 @@ def test_engrave_complete_notes_once_then_reuse_across_loads(tmp_path, monkeypat
 
 
 def test_note_stems_are_only_verovio_svg_graphics():
-    from piano_teacher.verovio_note_templates import _only_stem_svg
+    from piano_teacher.notation.assets.notes import _only_stem_svg
     from xml.etree import ElementTree as ET
     svg='''<svg xmlns="http://www.w3.org/2000/svg">
     <g class="note"><g class="notehead"><circle cx="0" cy="0" r="5"/></g>
@@ -70,7 +70,7 @@ def test_real_flag_is_not_embedded_in_reusable_beam_stem():
     import verovio
     from xml.etree import ElementTree as ET
     from piano_teacher.score import _create_verovio_toolkit
-    from piano_teacher.verovio_note_templates import _one_note_xml, _only_stem_svg
+    from piano_teacher.notation.assets.notes import _one_note_xml, _only_stem_svg
 
     toolkit = _create_verovio_toolkit(verovio)
     assert toolkit.loadData(_one_note_xml("eighth", "up"))
@@ -81,7 +81,7 @@ def test_real_flag_is_not_embedded_in_reusable_beam_stem():
 
 
 def test_note_template_musicxml_has_verovio_stem_and_real_note_duration():
-    from piano_teacher.verovio_note_templates import _one_note_xml, KINDS
+    from piano_teacher.notation.assets.notes import _one_note_xml, KINDS
     from xml.etree import ElementTree as ET
     for kind in KINDS:
         for direction in ("up", "down"):

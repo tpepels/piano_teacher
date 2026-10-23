@@ -1,6 +1,9 @@
 """Migration contracts: native-default launch, source ownership, moved Godot paths."""
 from pathlib import Path
 import ast
+from importlib.util import resolve_name
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 GODOT = ROOT / "godot"
@@ -70,11 +73,79 @@ def test_native_assets_are_not_importing_old_page_renderer():
         ast.parse(source, filename=str(path))
 
 
-def test_old_public_imports_are_thin_explicit_facades():
-    for name in ("score.py", "score_model.py", "lesson_score.py",
-                 "xml_import.py", "reading_spacing.py", "raster.py"):
+def test_notation_infrastructure_has_canonical_owners():
+    owners = {
+        "notation/model.py": {"build_score_model"},
+        "notation/lesson.py": {"build_lesson_score"},
+        "importing/musicxml.py": {"load_musicxml"},
+        "rendering/legacy/spacing.py": {
+            "space_for_reading", "space_for_continuous_reading"},
+        "notation/assets/glyphs.py": {"native_glyphs", "preparation_symbols"},
+        "notation/assets/beams.py": {"beam_fragments"},
+        "notation/assets/chords.py": {"chord_templates"},
+        "notation/assets/notes.py": {"note_templates"},
+        "notation/assets/slurs.py": {"slur_fragments"},
+        "notation/assets/ties.py": {"tie_templates"},
+        "notation/assets/tuplets.py": {"tuplet_fragments"},
+    }
+    for name, required in owners.items():
+        path = PKG / name
+        contents = path.read_text()
+        assert "import *" not in contents
+        assert "sys.modules" not in contents
+        tree = ast.parse(contents, filename=str(path))
+        definitions = {node.name for node in tree.body
+                       if isinstance(node, (ast.FunctionDef, ast.ClassDef))}
+        assert required <= definitions, (name, required - definitions)
+
+
+def test_retained_runtime_adapters_use_explicit_exports():
+    for name in ("score.py", "score_geometry.py", "raster.py"):
         path = PKG / name
         contents = path.read_text()
         assert "import *" not in contents
         assert "sys.modules" not in contents
         ast.parse(contents, filename=str(path))
+
+
+def test_retired_notation_facades_have_no_remaining_importers():
+    retired = {
+        "score_model", "lesson_score", "xml_import", "reading_spacing", "notation_symbols",
+        "verovio_beam_fragments", "verovio_chord_templates",
+        "verovio_note_templates", "verovio_slur_fragments",
+        "verovio_tie_templates", "verovio_tuplet_fragments",
+    }
+    remaining = sorted(name for name in retired if (PKG / f"{name}.py").exists())
+    assert not remaining, remaining
+    obsolete = {f"piano_teacher.{name}" for name in retired}
+    for root in (PKG, ROOT / "tests", ROOT / "scripts"):
+        for path in root.rglob("*.py"):
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for node in ast.walk(tree):
+                imports = set()
+                if isinstance(node, ast.Import):
+                    imports = {alias.name for alias in node.names}
+                elif isinstance(node, ast.ImportFrom):
+                    module = node.module or ""
+                    if node.level:
+                        package = ".".join(path.parent.relative_to(ROOT).parts)
+                        module = resolve_name("." * node.level + module, package)
+                    imports = {module, *(f"{module}.{alias.name}"
+                                         for alias in node.names)}
+                assert not imports & obsolete, (path, node.lineno, imports & obsolete)
+
+
+@pytest.mark.parametrize("filename,source", [
+    ("probe.py", "from . import score_model"),
+    ("subpackage/probe.py", "from .. import score_model"),
+])
+def test_retirement_gate_rejects_relative_facade_imports(
+        tmp_path, monkeypatch, filename, source):
+    package = tmp_path / "piano_teacher"
+    importer = package / filename
+    importer.parent.mkdir(parents=True)
+    importer.write_text(source)
+    monkeypatch.setitem(globals(), "ROOT", tmp_path)
+    monkeypatch.setitem(globals(), "PKG", package)
+    with pytest.raises(AssertionError, match="piano_teacher.score_model"):
+        test_retired_notation_facades_have_no_remaining_importers()

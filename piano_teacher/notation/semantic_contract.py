@@ -141,6 +141,91 @@ def _native_events(model):
     return events
 
 
+def _valid_beams(beams):
+    """Require explicit, well-formed MusicXML beam tuples, including absence."""
+    if not isinstance(beams, (tuple, list)):
+        return False
+    levels = set()
+    for beam in beams:
+        if not isinstance(beam, (tuple, list)) or len(beam) != 3:
+            return False
+        level, value, attributes = beam
+        if (not isinstance(level, str) or level not in tuple('12345678')
+                or level in levels or value not in (
+                    'begin', 'continue', 'end', 'forward hook', 'backward hook')
+                or not isinstance(attributes, (tuple, list))):
+            return False
+        levels.add(level)
+        names = set()
+        for attribute in attributes:
+            if not isinstance(attribute, (tuple, list)) or len(attribute) != 2:
+                return False
+            name, value = attribute
+            if (not isinstance(name, str) or not name or name == 'number'
+                    or name in names or not isinstance(value, str)):
+                return False
+            names.add(name)
+    return True
+
+
+def _beam_metadata(ledger, model, boundary):
+    # This row proves representation coverage only. Musical beam facts still
+    # require independent event comparisons; MIDI cannot author written beams.
+    events = model.get('notation_events', ())
+    valid = sum(_valid_beams(e.get('beams')) for e in events)
+    complete = bool(events) and valid == len(events)
+    ledger.add(boundary, 'beams', dict(id='score:beam-metadata'),
+               'explicit valid beam metadata on every native event',
+               dict(events=len(events), valid=valid),
+               status='verified' if complete else 'unsupported',
+               reason=None if complete else 'Native beam metadata is missing, malformed or empty inventory')
+
+
+def _valid_written_metadata(value, field, event):
+    if not isinstance(value, (tuple, list)):
+        return False
+    if field == 'tuplet_extras' and len(value) != len(event.get('tuplet_marks', ())):
+        return False
+    for attributes in value:
+        if not isinstance(attributes, (tuple, list)):
+            return False
+        names = set()
+        for attribute in attributes:
+            if not isinstance(attribute, (tuple, list)) or len(attribute) != 2:
+                return False
+            name, text = attribute
+            if (not isinstance(name, str) or not name or name in names
+                    or not isinstance(text, str)):
+                return False
+            if field == 'tuplet_extras' and name in ('type', 'number', 'bracket', 'show-number'):
+                return False
+            names.add(name)
+        if field == 'tied_marks' and 'type' not in names:
+            return False
+    return True
+
+
+def _compare_written_metadata(ledger, source, target, boundary, ambiguous, inferred_group):
+    for field, construct in (('tied_marks', 'written_tie_attributes'),
+                             ('tuplet_extras', 'tuplet_attributes')):
+        expected = source.get(field)
+        sound_tie = field == 'tied_marks' and (source['tie_start'] or source['tie_stop'])
+        actual = target.get(field) if target else None
+        status, reason = None, None
+        if ambiguous:
+            status = 'ambiguous'
+        elif boundary.endswith('native') and target is not None and actual is None:
+            status, reason = 'unsupported', f'Native event has no {field} metadata'
+        elif target is not None and not _valid_written_metadata(actual, field, target):
+            status, reason = 'mismatch', f'Malformed {field} metadata'
+        elif field == 'tuplet_extras' and inferred_group:
+            status, reason = 'unsupported', 'Original authors a ratio but no graphical tuplet attributes'
+        elif not boundary.startswith('generated') and sound_tie and not expected and actual:
+            status, reason = 'unsupported', 'Original sound tie has no explicit written tied attributes'
+        ledger.add(boundary, construct, source['source'], expected, actual,
+                   status=status, reason=reason)
+
+
 def _match_events(original, actual, mapping, *, direct=False):
     unused = set(range(len(actual)))
     pairs = []
@@ -202,15 +287,10 @@ def _compare_events(ledger, original, actual, boundary, *, direct=False, generat
             # Native notation_events describe visible ink only. Preserve the
             # unrepresented logical symbol explicitly; pitched performance is
             # still independently mandatory in _attacks below.
-            kinds = [construct, 'voices', 'ties', 'tuplets']
+            kinds = [construct, 'voices', 'ties', 'tuplets', 'beams',
+                     'written_tie_attributes', 'tuplet_attributes']
             if source['kind'] == 'note':
                 kinds.append('source_binding')
-            if source.get('beams'):
-                kinds.append('beams')
-            if source.get('tied_marks'):
-                kinds.append('written_tie_attributes')
-            if any(source.get('tuplet_extras', ())):
-                kinds.append('tuplet_attributes')
             if source.get('time_modification') is not None and identity['id'] not in authored:
                 kinds.append('tuplet_grouping')
             for kind in kinds:
@@ -257,25 +337,17 @@ def _compare_events(ledger, original, actual, boundary, *, direct=False, generat
             ledger.add(boundary, 'tuplet_grouping', identity, source['tuplet_marks'],
                        target.get('tuplet_marks') if target else None, status='unsupported',
                        reason='Original authors a ratio but no graphical group limits; generated grouping is inferred')
-        if any(source.get('tuplet_extras', ())):
-            ledger.add(boundary, 'tuplet_attributes', identity, source['tuplet_extras'],
-                       target.get('tuplet_extras') if target else None,
-                       status='unsupported' if boundary.endswith('native') else None,
-                       reason='Native model retains only type/number/bracket/show-number' if boundary.endswith('native') else None)
-        if boundary.endswith('native'):
-            if source.get('beams'):
-                ledger.add(boundary, 'beams', identity, source['beams'], None,
-                           status='unsupported', reason='Native notation_events have no beam metadata')
-        else:
-            ledger.add(boundary, 'beams', identity, source.get('beams'),
-                       target.get('beams') if target else None,
-                       status='ambiguous' if ambiguous else None)
-        # Additional written tie attributes have no native semantic field.
-        if source.get('tied_marks'):
-            ledger.add(boundary, 'written_tie_attributes', identity, source['tied_marks'],
-                       target.get('tied_marks') if target else None,
-                       status='unsupported' if boundary.endswith('native') else None,
-                       reason='Native model only retains start/stop' if boundary.endswith('native') else None)
+        _compare_written_metadata(ledger, source, target, boundary, ambiguous, inferred_group)
+        beam_status = None
+        if boundary.endswith('native') and target is not None:
+            if target.get('beams') is None:
+                beam_status = 'unsupported'
+            elif not _valid_beams(target['beams']):
+                beam_status = 'mismatch'
+        ledger.add(boundary, 'beams', identity, source.get('beams'),
+                   target.get('beams') if target else None,
+                   status='ambiguous' if ambiguous else beam_status,
+                   reason='Native event has missing or malformed beam metadata' if beam_status else None)
     for extra in extras:
         # Generated full piano lessons add an otherwise absent hand. Its blank
         # staff is a provable scaffolding normalization, not an original rest.
@@ -472,8 +544,7 @@ def verify_musicxml_contract(original_xml: str, generated_xml: str, native_model
     original = read_written_score(original_xml, strict=False)
     generated = read_written_score(generated_xml, strict=False)
     ledger = _Ledger()
-    ledger.add('original->native', 'beams', dict(id='score:beam-metadata'),
-               status='unsupported', reason='Native notation_events schema has no beam membership/level fields')
+    _beam_metadata(ledger, native_model, 'original->native')
     native = _native_events(native_model)
     pairs = _compare_events(ledger, original.symbols, generated.symbols, 'original->generated')
     generated_targets = {source['source']['id']: target for source, target, _ in pairs}
@@ -497,7 +568,8 @@ def verify_musicxml_contract(original_xml: str, generated_xml: str, native_model
     return ledger.report()
 
 
-def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both') -> dict:
+def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both',
+                            generated_xml: str | None = None) -> dict:
     """Decode original MIDI ticks with Mido; never call the application loader.
 
     This proves physical attacks/releases/dynamics, not a unique transcription.
@@ -510,10 +582,15 @@ def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both'
         raise ValueError('No supported common MIDI quarter-note timeline')
     if hand not in ('both', 'right', 'left'):
         raise ValueError('Invalid hand')
+    # Local import keeps the independent rule checker free of this ledger and
+    # of every production importer/lesson/model implementation.
+    from .midi_transcription_rules import RULE_VERSION, REQUIRED_RULES, verify_midi_transcription
+    rule_report = verify_midi_transcription(path, generated_xml, native_model, hand=hand)
+    dispositions_verified = rule_report['complete'] and rule_report['passed']
     ledger = _Ledger()
-    ledger.add('original->native', 'beams', dict(id='score:beam-metadata'),
-               status='unsupported', reason='Native notation_events schema has no beam membership/level fields')
+    _beam_metadata(ledger, native_model, 'original->native')
     notes, names, attack_tracks = [], {}, set()
+    ambiguous_pairings = {}
     for track_index, track in enumerate(midi.tracks):
         tick, opened = 0, {}
         for ordinal, msg in enumerate(track):
@@ -533,18 +610,24 @@ def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both'
             if msg.type == 'note_on' and msg.velocity:
                 attack_tracks.add(track_index)
                 if key in opened:
-                    ledger.add('original->native', 'midi_performance', identity,
-                               'unambiguous note pairing', 'overlapping same-pitch attack',
-                               status='ambiguous')
-                    continue
-                opened[key] = tick, msg.velocity, identity
+                    for _, _, pending in opened[key]:
+                        ambiguous_pairings[pending['id']] = pending
+                    ambiguous_pairings[identity['id']] = identity
+                opened.setdefault(key, []).append((tick, msg.velocity, identity))
             elif key in opened:
-                start, velocity, attack = opened.pop(key)
+                start, velocity, attack = opened[key].pop(0)
+                if not opened[key]:
+                    del opened[key]
                 ledger.add('original->native', 'midi_release', identity, True, True,
                            evidence=dict(attack_id=attack['id'], release_tick=tick))
                 if start == tick:
                     ledger.add('original->native', 'midi_performance', attack,
-                               status='unsupported', reason='Zero duration is not a timed piano attack')
+                               'skip zero-duration pair with warning and no native/generated attack',
+                               'independently verified disposition' if dispositions_verified else None,
+                               status='verified' if dispositions_verified else 'unverified',
+                               reason='Zero-duration ignore policy requires complete independent rule evidence',
+                               evidence=dict(rule_version=RULE_VERSION, rule='warning_dispositions',
+                                             release_id=identity['id']))
                     continue
                 notes.append(dict(id=attack['id'], source=attack, track=track_index,
                                   channel=msg.channel, midi_pitch=msg.note, velocity=velocity,
@@ -552,10 +635,19 @@ def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both'
                                   duration_beats=Fraction(tick-start, midi.ticks_per_beat)))
             else:
                 ledger.add('original->native', 'midi_release', identity,
-                           status='unsupported', reason='Release has no source attack to compare')
-        for _, _, attack in opened.values():
-            ledger.add('original->native', 'midi_performance', attack,
-                       'paired source release', None, reason='Unterminated original attack')
+                           'ignore orphan release with warning and no fabricated attack',
+                           'independently verified disposition' if dispositions_verified else None,
+                           status='verified' if dispositions_verified else 'unverified',
+                           reason='Orphan-release ignore policy requires complete independent rule evidence',
+                           evidence=dict(rule_version=RULE_VERSION, rule='warning_dispositions'))
+        for pending in opened.values():
+            for _, _, attack in pending:
+                ledger.add('original->native', 'midi_performance', attack,
+                           'paired source release', None, reason='Unterminated original attack')
+    for identity in ambiguous_pairings.values():
+        ledger.add('original->native', 'midi_note_pairing', identity, status='ambiguous',
+                   reason='Same-channel/pitch overlap has no unique attack-to-release identity in MIDI',
+                   evidence=dict(comparison_policy='FIFO physical endpoints; no unique written duration claim'))
     tracks = defaultdict(list)
     for n in notes:
         tracks[n['track']].append(n['midi_pitch'])
@@ -596,15 +688,25 @@ def verify_midi_performance(path: str | Path, native_model: dict, *, hand='both'
                    'Only physical key release compared; sustain/sostenuto sounding durations unverified')
     ledger.add('original->written', 'midi_written_transcription', dict(id='midi:written-transcription'),
                status='unsupported', reason='MIDI has no independently authored written score to compare')
-    return ledger.report()
+    ledger.add('original->written', 'midi_transcription_rules', dict(id='midi:transcription-rules'),
+               dict(rule_version=RULE_VERSION, required_rules=list(REQUIRED_RULES), complete=True, passed=True),
+               dict(rule_version=rule_report['rule_version'], required_rules=list(rule_report['rules']),
+                    complete=rule_report['complete'], passed=rule_report['passed']),
+               status='unverified' if not generated_xml else
+                      'verified' if dispositions_verified else
+                      'mismatch' if not rule_report['passed'] else 'unverified',
+               reason='Independent documented transcription policy; no claim of authored written notation',
+               evidence=dict(rule_version=RULE_VERSION, rule_report=rule_report))
+    report = ledger.report()
+    report['midi_transcription_rules'] = rule_report
+    return report
 
 
 def verify_generated_contract(generated_xml: str, native_model: dict) -> dict:
     """Generated/native consistency only; never substitute for original checks."""
     generated = read_written_score(generated_xml, strict=False)
     ledger = _Ledger()
-    ledger.add('generated->native', 'beams', dict(id='score:beam-metadata'), status='unsupported',
-               reason='Native notation_events schema has no beam membership/level fields')
+    _beam_metadata(ledger, native_model, 'generated->native')
     _compare_events(ledger, [e for e in generated.symbols if e['visible']],
                     _native_events(native_model), 'generated->native', direct=True)
     for issue in generated.issues:
@@ -612,7 +714,8 @@ def verify_generated_contract(generated_xml: str, native_model: dict) -> dict:
                    'valid timed notation', issue['reason'])
     for missing in generated.uncovered:
         ledger.add('generated', missing['construct'], missing['source'], status='unsupported',
-                   reason=missing['reason'])
+                   reason=missing['reason'],
+                   evidence=dict(xml=missing['xml']) if 'xml' in missing else None)
     return ledger.report()
 
 
@@ -709,6 +812,7 @@ def source_inventory(path: str | Path) -> list[dict]:
     ledger = _Ledger()
     if path.suffix.lower() in ('.mid', '.midi'):
         tracks = set()
+        pending_counts, clusters, ambiguous = defaultdict(int), defaultdict(list), {}
         ledger.add('original->native', 'beams', dict(id='score:beam-metadata'))
         for event in _raw_midi_events(path.read_bytes()):
             identity = dict(id=f'midi-t{event["track"]}-e{event["event_index"]}',
@@ -719,12 +823,26 @@ def source_inventory(path: str | Path) -> list[dict]:
             ledger.add('original->native', construct, identity)
             if event['attack'] and event['channel'] != 9:
                 tracks.add(event['track'])
+            if event['channel'] != 9:
+                key = event['track'], event['channel'], event['pitch']
+                if event['attack']:
+                    pending_counts[key] += 1
+                    clusters[key].append(identity)
+                    if pending_counts[key] > 1:
+                        ambiguous.update((source['id'], source) for source in clusters[key])
+                elif pending_counts[key]:
+                    pending_counts[key] -= 1
+                    if not pending_counts[key]:
+                        clusters[key] = []
+        for identity in ambiguous.values():
+            ledger.add('original->native', 'midi_note_pairing', identity, status='ambiguous')
         for track in sorted(tracks):
             ledger.add('original->native', 'source_hand_assignment', dict(id=f'midi-t{track}'))
         for construct in ('written_notes', 'written_rests', 'voices', 'ties', 'beams', 'tuplets',
                           'measure_structure', 'pedal_sounding_duration'):
             ledger.add('original->written', construct, dict(id=f'midi:unspecified:{construct}'))
         ledger.add('original->written', 'midi_written_transcription', dict(id='midi:written-transcription'))
+        ledger.add('original->written', 'midi_transcription_rules', dict(id='midi:transcription-rules'))
     else:
         original = read_written_score(path.read_text(encoding='utf-8'), strict=False)
         authored = _authored_tuplet_events(original.symbols)
@@ -732,18 +850,14 @@ def source_inventory(path: str | Path) -> list[dict]:
         for source in original.symbols:
             for boundary in ('original->generated', 'original->native'):
                 construct = 'written_notes' if source['kind'] == 'note' else 'written_rests'
-                for kind in (construct, 'voices', 'ties', 'tuplets'):
+                for kind in (construct, 'voices', 'ties', 'tuplets',
+                             'written_tie_attributes', 'tuplet_attributes'):
                     ledger.add(boundary, kind, source['source'])
                 if boundary == 'original->native' and source['kind'] == 'note':
                     ledger.add(boundary, 'source_binding', source['source'])
                 if source.get('time_modification') is not None and source['source']['id'] not in authored:
                     ledger.add(boundary, 'tuplet_grouping', source['source'])
-                if any(source.get('tuplet_extras', ())):
-                    ledger.add(boundary, 'tuplet_attributes', source['source'])
-                if boundary == 'original->generated' or source.get('beams'):
-                    ledger.add(boundary, 'beams', source['source'])
-                if source.get('tied_marks'):
-                    ledger.add(boundary, 'written_tie_attributes', source['source'])
+                ledger.add(boundary, 'beams', source['source'])
         for source in original.measures:
             for boundary in ('original->generated', 'original->native'):
                 ledger.add(boundary, 'measure_structure', source['source'])
@@ -757,9 +871,10 @@ def source_inventory(path: str | Path) -> list[dict]:
         for source in _original_attacks(original):
             ledger.add('original->native', 'source_attacks', source['source'])
         for missing in original.uncovered:
-            ledger.add('original', missing['construct'], missing['source'])
+            ledger.add('original', missing['construct'], missing['source'],
+                       evidence=dict(xml=missing['xml']) if 'xml' in missing else None)
         for issue in original.issues:
             ledger.add('original', 'invalid_structure', issue['source'])
     ledger.add('original->native', 'hand_mode', dict(id='score:hand-mode'))
-    return [{k: row[k] for k in ('id', 'boundary', 'construct', 'source')}
+    return [{k: row[k] for k in ('id', 'boundary', 'construct', 'source', 'evidence') if k in row}
             for row in ledger.elements]

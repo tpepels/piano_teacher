@@ -205,6 +205,17 @@ def read_written_score(xml: str, *, strict: bool = True) -> WrittenScore:
                     pitch = (octave + 1) * 12 + SEMITONES[step] + alter
                 elif element.find("rest") is None:
                     raise ValueError("Unsupported unpitched XML event")
+                rest = element.find("rest")
+                if rest is not None:
+                    if rest.attrib:
+                        uncovered.append(dict(source=identity, construct="rest_attributes",
+                            reason="Written rest attributes are not represented by the native contract",
+                            xml=ET.tostring(rest, encoding="unicode")))
+                    for child_index, child in enumerate(rest):
+                        uncovered.append(dict(source=dict(identity,
+                            id=f"{identity['id']}:rest:child{child_index}"), construct="rest_display",
+                            reason="Written rest display content is not represented by the native contract",
+                            xml=ET.tostring(child, encoding="unicode")))
                 modification = element.find("time-modification")
                 sound_ties = {t.get("type") for t in element.findall("tie")}
                 written_ties = {t.get("type") for t in element.findall("notations/tied")}
@@ -215,6 +226,13 @@ def read_written_score(xml: str, *, strict: bool = True) -> WrittenScore:
                     if mark.tag not in ("tied", "tuplet"):
                         uncovered.append(dict(source=identity, construct=mark.tag,
                                               reason="Source notation outside this contract"))
+                for mark_index, mark in enumerate(element.findall("notations/tuplet")):
+                    for child_index, child in enumerate(mark):
+                        uncovered.append(dict(source=dict(identity,
+                            id=f"{identity['id']}:tuplet{mark_index}:child{child_index}"),
+                            construct="tuplet_children",
+                            reason="Nested tuplet content is not represented by the native contract",
+                            xml=ET.tostring(child, encoding="unicode")))
                 raw.append(dict(
                     index=bar_index, measure=(int(label) if label.lstrip("-").isdigit()
                                               else bar_index + 1),

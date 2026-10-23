@@ -16,11 +16,11 @@ def _authored_beamed_chords():
     """Low thirds forced down and high thirds forced up in authored XML."""
     import verovio
     from piano_teacher.score import _create_verovio_toolkit
-    from piano_teacher.verovio_beam_fragments import extract_beam_fragments
-    from piano_teacher.verovio_chord_templates import chord_templates
-    from piano_teacher.verovio_note_templates import note_templates
-    from piano_teacher.verovio_tie_templates import tie_templates
-    from piano_teacher.notation_symbols import native_glyphs
+    from piano_teacher.notation.assets.beams import extract_beam_fragments
+    from piano_teacher.notation.assets.chords import chord_templates
+    from piano_teacher.notation.assets.notes import note_templates
+    from piano_teacher.notation.assets.ties import tie_templates
+    from piano_teacher.notation.assets.glyphs import native_glyphs
 
     measures, events, xml_measures = [], [], []
     for number, octave, steps, direction, ids in (
@@ -142,7 +142,7 @@ def test_packed_accidental_ink_clears_previous_onset_at_one_global_scale(
     binary = shutil.which("godot") or shutil.which("godot4")
     if not binary:
         pytest.skip("Godot 4 unavailable")
-    from piano_teacher.verovio_chord_templates import chord_templates
+    from piano_teacher.notation.assets.chords import chord_templates
 
     data = deepcopy(authored_assets)
     model = data["model"]

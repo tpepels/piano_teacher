@@ -23,6 +23,7 @@ from .proof import read_written_score
 from .pixel_proof import detect_staff_lines, expected_y
 from .symbol_pixel_proof import bright
 from .raster_matching import match_glyph as _match_glyph
+from .raster_matching import glyph_search_components, match_glyphs_joint
 from .reference_font import reference_glyphs
 
 
@@ -84,6 +85,9 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                 for note in notes:
                     record(note,clock,"unverified",reason=str(exc))
             continue
+        raster=bright(image)
+        xpos=round(image.width*.42)
+        requests=[]
         for staff,notes in hands.items():
             try:
                 pitches=sorted([
@@ -96,23 +100,13 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                 # as filled peaks; closely touching filled heads can merge.
                 # Compare each actual head silhouette in native PNG pixels
                 # at its MusicXML-derived diatonic position.
-                raster=bright(image)
-                xpos=round(image.width*.42)
                 for target,note in pitches:
-                    if sum(abs(other_y-target)<.001 for other_y,_other in pitches)>1:
-                        record(note,clock,"ambiguous",reason="Unison source events can share one visible head; raster identity is inseparable")
-                        continue
                     kind=note["note_type"]
                     glyph=("head_whole" if kind=="whole" else
                            "head_half" if kind=="half" else "head_black")
                     # Seconds in a chord are deliberately displaced
                     # horizontally by the engraver; they may also overlap
-                    # another head mask and lower silhouette agreement.\n                    # Thirds also have overlapping head silhouettes because\n                    # the font head height exceeds one staff-space.
-                    adjacent=any(
-                        other is not note and
-                        abs(other_y-target) <= 1.05*staves[staff].gap
-                        for other_y,other in pitches
-                    )
+                    # another head mask and lower silhouette agreement.
                     # A second moves members of its common stem group,
                     # including more distant chord tones. Infer that search
                     # region from the written voice/chord, never native X.
@@ -121,38 +115,67 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                         a is not b and abs(ay-by)<=1.05*staves[staff].gap
                         for ay,a in group for by,b in group)
                     x_search=range(-32,33) if displaced_group else range(-16,17)
-                    score=_match_glyph(
-                        raster,glyphs[glyph],staves[staff].gap,
-                        xpos,target,centered=True,
-                        dxs=x_search,dys=range(
-                            -math.floor(tolerance_staff_steps*staves[staff].gap/2),
-                            math.floor(tolerance_staff_steps*staves[staff].gap/2)+1))
-                    status = "verified"
-                    if adjacent:
-                        # Independent per-head matches can reuse neighboring
-                        # contour ink. Until joint assignment is proven, dense
-                        # adjacent heads receive no verified pitch credit.
-                        status = "ambiguous"
-                    elif score < .79:
-                        # A weak local match is failed evidence, not proof of
-                        # wrong musical placement: correct ledger/stem ink can
-                        # contaminate the head's comparison rectangle.
-                        status = "unverified"
-                        failures.append(
-                            f"{clock} {staff} {note['spelling']}: "
-                            f"required {glyph} not independently identified at written "
-                            f"staff position (image score={score:.3f})")
-                    else:
-                        verified+=1
-                    record(note,clock,status,glyph=glyph,match=round(score,3),
-                           target_y=round(target,2),**({"reason":"Adjacent silhouettes require a joint pixel assignment; independent matches are ambiguous"} if adjacent else
-                             {"reason":"Insufficient isolated contour evidence; ledger, stem or other ink may interfere"} if status=="unverified" else {}))
+                    requests.append(dict(note=note,glyph=glyphs[glyph],name=glyph,
+                        gap=staves[staff].gap,origin_y=target,dxs=x_search,
+                        unison=sum(abs(y-target)<.001 for y,_ in pitches)>1))
             except (ValueError,AssertionError,TypeError) as exc:
                 failures.append(f"{clock} {staff}: {exc}")
                 for note in notes:
                     if not any(r.get("source_id")==note.get("id") and
                                r["beat"]==clock and r["staff"]==staff for r in details):
                         record(note,clock,"unverified",reason=str(exc))
+        # Group the complete registration envelopes, including other staves
+        # and more distant chord tones. Different groups have disjoint pixel
+        # rows, so no verified identity can reuse another group's head ink.
+        # Gaps are recovered per staff; use each request's unchanged Y range.
+        # A shared union range only partitions groups conservatively.
+        radius=max((math.floor(tolerance_staff_steps*r["gap"]/2)
+                    for r in requests),default=0)
+        for indices in glyph_search_components(requests,dys=range(-radius,radius+1)):
+            group=[requests[i] for i in indices]
+            # Supply the per-staff range to the joint search as well: using
+            # the union radius for matching could relax a smaller staff.
+            for request in group:
+                r=math.floor(tolerance_staff_steps*request["gap"]/2)
+                request["dys"]=range(-r,r+1)
+            joint=None
+            if len(group)>1 and not any(r["unison"] for r in group):
+                joint=match_glyphs_joint(raster,group,xpos,dys=range(-radius,radius+1))
+            for i,request in enumerate(group):
+                note=request["note"]
+                staff=note["staff"]
+                if request["unison"]:
+                    record(note,clock,"ambiguous",reason="Unison source events can share one visible head; raster identity is inseparable")
+                    continue
+                evidence={}
+                if joint is not None:
+                    assigned=joint[i]
+                    score=assigned["score"]
+                    evidence["joint_assignment"]=dict(heads=len(group),
+                        x=assigned["x"],y=assigned["y"],
+                        exclusive_ink=len(assigned["support"]),
+                        isolated_match=round(assigned["isolated_score"],3))
+                else:
+                    score=_match_glyph(raster,request["glyph"],request["gap"],
+                        xpos,request["origin_y"],centered=True,
+                        dxs=request["dxs"],dys=request["dys"])
+                status="verified"
+                if score<.79:
+                    # Weak contour evidence is not a claim of wrong pitch.
+                    # A failed joint assignment must not hide an independently
+                    # failing head behind the other members' ambiguity.
+                    status="unverified"
+                    evidence["reason"]="Insufficient isolated contour evidence; ledger, stem or other ink may interfere"
+                    failures.append(f"{clock} {staff} {note['spelling']}: "
+                        f"required {request['name']} not independently identified at written "
+                        f"staff position (image score={score:.3f})")
+                elif len(group)>1 and joint is None:
+                    status="ambiguous"
+                    evidence["reason"]="No bounded joint assignment with sufficient disjoint notehead ink"
+                else:
+                    verified+=1
+                record(note,clock,status,glyph=request["name"],match=round(score,3),
+                       target_y=round(request["origin_y"],2),**evidence)
     total=sum(len(notes) for hands in by_clock.values() for notes in hands.values())
     if len(details)!=total:
         failures.append(f"Independent raster pitch accounting {len(details)}/{total}")
@@ -258,6 +281,7 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
     for event in written:
         written_by[round(float(event["beat"]),8),event["staff"],event["voice"]].append(event)
     failures, measured = [], []
+    identity_deltas = defaultdict(list)
     coverage = dict(expected=len(written), verified=0, ambiguous=0,
                     unsupported=0, unverified=0, mismatch=0)
 
@@ -341,6 +365,9 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
                     raise ValueError("intervention changed pixels outside the rest onset region")
                 if xs.max()-xs.min() > gap*4 or ys.max()-ys.min() > gap*9:
                     raise ValueError("intervention changed more than a single bounded rest/dot contour")
+                # Preserve full-frame pixel addresses, without contour trimming
+                # or registration: different voices must not reuse one glyph.
+                identity_deltas[beat].append((row, np.flatnonzero(delta)))
                 # Font expectation is read independently of fixture assets.
                 scores = {name.removeprefix("rest_"):round(_compare_isolated_masks(
                     delta, _rest_template_mask(glyph,gap)),4)
@@ -377,10 +404,27 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
                 failures.append(f"{key} {identity}: {exc}")
             coverage[row["status"]] += 1
             measured.append(row)
+    for beat, candidates in identity_deltas.items():
+        shared = set()
+        for index, (_row, pixels) in enumerate(candidates):
+            for other_index in range(index):
+                other_pixels = candidates[other_index][1]
+                if np.intersect1d(pixels, other_pixels, assume_unique=True).size:
+                    shared.update((index, other_index))
+        for index in sorted(shared):
+            row = candidates[index][0]
+            if row["status"] not in ("verified", "ambiguous"):
+                continue
+            coverage[row["status"]] -= 1
+            row.update(status="ambiguous", reason=
+                       "Same-frame rest interventions share changed pixels; source identities are inseparable")
+            coverage["ambiguous"] += 1
+            failures.append(f"{beat} {row['source_id']}: {row['reason']}")
     return {"passed":not failures, "complete":coverage["verified"] == len(written),
             "written_active_rests":len(written),
             "image_rest_glyphs_verified":coverage["verified"],
-            "intrinsically_indistinguishable_half_whole":coverage["ambiguous"],
+            "intrinsically_indistinguishable_half_whole":sum(
+                r["status"] == "ambiguous" and r.get("type_ambiguity", False) for r in measured),
             "coverage":coverage, "failures":failures, "measured":measured,
             "scope":"visible isolated contour against external Verovio font; full-frame repeat and restore invariance",
             "limitation":"contour proof does not establish rest placement, dots, half/whole identity or absence of overlaps"}

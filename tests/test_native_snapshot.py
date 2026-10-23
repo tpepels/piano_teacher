@@ -26,14 +26,14 @@ def test_new_model_waits_for_current_revision_native_assets():
 
 
 def test_native_preparation_keeps_revision_locked_until_assets_are_bound(tmp_path, monkeypatch):
-    from piano_teacher import notation_symbols
+    from piano_teacher.notation.assets import glyphs
 
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.load(str(ROOT / "midi/Ala_–_Joep_Beving.midi"))
     revision = engine.score_revision
     entered = threading.Event()
     changed = threading.Event()
-    real_symbols = notation_symbols.preparation_symbols
+    real_symbols = glyphs.preparation_symbols
 
     def switch_hand():
         assert entered.wait(10)
@@ -47,7 +47,7 @@ def test_native_preparation_keeps_revision_locked_until_assets_are_bound(tmp_pat
         assert not changed.wait(.1), "A newer lesson replaced the source before fragments were bound"
         return real_symbols()
 
-    monkeypatch.setattr(notation_symbols, "preparation_symbols", symbols_during_transition)
+    monkeypatch.setattr(glyphs, "preparation_symbols", symbols_during_transition)
     worker = threading.Thread(target=switch_hand)
     worker.start()
     try:

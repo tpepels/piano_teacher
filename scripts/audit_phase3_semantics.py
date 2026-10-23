@@ -72,6 +72,7 @@ def audit_source(name: str, *, source_index: int, hand: str = 'both',
     if artifact_dir is not None:
         artifact_dir = Path(artifact_dir)
         artifact_dir.mkdir(parents=True, exist_ok=True)
+    inventory = []
 
     def retain(key, filename, data):
         if artifact_dir is not None:
@@ -95,10 +96,19 @@ def audit_source(name: str, *, source_index: int, hand: str = 'both',
             default_clefs=infer_piece_clefs(piece.notes) if not piece.source_musicxml else None)
         retain('generated', 'generated.musicxml', score.musicxml.encode('utf-8'))
         model = build_score_model(score, boundaries=piece.bar_boundaries, hand=hand)
+        if path.suffix.lower() in ('.mid', '.midi'):
+            # Observed warning input is audited against independently decoded
+            # source dispositions, never treated as a proof assertion.
+            model['import_warnings'] = list(piece.import_warnings)
         retain('native', 'model.json', (json.dumps(model, indent=2) + '\n').encode('utf-8'))
         if path.suffix.lower() in ('.mid', '.midi'):
-            result = combine_reports(verify_midi_performance(captured, model, hand=hand),
+            midi_report = verify_midi_performance(captured, model, hand=hand,
+                                                   generated_xml=score.musicxml)
+            result = combine_reports(midi_report,
                                      verify_generated_contract(score.musicxml, model))
+            result['midi_transcription_rules'] = midi_report['midi_transcription_rules']
+            retain('midi_transcription_rules', 'midi-transcription-rules.json',
+                   (json.dumps(result['midi_transcription_rules'], indent=2) + '\n').encode('utf-8'))
         else:
             result = verify_musicxml_contract(source_bytes.decode('utf-8'), score.musicxml,
                                               model, hand=hand)
@@ -112,7 +122,15 @@ def audit_source(name: str, *, source_index: int, hand: str = 'both',
         ledger = _Ledger()
         ledger.add('pipeline', 'runtime_error', dict(id=f'source:{source_index}'),
                    'auditable original/generated/native score', f'{type(exc).__name__}: {exc}')
-        return {**metadata, **ledger.report(), 'runtime_error': f'{type(exc).__name__}: {exc}'}
+        # Preserve the original denominator at the producer as well as at the
+        # independent aggregator. An importer/model crash cannot erase source
+        # obligations from a standalone case artifact.
+        ledger.elements.extend({**row, 'status': 'unsupported'
+                                if row['construct']=='midi_written_transcription' else 'unverified',
+                                'reason': f'Pipeline failed before verification: {type(exc).__name__}: {exc}'}
+                               for row in inventory)
+        return {**metadata, **ledger.report(), 'source_inventory': inventory,
+                'runtime_error': f'{type(exc).__name__}: {exc}'}
 
 
 def main(argv=None) -> int:

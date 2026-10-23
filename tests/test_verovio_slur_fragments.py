@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 from piano_teacher.preprocessing_cache import PreprocessingCache
-from piano_teacher.verovio_slur_fragments import (
+from piano_teacher.notation.assets.slurs import (
     slur_pairs_from_xml,extract_slurs,slur_fragments,
 )
 

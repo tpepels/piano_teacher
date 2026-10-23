@@ -12,10 +12,10 @@ ROOT = Path(__file__).resolve().parents[1]
 def make_render_fixture(folder, bars=2):
     from piano_teacher.music import Note, Phrase
     from piano_teacher.exercise_generator import generate_variants
-    from piano_teacher.lesson_score import build_lesson_score
+    from piano_teacher.notation.lesson import build_lesson_score
     from piano_teacher.score import render_layout
     from piano_teacher.raster import rasterize_score
-    from piano_teacher.notation_symbols import preparation_symbols
+    from piano_teacher.notation.assets.glyphs import preparation_symbols
 
     duration = bars * 3
     notes = tuple(Note(i, i + .5, 77 - (i // 3) % 5, 0, 0, "right")

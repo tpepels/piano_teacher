@@ -44,6 +44,11 @@ SEMANTIC_FILES = (
     "tests/test_notation_proof_phase1.py",
     "tests/test_phase3_semantics.py",
     "tests/test_phase3_corpus_aggregation.py",
+    "tests/test_phase5_authored_rests.py",
+    "tests/test_phase5_beam_metadata.py",
+    "tests/test_phase5_written_metadata.py",
+    "tests/test_phase5_midi_overlaps.py",
+    "tests/test_phase5_midi_contract.py",
 )
 PHASE2_FILES = {
     "tests/test_native_pixel_proof.py",
@@ -69,7 +74,7 @@ def test_mutation_registry_covers_prior_detectors_and_all_phase4_contracts():
     assert "tests/test_phase3_real_rest_protocol.py" in suites["real_rest"]
     assert set(suites["release_contract"]) == {
         str(path.relative_to(ROOT)) for path in ROOT.glob("tests/test_phase4_*.py")
-    }
+    } | {"tests/test_phase5_corpus.py"}
     assert all(isinstance(files, tuple) and files for files in suites.values())
     all_files = [path for files in suites.values() for path in files]
     assert len(all_files) == len(set(all_files)), "detector files must run once per gate"
@@ -115,7 +120,7 @@ import pytest
 @pytest.mark.parametrize("value", ["a.b", "x[y]"])
 def test_case(value):
     manifest = json.loads(Path(os.environ["REGISTRY"]).read_text())
-    assert len(manifest["expected_nodeids"]) == 4
+    assert len(manifest["expected_nodeids"]) == 9
     assert manifest["junit_sha256"] is None
     assert manifest["provenance"]["clean"] is True
     assert manifest["provenance_after"] is None
@@ -136,16 +141,14 @@ def test_case(value):
     assert manifest["expected_nodeids"] == sorted([
         "tests/test_notation_proof_phase1.py::test_case[a.b]",
         "tests/test_notation_proof_phase1.py::test_case[x[y]]",
-        "tests/test_phase3_semantics.py::test_ok",
-        "tests/test_phase3_corpus_aggregation.py::test_ok",
-    ])
+    ] + [f'{path}::test_ok' for path in SEMANTIC_FILES[1:]])
     assert manifest["test_files_sha256"] == {
         name: hashlib.sha256((tmp_path / name).read_bytes()).hexdigest()
         for name in SEMANTIC_FILES
     }
     junit = out / manifest["junit_path"]
     assert manifest["junit_sha256"] == hashlib.sha256(junit.read_bytes()).hexdigest()
-    assert len(ET.parse(junit).findall(".//testcase")) == 4
+    assert len(ET.parse(junit).findall(".//testcase")) == len(SEMANTIC_FILES)+1
 
 
 @pytest.mark.parametrize("body", [
@@ -161,7 +164,7 @@ def test_recorder_preserves_failed_or_skipped_raw_evidence_and_blocks(tmp_path, 
     junit = out / manifest["junit_path"]
     assert junit.is_file()
     assert manifest["junit_sha256"] == hashlib.sha256(junit.read_bytes()).hexdigest()
-    assert len(manifest["expected_nodeids"]) == 3
+    assert len(manifest["expected_nodeids"]) == len(SEMANTIC_FILES)
 
 
 def test_collection_failure_still_records_blocked_suite_and_does_not_execute_tests(tmp_path):

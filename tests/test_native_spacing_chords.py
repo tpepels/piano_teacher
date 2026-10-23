@@ -1,7 +1,7 @@
 """Native chord availability and fixed-beat readability regressions."""
 from pathlib import Path
 
-from piano_teacher.verovio_chord_templates import (
+from piano_teacher.notation.assets.chords import (
     chord_pattern, patterns_from_model,
 )
 
@@ -56,11 +56,11 @@ def test_long_score_keeps_every_distinct_chord_pattern():
 def test_ala_original_source_chords_have_native_template_signatures():
     """A real user MIDI should never be rejected by a 32-item atlas cap."""
     from piano_teacher.music import load_midi
-    from piano_teacher.lesson_score import build_lesson_score
-    from piano_teacher.score_model import build_score_model
+    from piano_teacher.notation.lesson import build_lesson_score
+    from piano_teacher.notation.model import build_score_model
 
     piece = load_midi(ROOT/"midi/Ala_–_Joep_Beving.midi")
-    from piano_teacher.verovio_chord_templates import chord_templates
+    from piano_teacher.notation.assets.chords import chord_templates
     found = False
     total = 0
     target_pattern = None

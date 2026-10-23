@@ -79,6 +79,13 @@ class ScoreSymbol:
     accidental: str | None
     time_modification: dict | None
     tuplet_marks: tuple[dict, ...]
+    # None denotes historical/handmade symbols without beam evidence;
+    # an explicitly parsed empty tuple proves that this event has no beams.
+    beams: tuple[tuple[str, str, tuple[tuple[str, str], ...]], ...] | None = None
+    # Attribute bags follow XML mark order, including empty tuplet bags.
+    # None keeps older hand-built symbols distinguishable from parsed absence.
+    tied_marks: tuple[tuple[tuple[str, str], ...], ...] | None = None
+    tuplet_extras: tuple[tuple[tuple[str, str], ...], ...] | None = None
 
 
 def _int(element: ET.Element, name: str, default: int | None = None) -> int:
@@ -251,6 +258,16 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                     "bracket": tag.get("bracket", "no"),
                     "show_number": tag.get("show-number", "actual"),
                 } for tag in child.findall("notations/tuplet"))
+                beams = tuple((tag.get("number", "1"), (tag.text or "").strip(),
+                               tuple(sorted((key, value) for key, value in tag.attrib.items()
+                                            if key != "number")))
+                              for tag in child.findall("beam"))
+                tied_marks = tuple(tuple(sorted(tag.attrib.items()))
+                                   for tag in child.findall("notations/tied"))
+                tuplet_extras = tuple(tuple(sorted((key, value)
+                    for key, value in tag.attrib.items()
+                    if key not in ("type", "number", "bracket", "show-number")))
+                    for tag in child.findall("notations/tuplet"))
                 symbols.append(ScoreSymbol(
                     identifier, source_id, hand, child.findtext("voice", "1"),
                     number, at_beat, round(duration_ticks / divisions, 8),
@@ -258,7 +275,7 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                     child.findtext("type"), len(child.findall("dot")), chord,
                     "start" in tie_types, "stop" in tie_types,
                     is_attack, child.findtext("accidental"), time_modification,
-                    tuplet_marks))
+                    tuplet_marks, beams, tied_marks, tuplet_extras))
             if current_meter is None:
                 raise ValueError("No meter for a source measure")
             if cursor != ticks_in_bar:
@@ -383,11 +400,23 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
         # Return genuine JSON value types, not Python tuples that change
         # shape when the HTTP layer serializes the payload.
         "measures": [{**asdict(m), "meter": list(m.meter)} for m in measures],
-        "notes": [{**asdict(note), "spelling": (
+        "notes": [{**vars(note), "spelling": (
             list(note.spelling) if note.spelling is not None else None)}
             for note in notes],
-        "notation_events": [{**asdict(symbol), "tuplet_marks": [
-            dict(mark) for mark in symbol.tuplet_marks]}
+        # Copy owned mutable fields once. Recursively copying the immutable
+        # metadata tuples before converting them to JSON repeats that work.
+        "notation_events": [{**vars(symbol),
+            "spelling": dict(symbol.spelling) if symbol.spelling is not None else None,
+            "time_modification": (dict(symbol.time_modification)
+                                  if symbol.time_modification is not None else None),
+            "tuplet_marks": [
+            dict(mark) for mark in symbol.tuplet_marks], "beams": [
+                [level, value, [list(attribute) for attribute in attributes]]
+                for level, value, attributes in symbol.beams],
+            "tied_marks": [[list(attribute) for attribute in mark]
+                           for mark in symbol.tied_marks],
+            "tuplet_extras": [[list(attribute) for attribute in mark]
+                              for mark in symbol.tuplet_extras]}
             for symbol in symbols],
         "active_note_ids": [note.id for note in notes
                             if hand == "both" or hand == note.hand],

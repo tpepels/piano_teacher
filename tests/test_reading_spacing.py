@@ -6,7 +6,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from piano_teacher.lesson_score import build_lesson_score
+from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.lesson_validation import require_lesson_alignment
 from piano_teacher.music import Note, Phrase
 from piano_teacher.score import render_layout

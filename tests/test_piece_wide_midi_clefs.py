@@ -7,7 +7,7 @@ Do not alter the imported notes or re-key the passage to force a bass clef.
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from piano_teacher.lesson_score import (
+from piano_teacher.notation.lesson import (
     _readable_clef,
     build_lesson_score,
     infer_piece_clefs,

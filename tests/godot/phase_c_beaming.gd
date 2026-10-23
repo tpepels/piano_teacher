@@ -28,12 +28,6 @@ func run() -> void:
     if Geometry == null or Native == null:
         quit(1)
         return
-    check(absf(Geometry.beat_group_length([3,8])-1.5) < .0001,
-        "3/8 uses a single dotted-quarter group")
-    check(absf(Geometry.beat_group_length([2,2])-2.0) < .0001,
-        "2/2 uses half-note pulse instead of quarter group")
-    check(absf(Geometry.beat_group_length([4,16])-.5) < .0001,
-        "4/16 retains eighth-note grouping")
     var clefs := {"right":{"sign":"G","line":2},
                    "left":{"sign":"F","line":4}}
     var events: Array = [
@@ -69,26 +63,6 @@ func run() -> void:
                 "id":event["id"],"onset_beats":event["beat"],
                 "duration_beats":event["duration_beats"],
                 "midi_pitch":67,"hand":event["staff"]})
-    var groups: Array = Geometry.beam_groups(score)
-    check(groups.size() == 5, "Three groups in 4/4 and two in compound 6/8")
-    var by_first: Dictionary = {}
-    for group in groups:
-        by_first[str(group[0]["id"])] = group.map(func(e):return e["id"])
-    check(by_first.get("a",[]) == ["a","b","c"],
-        "Two sixteenths + eighth join inside one quarter group")
-    check(by_first.get("d",[]) == ["d","e"],
-        "Eighths join on the following quarter beat")
-    check(by_first.get("f",[]) == ["f","g"],
-        "Same-staff second voice must not steal beams")
-    check(by_first.get("i",[]) == ["i","j","k"],
-        "6/8 groups into three eighths, not a 4/4 pattern")
-    check(by_first.get("l",[]) == ["l","m","n"],
-        "Compound-beat boundary starts the next group")
-    check(not by_first.has("other_voice"),
-        "Single independent voice remains flagged, not accidentally beamed")
-    var lookup: Dictionary = Geometry.beamed_ids(groups)
-    check(lookup.has("a") and lookup.has("c") and not lookup.has("chord_c"),
-        "Chord tone shares leader's beam without a duplicate stem")
     check(Geometry.signature_steps(clefs["right"],3).size() == 3,
         "Three-sharp key signature produces three individually positioned signs")
     check(Geometry.signature_steps(clefs["right"],-2) == [4,7],
@@ -116,8 +90,20 @@ func run() -> void:
         load("res://tests/native_glyph_fixture.gd").beam_catalogue()),
         "Unit test has all source-matched Verovio beam textures")
     check(renderer.load_score(score), "Native loads grouped rhythms")
-    check(renderer.beam_groups.size() == groups.size(),
-        "Native renderer caches semantic beam plan per lesson")
+    var expected_groups: Dictionary = {
+        "a":["a","b","c"], "d":["d","e"], "f":["f","g"],
+        "i":["i","j","k"], "l":["l","m","n"]}
+    var by_first: Dictionary = {}
+    for group in renderer.beam_groups:
+        by_first[str(group[0]["id"])] = group.map(func(e):return e["id"])
+    check(renderer.beam_groups.size() == expected_groups.size()
+        and by_first == expected_groups,
+        "Native renderer retains every source beam identity and boundary")
+    check(not renderer.beamed_note_ids.has("other_voice"),
+        "Single independent voice remains flagged, not accidentally beamed")
+    check(renderer.beamed_note_ids.has("a") and renderer.beamed_note_ids.has("c")
+        and not renderer.beamed_note_ids.has("chord_c"),
+        "Chord tone shares source leader's beam without a duplicate stem")
     check(renderer.glyphs.has_beam("d|e",true),
         "Two-note Verovio beam fragment is loaded by original note identities")
     var beam_ink: Dictionary = renderer._beam_layout(renderer._gap(),0.0,580.0)
@@ -203,21 +189,22 @@ func run() -> void:
         check(absf(float(shifted[i]["x"])-float(members[i]["x"]) +
             .5*renderer.timeline.pixels_per_beat) < .001,
             "Stem anchors track the original beat at constant speed")
-    var rest_score: Dictionary = score.duplicate(true)
-    rest_score["notation_events"].insert(1, {
-        "id":"rest1","kind":"rest","staff":"right","voice":"1",
-        "measure":1,"beat":.25,"duration_beats":.25,
-        "note_type":"16th","chord":false})
-    rest_score["notation_events"][2]["beat"] = .50
-    # A rest interrupts: no beams should span it.
-    var broken: Array = Geometry.beam_groups(rest_score)
-    var broken_lookup: Dictionary = Geometry.beamed_ids(broken)
-    check(not broken_lookup.has("a"),"Rest splits a beam group")
-    var unsupported: Dictionary = score.duplicate(true)
-    unsupported["measures"][1]["meter"] = [7,8]
-    check(Geometry.beam_groups(unsupported).size() < groups.size(),
-        "Irregular grouping is not guessed")
-    # Regression: 32nd/64th events must remain native and use 3/4 beams.
+    var irregular: Dictionary = score.duplicate(true)
+    irregular["measures"][1]["meter"] = [7,8]
+    check(renderer.load_score(irregular), "Load source beams in irregular meter")
+    var irregular_groups: Dictionary = {}
+    for group in renderer.beam_groups:
+        irregular_groups[str(group[0]["id"])] = group.map(func(e):return e["id"])
+    check(renderer.beam_groups.size() == expected_groups.size()
+        and irregular_groups == expected_groups,
+        "Source beam boundaries survive meter changes without new inference")
+    var metadata: Dictionary = renderer.glyphs.beam_metadata.duplicate(true)
+    renderer.glyphs.beam_metadata.clear()
+    check(renderer.load_score(score), "Source without beam metadata remains flagged")
+    check(renderer.beam_groups.is_empty() and renderer.beamed_note_ids.is_empty(),
+        "Adjacent short notes must not invent beams when source groups are absent")
+    renderer.glyphs.beam_metadata = metadata
+    # Regression: 32nd/64th events must remain native with their source beams.
     var tiny: Dictionary = score.duplicate(true)
     tiny["notation_events"] = [
         note("s0",0.0,.125,"right","1",1,"32nd"),
@@ -234,15 +221,15 @@ func run() -> void:
         tiny["notes"].append({"id":event["id"],"onset_beats":event["beat"],
             "duration_beats":event["duration_beats"],
             "midi_pitch":67,"hand":"right"})
-    check(Geometry.beam_level("32nd") == 3 and Geometry.beam_level("64th") == 4,
-        "Three-level 32nd and four-level 64th notation values")
     check(Geometry.supported(tiny).is_empty(),
         "Ordinary 32nd/64th notes no longer trigger native fallback")
-    var tiny_groups: Array = Geometry.beam_groups(tiny)
-    check(tiny_groups.size() == 2 and tiny_groups[0].size() == 4
-        and tiny_groups[1].size() == 5,
-        "Short note groups retain exact quarter-beat boundaries")
     check(renderer.load_score(tiny), "Load 32nd and 64th lesson natively")
+    var tiny_groups: Array = []
+    for group in renderer.beam_groups:
+        tiny_groups.append(group.map(func(e):return e["id"]))
+    check(tiny_groups == [["s0","s1","s2","s3"],
+        ["t0","t1","t2","t3","t4"]],
+        "Short notes retain every source beam identity and boundary")
     check(renderer.timeline.pixels_per_beat >= 112.0
         and renderer.timeline.pixels_per_beat <= 400.0,
         "Native score fits genuine glyph ink at one fixed scale, without duration-only inflation")

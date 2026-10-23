@@ -34,11 +34,16 @@ from scripts.smoke_teaching_godot import PIANO, TestMidiInput
 
 
 def make_fixture(path: Path) -> None:
-    """Four imported bars, 16 quarter attacks, optional inner chord notes."""
+    """Two 8/4 source measures: 16 attacks and optional inner chord notes.
+
+    The default two-measure course contains the whole passage. Seeking to
+    measure 2 gives an eight-attack partial retry without changing recovery
+    thresholds or using the opt-in legacy consolidated course.
+    """
     midi = mido.MidiFile(ticks_per_beat=480)
     midi.tracks.append(mido.MidiTrack([
         mido.MetaMessage("set_tempo", tempo=500000, time=0),
-        mido.MetaMessage("time_signature", numerator=4, denominator=4, time=0),
+        mido.MetaMessage("time_signature", numerator=8, denominator=4, time=0),
         mido.MetaMessage("end_of_track", time=7680),
     ]))
     track = mido.MidiTrack([mido.MetaMessage("track_name", name="Right Hand", time=0)])
@@ -72,7 +77,7 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
     runtime.mkdir()
     music = output / "user-music"
     music.mkdir(exist_ok=True)
-    source = music / "Imported four-bar lesson.mid"
+    source = music / "Imported two-measure lesson.mid"
     make_fixture(source)
     environment = dict(os.environ)
     environment["PYTHONPATH"] = str(ROOT)
@@ -164,9 +169,11 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                     "Instructional transition contract is required"
                 assert engine.source == str(source.resolve())
                 assert initial["bpm"] == initial["target_bpm"] == 240
-                assert initial["lesson_level"] == "skeleton" and initial["teaching"]["target_count"] == 8
+                assert initial["lesson_level"] == "skeleton" and initial["teaching"]["target_count"] == 16
+                assert (initial["first_bar"], initial["last_bar"]) == (1, 2)
+                assert engine.plan.piece.bar_boundaries == (0, 8, 16)
                 assert "learner" in initial, "Stateful learner course contract is required"
-                assert initial["learner"]["total_units"] == 2 and initial["learner"]["prepared_units"] == 0
+                assert initial["learner"]["total_units"] == 1 and initial["learner"]["prepared_units"] == 0
                 identity = engine.plan.identity
                 send(61)
                 wrong = engine.state()
@@ -175,13 +182,19 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                 until(lambda text: "INSTRUCTIONAL_STAGE:hint-rendered" in text, "real hinted keyboard")
                 send(61, False)
                 solve_guided("opening guided fragment completed without mastery")
+                prepared = engine.state()["learner"]
+                assert prepared["prepared_units"] == prepared["total_units"] == 1
+                until(lambda text: "INSTRUCTIONAL_STAGE:partial-timed-ready" in text,
+                      "visible paused source-measure control selects a temporary partial")
+                assert engine.open_from_beat == 0, "Later full attempts must retain the passage beginning"
+                assert engine.state()["mastered"] == engine.state()["streak"] == 0
                 attempt = 0
                 current_id = None
                 scheduled = []
                 last_phase = None
                 recovery_solved = False
                 next_variant = False
-                prepared_all = False
+                prepared_all = True
                 listened = False
                 summary = None
                 revisited = False
@@ -246,18 +259,9 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                                 log("saved source trouble revisited without false mastery")
                         time.sleep(.003)
                         continue
-                    if state["mode"] == "learn" and state["phase"] == "guided_wait" \
-                            and not state.get("guided_recovery") and not prepared_all \
-                            and state["teaching"]["fragment"]["start_beat"] == 8:
-                        until(lambda text: "INSTRUCTIONAL_STAGE:next-idea-ready" in text,"visible Next idea reaches second source fragment")
-                        solve_guided("second guided idea completed without mastery")
-                        prepared = engine.state()["learner"]
-                        assert prepared["prepared_units"] == prepared["total_units"] == 2
-                        prepared_all = True
-                        continue
                     if state["mode"] == "learn" and state.get("guided_recovery") \
                             and state["phase"] == "guided_wait" and not recovery_solved:
-                        assert attempt == 2 and state["first_bar"] == 3 and state["last_bar"] == 4
+                        assert attempt == 2 and state["first_bar"] == state["last_bar"] == 2
                         assert state["bpm"] == 194 and state["target_bpm"] == 240
                         until(lambda text: "INSTRUCTIONAL_STAGE:recovery-guided-ready" in text, "static exact failed fragment")
                         solve_guided("failed bars guided correctly without mastery")
@@ -268,10 +272,10 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                         attempt += 1
                         current_id = state["transport_id"]
                         offset = state["play_from_beat"]
-                        expected_tempos = (240, 216, 194, 194, 213, 234, 240, 240, 240)
+                        expected_tempos = (240, 216, 194, 194, 207, 223, 240, 240, 240)
                         assert attempt <= len(expected_tempos), "Unexpected extra attempt"
                         assert state["bpm"] == expected_tempos[attempt-1], (attempt, state)
-                        assert offset == (8 if attempt in (2, 3) else 0), (attempt, offset)
+                        assert offset == (8 if attempt in (1, 2, 3) else 0), (attempt, offset)
                         assert state["target_bpm"] == 240 and engine.plan.identity == identity
                         assert state["mastered"] == 0 and state["streak"] == max(0, attempt-7)
                         with engine.lock:
@@ -283,7 +287,7 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                         scheduled = []
                         for note in required:
                             local = note.start - phrase.start
-                            if attempt == 2 or (attempt == 1 and local >= 8):
+                            if attempt in (1, 2):
                                 continue
                             scheduled.extend(((epoch+(local-offset)*seconds+.002, note.pitch, True),
                                 (epoch+(min(note.end,phrase.end)-phrase.start-offset)*seconds+.002, note.pitch, False)))
@@ -308,11 +312,15 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                         if state["phase"] in ("feedback", "recovering"):
                             assert state["mastered"] == 0
                             if attempt in (1, 2):
-                                assert state["retry_range"] == {"first_bar":3,"last_bar":4,"start_beat":8,"end_beat":16}
+                                assert state["retry_range"] == {"first_bar":2,"last_bar":2,"start_beat":8,"end_beat":16}
                                 assert state["bpm"] == (216 if attempt == 1 else 194)
                                 assert bool(state["guided_recovery"]) == (attempt == 2)
                             elif attempt == 3:
                                 assert state["streak"] == 0 and "whole passage" in state["next_action"].lower()
+                                partial = state["performance_summary"]
+                                assert partial["correct"] == partial["total"] == 8
+                                assert partial["missed"] == partial["extra_notes"] == 0
+                                assert partial["accuracy_percent"] == 100 and engine.pending_result is None
                             elif attempt >= 4:
                                 assert engine.pending_result is not None and engine.pending_result.clean, \
                                     f"Timestamped MIDI attempt {attempt} was not clean: {state}"
@@ -326,7 +334,7 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                 assert next_variant and recovery_solved and prepared_all and attempt == 9
                 if finish_modes:
                     assert listened and summary is not None and revisited
-                assert full_clean_tempos == [194, 213, 234, 240, 240, 240]
+                assert full_clean_tempos == [194, 207, 223, 240, 240, 240]
                 result = json.loads((output / "result.json").read_text())
                 assert result["failures"] == []
                 result["elapsed_seconds"] = time.monotonic()-begun

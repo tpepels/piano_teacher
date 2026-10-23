@@ -112,6 +112,11 @@ def _account_inventory(data, required, errors, *, boundary, midi):
                 errors.append("MIDI written transcription must remain unsupported; performance bytes do not specify a written score")
                 elements[position] = {**elements[position], "reported_status": row.get("status"),
                                       "status": "unverified", "reason": "MIDI written transcription cannot be independently verified"}
+            if midi and expected['construct']=='midi_note_pairing' and row.get('status')=='verified':
+                errors.append('Overlapping MIDI note pairing must remain ambiguous')
+                elements[position] = {**elements[position], 'reported_status': row.get('status'),
+                                      'status': 'unverified',
+                                      'reason': 'Original MIDI overlap cannot establish unique attack/release pairing'}
     if boundary == "visual" and not midi:
         expected_ids = {row["id"] for row in required}
         for position, row in enumerate(elements):
@@ -124,7 +129,8 @@ def _account_inventory(data, required, errors, *, boundary, midi):
     return {**data, "elements": elements}
 
 
-def _ledger(data, errors, *, normalized=None):
+def _ledger(data, errors, *, normalized=None, completeness_errors=None):
+    gaps = errors if completeness_errors is None else completeness_errors
     elements = data.get("elements")
     if not isinstance(elements, list) or not elements:
         errors.append("Missing/empty every-element ledger; pitch/rest counts alone do not verify notation")
@@ -182,14 +188,14 @@ def _ledger(data, errors, *, normalized=None):
     for construct, values in constructs.items():
         for status in STATUSES[1:]:
             if values[status]:
-                errors.append(f"Incomplete {construct}: {values[status]} {status} element(s)")
+                gaps.append(f"Incomplete {construct}: {values[status]} {status} element(s)")
     actually_complete = bool(elements) and counts["verified"] == counts["expected"]
     if type(data.get("complete")) is not bool:
         errors.append("complete must be a boolean")
     elif data["complete"] != actually_complete:
         errors.append("complete flag disagrees with every-element statuses")
     if not actually_complete:
-        errors.append("Complete verification blocked by missing or nonverified elements")
+        gaps.append("Complete verification blocked by missing or nonverified elements")
     return counts, unverified, constructs
 
 
@@ -358,14 +364,18 @@ def _invalid_constant(value):
 
 
 def aggregate(folder: Path, *, scores: int = 17, kind: str = "complete", include_elements: bool = False,
-              required_provenance: dict | None = None) -> dict:
+              required_provenance: dict | None = None,
+              source_names: tuple[str, ...] | None = None, source_root: Path | None = None) -> dict:
     """Require every pinned case, with independently recomputed status totals.
 
     ``scores`` selects a pinned prefix for small regression fixtures only; the
     CLI always requires all 17. Each boundary has its own 51-job denominator.
     ``passed`` here is the complete corpus gate, not a detector's narrower flag.
+    Supplemental, independently pinned inventories may reuse the validators via
+    ``source_names``; release callers and the CLI retain the original corpus.
     """
     errors = []
+    integrity_errors, coverage_errors = [], []
     jobs = []
     totals = _empty_coverage()
     unverified = []
@@ -376,11 +386,18 @@ def aggregate(folder: Path, *, scores: int = 17, kind: str = "complete", include
     if kind not in ("complete", "semantic", "visual"):
         errors.append(f"Unknown verification kind {kind!r}")
         kinds = ()
-    if not _count(scores, minimum=1) or scores > len(PINNED_SOURCES):
+    pinned = PINNED_SOURCES if source_names is None else source_names
+    if (not isinstance(pinned, tuple) or not pinned
+            or any(not isinstance(s, str) or not s or Path(s).is_absolute()
+                   or '..' in Path(s).parts for s in pinned)
+            or len(set(pinned)) != len(pinned)):
+        errors.append("Invalid supplemental source inventory")
+        pinned = ()
+    if not _count(scores, minimum=1) or scores > len(pinned):
         errors.append("Invalid pinned corpus denominator")
         scores = 0
-    for index, source in enumerate(PINNED_SOURCES[:scores]):
-        source_file = ROOT / (source if "/" in source else "midi/" + source)
+    for index, source in enumerate(pinned[:scores]):
+        source_file = (source_root or ROOT) / (source if "/" in source else "midi/" + source)
         try:
             digest = sha256(source_file.read_bytes()).hexdigest()
         except OSError as exc:
@@ -394,9 +411,10 @@ def aggregate(folder: Path, *, scores: int = 17, kind: str = "complete", include
                 item = folder / f"{prefix}-{index}-{hand}" / "summary.json"
                 job = {"verification_kind": boundary, "source_index": index,
                        "source": source, "hand": hand, "status": "missing",
-                       "complete": False, "coverage": _empty_coverage(), "errors": []}
+                       "complete": False, "coverage": _empty_coverage(), "errors": [],
+                       "integrity_errors": [], "coverage_errors": []}
                 jobs.append(job)
-                job_errors = job["errors"]
+                job_errors = job["integrity_errors"]
                 report_error_status = None
                 try:
                     data = json.loads(item.read_text(encoding="utf-8"),
@@ -459,7 +477,8 @@ def aggregate(folder: Path, *, scores: int = 17, kind: str = "complete", include
                         if isinstance(row, dict) and row.get("status") == "verified" else row
                         for row in accounted["elements"]]
                 normalized = [] if include_elements else None
-                coverage, gaps, per_construct = _ledger(accounted, job_errors, normalized=normalized)
+                coverage, gaps, per_construct = _ledger(accounted, job_errors, normalized=normalized,
+                                                       completeness_errors=job["coverage_errors"])
                 if include_elements:
                     job["elements"] = normalized
                 job["coverage"] = coverage
@@ -473,13 +492,20 @@ def aggregate(folder: Path, *, scores: int = 17, kind: str = "complete", include
                                    "score_source": source, "hand": hand} for row in gaps)
                 if boundary == "visual":
                     _visual(data, source, hand, scores, job_errors)
-                job.update(status=report_error_status or ("blocked" if job_errors else "verified"), complete=not job_errors,
+                job["errors"] = job_errors + job["coverage_errors"]
+                job.update(status=report_error_status or ("blocked" if job["errors"] else "verified"),
+                           complete=not job["errors"], integrity_complete=not job_errors,
                            reported_passed=data.get("passed"), reported_complete=data.get("complete"))
-                errors.extend(f"{label}: {error}" for error in job_errors)
+                integrity_errors.extend(f"{label}: {error}" for error in job_errors)
+                coverage_errors.extend(f"{label}: {error}" for error in job["coverage_errors"])
+    integrity_errors = errors + integrity_errors
+    errors = integrity_errors + coverage_errors
     complete = not errors and bool(jobs)
     return {
         "schema_version": 1, "verification_kind": kind,
         "passed": complete, "complete": complete,
+        "integrity_complete": bool(jobs) and not integrity_errors,
+        "integrity_errors": integrity_errors, "coverage_errors": coverage_errors,
         "status": "complete" if complete else "blocked",
         "expected_scores": scores, "expected_modes": list(HANDS),
         "required_jobs": scores * len(HANDS) * len(kinds),

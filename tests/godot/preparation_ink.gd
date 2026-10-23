@@ -50,9 +50,16 @@ func run() -> void:
             "count_in_beats": 4.0, "count_in_meter": [4, 4]}
         app._process(0.0)
         app.score_overlay.cursor = {} # Compare ink without the timing beam.
+        # The anticipation outline breathes on wall time even while transport
+        # is paused. Isolate preparation ink in both frames: a changing cue
+        # cannot establish whether showing the preparation removed notation.
+        app.score_overlay.next_chord = []
         app.score_overlay.showing = false
         app.score_overlay.queue_redraw()
         var original: Image = await frame()
+        var repeated: Image = await frame()
+        check(original.get_data() == repeated.get_data(),
+            "preparation baseline is unchanged before intervention at %.0f" % onset)
         original.save_png(folder + "/original-%.0f.png" % onset)
         app.score_overlay.showing = true
         app.score_overlay.queue_redraw()

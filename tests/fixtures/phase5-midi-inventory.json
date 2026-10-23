@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "report_kind": "phase5_source_inventory",
+  "required_cases": 102,
+  "sources": [
+    {
+      "source_index": 0,
+      "source": "Ala_–_Joep_Beving.midi",
+      "source_sha256": "1067787fafc2f511ccd866c3b1790a880201b7ee51064ba616e7a0b62d5de71c",
+      "size_bytes": 5203
+    },
+    {
+      "source_index": 1,
+      "source": "Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi",
+      "source_sha256": "014a441640077d9aaa8f8378e405d57f7c2eed15cd4ee832b214738f42fb4d25",
+      "size_bytes": 3828
+    },
+    {
+      "source_index": 2,
+      "source": "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+      "source_sha256": "2c303b0e43d79b40dc9850846738b2e0c43799347f6f4ac77d0f2e8e6dcb6bb9",
+      "size_bytes": 8624
+    },
+    {
+      "source_index": 3,
+      "source": "Clair_de_Lune_–_Debussy.midi",
+      "source_sha256": "e1bd67c038e9275d4c0788ea7da027e9aac641a114c412816d28f8e67c95ccef",
+      "size_bytes": 10957
+    },
+    {
+      "source_index": 4,
+      "source": "Danny_Boy(Bill_Evans_Ver_).midi",
+      "source_sha256": "088155e12d875b789d6675e526f6581a93d08f8e3ea67b955011a9db758817f0",
+      "size_bytes": 2260
+    },
+    {
+      "source_index": 5,
+      "source": "Gymnopédie_No_1_–_Satie.midi",
+      "source_sha256": "894c885ac04855c5af401db400689fadd4f41215610b56d3aa7a2ce773e03944",
+      "size_bytes": 3143
+    },
+    {
+      "source_index": 6,
+      "source": "J_S_Bach_-_Invention_No_1_(BWV_772).midi",
+      "source_sha256": "0daf63e6cc62cba7ecb7178efc152a8cb4310c88ba21a14eecb6b49353b318b0",
+      "size_bytes": 3052
+    },
+    {
+      "source_index": 7,
+      "source": "Le_Pianiste_virtuose_-_Première_partie_(1-20)_-_C_L_Hanon.midi",
+      "source_sha256": "ec5ee753c6de4b3a76dff66e3f07f2542e60e974d10e5999faafbbf1ee7a2e46",
+      "size_bytes": 108839
+    },
+    {
+      "source_index": 8,
+      "source": "Liebestraum_S_541_No_3_in_A♭_Major_–_Liszt.midi",
+      "source_sha256": "3602c717d100258c7aed271b37cfe337096e34ec4632b59a774eb0b8cda08020",
+      "size_bytes": 14077
+    },
+    {
+      "source_index": 9,
+      "source": "Merry-Go-Round-of-Life.midi",
+      "source_sha256": "58da911f75c8c2ee137b9e269439dcfb04b6f914f40749948aba93a434dc0048",
+      "size_bytes": 17265
+    },
+    {
+      "source_index": 10,
+      "source": "Moonlight_Sonata_I.midi",
+      "source_sha256": "de076d8ab0a11222d929723a8293e181cdedf97328493fa2e5591db2eec709c4",
+      "size_bytes": 8719
+    },
+    {
+      "source_index": 11,
+      "source": "Mozart_-_Piano_Sonata_No_16_in_C_Major,_K_545,_1st_Movement.midi",
+      "source_sha256": "7de627912a1fc163db2ee6162c0c45a38dc81de18fa0276ae35b5577ce2a7ddb",
+      "size_bytes": 17367
+    },
+    {
+      "source_index": 12,
+      "source": "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi",
+      "source_sha256": "56cb46d35d29febe7361fa7b907eec07f44fea12ca3c2bbcb09a8cb60da7a33a",
+      "size_bytes": 13178
+    },
+    {
+      "source_index": 13,
+      "source": "Prelude_I_in_C_major,_BWV_846_-_Well_Tempered_Clavier_[First_Book].midi",
+      "source_sha256": "886a2897c8f787d600835c9b2789e81d1d765eacc5fcc0c4212156bd908005b2",
+      "size_bytes": 3606
+    },
+    {
+      "source_index": 14,
+      "source": "Prelude_in_C-sharp_Minor,_Opus_3_No_2_–_Sergei_Rachmaninoff.midi",
+      "source_sha256": "615b396bf05daa2d525360bd9753e4589f2c603a4d0dc6218f2dbeb929fdf4e8",
+      "size_bytes": 15722
+    },
+    {
+      "source_index": 15,
+      "source": "The_Entertainer_-_Scott_Joplin.midi",
+      "source_sha256": "bb6abf9665c83d9fe6f156426d98eafeaa6fb4cfd5064b1222a101a7a80562ba",
+      "size_bytes": 12968
+    },
+    {
+      "source_index": 16,
+      "source": "Waltz_for_Debby.midi",
+      "source_sha256": "3178818aef68a40ffbe04cf4b6b2a62a7b3cdc54ca154c6930c9ddb9f4b579e5",
+      "size_bytes": 4899
+    }
+  ]
+}

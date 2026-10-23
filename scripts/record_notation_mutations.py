@@ -29,6 +29,11 @@ SUITES = {
         "tests/test_notation_proof_phase1.py",
         "tests/test_phase3_semantics.py",
         "tests/test_phase3_corpus_aggregation.py",
+        "tests/test_phase5_authored_rests.py",
+        "tests/test_phase5_beam_metadata.py",
+        "tests/test_phase5_written_metadata.py",
+        "tests/test_phase5_midi_overlaps.py",
+        "tests/test_phase5_midi_contract.py",
     ),
     "visual": (
         "tests/test_native_pixel_proof.py",
@@ -40,12 +45,14 @@ SUITES = {
         "tests/test_phase3_visual_coverage.py",
         "tests/test_phase3_raster_matching.py",
         "tests/test_phase3_capture_provenance.py",
+        "tests/test_phase5_staff_detection.py",
+        "tests/test_phase5_rest_identity.py",
     ),
     "real_rest": ("tests/test_phase3_real_rest_protocol.py",),
     "release_contract": tuple(
         path.relative_to(ROOT).as_posix()
         for path in sorted((ROOT / "tests").glob("test_phase4_*.py"))
-    ),
+    ) + ("tests/test_phase5_corpus.py",),
 }
 
 

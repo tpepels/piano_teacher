@@ -1235,15 +1235,20 @@ func _build_interface() -> void:
     var score_region := VBoxContainer.new()
     score_region.add_theme_constant_override("separation", 8)
     score_margin.add_child(score_region)
+    # Reserve a stable header row: floating navigation can cover high notes
+    # and the upper staff, especially in the complete-source fallback view.
+    var score_header := HBoxContainer.new()
+    score_header.alignment = BoxContainer.ALIGNMENT_END
+    score_header.add_theme_constant_override("separation", 8)
+    score_region.add_child(score_header)
+    practice_stage_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    score_header.add_child(practice_stage_bar)
     var score_area := Control.new()
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
     score_area.custom_minimum_size = Vector2(0, 210)
     score_region.add_child(score_area)
     score_frame = score_area
     score_frame.clip_contents = true
-    practice_stage_bar.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-    practice_stage_bar.position = Vector2(18, 12)
-    practice_stage_bar.size = Vector2(500, 28)
     score_frame.resized.connect(_layout_moving_score)
     game_stage = GameStage.new()
     game_stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -1338,7 +1343,6 @@ func _build_interface() -> void:
     game_count_in.size = Vector2(142, 38)
     game_count_in.visible = false
     score_frame.add_child(game_count_in)
-    score_frame.add_child(practice_stage_bar)
     # A visible retry notice must not consume vertical space or force the
     # bottom transport buttons off smaller laptop screens.
     practice_playback_banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
@@ -1395,19 +1399,14 @@ func _build_interface() -> void:
     progress_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     progress_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     challenge_bar.add_child(progress_label)
-    # Stage navigation floats within the existing score stage. Putting
-    # it in the progress row enlarges the entire Practice minimum width,
-    # clipping transport and the MIDI keyboard on 800x600 desktops.
+    # Keep navigation separate from both notation ink and the progress/tempo
+    # row, whose combined minimum width would clip an 800x600 practice window.
     practice_step_controls = HBoxContainer.new()
     practice_step_controls.name = "PracticeStepControls"
-    practice_step_controls.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-    practice_step_controls.offset_left = -332.0
-    practice_step_controls.offset_right = -12.0
-    practice_step_controls.offset_top = 10.0
-    practice_step_controls.offset_bottom = 50.0
+    practice_step_controls.size_flags_horizontal = Control.SIZE_SHRINK_END
     practice_step_controls.add_theme_constant_override("separation", 5)
     practice_step_controls.z_index = 6
-    score_frame.add_child(practice_step_controls)
+    score_header.add_child(practice_step_controls)
     practice_step_previous_button = _button("‹", func(): _navigate_practice_step(-1), false, "navigation")
     practice_step_previous_button.custom_minimum_size = Vector2(38, 38)
     practice_step_previous_button.tooltip_text = "Previous lesson step (hand and note level)"
@@ -1675,15 +1674,13 @@ func _update_responsive_layout() -> void:
         _update_hand_stages(last_state)
     if practice_header == null:
         return
-    # Floating navigation never changes the Practice row's intrinsic size.
+    # The reserved score header keeps navigation outside the notation region.
     var compact_steps: bool = width < 1250.0
     progress_label.visible = true
     if practice_step_controls != null:
         var controls_width: float = 350.0 if width < 850.0 else 420.0 if compact_steps else 500.0
-        practice_step_controls.offset_left = -controls_width - 12.0
-        practice_step_controls.offset_right = -12.0
+        practice_step_controls.custom_minimum_size.x = controls_width
         practice_step_picker.custom_minimum_size.x = 120.0 if width < 850.0 else 150.0 if compact_steps else 180.0
-        practice_stage_bar.size = Vector2(356.0 if width < 1150.0 else 500.0, 28.0)
         for arrow in [practice_step_previous_button, practice_step_next_button]:
             arrow.custom_minimum_size.x = 40.0
     for bpm_button in [tempo_down_button, tempo_up_button]:

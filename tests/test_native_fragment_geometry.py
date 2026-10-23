@@ -15,7 +15,7 @@ def test_native_fragment_anchors_and_accidental_collisions(tmp_path):
     binary = shutil.which("godot") or shutil.which("godot4")
     if not binary:
         pytest.skip("Godot 4 unavailable")
-    from piano_teacher.notation_symbols import native_glyphs
+    from piano_teacher.notation.assets.glyphs import native_glyphs
     fixture = tmp_path / "symbols.json"
     fixture.write_text(json.dumps(native_glyphs()))
     result = subprocess.run(
@@ -37,7 +37,7 @@ def test_native_slur_preserves_original_texture_pixels(tmp_path):
         pytest.skip("Godot with a display is required for pixel verification")
     import verovio
     from piano_teacher.score import _create_verovio_toolkit
-    from piano_teacher.verovio_slur_fragments import extract_slurs
+    from piano_teacher.notation.assets.slurs import extract_slurs
 
     xml = """<score-partwise version="4.0"><work><work-title> </work-title></work>
       <movement-title> </movement-title><part-list>

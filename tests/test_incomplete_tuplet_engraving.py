@@ -1,7 +1,7 @@
 """Invisible singleton MIDI tuplets versus genuine complete written groups."""
 from xml.etree import ElementTree as ET
 
-from piano_teacher.lesson_score import (
+from piano_teacher.notation.lesson import (
     DIVISIONS, _append_note, _write_tuplet_groups,
 )
 

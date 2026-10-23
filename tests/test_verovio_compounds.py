@@ -21,7 +21,7 @@ def _whole_chord_model():
 
 
 def test_whole_chord_ink_is_centred_on_source_head_positions():
-    from piano_teacher.verovio_chord_templates import chord_templates
+    from piano_teacher.notation.assets.chords import chord_templates
 
     item = chord_templates(_whole_chord_model())["whole|down|0,2"]
     bounds = item["heads_only"]["bounds"]
@@ -31,7 +31,7 @@ def test_whole_chord_ink_is_centred_on_source_head_positions():
 def test_real_chord_stem_excludes_its_nested_flag():
     import verovio
     from piano_teacher.score import _create_verovio_toolkit
-    from piano_teacher.verovio_chord_templates import (
+    from piano_teacher.notation.assets.chords import (
         _xml, _extract_chord, _only_original_chord_stems,
     )
 
@@ -45,7 +45,7 @@ def test_real_chord_stem_excludes_its_nested_flag():
 
 
 def test_source_beam_direction_gets_its_own_reusable_chord_template():
-    from piano_teacher.verovio_chord_templates import chord_templates
+    from piano_teacher.notation.assets.chords import chord_templates
 
     model = _whole_chord_model()
     model["notation_events"] = [{**event, "note_type": "eighth"}
@@ -61,8 +61,8 @@ def test_source_beam_direction_gets_its_own_reusable_chord_template():
 def test_incomplete_cached_chord_is_rebuilt_instead_of_causing_fallback(tmp_path, damage):
     import verovio
     from piano_teacher.preprocessing_cache import PreprocessingCache
-    from piano_teacher import verovio_chord_templates as chords
-    from piano_teacher.notation_symbols import native_glyphs
+    from piano_teacher.notation.assets import chords
+    from piano_teacher.notation.assets.glyphs import native_glyphs
 
     cache = PreprocessingCache(tmp_path)
     model = _whole_chord_model()
@@ -110,7 +110,7 @@ def test_tie_is_real_verovio_engraved_curve_and_disk_cache(tmp_path,monkeypatch)
 
 
 def test_chord_intervals_reuse_transposed_shapes():
-    from piano_teacher.verovio_chord_templates import chord_pattern
+    from piano_teacher.notation.assets.chords import chord_pattern
     measure={"clefs":{"right":{"sign":"G","line":2}}}
     base={"staff":"right","note_type":"quarter",
           "spelling":{"step":"C","octave":5}}

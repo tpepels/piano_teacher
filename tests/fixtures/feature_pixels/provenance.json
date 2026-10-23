@@ -1,0 +1,122 @@
+[
+  {
+    "file": "rhythms/native-0.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-rhythms/native-0.00.png",
+    "sha256": "30a297d571b82e90eec24b024f4cdfec122079798b3e214ef15e0300fc4485db"
+  },
+  {
+    "file": "rhythms/native-10.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-rhythms/native-10.00.png",
+    "sha256": "3afdb44d61b99b2d851a505e2273abd25418c2742bd210c32fa902d1a0d916cd"
+  },
+  {
+    "file": "rhythms/native-4.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-rhythms/native-4.00.png",
+    "sha256": "a09ab5d169faae9cb2317713829db4d53261290425901b4f7edab0cb5b906a58"
+  },
+  {
+    "file": "rhythms/native-6.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-rhythms/native-6.00.png",
+    "sha256": "af244251f34024e0119466c64897c64c87c167afe920300b64684ffa66409341"
+  },
+  {
+    "file": "rhythms/native-7.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-rhythms/native-7.00.png",
+    "sha256": "c4c358161fbeaa4553df2f9895af310c0e915ce9f3084746a39e88e75d054fb6"
+  },
+  {
+    "file": "rhythms/native-7.50000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-rhythms/native-7.50.png",
+    "sha256": "b7017fca1b110f8e8d126fb701f66164cd2e1be18b38652375a46a7e60efda3d"
+  },
+  {
+    "file": "rhythms/native-8.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-rhythms/native-8.00.png",
+    "sha256": "8c817a59295d5decd3989420e6d3e62757fa2191b6087c64f55ca55a251352e2"
+  },
+  {
+    "file": "rhythms/native-9.50000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-rhythms/native-9.50.png",
+    "sha256": "f3d6d9a61c376fabc11ed54f81ef8318d409a76bef97e162a12a3bb840c25917"
+  },
+  {
+    "file": "accidentals/native-0.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-accidentals/native-0.00.png",
+    "sha256": "f87df28c50bf794aeae9eac4b292c89263453c4bbd9c7f241d0598be220d138f"
+  },
+  {
+    "file": "accidentals/native-1.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-accidentals/native-1.00.png",
+    "sha256": "3c4b3727927ea7833669430a032f32e78ede0bfbad8265794775614e4d0ce620"
+  },
+  {
+    "file": "accidentals/native-2.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-accidentals/native-2.00.png",
+    "sha256": "16b8421f80977eeae771b0d1cb7ba334facb4c55724020cef8644c2cf897bdea"
+  },
+  {
+    "file": "accidentals/native-3.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-accidentals/native-3.00.png",
+    "sha256": "b7e51020df62d628eefebb2b67dec24b6bcca5d956fce5a5f0aaedd93968e7f1"
+  },
+  {
+    "file": "accidentals/native-4.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-accidentals/native-4.00.png",
+    "sha256": "a1296a2eab07f172918e9d1bab17eedf554ff3e6dfa81f122ea1bb27599b6bda"
+  },
+  {
+    "file": "accidentals/native-5.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-accidentals/native-5.00.png",
+    "sha256": "2ed3c156562529152163a7912f139d87c48121d617e036f802fe46dcc6508fef"
+  },
+  {
+    "file": "accidentals/native-6.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-accidentals/native-6.00.png",
+    "sha256": "03cc72a2b7c6fff3e99040ff6c5e2c810b383a208c53c61ab63ac80b9cb38c7e"
+  },
+  {
+    "file": "accidentals/native-7.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-symbol-specimens/written-accidentals/native-7.00.png",
+    "sha256": "46a1767b8928c7ebb340dc06bc71a5e0984a67666ab47da4aa35f84ab8d51a12"
+  },
+  {
+    "file": "chords/native-0.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-native-pixel-proof/independent-grand-staff-pixel-chords/native-0.00.png",
+    "sha256": "ccd85e8987e4cafb360bb083b11dcafe5cff4e07590a642215df8ebcb01a8824"
+  },
+  {
+    "file": "chords/native-1.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-native-pixel-proof/independent-grand-staff-pixel-chords/native-1.00.png",
+    "sha256": "3caff26c33ac9a0b6ca6508d21616d525dc96bb6dfb46f22a75e05d98c856365"
+  },
+  {
+    "file": "chords/native-2.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-native-pixel-proof/independent-grand-staff-pixel-chords/native-2.00.png",
+    "sha256": "a16a60cc1d7e7d877c635dbb4a450c399b78f09caeabbe8881edee3ab6df5317"
+  },
+  {
+    "file": "chords/native-3.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-native-pixel-proof/independent-grand-staff-pixel-chords/native-3.00.png",
+    "sha256": "336ff29a820dc43af28c0241316d0c52249b573d2d0b1c559746464fb0970002"
+  },
+  {
+    "file": "chords/native-4.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-native-pixel-proof/independent-grand-staff-pixel-chords/native-4.00.png",
+    "sha256": "861d86070c133528adaf4895c22107bf11e00d6c214c417cca1ae82b016f9ae6"
+  },
+  {
+    "file": "chords/native-5.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-native-pixel-proof/independent-grand-staff-pixel-chords/native-5.00.png",
+    "sha256": "a1360ddc933bd9098cdf219824ca8fd3043c8ee997026cd7439cf7689ec4eb13"
+  },
+  {
+    "file": "chords/native-6.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-native-pixel-proof/independent-grand-staff-pixel-chords/native-6.00.png",
+    "sha256": "ff8ded47d193e122f0fb0d61fd47b892df83660e3e15043afab71837d49ec605"
+  },
+  {
+    "file": "chords/native-7.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-native-pixel-proof/independent-grand-staff-pixel-chords/native-7.00.png",
+    "sha256": "94890d8e780f2e8b9f7918371af59e93fb2da6e08892bec658f4e715b5d958a1"
+  }
+]

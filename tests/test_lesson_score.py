@@ -2,7 +2,7 @@
 from xml.etree import ElementTree as ET
 import pytest
 from piano_teacher.music import Note, Phrase
-from piano_teacher.lesson_score import build_lesson_score, DIVISIONS
+from piano_teacher.notation.lesson import build_lesson_score, DIVISIONS
 from piano_teacher.exercise_generator import generate_variants
 
 

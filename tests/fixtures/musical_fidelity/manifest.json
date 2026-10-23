@@ -2324,10 +2324,49 @@
     {
       "file": "unsupported_unclosed_midi.mid",
       "error": "unterminated MIDI note"
-    },
+    }
+  ],
+  "ambiguous": [
     {
       "file": "unsupported_ambiguous_overlap.mid",
-      "error": "overlapping MIDI note"
+      "ticks_per_beat": 480,
+      "overlapping_attacks": 1,
+      "attacks": [
+        {
+          "track": 1,
+          "channel": 0,
+          "pitch": 60,
+          "tick": 0,
+          "velocity": 80,
+          "source_id": "midi-t1-e1"
+        },
+        {
+          "track": 1,
+          "channel": 0,
+          "pitch": 60,
+          "tick": 480,
+          "velocity": 80,
+          "source_id": "midi-t1-e2"
+        }
+      ],
+      "releases": [
+        {
+          "track": 1,
+          "channel": 0,
+          "pitch": 60,
+          "tick": 960
+        },
+        {
+          "track": 1,
+          "channel": 0,
+          "pitch": 60,
+          "tick": 1440
+        }
+      ],
+      "fifo_pairs": [
+        ["midi-t1-e1", 960],
+        ["midi-t1-e2", 1440]
+      ]
     }
   ]
 }
