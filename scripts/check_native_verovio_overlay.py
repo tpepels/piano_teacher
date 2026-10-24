@@ -870,7 +870,9 @@ def _library_job(case, source_phrase, variant, directory, godot, reuse_captures=
             problems = variant_errors(source_phrase, variant)
             if problems:
                 raise AssertionError("; ".join(problems))
-        piece = _library_piece(case.filename)
+        source_path = (ROOT / (case.filename if "/" in case.filename
+                               else "midi/" + case.filename)).resolve()
+        piece = _library_piece(str(source_path))
         from piano_teacher.preprocessing_cache import PreprocessingCache
         cache = PreprocessingCache(directory.parent.parent/"cache")
         prepared = fixture(case, piece=piece,

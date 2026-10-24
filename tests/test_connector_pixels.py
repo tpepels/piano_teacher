@@ -237,3 +237,37 @@ def test_actual_missing_secondary_beam_cannot_pass_as_written_sixteenths(tmp_pat
     image.save(path)
     after = verify_beam_pixels(xml, folder, hand='right')
     assert after['measured'][0]['status'] == 'mismatch'
+
+
+def test_explicit_source_group_identity_survives_reference_measure_count_changes():
+    """The reference renderer may paginate or omit empty measure containers.
+
+    Explicit XML event IDs must still resolve; anonymous events are not
+    guessed by proximity if the structural count no longer agrees.
+    """
+    from piano_teacher.notation.connector_pixels import _pages
+    from piano_teacher.notation.proof import read_written_score
+    from types import SimpleNamespace
+    folder = FIXTURES / 'tuplets'
+    xml = (folder / 'score.musicxml').read_text()
+    svg = (folder / 'verovio-0.svg').read_text()
+    written = read_written_score(xml)
+    original = _pages(written, [svg])[1]
+    assert any(e['id'] for e in original.values())
+    malformed_index = SimpleNamespace(symbols=written.symbols + (dict(
+        written.symbols[0], index=12345, id=None),))
+    resolved = _pages(malformed_index, [svg])[1]
+    expected = {e['id'] for e in written.symbols if e['id']}
+    assert expected <= {e['id'] for e in resolved.values() if e['id']}
+
+
+def test_grouped_source_ids_do_not_depend_on_anonymous_rest_ordinal():
+    from piano_teacher.notation.connector_pixels import _inventory
+    from piano_teacher.notation.proof import read_written_score
+    folder = FIXTURES / 'tuplets'
+    written = read_written_score((folder / 'score.musicxml').read_text())
+    svg = (folder / 'verovio-0.svg').read_text()
+    groups = _inventory(written, [svg], 'tuplet', 'right')
+    graphical = [g for g in groups if g.get('graphical', True)]
+    assert graphical and all(g['events'] and not g.get('error') for g in graphical)
+    assert len({e['source']['id'] for g in graphical for e in g['events']}) >= 5

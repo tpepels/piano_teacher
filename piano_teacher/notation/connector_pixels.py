@@ -90,6 +90,16 @@ def _pages(written, strings):
                 for node in root.iter() if 'measure' in _classes(node) and _real(node)]
     indices = sorted({e['index'] for e in written.symbols})
     aliases = {}
+    # XML IDs are independent of Verovio's pagination/measure count.
+    # Never discard them when a printed system splits or repeats a measure.
+    explicit = defaultdict(list)
+    for event in written.symbols:
+        if event['id']:
+            explicit[event['id']].append(event)
+    for page, (_root, geom) in enumerate(pages):
+        for identifier in geom.elements:
+            if len(explicit[identifier]) == 1:
+                aliases[page, identifier] = explicit[identifier][0]
     if len(measures) != len(indices):
         return pages, aliases
     for index, (page, measure) in zip(indices, measures):
@@ -104,6 +114,9 @@ def _pages(written, strings):
             symbols = [n for n in staff.iter() if _real(n)
                        and _classes(n) & {'note', 'rest', 'mRest', 'multiRest'}
                        and n.get('id') in pages[page][1].elements]
+            # Assign anonymous rests only when the entire staff's source
+            # event sequence matches. Explicit IDs above are always bound
+            # individually, even when the printed count/order differs.
             if len(symbols) != len(events):
                 continue
             valid = all((('note' in _classes(n)) == (e['kind'] == 'note'))
@@ -113,18 +126,11 @@ def _pages(written, strings):
                 continue
             voices = {e['voice'] for e in events}
             for node, event in zip(symbols, events):
-                if not event['id'] and (event['kind'] != 'rest' or len(voices) != 1):
+                if event['id'] or (event['kind'] != 'rest' or len(voices) != 1):
                     continue
-                aliases[page, node.get('id')] = event
-    # Explicit XML IDs also support unusual multi-system/page inventory.
-    explicit = defaultdict(list)
-    for event in written.symbols:
-        if event['id']:
-            explicit[event['id']].append(event)
-    for page, (_root, geom) in enumerate(pages):
-        for identifier in geom.elements:
-            if len(explicit[identifier]) == 1:
-                aliases[page, identifier] = explicit[identifier][0]
+                identifier = node.get('id')
+                if (page, identifier) not in aliases:
+                    aliases[page, identifier] = event
     return pages, aliases
 
 

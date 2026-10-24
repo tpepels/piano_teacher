@@ -305,3 +305,17 @@ def test_long_reference_uses_the_same_pagination_as_production():
     _, engraving = audit.fixture(audit.AuditCase("long-production", str(path),
         1, len(piece.bar_boundaries)-1), piece=piece)
     assert not engraving.layout["continuous_score"]
+
+
+def test_focused_midi_file_is_resolved_under_bundled_library(tmp_path, monkeypatch):
+    from scripts import check_native_verovio_overlay as audit
+    source = audit.ROOT / "midi" / "Danny_Boy(Bill_Evans_Ver_).midi"
+    observed = []
+    monkeypatch.setattr(audit, "_library_piece", lambda path: observed.append(path) or None)
+    monkeypatch.setattr(audit, "fixture", lambda *args, **kw: (None, None))
+    monkeypatch.setattr(audit, "run", lambda *args, **kw: dict(
+        errors=[], nonverified_symbols={}, whole_window_coverage=None))
+    case = audit.AuditCase("focused", source.name, 1, 2)
+    result = audit._library_job(case, None, None, tmp_path, "godot", focused=True)
+    assert result['captured'] and not result['errors']
+    assert observed == [str(source.resolve())]
