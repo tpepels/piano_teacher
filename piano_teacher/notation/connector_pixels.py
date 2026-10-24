@@ -100,9 +100,30 @@ def _pages(written, strings):
         for identifier in geom.elements:
             if len(explicit[identifier]) == 1:
                 aliases[page, identifier] = explicit[identifier][0]
-    if len(measures) != len(indices):
-        return pages, aliases
-    for index, (page, measure) in zip(indices, measures):
+    if len(measures) == len(indices):
+        matched_measures = list(zip(indices, measures))
+    else:
+        # A reference print can insert/split measure containers without
+        # changing the source XML event identities. Anchor a measure through
+        # unique preserved note/rest IDs instead of abandoning *all*
+        # anonymous-rest binding on the page. Do not guess an unanchored
+        # measure by position or by its musical content.
+        matched_measures = []
+        for page, measure in measures:
+            anchored_indices = {
+                explicit[node.get('id')][0]['index']
+                for node in measure.iter()
+                if _classes(node) & {'note', 'rest', 'mRest', 'multiRest'}
+                and len(explicit[node.get('id')]) == 1
+            }
+            if len(anchored_indices) == 1:
+                matched_measures.append((next(iter(anchored_indices)), (page, measure)))
+    match_counts = Counter(index for index, _ in matched_measures)
+    for index, (page, measure) in matched_measures:
+        if match_counts[index] != 1:
+            # Multiple reference measure containers may contain pieces of
+            # one source measure. Their anonymous event order is not unique.
+            continue
         expected = defaultdict(list)
         for event in written.symbols:
             if event['index'] == index:

@@ -305,3 +305,50 @@ def test_no_usable_reference_frame_cannot_be_certified(monkeypatch):
         and "No independently usable framebuffer" in row["evidence"]["unavailable_witnesses"][0]["reason"]
         for row in report["measured"]
     )
+
+
+def test_anonymous_group_rest_can_bind_across_reference_measure_inventory_change():
+    """Source IDs inside the *same* print measure still anchor its anonymous rest."""
+    from xml.etree import ElementTree as ET
+    from piano_teacher.notation.connector_pixels import _inventory
+    from piano_teacher.notation.proof import read_written_score
+    folder = FIXTURES / 'singleton-rest'
+    written = read_written_score((folder / 'score.musicxml').read_text())
+    root = ET.fromstring((folder / 'verovio-0.svg').read_text())
+    parents = {child: parent for parent in root.iter() for child in parent}
+    measure = next(node for node in root.iter()
+                   if 'measure' in node.get('class', '').split())
+    parent = parents[measure]
+    # A renderer-only extra measure changes the printed structural count.
+    # The genuine source measure still has a unique, preserved explicit ID.
+    ET.SubElement(parent, '{http://www.w3.org/2000/svg}g',
+                  {'class':'measure', 'id':'extra-empty-print-measure'})
+    changed = ET.tostring(root, encoding='unicode')
+    rows = _inventory(written, [changed], 'tuplet', 'right')
+    graphics = [row for row in rows if row.get('graphical', True)]
+    assert graphics, 'The original tuplet must remain in the inventory'
+    assert all(row['events'] for row in graphics), graphics
+    # A polyphonic anonymous rest without a unique staff sequence must
+    # continue to be rejected by the existing negative fixture.
+
+
+def test_unanchored_extra_reference_measure_cannot_invent_rest_ownership():
+    from xml.etree import ElementTree as ET
+    from piano_teacher.notation.connector_pixels import _pages
+    from piano_teacher.notation.proof import read_written_score
+    folder = FIXTURES / 'singleton-rest'
+    written = read_written_score((folder / 'score.musicxml').read_text())
+    svg = (folder / 'verovio-0.svg').read_text()
+    root = ET.fromstring(svg)
+    for node in root.iter():
+        if node.get('id') == 'pt47f2097da0e7562addd767bf9f9210b1s0':
+            node.set('id', 'changed-identity')
+    # An unanchored print measure with changed source IDs may not borrow
+    # anonymous identities purely by measure order when counts differ.
+    parents = {child: parent for parent in root.iter() for child in parent}
+    measure = next(node for node in root.iter()
+                   if 'measure' in node.get('class', '').split())
+    ET.SubElement(parents[measure], '{http://www.w3.org/2000/svg}g',
+                  {'class':'measure', 'id':'unanchored-extra-measure'})
+    _pages_result, aliases = _pages(written, [ET.tostring(root, encoding='unicode')])
+    assert all(e['kind'] != 'rest' for e in aliases.values())
