@@ -2147,13 +2147,14 @@ class PracticeEngine:
                 self._page_png[key] = png
             return self._page_png[key]
 
-    def geometry(self, *, native_notes: bool = False) -> dict:
-        """Prepare selected revision/hand in a stateless notation collaborator."""
+    def geometry(self, *, native_notes: bool = True) -> dict:
+        """Prepare native assets; explicit False exposes reference-only layout."""
         from .application.score_preparation import assemble_layout
         with self.lock:
             source_score = self.engraving()
             if not native_notes:
-                return assemble_layout(source_score, revision=self.score_revision)
+                return assemble_layout(source_score, native_notes=False,
+                    revision=self.score_revision)
             if self.plan is None:
                 raise ValueError("No piece loaded")
             p = self.plan

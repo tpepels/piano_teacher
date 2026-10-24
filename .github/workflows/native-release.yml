@@ -20,9 +20,7 @@ concurrency:
 jobs:
   exact-release-gate:
     name: Exact native release gate
-    uses: ./.github/workflows/native-release-gate.yml
-    with:
-      revision: ${{ github.sha }}
+    uses: ./.github/workflows/native-notation.yml
 
   release-context:
     name: Validate native tag and immutable event revision
@@ -119,10 +117,6 @@ jobs:
         with:
           name: native-release-candidate
           path: /tmp/native-candidate
-      - uses: actions/download-artifact@v4
-        with:
-          name: phase4-native-release-report
-          path: /tmp/native-report
       - name: Verify candidate revision and current remote tag, then create draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -137,4 +131,5 @@ jobs:
           test "$remote_revision" = "$REVISION"
           gh release create "$TAG" /tmp/native-candidate/* \
             --repo "$GH_REPO" --draft --verify-tag --target "$REVISION" \
-            --title "Native $TAG" --notes-file /tmp/native-report/native-release.md
+            --title "Native $TAG" \
+            --notes "Candidate passed the comprehensive native notation check at $REVISION."

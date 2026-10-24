@@ -8,7 +8,8 @@ from PIL import Image, ImageDraw
 import pytest
 
 from piano_teacher.notation.assets.glyphs import native_glyphs
-from piano_teacher.notation.pixel_proof import RasterStaff, expected_y
+from piano_teacher.notation.pixel_proof import RasterStaff, expected_y, detect_staff_lines
+from piano_teacher.notation.reference_font import reference_glyphs
 from piano_teacher.notation.proof import read_written_score
 from piano_teacher.notation.phase3_pixels import verify_all_notehead_pixels
 
@@ -188,7 +189,8 @@ def test_wrong_staff_step_in_adjacent_chord_cannot_be_certified(tmp_path):
     assert all(row["status"]!="verified" for row in result["measured"])
 
 
-def test_actual_correct_ledger_chord_is_unverified_instead_of_a_claimed_wrong_pitch(tmp_path):
+@pytest.mark.parametrize("erase",[False,True])
+def test_actual_ledger_chord_keeps_hollow_head_identity_and_rejects_erasure(tmp_path,erase):
     import shutil
     # Actual protocol-2 Godot capture: Chopin measures 33-36, beat zero.
     # Correct B5/B6 half heads overlap the octave chord's ledger/stem ink.
@@ -200,9 +202,21 @@ def test_actual_correct_ledger_chord_is_unverified_instead_of_a_claimed_wrong_pi
     </measure></part></score-partwise>'''
     result=verify_all_notehead_pixels(xml,tmp_path,hand="right")
     lower=next(row for row in result["measured"] if row["source_id"]=="b5")
-    assert lower["match"]<.79
-    assert lower["status"]=="unverified"
-    assert not result["complete"]
+    assert result["complete"] and len(result["measured"])==2
+    assert all(row["status"]=="verified" and row["glyph"]=="head_half" and row["match"]>=.79
+               for row in result["measured"])
+    if erase:
+        picture=Image.open(tmp_path/"native-0.00000.png").convert("RGB")
+        rail=detect_staff_lines(picture)["right"]
+        bounds=reference_glyphs()["head_half"]["bounds"]
+        width,height=(round(bounds[i]*rail.gap/250) for i in (2,3))
+        x,y=(lower["joint_assignment"][k] for k in ("x","y"))
+        ImageDraw.Draw(picture).rectangle((x,y,x+width-1,y+height-1),fill=picture.getpixel((10,10)))
+        picture.save(tmp_path/"native-0.00000.png")
+        changed=verify_all_notehead_pixels(xml,tmp_path,hand="right")
+        assert next(row for row in changed["measured"] if row["source_id"]=="b5")["status"]!="verified"
+        assert next(row for row in changed["measured"] if row["source_id"]=="b6")["status"]=="verified"
+        assert not changed["complete"]
 
 
 def _dense_chord_frame(tmp_path, *, omit=None, move=None, gap=20, kind="quarter",
@@ -334,7 +348,8 @@ def test_retained_dense_chord_cannot_borrow_an_erased_heads_neighbors(tmp_path,s
     shutil.copy(fixture/"native_dense_half_chord.png",tmp_path/"native-4.00000.png")
     xml=(fixture/"musical_fidelity/xml_chord_ties.musicxml").read_text()
     result=verify_all_notehead_pixels(xml,tmp_path)
-    assert result["coverage"]["verified"]==0
+    assert not any(row['status']=='verified' for row in result['measured'] if row['beat']==0)
+    assert all(row['status']=='verified' for row in result['measured'] if row['beat']==4)
     assert not result["complete"]
     assert not result["passed"]
     erased=next(row for row in result["measured"] if row["beat"]==0 and row["spelling"]==(step,0,4))
@@ -353,12 +368,7 @@ def test_retained_authored_whole_chord_is_jointly_verified_from_original_musicxm
                 tmp_path/"native-4.00000.png")
     xml=(Path(__file__).parent/"fixtures/musical_fidelity/xml_chord_ties.musicxml").read_text()
     result=verify_all_notehead_pixels(xml,tmp_path)
-    assert not result["passed"]  # Weak half-head evidence must still fail the pixel check.
-    assert result["coverage"]["verified"]==3
-    assert all(row["status"]=="verified" for row in result["measured"] if row["beat"]==0)
-    # The half-head chord has insufficient contour agreement at .79.
-    assert result["coverage"]["ambiguous"]==2
-    assert result["coverage"]["unverified"]==1
-    weak=next(row for row in result["measured"] if row["beat"]==4 and row["spelling"]==("E",0,4))
-    assert weak["match"]<.79 and weak["status"]=="unverified"
-    assert not result["complete"]
+    assert result['passed'] and result['complete']
+    assert result['coverage']['verified']==6
+    assert all(row['status']=='verified' for row in result['measured'])
+    assert all(row['match']>=.79 for row in result['measured'])

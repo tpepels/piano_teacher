@@ -1,6 +1,7 @@
 """Imported-source learner progression stays separate from timed mastery."""
 import mido
 import pytest
+from pathlib import Path
 
 from piano_teacher import server
 from piano_teacher.learning import LearningPlan
@@ -111,6 +112,10 @@ def take(e, now):
 
 
 def advance(e, now):
+    state = e.state()
+    if state['phase'] == 'loading':
+        return ack(e)
+    assert e.next_at > now[0], state
     now[0] = e.next_at+.01
     state = e.state()
     return ack(e) if state['phase'] == 'loading' else state
@@ -181,18 +186,44 @@ def test_explicit_rhythm_choice_does_not_claim_unprepared_units(course):
     assert state['learner']['prepared_units'] == 0 and not e.plan.mastered
 
 
+def test_loading_readiness_starts_a_real_count_in_without_advancing_the_clock(course):
+    e, now, _, _ = course()
+    begin(e)
+    e.control('practice')
+    loading = e.state()
+    assert loading['phase'] == 'loading'
+    now[0] += 30
+    e.control('score_ready', revision=loading['revision']-1)
+    assert e.state()['phase'] == 'loading' and not e.state()['running']
+    ready_at = now[0]
+    counted = advance(e, now)
+    assert now[0] == ready_at
+    assert counted['phase'] == 'count_in' and counted['clock_beat'] < 0
+    assert e.run_at > ready_at and counted['awaiting_score_revision'] is None
+    assert e.recorder is not None and not e.recorder.presses
+    assert not e.plan.mastered and e.plan.streak == 0
+
+
 def test_three_real_clean_full_takes_advance_guided_course_to_next_variant_learn(course):
     e, now, _, _ = course()
     begin(e)
     first_stage = e.plan.identity
     e.control('practice')
-    ack(e)
+    counted = advance(e, now)
+    assert counted['phase'] == 'count_in' and counted['clock_beat'] < 0
+    revision = counted['revision']
     for streak in (1, 2, 3):
         feedback = take(e, now)
         assert f'Clean pass {streak}/3' in feedback['next_action']
         assert first_stage not in e.plan.mastered
         if streak < 3:
-            assert advance(e, now)['phase'] == 'count_in'
+            repeated = advance(e, now)
+            # The empty measure between takes supplies preparation. A
+            # same-score repeat continues its clock without another count-in.
+            assert repeated['phase'] == 'playing' and repeated['count_in_beats'] == 0
+            assert repeated['revision'] == revision and repeated['clock_beat'] == 0
+            assert repeated['streak'] == streak and e.plan.identity == first_stage
+            assert e.recorder is not None and not e.recorder.presses
     next_stage = advance(e, now)
     assert e.plan.mastered[first_stage] == 80
     assert next_stage['mode'] == 'learn' and next_stage['phase'] == 'guided_wait'
@@ -385,10 +416,7 @@ def test_legacy_timed_recovery_does_not_enable_guided_course_progression(course)
 
 
 def test_actual_237_bar_import_performs_every_original_event_and_no_input_cannot_score(tmp_path, monkeypatch):
-    from pathlib import Path
-    source = Path('/home/tom/Music/Piano Teacher/Merry-Go-Round-of-Life.midi')
-    if not source.is_file():
-        pytest.skip('The local 237-bar user import is unavailable')
+    source = Path(__file__).resolve().parents[1]/'midi'/'Merry-Go-Round-of-Life.midi'
     now = [100.0]
     monkeypatch.setattr(server.time, 'monotonic', lambda: now[0])
     e = PracticeEngine(tmp_path, enable_midi=False)
@@ -400,10 +428,26 @@ def test_actual_237_bar_import_performs_every_original_event_and_no_input_cannot
         assert state['first_bar'] == 1 and state['last_bar'] == 237
         assert state['required_notes'] == 2346
         assert e.plan.active_phrase.notes == e.plan.piece.notes
-        e.control('score_ready', revision=state['revision'])
+        counted = advance(e, now)
+        assert counted['phase'] == 'count_in' and counted['clock_beat'] < 0
+        transport = counted['transport_id']
         now[0] = e.run_at+state['duration_beats']*60/e.plan.bpm+.23
         preview = e.state()
-        assert preview['phase'] == 'ready' and preview['performance_summary'] is None
+        assert preview['phase'] == 'preview_gap' and preview['performance_summary'] is None
+        assert preview['preview_only'] and not preview['scoring_available']
+        assert preview['take_result'] is None and e.pending_result is None
+        assert preview['midi_notes'] == 0
+        now[0] = e.next_at-.01
+        gap = e.state()
+        assert gap['phase'] == 'preview_gap'
+        assert gap['visual_scroll_beat'] > preview['visual_scroll_beat']
+        repeated = advance(e, now)
+        assert repeated['phase'] == 'playing' and repeated['preview_only']
+        assert repeated['transport_id'] == transport+1 and repeated['revision'] == state['revision']
+        assert repeated['count_in_beats'] == 0 and repeated['clock_beat'] == 0
+        assert repeated['visual_scroll_beat'] >= gap['visual_scroll_beat']
+        assert repeated['performance_summary'] is None and repeated['take_result'] is None
+        assert not repeated['scoring_available'] and repeated['midi_notes'] == 0
         assert not e.plan.mastered and e.plan.streak == 0
     finally:
         e.db.close()

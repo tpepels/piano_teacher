@@ -5,6 +5,7 @@ from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.practice import PlayedNote
 from piano_teacher.server import PracticeEngine
+from test_phase1_camera import native_camera_run
 
 
 def piece(bars=4):
@@ -40,10 +41,11 @@ def test_tempo_capped_lead_and_five_errors_slow_ten_percent(tmp_path,monkeypatch
         assert state["streak"]==0 and state["mastered"]==0
         now[0]=e.next_at+.01
         waiting=e.state()
-        assert waiting["phase"]=="loading"
-        e.control("score_ready",revision=waiting["revision"])
-        assert e.state()["phase"]=="count_in"
-        assert e.state()["clock_beat"]==pytest.approx(-2.0)
+        assert waiting["phase"]=="playing"
+        assert waiting["awaiting_score_revision"] is None
+        assert waiting["revision"] == state["revision"]
+        assert waiting["count_in_beats"] == 0
+        assert waiting["clock_beat"] == pytest.approx(0.0)
     finally:
         e.db.close()
 
@@ -64,10 +66,11 @@ def test_complete_current_chunk_before_rewinding(tmp_path,monkeypatch):
         assert e.state()["recovery_beat"]==8
         now[0]=e.next_at+.01
         waiting=e.state()
-        assert waiting["phase"]=="loading"
-        e.control("score_ready",revision=waiting["revision"])
-        assert e.state()["play_from_beat"]==8
-        assert e.state()["clock_beat"]==pytest.approx(-2.0)
+        assert waiting["phase"]=="playing"
+        assert waiting["awaiting_score_revision"] is None
+        assert waiting["play_from_beat"]==8
+        assert waiting["count_in_beats"]==0
+        assert waiting["clock_beat"]==pytest.approx(0.0)
     finally:
         e.db.close()
 
@@ -103,13 +106,12 @@ def test_stop_cancels_pending_retry(tmp_path,monkeypatch):
         e.db.close()
 
 
-def test_godot_has_virtual_lead_in_notation():
-    from pathlib import Path
-    script=(Path(__file__).resolve().parents[1]/"godot"/"main.gd").read_text()
-    assert "lead_width_px" in script and "lead_first" in script
-    assert 'score_overlay.lead_beats = lead_beats' in script
-    assert 'score_overlay.lead_meter = last_state.get("count_in_meter"' in script
-    assert 'target_x = viewport.x * 0.42 - note_x * displayed_width' in script
+def test_godot_has_virtual_lead_in_notation(native_camera_run):
+    report, output = native_camera_run
+    lead = [s for s in report["samples"] if s["label"] == "lead"]
+    assert len(lead) >= 2 and all(s["clock"] < 0 for s in lead)
+    assert all(s["visible_count"] > 0 for s in lead)
+    assert "PHASE0_LEAD_BEAT:" in output
 
 
 def test_custom_target_recovers_instead_of_running_to_original_midi_speed(tmp_path, monkeypatch):

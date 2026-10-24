@@ -4,7 +4,7 @@ extends "res://notation/shared/view_base.gd"
 # and ties are native Godot primitives. Musical glyph CONTOURS come ONLY from
 # the installed Verovio font, cached as individual Godot ImageTextures.
 # There is no full-page SVG bitmap or custom imitation of a music glyph.
-# Incomplete notation falls back to the existing Verovio score as a whole.
+# Incomplete notation is rejected; production reports a preparation error.
 const Geometry := preload("res://notation/native/geometry.gd")
 const ScoreIndex := preload("res://notation/native/score_index.gd")
 const BarlineLayout := preload("res://notation/native/barline_layout.gd")
@@ -31,6 +31,7 @@ var configured_density: float = Timeline.DEFAULT_PIXELS_PER_BEAT
 var beam_groups: Array = []
 var beamed_note_ids: Dictionary = {}
 var beam_stem_up_by_note: Dictionary = {}
+var voice_stem_up_by_note: Dictionary = {}
 var chord_members: Dictionary = {}
 var notation_tuplets: Array = []
 # Immutable musical structure is indexed ONCE when a passage changes.
@@ -71,6 +72,7 @@ func clear_score() -> void:
     beam_groups.clear()
     beamed_note_ids.clear()
     beam_stem_up_by_note.clear()
+    voice_stem_up_by_note.clear()
     chord_members.clear()
     notation_tuplets.clear()
     measure_by_number.clear()
@@ -191,6 +193,7 @@ func load_score(candidate: Dictionary) -> bool:
         if str(source_event.get("kind", "")) == "note":
             expression_note_index[str(source_event.get("id", ""))] = source_event
     chord_members = index["chord_members"]
+    voice_stem_up_by_note = _polyphonic_stem_directions()
     previous_attack_before_measure = index["previous_attack_before_measure"]
     tie_pairs = index["tie_pairs"]
     slur_pairs = index["slur_pairs"]
@@ -277,8 +280,7 @@ func load_score(candidate: Dictionary) -> bool:
     return true
 
 # Only native compositor fragments with unambiguous original Verovio ink.
-# Missing engraving falls back to the existing full Verovio score, rather than
-# drawing approximate beams, stems, chord shapes, tuplets or omitted slurs.
+# Reject incomplete engraving before playback can become ready.
 func _missing_source_engraving() -> String:
     if not beam_extraction_complete:
         return "Source Verovio beam extraction failed"
@@ -288,16 +290,13 @@ func _missing_source_engraving() -> String:
     if not slur_extraction_complete:
         return "Source Verovio slur extraction failed"
     for group in notation_tuplets:
+        if _tuplet_hidden(group):
+            continue
         var ids := PackedStringArray()
         for event in group.get("events",[]):
-            if str(event.get("kind","")) == "note":
-                ids.append(str(event.get("id","")))
-        # Some imported MIDI notes carry a one-event start/stop marker.
-        # Those do not have a multi-note Verovio number/bracket fragment:
-        # their actual beat duration remains intact; invent no symbol.
-        if ids.size() < 2:
-            continue
-        if not glyphs.has_tuplet("|".join(ids),false):
+            ids.append(str(event.get("id","")))
+        if ids.is_empty() or not glyphs.has_tuplet("|".join(ids),
+                str(group.get("bracket","yes")) == "yes"):
             return "Missing engraved Verovio tuplet: "+("|".join(ids))
     for leader_id in chord_members:
         var event: Dictionary = {}
@@ -562,21 +561,16 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
     # Authentic separated Verovio number/bracket masks only. Every group
     # was validated on lesson load; no Godot-drawn ratio, digit or hook.
     for group in notation_tuplets:
+        if _tuplet_hidden(group):
+            continue
         var events: Array = group.get("events",[])
-        if events.size() < 2:
+        if events.is_empty():
             continue
         var ids := PackedStringArray()
-        var note_events: Array = []
         for event in events:
-            if str(event.get("kind","")) == "note":
-                ids.append(str(event.get("id","")))
-                note_events.append(event)
-        if note_events.size() < 2:
-            continue
-        # Verovio's image is anchored to actual noteheads, not rests that
-        # precede/follow them within the MusicXML tuplet.
-        var first: Dictionary = note_events[0]
-        var last: Dictionary = note_events[-1]
+            ids.append(str(event.get("id","")))
+        var first: Dictionary = events[0]
+        var last: Dictionary = events[-1]
         var x0: float = timeline.screen_x(
             float(first.get("beat",0.0)),clock,playhead_x,play_from_beat)
         var x1: float = timeline.screen_x(
@@ -584,8 +578,13 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
         if x1 < -50.0 or x0 > size.x+50.0:
             continue
         glyphs.paint_tuplet(self,"|".join(ids),x0,x1,
-            _event_y(first,gap),gap,
+            _rest_y(first,gap) if str(first.get("kind","")) == "rest" else _event_y(first,gap),gap,
             _ink(str(group.get("staff","right"))))
+
+
+func _tuplet_hidden(group: Dictionary) -> bool:
+    return str(group.get("show_number","actual")) == "none" and \
+        str(group.get("bracket","yes")) == "no"
 
 
 func _paint_rest(x: float, y: float,
@@ -639,11 +638,16 @@ func _layout_rest_lanes(gap: float, density: float) -> void:
         var direction := -1.0
         if voices.size() > 1:
             direction = -1.0 if voice_index % 2 == 0 else 1.0
-            preferred = direction*(1.0+float(voice_index/2))
+            preferred = direction*(1.0+floorf(float(voice_index)/2.0))
         var candidates: Array = [preferred]
+        # Half/whole rectangles derive their value from sitting on or
+        # hanging below a staff line. A half-space displacement exchanges
+        # those two meanings even though the same texture is painted.
+        var lane_step: float = (1.0 if str(event.get("note_type","")) in
+            ["whole","half"] else .5)
         for step in range(1,15):
-            candidates.append(preferred+direction*float(step)*.5)
-            candidates.append(preferred-direction*float(step)*.5)
+            candidates.append(preferred+direction*float(step)*lane_step)
+            candidates.append(preferred-direction*float(step)*lane_step)
         var placed := false
         var best_score := INF
         var best_shift: float = preferred
@@ -737,8 +741,54 @@ func _source_stem_bounds(event: Dictionary, up: bool) -> Array:
     return glyphs.note_stem_bounds.get(key,[])
 
 
-# Pitch extrema determine a whole chord's stem, not the arbitrarily
-# first note in MusicXML. The head artwork/width still comes from Verovio.
+# Two independent simultaneous voices need separate shafts even when both
+# lie on the same side of the staff. Index once per score, never per frame.
+# Source beam and explicit stem directions remain authoritative. Interleaved
+# chords and three-or-more voices require separate collision layout.
+func _polyphonic_stem_directions() -> Dictionary:
+    var onsets: Dictionary = {}
+    for event in ordered_events:
+        if str(event.get("kind","")) != "note" or \
+                bool(event.get("chord",false)) or \
+                str(event.get("note_type","")) in ["whole","breve","long","maxima"]:
+            continue
+        var key: String = "%s|%s|%.8f" % [event.get("staff","right"),
+            event.get("measure",0),float(event.get("beat",0.0))]
+        if not onsets.has(key):
+            onsets[key] = []
+        onsets[key].append(event)
+    var directions: Dictionary = {}
+    for leaders in onsets.values():
+        if leaders.size() != 2 or \
+                str(leaders[0].get("voice","1")) == str(leaders[1].get("voice","1")):
+            continue
+        var ranges: Array = []
+        for leader in leaders:
+            var low := INF
+            var high := -INF
+            var members: Array = chord_members.get(str(leader.get("id","")),[leader])
+            for member in members:
+                var y: float = _event_y(member,1.0)
+                low = minf(low,y)
+                high = maxf(high,y)
+            ranges.append(Vector2(low,high))
+        var upper: int = -1
+        if ranges[0].y < ranges[1].x:
+            upper = 0
+        elif ranges[1].y < ranges[0].x:
+            upper = 1
+        if upper < 0:
+            continue
+        for i in range(2):
+            var members: Array = chord_members.get(str(leaders[i].get("id","")),[leaders[i]])
+            for member in members:
+                directions[str(member.get("id",""))] = i == upper
+    return directions
+
+
+# Pitch extrema determine an isolated chord's default stem, not the arbitrary
+# first note in MusicXML. Polyphonic voices use the indexed separate shafts.
+# The complete head/stem artwork still comes from Verovio.
 func _chord_extents(event: Dictionary, gap: float,
         head_offsets: Dictionary = {}) -> Dictionary:
     var members: Array = chord_members.get(str(event.get("id", "")), [event])
@@ -747,7 +797,10 @@ func _chord_extents(event: Dictionary, gap: float,
     var top_offset := 0.0
     var bottom_offset := 0.0
     var sum_step := 0.0
+    var explicit_stem := ""
     for member in members:
+        if str(member.get("stem","")) in ["up","down"]:
+            explicit_stem = str(member["stem"])
         var head_y: float = _event_y(member, gap)
         var offset: float = float(head_offsets.get(str(member.get("id", "")), 0.0))
         if head_y < top_y:
@@ -762,7 +815,9 @@ func _chord_extents(event: Dictionary, gap: float,
             member.get("spelling", {}),clef))
     return {"top_y":top_y,"bottom_y":bottom_y,
         "top_offset":top_offset,"bottom_offset":bottom_offset,
-        "up":sum_step/float(maxi(1,members.size())) < 4.0}
+        "up":explicit_stem == "up" if not explicit_stem.is_empty() else
+            bool(voice_stem_up_by_note.get(str(event.get("id","")),
+                sum_step/float(maxi(1,members.size())) < 4.0))}
 
 
 # Chord sprites are keyed by their diatonic interval signature, which is
@@ -847,7 +902,7 @@ func _event_ink_rect(event: Dictionary, gap: float,
             bottom = maxf(bottom,dot_y+float(dot[1]+dot[3])*unit)
             right = maxf(right,gap*(1.05+float(dots-1)*.63)+
                 float(dot[2])*unit*.5)
-        return Rect2(left,top,right-left,bottom-top)
+        return _with_single_tuplet_ink(event,Rect2(left,top,right-left,bottom-top),gap)
     if chord_members.has(id):
         var key: String = _chord_template_key(event)
         box = glyphs.chord_heads_bounds[key] if beamed_note_ids.has(id) else \
@@ -898,7 +953,42 @@ func _event_ink_rect(event: Dictionary, gap: float,
     if dots > 0:
         right = maxf(right,head_x+gap*(1.05+float(dots-1)*.63)+ \
             float(glyphs.bounds["augmentation_dot"][2])*unit*.5)
-    return Rect2(left,top,right-left,bottom-top)
+    var rect := Rect2(left,top,right-left,bottom-top)
+    if chord_members.has(id):
+        var group: Array = chord_members[id].duplicate()
+        group.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+            return Geometry.diatonic_index(a.get("spelling",{})) < Geometry.diatonic_index(b.get("spelling",{})))
+        var centers: Array = []
+        for member in group:
+            centers.append(Vector2(float(heads.get(str(member.get("id","")),0.0)),_event_y(member,gap)))
+        var anchors: Dictionary = _chord_dot_anchors(group,centers,gap)
+        var dot: Array = glyphs.bounds["augmentation_dot"]
+        for member in group:
+            var member_id: String = str(member.get("id",""))
+            if anchors.has(member_id):
+                var anchor: Vector2 = anchors[member_id]
+                var count: int = int(member.get("dots",0))
+                rect = rect.merge(Rect2(anchor.x+gap*1.05-float(dot[2])*unit*.5,
+                    anchor.y-gap*.24+float(dot[1])*unit,
+                    float(dot[2])*unit+float(count-1)*gap*.63,float(dot[3])*unit))
+    return _with_single_tuplet_ink(event,rect,gap)
+
+
+func _with_single_tuplet_ink(event: Dictionary, rect: Rect2, gap: float) -> Rect2:
+    var id: String = str(event.get("id",""))
+    if not glyphs.tuplet_metadata.has(id):
+        return rect
+    var info: Dictionary = glyphs.tuplet_metadata[id]
+    if info.get("note_ids",[]).size() != 1:
+        return rect
+    var y: float = _rest_y(event,gap) if str(event.get("kind","")) == "rest" else _event_y(event,gap)
+    var unit: float = gap/250.0
+    for kind in ["number","bracket"]:
+        if info.get(kind) is Dictionary and not info[kind].is_empty():
+            var box: Array = info[kind]["bounds"]
+            rect = rect.merge(Rect2(float(box[0])*unit,y+float(box[1])*unit,
+                float(box[2])*unit,float(box[3])*unit))
+    return rect
 
 
 func _required_ink_density(preferred: float, gap: float = MAX_STAFF_GAP) -> float:
@@ -1016,17 +1106,52 @@ func _paint_engraved_chord(event: Dictionary, x: float,
         glyphs.paint_chord(self,key,x,anchor,gap,ink))
     if not painted_ok:
         return []
+    var dot_anchors: Dictionary = _chord_dot_anchors(sorted_heads,head_centres,gap)
     var painted: Array = []
     for i in range(sorted_heads.size()):
         var current: Dictionary = sorted_heads[i]
         var center: Vector2 = head_centres[i]
-        _paint_rhythm_dots(center.x,center.y,
+        var dot_anchor: Vector2 = dot_anchors.get(str(current.get("id","")),center)
+        _paint_rhythm_dots(dot_anchor.x,dot_anchor.y,
             int(current.get("dots",0)),ink,gap)
         _paint_note_accidental(current,center.x,center.y,ink,gap)
         var id: String = str(current.get("id",""))
         drawn_noteheads[id] = center
         painted.append(id)
     return painted
+
+
+func _chord_dot_anchors(notes: Array, centers: Array, gap: float) -> Dictionary:
+    # Every tone's dots clear the rightmost displaced head. Assign distinct
+    # staff spaces from highest to lowest; a line tone can use the space
+    # below when its preferred upper space belongs to its adjacent tone.
+    var right := -INF
+    for center in centers:
+        right = maxf(right,center.x)
+    var occupied: Dictionary = {}
+    var result: Dictionary = {}
+    for note in notes:
+        if int(note.get("dots",0)) > 0:
+            var staff: String = str(note.get("staff","right"))
+            var step: int = Geometry.staff_step(note.get("spelling",{}),_clef_for(staff,_measure_for(note)))
+            if posmod(step,2) == 1:
+                occupied[step] = true
+    for i in range(notes.size()-1,-1,-1):
+        var note: Dictionary = notes[i]
+        if int(note.get("dots",0)) == 0:
+            continue
+        var staff: String = str(note.get("staff","right"))
+        var step: int = Geometry.staff_step(note.get("spelling",{}),_clef_for(staff,_measure_for(note)))
+        var target: int = step if posmod(step,2) == 1 else step+1
+        if posmod(step,2) == 0:
+            if occupied.has(target):
+                target = step-1
+            while occupied.has(target):
+                target -= 2
+        occupied[target] = true
+        result[str(note.get("id",""))] = Vector2(right,
+            Geometry.note_y(target,_staff_center(staff)+gap*2.0,gap)+gap*.24)
+    return result
 
 
 func _paint_note(event: Dictionary, x: float,
@@ -1049,7 +1174,7 @@ func _paint_note(event: Dictionary, x: float,
         beam_stem.is_empty() and \
         chord_members.get(str(event.get("id", "")), [event]).size() == 1
     if isolated:
-        var normal_up: bool = step < 4
+        var normal_up: bool = bool(_chord_extents(event,gap)["up"])
         if not glyphs.paint_note(self, kind, normal_up, x, y, gap, ink):
             # Atlas validation happens on load; missing artwork must never
             # silently revert to imitated musical ink.
@@ -1176,9 +1301,57 @@ func _tie_placement(first: Dictionary, last: Dictionary,
         str(last.get("id","")),0.0))
     if right-left <= gap*1.2:
         return {}
-    var upward_stem: bool = bool(_chord_extents(first,gap)["up"])
     return {"x0":left, "x1":right, "y":_event_y(first,gap),
-        "down":upward_stem}
+        "down":_tie_bow_down(first,last,gap)}
+
+
+func _tie_bow_down(first: Dictionary, last: Dictionary, gap: float) -> bool:
+    for i in range(2):
+        var event: Dictionary = first if i == 0 else last
+        for attributes in event.get("tied_marks",[]):
+            var kind := ""
+            var placement := ""
+            for attribute in attributes:
+                if attribute.size() == 2:
+                    if str(attribute[0]) == "type":
+                        kind = str(attribute[1])
+                    elif str(attribute[0]) == "placement":
+                        placement = str(attribute[1])
+            if kind == ("start" if i == 0 else "stop") and \
+                    placement in ["above","below"]:
+                return placement == "below"
+    var leader: Dictionary = first
+    if bool(first.get("chord",false)):
+        # Locate only simultaneous events, including a child's real leader.
+        # Do not scan the full performance's chord dictionary per frame.
+        var beat: float = float(first.get("beat",0.0))
+        var begin := 0
+        var end := ordered_events.size()
+        while begin < end:
+            var middle: int = (begin+end) >> 1
+            if float(ordered_events[middle].get("beat",0.0)) < beat-.000001:
+                begin = middle+1
+            else:
+                end = middle
+        for index in range(begin,ordered_events.size()):
+            var candidate: Dictionary = ordered_events[index]
+            if float(candidate.get("beat",0.0)) > beat+.000001:
+                break
+            if not bool(candidate.get("chord",false)) and \
+                    str(candidate.get("kind","")) == "note" and \
+                    candidate.get("staff") == first.get("staff") and \
+                    candidate.get("voice") == first.get("voice") and \
+                    candidate.get("measure") == first.get("measure"):
+                leader = candidate
+                break
+    var extents: Dictionary = _chord_extents(leader,gap)
+    var y: float = _event_y(first,gap)
+    var middle_y: float = (float(extents["top_y"])+float(extents["bottom_y"]))* .5
+    # Original chord ties face away from the chord interior, independently
+    # of the shared stem. The middle note of an odd chord keeps its stem rule.
+    if absf(y-middle_y) > .001:
+        return y > middle_y
+    return bool(beam_stem_up_by_note.get(str(first.get("id","")),extents["up"]))
 
 
 func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
@@ -1193,9 +1366,51 @@ func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
             continue
         var place: Dictionary = _tie_placement(previous,event,x0,x1,gap)
         if not place.is_empty():
-            glyphs.paint_tie(self,float(place["x0"]),float(place["x1"]),
-                float(place["y"]),gap,bool(place["down"]),
-                _ink(str(event.get("staff","right"))))
+            _paint_tie_contour(previous,event,place,gap)
+
+
+func _paint_tie_contour(first: Dictionary, last: Dictionary,
+        place: Dictionary, gap: float) -> void:
+    var direction: String = "up" if bool(place["down"]) else "down"
+    var texture: Texture2D = glyphs.tie_textures.get(direction)
+    if texture == null:
+        return
+    var data: Dictionary = glyphs.tie_metadata[direction]
+    var box: Array = data["bounds"]
+    var source_head: Array = glyphs.bounds["head_half"]
+    var source_center: float = float(source_head[0])+float(source_head[2])*.5
+    var widths: Array[float] = []
+    for event in [first,last]:
+        var kind: String = str(event.get("note_type","quarter"))
+        var name: String = "head_"+(kind if kind in ["whole","half"] else "black")
+        widths.append(float(glyphs.bounds[name][2]))
+    var unit: float = gap/250.0
+    # The original template was engraved between HALF-note font origins;
+    # native musical X is the centre of each actual head. Keep Verovio's
+    # head-edge clearances in staff units, including a wider whole head.
+    # Stretch the contour itself, never the empty endpoint margins.
+    var left_inset: float = (float(box[0])-source_center+
+        (widths[0]-float(source_head[2]))*.5)*unit
+    var right_inset: float = (float(box[0])+float(box[2])-
+        float(data["span"])-source_center-
+        (widths[1]-float(source_head[2]))*.5)*unit
+    var span: float = float(place["x1"])-float(place["x0"])
+    if span-(left_inset-right_inset) < float(box[3])*unit:
+        # Do not compress the ink to less than its original bow height:
+        # that collapses a curve into a vertical mark. Map the original
+        # contour affinely between head centres in this tight interval.
+        # Any overlap remains visible to the independent pixel audit.
+        var compression: float = span/(float(data["span"])*unit)
+        left_inset *= compression
+        right_inset *= compression
+    var left: float = float(place["x0"])+left_inset
+    var right: float = float(place["x1"])+right_inset
+    if right <= left:
+        return
+    draw_texture_rect(texture,Rect2(left,
+        float(place["y"])+float(box[1])*unit,
+        right-left,float(box[3])*unit),false,
+        _ink(str(last.get("staff","right"))))
 
 
 # Binary-search into pre-sorted MusicXML events. Work is proportional

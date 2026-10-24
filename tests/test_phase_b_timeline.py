@@ -4,6 +4,7 @@ import shutil
 import subprocess
 
 import pytest
+from test_phase1_camera import native_camera_run
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,16 +26,8 @@ def test_fixed_beat_timeline_and_preparation_at_40_80_120_bpm():
     assert "SCRIPT ERROR" not in output, output
 
 
-def test_opt_in_app_uses_existing_visual_transport_clock_not_engraving_x():
-    script = (GODOT / "main.gd").read_text()
-    prototype = (GODOT / "notation/diagnostics/timeline_preview.gd").read_text()
-    timeline = (GODOT / "notation/shared/timeline.gd").read_text()
-    assert 'timeline_model_request.request(URL + "/score/model")' in script
-    assert 'timeline_preview.present(last_state, _transport_beat_now())' in script
-    assert 'PIANO_TEACHER_TIMELINE_PREVIEW' in script
-    assert 'PIANO_TEACHER_PIXELS_PER_BEAT' in timeline
-    assert 'return beat * pixels_per_beat' in timeline
-    assert 'return pixels_per_beat * bpm / 60.0' in timeline
-    assert 'timeline.screen_x(' in prototype
-    assert 'playhead_x, from)' in prototype
-    assert 'Verovio' not in prototype
+def test_native_app_uses_existing_visual_transport_clock(native_camera_run):
+    report, _ = native_camera_run
+    assert report["native_ready"] and report["clock_matched"]
+    assert report["pause_frozen"] and report["resume_advanced"]
+    assert report["lead_samples"] >= 2 and report["playing_samples"] >= 3

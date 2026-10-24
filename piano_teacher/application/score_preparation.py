@@ -5,19 +5,19 @@ A stateless application collaborator: no PracticeEngine access, no new cache.
 from __future__ import annotations
 
 
-def assemble_layout(source_score, *, native_notes: bool = False,
+def assemble_layout(source_score, *, native_notes: bool = True,
                     native_model: dict | None = None,
                     notation_xml: str | None = None,
                     cache=None, cache_key: str = "",
                     revision: int | None = None) -> dict:
+    if native_notes and (native_model is None or not notation_xml):
+        raise ValueError("Native score preparation requires the selected lesson model and MusicXML")
     from ..notation.assets.glyphs import native_glyphs, preparation_symbols
     layout = {**source_score.layout, "symbols": preparation_symbols(),
               "native_glyphs": native_glyphs()}
     if revision is not None:
         layout["revision"] = revision
     if native_notes:
-        if native_model is None or not notation_xml:
-            raise ValueError("Native score preparation requires the selected lesson model and MusicXML")
         # Build the identity-preserving model once for all fragment
         # extractors, rather than reparsing the lesson four times.
         from ..notation.assets.notes import note_templates
@@ -26,9 +26,8 @@ def assemble_layout(source_score, *, native_notes: bool = False,
         # Variable chord patterns are pre-engraved individually and
         # reused via a disk cache; unsupported patterns remain native.
         layout["native_note_templates"] = note_templates(cache)
-        # The backend's raster notation must remain available even if
-        # the installed Verovio version changes its compound SVG markup.
-        # Never fail the entire /score/layout response for optional art.
+        # Extraction failures remain explicit missing native assets. The
+        # native compositor rejects incomplete ink; it never selects pages.
         try:
             layout["native_tie_templates"] = tie_templates(cache)
         except Exception as exc:

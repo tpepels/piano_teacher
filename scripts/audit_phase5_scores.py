@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.aggregate_phase3_corpus import aggregate, HANDS
+from scripts.aggregate_phase3_corpus import aggregate, HANDS, STATUSES
 
 
 def discover(directory: Path) -> dict:
@@ -83,8 +83,33 @@ def classify_findings(rows: list[dict]) -> dict:
     }
 
 
+def _grouped_coverage(jobs, dimension):
+    groups = {}
+    for job in jobs:
+        for row in job["elements"]:
+            source = row.get("source") if isinstance(row.get("source"), dict) else {}
+            identity = {"source_index": job["source_index"], "source": job["source"], "hand": job["hand"]}
+            if dimension == "score":
+                identity.pop("hand")
+            elif dimension == "hand":
+                identity = {"hand": job["hand"]}
+            elif dimension == "feature":
+                identity = {"feature": row.get("construct", "unknown")}
+            else:
+                # Preserve source labels (including pickups), parts and an
+                # explicit score-level bucket. Never assign MIDI attacks to
+                # inferred written measures as if the source specified them.
+                identity.update(part=source.get("part", source.get("part_index")),
+                                measure=source.get("measure"),
+                                measure_index=source.get("measure_index"))
+            key = json.dumps(identity, sort_keys=True)
+            at = groups.setdefault(key, {**identity, "coverage": dict.fromkeys(("expected", *STATUSES), 0)})["coverage"]
+            at["expected"] += 1
+            at[row["status"]] += 1
+    return list(groups.values())
+
+
 def summarize(inventory: dict, reports: Path, *, kind: str = 'complete') -> dict:
-    from scripts.audit_native_release import grouped, empty_coverage, add_coverage
     errors = validate_inventory(inventory, ROOT / 'midi')
     names = tuple(row['source'] for row in inventory.get('sources', [])
                   if isinstance(row, dict) and isinstance(row.get('source'), str))
@@ -97,12 +122,11 @@ def summarize(inventory: dict, reports: Path, *, kind: str = 'complete') -> dict
     categories = {}
     for boundary in (('semantic', 'visual') if kind == 'complete' else (kind,)):
         jobs = [job for job in report['jobs'] if job['verification_kind'] == boundary]
-        coverage = empty_coverage()
-        for job in jobs:
-            add_coverage(coverage, job['coverage'])
+        coverage = {key: sum(job['coverage'][key] for job in jobs)
+                    for key in ('expected', *STATUSES)}
         categories[boundary] = dict(coverage=coverage,
             complete=bool(jobs) and all(job['complete'] for job in jobs) and not errors,
-            **{f'by_{dimension}': grouped(jobs, dimension)
+            **{f'by_{dimension}': _grouped_coverage(jobs, dimension)
                for dimension in ('score', 'hand', 'measure', 'feature')})
     report['categories'] = categories
     report['findings'] = classify_findings(report['unverified_elements'])

@@ -37,7 +37,14 @@ def test_manageable_passages_are_grouped_and_source_notes_are_not_lost():
     assert len(plan.lesson_steps) < 20
     assert [step.hand for step in plan.lesson_steps[:3]] == ["right", "left", "both"]
     assert plan.exercises[-1].kind == "perform"
-    assert [(e.phrase.first_bar, e.phrase.last_bar) for e in plan.exercises if e.kind == "connect"] == [(7, 10), (15, 18)]
+    # Adaptive routes can omit an overfull bridge. Every retained exercise
+    # must still follow complete source measures and retain their attacks.
+    for exercise in plan.exercises:
+        phrase = exercise.phrase
+        assert phrase.start == piece.bar_boundaries[phrase.first_bar-1]
+        assert phrase.end == piece.bar_boundaries[phrase.last_bar]
+        assert Counter(phrase.notes) == Counter(
+            note for note in piece.notes if phrase.start <= note.start < phrase.end)
     assert plan.exercises[-1].phrase.notes == piece.notes
     assert all(s.level == "original" for s in plan.lesson_steps if s.kind != "learn" or s.hand == "both")
 

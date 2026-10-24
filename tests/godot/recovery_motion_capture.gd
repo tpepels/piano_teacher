@@ -2,9 +2,9 @@ extends SceneTree
 
 const Design := preload("res://practice_theme.gd")
 
-# Desktop raster capture with a backend-derived clock. Saves every frame and
+# Desktop native capture with a backend-derived clock. Saves every frame and
 # its projection, so motion can be inspected as video and measured separately.
-class FixtureApp extends "res://main.gd":
+class FixtureApp extends "native_production_fixture.gd":
     func _ready() -> void:
         _build_interface()
         _navigate("practice")
@@ -28,25 +28,20 @@ func run() -> void:
     root.add_child(app)
     await process_frame
     await process_frame
-    app.revision = 0
-    app.layout_revision = 0
-    app.requested_revision = 0
-    app.requested_page = 0
-    app.score_layout = JSON.parse_string(FileAccess.get_file_as_string(folder + "/layout.json"))
-    for page in range(int(app.score_layout.pages)):
-        app.page_images.append(Image.load_from_file(folder + "/page-%d.png" % page))
-    app.source_layout = app.score_layout
-    app.last_state = {"phase":"ready"}
-    app._on_score(0, 200, PackedStringArray(), FileAccess.get_file_as_bytes(folder + "/score.png"))
+    var error: String = app.load_native_fixture(folder)
+    if not error.is_empty():
+        push_error(error)
+        quit(1)
+        return
     await process_frame
     await process_frame
     var samples: Array = []
     for bpm in [40, 80, 120]:
         var initial_beat: float = -float(bpm)/60.0*.2 if checking else -1.0
-        var state := {"revision":0, "transport_id":bpm, "bpm":bpm,
-            "running":true, "paused":false, "phase":"count_in",
+        var state := {"revision":app.revision, "transport_id":bpm, "bpm":bpm,
+            "loaded":true, "running":true, "paused":false, "phase":"count_in",
             "mode":"practice", "preview_only":true, "clock_beat":initial_beat,
-            "play_from_beat":0.0, "duration_beats":app.score_layout.beats,
+            "play_from_beat":0.0, "duration_beats":app.timeline_preview.timeline.duration_beats,
             "count_in_beats":1, "count_in_bar_beats":4}
         var clock = load(args[2] if args.size() > 2 else "res://visual_transport_clock.gd").new()
         clock.accept(state, 100000, 100000)
@@ -65,30 +60,29 @@ func run() -> void:
             app.last_state.clock_beat = beat
             app.last_state.paused = true
             app.last_state.phase = "playing" if beat >= 0 else "count_in"
-            # Force the interval that previously left the cached playhead
-            # inside a moving parent for every second display frame.
-            app.last_overlay_animation_ms = Time.get_ticks_msec() if frame % 2 else 0
+            # Sample the production native compositor on every display frame.
             app._process(0.0)
-            app.score_overlay.transport_active = true
+            app.timeline_preview.queue_redraw()
             await process_frame
             RenderingServer.force_draw()
             var pixels: Image = root.get_texture().get_image()
             if not checking:
                 pixels.save_png(output + "/%d-%03d.png" % [bpm, frame])
             var pixel_scale := Vector2(pixels.get_size()) / root.get_visible_rect().size
-            var expected_x: float = (app.score_frame.global_position.x + app.score_frame.size.x * .42) * pixel_scale.x
-            var line_y: int = roundi(app.score_frame.get_global_rect().get_center().y * pixel_scale.y)
+            var expected_x: float = (app.timeline_preview.global_position.x + app.timeline_preview.size.x * .42) * pixel_scale.x
+            var line_y: int = roundi(app.timeline_preview.get_global_rect().get_center().y * pixel_scale.y)
             var line_x := -1
             var best := 1.0
             for x in range(maxi(0,roundi(expected_x)-35), mini(pixels.get_width(),roundi(expected_x)+36)):
                 var color: Color = pixels.get_pixel(x,line_y)
-                var distance: float = absf(color.r - Design.SCORE_ACCENT.r) \
-                    + absf(color.g - Design.SCORE_ACCENT.g) + absf(color.b - Design.SCORE_ACCENT.b)
+                var distance: float = absf(color.r - Design.MINT.r) \
+                    + absf(color.g - Design.MINT.g) + absf(color.b - Design.MINT.b)
                 if distance < best:
                     best = distance
                     line_x = x
             samples.append({"bpm":bpm, "frame":frame, "seconds":elapsed,
-                "beat":beat, "x":app.score_content.position.x,
+                "beat":beat, "clock_beat":app.timeline_preview.clock_beat,
+                "noteheads":app.timeline_preview.drawn_noteheads,
                 "expected_line_x":expected_x, "rendered_line_x":line_x, "line_color_error":best,
                 "width":pixels.get_width(), "height":pixels.get_height(),
                 "pixel_scale":[pixel_scale.x, pixel_scale.y]})

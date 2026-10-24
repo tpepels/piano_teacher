@@ -8,15 +8,9 @@ const MUTED := Design.SECONDARY_INK
 const PAPER := Design.FOREST
 const WHITE := Design.PANEL
 const ACCENT := Design.TEAL
-const ScoreStrip := preload("res://notation/legacy/strip.gd")
-const ScoreExactSpacing := preload("res://notation/legacy/exact_spacing.gd")
-const ScoreQuality := preload("res://notation/legacy/quality.gd")
-const StaffContinuity := preload("res://staff_continuity.gd")
-const ScoreOverlay := preload("res://score_overlay.gd")
-const NoteReactions := preload("res://note_reactions.gd")
+const ScoreEffects := preload("res://score_effects.gd")
 const ChallengeFlow := preload("res://challenge_flow.gd")
 const LivingScore := preload("res://living_score.gd")
-const ScoreMotionCurve := preload("res://notation/legacy/motion_curve.gd")
 const HintKeyboard := preload("res://hint_keyboard.gd")
 const GameBackdrop := preload("res://game_backdrop.gd")
 const GameStage := preload("res://game_stage.gd")
@@ -29,7 +23,6 @@ const ActionButton := preload("res://action_button.gd")
 const LibraryRow := preload("res://library_row.gd")
 const GameInputIndicator := preload("res://game_input_indicator.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
-const TimelinePreview := preload("res://notation/diagnostics/timeline_preview.gd")
 const NativeNotation := preload("res://notation/native/view.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 
@@ -113,7 +106,6 @@ var last_control_action := ""
 var pending_transport_action := ""
 var action_request_started_ms := 0
 var state_request: HTTPRequest
-var score_request: HTTPRequest
 var layout_request: HTTPRequest
 var action_request: HTTPRequest
 var device_request: HTTPRequest
@@ -135,14 +127,8 @@ var progress_label: Label
 var device_button: Button
 var device_menu_requested := false
 var start_button: Button
-var score_view: TextureRect
-var score_overlay: ScoreOverlay
-var note_reactions: Control
+var score_effects = ScoreEffects.new()
 var score_frame: Control
-var score_content: Control
-var staff_continuity: Control
-var score_crop_origin := Vector2.ZERO
-var score_crop_size := Vector2.ONE
 var count_tick_index := -1
 var play_tick_index := -1
 var game_phase_cue: Control
@@ -153,42 +139,11 @@ var device_menu: PopupMenu
 var device_names: Array = []
 var revision := -1
 var state_pending := false
-var score_pending := false
-var requested_revision := -1
 var layout_revision := -1
 var requested_layout_revision := -1
 var layout_pending := false
 var score_layout: Dictionary = {}
 var living_chords: Array = []
-var source_layout: Dictionary = {}
-var page_images: Array[Image] = []
-var score_tiles: Array[TextureRect] = []
-var strip_tiles: Array = []
-# Phase 8G: static raster geometry is independent of the moving camera.
-var score_tile_scale := -1.0
-var cached_bounds: Dictionary = {}
-var cached_bounds_revision := -1
-# Only animated overlays use a 30 FPS redraw cadence. The engraving camera
-# stays at 60 FPS and musical timing remains owned by the Python engine.
-var last_overlay_animation_ms := -1000
-var camera_last_scale := -1.0
-var score_raster_width := 2000
-var visible_tile_begin := 0
-var visible_tile_end := 0
-var tile_window_initialized := false
-var tile_geometry_rebuilds := 0
-var tile_window_changes := 0
-var score_tile_upload_bytes := 0
-var score_tile_packed_bytes := 0
-# Phase 8I: long scores retain compressed CPU ink instead of offscreen
-# Texture2Ds. Two neighbouring systems on each side are prefetched.
-var deferred_tile_mode := false
-var resident_tile_begin := 0
-var resident_tile_end := 0
-var resident_tile_bytes := 0
-var restored_tile_count := 0
-var current_page := -1
-var requested_page := -1
 var rendered_revision := -1
 var action_pending := false
 var last_state: Dictionary = {}
@@ -198,9 +153,7 @@ var last_state_tick := 0
 var last_playhead_strike_beat := -INF
 var last_playhead_strike_transport := -1
 var visual_transport_clock = VisualTransportClock.new()
-# The experiment is opt-in: the legacy engraving remains the default.
-var timeline_preview_enabled := false
-var native_notation_enabled := false
+# The native compositor is the sole production score view.
 var timeline_preview: Control
 var native_score_feedback: Control
 var timeline_model_request: HTTPRequest
@@ -209,7 +162,6 @@ var timeline_model_revision := -1
 var timeline_model_retry_after_ms := 0
 var state_request_started_ms := 0
 var last_audio_transport_id := -1
-var follow_system_key := ""
 # Opt-in diagnostic hook for the actual headless UI integration test only.
 var phase0_smoke_mode := false
 var listen_sync_diagnostics := false
@@ -262,10 +214,6 @@ var ui_scale := 1.0
 var last_seen_midi_input_count := -1
 var last_seen_midi_visual_sequence := 0
 var state_poll_timer: Timer
-# No repeated camera work for an unchanged, paused transport snapshot.
-var last_paused_score_key := ""
-# Only project the stopped score when its intended ready position changes.
-var last_ready_score_key := ""
 
 func _ready() -> void:
     # On 120/144 Hz laptops Godot otherwise renders the entire translucent
@@ -279,19 +227,6 @@ func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
-    # Native semantic notation is the canonical score engine. The original
-    # Verovio page display remains a compatibility path for scores whose
-    # source engraving cannot yet be represented faithfully. An explicit
-    # switch allows comparing the historical pipeline during migration.
-    # PIANO_TEACHER_NATIVE_NOTATION=1 stays valid but is no longer required.
-    native_notation_enabled = (
-        OS.get_environment("PIANO_TEACHER_RENDERER").to_lower() != "legacy" and
-        OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION").to_lower() not in
-            ["0", "false", "off"] and
-        not OS.get_cmdline_user_args().has("--legacy-notation"))
-    timeline_preview_enabled = (native_notation_enabled or
-        OS.get_environment("PIANO_TEACHER_TIMELINE_PREVIEW") == "1" or
-        OS.get_cmdline_user_args().has("--timeline-preview"))
     # Apply one device-independent Window scale before creating the controls.
     # Do not enlarge fonts and controls a second time in the layouts.
     _configure_ui_scaling()
@@ -316,14 +251,11 @@ func _ready() -> void:
         get_window().size_changed.connect(_update_responsive_layout)
     _update_responsive_layout()
     state_request = _new_request(_on_state)
-    score_request = _new_request(_on_score)
     layout_request = _new_request(_on_layout)
-    if timeline_preview_enabled:
-        timeline_model_request = _new_request(_on_timeline_model)
+    timeline_model_request = _new_request(_on_timeline_model)
     # Verovio can take longer to engrave a dense MIDI score on the first run.
     # Do not abandon the request after the generic five-second timeout.
     layout_request.timeout = 90.0
-    score_request.timeout = 45.0
     action_request = _new_request(_on_action)
     action_request.timeout = 90.0
     device_request = _new_request(_on_devices)
@@ -456,213 +388,21 @@ func _update_count_in() -> void:
         var bar_beats: int = maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4)))))
         _count_tick(posmod(tick, bar_beats) == 0)
 
-func _score_note_bounds(page: int) -> Dictionary:
-    if cached_bounds_revision == revision and cached_bounds.has(page):
-        return cached_bounds[page]
-    if cached_bounds_revision != revision:
-        cached_bounds_revision = revision
-        cached_bounds.clear()
-    # Derive framing from actual engraved required notes, not the white area
-    # around the page or a cursor's approximated staff bounds.
-    var left: float = INF
-    var right: float = - INF
-    for item in score_layout.get("notes", []):
-        if int(item.get("page", -1)) != page:
-            continue
-        var px: float = (float(item.get("x", 0.0)) - score_crop_origin.x) / maxf(score_crop_size.x, 0.00001)
-        left = minf(left, px)
-        right = maxf(right, px)
-    if not is_finite(left) or not is_finite(right):
-        for item in score_layout.get("anchors", []):
-            if int(item.get("page", -1)) != page:
-                continue
-            var ax: float = (float(item.get("x", 0.0)) - score_crop_origin.x) / maxf(score_crop_size.x, 0.00001)
-            left = minf(left, ax)
-            right = maxf(right, ax)
-    var bounds: Dictionary
-    if not is_finite(left) or not is_finite(right):
-        bounds = {"left": 0.0, "right": 1.0}
-    else:
-        bounds = {"left": clampf(left - 0.04, 0.0, 1.0),
-            "right": clampf(right + 0.04, 0.0, 1.0)}
-    cached_bounds[page] = bounds
-    return bounds
+func _native_score_ready() -> bool:
+    return timeline_preview != null and timeline_preview.native_ready \
+        and layout_revision == revision and timeline_model_revision == revision \
+        and rendered_revision == revision
 
 
 func _visible_score_noteheads() -> int:
-    # Validate where real noteheads appear after the actual Godot canvas
-    # transform. Cursor movement alone previously passed with a blank panel.
-    if score_frame == null or score_content == null:
+    if timeline_preview == null or not timeline_preview.is_visible_in_tree():
         return 0
+    var viewport := Rect2(Vector2.ZERO, timeline_preview.size)
     var visible := 0
-    for item in score_layout.get("notes", []):
-        if int(item.get("page", -1)) != current_page:
-            continue
-        var normalized: Vector2 = (Vector2(float(item.get("x", 0.0)), float(item.get("y", 0.0)))
-            - score_crop_origin) / score_crop_size
-        var xy: Vector2 = score_content.position + normalized * score_content.size
-        if xy.x >= 0.0 and xy.x <= score_frame.size.x and xy.y >= 0.0 and xy.y <= score_frame.size.y:
+    for point in timeline_preview.drawn_noteheads.values():
+        if viewport.has_point(point):
             visible += 1
     return visible
-
-
-func _layout_moving_score(delta: float = 0.0) -> void:
-    if score_view.texture == null or score_frame == null or score_content == null:
-        return
-    score_overlay.preparation_clefs = score_layout.get("staff_clefs", {})
-    var viewport: Vector2 = score_frame.size
-    var image: Vector2 = score_overlay.image_size
-    if viewport.x < 10.0 or viewport.y < 10.0 or image.x <= 0.0 or image.y <= 0.0:
-        return
-    var bounds: Dictionary = _score_note_bounds(current_page)
-    var focus_left: float = float(bounds["left"])
-    var focus_right: float = float(bounds["right"])
-    var focus_span: float = maxf(0.18, focus_right - focus_left)
-    # Use one stable zoom for stopped, count-in and playing. Earlier versions
-    # changed to a much larger scale on Start and then panned empty page space
-    # across the entire visible panel.
-    var width_scale: float = viewport.x * 0.83 / (image.x * focus_span)
-    if score_layout.has("strip_size"):
-        # Long passages stay readable: never shrink an entire composition to
-        # the viewport. Tiles scroll through at a staff-based stable scale.
-        width_scale = INF
-    var height_scale: float = viewport.y * 0.77 / image.y
-    var scale: float = maxf(0.01, minf(width_scale, height_scale))
-    var systems: Array = score_layout.get("systems", [])
-    var rail_center := .5
-    if not systems.is_empty():
-        var rails: Array = systems[0].get("staff_lines", [])
-        if rails.size() >= 2:
-            var native_gap: float = absf(float(rails[1]) - float(rails[0])) * image.y
-            var rail_extent: float = absf(float(rails[-1]) - float(rails[0])) * image.y
-            rail_center = (float(rails[0]) + float(rails[-1])) * .5
-            if native_gap > .001 and rail_extent > .001:
-                # The raster tile height includes large blank SVG margins.
-                # Scale from the actual grand staff, not those margins.
-                # Leave 35% of the stage for ledger lines and phrasing.
-                # Score is the focal element; on a larger display the
-                # *actual* noteheads/staves must grow with the stage.
-                # The grand-staff bound protects both hands and ledger lines.
-                var desired_gap: float = ScoreQuality.staff_gap(viewport.y, rails)
-                scale = minf(width_scale, desired_gap / native_gap)
-    # Fit the whole engraving above the progress rail. Staff-only fitting
-    # clipped the opening clefs and lower meter, especially beside hints.
-    var ink_top: float = float(score_layout.get("strip_ink_top", 0.0))
-    var ink_bottom: float = float(score_layout.get("strip_ink_bottom", 1.0))
-    var notation_top := 8.0
-    var notation_height: float = maxf(1.0, viewport.y - notation_top - 32.0)
-    if score_layout.has("strip_ink_top"):
-        scale = minf(scale, notation_height / maxf(1.0, (ink_bottom-ink_top)*image.y))
-    var displayed_width: float = image.x * scale
-    var displayed_height: float = image.y * scale
-    if score_content.size.distance_to(Vector2(displayed_width, displayed_height)) > .1:
-        score_content.size = Vector2(displayed_width, displayed_height)
-    staff_continuity.set_hand(str(last_state.get("hand", "both")))
-    if staff_continuity.size.distance_to(score_content.size) > .1:
-        staff_continuity.size = score_content.size
-        staff_continuity.queue_redraw()
-    # Keep all source tile geometry in local canvas coordinates. Only a
-    # change in zoom requires touching every node; ordinary camera movement
-    # changes score_content.position alone.
-    if absf(scale - score_tile_scale) > .000001:
-        for i in range(score_tiles.size()):
-            var rect: Rect2 = strip_tiles[i]["rect"]
-            score_tiles[i].position = rect.position * scale
-            score_tiles[i].size = rect.size * scale
-        score_tile_scale = scale
-        tile_geometry_rebuilds += 1
-    var midpoint_x: float = (focus_left + focus_right) * 0.5
-    var target_x: float = viewport.x * 0.5 - midpoint_x * displayed_width
-    if score_layout.has("strip_size") and not score_layout.get("notes", []).is_empty():
-        target_x = viewport.x * 0.04
-    if score_overlay.showing and not score_overlay.cursor.is_empty():
-        var note_x: float = (float(score_overlay.cursor.get("x", 0.0))
-            - score_crop_origin.x) / maxf(score_crop_size.x, 0.00001)
-        target_x = viewport.x * 0.42 - note_x * displayed_width
-    # Centre the *real staff*, not the large blank area in the SVG raster.
-    var target_y: float = viewport.y * .5 - rail_center * displayed_height
-    if score_layout.has("strip_ink_top"):
-        target_y = notation_top + (notation_height - (ink_bottom-ink_top)*displayed_height)*.5 \
-            - ink_top*displayed_height
-    var target := Vector2(target_x, target_y)
-    # Ten short rules cover the visible viewport, including the empty lead-in.
-    # Use the same camera transform as the notes, without a separate timebase.
-    staff_continuity.set_viewport_span(-target_x, viewport.x)
-    if game_stage != null and not systems.is_empty():
-        var band_rails: Array = systems[0].get("staff_lines", [])
-        if band_rails.size() >= 2:
-            var first_y: float = (target_y + float(band_rails[0]) * displayed_height) / viewport.y
-            var last_y: float = (target_y + float(band_rails[-1]) * displayed_height) / viewport.y
-            game_stage.set_staff_band(first_y, last_y)
-    var key: String = "%d/%d/%d" % [revision, current_page, int(last_state.get("transport_id", 0))]
-    # This is a musical projection, not a camera chasing a moving object.
-    # Smoothing introduces tempo-dependent lag; clamps let the rule wander.
-    # During Ready/Pause the exact same transform is requested repeatedly.
-    # Don't invalidate the long score canvas if nothing has moved.
-    if score_content.position != target:
-        score_content.position = target
-        # The playhead is drawn in this moving canvas. Its local coordinate
-        # must repaint on the SAME frame as the parent moves, or a cached
-        # 30 Hz line drifts left on alternate 60 Hz score frames.
-        score_overlay.queue_redraw()
-    # Two binary searches locate the visible half-open tile interval.
-    # Update only entering/leaving tiles, rather than all systems at 60 Hz.
-    var tile_overscan: float = maxf(120.0, viewport.x * .18)
-    var window: Vector2i = ScoreStrip.visible_tile_range(
-        strip_tiles, target_x, scale, viewport.x, tile_overscan)
-    # Stage new textures before releasing old ones, so rapid seeks have
-    # no frame with a missing notehead or accidental.
-    if not _set_tile_residency(window):
-        _score_failed("An engraved score tile could not be decoded")
-        return
-    if not tile_window_initialized or visible_tile_begin != window.x \
-            or visible_tile_end != window.y:
-        tile_window_changes += 1
-    if not tile_window_initialized:
-        # Fresh TextureRect nodes default to visible; initialize them once.
-        for tile in score_tiles:
-            tile.visible = false
-        tile_window_initialized = true
-    else:
-        for i in range(visible_tile_begin, visible_tile_end):
-            if i < window.x or i >= window.y:
-                score_tiles[i].visible = false
-    for i in range(window.x, window.y):
-        if i < visible_tile_begin or i >= visible_tile_end:
-            score_tiles[i].visible = true
-    visible_tile_begin = window.x
-    visible_tile_end = window.y
-    follow_system_key = key
-
-func _set_tile_residency(visible_range: Vector2i) -> bool:
-    if not deferred_tile_mode:
-        return true
-    var next_begin: int = maxi(0, visible_range.x - 2)
-    var next_end: int = mini(score_tiles.size(), visible_range.y + 2)
-    if resident_tile_begin == next_begin and resident_tile_end == next_end:
-        return true
-    # Decode incoming ink before evicting outgoing textures. The preload
-    # margin is wider than one system so normal playback almost always
-    # reveals a tile that has already been uploaded.
-    var incoming: Dictionary = {}
-    for i in range(next_begin, next_end):
-        if i >= resident_tile_begin and i < resident_tile_end:
-            continue
-        var texture: Texture2D = ScoreStrip.tile_texture(strip_tiles[i])
-        if texture == null:
-            return false
-        incoming[i] = texture
-    for i in range(resident_tile_begin, resident_tile_end):
-        if i < next_begin or i >= next_end:
-            score_tiles[i].texture = null
-            resident_tile_bytes -= int(strip_tiles[i].get("upload_bytes", 0))
-    for i in incoming:
-        score_tiles[i].texture = incoming[i]
-        resident_tile_bytes += int(strip_tiles[i].get("upload_bytes", 0))
-        restored_tile_count += 1
-    resident_tile_begin = next_begin
-    resident_tile_end = next_end
-    return true
 
 
 func _new_request(callback: Callable) -> HTTPRequest:
@@ -1258,8 +998,7 @@ func _build_interface() -> void:
     var score_region := VBoxContainer.new()
     score_region.add_theme_constant_override("separation", 8)
     score_margin.add_child(score_region)
-    # Reserve a stable header row: floating navigation can cover high notes
-    # and the upper staff, especially in the complete-source fallback view.
+    # Reserve a stable header row so navigation clears high notes and staves.
     var score_header := HBoxContainer.new()
     score_header.alignment = BoxContainer.ALIGNMENT_END
     score_header.add_theme_constant_override("separation", 8)
@@ -1272,55 +1011,20 @@ func _build_interface() -> void:
     score_region.add_child(score_area)
     score_frame = score_area
     score_frame.clip_contents = true
-    score_frame.resized.connect(_layout_moving_score)
     game_stage = GameStage.new()
     game_stage.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_frame.add_child(game_stage)
-    score_content = Control.new()
-    score_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    score_frame.add_child(score_content)
-    staff_continuity = StaffContinuity.new()
-    staff_continuity.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    score_content.add_child(staff_continuity)
-    # The positive MIDI feedback halo is behind the actual engraved ink.
-    note_reactions = NoteReactions.new()
-    note_reactions.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    score_content.add_child(note_reactions)
-    score_view = TextureRect.new()
-    score_view.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    score_view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    score_view.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-    score_view.stretch_mode = TextureRect.STRETCH_SCALE
-    score_content.add_child(score_view)
-    score_overlay = ScoreOverlay.new()
-    # The Verovio strip already includes its genuine opening clefs/meter.
-    # Count-in adds rests; StaffContinuity owns the rules across the lead-in.
-    score_overlay.show_preparation_header = false
-    score_overlay.show_preparation_staff = false
-    score_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    score_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    score_content.add_child(score_overlay)
-    note_reactions.hit_pulses = score_overlay.hit_pulses
-    note_reactions.preview_pulses = score_overlay.preview_pulses
-    note_reactions.wrong_ghosts = score_overlay.wrong_ghosts
-    if timeline_preview_enabled:
-        # Native notation sits above the legacy raster but BELOW the real
-        # count-in, error and transport overlays. The first Phase C trial
-        # must not hide essential game controls while it draws the score.
-        timeline_preview = (NativeNotation.new() if native_notation_enabled
-            else TimelinePreview.new())
-        timeline_preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-        timeline_preview.visible = false
-        score_frame.add_child(timeline_preview)
-        if native_notation_enabled:
-            # Keep the measure rail visible above the opaque native canvas.
-            game_stage.surface_visible = false
-            game_stage.z_index = 1
-            native_score_feedback = preload("res://native_score_feedback.gd").new()
-            native_score_feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-            score_frame.add_child(native_score_feedback)
-        if not timeline_preview.set_density_from_env():
-            push_warning("Native score density: " + str(timeline_preview.notice))
+    timeline_preview = NativeNotation.new()
+    timeline_preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    timeline_preview.visible = false
+    score_frame.add_child(timeline_preview)
+    game_stage.surface_visible = false
+    game_stage.z_index = 1
+    native_score_feedback = preload("res://native_score_feedback.gd").new()
+    native_score_feedback.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    score_frame.add_child(native_score_feedback)
+    if not timeline_preview.set_density_from_env():
+        push_warning("Native score density: " + str(timeline_preview.notice))
     # Score status must live inside the score panel: feedback_label is replaced
     # by regular state polling and cannot hold engraving errors reliably.
     score_status_panel = CenterContainer.new()
@@ -1353,7 +1057,7 @@ func _build_interface() -> void:
     game_impact_callout = GameImpactCallout.new()
     # Native reactions stay on exact noteheads. The legacy coaching card
     # can cover low staff ink when the contextual keyboard reduces height.
-    game_impact_callout.visible = not native_notation_enabled
+    game_impact_callout.visible = false
     game_impact_callout.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
     game_impact_callout.offset_left = -264.0
     game_impact_callout.offset_right = -14.0
@@ -2193,9 +1897,9 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
         lesson_rows.add_child(chapter)
 
 func _refresh_score_status() -> void:
-    if score_status_panel == null or score_view == null:
+    if score_status_panel == null:
         return
-    score_status_panel.visible = score_view.texture == null
+    score_status_panel.visible = not _native_score_ready()
     # Phase guidance already has captions below the score and count-in
     # lights. An opaque capsule must never cover engraved noteheads.
     game_phase_cue.visible = score_status_panel.visible
@@ -2218,18 +1922,28 @@ func _score_failed(message: String) -> void:
     if phase0_smoke_mode:
         print("PHASE0_SCORE_ERROR:", message)
     score_error = message
+    rendered_revision = -1
+    timeline_model_revision = -1
+    if timeline_preview != null:
+        timeline_preview.clear_score()
+        timeline_preview.visible = false
+    if native_score_feedback != null:
+        native_score_feedback.bind_score(timeline_preview, -1)
+    start_button.disabled = true
+    practice_retry_button.disabled = true
     feedback_label.text = message
     _refresh_score_status()
 
 func _retry_score() -> void:
-    if not bool(last_state.get("loaded", false)) or layout_pending or score_pending:
+    if not bool(last_state.get("loaded", false)) or layout_pending:
         return
     score_error = ""
     score_layout = {}
     layout_revision = -1
     rendered_revision = -1
-    current_page = -1
-    score_view.texture = null
+    timeline_model_revision = -1
+    timeline_preview.clear_score()
+    timeline_preview.visible = false
     _refresh_score_status()
     _request_layout()
 
@@ -2604,7 +2318,7 @@ func _toggle_fullscreen() -> void:
     _on_fullscreen_toggle(enabled)
 
 func _poll() -> void:
-    if timeline_preview_enabled and bool(last_state.get("loaded", false)) \
+    if bool(last_state.get("loaded", false)) and score_error.is_empty() \
             and timeline_model_revision != revision \
             and not timeline_model_pending \
             and Time.get_ticks_msec() >= timeline_model_retry_after_ms:
@@ -2621,49 +2335,21 @@ func _process(_delta: float) -> void:
     if frame_diagnostics and current_screen == "practice":
         var frame_result: Dictionary = frame_meter.record_frame(_delta)
         if not frame_result.is_empty():
-            frame_result["score_tiles"] = score_tiles.size()
-            frame_result["visible_score_tiles"] = visible_tile_end - visible_tile_begin
-            frame_result["tile_upload_mib"] = snappedf(
-                float(score_tile_upload_bytes) / (1024.0 * 1024.0), .01)
-            frame_result["resident_tile_mib"] = snappedf(
-                float(resident_tile_bytes) / (1024.0 * 1024.0), .01)
-            frame_result["packed_tile_mib"] = snappedf(
-                float(score_tile_packed_bytes) / (1024.0 * 1024.0), .01)
-            frame_result["resident_tiles"] = resident_tile_end - resident_tile_begin \
-                if deferred_tile_mode else score_tiles.size()
-            frame_result["tile_restores"] = restored_tile_count
-            frame_result["tile_geometry_rebuilds"] = tile_geometry_rebuilds
-            frame_result["tile_window_changes"] = tile_window_changes
+            frame_result["native_visible_noteheads"] = _visible_score_noteheads()
+            frame_result["native_scanned_events"] = timeline_preview.frame_scanned_events
             frame_result["phase"] = str(last_state.get("phase", ""))
             print("PHASE8D_FRAME_INTERVALS:", JSON.stringify(frame_result))
     # Animate short-lived hit pulses between HTTP state samples.
     var ticks: int = Time.get_ticks_msec()
-    var effects_were_visible: bool = (not score_overlay.hit_pulses.is_empty()
-        or not score_overlay.wrong_ghosts.is_empty()
-        or not score_overlay.preview_pulses.is_empty())
-    var effects_before: int = score_overlay.hit_pulses.size() + \
-        score_overlay.wrong_ghosts.size() + score_overlay.preview_pulses.size()
-    for index in range(score_overlay.hit_pulses.size() - 1, -1, -1):
-        if int(score_overlay.hit_pulses[index].get("until_ms", 0)) <= ticks:
-            score_overlay.hit_pulses.remove_at(index)
-    for index in range(score_overlay.wrong_ghosts.size() - 1, -1, -1):
-        if int(score_overlay.wrong_ghosts[index].get("until_ms", 0)) <= ticks:
-            score_overlay.wrong_ghosts.remove_at(index)
-    for index in range(score_overlay.preview_pulses.size() - 1, -1, -1):
-        if int(score_overlay.preview_pulses[index].get("until_ms", 0)) <= ticks:
-            score_overlay.preview_pulses.remove_at(index)
-    # Redraw the *last* expiry too. Otherwise a paused score may retain
-    # the final faded wrong pitch until another transport update arrives.
-    var effects_after: int = score_overlay.hit_pulses.size() + \
-        score_overlay.wrong_ghosts.size() + score_overlay.preview_pulses.size()
-    var pulse_expired: bool = effects_before != effects_after
-    # Expired particles disappear immediately; live particles and
-    # anticipation normally redraw at 30 rather than 60 FPS.
-    if effects_were_visible and (pulse_expired or \
-            ticks - last_overlay_animation_ms >= 33):
-        last_overlay_animation_ms = ticks
-        score_overlay.queue_redraw()
-        note_reactions.queue_redraw()
+    for index in range(score_effects.hit_pulses.size() - 1, -1, -1):
+        if int(score_effects.hit_pulses[index].get("until_ms", 0)) <= ticks:
+            score_effects.hit_pulses.remove_at(index)
+    for index in range(score_effects.wrong_ghosts.size() - 1, -1, -1):
+        if int(score_effects.wrong_ghosts[index].get("until_ms", 0)) <= ticks:
+            score_effects.wrong_ghosts.remove_at(index)
+    for index in range(score_effects.preview_pulses.size() - 1, -1, -1):
+        if int(score_effects.preview_pulses[index].get("until_ms", 0)) <= ticks:
+            score_effects.preview_pulses.remove_at(index)
     apply_tempo_button.disabled = action_pending
     if tempo_down_button != null:
         tempo_down_button.disabled = (action_pending or not bool(last_state.get("loaded", false))
@@ -2696,9 +2382,9 @@ func _process(_delta: float) -> void:
             print("PHASE8B_LISTEN_SOFTWARE_SYNC:",
                 JSON.stringify(demo_player.sync_report()))
     _update_count_in()
-    # Frame-accurate Phase B projection uses the SAME clock as score and
+    # Frame-accurate native projection uses the SAME clock as score and
     # count-in. No Verovio X positions or per-note speed correction.
-    if timeline_preview_enabled and timeline_preview != null \
+    if timeline_preview != null \
             and bool(last_state.get("loaded", false)):
         var score_clock: float = _transport_beat_now()
         timeline_preview.present(last_state, score_clock,
@@ -2713,241 +2399,40 @@ func _process(_delta: float) -> void:
             maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4))))),
             bool(last_state.get("preview_only", false))
                 or str(last_state.get("mode", "")) == "listen")
-    # A paused Listen or practice score is a frozen frame. The previous
-    # path ran note indexing and geometry projection 30 times per second
-    # while the instrument was idle. Allow one pass after any seek, mode,
-    # score or transport change and let queued MIDI visuals expire above.
-    if bool(last_state.get("paused", false)) and layout_revision == revision:
-        var static_key: String = "%s|%s|%s|%s|%s|%s" % [
-            str(revision), str(last_state.get("transport_id", -1)),
-            str(last_state.get("clock_beat", 0.0)),
-            str(last_state.get("play_from_beat", 0.0)),
-            str(last_state.get("mode", "")), str(last_state.get("phase", ""))]
-        if static_key == last_paused_score_key:
-            return
-        last_paused_score_key = static_key
-    else:
-        last_paused_score_key = ""
-    if str(last_state.get("mode", "practice")) == "learn":
-        score_overlay.next_chord.clear()
-        _layout_guided_score()
-        return
-    score_overlay.guided_active = false
-    if last_state.is_empty() or not bool(last_state.get("running", false)) or layout_revision != revision:
-        if not score_overlay.preview_pulses.is_empty():
-            score_overlay.preview_pulses.clear()
-            score_overlay.queue_redraw()
-            note_reactions.queue_redraw()
+    # Source-event reactions still follow the backend clock. Native feedback
+    # owns visible note cues and grading; no page-coordinate camera runs here.
+    if last_state.is_empty() or not bool(last_state.get("running", false)) \
+            or bool(last_state.get("paused", false)) or not _native_score_ready():
         last_playhead_strike_transport = -1
-        score_overlay.onset_until_ms = 0
-        # The very first expected attack must be visible before the pianist
-        # starts. A ready practice passage should not show an empty score
-        # until Play is pressed or the first physical key is struck.
-        var ready_preview: Array = []
-        if layout_revision == revision and str(last_state.get("phase", "")) in ["ready", "disconnected"]:
-            ready_preview = LivingScore.cue(living_chords,
-                float(last_state.get("play_from_beat", 0.0)), score_overlay.marks)
-        if ready_preview != score_overlay.next_chord:
-            score_overlay.next_chord = ready_preview
-            score_overlay.queue_redraw()
-        if score_overlay.showing:
-            score_overlay.showing = false
-            score_overlay.queue_redraw()
-        # Feedback/pause deliberately retain the last played camera position.
-        # Ready and disconnected should return to the beginning exactly once,
-        # even if the overlay was already hidden on an earlier frame.
-        var stopped_phase: String = str(last_state.get("phase", "ready"))
-        if stopped_phase in ["ready", "disconnected"] and layout_revision == revision:
-            var ready_key: String = "%s|%s|%s|%s" % [
-                str(revision), str(current_page),
-                str(last_state.get("play_from_beat", 0.0)),
-                str(last_state.get("transport_id", -1))]
-            if ready_key != last_ready_score_key:
-                last_ready_score_key = ready_key
-                _layout_moving_score(_delta)
-        else:
-            last_ready_score_key = ""
         return
-    # Any running attempt invalidates the cached Ready projection so that
-    # Stop can restore the start even when the transport ID is unchanged.
-    last_ready_score_key = ""
-    # Count-in uses negative beats on the same spacing as the opening notes.
-    # position advances at BPM regardless of the user's MIDI performance.
     var clock: float = _transport_beat_now()
-    var play_from: float = float(last_state.get("play_from_beat", 0.0))
-    var beat: float = clampf(play_from + maxf(0.0, clock), 0.0, float(last_state.get("duration_beats", 1.0)))
-    var active: bool = not bool(last_state.get("paused", false))
-    var musical_clock: float = play_from + clock
+    var musical_clock: float = float(last_state.get("play_from_beat", 0.0)) + clock
     var strike_transport: int = int(last_state.get("transport_id", 0))
-    if not active or last_playhead_strike_transport != strike_transport \
-            or musical_clock < last_playhead_strike_beat - .001:
-        last_playhead_strike_transport = strike_transport
-        last_playhead_strike_beat = musical_clock
-        score_overlay.onset_until_ms = 0
-    else:
-        if musical_clock - last_playhead_strike_beat <= .5:
-            var onsets: Array = LivingScore.groups_crossed(
-                living_chords, last_playhead_strike_beat, musical_clock)
-            if not onsets.is_empty():
-                score_overlay.onset_until_ms = Time.get_ticks_msec() + 180
-                if bool(last_state.get("preview_only", false)) or str(last_state.get("mode", "")) == "listen":
-                    _preview_note_arrivals(onsets)
-        last_playhead_strike_beat = musical_clock
-    # The note cue is a musical preview on the exact score, not an evaluator.
-    # During count-in show the first chord. It disappears during rests longer
-    # than 1.25 beats, and correct/missed/wrong pitch marks always take priority.
-    score_overlay.next_chord = LivingScore.cue(
-        living_chords, beat, score_overlay.marks)
-    var cursor: Dictionary = _position_at_beat(beat)
-    if cursor.is_empty():
-        score_overlay.showing = false
-        score_overlay.queue_redraw()
-        return
-    var page: int = int(cursor.get("page", 0))
-    if current_page != page or rendered_revision != revision:
-        _request_score(page)
-        score_overlay.showing = false
-        score_overlay.queue_redraw()
-        return
-    # A fixed origin for the blank measure is necessary: rebuilding it
-    # from the changing cursor made the measure jump/disappear at downbeat.
-    var initial_cursor: Dictionary = _position_at_beat(play_from)
-    score_overlay.lead_first = {}
-    score_overlay.lead_width_px = 0.0
-    score_overlay.lead_staff_lines = []
-    # Negative beat projection must remain time-proportional across zero
-    # even for paused/seeked transport snapshots. Count-in decorations are
-    # a separate visibility decision: never leave extra clefs on the score.
-    if clock < 0.0 and int(initial_cursor.get("page", -1)) == current_page:
-        var beat_width: float = _beat_width_at(play_from)
-        cursor["x"] = float(initial_cursor.get("x", 0.0)) + clock * beat_width
-        if active:
-            var lead_beats: float = maxf(0.5, float(last_state.get("count_in_beats", 3)))
-            score_overlay.lead_first = initial_cursor
-            score_overlay.lead_beats = lead_beats
-            score_overlay.lead_meter = last_state.get("count_in_meter", [4, 4])
-            for system in score_layout.get("systems", []):
-                if int(system.get("page", -1)) == current_page and str(system.get("system", "")) == str(initial_cursor.get("system", "")):
-                    score_overlay.lead_staff_lines = system.get("staff_lines", [])
-                    break
-            score_overlay.lead_width_px = lead_beats * beat_width / score_crop_size.x * score_content.size.x
-    score_overlay.cursor = cursor
-    score_overlay.showing = true
-    score_overlay.transport_active = active
-    _layout_moving_score(_delta)
-    if phase0_smoke_mode and clock < 0.0:
-        var lead_tick: int = int(floor(clock * 4.0))
-        if lead_tick != phase0_last_lead_tick:
-            phase0_last_lead_tick = lead_tick
-            var cursor_screen_x: float = score_content.position.x + (
-                (float(cursor.get("x", 0.0)) - score_crop_origin.x)
-                / score_crop_size.x * score_content.size.x)
-            print("PHASE0_LEAD_BEAT:", clock, " CONTENT_X:", score_content.position.x,
-                  " CURSOR_X:", cursor_screen_x, " VISIBLE:", score_overlay.showing)
-    if phase0_smoke_mode and active and clock >= 0.0:
-        print("PHASE0_VISIBLE_NOTES:", _visible_score_noteheads(),
-              " PANEL_WIDTH:", score_frame.size.x,
-              " CONTENT_X:", score_content.position.x)
-    if phase0_smoke_mode and active and clock >= 0.0:
-        var cursor_tick: int = int(floor(beat * 4.0))
-        if cursor_tick > phase0_last_cursor_tick:
-            phase0_last_cursor_tick = cursor_tick
-            var cropped_x: float = (float(cursor.get("x", 0.0)) - score_crop_origin.x) / score_crop_size.x
-            var screen_x: float = score_content.position.x + cropped_x * score_content.size.x
-            print("PHASE0_CURSOR_BEAT:", beat, " SCREEN_X:", screen_x,
-                  " VISIBLE:", score_overlay.showing, " CONTENT_X:", score_content.position.x)
-    # Score transforms are still applied each visual frame. The line,
-    # notehalo and particles do not need to repaint that often.
-    if ticks - last_overlay_animation_ms >= 33:
-        last_overlay_animation_ms = ticks
-        score_overlay.queue_redraw()
+    if last_playhead_strike_transport == strike_transport \
+            and musical_clock >= last_playhead_strike_beat \
+            and musical_clock - last_playhead_strike_beat <= .5:
+        var onsets: Array = LivingScore.groups_crossed(
+            living_chords, last_playhead_strike_beat, musical_clock)
+        if not onsets.is_empty() and (bool(last_state.get("preview_only", false)) \
+                or str(last_state.get("mode", "")) == "listen"):
+            _preview_note_arrivals(onsets)
+    last_playhead_strike_transport = strike_transport
+    last_playhead_strike_beat = musical_clock
+    if phase0_smoke_mode:
+        var tick: int = int(floor(clock * 4.0))
+        var playhead: float = timeline_preview.size.x * .42
+        var content_x: float = -timeline_preview.clock_beat * timeline_preview.timeline.pixels_per_beat
+        if clock < 0.0 and tick != phase0_last_lead_tick:
+            phase0_last_lead_tick = tick
+            print("PHASE0_LEAD_BEAT:", clock, " CONTENT_X:", content_x,
+                " CURSOR_X:", playhead, " VISIBLE:", timeline_preview.visible)
+        elif clock >= 0.0 and tick != phase0_last_cursor_tick:
+            phase0_last_cursor_tick = tick
+            print("PHASE0_VISIBLE_NOTES:", _visible_score_noteheads(),
+                " PANEL_WIDTH:", score_frame.size.x, " CONTENT_X:", content_x)
+            print("PHASE0_CURSOR_BEAT:", musical_clock, " SCREEN_X:", playhead,
+                " VISIBLE:", timeline_preview.visible, " CONTENT_X:", content_x)
 
-func _layout_guided_score() -> void:
-    score_overlay.guided_active = true
-    score_overlay.next_chord.clear()
-    score_overlay.lead_first = {}
-    score_overlay.lead_width_px = 0.0
-    score_overlay.showing = false
-    if layout_revision != revision or rendered_revision != revision or score_view.texture == null:
-        score_overlay.queue_redraw()
-        return
-    var teaching: Dictionary = last_state.get("teaching", {}) if last_state.get("teaching") is Dictionary else {}
-    var expected: Array = teaching.get("expected_notes", [])
-    if not expected.is_empty():
-        var cursor: Dictionary = _position_at_beat(float(expected[0].get("beat", 0.0)))
-        if not cursor.is_empty():
-            score_overlay.cursor = cursor
-            score_overlay.showing = true
-    elif str(last_state.get("phase", "")) == "guided_complete":
-        score_overlay.queue_redraw()
-        return # Keep the finished idea still while the student chooses rhythm.
-    _layout_moving_score()
-    score_overlay.queue_redraw()
-
-func _beat_width_at(beat: float) -> float:
-    var points: Array = score_layout.get("anchors", [])
-    if points.size() < 2:
-        return .01
-    # Start at the same indexed region as the camera. A silent lead-in
-    # should not walk a hundred pages of future notes every rendered frame.
-    var low := 0
-    var high: int = points.size()
-    while low < high:
-        var middle: int = (low + high) / 2
-        if float(points[middle].get("beat", 0.0)) <= beat + .000001:
-            low = middle + 1
-        else:
-            high = middle
-    var index: int = clampi(low - 1, 0, points.size() - 2)
-    if bool(score_layout.get("continuous_score", false)):
-        var slope: float = ScoreMotionCurve.velocity(points, index, beat)
-        if slope > .000001:
-            return slope
-    for offset in range(index, mini(index + 3, points.size() - 1)):
-        var left: Dictionary = points[offset]
-        var right: Dictionary = points[offset + 1]
-        var span: float = float(right.get("beat", 0.0)) - float(left.get("beat", 0.0))
-        if span > 0.0 and float(right.x) > float(left.x):
-            return (float(right.x) - float(left.x)) / span
-    return .01
-
-func _position_at_beat(beat: float) -> Dictionary:
-    var points: Array = score_layout.get("anchors", [])
-    if points.is_empty():
-        return {}
-    # A long imported song may have thousands of anchors. The old linear
-    # search walked from beat zero at every display frame (120 times/sec on
-    # many laptops), causing rising CPU use and late camera frames.
-    var low := 0
-    var high: int = points.size()
-    while low < high:
-        var middle: int = (low + high) / 2
-        if float(points[middle].get("beat", 0.0)) <= beat + .000001:
-            low = middle + 1
-        else:
-            high = middle
-    var at: int = maxi(0, low - 1)
-    var left: Dictionary = points[at]
-    var position: Dictionary = left.duplicate()
-    if at + 1 < points.size():
-        var right: Dictionary = points[at + 1]
-        # The generated scrolling strip is a single time-proportional
-        # canvas. Interpolate right THROUGH former page/system joins. Holding
-        # the last notehead until the next system would stop the camera for
-        # part of a beat and then jump ahead despite equalized engraving.
-        var continuous: bool = score_layout.has("strip_size")
-        if continuous or (int(left.get("page", 0)) == int(right.get("page", 0)) and str(left.get("system", "")) == str(right.get("system", ""))):
-            var span: float = float(right.get("beat", 0.0)) - float(left.get("beat", 0.0))
-            if span > 0:
-                if bool(score_layout.get("continuous_score", false)):
-                    # Native ink never moves independently. Smooth the CAMERA
-                    # derivative across short notes; each note still crosses
-                    # the stationary playhead at its exact source beat.
-                    position["x"] = ScoreMotionCurve.position(points, at, beat)
-                else:
-                    var fraction: float = clampf((beat - float(left.get("beat", 0.0))) / span, 0.0, 1.0)
-                    position["x"] = lerpf(float(left["x"]), float(right["x"]), fraction)
-    return position
 
 func _on_state(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, sample_started_ms: int = -1) -> void:
     if sample_started_ms < 0:
@@ -3151,7 +2636,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         listen_button.call("configure", listen_kind)
         _game_button(listen_button)
     practice_retry_button.disabled = (not bool(parsed.get("loaded", false))
-        or score_view.texture == null or layout_revision != revision)
+        or not _native_score_ready())
     var summary: Dictionary = parsed.get("performance_summary", {}) if parsed.get("performance_summary") is Dictionary else {}
     performance_review.visible = not summary.is_empty()
     if not summary.is_empty():
@@ -3293,49 +2778,38 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     elif str(parsed.get("mode", "")) == "listen" and not active_transport:
         start_button.text = "Back to warm-up" if bool(parsed.get("warmup", false)) else "Listen again"
     start_button.tooltip_text = "Play, pause or resume · Space · Play any piano key when ready"
-    start_button.disabled = not active_transport and (score_view.texture == null or layout_revision != revision)
+    start_button.disabled = not active_transport and (not _native_score_ready())
     start_button.call("configure", "pause" if start_button.text == "Pause" else "play",
         active_transport and not bool(parsed.get("paused", false)))
     listen_button.call("configure", "practice" if str(parsed.get("mode", "")) == "listen" else "listen",
         str(parsed.get("mode", "")) == "listen")
-    score_overlay.marks = []
+    score_effects.marks = []
     for marker in parsed.get("feedback_marks", []):
-        score_overlay.marks.append(ScoreStrip.map_point(marker, score_layout) if score_layout.has("strip_size") else marker)
-    score_overlay.queue_redraw()
+        score_effects.marks.append(marker)
     _consume_live_piano_hits(parsed)
     var new_revision := int(parsed.get("revision", 0))
     if new_revision != revision:
         revision = new_revision
         if timeline_preview != null:
             timeline_preview.clear_score()
-            timeline_preview.visible = true
+            timeline_preview.visible = false
             timeline_model_revision = -1
             timeline_model_retry_after_ms = 0
         layout_revision = -1
         score_layout = {}
         living_chords.clear()
-        source_layout = {}
-        page_images.clear()
-        current_page = -1
-        score_view.texture = null
+        rendered_revision = -1
         score_error = ""
+        start_button.disabled = not active_transport
+        practice_retry_button.disabled = true
         _refresh_score_status()
-        score_overlay.showing = false
-        score_overlay.marks = []
-        score_overlay.next_chord.clear()
-        score_overlay.hit_pulses.clear()
-        score_overlay.wrong_ghosts.clear()
-        score_overlay.preview_pulses.clear()
-        note_reactions.queue_redraw()
+        score_effects.marks = []
+        score_effects.hit_pulses.clear()
+        score_effects.wrong_ghosts.clear()
+        score_effects.preview_pulses.clear()
         _request_layout()
-    if str(parsed.get("phase", "")) == "loading" and layout_revision == revision and rendered_revision == revision and score_view.texture != null:
+    if str(parsed.get("phase", "")) == "loading" and _native_score_ready():
         _send_action({"action": "score_ready", "revision": revision})
-    if str(parsed.get("phase", "")) == "feedback" and not score_overlay.marks.is_empty():
-        var target_page: int = int(score_overlay.marks[0].get("page", 0))
-        if current_page != target_page and layout_revision == revision and \
-                (not native_notation_enabled or timeline_preview == null or \
-                not timeline_preview.visible):
-            _request_score(target_page)
     # A physical note-on is the hands-free equivalent of Start on this
     # screen only. Poll-based arming keeps device checks in Settings inert.
     # A completion note in Learn must NOT instantly skip the completed idea;
@@ -3344,7 +2818,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if (fresh_piano_key and sample_started_ms < 0 and current_screen == "practice"
             and not action_pending and old_revision == int(parsed.get("revision", -1))
             and old_phase == current_phase and not str(parsed.get("device", "")).is_empty()
-            and score_view.texture != null and layout_revision == revision
+            and _native_score_ready()
             and (current_phase in ["ready", "performance_complete", "guided_complete"]
                 or (current_phase == "feedback" and str(parsed.get("mode", "")) == "practice"
                     and not bool(parsed.get("auto", false))))):
@@ -3355,54 +2829,6 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         elif str(parsed.get("mode", "")) in ["practice", "perform"]:
             _send_action({"action": "start"})
     _refresh_score_status()
-
-func _staff_diatonic_index(pitch: int) -> int:
-    # Equal chromatic pitches share a stave step (e.g. C and C#).
-    var letter_steps := [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6]
-    return int(pitch / 12) * 7 + letter_steps[posmod(pitch, 12)]
-
-
-func _wrong_note_ghost(pitch: int, note: Dictionary) -> Dictionary:
-    # Position the wrong physical pitch using the real engraved note's
-    # pitch, hand, and local five-line staff. The source note's Verovio
-    # coordinate is authoritative; only pitch displacement is calculated.
-    var source_y: float = float(note.get("y", 0.0))
-    var source_x: float = float(note.get("x", 0.0))
-    var staff: Dictionary = {}
-    for candidate in score_layout.get("systems", []):
-        if int(candidate.get("page", -1)) != int(note.get("page", -2)):
-            continue
-        if (source_x >= float(candidate.get("left", -1.0)) - 0.001
-                and source_x <= float(candidate.get("right", 2.0)) + 0.001
-                and candidate.get("staff_lines", []).size() >= 10):
-            staff = candidate
-            break
-    if staff.is_empty():
-        return {}
-    var lines: Array = staff.get("staff_lines", [])
-    var hand: String = str(note.get("hand", "right"))
-    var index: int = 5 if hand == "left" else 0
-    var gap: float = absf(float(lines[index + 1]) - float(lines[index]))
-    if gap <= 0.0:
-        return {}
-    var steps: int = _staff_diatonic_index(pitch) - _staff_diatonic_index(int(note.get("pitch", pitch)))
-    var target_y: float = source_y - float(steps) * gap * 0.5
-    var ledgers: Array = []
-    var top: float = float(lines[index])
-    var bottom: float = float(lines[index + 4])
-    for n in range(1, 7):
-        if target_y <= top - float(n) * gap + gap * 0.25:
-            ledgers.append(top - float(n) * gap)
-        if target_y >= bottom + float(n) * gap - gap * 0.25:
-            ledgers.append(bottom + float(n) * gap)
-    var names := ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-    return {
-        "page": int(note.get("page", -1)),
-        "x": source_x, "y": target_y,
-        "label": names[posmod(pitch, 12)] + str(int(pitch / 12) - 1),
-        "ledger_lines": ledgers,
-    }
-
 
 func _update_note_feedback_hud(parsed: Dictionary) -> void:
     # The red HUD has its own fixed screen position. Score-head markers
@@ -3425,9 +2851,9 @@ func _preview_note_arrivals(groups: Array) -> void:
     for group in groups:
         var notes: Array = group.get("notes", [])
         for note in notes:
-            if score_overlay.preview_pulses.size() >= 24:
-                score_overlay.preview_pulses.pop_front()
-            score_overlay.preview_pulses.append({
+            if score_effects.preview_pulses.size() >= 24:
+                score_effects.preview_pulses.pop_front()
+            score_effects.preview_pulses.append({
                 "page": int(note.get("page", 0)),
                 "x": float(note.get("x", 0.0)),
                 "y": float(note.get("y", 0.0)),
@@ -3436,8 +2862,6 @@ func _preview_note_arrivals(groups: Array) -> void:
                 "status": "preview"
             })
     game_stage.preview_react()
-    score_overlay.queue_redraw()
-    note_reactions.queue_redraw()
 
 
 func _clear_assessed_effects_in_ungraded_mode(state: Dictionary) -> void:
@@ -3449,20 +2873,18 @@ func _clear_assessed_effects_in_ungraded_mode(state: Dictionary) -> void:
     if ungraded:
         if game_impact_callout != null:
             game_impact_callout.call("clear")
-        if score_overlay.hit_pulses.is_empty() and score_overlay.wrong_ghosts.is_empty():
+        if score_effects.hit_pulses.is_empty() and score_effects.wrong_ghosts.is_empty():
             return
-        score_overlay.hit_pulses.clear()
-        score_overlay.wrong_ghosts.clear()
+        score_effects.hit_pulses.clear()
+        score_effects.wrong_ghosts.clear()
         # The stage is a separate canvas and must drop its older earned
         # success energy along with the note particles on mode change.
         game_stage.impact_energy = 0.0
         game_stage.queue_redraw()
     else:
-        if score_overlay.preview_pulses.is_empty():
+        if score_effects.preview_pulses.is_empty():
             return
-        score_overlay.preview_pulses.clear()
-    score_overlay.queue_redraw()
-    note_reactions.queue_redraw()
+        score_effects.preview_pulses.clear()
 
 
 func _consume_live_piano_hits(state: Dictionary) -> void:
@@ -3498,18 +2920,17 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                 if str(note.get("id", "")) != reference_id:
                     continue
                 var remaining: int = maxi(1, 420 - int(age * 1000.0))
-                score_overlay.wrong_ghosts.append({
+                score_effects.wrong_ghosts.append({
                     "page": int(note.get("page", 0)),
                     "x": float(note.get("x", 0.0)),
                     "y": float(note.get("y", 0.0)),
                     "duration_ms": 420,
                     "until_ms": Time.get_ticks_msec() + remaining
                 })
-                if score_overlay.wrong_ghosts.size() > 32:
-                    score_overlay.wrong_ghosts.pop_front()
+                if score_effects.wrong_ghosts.size() > 32:
+                    score_effects.wrong_ghosts.pop_front()
                 game_stage.react("unexpected")
                 game_impact_callout.call("react", "unexpected")
-                note_reactions.queue_redraw()
                 break
             continue
         if status not in ["on_time", "early", "late"] or age > .22:
@@ -3519,7 +2940,7 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
             continue
         for note in notes:
             if str(note.get("id", "")) == note_id:
-                score_overlay.hit_pulses.append({
+                score_effects.hit_pulses.append({
                     "page": int(note.get("page", 0)),
                     "x": float(note.get("x", 0.0)),
                     "y": float(note.get("y", 0.0)),
@@ -3528,11 +2949,10 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
                     "duration_ms": 220,
                     "until_ms": Time.get_ticks_msec() + maxi(1, 220 - int(age * 1000.0))
                 })
-                if score_overlay.hit_pulses.size() > 32:
-                    score_overlay.hit_pulses.pop_front()
+                if score_effects.hit_pulses.size() > 32:
+                    score_effects.hit_pulses.pop_front()
                 game_stage.react(status)
                 game_impact_callout.call("react", status)
-                note_reactions.queue_redraw()
                 break
 
 
@@ -3541,8 +2961,7 @@ func _request_layout() -> void:
         return
     layout_pending = true
     requested_layout_revision = revision
-    var score_url: String = URL + ("/score/layout?native=1"
-        if native_notation_enabled else "/score/layout")
+    var score_url: String = URL + "/score/layout?native=1"
     if layout_request.request(score_url) != OK:
         layout_pending = false
         _score_failed("Cannot request score geometry from the practice engine")
@@ -3563,27 +2982,21 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
         # A control request may have advanced the server before its state
         # response reached this window. Wait for that revision's normal poll.
         return
-    # The original Verovio font glyphs are imported ONCE into native
-    # Godot textures. Full raster pages are only requested on fallback.
-    var native_assets_ready := true
-    if native_notation_enabled and timeline_preview != null:
-        var glyph_catalog: Dictionary = parsed.get("native_glyphs", {})
-        var note_catalog: Dictionary = parsed.get("native_note_templates", {})
-        var tie_catalog: Dictionary = parsed.get("native_tie_templates", {})
-        var chord_catalog: Dictionary = parsed.get("native_chord_templates", {})
-        var beam_catalog: Dictionary = parsed.get("native_beam_fragments", {})
-        var tuplet_catalog: Dictionary = parsed.get("native_tuplet_fragments", {})
-        var slur_catalog: Dictionary = parsed.get("native_slur_fragments", {})
-        if not timeline_preview.set_verovio_glyphs(
-                glyph_catalog, note_catalog, tie_catalog, chord_catalog,
-                beam_catalog, tuplet_catalog, slur_catalog,
-                parsed.get("native_required_slur_pairs",[]),
-                bool(parsed.get("native_slurs_complete",false)),
-                parsed.get("native_required_beam_groups",[]),
-                bool(parsed.get("native_beams_complete",false))):
-            native_assets_ready = false
-            push_warning("Native Verovio glyph fallback: " +
-                str(timeline_preview.failure_reason))
+    # Authentic Verovio contours remain the only musical glyph assets.
+    if not timeline_preview.set_verovio_glyphs(
+            parsed.get("native_glyphs", {}),
+            parsed.get("native_note_templates", {}),
+            parsed.get("native_tie_templates", {}),
+            parsed.get("native_chord_templates", {}),
+            parsed.get("native_beam_fragments", {}),
+            parsed.get("native_tuplet_fragments", {}),
+            parsed.get("native_slur_fragments", {}),
+            parsed.get("native_required_slur_pairs", []),
+            bool(parsed.get("native_slurs_complete", false)),
+            parsed.get("native_required_beam_groups", []),
+            bool(parsed.get("native_beams_complete", false))):
+        _score_failed(str(timeline_preview.failure_reason))
+        return
     parsed.erase("native_glyphs")
     parsed.erase("native_note_templates")
     parsed.erase("native_tie_templates")
@@ -3595,261 +3008,20 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
     parsed.erase("native_slurs_complete")
     parsed.erase("native_required_beam_groups")
     parsed.erase("native_beams_complete")
-    cached_bounds.clear()
-    cached_bounds_revision = -1
     score_layout = parsed
-    source_layout = parsed
-    # Select once for this score revision. All pages need identical
-    # resolution for the geometric strip; resizing during playback must
-    # never mix pixel densities within one source score.
-    score_raster_width = ScoreQuality.png_width(source_layout, score_frame.size.y)
-    page_images.clear()
-    layout_revision = revision
-    if native_notation_enabled and native_assets_ready:
-        # A native lesson needs its authentic fragment atlas and semantic
-        # model, not the legacy raster tiles.
-        timeline_model_revision = -1
-        print("NATIVE_SCORE_RASTER_SKIPPED: ", revision)
-        _request_timeline_model()
-        return
-    # Native glyph preparation failed or legacy was explicitly selected.
-    page_images.resize(int(parsed.get("pages", 0)))
-    _request_score(0)
-
-func _request_score(page: int) -> void:
-    if score_pending or layout_revision != revision:
-        return
-    # The whole virtual strip is ready; original source pages must never be
-    # fetched in response to an old feedback marker during playback.
-    if rendered_revision == revision and score_layout.has("strip_size"):
-        return
-    if page == current_page and rendered_revision == revision:
-        return
-    if page < 0 or page >= int(source_layout.get("pages", score_layout.get("pages", 0))):
-        return
-    score_pending = true
-    requested_page = page
-    requested_revision = revision
-    if score_request.request(URL + "/score.png?page=%d&width=%d" % [
-            page, score_raster_width]) != OK:
-        score_pending = false
-        _score_failed("Cannot request score page from the practice engine")
-
-func _visible_engraving_bounds(picture: Image) -> Rect2i:
-    # Verovio PNGs have transparent black margins; some imports are opaque
-    # white. Only visible dark pixels are engraving ink in either format.
-    picture.convert(Image.FORMAT_RGBA8)
-    var rgba: PackedByteArray = picture.get_data()
-    var width: int = picture.get_width()
-    var height: int = picture.get_height()
-    var left: int = width
-    var top: int = height
-    var right: int = -1
-    var bottom: int = -1
-    # Coarse sampling is sufficient for a bounding box and avoids a slow
-    # pixel-by-pixel GDScript pass over a large raster.
-    for y in range(0, height, 2):
-        for x in range(0, width, 2):
-            var offset: int = (y * width + x) * 4
-            if rgba[offset + 3] < 8:
-                continue
-            if rgba[offset] >= 240 and rgba[offset + 1] >= 240 and rgba[offset + 2] >= 240:
-                continue
-            left = mini(left, x)
-            right = maxi(right, x)
-            top = mini(top, y)
-            bottom = maxi(bottom, y)
-    if right < left or bottom < top:
-        return Rect2i(0, 0, 0, 0)
-    return Rect2i(left, top, mini(width - left, right - left + 2),
-                  mini(height - top, bottom - top + 2))
-
-
-func _on_score(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-    score_pending = false
-    if requested_revision != revision:
-        if layout_revision == revision:
-            _request_score(0)
-        return
-    if code != 200:
-        _score_failed(_http_failure(code, body))
-        return
-    var picture := Image.new()
-    if picture.load_png_from_buffer(body) != OK:
-        _score_failed("The practice engine sent an invalid score image (PNG)")
-        return
-    if picture.get_width() < 32 or picture.get_height() < 32:
-        _score_failed("The engraved score image is unexpectedly small")
-        return
-    if page_images.is_empty():
-        if source_layout.is_empty():
-            source_layout = score_layout
-        page_images.resize(int(source_layout.get("pages", 1)))
-    page_images[requested_page] = picture
-    for page in range(page_images.size()):
-        if page_images[page] == null:
-            _request_score(page)
-            return
-    # Validate that the source page has real notation. System tiles
-    # are the only visible score images; an additional cropped whole-page
-    # image would create an unused full-resolution CPU allocation.
-    var opaque_bounds := _visible_engraving_bounds(picture)
-    if opaque_bounds.size.x < 16 or opaque_bounds.size.y < 16:
-        _score_failed("The engraving image contains no visible musical notation")
-        return
-    var should_defer: bool = source_layout.get("systems", []).size() >= \
-        ScoreStrip.DEFERRED_MIN_SYSTEMS
-    # Phase 1 A/B diagnostic: keep constant-velocity practice as the
-    # standard until the unwarped geometry has its own musical-time camera.
-    # PIANO_TEACHER_NATIVE_SCORE=1 ./run.sh enables source-ink preview.
-    var native_ink_preview: bool = OS.get_environment("PIANO_TEACHER_NATIVE_SCORE") == "1"
-    var continuous_engraving: bool = bool(source_layout.get("continuous_score", false))
-    # A single Verovio system needs no page-to-page copy, glyph stretching,
-    # crop-splicing or fake measure-line segments. The backend has already
-    # engraved a complete fresh passage at the selected practice tempo.
-    if native_ink_preview and not continuous_engraving:
-        print("NATIVE_SCORE_PREVIEW: source pixels unchanged; motion still experimental")
-    var strip: Dictionary = ScoreStrip.build(
-        source_layout, page_images, should_defer,
-        native_ink_preview or continuous_engraving)
-    # The alternative raster reflow is isolated as an explicit diagnostic.
-    # It is NOT the native notation engine, and must not silently replace it.
-    if continuous_engraving and not native_ink_preview and \
-            not native_notation_enabled and \
-            OS.get_environment("PIANO_TEACHER_EXACT_VEROVIO_GRID") == "1" \
-            and not strip.has("error"):
-        strip = ScoreExactSpacing.reflow(strip)
-        if bool(strip["layout"].get("exact_ink_grid", false)):
-            print("VEROVIO_EXACT_GRID: active, safe cuts=",
-                strip["layout"].get("exact_ink_grid_cuts", 0),
-                " inserted pixels=", strip["layout"].get("exact_ink_grid_added_pixels", 0))
-        elif phase0_smoke_mode:
-            print("VEROVIO_EXACT_GRID: fallback ",
-                strip["layout"].get("exact_ink_grid_reason", "unknown"))
-    if not strip.has("error"):
-        var spacing_fallback: String = str(
-            strip["layout"].get("strip_timing_fallback", ""))
-        if not spacing_fallback.is_empty():
-            push_warning("Verovio score spacing fallback: " + spacing_fallback)
-    if strip.has("error") or strip["tiles"].is_empty():
-        _score_failed(str(strip.get("error", "No staff systems were found in the engraving")))
-        return
-    for tile in score_tiles:
-        score_content.remove_child(tile)
-        tile.queue_free()
-    score_tiles.clear()
-    score_tile_scale = -1.0
-    visible_tile_begin = 0
-    visible_tile_end = 0
-    tile_window_initialized = false
-    deferred_tile_mode = false
-    resident_tile_begin = 0
-    resident_tile_end = 0
-    resident_tile_bytes = 0
-    restored_tile_count = 0
-    tile_geometry_rebuilds = 0
-    tile_window_changes = 0
-    strip_tiles = strip["tiles"]
-    deferred_tile_mode = bool(strip.get("deferred", should_defer))
-    score_tile_upload_bytes = 0
-    score_tile_packed_bytes = 0
-    for item in strip_tiles:
-        score_tile_upload_bytes += int(item.get("upload_bytes", 0))
-        var packed: PackedByteArray = item.get("packed_ink", PackedByteArray())
-        score_tile_packed_bytes += packed.size()
-    var notation_material := Design.notation_material()
-    for item in strip_tiles:
-        var tile := TextureRect.new()
-        tile.texture = item.get("texture") as Texture2D
-        tile.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-        tile.stretch_mode = TextureRect.STRETCH_SCALE
-        tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        tile.material = notation_material
-        score_content.add_child(tile)
-        score_content.move_child(tile, score_overlay.get_index())
-        score_tiles.append(tile)
-    # Continuous staff rails provide a transparent underlay where tile rules
-    # have been stripped. NEVER render them over the engraved raster: that
-    # doubles horizontal staff lines and paints through noteheads and stems.
-    score_content.move_child(staff_continuity, 0)
-    if not deferred_tile_mode:
-        resident_tile_begin = 0
-        resident_tile_end = score_tiles.size()
-        resident_tile_bytes = score_tile_upload_bytes
-    score_layout = strip["layout"]
-    cached_bounds.clear()
-    cached_bounds_revision = -1
-    var rail_groups: Array = score_layout.get("systems", [])
-    if not rail_groups.is_empty():
-        staff_continuity.set_rails(rail_groups[0].get("staff_lines", []))
-    else:
-        staff_continuity.set_rails([])
-    # Exact same measured staff geometry for the MIDI resonance glow.
-    note_reactions.staff_lines = staff_continuity.staff_lines
     living_chords = LivingScore.prepare(score_layout)
-    score_crop_origin = Vector2.ZERO
-    score_crop_size = Vector2.ONE
-    # The invisible score image is only a readiness sentinel. Do not keep
-    # an extra complete engraved page uploaded to the GPU.
-    var ready_pixel := Image.create(1, 1, false, Image.FORMAT_LA8)
-    ready_pixel.fill(Color(1, 1, 1, 0))
-    score_view.texture = ImageTexture.create_from_image(ready_pixel)
-    score_view.visible = false
-    score_overlay.image_size = strip["size"]
-    note_reactions.active_page = 0
-    note_reactions.crop_origin = Vector2.ZERO
-    note_reactions.crop_size = Vector2.ONE
-    # Pixel-accurate relative staff gap follows the same strip scaling as
-    # every real glyph, even at unusual screen sizes and dense chord voicing.
-    var systems: Array = score_layout.get("systems", [])
-    if not systems.is_empty():
-        var staff_lines: Array = systems[0].get("staff_lines", [])
-        if staff_lines.size() >= 2:
-            var gap_ratio: float = absf(float(staff_lines[1]) - float(staff_lines[0]))
-            score_overlay.staff_gap_fraction = gap_ratio
-            note_reactions.staff_gap_fraction = gap_ratio
-    score_overlay.load_symbols(source_layout.get("symbols", {}))
-    # Cropped tile textures now own all visible imagery. Release full pages
-    # rather than retaining a second whole-song raster in CPU memory.
-    page_images.clear()
-    score_overlay.crop_origin = score_crop_origin
-    score_overlay.crop_size = score_crop_size
-    current_page = 0
-    score_overlay.active_page = current_page
-    rendered_revision = revision
+    layout_revision = revision
+    timeline_model_revision = -1
     score_error = ""
-    if phase0_smoke_mode:
-        print("PHASE0_SCORE_READY:", picture.get_width(), "x", picture.get_height())
-        print("PHASE0_LESSON_READY: REVISION:", revision, " LEVEL:",
-              str(last_state.get("lesson_level", "")), " REQUIRED:",
-              int(last_state.get("required_notes", 0)))
-    start_button.disabled = false
-    score_overlay.queue_redraw()
-    _layout_moving_score()
     _refresh_score_status()
-    if str(last_state.get("phase", "")) == "loading" and int(last_state.get("awaiting_score_revision", -1)) == revision:
-        _send_action({"action": "score_ready", "revision": revision})
+    _request_timeline_model()
 
 func _finish_native_score() -> void:
-    # A 1x1 readiness marker preserves the existing UI/transport contract;
-    # no full score page or GPU texture is constructed for native notation.
-    if layout_revision != revision:
+    if layout_revision != revision or timeline_model_revision != revision \
+            or not timeline_preview.native_ready:
         return
-    for tile in score_tiles:
-        score_content.remove_child(tile)
-        tile.queue_free()
-    score_tiles.clear()
-    strip_tiles.clear()
-    page_images.clear()
-    current_page = 0
-    var pixel := Image.create(1, 1, false, Image.FORMAT_LA8)
-    pixel.fill(Color(1, 1, 1, 0))
-    score_view.texture = ImageTexture.create_from_image(pixel)
-    score_view.visible = false
     rendered_revision = revision
     score_error = ""
-    score_overlay.showing = false
-    score_overlay.queue_redraw()
     start_button.disabled = false
     _refresh_score_status()
     if phase0_smoke_mode:
@@ -3863,12 +3035,10 @@ func _request_timeline_model() -> void:
     if timeline_model_request == null or timeline_model_pending \
             or not bool(last_state.get("loaded", false)):
         return
-    # The semantic model may arrive before /score/layout. Wait for the
-    # authentic Verovio glyphs instead of reporting a false native fallback.
+    # The semantic model must wait for this revision's authentic glyphs.
     # _on_layout requests the model once the font atlas is actually ready.
-    if native_notation_enabled and (layout_revision != revision or \
-            timeline_preview == null or \
-            not timeline_preview.glyphs.ready()):
+    if not score_error.is_empty() or layout_revision != revision or \
+            timeline_preview == null or not timeline_preview.glyphs.ready():
         return
     timeline_model_pending = true
     var error: Error = timeline_model_request.request(URL + "/score/model")
@@ -3883,43 +3053,26 @@ func _request_timeline_model() -> void:
 func _on_timeline_model(_result: int, code: int,
         _headers: PackedStringArray, body: PackedByteArray) -> void:
     timeline_model_pending = false
-    if not timeline_preview_enabled or timeline_preview == null:
+    if timeline_preview == null or layout_revision != revision or not score_error.is_empty():
         return
     var candidate: Variant = _decode_json(body)
     if code == 200 and candidate is Dictionary:
-        # Ignore a stale response after a lesson/hand/variant transition.
+        # Ignore stale replies after lesson/hand/variant transitions.
         if int(candidate.get("revision", -1)) != revision:
             return
-        if timeline_preview.load_score(candidate):
-            timeline_model_revision = revision
-            timeline_preview.visible = true
-            if native_notation_enabled:
-                _finish_native_score()
-                score_view.visible = false
-                for tile in score_tiles:
-                    tile.visible = false
-            if native_score_feedback != null:
-                native_score_feedback.bind_score(timeline_preview, revision)
-                native_score_feedback.present(last_state)
-            print("PHASE_B_MODEL_READY: ", revision,
-                " NOTES: ", timeline_preview.timeline.notes.size(),
-                " DENSITY: ", timeline_preview.timeline.pixels_per_beat)
+        if not timeline_preview.load_score(candidate):
+            _score_failed(str(timeline_preview.failure_reason))
             return
-        if native_notation_enabled and not str(timeline_preview.failure_reason).is_empty():
-            # Phase C must never show incomplete or incorrect notation.
-            # Leave the existing Verovio engraving visible underneath.
-            timeline_preview.visible = false
-            score_view.visible = true
-            for tile in score_tiles:
-                tile.visible = true
-            timeline_model_revision = revision
-            push_warning("Native notation fallback: " +
-                str(timeline_preview.failure_reason))
-            # Only now pay for the complete legacy PNG strip.
-            if rendered_revision != revision and not score_pending:
-                page_images.resize(int(source_layout.get("pages", 0)))
-                _request_score(0)
-            return
+        timeline_model_revision = revision
+        timeline_preview.visible = true
+        _finish_native_score()
+        if native_score_feedback != null:
+            native_score_feedback.bind_score(timeline_preview, revision)
+            native_score_feedback.present(last_state)
+        print("NATIVE_MODEL_READY: ", revision,
+            " NOTES: ", timeline_preview.timeline.notes.size(),
+            " DENSITY: ", timeline_preview.timeline.pixels_per_beat)
+        return
     timeline_model_retry_after_ms = Time.get_ticks_msec() + 2000
     timeline_preview.notice = "Score model unavailable; retrying"
     timeline_preview.queue_redraw()
@@ -4046,11 +3199,17 @@ func _listen_or_return_to_practice() -> void:
 
 
 func _toggle_playing() -> void:
+    if bool(last_state.get("paused", false)) and not score_error.is_empty():
+        feedback_label.text = score_error
+        return
     if str(last_state.get("mode", "")) == "listen" and not _has_active_transport():
         _send_action({"action": "practice" if bool(last_state.get("warmup", false)) else "listen"})
         return
     if str(last_state.get("mode", "practice")) == "learn":
         var phase: String = str(last_state.get("phase", "ready"))
+        if phase not in ["paused", "guided_wait", "loading"] and not _native_score_ready():
+            feedback_label.text = "Preparing sheet music - wait for the notes before starting"
+            return
         var teaching: Dictionary = last_state.get("teaching", {}) if last_state.get("teaching") is Dictionary else {}
         if phase == "guided_complete" and bool(teaching.get("has_more_units", false)) and not bool(last_state.get("guided_recovery", false)):
             _send_action({"action": "learn_next"})
@@ -4063,7 +3222,7 @@ func _toggle_playing() -> void:
     if _has_active_transport():
         _send_action({"action": "pause"})
         return
-    if not bool(last_state.get("running", false)) and (score_view.texture == null or layout_revision != revision):
+    if not bool(last_state.get("running", false)) and (not _native_score_ready()):
         feedback_label.text = "Preparing sheet music - wait for the notes before starting"
         return
     _send_action({"action": "pause" if bool(last_state.get("running", false)) else "start"})
@@ -4082,6 +3241,9 @@ func _open_advanced_pause() -> void:
 
 
 func _toggle_pause() -> void:
+    if bool(last_state.get("paused", false)) and not score_error.is_empty():
+        feedback_label.text = score_error
+        return
     if _has_active_transport() or (str(last_state.get("mode", "practice")) == "learn" and str(last_state.get("phase", "")) in ["guided_wait", "paused"]):
         _send_action({"action": "resume" if bool(last_state.get("paused", false)) else "pause"})
 
@@ -4093,7 +3255,7 @@ func _skip_current_lesson() -> void:
 
 
 func _restart_practice() -> void:
-    if score_view.texture != null and layout_revision == revision:
+    if _native_score_ready():
         _send_action({"action": "learn_retry" if str(last_state.get("mode", "practice")) == "learn" else "restart"})
 
 func _request_devices() -> void:

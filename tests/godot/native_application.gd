@@ -15,18 +15,14 @@ func wait_for(predicate: Callable, label: String) -> bool:
     return true
 
 func run() -> void:
-    if OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") != "1":
-        quit(1)
-        return
     var folder: String = OS.get_cmdline_user_args()[0]
     app = load("res://main.gd").new()
     root.add_child(app)
     app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     app._navigate("practice")
     var ready: bool = await wait_for(func() -> bool:
-        return app.native_notation_enabled and app.timeline_preview != null and \
-            app.timeline_preview.native_ready and app.timeline_preview.is_visible_in_tree() and \
-            app.timeline_model_revision == app.revision and app.rendered_revision == app.revision,
+        return app.timeline_preview != null and app._native_score_ready() and \
+            app.timeline_preview.is_visible_in_tree(),
         "actual native compositor ready")
     if not ready:
         quit(1)
@@ -65,9 +61,11 @@ func run() -> void:
         "clock_samples":samples, "linear_timeline":linear,
         "pixels_per_beat":density, "first_bar":renderer.timeline.model.get("first_bar"),
         "play_from_beat":renderer.play_from_beat,
+        "selected_start_bar":app.last_state.get("selected_start_bar"),
+        "source_measures":renderer.timeline.model.get("measures", []),
         "revision":app.revision}
     var file := FileAccess.open(folder.path_join("native-application.json"), FileAccess.WRITE)
     file.store_string(JSON.stringify(report))
     file.close()
     print("NATIVE_APPLICATION_ACTIVE:", JSON.stringify(report))
-    quit(0 if renderer.native_ready and drawn > 0 and linear else 1)
+    quit(0 if app._native_score_ready() and renderer.is_visible_in_tree() and drawn > 0 and linear else 1)

@@ -1,4 +1,4 @@
-"""Tempo changes keep notation geometry and wait for score/feedback handoff."""
+"""Tempo changes reuse native notation; source changes retain readiness handoff."""
 import pytest
 
 from piano_teacher import server
@@ -35,7 +35,7 @@ def note_spacing(layout):
     return (second["x"] - first["x"]) * layout["widths"][page] / staff_gap
 
 
-def test_recovery_keeps_old_feedback_then_waits_for_new_score_and_retries_same_chunk(harness):
+def test_recovery_keeps_feedback_then_reuses_native_score_for_same_chunk(harness):
     e, now = harness
     original = e.engraving()
     revision = e.score_revision
@@ -55,31 +55,21 @@ def test_recovery_keeps_old_feedback_then_waits_for_new_score_and_retries_same_c
     assert e.engraving() is original
     assert e.transport_id == transport
     now[0] = e.next_at + .01
-    loading = e.state()
-    assert loading["phase"] == "loading"
-    assert loading["revision"] == revision + 1
-    assert loading["awaiting_score_revision"] == revision + 1
-    assert loading["recovery_beat"] == 8
-    revised = e.engraving()
-    # Recovery changes transport BPM, never printed horizontal distances.
-    assert note_spacing(revised.layout) == pytest.approx(note_spacing(original.layout), rel=.001)
-    # Rendering time cannot consume the retry's count-in or queue revisions.
-    now[0] += 120
-    assert e.state()["phase"] == "loading"
-    assert e.score_revision == revision + 1 and e.transport_id == transport
-    e.control("score_ready", revision=revision)
-    assert e.state()["phase"] == "loading"
-    e.control("score_ready", revision=revision + 1)
     restarted = e.state()
-    assert restarted["phase"] == "count_in"
+    assert restarted["phase"] == "playing"
+    assert restarted["revision"] == revision
+    assert restarted["awaiting_score_revision"] is None
     assert restarted["play_from_beat"] == 8
     assert restarted["transport_id"] == transport + 1
     assert restarted["recovery_beat"] is None
-    assert 0 < restarted["countdown"] <= 4
-    assert e.engraving() is revised
+    # The visual loop gap supplies preparation; a tempo-only retry neither
+    # re-engraves notation nor prepends a second empty count-in measure.
+    assert restarted["count_in_beats"] == 0
+    assert restarted["clock_beat"] == pytest.approx(0)
+    assert e.engraving() is original
 
 
-def test_clean_tempo_restore_waits_for_score_without_advancing_lesson(harness):
+def test_clean_tempo_restore_reuses_native_score_without_advancing_lesson(harness):
     e, now = harness
     e.plan.bpm = 72
     expected_bpm = e.plan._next_automatic_bpm()
@@ -97,17 +87,15 @@ def test_clean_tempo_restore_waits_for_score_without_advancing_lesson(harness):
     waiting = e.state()
     assert waiting["bpm"] == expected_bpm
     assert e.plan.identity == identity
-    assert waiting["phase"] == "loading"
-    assert waiting["revision"] == revision + 1
-    assert waiting["awaiting_score_revision"] == revision + 1
-    restored = e.engraving()
-    assert note_spacing(restored.layout) == pytest.approx(note_spacing(original.layout), rel=.001)
-    e.control("score_ready", revision=revision + 1)
-    assert e.state()["phase"] == "count_in"
-    assert e.state()["play_from_beat"] == 0
+    assert waiting["phase"] == "playing"
+    assert waiting["revision"] == revision
+    assert waiting["awaiting_score_revision"] is None
+    assert waiting["count_in_beats"] == 0
+    assert waiting["play_from_beat"] == 0
+    assert e.engraving() is original
 
 
-def test_cache_follows_actual_bpm_and_restart_keeps_fresh_clock(harness):
+def test_cache_reuses_source_ink_when_transport_bpm_changes(harness):
     e, now = harness
     original = e.engraving()
     # Recovery can change actual tempo without changing the selected target.
@@ -124,7 +112,7 @@ def test_cache_follows_actual_bpm_and_restart_keeps_fresh_clock(harness):
     assert e.state()["countdown"] == pytest.approx(10 / 3)
 
 
-def test_manual_restart_during_recovery_renders_before_starting_fresh_count_in(harness):
+def test_manual_restart_during_recovery_keeps_native_score_and_fresh_count_in(harness):
     e, now = harness
     e.engraving()
     e.start()
@@ -133,14 +121,11 @@ def test_manual_restart_during_recovery_renders_before_starting_fresh_count_in(h
     revision = e.score_revision
     e.control("restart")
     waiting = e.state()
-    assert waiting["phase"] == "loading"
-    assert waiting["revision"] == revision + 1
-    e.engraving()
-    now[0] += 90
-    e.control("score_ready", revision=revision + 1)
-    assert e.state()["phase"] == "count_in"
-    assert e.state()["play_from_beat"] == 0
-    assert 0 < e.state()["countdown"] <= 4
+    assert waiting["phase"] == "count_in"
+    assert waiting["revision"] == revision
+    assert waiting["awaiting_score_revision"] is None
+    assert waiting["play_from_beat"] == 0
+    assert 0 < waiting["countdown"] <= 4
 
 
 def test_pickup_count_in_uses_source_meter_instead_of_short_first_bar(harness):

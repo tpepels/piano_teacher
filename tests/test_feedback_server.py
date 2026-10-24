@@ -46,7 +46,8 @@ def test_score_feedback_waits_until_displayed_before_curriculum_advance(tmp_path
     assert e.plan.failures==0
     now[0] = deadline+.01
     restarted=e.state()
-    assert restarted['phase']=='count_in'
+    assert restarted['phase']=='playing'
+    assert restarted['count_in_beats'] == 0 and restarted['awaiting_score_revision'] is None
     assert restarted['feedback_marks']==[]
     assert restarted['take_result'] is None
     assert e.plan.failures==1

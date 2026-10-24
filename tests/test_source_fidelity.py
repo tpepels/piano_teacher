@@ -1,5 +1,6 @@
 """Real source files retain attack identity, exact time, and written context."""
 from pathlib import Path
+from collections import Counter
 from xml.etree import ElementTree as ET
 
 import mido
@@ -231,26 +232,60 @@ def test_noncontiguous_tie_cannot_turn_an_explicit_rest_into_a_held_note(tmp_pat
         import_piece(path)
 
 
-def test_supplied_full_piece_keeps_all_source_attacks_and_legacy_stage_identity():
-    import hashlib
-    import json
-    source = Path('/home/tom/Music/Piano Teacher/Merry-Go-Round-of-Life.midi')
-    if not source.is_file():
-        pytest.skip('The local 2,346-note user import is unavailable')
+def test_bundled_full_piece_keeps_source_attacks_and_stable_individual_stage_identity(tmp_path):
+    source = Path(__file__).resolve().parents[1]/'midi'/'Merry-Go-Round-of-Life.midi'
     piece = music.load_midi(source)
-    # This regression pins the historical consolidated course. Since 8b4c043,
-    # the default is the separate two-measure route (756 steps for this file).
+    # Route consolidation can change how many stages are useful. Coverage
+    # and the identity of each unchanged source stage must survive that.
     plan = LearningPlan(piece, consolidate=True)
     assert len(piece.notes) == len({note.source_id for note in piece.notes}) == 2346
+    attacks = sum(message.type == 'note_on' and message.velocity > 0
+                  for track in mido.MidiFile(source).tracks for message in track)
+    assert attacks == len(piece.notes)
     assert len(piece.bar_boundaries)-1 == 237 and piece.bar_boundaries[-1] == 712
-    assert len(plan.lesson_steps) == 301
-    # Recorded from f5e1957's original importer and route 2 over this exact MIDI.
-    # Normalize only the later route-version prefix, retaining all original
-    # passage/hand/variant keys and their source-event signatures unchanged.
-    legacy_keys = [step.key.replace('course:3:', 'course:2:', 1) for step in plan.lesson_steps]
-    digest = hashlib.sha256(json.dumps(legacy_keys, separators=(',', ':')).encode()).hexdigest()
-    assert digest == 'c7940fab7bc768f4f4fadd722ddd216a3174bd2785eb7687e69492c7df0c8c81'
+    assert Counter(note for exercise in plan.exercises if exercise.kind == 'learn'
+                   for note in exercise.phrase.notes) == Counter(piece.notes)
     assert plan.exercises[-1].phrase.notes == piece.notes
+    assert plan.exercises[-1].phrase.start == piece.bar_boundaries[0]
+    assert plan.exercises[-1].phrase.end == piece.bar_boundaries[-1]
+
+    relocated = tmp_path/'different title.mid'
+    relocated.write_bytes(source.read_bytes())
+    reopened = LearningPlan(music.load_midi(relocated), consolidate=True)
+    assert reopened.piece.notes == piece.notes
+    assert len({step.key for step in plan.lesson_steps}) == len(plan.lesson_steps)
+    # The same source stage can occur at a different index in the ordinary
+    # adaptive route. Surrounding course choices must not change its key.
+    def stage_identities(route):
+        return {(step.kind, step.first_bar, step.last_bar, step.hand, step.level): step.key
+                for step in route.lesson_steps}
+
+    consolidated = stage_identities(plan)
+    ordinary = stage_identities(LearningPlan(piece))
+    shared = consolidated.keys() & ordinary.keys()
+    assert any(stage[0] == 'learn' for stage in shared)
+    assert all(consolidated[stage] == ordinary[stage] for stage in shared)
+    for number, step in enumerate(plan.lesson_steps, 1):
+        plan.select_step(number)
+        reopened.select_step(number)
+        assert plan.identity == reopened.identity == step.key
+        variant = plan.active_variant
+        phrase = plan.exercise.phrase
+        assert variant.notes == tuple(phrase.notes[i] for i in variant.source_indices)
+        assert len(variant.notes) == step.required_notes
+        assert all(note in piece.notes for note in variant.notes)
+        if step.hand != 'both':
+            assert all(note.hand == step.hand for note in variant.notes)
+        if step.level == 'original':
+            assert variant.notes == tuple(note for note in phrase.notes
+                                          if step.hand == 'both' or note.hand == step.hand)
+        plan.set_bpm(60)
+        assert plan.identity == step.key
+    # Revisiting after other stages and tempo choices resolves the same key;
+    # progress is bound to musical content, not its position in a route hash.
+    for number, step in reversed(list(enumerate(plan.lesson_steps, 1))):
+        plan.select_step(number)
+        assert plan.identity == step.key
 
 
 def test_unsupported_musicxml_layout_has_a_source_error_before_music21_conversion(tmp_path):

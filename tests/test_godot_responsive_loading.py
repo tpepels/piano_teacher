@@ -37,17 +37,10 @@ def test_long_song_names_cannot_force_controls_wider():
     assert 'library_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in SCRIPT
 
 
-def test_score_error_does_not_disappear_during_state_polling():
-    assert 'func _score_failed(message: String) -> void:' in SCRIPT
-    assert 'func _refresh_score_status() -> void:' in SCRIPT
-    assert 'score_status_label.text = "Unable to display sheet music:' in SCRIPT
-    assert 'score_retry_button.visible = true' in SCRIPT
-    assert 'func _retry_score() -> void:' in SCRIPT
-    assert 'score_error = ""\n        _refresh_score_status()' in SCRIPT
-    assert '"Placeholder"' not in SCRIPT
-    assert 'layout_request.timeout = 90.0' in SCRIPT
-    assert 'score_request.timeout = 45.0' in SCRIPT
-    assert 'action_request.timeout = 90.0' in SCRIPT
+def test_score_error_does_not_disappear_during_state_polling(tmp_path):
+    from test_native_production import test_native_production_readiness_and_failure_gate
+
+    test_native_production_readiness_and_failure_gate(tmp_path, "default")
 
 
 def test_failed_library_import_keeps_error_in_library():

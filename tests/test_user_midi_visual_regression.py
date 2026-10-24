@@ -1,8 +1,7 @@
 """Regression contract for the user's seven real MIDI visual fixtures.
 
-Verovio is the notation authority. The full source-SVG-vs-Godot-pixel
-comparison is executed by scripts/check_user_midi_visual_regression.py;
-these tests pin the real, unmodified source corpus independently of rendering.
+Verovio is the notation authority. The historical CLI delegates to the
+canonical native audit; these tests also pin the unmodified source corpus.
 """
 from pathlib import Path
 
@@ -12,6 +11,31 @@ import pytest
 from scripts.check_user_midi_visual_regression import CASES, MIDI_DIR
 from piano_teacher.lesson_timing import preparation_meter, lead_in_beats
 from piano_teacher.score import import_piece
+
+
+@pytest.mark.parametrize("exit_code", [0, 23])
+def test_historical_cli_forwards_arguments_and_status_to_native_audit(
+        tmp_path, monkeypatch, exit_code):
+    import subprocess
+    import sys
+    from scripts import check_user_midi_visual_regression as cli
+
+    calls = []
+
+    def run(command, **kwargs):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, exit_code)
+
+    def retired(*args, **kwargs):
+        pytest.fail("Historical CLI executed retired strip runtime")
+
+    monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(cli, "run_one", retired, raising=False)
+    arguments = ["--out", str(tmp_path), "--only", "Ala"]
+    assert cli.main(arguments) == exit_code
+    assert calls == [[sys.executable,
+                      str(cli.ROOT / "scripts/check_native_verovio_overlay.py"),
+                      *arguments]]
 
 
 def test_seven_original_midi_files_are_present():

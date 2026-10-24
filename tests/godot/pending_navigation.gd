@@ -2,7 +2,7 @@ extends SceneTree
 
 # Keep the real request arbitration, navigation and response handlers. The wire
 # alone is controlled so a user can navigate before an HTTP response arrives.
-class FixtureApp extends "res://main.gd":
+class FixtureApp extends "native_production_fixture.gd":
     var wire_commands: Array[Dictionary] = []
 
     func _ready() -> void:
@@ -154,12 +154,11 @@ func run() -> void:
     root.add_child(app)
     await process_frame
     app._navigate("practice")
-    app.revision = 1
-    app.layout_revision = 1
-    app.rendered_revision = 1
-    var image := Image.create(2, 2, false, Image.FORMAT_RGBA8)
-    image.fill(Color.WHITE)
-    app.score_view.texture = ImageTexture.create_from_image(image)
+    var fixture_error: String = app.load_native_fixture(OS.get_cmdline_user_args()[1])
+    check(fixture_error.is_empty(), fixture_error)
+    if not fixture_error.is_empty():
+        quit(1)
+        return
     var scenario := OS.get_cmdline_user_args()[0]
     match scenario:
         "start_settings": test_pending_start_or_resume("start", "settings")

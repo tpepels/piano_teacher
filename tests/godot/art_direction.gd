@@ -60,7 +60,6 @@ func write_report() -> void:
     if output.is_empty():
         return
     var report := {"schema_version": 1, "mode": "geometry" if geometry_only else "http",
-        "native_environment": OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION"),
         "scene": "res://main.tscn", "viewport": [root.size.x, root.size.y],
         "window_mode": root.mode,
         "window_geometry": window_geometry(),
@@ -250,7 +249,7 @@ func check_settings_rows(label: String) -> Dictionary:
 
 func requests_idle() -> bool:
     # Polls continue normally; only actions/assets/drawer data gate captures.
-    return not (app.action_pending or app.layout_pending or app.score_pending or
+    return not (app.action_pending or app.layout_pending or
         app.timeline_model_pending or app.library_pending or app.lesson_pending or
         app.settings_pending or app.device_pending or app.library_health_pending) and \
         app.pending_transport_action.is_empty() and app.pending_library_piece.is_empty()
@@ -258,8 +257,10 @@ func requests_idle() -> bool:
 func native_status() -> Dictionary:
     if app == null:
         return {"checked": not geometry_only, "app_created": false}
-    var status := {"checked": not geometry_only, "enabled": app.native_notation_enabled,
-        "native_ready": false, "visible": false, "drawn_noteheads": 0,
+    var renderer = app.timeline_preview
+    var status := {"checked": not geometry_only,
+        "renderer_script": str(renderer.get_script().resource_path) if renderer != null else "",
+        "score_ready": app._native_score_ready(), "native_ready": false, "visible": false, "drawn_noteheads": 0,
         "visible_noteheads": 0, "revision": app.revision,
         "state_revision": int(app.last_state.get("revision", -1)),
         "layout_revision": app.layout_revision, "rendered_revision": app.rendered_revision,
@@ -268,7 +269,6 @@ func native_status() -> Dictionary:
         "window_size": [root.size.x, root.size.y], "window_mode": root.mode,
         "window_geometry": window_geometry(),
         "covered_by_drawer": app.current_screen != "practice"}
-    var renderer = app.timeline_preview
     if renderer == null:
         return status
     status["native_ready"] = renderer.native_ready
@@ -290,8 +290,9 @@ func native_status() -> Dictionary:
 func native_is_ready() -> bool:
     var status := native_status()
     var revision: int = int(status.get("revision", -1))
-    return revision >= 0 and bool(status.get("enabled", false)) and \
-        bool(status.get("native_ready", false)) and bool(status.get("visible", false)) and \
+    return revision >= 0 and status.get("renderer_script", "") == "res://notation/native/view.gd" and \
+        bool(status.get("score_ready", false)) and bool(status.get("native_ready", false)) and \
+        bool(status.get("visible", false)) and \
         str(status.get("failure_reason", "")).is_empty() and \
         revision == int(status.get("state_revision", -2)) and \
         revision == int(status.get("layout_revision", -2)) and \
@@ -780,8 +781,6 @@ func run() -> void:
     if bool(config.get("native_input", false)):
         root.title = "Practice UX " + str(OS.get_process_id())
     deadline_ms = Time.get_ticks_msec() + int(float(config.get("timeout_seconds", 90)) * 1000.0)
-    check(OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1",
-        "PIANO_TEACHER_NATIVE_NOTATION=1 is explicitly required")
     check(not render or (not geometry_only and DisplayServer.get_name() != "headless"),
         "Screenshots require a visible real HTTP application")
     if not failures.is_empty():

@@ -10,7 +10,7 @@ from piano_teacher.notation.assets.glyphs import native_glyphs
 from piano_teacher.notation.phase3_pixels import verify_all_rest_pixels
 
 
-def _captures(folder, *, kind="quarter", shift=0, mutation=None):
+def _captures(folder, *, kind="quarter", shift=0, mutation=None, gap=20):
     xml = f'''<score-partwise><part-list><score-part id="RH"><part-name>Right</part-name>
     </score-part></part-list><part id="RH"><measure number="1"><attributes>
     <divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time>
@@ -21,17 +21,17 @@ def _captures(folder, *, kind="quarter", shift=0, mutation=None):
     (folder / "fixture.json").write_text(json.dumps({"assets":{"native_glyphs":glyphs}}))
     bg = Image.new("RGB", (1536,520), (16,41,35))
     pen = ImageDraw.Draw(bg)
-    for y in (120,140,160,180,200,320,340,360,380,400):
+    for y in (center+step*gap for center in (160,360) for step in range(-2,3)):
         pen.line((0,y,1535,y), fill=(73,83,77))
     # Dense neighboring ink remains identical in both images.
     pen.ellipse((670,155,692,167),fill=(220,230,215))
     glyph = glyphs["rest_" + ("eighth" if mutation=="wrong" else kind)]
     b = glyph["bounds"]
-    w,h = round(b[2]*20/250), round(b[3]*20/250)
+    w,h = round(b[2]*gap/250), round(b[3]*gap/250)
     mask=Image.open(BytesIO(cairosvg.svg2png(bytestring=glyph["svg"].encode(),
                                           output_width=w,output_height=h))).convert("RGBA")
     original = bg.copy().convert("RGBA")
-    x,y = round(1536*.42)-w//2,round(160+b[1]*20/250+shift)
+    x,y = round(1536*.42)-w//2,round(160+b[1]*gap/250+shift)
     if mutation not in ("missing","dark-addition"):
         original.alpha_composite(mask,(x,y))
     original=original.convert("RGB")
@@ -71,8 +71,8 @@ def test_wrong_missing_or_uncontrolled_image_cannot_verify_rest(tmp_path,mutatio
     assert report["image_rest_glyphs_verified"]==0
 
 
-def test_block_rest_family_is_ambiguous_and_never_counted_as_identity_verified(tmp_path):
-    report=verify_all_rest_pixels(_captures(tmp_path,kind="half"),tmp_path)
+def test_unresolvable_block_rest_orientation_is_never_counted_as_identity_verified(tmp_path):
+    report=verify_all_rest_pixels(_captures(tmp_path,kind="half",shift=5),tmp_path)
     assert report["image_rest_glyphs_verified"]==0
     assert report["coverage"]["ambiguous"]==1
     assert report["measured"][0]["status"]=="ambiguous"
@@ -91,11 +91,10 @@ def test_renderer_atlas_corruption_does_not_change_independent_font_expectation(
 
 
 @pytest.mark.parametrize("kind",["whole","half","quarter","eighth","16th","32nd","64th","128th"])
-def test_authentic_rest_families_have_explicit_verified_or_ambiguous_status(tmp_path,kind):
+def test_authentic_rest_families_have_verified_staff_relative_identity(tmp_path,kind):
     report=verify_all_rest_pixels(_captures(tmp_path,kind=kind),tmp_path)
     assert report["passed"],report["failures"]
-    status="ambiguous" if kind in ("whole","half") else "verified"
-    assert report["measured"][0]["status"]==status
+    assert report["measured"][0]["status"]=="verified"
 
 
 @pytest.mark.parametrize("kind",["whole","half","quarter","16th","32nd","64th","128th"])

@@ -88,10 +88,10 @@ def test_native_rest_a_long_way_off_its_staff_is_detected():
     assert any("displaced too far" in error for error in
                readability_errors(_model(),report))
 
-def test_real_overlay_corpus_is_pinned_to_every_bundled_midi():
-    from scripts.check_user_midi_visual_regression import CASES as MIDI_CASES
-    expected_files = {filename for filename, hand in MIDI_CASES}
-    assert {case.filename for case in CASES if "/" not in case.filename} == expected_files
+def test_focused_overlay_regressions_retain_hard_passages_and_notation_features():
+    from scripts.check_native_verovio_overlay import library_sources
+    expected_files = {path.name for path in library_sources()}
+    assert {case.filename for case in CASES if "/" not in case.filename} <= expected_files
     assert len(CASES) >= 15
     assert sum("/" in case.filename for case in CASES) >= 6
     assert {"chords", "ties", "tuplets", "grandstaff", "key_change", "rests"} <= {

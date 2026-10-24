@@ -1,4 +1,5 @@
 """Vectorized matching must preserve the scalar oracle and its thresholds."""
+import math
 import numpy as np
 import pytest
 
@@ -49,6 +50,34 @@ def test_joint_assignment_cannot_count_one_head_twice_even_when_both_local_match
     assert all(raster_matching.match_glyph(pixels,r["glyph"],20,100,r["origin_y"],
         centered=True,dxs=r["dxs"],dys=range(-4,5))>=.79 for r in requests)
     assert raster_matching.match_glyphs_joint(pixels,requests,100,dys=range(-4,5)) is None
+
+
+def test_unrelated_head_surplus_cannot_pay_touching_heads_pixel_capacity():
+    # Two touching source requests compete for one small physical head. An
+    # unrelated large head contributes enough total ink to pass a global
+    # pixel-count check, but none of that ink belongs to the small requests.
+    pixels = (_head_pixels([("head_black", 60, 48)], gap=12) |
+              _head_pixels([("head_black", 120, 40)], gap=40))
+    b = reference_glyphs()["head_black"]["bounds"]
+    small_y = 48-b[1]*12/250
+    large_y = 40-b[1]*40/250
+    large_dx = round(120-(100-b[2]*40/500))
+    requests = [
+        dict(_request("head_black", small_y, gap=12, dxs=range(-34, -29)), dys=range(-1, 2)),
+        dict(_request("head_black", small_y+.5, gap=12, dxs=range(-34, -29)), dys=range(-1, 2)),
+        dict(_request("head_black", large_y, gap=40, dxs=(large_dx,)), dys=(0,)),
+    ]
+    candidates = [raster_matching._joint_candidates(pixels, request, 100, (0,), .79)
+                  for request in requests]
+    # The large head is assigned first (one candidate). Insufficient capacity
+    # in the touching subset must still reject the complete assignment.
+    assert len(candidates[2]) == 1 < min(map(len, candidates[:2]))
+    best = [rows[0] for rows in candidates]
+    assert all(row["score"] >= .79 for row in best)
+    required = [math.ceil(.79*row["denominator"]/2) for row in best]
+    assert len(set().union(*(row["support"] for row in best))) >= sum(required)
+    assert len(best[0]["support"] | best[1]["support"]) < sum(required[:2])
+    assert raster_matching.match_glyphs_joint(pixels, requests, 100, dys=(0,)) is None
 
 
 @pytest.mark.parametrize("erased",[0,1])

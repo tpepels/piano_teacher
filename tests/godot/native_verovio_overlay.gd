@@ -7,6 +7,32 @@ var failures: Array[String] = []
 func _initialize() -> void:
     call_deferred("_audit")
 
+func _capture_schedule(fixture: Dictionary, density: float) -> Dictionary:
+    # Density chooses capture cost only. Python must establish actual motion,
+    # viewport coverage and ownership from the saved images independently.
+    var original: Array = fixture.get("sample_beats", [0.0, 1.5, 3.5, 5.5])
+    if not bool(fixture.get("full_symbol_inventory", false)):
+        return {"samples": original, "added": 0, "interval": 0.0}
+    var interval: float = minf(0.15, 96.0 / maxf(1.0, density))
+    var ending: float = maxf(0.0, float(fixture["model"]["duration_beats"]))
+    var by_filename: Dictionary = {}
+    # Source clocks have priority, including nonterminating fractions. Never
+    # replace their exact clock with a nearby grid clock sharing its F5 name.
+    for clock in original:
+        by_filename["native-%.5f.png" % float(clock)] = clock
+    var before: int = by_filename.size()
+    for index in range(int(ceil(ending / interval)) + 1):
+        var clock: float = minf(ending, float(index) * interval)
+        var name: String = "native-%.5f.png" % clock
+        if not by_filename.has(name):
+            by_filename[name] = clock
+    var samples: Array = by_filename.values()
+    samples.sort()
+    return {"samples": samples, "interval": interval,
+        "added": samples.size() - before, "original": original.size(),
+        "geometry_is_proof": false, "stripe_half_width": 64,
+        "maximum_scheduled_step_pixels": 96.0}
+
 func _audit() -> void:
     var args: PackedStringArray = OS.get_cmdline_user_args()
     if args.size() != 2:
@@ -59,11 +85,16 @@ func _audit() -> void:
         "rest_difference_protocol": 2,
         "rest_difference_frames": [],
     }
-    var samples: Array = fixture.get("sample_beats", [0.0, 1.5, 3.5, 5.5])
+    var schedule: Dictionary = _capture_schedule(fixture, renderer.timeline.pixels_per_beat)
+    var samples: Array = schedule["samples"]
+    if bool(fixture.get("full_symbol_inventory", false)):
+        var diagnostics: Dictionary = schedule.duplicate()
+        diagnostics.erase("samples")
+        result["extra_symbol_schedule"] = diagnostics
     for point in samples:
         var at: float = float(point)
         renderer.present({
-            "running": true, "paused": true,
+            "running": true, "paused": not bool(fixture.get("phase3_full",false)),
             "bpm": 40.0, "hand": str(fixture.get("hand","both")),
             "transport_id": 19, "count_in_beats": 0.0,
             "play_from_beat": 0.0
@@ -76,7 +107,8 @@ func _audit() -> void:
         # precise filenames in Phase 3 to prevent one frame overwriting
         # another; preserve Phase 2's existing artifact names.
         var filename: String = ("native-%.5f.png" if bool(fixture.get(
-            "phase3_full",false)) else "native-%.2f.png") % at
+            "phase3_full",false)) or bool(fixture.get("full_symbol_inventory",false))
+            else "native-%.2f.png") % at
         if frame.is_empty() or frame.save_png(folder.path_join(filename)) != OK:
             failures.append("Cannot capture " + filename)
         # Phase 3 controlled pixel experiment: capture a second rendering
@@ -86,7 +118,13 @@ func _audit() -> void:
         # accept an unrelated note/flag as a rest or trust the renderer's
         # rest Y coordinate. Source ID is only used to select what to hide,
         # never to supply expected glyph type, shape or screen geometry.
+        var visible_rests: Array = []
         if bool(fixture.get("phase3_full",false)):
+            for candidate in renderer.ordered_events:
+                if str(candidate.get("kind","")) == "rest" and \
+                        absf(float(candidate.get("beat",0.0))-at) < .0000001:
+                    visible_rests.append(candidate)
+        if not visible_rests.is_empty():
             # A no-op frame detects clock/animation drift independently of
             # the rest intervention. Preserve full frames so unrelated changes
             # outside the old 160px crop cannot be hidden from the oracle.
@@ -94,12 +132,6 @@ func _audit() -> void:
             await RenderingServer.frame_post_draw
             var repeat_file := "repeat-%.5f.png" % at
             view.get_texture().get_image().save_png(folder.path_join(repeat_file))
-            var visible_rests: Array = []
-            for candidate in renderer.ordered_events:
-                if str(candidate.get("kind","")) != "rest":
-                    continue
-                if absf(float(candidate.get("beat",0.0))-at) < .0000001:
-                    visible_rests.append(candidate)
             var original_events: Array = renderer.ordered_events.duplicate()
             for rest_index in range(visible_rests.size()):
                 var suppressed: Dictionary = visible_rests[rest_index]

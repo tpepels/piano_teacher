@@ -1,0 +1,55 @@
+name: Native notation
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      revision:
+        description: Event commit that passed the comprehensive native notation check
+        value: ${{ jobs.native-notation.outputs.revision }}
+
+permissions:
+  contents: read
+
+jobs:
+  native-notation:
+    name: native-notation
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 360
+    outputs:
+      revision: ${{ steps.passed.outputs.revision }}
+    steps:
+      - name: Install Godot and framebuffer dependencies
+        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango xorg-server-xvfb xorg-xauth mesa
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Trust container workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install application
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e '.[godot,test]'
+      - name: Check all 17 bundled MIDI files, every measure, hand and learning variant
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" \
+            .venv/bin/python scripts/check_native_verovio_overlay.py --out /tmp/native-notation
+      - name: Upload native notation reports and framebuffer images
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-notation
+          path: /tmp/native-notation/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Export passing revision for release builds
+        id: passed
+        env:
+          REVISION: ${{ github.sha }}
+        run: printf 'revision=%s\n' "$REVISION" >> "$GITHUB_OUTPUT"

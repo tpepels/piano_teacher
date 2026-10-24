@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Capture real user-MIDI practice screens through the normal Godot renderer.
 
-Unlike the SVG / ScoreStrip pixel test, this checks the actual 1536x960 HUD,
+Alongside the notation pixel checks, this checks the actual 1536x960 HUD,
 stage, staff rails, count-in and moving music. Requires a graphical session:
   .venv/bin/python scripts/check_user_midi_desktop.py --out /tmp/piano-midi-desktop
 For CI use xvfb-run; --headless is NOT a pixel-rendering substitute.
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 from pathlib import Path
 import shutil
@@ -47,27 +48,11 @@ def api(route: str, data: dict) -> dict:
         return json.load(response)
 
 
-def run_one(filename: str, out: Path, godot: str, *, native: bool = False,
-            default_native: bool = False) -> dict:
-    folder = out / (_name(filename) + ("-native" if native else ""))
+def run_one(filename: str, out: Path, godot: str) -> dict:
+    folder = out / _name(filename)
     folder.mkdir(parents=True, exist_ok=True)
     env = dict(os.environ)
-    if not native:
-        # This test intentionally exercises the RETIRED page renderer as a
-        # compatibility comparison; the actual app defaults to native.
-        env["PIANO_TEACHER_RENDERER"] = "legacy"
-    else:
-        env.pop("PIANO_TEACHER_RENDERER", None)
-    if native:
-        if default_native:
-            # Verify the normal app launches native even with NO opt-in flag.
-            env.pop("PIANO_TEACHER_NATIVE_NOTATION", None)
-        else:
-            env["PIANO_TEACHER_NATIVE_NOTATION"] = "1"
-        # Raster-based time-grid work must not alter the native score test.
-        env["PIANO_TEACHER_EXACT_VEROVIO_GRID"] = "0"
     env["PYTHONPATH"] = str(ROOT)
-    env["HOME"] = str(folder)
     for key, path in (("XDG_DATA_HOME", "data"),
                       ("XDG_CONFIG_HOME", "config"),
                       ("XDG_CACHE_HOME", "cache")):
@@ -93,14 +78,6 @@ def run_one(filename: str, out: Path, godot: str, *, native: bool = False,
                 raise AssertionError(f"Godot desktop capture failed for {filename}:\n{transcript[-8000:]}")
             report = json.loads((folder / "desktop-report.json").read_text())
             assert not report["errors"], report["errors"]
-            if native:
-                assert "NATIVE_SCORE_RASTER_SKIPPED:" in transcript, (
-                    "Native score path still downloads the legacy raster "
-                    "before validating original Verovio note fragments"
-                )
-                assert "PHASE0_SCORE_READY:" not in transcript, (
-                    "Native desktop unexpectedly completed legacy PNG tile rendering"
-                )
             resolutions = ((1536, 960), (1024, 768), (800, 600)) if filename.startswith("Ala_") else ((1536, 960),)
             expected = {"ready", "count-in", "playing"} | {
                 f"{screen}-{width}x{height}"
@@ -111,6 +88,19 @@ def run_one(filename: str, out: Path, godot: str, *, native: bool = False,
             for frame in expected:
                 assert (folder / (frame + ".png")).stat().st_size >= 10000
             for item in report["frames"]:
+                if item["screen"] == "practice":
+                    assert item.get("native_ready") is True and not item.get("native_failure"), (
+                        f"{filename}: native renderer was not ready in {item['frame']}: "
+                        f"{item.get('native_failure', '')}"
+                    )
+                    pixels_per_beat = item.get("pixels_per_beat", 0)
+                    assert math.isfinite(pixels_per_beat) and pixels_per_beat > 0, (
+                        f"{filename}: invalid native pixels per beat in {item['frame']}"
+                    )
+                    if item.get("transport_phase") != "count_in":
+                        assert item.get("visible_noteheads", 0) > 0, (
+                            f"{filename}: no visible native noteheads in {item['frame']}"
+                        )
                 if item["screen"] == "lesson":
                     assert item["caption_rect"][2] >= 80, item
                     assert item["activity_rect"][3] <= 70, item
@@ -132,12 +122,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=Path("/tmp/piano-midi-desktop"))
     parser.add_argument("--only", help="Case-insensitive substring in filename")
-    parser.add_argument("--native", action="store_true",
-                        help="Capture and require the original pure-Godot native renderer")
-    parser.add_argument("--default-native", action="store_true",
-                        help="Verify native renderer without setting the old opt-in flag")
-    parser.add_argument("--require-exact-ink-grid", action="store_true",
-                        help="Fail unless the opt-in Verovio pixel-preserving adapter activates")
     args = parser.parse_args()
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
         parser.error("This captures actual desktop pixels: start a display or use xvfb-run")
@@ -155,25 +139,7 @@ def main() -> int:
     results, failures = [], []
     for filename in cases:
         try:
-            native = args.native or args.default_native
-            outcome = run_one(filename, args.out, godot,
-                              native=native, default_native=args.default_native)
-            if native:
-                for frame in outcome["frames"]:
-                    if frame["screen"] == "practice":
-                        assert frame.get("native_ready", False), (
-                            f"{filename}: native renderer was not active in "
-                            f"{frame['frame']}: {frame.get('native_failure', '')}"
-                        )
-            if args.require_exact_ink_grid:
-                practice_frames = [frame for frame in outcome["frames"]
-                                   if frame.get("screen") == "practice"]
-                assert practice_frames and all(
-                    frame.get("exact_ink_grid", False)
-                    and frame.get("beat_camera", {}).get("enabled", False)
-                    for frame in practice_frames), (
-                        f"{filename}: opt-in exact Verovio ink did not align every practice frame"
-                    )
+            outcome = run_one(filename, args.out, godot)
             results.append(outcome)
         except Exception as exc:
             failures.append({"filename": filename, "error": str(exc)})

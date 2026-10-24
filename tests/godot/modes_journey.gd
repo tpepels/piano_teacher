@@ -15,6 +15,7 @@ func check(ok: bool, description: String) -> void:
         print("MODES_FAIL:",description)
 
 func wait_for(predicate: Callable, description: String, seconds: float = 25.0) -> bool:
+    print("MODES_WAIT:",description)
     var deadline := Time.get_ticks_msec()+int(seconds*1000)
     while not predicate.call():
         if Time.get_ticks_msec() >= deadline:
@@ -42,11 +43,9 @@ func phase() -> String:
     return str(app.last_state.get("phase",""))
 
 func score_ready() -> bool:
-    if app.native_notation_enabled and (app.timeline_preview == null or \
-            not app.timeline_preview.native_ready or app.timeline_model_revision != app.revision):
-        return false
-    return app.score_view.texture != null and app.layout_revision == app.revision \
-        and app.rendered_revision == app.revision and not app.layout_pending and not app.score_pending
+    return app.timeline_preview != null and app._native_score_ready() \
+        and app.timeline_preview.is_visible_in_tree() and not app.layout_pending \
+        and not app.timeline_model_pending
 
 func demo_player() -> AudioStreamPlayer:
     for player in app.find_children("*","AudioStreamPlayer",true,false):
@@ -55,15 +54,11 @@ func demo_player() -> AudioStreamPlayer:
     return null
 
 func note_position(note: Dictionary) -> Vector2:
-    if app.native_notation_enabled:
-        var renderer = app.timeline_preview
-        if renderer != null and renderer.drawn_noteheads.has(str(note.id)):
-            return renderer.get_global_transform_with_canvas() * \
-                Vector2(renderer.drawn_noteheads[str(note.id)])
-        return Vector2(-10000,-10000)
-    var local: Vector2 = (Vector2(float(note.x),float(note.y))-app.score_crop_origin) \
-        /app.score_crop_size*app.score_content.size
-    return app.score_content.get_global_transform_with_canvas()*local
+    var renderer = app.timeline_preview
+    if renderer != null and renderer.drawn_noteheads.has(str(note.id)):
+        return renderer.get_global_transform_with_canvas() * \
+            Vector2(renderer.drawn_noteheads[str(note.id)])
+    return Vector2(-10000,-10000)
 
 func note_ink(picture: Image, point: Vector2) -> int:
     var pixels := 0
@@ -170,33 +165,39 @@ func run() -> void:
     app.open_mode.select(0)
     press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait","import enters generated Learn")
-    # The default first lesson is bars 1-2. Explicitly choose the full-source
-    # connection using the existing lesson picker so Listen/Perform include
+    # Explicitly choose the available full-source performance using the
+    # existing lesson picker so Listen/Perform include
     # the opening rest, internal rest and held ending in bars 3-4.
     await wait_for(func(): return not app.lesson_pending and not app.action_pending \
         and not app.practice_step_picker.disabled,"normal lesson picker is ready")
     var full_step := -1
     for index in range(app.practice_step_entries.size()):
         var step: Dictionary = app.practice_step_entries[index]
-        if str(step.get("kind","")) == "connect" and int(step.get("first_bar",0)) == 1 \
+        if str(step.get("kind","")) == "perform" and int(step.get("first_bar",0)) == 1 \
                 and int(step.get("last_bar",0)) == 4 and str(step.get("level","")) == "original":
             full_step = index
             break
-    check(full_step >= 0,"Lesson picker exposes the full four-bar original connection")
+    check(full_step >= 0,"Lesson picker exposes the full four-bar original performance")
     if full_step >= 0:
         app.practice_step_picker.select(full_step)
         app.practice_step_picker.item_selected.emit(full_step)
-    await wait_for(func(): return score_ready() and not app.action_pending and phase() == "guided_wait" \
+    await wait_for(func(): return score_ready() and not app.action_pending \
+        and str(app.last_state.get("kind","")) == "perform" \
         and int(app.last_state.get("lesson_step",0)) == full_step+1,
-        "explicit full-source connection is selected without mastery")
+        "explicit full-source performance is selected without mastery")
+    check(int(app.last_state.get("mastered",-1)) == 0,"Picker selection never invents mastery")
+    print("MODES_STAGE:full-source-selected")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,"choose tempo")
     await wait_for(func(): return not app.action_pending and not app.apply_tempo_button.disabled,"Pause acknowledged and tempo control enabled")
+    print("MODES_STAGE:tempo-ready")
     app.tempo_setting.value = 240
     press("Apply tempo")
     await wait_for(func(): return not app.action_pending and int(app.last_state.get("target_bpm",0)) == 240,"chosen target240 acknowledged")
+    print("MODES_STAGE:tempo-applied")
     press("Practice")
-    await wait_for(func(): return score_ready() and phase() == "guided_wait","active generated score ready")
+    await wait_for(func(): return score_ready() and not app.action_pending \
+        and int(app.last_state.get("required_notes",0)) == 26,"full original source score ready")
     await capture("01-imported-generated-lesson")
     print("MODES_STAGE:import-ready")
     await create_timer(.25).timeout
@@ -276,7 +277,7 @@ func run() -> void:
             child.stop()
     await wait_for(func(): return not app.state_pending and not app.device_pending and not app.library_pending \
         and not app.settings_pending and not app.lesson_pending and not app.action_pending \
-        and not app.layout_pending and not app.score_pending,"drain normal requests before exit")
+        and not app.layout_pending and not app.timeline_model_pending,"drain normal requests before exit")
     var result := FileAccess.open(folder+"/result.json",FileAccess.WRITE)
     result.store_string(JSON.stringify({"frames":frames,"failures":failures,"renderer":DisplayServer.get_name()},"  "))
     print("MODES_RESULT:","PASS" if failures.is_empty() else "FAIL")

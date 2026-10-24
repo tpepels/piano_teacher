@@ -2,7 +2,7 @@ extends SceneTree
 
 # Exercise the actual interface and handlers without a backend or MIDI device.
 # Only outbound HTTP requests are replaced; controls and navigation stay real.
-class FixtureApp extends "res://main.gd":
+class FixtureApp extends "native_production_fixture.gd":
     var commands: Array[Dictionary] = []
 
     func _ready() -> void:
@@ -450,10 +450,9 @@ func test_caption_bounds() -> void:
                 "Reserve a feedback line and enough instruction space for this viewport")
 
 func test_notation_phase_cues() -> void:
-    var texture: Texture2D = app.score_view.texture
     for dimensions in [Vector2i(800, 600), Vector2i(1536, 960)]:
         root.size = dimensions
-        app.score_view.texture = texture
+        check(app.load_native_fixture(OS.get_cmdline_user_args()[1]).is_empty(), "Native source reloads")
         await process_frame
         await process_frame
         for phase in ["ready", "count_in", "playing", "paused", "feedback"]:
@@ -491,8 +490,8 @@ func test_notation_phase_cues() -> void:
                 check(app.feedback_label.visible and "Paused" in app.feedback_label.text,
                     "Pause retains its ordinary state caption")
         # A preparing score can still show a genuine transition cue: there
-        # are no engraved noteheads underneath it until a texture arrives.
-        app.score_view.texture = null
+        # are no engraved noteheads until the native model is ready.
+        app.timeline_preview.clear_score()
         app._on_state(0, 200, PackedStringArray(), JSON.stringify(state("loading")).to_utf8_buffer())
         check(app.game_phase_cue.visible and app.game_phase_cue.message == "PREPARING",
             "The phase cue remains available while engraving is not yet ready")
@@ -509,7 +508,7 @@ func test_instructional_transition() -> void:
     retry["phase"] = "paused"
     retry["paused"] = true
     retry["pause_context"] = "recovering"
-    app.score_view.texture = null # Pausing loading must not disable Resume.
+    app.timeline_preview.clear_score() # Pausing loading must not disable Resume.
     app._on_state(0,200,PackedStringArray(),JSON.stringify(retry).to_utf8_buffer())
     check(not app.start_button.disabled, "Resume remains available while the next score is loading")
     check(not app.stop_button.disabled, "Stop remains available during an automatic break")
@@ -781,12 +780,11 @@ func run() -> void:
     await process_frame
     await process_frame
     app._navigate("practice")
-    app.revision = 1
-    app.layout_revision = 1
-    app.rendered_revision = 1
-    var image := Image.create(2, 2, false, Image.FORMAT_RGBA8)
-    image.fill(Color.WHITE)
-    app.score_view.texture = ImageTexture.create_from_image(image)
+    var fixture_error: String = app.load_native_fixture(OS.get_cmdline_user_args()[1])
+    check(fixture_error.is_empty(), fixture_error)
+    if not fixture_error.is_empty():
+        quit(1)
+        return
     var scenario := OS.get_cmdline_user_args()[0]
     match scenario:
         "three_button_stage": test_three_button_stage()

@@ -486,13 +486,25 @@ func has_tuplet(name: String, requires_bracket: bool) -> bool:
 
 func paint_tuplet(canvas: CanvasItem, name: String, x0: float, x1: float,
         y0: float, gap: float, ink: Color) -> bool:
-    if not tuplet_textures.has(name) or x1 <= x0:
+    if not tuplet_textures.has(name):
         return false
     var info: Dictionary = tuplet_metadata[name]
     var textures: Dictionary = tuplet_textures[name]
     var number: Dictionary = info["number"]
     var nb: Array = number["bounds"]
     var unit: float = gap/250.0
+    if info.get("note_ids",[]).size() == 1:
+        # One genuine source anchor has no endpoint interval to stretch.
+        # Retain both masks' original offsets and staff-space scale.
+        for kind in ["number","bracket"]:
+            if textures.has(kind):
+                var box: Array = info[kind]["bounds"]
+                canvas.draw_texture_rect(textures[kind],Rect2(
+                    x0+float(box[0])*unit,y0+float(box[1])*unit,
+                    float(box[2])*unit,float(box[3])*unit),false,ink)
+        return true
+    if x1 <= x0:
+        return false
     var center: float = (x0+x1)*.5
     canvas.draw_texture_rect(textures["number"],
         Rect2(center-float(nb[2])*unit*.5, y0+float(nb[1])*unit,

@@ -47,7 +47,10 @@ def chord_pattern(leader: dict, notes: list[dict], measure: dict) -> str | None:
         return None
     bottom = anchor-(line-1)*2+octave_change*7
     up = sum(p-bottom for p in absolute)/len(absolute)<4
-    direction = "up" if up else "down"
+    declared = {n.get("stem") for n in notes if n.get("stem") in {"up", "down"}}
+    if len(declared) > 1:
+        return None  # One compound sprite cannot represent conflicting stems.
+    direction = next(iter(declared)) if declared else ("up" if up else "down")
     differences = sorted(p-diatonic(leader["spelling"]) for p in absolute)
     return f"{kind}|{direction}|{','.join(map(str,differences))}"
 
@@ -55,19 +58,31 @@ def chord_pattern(leader: dict, notes: list[dict], measure: dict) -> str | None:
 def patterns_from_model(model: dict, *, stem_directions: dict[str, bool] | None = None) -> list[str]:
     measures = {int(m["number"]):m for m in model.get("measures",[])}
     lanes = defaultdict(list)
+    simultaneous = defaultdict(set)
     for e in model.get("notation_events",[]):
         if e.get("kind")=="note":
             key=(e.get("staff"),str(e.get("voice","1")),int(e.get("measure",0)),
                  round(float(e.get("beat",0)),6))
             lanes[key].append(e)
+            if not e.get("chord"):
+                simultaneous[(key[0],key[2],key[3])].add(key[1])
     patterns = set()
-    for (_,_,measure_id,_), notes in lanes.items():
+    for (staff,_,measure_id,beat), notes in lanes.items():
         leaders = [n for n in notes if not n.get("chord")]
         if len(leaders)!=1 or len(notes)<2 or measure_id not in measures:
             continue
         pattern = chord_pattern(leaders[0],notes,measures[measure_id])
         if pattern:
             patterns.add(pattern)
+            # Independent simultaneous voices may need the opposite shaft
+            # side from an isolated pitch default. Provide authentic ink for
+            # both choices; native voice layout selects it without changing
+            # written source directions or borrowing another chord's stem.
+            if (len(simultaneous[(staff,measure_id,beat)]) > 1 and
+                    not pattern.startswith("whole|") and
+                    not any(n.get("stem") in {"up","down"} for n in notes)):
+                kind, direction, relative = pattern.split("|")
+                patterns.add(f"{kind}|{'down' if direction == 'up' else 'up'}|{relative}")
             leader_id = str(leaders[0].get("id", ""))
             if stem_directions is not None and leader_id in stem_directions:
                 kind, _, relative = pattern.split("|")

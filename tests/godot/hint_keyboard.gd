@@ -25,14 +25,19 @@ func settle() -> void:
     await process_frame
 
 func fit_window(width: int, height: int) -> void:
-    root.size = Vector2i(width, height)
-    # X11 applies leaving fullscreen asynchronously. Measure the actual canvas after it settles.
-    await create_timer(.15).timeout
-    root.size = Vector2i(width, height)
-    await create_timer(.05).timeout
-    await settle()
+    # The project starts fullscreen. X11 can deliver its old fullscreen
+    # geometry after the first windowed resize request. Wait for actual,
+    # stable viewport dimensions rather than assuming a fixed OS delay.
+    var requested := Vector2i(width,height)
+    var deadline: int = Time.get_ticks_msec()+2000
+    var stable := 0
+    while Time.get_ticks_msec() < deadline and stable < 3:
+        if root.size != requested:
+            root.size = requested
+        await create_timer(.025).timeout
+        stable = stable+1 if root.get_visible_rect().size == Vector2(width,height) else 0
     check(root.get_visible_rect().size == Vector2(width, height),
-        "capture uses the requested %d by %d actual viewport" % [width, height])
+        "capture uses the requested %d by %d actual viewport (observed %s)" % [width, height,root.get_visible_rect().size])
     if is_instance_valid(keyboard):
         keyboard.position = Vector2(24, root.get_visible_rect().size.y - keyboard.size.y - 24)
 

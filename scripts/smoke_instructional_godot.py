@@ -34,10 +34,10 @@ from scripts.smoke_teaching_godot import PIANO, TestMidiInput
 
 
 def make_fixture(path: Path) -> None:
-    """Two 8/4 source measures: 16 attacks and optional inner chord notes.
+    """Two 8/4 source measures: eight onsets and optional inner chord notes.
 
     The default two-measure course contains the whole passage. Seeking to
-    measure 2 gives an eight-attack partial retry without changing recovery
+    measure 2 gives a five-attack partial retry without changing recovery
     thresholds or using the opt-in legacy consolidated course.
     """
     midi = mido.MidiFile(ticks_per_beat=480)
@@ -48,7 +48,7 @@ def make_fixture(path: Path) -> None:
     ]))
     track = mido.MidiTrack([mido.MetaMessage("track_name", name="Right Hand", time=0)])
     events = []
-    for beat in range(16):
+    for beat in (0, 1, 4, 8, 9, 11, 13, 15):
         upper = (72, 74, 76, 77)[beat % 4]
         for pitch in (upper - 5, upper):
             events.extend(((beat * 480, 1, pitch), (beat * 480 + 240, 0, pitch)))
@@ -169,7 +169,7 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                     "Instructional transition contract is required"
                 assert engine.source == str(source.resolve())
                 assert initial["bpm"] == initial["target_bpm"] == 240
-                assert initial["lesson_level"] == "skeleton" and initial["teaching"]["target_count"] == 16
+                assert initial["lesson_level"] == "skeleton" and initial["teaching"]["target_count"] == 8
                 assert (initial["first_bar"], initial["last_bar"]) == (1, 2)
                 assert engine.plan.piece.bar_boundaries == (0, 8, 16)
                 assert "learner" in initial, "Stateful learner course contract is required"
@@ -212,7 +212,7 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                         assert attempt == 9, f"Mastery arrived after unexpected attempt {attempt}"
                         assert state["lesson_level"] == "original" and engine.plan.identity != identity
                         next_variant = True
-                        assert state["mode"] == "learn" and len(engine.plan.active_variant.notes) == 32
+                        assert state["mode"] == "learn" and len(engine.plan.active_variant.notes) == 16
                         assert state["target_bpm"] == 240 and state["streak"] == 0
                         earned_variant = {"mode":state["mode"],"level":state["lesson_level"],
                             "source_notes":len(engine.plan.active_variant.notes),"mastered":state["mastered"]}
@@ -223,7 +223,7 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                     if next_variant:
                         assert state["mastered"] == 1 and state["streak"] == 0
                         if state["mode"] == "listen" and state["running"] and not listened:
-                            assert state["bpm"] == state["target_bpm"] == 240 and state["required_notes"] == 32
+                            assert state["bpm"] == state["target_bpm"] == 240 and state["required_notes"] == 16
                             assert engine.recorder is None and state["midi_notes"] == 0
                             demo = state["demo"]
                             assert demo["source_ids"] == [f"{engine.plan.identity}:{index}" for index in engine.plan.active_variant.source_indices]
@@ -237,7 +237,7 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                                 pcm.byteswap()
                             assert max(abs(value) for value in pcm) > 100
                             listened = True
-                            log("same earned original source has real Listen PCM without mastery", source_notes=32)
+                            log("same earned original source has real Listen PCM without mastery", source_notes=16)
                         if state["mode"] == "perform" and state["running"]:
                             assert listened and state["bpm"] == 240 and state["target_bpm"] == 240
                             if perform_transport is None:
@@ -247,8 +247,8 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                             perform_beat = state["clock_beat"]
                         if state["phase"] == "performance_complete" and summary is None:
                             summary = state["performance_summary"]
-                            assert summary["correct"] == 0 and summary["total"] == 32 and summary["accuracy_percent"] == 0
-                            assert summary["missed"] == 32 and state["learner"]["trouble_units"]
+                            assert summary["correct"] == 0 and summary["total"] == 16 and summary["accuracy_percent"] == 0
+                            assert summary["missed"] == 16 and state["learner"]["trouble_units"]
                             log("same original Perform finishes all misses and saves source trouble", summary=summary)
                         if summary is not None and state["mode"] == "learn" and state["phase"] == "guided_wait":
                             assert state["teaching"]["fragment"]["start_beat"] == 0
@@ -281,7 +281,7 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                         with engine.lock:
                             phrase = engine.plan.active_phrase
                             required = [n for n in phrase.notes if n.start >= phrase.start+offset-1e-7]
-                            assert len(phrase.notes) == 16 and phrase.end-phrase.start == 16
+                            assert len(phrase.notes) == 8 and phrase.end-phrase.start == 16
                             seconds = 60 / engine.plan.bpm
                             epoch = engine.run_at
                         scheduled = []
@@ -318,7 +318,7 @@ def run(output: Path, *, finish_modes: bool = False) -> dict:
                             elif attempt == 3:
                                 assert state["streak"] == 0 and "whole passage" in state["next_action"].lower()
                                 partial = state["performance_summary"]
-                                assert partial["correct"] == partial["total"] == 8
+                                assert partial["correct"] == partial["total"] == 5
                                 assert partial["missed"] == partial["extra_notes"] == 0
                                 assert partial["accuracy_percent"] == 100 and engine.pending_result is None
                             elif attempt >= 4:

@@ -524,3 +524,10 @@ def test_cli_writes_a_blocked_report_for_missing_corpus(tmp_path):
     assert all(job["coverage"]["expected"] > 0 for job in result["jobs"])
     assert result["coverage"]["expected"] == result["coverage"]["unverified"] > 0
     assert len(result["unverified_elements"]) == result["coverage"]["expected"]
+
+
+def test_normalized_ledger_is_exposed_by_existing_aggregator(tmp_path):
+    _complete(tmp_path, kind="semantic")
+    _complete(tmp_path, kind="visual")
+    result = aggregate(tmp_path, scores=2, include_elements=True)
+    assert sum(len(job["elements"]) for job in result["jobs"]) == result["coverage"]["expected"]

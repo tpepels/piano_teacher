@@ -97,7 +97,9 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
     # in the same generated hand, measure and voice with the same written
     # duration. We must not silently replace explicit 8th-note beams with
     # isolated flags. Shortened lessons can legitimately lose a partial
-    # group: never leave an orphan beam begin/end in those variants.
+    # group: never leave an orphan beam begin/end in those variants. The
+    # primary beam owns its secondary levels/subgroups/hooks: select the
+    # complete primary group, then copy each note's original marks once.
     groups = defaultdict(list)
     group_indices = defaultdict(int)
     for pi, part in enumerate(source_parts):
@@ -107,6 +109,8 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                     continue
                 sid = f"xml-p{pi}-m{mi}-e{ordinal}"
                 for mark in original.findall("beam"):
+                    if mark.get("number", "1") != "1":
+                        continue
                     group_key = (pi, mi, original.findtext("voice", "1"),
                                  original.findtext("staff", "1"),
                                  mark.get("number", "1"))
@@ -164,7 +168,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                 break
         if not valid:
             continue
-        for (dest, original, _sid), (_sid2, kind) in zip(translated,members):
+        for dest, original, _sid in translated:
             if dest.findall("beam"):
                 raise ValueError("Conflicting source beam marks in generated score")
             for original_mark in original.findall("beam"):
@@ -195,6 +199,13 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
         original = original_notes.get(sid)
         if original is None:
             continue  # MIDI source IDs have no original MusicXML decorations.
+        stem = original.find("stem")
+        if stem is not None:
+            # Direction is authored notation, not a pitch-based layout hint.
+            # Keep the binding's existing source attack/timing authoritative.
+            dest.append(deepcopy(stem))
+            if (stem.text or "").strip() not in {"up", "down"}:
+                unrendered.add("note:stem")
         original_notations = original.find("notations")
         if original_notations is not None:
             target_notations = dest.find("notations")

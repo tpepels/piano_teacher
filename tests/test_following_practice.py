@@ -9,6 +9,7 @@ from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.learning import LearningPlan
 from piano_teacher.server import PracticeEngine
 from piano_teacher.score import _fade_inactive_staff
+from test_phase1_camera import native_camera_run
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -64,13 +65,13 @@ def test_unknown_staff_structure_is_not_faded():
     assert "opacity=" not in _fade_inactive_staff(
         SVG.replace('class="staff" id="bottom"', 'class="other" id="bottom"'), "right")
 
-def test_godot_produces_metronome_and_follows_score():
-    source = (ROOT / "godot/main.gd").read_text()
-    for expected in ("AudioStreamWAV.new()", "samples.encode_s16", "count_in_beats",
-                     "count_tick_index", "play_tick_index", "click_player.play()",
-                     "func _layout_moving_score(delta: float = 0.0)", "score_content.position =",
-                     "score_frame.clip_contents = true", "score_overlay.crop_origin"):
-        assert expected in source
+def test_godot_produces_metronome_and_follows_score(native_camera_run):
+    report, output = native_camera_run
+    assert report["high_click_bytes"] > 0 and report["low_click_bytes"] > 0
+    assert report["click_stream_selected"]
+    assert "PHASE0_CLICK:count_in" in output
+    assert report["clock_matched"] and report["resume_advanced"]
+    assert report["clipped"]
 
 def test_crop_coordinate_mapping():
     original = (2000, 1250)

@@ -86,6 +86,7 @@ class ScoreSymbol:
     # None keeps older hand-built symbols distinguishable from parsed absence.
     tied_marks: tuple[tuple[tuple[str, str], ...], ...] | None = None
     tuplet_extras: tuple[tuple[tuple[str, str], ...], ...] | None = None
+    stem: str | None = None
 
 
 def _int(element: ET.Element, name: str, default: int | None = None) -> int:
@@ -275,7 +276,8 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                     child.findtext("type"), len(child.findall("dot")), chord,
                     "start" in tie_types, "stop" in tie_types,
                     is_attack, child.findtext("accidental"), time_modification,
-                    tuplet_marks, beams, tied_marks, tuplet_extras))
+                    tuplet_marks, beams, tied_marks, tuplet_extras,
+                    child.findtext("stem")))
             if current_meter is None:
                 raise ValueError("No meter for a source measure")
             if cursor != ticks_in_bar:

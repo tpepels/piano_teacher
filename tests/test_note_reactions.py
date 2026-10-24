@@ -1,163 +1,178 @@
-"""7.6b: real Godot glyph-aligned cues and MIDI-triggered reactions."""
+"""Native feedback follows authentic source events through the production app."""
+import json
 from pathlib import Path
 import shutil
 import subprocess
 
 import pytest
 
+from scripts.smoke_teaching_godot import make_fixture
+
 ROOT = Path(__file__).resolve().parents[1]
 GODOT = shutil.which("godot") or shutil.which("godot4")
 
 
 @pytest.mark.skipif(GODOT is None, reason="Godot 4 not installed")
-def test_notehead_outlines_and_reactions_use_real_score_mapping(tmp_path):
+def test_native_feedback_and_reaction_queues_follow_real_source_events(tmp_path):
+    from piano_teacher.server import PracticeEngine
+
+    midi = tmp_path / "chords.mid"
+    make_fixture(midi)
+    engine = PracticeEngine(tmp_path / "data", enable_midi=False)
+    try:
+        engine.load(str(midi))
+        engine.plan.set_hand("both")
+        payload = {"model": engine.semantic_score(),
+                   "layout": engine.geometry(native_notes=True), "state": engine.state()}
+    finally:
+        engine.db.close()
+    (tmp_path / "native.json").write_text(json.dumps(payload))
     script = tmp_path / "note_reactions.gd"
     script.write_text('''extends SceneTree
-const Ink := preload("res://notehead_ink.gd")
-const Effects := preload("res://note_reactions.gd")
+var failures: Array[String] = []
 
-class FixtureApp extends "res://main.gd":
-    func _ready() -> void:
-        _build_interface()
-        _navigate("practice")
-        set_process(false)
+func check(ok: bool, label: String) -> void:
+    if not ok:
+        failures.append(label)
+        print("NOTE_REACTIONS_FAIL:", label)
 
 func _initialize() -> void:
     call_deferred("run")
 
-func run() -> void:
-    # Rotated notehead outlines are closed, wider than tall, and remain
-    # centred on the exact Verovio x/y rather than nearby system positions.
-    var center := Vector2(80, 40)
-    var radii: Vector2 = Ink.radii(18)
-    assert(radii.x > radii.y)
-    var ellipse: PackedVector2Array = Ink.ellipse(center, radii.x, radii.y)
-    assert(ellipse.size() == 33 and ellipse[0].distance_to(ellipse[-1]) < .01)
-    var bounds := Rect2(center, Vector2.ZERO)
-    for point in ellipse:
-        bounds = bounds.expand(point)
-    assert(bounds.size.x > bounds.size.y)
-    assert(bounds.size.x < 40 and bounds.size.y < 30)
+func present(app: Control, state: Dictionary) -> void:
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(state).to_utf8_buffer())
 
-    # The original notation owns the noteheads. The short pulse is exactly
-    # anchored at their SVG coordinates, without particle motion or replicas.
-    assert(Effects.MAX_VISIBLE_HITS <= 16)
-    var app := FixtureApp.new()
+func run() -> void:
+    var app = load("FIXTURE_PATH").new()
     root.add_child(app)
-    await process_frame
-    app.revision = 9
-    app.layout_revision = 9
-    app.last_seen_midi_visual_sequence = 0
-    app.score_layout = {"attack_map":{"a":"na", "b":"nb", "c":"nc"}, "notes":[
-        {"id":"na", "page":0, "x":.32, "y":.52},
-        {"id":"nb", "page":0, "x":.32, "y":.47},
-        {"id":"nc", "page":0, "x":.58, "y":.52}]}
-    app.score_overlay.image_size = Vector2(1200, 240)
-    app.score_overlay.active_page = 0
-    app.score_overlay.staff_gap_fraction = .04
-    app.score_overlay.size = Vector2(1200, 240)
-    app.note_reactions.size = Vector2(1200, 240)
-    app.note_reactions.staff_gap_fraction = .04
-    app.living_chords = [{"beat":0.0, "notes":[
-        {"id":"na", "page":0, "x":.32, "y":.52, "pitch":60, "hand":"right"},
-        {"id":"nb", "page":0, "x":.32, "y":.47, "pitch":64, "hand":"right"}]}]
-    app.last_state = {"phase":"ready", "running":false, "mode":"practice",
-        "play_from_beat":0.0}
-    app._process(.016)
-    assert(app.score_overlay.next_chord.size() == 2,
-        "Ready stage must highlight the next real chord before Play")
-    app.last_state["phase"] = "feedback"
-    app._process(.016)
-    assert(app.score_overlay.next_chord.is_empty(),
-        "Feedback must not overwrite judged notes with a fresh teal cue")
-    app.score_overlay.next_chord = [
-        {"id":"na", "page":0, "x":.32, "y":.52, "emphasis":1.0},
-        {"id":"nb", "page":0, "x":.32, "y":.47, "emphasis":1.0}]
-    app.score_overlay.marks = [
-        {"note_id":"nb", "page":0, "x":.32, "y":.47, "status":"missed"}]
-    var state := {"phase":"playing", "transport_id":3, "midi_visual_events":[
-        {"sequence":1,"transport_id":3,"source_id":"a","status":"on_time","age":.02},
-        {"sequence":2,"transport_id":3,"source_id":"c","status":"late","age":.03},
-        {"sequence":3,"transport_id":3,"reference_source_id":"b","status":"unexpected",
-            "pitch":73,"age":.02}]}
-    app._consume_live_piano_hits(state)
-    assert(app.score_overlay.hit_pulses.size() == 2)
-    assert(app.note_reactions.hit_pulses.size() == 2,
-        "Score reaction underlay must own the live pulse array")
-    assert(app.score_overlay.hit_pulses[0].x == .32)
-    assert(app.score_overlay.hit_pulses[1].x == .58)
-    # A quick light pulse replaces the former 450ms fireworks.
-    assert(app.score_overlay.hit_pulses[0].duration_ms == 220)
-    assert(app.score_overlay.hit_pulses[0].note_id == "na",
-        "A scored note must override its pending gold outline")
-    assert(app.score_overlay.hit_pulses[1].note_id == "nc")
-    assert(app.note_reactions.material is CanvasItemMaterial and
-        app.note_reactions.material.blend_mode == CanvasItemMaterial.BLEND_MODE_MIX,
-        "Glow should accumulate luminous light rather than opaque circles")
-    assert(app.score_overlay.wrong_ghosts.size() == 1)
-    assert(app.game_impact_callout.last_status == "unexpected" and
-        app.game_impact_callout.message == "TRY THAT NOTE",
-        "Judged MIDI events trigger compact coaching, not ungraded preview")
-    assert(app.score_overlay.wrong_ghosts[0].y == .47,
-        "Wrong pitch must point to the true expected note, not a fake glyph")
-    assert(not app.score_overlay.wrong_ghosts[0].has("label"),
-        "No extra wrong-pitch text on the music")
-    app._consume_live_piano_hits(state)
-    assert(app.score_overlay.hit_pulses.size() == 2, "Repeated poll must not duplicate pulses")
-    # Old poll events must not grant a reward if Listen or an ungraded
-    # no-device preview has taken over the transport.
-    var previews := [
-        {"phase":"playing", "mode":"practice", "preview_only":true,
-         "transport_id":4, "midi_visual_events":[
-            {"sequence":4,"transport_id":4,"source_id":"a",
-             "status":"on_time","age":.01}]},
-        {"phase":"playing", "mode":"listen", "preview_only":false,
-         "transport_id":5, "midi_visual_events":[
-            {"sequence":5,"transport_id":5,"source_id":"a",
-             "status":"on_time","age":.01}]}
-    ]
-    for ungraded in previews:
-        app._consume_live_piano_hits(ungraded)
-    assert(app.score_overlay.hit_pulses.size() == 2,
-        "Listen and no-keyboard preview cannot generate an awarded hit")
-    assert(app.note_reactions.wrong_ghosts.size() == 1,
-        "Unexpected-note effects still use the original judged event")
-    app._clear_assessed_effects_in_ungraded_mode(
-        {"preview_only":true, "mode":"practice"})
-    assert(app.score_overlay.hit_pulses.is_empty() and
-        app.note_reactions.hit_pulses.is_empty() and
-        app.note_reactions.wrong_ghosts.is_empty(),
-        "An ungraded preview must not inherit an earlier graded note burst")
-    assert(app.game_impact_callout.elapsed >= app.game_impact_callout.DURATION,
-        "An ungraded preview cannot inherit earned coaching labels")
-    var grouped: Array = load("res://living_score.gd").groups_crossed(
-        app.living_chords, -.1, .05)
-    assert(grouped.size() == 1 and grouped[0].notes.size() == 2,
-        "One musical onset should include the whole chord exactly once")
-    app._preview_note_arrivals(grouped)
-    assert(app.score_overlay.preview_pulses.size() == 2 and
-        app.note_reactions.preview_pulses.size() == 2,
-        "Keyboard-free playback must show clearly visible ungraded note impacts")
-    assert(app.score_overlay.preview_pulses[0].status == "preview" and
-        app.score_overlay.hit_pulses.is_empty() and
-        app.game_stage.impact_energy == 0.0 and
-        app.game_stage.preview_energy > 0.0,
-        "Preview must illuminate notes without inventing a scored success")
-    # Drawing the same score and reaction transform must parse and render
-    # without any separate positioning / type-inference errors.
-    app.score_overlay.queue_redraw()
-    app.note_reactions.queue_redraw()
+    var error: String = app.load_native_fixture(OS.get_cmdline_user_args()[0])
+    check(error.is_empty(), "Production native fixture loads: " + error)
+    if not failures.is_empty():
+        app.free()
+        quit(1)
+        return
+    var renderer = app.timeline_preview
+    var feedback = app.native_score_feedback
+    check(feedback.score == renderer and feedback.score_revision == app.revision,
+        "Production binds native feedback to the loaded source revision")
+    check(feedback.is_visible_in_tree(), "Native feedback is the visible presentation layer")
+    var attacks: Array = []
+    for event in renderer.ordered_events:
+        if bool(event.get("is_attack",false)) and event.get("source_id") != null:
+            attacks.append(event)
+    check(attacks.size() >= 3, "Imported repeated chords contain real source attacks")
+    if not failures.is_empty():
+        app.free()
+        quit(1)
+        return
+    var first: Dictionary = attacks[0]
+    var second: Dictionary = attacks[1]
+    var later: Dictionary = attacks[-1]
+    for event in [first,second,later]:
+        check(feedback.source_to_id.get(str(event.source_id)) == str(event.id),
+            "Native binding preserves each authentic source identity")
+    renderer.present({"running":true,"hand":"both"},float(first.beat))
     await process_frame
     await process_frame
-    print("NOTE_REACTIONS_OK")
-    quit()
-''')
+    check(renderer.drawn_noteheads.has(str(first.id)), "Production paints the first authentic notehead")
+    check(feedback.note_position(str(first.id)) == renderer.drawn_noteheads[str(first.id)],
+        "Feedback samples the actually painted native notehead")
+    check(feedback.note_position("missing-source") == Vector2.INF,
+        "Unknown source identity cannot invent a feedback position")
+    var before: Vector2 = feedback.note_position(str(first.id))
+    renderer.present({"running":true,"hand":"both"},float(first.beat)+.25)
+    await process_frame
+    await process_frame
+    var after: Vector2 = feedback.note_position(str(first.id))
+    check(absf(before.x-after.x-renderer.timeline.pixels_per_beat*.25) < .01 and
+        absf(before.y-after.y) < .01, "Feedback follows actual native scrolling at fixed beat density")
+
+    var state: Dictionary = app.last_state.duplicate(true)
+    state.merge({"phase":"playing", "mode":"practice", "running":true,
+        "paused":false, "preview_only":false, "transport_id":3,
+        "feedback_marks":[{"source_id":str(second.source_id), "status":"missed"},
+            {"note_id":str(later.id), "status":"early", "estimated":true}],
+        "midi_visual_events":[
+            {"sequence":1,"transport_id":3,"source_id":str(first.source_id),"status":"on_time","age":.02},
+            {"sequence":2,"transport_id":3,"source_id":str(later.source_id),"status":"late","age":.03},
+            {"sequence":3,"transport_id":3,"reference_source_id":str(second.source_id),
+                "status":"unexpected","pitch":73,"age":.02}]},true)
+    present(app,state)
+    check(feedback.markers.get(str(second.id)) == "missed" and feedback.markers.size() == 1,
+        "Only assessed exact source identities mark the native score")
+    check(feedback.pulses.size() == 3 and feedback.pulses[0].id == str(first.id) and
+        feedback.pulses[1].id == str(later.id) and feedback.pulses[2].id == str(second.id),
+        "Native feedback maps judged attacks and unexpected input to their true source targets")
+    check(app.score_effects.hit_pulses.size() == 2 and app.score_effects.wrong_ghosts.size() == 1,
+        "Source event queues retain judged hits and unexpected input")
+    check(app.score_effects.hit_pulses[0].note_id == str(first.id) and
+        app.score_effects.hit_pulses[1].note_id == str(later.id),
+        "Source queues distinguish separate attacks rather than repeated pitches")
+    check(app.score_effects.hit_pulses[0].duration_ms == 220,
+        "Source hit lifetime stays short and bounded")
+    present(app,state)
+    check(feedback.pulses.size() == 3 and app.score_effects.hit_pulses.size() == 2 and
+        app.score_effects.wrong_ghosts.size() == 1, "Repeated polls cannot replay a judged event")
+
+    # Fresh sequences with stale transport, old age or an unknown source are consumed safely.
+    state.midi_visual_events = [
+        {"sequence":4,"transport_id":2,"source_id":str(first.source_id),"status":"on_time","age":.01},
+        {"sequence":5,"transport_id":3,"source_id":str(first.source_id),"status":"on_time","age":2.0},
+        {"sequence":6,"transport_id":3,"source_id":"missing-source","status":"on_time","age":.01}]
+    present(app,state)
+    check(feedback.pulses.size() == 3 and app.score_effects.hit_pulses.size() == 2,
+        "Stale or unmapped events cannot create a native reward")
+    for ungraded_mode in ["preview", "listen"]:
+        state.preview_only = ungraded_mode == "preview"
+        state.mode = "listen" if ungraded_mode == "listen" else "practice"
+        state.transport_id += 1
+        var sequence: int = 7 if ungraded_mode == "preview" else 8
+        state.midi_visual_events = [{"sequence":sequence,"transport_id":state.transport_id,
+            "source_id":str(first.source_id),"status":"on_time","age":.01}]
+        present(app,state)
+        check(feedback.markers.is_empty() and feedback.pulses.is_empty(),
+            ungraded_mode + " clears native assessed feedback")
+        check(app.score_effects.hit_pulses.is_empty() and app.score_effects.wrong_ghosts.is_empty(),
+            ungraded_mode + " cannot retain or award source hit credit")
+        state.preview_only = false
+        state.mode = "practice"
+        state.feedback_marks = []
+        present(app,state)
+        check(feedback.pulses.is_empty() and app.score_effects.hit_pulses.is_empty(),
+            "Returning to graded practice cannot replay " + ungraded_mode + " events")
+
+    var groups: Array = load("res://living_score.gd").groups_crossed(
+        app.living_chords,float(first.beat)-.01,float(first.beat)+.01)
+    var chord_notes := 0
+    for event in attacks:
+        if absf(float(event.beat)-float(first.beat)) < .001:
+            chord_notes += 1
+    check(groups.size() == 1 and groups[0].notes.size() == chord_notes,
+        "Crossing an authentic source onset groups the entire chord exactly once")
+    app._preview_note_arrivals(groups)
+    check(app.score_effects.preview_pulses.size() == chord_notes and
+        app.score_effects.preview_pulses[0].status == "preview" and
+        app.score_effects.hit_pulses.is_empty() and feedback.pulses.is_empty(),
+        "Preview source arrivals remain distinct from assessed native rewards")
+    check(app.game_stage.impact_energy == 0.0 and app.game_stage.preview_energy > 0.0,
+        "Ungraded source arrivals illuminate the stage without earned success")
+    app._clear_assessed_effects_in_ungraded_mode({"preview_only":false,"mode":"practice"})
+    check(app.score_effects.preview_pulses.is_empty(),
+        "Returning to a scored take clears its ungraded source effects")
+    renderer.queue_redraw()
+    feedback.queue_redraw()
+    await process_frame
+    await process_frame
+    print("NOTE_REACTIONS_FAILURES:",failures.size())
+    app.free()
+    quit(0 if failures.is_empty() else 1)
+'''.replace("FIXTURE_PATH", str(ROOT / "tests/godot/native_production_fixture.gd")))
     result = subprocess.run(
         [GODOT, "--headless", "--path", str(ROOT / "godot"),
-         "--script", str(script)],
+         "--script", str(script), "--", str(tmp_path)],
         capture_output=True, text=True, timeout=30
     )
     output = result.stdout + result.stderr
     assert result.returncode == 0, output
-    assert "SCRIPT ERROR" not in output, output
-    assert "NOTE_REACTIONS_OK" in output, output
+    assert "SCRIPT ERROR" not in output and "ERROR:" not in output, output
+    assert "NOTE_REACTIONS_FAILURES:0" in output, output

@@ -16,6 +16,11 @@ func wait_for(predicate: Callable, seconds: float = 60.0) -> bool:
         await process_frame
     return true
 
+func score_ready() -> bool:
+    return app.timeline_preview != null and app._native_score_ready() \
+        and app.timeline_preview.is_visible_in_tree() and not app.layout_pending \
+        and not app.timeline_model_pending
+
 func api(route: String, body: Dictionary) -> Dictionary:
     var request := HTTPRequest.new()
     root.add_child(request)
@@ -67,9 +72,9 @@ func run() -> void:
     await capture("library")
     await api("/library/open", {"id": source.get_file()})
     app._navigate("practice")
-    await wait_for(func(): return app.score_view.texture != null and app.rendered_revision == app.revision)
+    await wait_for(func(): return score_ready())
     await api("/control", {"action": "tempo", "bpm": 80})
-    await wait_for(func(): return int(app.last_state.get("bpm", 0)) == 80 and app.score_view.texture != null)
+    await wait_for(func(): return int(app.last_state.get("bpm", 0)) == 80 and score_ready())
     app.start_button.pressed.emit()
     app._navigate("settings") # The Start HTTP response has not arrived yet.
     await wait_for(func(): return bool(app.last_state.get("paused", false)))
@@ -91,7 +96,7 @@ func run() -> void:
     await wait_for(func(): return not app.action_pending and not bool(app.preferences.get("metronome", true)))
     app.tempo_setting.value = 60
     press("Apply tempo")
-    await wait_for(func(): return int(app.last_state.get("target_bpm", 0)) == 60 and app.score_view.texture != null)
+    await wait_for(func(): return int(app.last_state.get("target_bpm", 0)) == 60 and score_ready())
     app._show_devices()
     await process_frame
     if app.device_menu.get_item_id(0) != -2:
@@ -125,7 +130,7 @@ func run() -> void:
         failures.append("Music drawer must expose Continue for the imported piece")
     else:
         await wait_for(func(): return not app.action_pending and app.current_screen == "practice" \
-            and app.score_view.texture != null and app.rendered_revision == app.revision)
+            and score_ready())
         if app.open_picker.visible or str(app.last_state.get("hand", "")) != saved_hand \
                 or int(app.last_state.get("target_bpm", 0)) != saved_tempo:
             failures.append("Continue must restore saved hand and tempo without a starting-point picker")

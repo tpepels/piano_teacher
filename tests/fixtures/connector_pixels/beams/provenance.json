@@ -1,0 +1,5 @@
+{
+  "capture": "Actual Godot gl_compatibility framebuffer; native_verovio_overlay.gd; no mutation",
+  "source": "tests/fixtures/native_pixel_beam_probe.musicxml",
+  "reference": "Original independently engraved Verovio SVG; no native atlas consumed by proof"
+}

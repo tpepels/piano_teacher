@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run the actual HTTP application with native notation and reject fallback.
 
-PIANO_TEACHER_NATIVE_NOTATION=1 .venv/bin/python scripts/smoke_native_notation.py
+.venv/bin/python scripts/smoke_native_notation.py
 Add --render to retain an actual desktop screenshot beside the JSON/log evidence.
 """
 from __future__ import annotations
@@ -36,8 +36,6 @@ def main(argv=None):
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--output", type=Path, default=Path("/tmp/piano-native-application"))
     args = parser.parse_args(argv)
-    if os.environ.get("PIANO_TEACHER_NATIVE_NOTATION") != "1":
-        parser.error("Set PIANO_TEACHER_NATIVE_NOTATION=1")
     godot = shutil.which("godot") or shutil.which("godot4")
     if godot is None:
         parser.error("Godot 4 is required")
@@ -49,8 +47,7 @@ def main(argv=None):
             parser.error("Port 8765 is occupied; close the other application first")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, "PIANO_TEACHER_NATIVE_NOTATION": "1",
-           "XDG_DATA_HOME": str(output / "data"),
+    env = {**os.environ, "XDG_DATA_HOME": str(output / "data"),
            "XDG_CONFIG_HOME": str(output / "config"), "PYTHONPATH": str(ROOT)}
     with (output / "backend.log").open("w") as backend_log:
         backend = subprocess.Popen(

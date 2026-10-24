@@ -48,7 +48,9 @@ def erase(folder, beat, bbox):
 def test_retained_rhythm_features_have_bound_event_evidence():
     report = check('rhythms')
     assert 'passed' not in report  # bounded feature coverage is not a global proof
-    assert report['coverage']['expected'] == 11
+    assert report['coverage']['expected'] == 13  # Includes both quarter flag-absence obligations.
+    assert report['by_construct']['flag_absence']['expected'] == 2
+    assert report['by_construct']['flag_absence']['verified'] == 2
     assert report['by_construct']['stem']['verified'] == 7
     assert report['by_construct']['flag']['verified'] == 3
     assert report['by_construct']['dot']['ambiguous'] == 1
@@ -98,11 +100,62 @@ def test_wrong_accidental_and_double_dot_do_not_pass_neighbor_ink():
     assert feature(report, 8., 'dot')['status'] != 'verified'
 
 
+@pytest.mark.parametrize('direction',[-1,1])
+def test_accidental_cannot_shift_to_the_next_written_staff_step(tmp_path,direction):
+    from piano_teacher.notation.pixel_proof import detect_staff_lines
+    folder=copied('accidentals',tmp_path)
+    box=feature(check('accidentals',folder),0.,'accidental')['evidence']['bbox']
+    path=folder/'native-0.00000.png'
+    image=Image.open(path).convert('RGB')
+    gap=detect_staff_lines(image)['right'].gap
+    glyph=image.crop(tuple(box))
+    erase(folder,0.,box)
+    image=Image.open(path).convert('RGB')
+    image.paste(glyph,(box[0],box[1]+direction*round(gap/2)))
+    image.save(path)
+    assert feature(check('accidentals',folder),0.,'accidental')['status']!='verified'
+
+
+def test_accidental_column_can_move_left_without_changing_its_pitch(tmp_path):
+    folder=copied('accidentals',tmp_path)
+    box=feature(check('accidentals',folder),0.,'accidental')['evidence']['bbox']
+    path=folder/'native-0.00000.png'
+    glyph=Image.open(path).convert('RGB').crop(tuple(box))
+    erase(folder,0.,box)
+    image=Image.open(path).convert('RGB')
+    image.paste(glyph,(box[0]-40,box[1]))
+    image.save(path)
+    assert feature(check('accidentals',folder),0.,'accidental')['status']=='verified'
+
+
+def test_a_previous_heads_accidental_cannot_be_borrowed_for_the_current_note(tmp_path):
+    from piano_teacher.notation.reference_font import reference_glyphs
+    from piano_teacher.notation.symbol_pixel_proof import _outline
+    from piano_teacher.notation.pixel_proof import detect_staff_lines,expected_y
+    import numpy as np
+    folder=copied('accidentals',tmp_path)
+    box=feature(check('accidentals',folder),0.,'accidental')['evidence']['bbox']
+    path=folder/'native-0.00000.png'
+    image=Image.open(path).convert('RGB')
+    glyph=image.crop(tuple(box))
+    erase(folder,0.,box)
+    image=Image.open(path).convert('RGB')
+    image.paste(glyph,(box[0]-60,box[1]))
+    rail=detect_staff_lines(image)['right']
+    head=reference_glyphs()['head_black'];b=head['bounds']
+    width,height=(round(b[i]*rail.gap/250) for i in (2,3))
+    x=round(600-width/2);y=round(expected_y(rail,('C',0,4),('G',2,0))+b[1]*rail.gap/250)
+    pixels=np.asarray(image).copy()
+    pixels[y:y+height,x:x+width][_outline(head['svg'],width,height)]=(229,242,234)
+    Image.fromarray(pixels).save(path)
+    assert feature(check('accidentals',folder),0.,'accidental')['status']!='verified'
+
+
 def test_source_chords_legitimately_share_stem_evidence():
     report = check('chords')
     assert report['by_construct']['stem']['expected'] == 24
-    assert report['by_construct']['stem']['verified'] == 12
-    assert report['by_construct']['stem']['unverified'] == 12
+    assert report['by_construct']['stem']['verified'] == 24
+    assert report['by_construct']['stem']['unverified'] == 0
     rows = [r for r in report['measured'] if r['beat'] == 4.]
     ids = {r['features']['stem']['evidence']['group_id'] for r in rows}
     assert len(ids) == 1

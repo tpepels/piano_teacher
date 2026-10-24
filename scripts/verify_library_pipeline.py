@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Phase 6: verify real imported files through practice navigation, Verovio,
-PNG rasterization, source-note mapping, and Godot's scrolling-score assembly.
+PNG rasterization, source-note mapping, and Godot's native production view.
 
 All output is written outside the music folder. Each input is isolated in a
 subprocess with a deadline; a corrupt or very large file cannot stop the rest.
@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import bisect
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -24,7 +23,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from piano_teacher.library import ScoreLibrary
-from piano_teacher.score import import_piece
 
 RESULT_PREFIX = "PHASE6_RESULT:"
 
@@ -64,7 +62,7 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
                 if state["mode"] != "practice" or state["running"]:
                     raise AssertionError("Opening a starting measure unexpectedly began playback")
                 # Real Verovio, glyph positions, timing map and exact alignment.
-                layout = engine.geometry()
+                layout = engine.geometry(native_notes=False)
                 engraving = engine.engraving()
                 if not engraving.pages or not layout["systems"]:
                     raise AssertionError("Engraving contains no pages or staff systems")
@@ -91,6 +89,20 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
                     filename = f"sample-{index+1:02d}-page-{page:02d}.png"
                     (evidence / filename).write_bytes(png)
                     files.append(filename)
+                native_folder = None
+                if godot:
+                    native_folder = f"sample-{index+1:02d}"
+                    folder = evidence / native_folder
+                    folder.mkdir(exist_ok=True)
+                    payload = {"layout": engine.geometry(native_notes=True),
+                               "model": engine.semantic_score(), "state": state}
+                    source_ids = {note["id"] for note in payload["model"]["notes"]}
+                    if not required.issubset(source_ids):
+                        raise AssertionError("Native model lost required source attacks")
+                    if payload["layout"]["revision"] != payload["model"]["revision"]:
+                        raise AssertionError("Native assets and model have different revisions")
+                    (folder / "native.json").write_text(
+                        json.dumps(payload) + "\n", encoding="utf-8")
                 # Exercise the actual timed transport in disconnected
                 # preview mode. The clock must enter count-in then Playing
                 # without generating any scored note or mastery.
@@ -110,6 +122,8 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
                     "measure": bar, "hand": engine.plan.hand,
                     "layout": layout, "pages": files,
                 }
+                if native_folder:
+                    manifest["native_fixture"] = native_folder
                 manifest_name = f"sample-{index+1:02d}.json"
                 (evidence / manifest_name).write_text(
                     json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
@@ -135,12 +149,15 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
                 raise AssertionError("Exercise navigation escaped its legal range")
             if godot:
                 command = [godot, "--headless", "--path", str(ROOT / "godot"),
-                           "--script", "res://diagnostic_score.gd", "--", str(evidence)]
+                           "--script", str(ROOT / "tests/godot/native_library_diagnostic.gd"),
+                           "--", str(evidence)]
                 run = subprocess.run(command, capture_output=True, text=True,
                                      timeout=50, cwd=ROOT)
                 (evidence / "godot.log").write_text(run.stdout + run.stderr)
-                if run.returncode != 0 or "PHASE6_GODOT_PASS" not in run.stdout:
-                    raise RuntimeError("Godot score assembly failed: " +
+                if (run.returncode != 0 or "PHASE6_GODOT_PASS" not in run.stdout
+                        or "SCRIPT ERROR" in run.stdout + run.stderr
+                        or "Parse Error" in run.stdout + run.stderr):
+                    raise RuntimeError("Godot native production diagnostic failed: " +
                                        (run.stdout + run.stderr)[-1200:])
             return {"status": "pass", "file": path.name,
                     "source_notes": len(piece.notes), "total_measures":
@@ -226,7 +243,7 @@ def main() -> int:
                         help="Maximum seconds per file including Godot")
     parser.add_argument("--limit", type=int, help="Check only first N library entries")
     parser.add_argument("--godot", nargs="?", const="auto", default=None,
-                        help="Also verify actual Godot score assembly (auto finds executable)")
+                        help="Also verify Godot native production preparation and display (auto finds executable)")
     parser.add_argument("--worker", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--evidence", type=Path, help=argparse.SUPPRESS)
     args = parser.parse_args()

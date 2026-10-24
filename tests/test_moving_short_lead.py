@@ -1,6 +1,7 @@
 """Tempo-capped count-in is short even when beginning at very slow BPM."""
 import pytest
 from piano_teacher.lesson_timing import lead_in_beats
+from test_phase1_camera import native_camera_run
 
 
 @pytest.mark.parametrize("bar,bpm,expected", [
@@ -25,12 +26,19 @@ def test_invalid_count_in_inputs_fail():
             lead_in_beats(*args)
 
 
-def test_godot_scrolling_is_unconditional_during_transport():
-    from pathlib import Path
-    gd=(Path(__file__).resolve().parents[1]/"godot"/"main.gd").read_text()
-    assert "target_x = viewport.x * 0.42 - note_x * displayed_width" in gd
-    assert "if displayed_width > viewport.x * 0.91:" not in gd
-    assert "var initial_cursor: Dictionary = _position_at_beat(play_from)" in gd
-    assert "PHASE0_LEAD_BEAT:" in gd
-    assert 'game_phase_cue = GamePhaseCue.new()' in gd
-    assert 'game_count_in.present(beat,' in gd
+def test_godot_scrolling_is_unconditional_during_transport(native_camera_run):
+    report, _ = native_camera_run
+    assert report["short_passage"], "Probe must exercise a score narrower than the viewport"
+    lead = [s for s in report["samples"] if s["label"] == "lead"]
+    playing = [s for s in report["samples"] if s["label"] == "playing"]
+    assert len(lead) >= 2 and playing
+    samples = lead + playing
+    for first, second in zip(samples, samples[1:]):
+        a = {h["id"]: h["x"] for h in first["heads"]}
+        b = {h["id"]: h["x"] for h in second["heads"]}
+        common = a.keys() & b.keys()
+        assert common
+        advance = (second["clock"] - first["clock"]) * first["density"]
+        assert advance > 0
+        for ident in common:
+            assert a[ident] - b[ident] == pytest.approx(advance, abs=.002)

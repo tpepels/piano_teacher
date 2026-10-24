@@ -7,9 +7,10 @@ class LiveApp extends "res://main.gd":
 
     func _process(delta: float) -> void:
         super._process(delta)
-        # Record the clock used for this rendered frame. Reading it after the
-        # GPU readback would include the elapsed capture time in the sample.
-        rendered_clock = _transport_beat_now()
+        # Record the exact clock supplied to the native view, rather than
+        # sampling the advancing transport again after super._process.
+        if timeline_preview != null:
+            rendered_clock = timeline_preview.clock_beat
 
 var app: Control
 var folder := ""
@@ -57,36 +58,38 @@ func api(command: Dictionary) -> Dictionary:
     return parsed
 
 func score_ready() -> bool:
-    var ready: bool = app.score_view.texture != null and app.layout_revision == app.revision \
-        and app.rendered_revision == app.revision and not app.layout_pending and not app.score_pending
-    if ready and app.native_notation_enabled:
-        return app.timeline_preview != null and app.timeline_preview.native_ready \
-            and app.timeline_preview.is_visible_in_tree() and app.timeline_model_revision == app.revision
-    return ready
+    return app.timeline_preview != null and app._native_score_ready() \
+        and app.timeline_preview.is_visible_in_tree() and not app.layout_pending \
+        and not app.timeline_model_pending
 
 func active_attempt(transport_id: int) -> bool:
     return int(app.last_state.get("transport_id", -1)) == transport_id \
-        and bool(app.last_state.get("running", false)) and app.score_overlay.showing and score_ready()
+        and bool(app.last_state.get("running", false)) and score_ready()
 
 func note_position(note: Dictionary) -> Vector2:
-    if app.native_notation_enabled:
-        var renderer = app.timeline_preview
-        var id: String = str(note["id"])
-        if renderer.drawn_noteheads.has(id):
-            return renderer.get_global_transform_with_canvas() * renderer.drawn_noteheads[id]
-        for event in renderer.ordered_events:
-            if str(event.get("id", "")) == id:
-                var clock: float = renderer.clock_beat if renderer.running or renderer.paused else 0.0
-                var x: float = renderer.timeline.screen_x(float(event["beat"]),clock,
-                    renderer.size.x * renderer.PLAYHEAD_FRACTION,renderer.play_from_beat)
-                x += float(renderer.cached_head_offsets.get(id,0.0))
-                return renderer.get_global_transform_with_canvas() * Vector2(x,
-                    renderer._event_y(event,renderer._gap()))
-        check(false, "Tracked native source note missing")
-        return Vector2.ZERO
-    var local: Vector2 = (Vector2(float(note.x), float(note.y)) - app.score_crop_origin) \
-        / app.score_crop_size * app.score_content.size
-    return app.score_content.get_global_transform_with_canvas() * local
+    var renderer = app.timeline_preview
+    var id: String = str(note["id"])
+    for event in renderer.ordered_events:
+        if str(event.get("id", "")) == id:
+            var clock: float = renderer.clock_beat if renderer.running or renderer.paused else 0.0
+            var x: float = renderer.timeline.screen_x(float(event["beat"]),clock,
+                renderer.size.x * renderer.PLAYHEAD_FRACTION,renderer.play_from_beat)
+            x += float(renderer.cached_head_offsets.get(id,0.0))
+            var point := Vector2(x, renderer._event_y(event,renderer._gap()))
+            if renderer.drawn_noteheads.has(id):
+                point = renderer.drawn_noteheads[id]
+                if renderer.score_loop_enabled and not renderer.timeline.measures.is_empty():
+                    # Repeated passes retain the same source IDs. The painted
+                    # map may describe the next visible pass; keep measuring
+                    # this attempt's occurrence, preserving its glyph offsets.
+                    var last: Dictionary = renderer.timeline.measures[-1]
+                    var gap_beats: float = maxf(.25, float(last.end_beat) - float(last.start_beat))
+                    var stride: float = (renderer.timeline.duration_beats + gap_beats) \
+                        * renderer.timeline.pixels_per_beat
+                    point.x -= roundf((point.x - x) / stride) * stride
+            return renderer.get_global_transform_with_canvas() * point
+    check(false, "Tracked native source note missing")
+    return Vector2.ZERO
 
 func local_ink(frame: Image, position: Vector2, staff_gap := Vector2.ZERO) -> Dictionary:
     # Glyph coordinates locate the left edge of a notehead. Remove long
@@ -230,24 +233,17 @@ func capture(bpm: int, label: String) -> Dictionary:
     # the actual render target dimensions.
     var pixel_scale := Vector2(frame.get_size()) / root.get_visible_rect().size
     var position: Vector2 = note_position(note) * pixel_scale
-    var cursor: Dictionary = app.score_overlay.cursor
-    var beam_local: Vector2 = (Vector2(float(cursor.get("x", 0.0)), 0.0) \
-        - app.score_crop_origin) / app.score_crop_size * app.score_content.size
-    var beam: Vector2 = (app.score_content.get_global_transform_with_canvas() * beam_local) * pixel_scale
-    if app.native_notation_enabled:
-        var renderer = app.timeline_preview
-        beam = (renderer.get_global_transform_with_canvas() * Vector2(
-            renderer.size.x * renderer.PLAYHEAD_FRACTION,0.0)) * pixel_scale
+    var renderer = app.timeline_preview
+    var beam: Vector2 = (renderer.get_global_transform_with_canvas() * Vector2(
+        renderer.size.x * renderer.PLAYHEAD_FRACTION,0.0)) * pixel_scale
     var canvas_panel: Rect2 = app.score_frame.get_global_rect()
     var panel := Rect2(canvas_panel.position * pixel_scale, canvas_panel.size * pixel_scale)
     check(absf(beam.x - (panel.position.x + panel.size.x * 0.42)) < 2.0,
         "%d BPM %s: timing line stays fixed" % [bpm, label])
-    check(app.score_content.size.distance_to(baseline_size) < 0.5,
+    check(app.timeline_preview.size.distance_to(baseline_size) < 0.5,
         "%d BPM %s: notation scale stays stable" % [bpm, label])
-    var staff_gap: Vector2 = app.score_overlay.staff_gap_fraction * app.score_content.size.y * pixel_scale
-    if app.native_notation_enabled:
-        staff_gap = Vector2.ONE * app.timeline_preview._gap() * pixel_scale
-        check(score_ready(), "%d BPM %s: current source revision remains visibly native" % [bpm,label])
+    var staff_gap: Vector2 = Vector2.ONE * renderer._gap() * pixel_scale
+    check(score_ready(), "%d BPM %s: current source revision remains visibly native" % [bpm,label])
     var ink := local_ink(frame, position, staff_gap)
     var paused_modal: bool = app.pause_sheet.is_visible_in_tree()
     var modal_ink: Dictionary = {}
@@ -277,13 +273,12 @@ func capture(bpm: int, label: String) -> Dictionary:
     var result := {"bpm": bpm, "label": label, "beat": app.rendered_clock,
         "phase": app.last_state.get("phase", ""), "note_id": tracked_id,
         "note_x": position.x, "note_y": position.y, "beam_x": beam.x,
-        "width": app.score_content.size.x, "height": app.score_content.size.y,
+        "width": app.timeline_preview.size.x, "height": app.timeline_preview.size.y,
         "ink": ink, "paused_modal": paused_modal, "modal_ink": modal_ink,
         "frame": filename, "pixel_scale": [pixel_scale.x, pixel_scale.y]}
-    if app.native_notation_enabled:
-        result["native_ready"] = app.timeline_preview.native_ready
-        result["native_visible"] = app.timeline_preview.is_visible_in_tree()
-        result["native_noteheads"] = app.timeline_preview.drawn_noteheads.size()
+    result["native_ready"] = renderer.native_ready
+    result["native_visible"] = renderer.is_visible_in_tree()
+    result["native_noteheads"] = renderer.drawn_noteheads.size()
     samples.append(result)
     write_samples()
     return result
@@ -292,12 +287,16 @@ func run_tempo(bpm: int) -> void:
     print("VISIBLE_STAGE:", bpm, " BPM real HTTP playback")
     var tempo: Dictionary = await api({"action": "tempo", "bpm": bpm})
     var wanted_revision: int = int(tempo.get("revision", -2))
-    if not await wait_for(func(): return app.revision == wanted_revision and score_ready(),
-            90.0, "engraved score revision at " + str(bpm)):
+    # Tempo changes reuse the native revision. Wait for the actual stopped
+    # transport snapshot too, or Play can toggle the previous attempt's Pause.
+    if not await wait_for(func(): return app.revision == wanted_revision and score_ready() \
+            and int(app.last_state.get("bpm", -1)) == bpm \
+            and str(app.last_state.get("phase", "")) == "ready" and not app.action_pending,
+            90.0, "native score and stopped transport at " + str(bpm)):
         return
     await process_frame
     await process_frame
-    baseline_size = app.score_content.size
+    baseline_size = app.timeline_preview.size
     tracked_id = str(app.score_layout["notes"][0].get("id", ""))
     check(not tracked_id.is_empty(), "Required note has a stable ID")
     var prior_id: int = int(app.last_state.get("transport_id", -1))
@@ -393,8 +392,15 @@ func run() -> void:
             if await wait_for(func(): return active_attempt(transport_id), 5.0, "final preview starts"):
                 await wait_for(func(): return not bool(app.last_state.get("running", true)),
                     8.0, "preview naturally completes")
-                check(str(app.last_state.get("phase", "")) == "ready", "Completed preview returns to ready")
+                check(str(app.last_state.get("phase", "")) == "preview_gap",
+                    "Completed preview enters the empty measure between passes")
                 check(int(app.last_state.get("mastered", -1)) == 0, "Completed preview does not master a lesson")
+                await wait_for(func(): return int(app.last_state.get("transport_id", -1)) > transport_id \
+                        and active_attempt(int(app.last_state.get("transport_id", -1))),
+                    5.0, "silent preview repeats after the empty measure")
+                check(int(app.last_state.get("mastered", -1)) == 0,
+                    "Repeated silent preview does not master a lesson")
+                await api({"action": "stop"})
     write_samples()
     print("VISIBLE_RESULT:", "PASS" if failures.is_empty() else "FAIL", " samples=", samples.size())
     quit(0 if failures.is_empty() else 1)

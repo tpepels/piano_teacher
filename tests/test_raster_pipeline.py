@@ -7,6 +7,7 @@ from PIL import Image
 
 from piano_teacher.raster import rasterize_score
 from piano_teacher.server import PracticeEngine
+from test_phase1_camera import native_camera_run
 
 VEROVIO_GLYPH = """<svg xmlns="http://www.w3.org/2000/svg"
  xmlns:xlink="http://www.w3.org/1999/xlink" width="1000" height="600"
@@ -137,25 +138,14 @@ def test_png_http_endpoint_and_svg_debug(tmp_path, monkeypatch):
         engine.db.close()
 
 
-def test_godot_loads_png_with_same_notehead_coordinates():
-    script = (Path(__file__).resolve().parents[1] / "godot/main.gd").read_text()
-    assert '"/score.png?page=%d&width=%d"' in script
-    assert "ScoreQuality.png_width(source_layout, score_frame.size.y)" in script
-    assert "picture.load_png_from_buffer(body)" in script
-    assert 'score_overlay.image_size = strip["size"]' in script
-    # Long scores defer texture uploads but share the exact same engraving
-    # geometry as short scores; the score view itself is only a sentinel.
-    assert 'ScoreStrip.build(' in script
-    assert 'source_layout, page_images, should_defer' in script
-    assert 'score_view.texture = ImageTexture.create_from_image(ready_pixel)' in script
-    # Both transparent and opaque margins are excluded; strip tiles preserve
-    # the real geometry and avoid a single oversized GPU texture.
-    assert "var opaque_bounds := _visible_engraving_bounds(picture)" in script
-    assert "score_overlay.crop_origin = score_crop_origin" in script
-    assert "score_overlay.active_page = current_page" in script
-    overlay = (Path(__file__).resolve().parents[1] / "godot/score_overlay.gd").read_text()
-    assert "func _sheet_xy(x: float, y: float)" in overlay
-    assert "picture.load_svg_from_buffer" not in script
+def test_production_native_view_uses_source_note_identities(native_camera_run):
+    # Raster utilities/endpoints above remain diagnostic coverage. Production
+    # coordinates now come from the real native CanvasItem and source model.
+    report, _ = native_camera_run
+    ready = next(s for s in report["samples"] if s["label"] == "ready")
+    assert ready["heads"] and ready["visible_count"] > 0
+    assert len({h["id"] for h in ready["heads"]}) == len(ready["heads"])
+    assert report["same_atlas"] and report["same_index"]
 
 
 def test_practice_navigation_no_vertical_letter_wrapping():

@@ -1,6 +1,6 @@
 extends SceneTree
-# Desktop-only real-pixel diagnostic: same main.gd, HTTP engine, Verovio PNG,
-# ScoreStrip, HUD and animation that the pianist actually sees.
+# Desktop-only real-pixel diagnostic: the production native Godot view,
+# HTTP engine, authentic Verovio glyphs, HUD and animation the pianist sees.
 # Run under a real Linux display (Xvfb is supported); never with --headless.
 
 var app: Control
@@ -44,13 +44,12 @@ func _api(path: String, payload: Dictionary) -> Dictionary:
 
 func _capture(label: String) -> void:
     # Allow the real HUD and notation to settle; do not capture the initial
-    # opaque loading panel or a canvas before the raster textures arrive.
+    # opaque loading panel or a canvas before native glyphs and model arrive.
     await process_frame
     await process_frame
     # Sample the same clock used to draw the frame, not one taken after
     # PNG encoding (which may take 20-50ms on a software-rendered CI GPU).
-    app._layout_moving_score()
-    var capture_beat: float = app._transport_beat_now()
+    var capture_beat: float = app.timeline_preview.clock_beat
     RenderingServer.force_draw()
     var image: Image = root.get_texture().get_image()
     var path: String = folder.path_join(label + ".png")
@@ -58,16 +57,19 @@ func _capture(label: String) -> void:
         errors.append("Cannot capture real rendered desktop: " + label)
         return
     var bounds: Rect2 = app.score_frame.get_global_rect()
-    var rows: Array = app.staff_continuity.staff_lines.duplicate()
-    if app.native_notation_enabled and _native_notation_ready():
-        # Count the ten real staff rules painted by the native compositor.
-        # The retired raster rail underlay is deliberately not allocated.
-        rows.clear()
-        var gap: float = app.timeline_preview._gap()
+    var renderer = app.timeline_preview
+    var rows: Array = []
+    if _native_notation_ready():
+        var gap: float = renderer._gap()
         for staff in ["right","left"]:
-            var middle: float = app.timeline_preview._staff_center(staff)
+            var middle: float = renderer._staff_center(staff)
             for line in range(-2,3):
                 rows.append(middle+float(line)*gap)
+    var visible_heads := 0
+    var native_bounds := Rect2(Vector2.ZERO, renderer.size)
+    for center in renderer.drawn_noteheads.values():
+        if native_bounds.has_point(center):
+            visible_heads += 1
     var info := {
         "frame": label, "screen": app.current_screen,
         "image_size": [image.get_width(), image.get_height()],
@@ -76,25 +78,19 @@ func _capture(label: String) -> void:
         "staff_rows": rows.size(),
         "staff_clefs": app.score_layout.get("staff_clefs", {}),
         "note_count": app.score_layout.get("notes", []).size(),
-        "glyph_tile_count": app.score_tiles.size(),
-        "score_width": app.score_content.size.x,
-        "beat_camera": load("res://notation/shared/beat_camera.gd").prepare(app.score_layout),
-        "exact_ink_grid": bool(app.score_layout.get("exact_ink_grid", false)),
-        "native_ready": _native_notation_ready() if
-            app.native_notation_enabled else false,
+        "native_noteheads": renderer.drawn_noteheads.size(),
+        "visible_noteheads": visible_heads,
+        "score_width": renderer.size.x,
+        "pixels_per_beat": renderer.timeline.pixels_per_beat,
+        "model_notes": renderer.timeline.notes.size(),
+        "native_ready": _native_notation_ready(),
         "native_failure": _native_failure(),
-        "exact_ink_grid_reason": str(app.score_layout.get("exact_ink_grid_reason", "")),
         "current_hand": str(app.last_state.get("hand", "")),
         "transport_phase": str(app.last_state.get("phase", "")),
-        "clock_beat": capture_beat,
-        "fallback": str(app.score_layout.get("strip_timing_fallback", ""))
+        "clock_beat": capture_beat
     }
     frames.append(info)
     if app.current_screen == "practice":
-        var camera_result: Dictionary = info["beat_camera"]
-        if bool(camera_result.get("enabled", false)) and \
-                float(camera_result.get("max_error_px", INF)) > 2.0:
-            errors.append("Unaligned real Verovio notes bypassed the exact-grid guard at " + label)
         if bounds.size.x < float(image.get_width()) * .65 or bounds.size.y < 130:
             errors.append("Practice sheet must dominate the desktop viewport")
         if rows.size() != 10:
@@ -105,9 +101,10 @@ func _capture(label: String) -> void:
             var left: Dictionary = clefs.get("left", {})
             if str(right.get("sign", "")) != "G" or str(left.get("sign", "")) != "F":
                 errors.append("Ala piano grand staff requires G clef over F clef")
-        if int(info.note_count) <= 0 or \
-                (int(info.glyph_tile_count) <= 0 and not bool(info.native_ready)):
-            errors.append("Real practice notation has no measured notes or active native score")
+        if int(info.note_count) <= 0 or int(info.model_notes) <= 0 or not bool(info.native_ready):
+            errors.append("Real practice notation has no source notes or current native score")
+        if str(info.transport_phase) != "count_in" and int(info.visible_noteheads) <= 0:
+            errors.append("Native practice view painted no visible source noteheads: " + label)
     if app.current_screen == "lesson":
         var activity_row: Control = app.find_child("LessonActivityRow", true, false)
         var caption: Label = app.find_child("LessonActivityCaption", true, false)
@@ -135,7 +132,7 @@ func _capture(label: String) -> void:
             if not app.lesson_rows.is_visible_in_tree():
                 errors.append("Lesson step list is not visible at " + label)
     print("MIDI_DESKTOP_FRAME:", label, " size=", image.get_size(),
-        " notes=", info.note_count, " tiles=", info.glyph_tile_count)
+        " notes=", info.note_count, " native_heads=", info.native_noteheads)
 
 func _lesson_ready() -> bool:
     return not app.lesson_pending and app.lesson_rows.get_child_count() > 0 \
@@ -179,23 +176,21 @@ func _audit_all_screens() -> void:
 
 
 func _native_failure() -> String:
-    if not app.native_notation_enabled or app.timeline_preview == null:
+    if app.timeline_preview == null:
         return ""
     return str(app.timeline_preview.get("failure_reason"))
 
 
 func _native_notation_ready() -> bool:
-    return app.timeline_preview != null and \
-        bool(app.timeline_preview.get("native_ready")) and \
-        app.timeline_preview.visible and \
-        app.timeline_model_revision == app.revision
+    return app.timeline_preview != null and app._native_score_ready() and \
+        app.timeline_preview.is_visible_in_tree() and not app.layout_pending and \
+        not app.timeline_model_pending
 
 
 func _notation_ready() -> bool:
-    return app.score_view.texture != null and \
-        app.rendered_revision == app.revision and \
+    return _native_notation_ready() and \
+        not app.timeline_preview.timeline.notes.is_empty() and \
         not app.score_layout.get("notes", []).is_empty() and \
-        (app.score_tiles.size() > 0 or _native_notation_ready()) and \
         app.score_frame.is_visible_in_tree()
 
 func _is_counting() -> bool:
@@ -223,13 +218,8 @@ func _run() -> void:
     app._navigate("practice")
     var ready: bool = await _wait_until(
         Callable(self, "_notation_ready"), 100.0, "real notation in practice stage")
-    if ready and OS.get_environment("PIANO_TEACHER_NATIVE_NOTATION") == "1":
-        ready = await _wait_until(Callable(self, "_native_notation_ready"),
-            55.0, "pure Godot notation ready")
-        if not ready:
-            errors.append("Native semantic renderer unavailable: " + str(
-                app.timeline_preview.get("failure_reason") if
-                app.timeline_preview != null else "missing timeline"))
+    if not ready:
+        errors.append("Native semantic renderer unavailable: " + _native_failure())
     if ready:
         await _capture("ready")
         await _audit_all_screens()

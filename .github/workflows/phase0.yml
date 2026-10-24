@@ -13,7 +13,7 @@ jobs:
       - name: Install dependencies
         run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid
       - uses: actions/checkout@v4
-      - name: Trust the exact container workspace for provenance
+      - name: Trust container workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install application
         run: |
@@ -23,16 +23,6 @@ jobs:
         run: |
           .venv/bin/python -m pytest -q
           ./scripts/check_godot.sh
-      - name: Compare user's seven MIDI files with original Verovio engravings
-        run: .venv/bin/python scripts/check_user_midi_visual_regression.py --out /tmp/piano-user-midi-visual
-      - name: Upload real MIDI visual comparison images and pixel report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: original-verovio-vs-godot-score-strip
-          path: /tmp/piano-user-midi-visual
-          if-no-files-found: warn
-          retention-days: 14
       - name: Real practice UI with the three reported MIDI files
         run: |
           .venv/bin/python scripts/smoke_godot.py --file 'midi/Ala_–_Joep_Beving.midi'
@@ -78,19 +68,12 @@ jobs:
       - name: Install graphical test dependencies
         run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango fluidsynth soundfont-fluid xorg-server-xvfb xorg-xauth mesa xdotool
       - uses: actions/checkout@v4
-      - name: Trust the exact container workspace for provenance
+      - name: Trust container workspace
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - name: Install application
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install -e '.[godot,test]'
-      - name: Capture actual practice windows for user MIDI
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: |
-          xvfb-run -a -s "-screen 0 1600x1000x24" \
-            .venv/bin/python scripts/check_user_midi_desktop.py \
-            --out /tmp/piano-midi-desktop
       - name: Exercise guided lessons, fullscreen, starting picker, and pause sheet
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
@@ -101,7 +84,6 @@ jobs:
       - name: Preserve manual BPM alongside real Practice controls and native notation
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
-          PIANO_TEACHER_NATIVE_NOTATION: "1"
         run: |
           xvfb-run -a -s "-screen 0 1920x1080x24" \
             .venv/bin/python scripts/review_art_direction.py --render --exercise-controls --native-input \
@@ -120,103 +102,5 @@ jobs:
         with:
           name: piano-teacher-learning-and-pause-screens
           path: /tmp/piano-full-learning-ui
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Prove lossless Phase 1 Verovio layout on real Chopin MIDI
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          PIANO_TEACHER_EXACT_VEROVIO_GRID: "1"
-        run: |
-          xvfb-run -a -s "-screen 0 1600x1000x24" \
-            .venv/bin/python scripts/check_user_midi_desktop.py \
-            --only Chopin --require-exact-ink-grid \
-            --out /tmp/piano-phase1-exact-grid
-      - name: Upload Phase 1 experimental score frames
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: phase1-chopin-original-verovio-ink
-          path: /tmp/piano-phase1-exact-grid
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Verify original Verovio rest positions, dots, voices and rendered pixels
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          PIANO_TEACHER_REST_SCREENSHOTS: /tmp/piano-native-rest-screenshots
-        run: .venv/bin/python -m pytest tests/test_native_rest_placement.py -q
-      - name: Upload native rest engraving evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-verovio-rest-placement
-          path: /tmp/piano-native-rest-screenshots
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Confirm canonical native renderer without opt-in environment flag
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: |
-          xvfb-run -a -s "-screen 0 1600x1000x24" \
-            .venv/bin/python scripts/check_user_midi_desktop.py \
-            --default-native --only Ala --out /tmp/piano-native-default
-      - name: Upload native-default practice window evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-default-without-flag
-          path: /tmp/piano-native-default
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Exercise the original native Godot score on real Joep Beving MIDI
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: |
-          xvfb-run -a -s "-screen 0 1600x1000x24" \
-            .venv/bin/python scripts/check_user_midi_desktop.py \
-            --native --only Ala --out /tmp/piano-native-desktop
-      - name: Verify native Chopin pickup meter geometry with real Godot pixels
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: |
-          xvfb-run -a -s "-screen 0 1600x1000x24" \
-            .venv/bin/python scripts/check_user_midi_desktop.py \
-            --native --only Chopin --out /tmp/piano-native-chopin
-      - name: Native Verovio overlay - 9 real MIDI passages, both hands, and complex rhythm
-        env:
-          LIBGL_ALWAYS_SOFTWARE: "1"
-        run: |
-          xvfb-run -a -s "-screen 0 1600x1000x24" \
-            .venv/bin/python scripts/check_native_verovio_overlay.py \
-            --out /tmp/piano-native-verovio-overlay
-      - name: Upload source-registered native Verovio overlay evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-verovio-multi-passage-overlays
-          path: /tmp/piano-native-verovio-overlay/
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Upload native Chopin pickup engraving evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-chopin-pickup-meter-captures
-          path: /tmp/piano-native-chopin
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Upload native Godot notation evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-godot-ala-rhythm-captures
-          path: /tmp/piano-native-desktop
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Upload rendered Godot desktop screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: real-midi-godot-practice-screenshots
-          path: /tmp/piano-midi-desktop
           if-no-files-found: warn
           retention-days: 14

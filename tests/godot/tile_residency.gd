@@ -1,92 +1,75 @@
 extends SceneTree
-
-# Phase 8I: exercise bounded GPU residency without fake scoring or a
-# pre-rendered preview. Uses real Godot ImageTexture resources, and the
-# production app's exact residency path.
-class FixtureApp extends "res://main.gd":
-    func _ready() -> void:
-        set_process(false)
+# The native successor of tile residency: source events stay indexed once,
+# the visible window bounds frame work, and seeks reuse authentic atlases.
+class FixtureApp extends "native_production_fixture.gd":
+    func _transport_beat_now() -> float:
+        return float(last_state.get("clock_beat", 0.0))
 
 var failures: Array[String] = []
-
-func check(ok: bool, description: String) -> void:
+func _initialize() -> void: call_deferred("run")
+func check(ok: bool, message: String) -> void:
     if not ok:
-        failures.append(description)
-        print("TILE_RESIDENCY_FAIL:", description)
+        failures.append(message)
+        print("NATIVE_RESIDENCY_FAIL:", message)
 
-func _initialize() -> void:
-    call_deferred("run")
+func atlas_ids(view: Control) -> Dictionary:
+    var ids: Dictionary = {}
+    for group in ["textures","note_textures","note_stem_textures","tie_textures",
+            "chord_textures","chord_heads_textures","chord_stem_textures",
+            "beam_textures","tuplet_textures","slur_textures"]:
+        var textures: Dictionary = view.glyphs.get(group)
+        for key in textures:
+            ids[group+"/"+str(key)] = textures[key].get_instance_id()
+    return ids
 
 func run() -> void:
+    root.mode = Window.MODE_WINDOWED
+    root.size = Vector2i(1024,768)
     var app := FixtureApp.new()
+    app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_child(app)
     await process_frame
-
-    var tile_image := Image.create(48, 32, false, Image.FORMAT_LA8)
-    tile_image.fill(Color(1, 1, 1, 0))
-    tile_image.set_pixel(2, 2, Color(0, 0, 0, 1))
-    var raw: PackedByteArray = tile_image.get_data()
-    var packed: PackedByteArray = raw.compress(FileAccess.COMPRESSION_FASTLZ)
-    check(not packed.is_empty(), "Lossless packing must be available")
-    var tile_count := 80
-    for i in range(tile_count):
-        app.strip_tiles.append({
-            "rect": Rect2(i * 48, 0, 48, 32),
-            "image_size": Vector2i(48, 32),
-            "upload_bytes": raw.size(),
-            "packed_ink": packed,
-        })
-        var tile := TextureRect.new()
-        app.score_tiles.append(tile)
-        app.add_child(tile)
-    app.deferred_tile_mode = true
-
-    var seeks: Array[int] = [0, 1, 10, 73, 20, 79, 42, 0, 30, 78]
-    for target in seeks:
-        check(app._set_tile_residency(Vector2i(target, target + 1)),
-            "Every legitimate seek must restore its source ink")
-        var start: int = maxi(0, target - 2)
-        var end: int = mini(tile_count, target + 3)
-        check(app.resident_tile_begin == start and
-            app.resident_tile_end == end, "Keep only two systems around playhead")
-        check(app.resident_tile_bytes == (end - start) * raw.size(),
-            "Actual resident bytes equal exactly the uploaded LA8 tiles")
-        for i in range(tile_count):
-            var active: bool = app.score_tiles[i].texture != null
-            check(active == (i >= start and i < end),
-                "A seek cannot leave offscreen GPU textures behind")
-        check(app.score_tiles[target].texture != null and
-            app.score_tiles[target].texture.get_image().get_pixel(2, 2).a > .98,
-            "Restored real image must have the exact source note ink")
-
-    var restores_before: int = app.restored_tile_count
-    check(app._set_tile_residency(Vector2i(78, 79)),
-        "Repeated camera window remains valid")
-    check(app.restored_tile_count == restores_before,
-        "Stable view must not re-decode or re-upload any image")
-
-    check(app._set_tile_residency(Vector2i(20, 21)),
-        "Prepare a known valid score for the corruption test")
-    var stored_begin: int = app.resident_tile_begin
-    var stored_end: int = app.resident_tile_end
-    var stored_bytes: int = app.resident_tile_bytes
-    var kept_texture: Texture2D = app.score_tiles[20].texture
-    var safe_tile: Dictionary = app.strip_tiles[50]
-    var damaged: Dictionary = safe_tile.duplicate()
-    damaged["packed_ink"] = PackedByteArray()
-    app.strip_tiles[50] = damaged
-    check(not app._set_tile_residency(Vector2i(50, 51)),
-        "Corrupted note ink must fail instead of displaying an empty staff")
-    check(app.resident_tile_begin == stored_begin and
-        app.resident_tile_end == stored_end and app.resident_tile_bytes == stored_bytes,
-        "Failed seek cannot evict the existing visible score")
-    check(app.score_tiles[20].texture == kept_texture,
-        "Failed seek must keep the previously displayed GPU notation")
-    app.strip_tiles[50] = safe_tile
-    check(app._set_tile_residency(Vector2i(50, 51)),
-        "Retry with original ink must recover a complete rendered score")
-    check(app.score_tiles[50].texture != null,
-        "Recovered tile must be drawable immediately")
-
+    await process_frame
+    var folder: String = OS.get_cmdline_user_args()[0]
+    var error: String = app.load_native_fixture(folder)
+    check(error.is_empty(),error)
+    if not error.is_empty():
+        quit(1)
+        return
+    var view = app.timeline_preview
+    var atlas: Dictionary = atlas_ids(view)
+    var source: Dictionary = view.timeline.model.duplicate(true)
+    var child_count: int = app.find_children("*","",true,false).size()
+    check(view.ordered_events.size() >= 300, "Stress fixture contains a long source score")
+    check(not atlas.is_empty(), "Residency checks actual authentic texture resources")
+    var duration: float = view.timeline.duration_beats
+    for fraction in [0.0,.9,.1,.75,.4,.99,.2,.8,0.0,.99]:
+        var beat: float = minf(duration-1.0,duration*float(fraction))
+        app.last_state = {"loaded":true,"revision":app.revision,"running":true,
+            "paused":true,"phase":"playing","clock_beat":beat,"bpm":80,
+            "hand":"right","transport_id":33,"play_from_beat":0.0}
+        app._process(0.0)
+        view.queue_redraw()
+        await process_frame
+        await process_frame
+        RenderingServer.force_draw()
+        check(not view.drawn_noteheads.is_empty(), "Rapid seek paints source notes immediately")
+        check(view.frame_scanned_events < view.ordered_events.size()/4,
+            "Each frame visits a bounded visible event window, even near the end")
+        check(atlas_ids(view) == atlas, "Seeks reuse the same authentic atlas resources")
+        check(app.find_children("*","",true,false).size() == child_count,
+            "Rapid seeks do not accumulate scene nodes")
+        check(view.timeline.model == source, "Seeking preserves all original source events")
+        check(app._native_score_ready(), "Seek retains matching production readiness")
+    # A rejected real model must invalidate readiness rather than exposing
+    # stale notation. A fresh prepared payload must recover through handlers.
+    var invalid: Dictionary = source.duplicate(true)
+    invalid["schema"] = "invalid-test-schema"
+    app._on_timeline_model(0,200,PackedStringArray(),JSON.stringify(invalid).to_utf8_buffer())
+    check(not app._native_score_ready() and not view.native_ready,
+        "Rejected source model clears actual renderer readiness")
+    check(not app.score_error.is_empty(), "Rejected source has a persistent error")
+    check(app.load_native_fixture(folder).is_empty(), "Fresh authentic preparation recovers rejected model")
+    check(app._native_score_ready(), "Recovered production model is ready again")
     print("TILE_RESIDENCY_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

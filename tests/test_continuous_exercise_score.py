@@ -1,11 +1,8 @@
-"""Regression checks for freshly engraved one-system practice exercises.
-
-Only exercise-sized material uses the new path. Longer works retain the
-existing multi-page renderer until a native vector camera is available.
-"""
+"""Reference engraving and the native production camera retain source timing."""
 from xml.etree import ElementTree as ET
 
 import pytest
+from test_phase1_camera import native_camera_run
 
 from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.music import Note, Phrase
@@ -69,15 +66,16 @@ def test_older_paginated_rendering_is_still_available():
     assert not regular.layout["continuous_score"]
 
 
-def test_practice_keeps_keyboard_exit_and_direct_source_score():
+def test_practice_keeps_keyboard_exit_and_native_source_score(native_camera_run):
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1] / "godot" / "main.gd"
     source = root.read_text(encoding="utf-8")
     assert 'event.ctrl_pressed' in source and 'KEY_Q' in source
     assert 'var rail_exit := _button("Exit", _exit_app' in source
-    assert 'source_layout.get("continuous_score", false)' in source
-    assert "native_ink_preview or continuous_engraving" in source
+    report, _ = native_camera_run
+    assert report["native_ready"] and report["same_atlas"] and report["same_timeline"]
+    assert all(sample["visible_count"] > 0 for sample in report["samples"])
 
 
 def test_continuous_spacing_is_independent_of_bpm():

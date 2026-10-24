@@ -11,33 +11,31 @@ PKG = ROOT / "piano_teacher"
 
 MOVED = {
     "score_timeline.gd": "notation/shared/timeline.gd",
-    "score_beat_camera.gd": "notation/shared/beat_camera.gd",
+    "score_beat_camera.gd": None,
     "score_native_notation.gd": "notation/native/view.gd",
     "score_notation_geometry.gd": "notation/native/geometry.gd",
     "score_verovio_glyphs.gd": "notation/native/glyphs.gd",
     "score_timeline_preview.gd": "notation/diagnostics/timeline_preview.gd",
-    "score_strip.gd": "notation/legacy/strip.gd",
-    "score_quality.gd": "notation/legacy/quality.gd",
-    "score_exact_spacing.gd": "notation/legacy/exact_spacing.gd",
-    "score_motion_curve.gd": "notation/legacy/motion_curve.gd",
+    "score_strip.gd": None,
+    "score_quality.gd": None,
+    "score_exact_spacing.gd": None,
+    "score_motion_curve.gd": None,
 }
 
 
-def test_native_renderer_is_default_and_old_renderer_is_explicit():
-    main = (GODOT / "main.gd").read_text()
-    assert 'PIANO_TEACHER_RENDERER").to_lower() != "legacy"' in main
-    assert '"--legacy-notation"' in main
-    assert 'PIANO_TEACHER_NATIVE_NOTATION").to_lower() not in' in main
-    assert 'score_view.visible = true' in main
-    assert 'timeline_preview.visible = false' in main
+def test_production_renderer_ignores_retired_selection_switches(tmp_path):
+    # Source ownership gates below remain static; renderer selection is
+    # verified by instantiating the production app under the retired flags.
+    from test_native_production import test_native_production_readiness_and_failure_gate
+
+    test_native_production_readiness_and_failure_gate(tmp_path, "retired-switches")
 
 
 def test_moved_godot_resources_and_uid_companions_are_canonical():
     for old, new in MOVED.items():
         assert not (GODOT / old).exists(), old
-        assert (GODOT / new).is_file(), new
-    for resource in ("strip", "quality"):
-        assert (GODOT / f"notation/legacy/{resource}.gd.uid").is_file()
+        if new is not None:
+            assert (GODOT / new).is_file(), new
 
 
 def test_no_stale_godot_script_paths():

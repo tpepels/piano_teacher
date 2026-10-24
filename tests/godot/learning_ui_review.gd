@@ -45,8 +45,9 @@ func sheet() -> Control:
     return app.get("pause_sheet")
 
 func score_ready() -> bool:
-    return app.score_view.texture != null and app.layout_revision == app.revision \
-        and app.rendered_revision == app.revision and not app.layout_pending and not app.score_pending
+    return app.timeline_preview != null and app._native_score_ready() \
+        and app.timeline_preview.is_visible_in_tree() and not app.layout_pending \
+        and not app.timeline_model_pending
 
 func key(code: Key) -> void:
     for down in [true,false]:
@@ -62,11 +63,6 @@ func resize_to(dimensions: Vector2i) -> void:
     await create_timer(.15).timeout
     await process_frame
     await process_frame
-
-func note_position(note: Dictionary) -> Vector2:
-    var local: Vector2 = (Vector2(float(note.x),float(note.y))-app.score_crop_origin) \
-        /app.score_crop_size*app.score_content.size
-    return app.score_content.get_global_transform_with_canvas()*local
 
 func note_ink(picture: Image,point: Vector2) -> int:
     var pixels := 0
@@ -124,31 +120,17 @@ func capture(label: String) -> Dictionary:
         if not paused and bool(app.last_state.get("loaded", false)):
             var panel: Rect2 = app.score_frame.get_global_rect()
             var found := false
-            if app.native_notation_enabled and app.timeline_preview != null and \
-                    app.timeline_preview.visible:
-                # Native noteheads live in the fixed musical-time viewport.
-                # Testing the retired strip positions reports false blank
-                # scores once full-page PNGs stop being downloaded.
-                var view: Control = app.timeline_preview
-                var native_heads: Dictionary = view.get("drawn_noteheads")
-                for id in native_heads:
-                    var local: Vector2 = native_heads[id]
-                    var point: Vector2 = view.get_global_transform_with_canvas()*local
-                    var pixels := note_ink(picture,point*scale)
-                    if panel.grow(-8).has_point(point) and pixels >= 8:
-                        entry["note_id"] = str(id)
-                        entry["notehead_ink"] = pixels
-                        found = true
-                        break
-            else:
-                for note in app.score_layout.get("notes",[]):
-                    var point := note_position(note)
-                    var pixels := note_ink(picture,point*scale)
-                    if panel.grow(-8).has_point(point) and pixels >= 8:
-                        entry["note_id"] = str(note.id)
-                        entry["notehead_ink"] = pixels
-                        found = true
-                        break
+            check(score_ready(), "Current native source revision is visible in " + label)
+            var view = app.timeline_preview
+            for id in view.drawn_noteheads:
+                var local: Vector2 = view.drawn_noteheads[id]
+                var point: Vector2 = view.get_global_transform_with_canvas()*local
+                var pixels := note_ink(picture,point*scale)
+                if panel.grow(-8).has_point(point) and pixels >= 8:
+                    entry["note_id"] = str(id)
+                    entry["notehead_ink"] = pixels
+                    found = true
+                    break
             check(found or phase() == "count_in",
                 "Actual engraved note pixels remain visible after the count-in in "+label)
             for button in [app.start_button,app.practice_retry_button,app.listen_button]:
@@ -322,7 +304,7 @@ func run() -> void:
             child.stop()
     await wait_for(func(): return not app.state_pending and not app.device_pending and not app.library_pending \
         and not app.settings_pending and not app.lesson_pending and not app.action_pending \
-        and not app.layout_pending and not app.score_pending,"drain ordinary requests before exit")
+        and not app.layout_pending and not app.timeline_model_pending,"drain ordinary requests before exit")
     var result := FileAccess.open(folder+"/result.json",FileAccess.WRITE)
     result.store_string(JSON.stringify({"frames":frames,"failures":failures,"renderer":DisplayServer.get_name()},"  "))
     print("LEARNING_UI_RESULT:","PASS" if failures.is_empty() else "FAIL")

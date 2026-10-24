@@ -23,8 +23,78 @@ from .proof import read_written_score
 from .pixel_proof import detect_staff_lines, expected_y
 from .symbol_pixel_proof import bright
 from .raster_matching import match_glyph as _match_glyph
-from .raster_matching import glyph_search_components, match_glyphs_joint
+from .raster_matching import glyph_search_components, match_glyphs_joint, photographed_playhead_columns
 from .reference_font import reference_glyphs
+
+
+def verify_translation_sequence(first: Image.Image, middle: Image.Image,
+                                last: Image.Image) -> dict:
+    """Measure two equal-time steps from pale score ink, never native telemetry.
+
+    The playhead and quiet staff rules are excluded by the independent ink
+    mask. No requested density or absolute reference-print X enters this
+    measurement. Insufficient or changing contours remain unverified.
+    """
+    import numpy as np
+
+    pictures = (first, middle, last)
+    if len({p.size for p in pictures}) != 1:
+        return dict(passed=False, status="unverified", reason="Motion framebuffer dimensions changed")
+    width = first.width
+    margin = max(16, round(width*.06))
+    masks = [bright(p)[:, margin:width-margin] for p in pictures]
+    if any(np.count_nonzero(mask) < 24 for mask in masks):
+        return dict(passed=False, status="unverified", reason="Insufficient moving score ink")
+    steps, scores = [], []
+    limit = min(round(width*.18), masks[0].shape[1]//3)
+    for a, b in zip(masks, masks[1:]):
+        left, right = a.sum(axis=0).astype(float), b.sum(axis=0).astype(float)
+        candidates = []
+        for shift in range(-limit, limit+1):
+            aa, bb = (left[shift:], right[:-shift]) if shift > 0 else (
+                (left[:shift], right[-shift:]) if shift < 0 else (left, right))
+            norm = float(np.linalg.norm(aa)*np.linalg.norm(bb))
+            candidates.append((float(aa.dot(bb))/norm if norm else 0, shift))
+        best = None
+        for _score, shift in sorted(candidates, reverse=True)[:8]:
+            aa, bb = (a[:, shift:], b[:, :-shift]) if shift > 0 else (
+                (a[:, :shift], b[:, -shift:]) if shift < 0 else (a, b))
+            dice = float(2*np.count_nonzero(aa & bb)/(np.count_nonzero(aa)+np.count_nonzero(bb)))
+            candidate = (dice, -abs(shift), shift)
+            if best is None or candidate > best:
+                best = candidate
+        scores.append(round(best[0], 4))
+        steps.append(best[2])
+    coherent = min(scores) >= .80
+    forward = min(steps) > 0
+    uniform = abs(steps[0]-steps[1]) <= 1
+    passed = coherent and forward and uniform
+    return dict(passed=passed, status="verified" if passed else "unverified",
+                pixel_steps=steps, contour_agreement=scores,
+                reason="Equal musical steps preserve forward score translation" if passed else
+                       "Score froze, reversed, jumped or lacked coherent image correspondence")
+
+
+def verify_scroll_pixels(xml: str, folder: Path) -> dict:
+    """Witness initial movement and every measure transition on the same view."""
+    written = read_written_score(xml)
+    duration = float(written.bars[-1])
+    step = min(.0625, duration/4)
+    centers = [step, *(float(b) for b in written.bars[1:-1])]
+    measured = []
+    for center in centers:
+        clocks = [round(center-step, 8), round(center, 8), round(center+step, 8)]
+        try:
+            pictures = []
+            for clock in clocks:
+                with Image.open(folder/f"native-{clock:.5f}.png") as picture:
+                    pictures.append(picture.convert("RGB"))
+            result = verify_translation_sequence(*pictures)
+        except (OSError, ValueError) as exc:
+            result = dict(passed=False, status="unverified", reason=str(exc))
+        measured.append(dict(clock=center, **result))
+    return dict(passed=all(r["passed"] for r in measured), measured=measured,
+                scope="Actual framebuffer translation at equal musical steps; fixed layout scale is unrestricted")
 
 
 def _clef_at(reference, bar: int, hand: str):
@@ -34,6 +104,44 @@ def _clef_at(reference, bar: int, hand: str):
         raise ValueError(f"No explicit clef for {hand} in source window")
     _i,sign,line,octave=max(matches,key=lambda e:e[0])
     return sign,line,octave
+
+
+def _ledger_context_rows(pixels, rail, written, notes):
+    """Recover thin ledger rules at source-required diatonic positions.
+
+    A line must have real continuous bright ink beyond a head's width.
+    Return its measured (row,left,right) span so the matcher can require
+    actual ownership at each head, rather than masking that Y everywhere.
+    This recognizes permitted occluding ink, never supplies head support.
+    Unrelated staff positions or broad filled regions authorize nothing.
+    """
+    import numpy as np
+    expected=set()
+    for note in notes:
+        y=expected_y(rail,note["spelling"],_clef_at(written,note["index"],note["staff"]))
+        step=round((rail.bottom-y)*2/rail.gap)
+        steps=range(-2,step-1,-2) if step<0 else range(10,step+1,2)
+        expected.update(rail.bottom-s*rail.gap/2 for s in steps)
+    origin=round(pixels.shape[1]*.42)
+    left,right=max(0,origin-round(3*rail.gap)),min(pixels.shape[1],origin+round(3*rail.gap))
+    rows=set()
+    for y in expected:
+        candidates=[]
+        for row in range(max(0,round(y-.13*rail.gap)),min(pixels.shape[0],round(y+.13*rail.gap)+1)):
+            line=pixels[row,left:right]
+            edges=np.flatnonzero(np.diff(np.r_[False,line,False].astype(int)))
+            runs=[]
+            for a,b in zip(edges[::2],edges[1::2]):
+                if runs and a-runs[-1][1]<=min(3,math.ceil(.13*rail.gap)):
+                    runs[-1]=(runs[-1][0],b)
+                else:
+                    runs.append((a,b))
+            for a,b in runs:
+                if b-a>=1.5*rail.gap:
+                    candidates.append((row,left+int(a),left+int(b)))
+        if candidates and max(r[0] for r in candidates)-min(r[0] for r in candidates)+1<=max(2,math.ceil(.14*rail.gap)):
+            rows.update(candidates)
+    return tuple(sorted(rows))
 
 
 def verify_all_notehead_pixels(generated_xml: str, folder: Path,
@@ -86,10 +194,12 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                     record(note,clock,"unverified",reason=str(exc))
             continue
         raster=bright(image)
+        occlusion_columns=photographed_playhead_columns(image)
         xpos=round(image.width*.42)
         requests=[]
         for staff,notes in hands.items():
             try:
+                ledger_rows=_ledger_context_rows(raster,staves[staff],written,notes)
                 pitches=sorted([
                     (expected_y(staves[staff],note["spelling"],
                         _clef_at(written,note["index"],staff)),note)
@@ -117,6 +227,9 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                     x_search=range(-32,33) if displaced_group else range(-16,17)
                     requests.append(dict(note=note,glyph=glyphs[glyph],name=glyph,
                         gap=staves[staff].gap,origin_y=target,dxs=x_search,
+                        alternatives=tuple((name,glyphs[name]) for name in ("head_black","head_half","head_whole") if name!=glyph),
+                        background_rows=ledger_rows if glyph!="head_black" else (),
+                        occlusion_columns=occlusion_columns,
                         unison=sum(abs(y-target)<.001 for y,_ in pitches)>1))
             except (ValueError,AssertionError,TypeError) as exc:
                 failures.append(f"{clock} {staff}: {exc}")
@@ -139,7 +252,7 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                 r=math.floor(tolerance_staff_steps*request["gap"]/2)
                 request["dys"]=range(-r,r+1)
             joint=None
-            if len(group)>1 and not any(r["unison"] for r in group):
+            if not any(r["unison"] for r in group):
                 joint=match_glyphs_joint(raster,group,xpos,dys=range(-radius,radius+1))
             for i,request in enumerate(group):
                 note=request["note"]
@@ -154,11 +267,14 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                     evidence["joint_assignment"]=dict(heads=len(group),
                         x=assigned["x"],y=assigned["y"],
                         exclusive_ink=len(assigned["support"]),
+                        visible_reference_pixels=assigned['visible_reference_pixels'],
+                        reference_pixels=assigned['reference_pixels'],
                         isolated_match=round(assigned["isolated_score"],3))
                 else:
                     score=_match_glyph(raster,request["glyph"],request["gap"],
                         xpos,request["origin_y"],centered=True,
-                        dxs=request["dxs"],dys=request["dys"])
+                        dxs=request["dxs"],dys=request["dys"],background_rows=request["background_rows"],
+                        occlusion_columns=request['occlusion_columns'])
                 status="verified"
                 if score<.79:
                     # Weak contour evidence is not a claim of wrong pitch.
@@ -169,9 +285,9 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                     failures.append(f"{clock} {staff} {note['spelling']}: "
                         f"required {request['name']} not independently identified at written "
                         f"staff position (image score={score:.3f})")
-                elif len(group)>1 and joint is None:
+                elif joint is None:
                     status="ambiguous"
-                    evidence["reason"]="No bounded joint assignment with sufficient disjoint notehead ink"
+                    evidence["reason"]="No bounded source-family assignment with sufficient distinct notehead ink"
                 else:
                     verified+=1
                 record(note,clock,status,glyph=request["name"],match=round(score,3),
@@ -253,14 +369,249 @@ def _compare_isolated_masks(observed, reference) -> float:
     return best
 
 
+def _rest_delta_parts(delta, gap: float) -> list[dict]:
+    """Separate horizontally detached marks; bridge only small raster gaps.
+
+    A playhead can occlude a narrow column through a rest. Joining that cut
+    does not authorize joining a detached dot to the body. Inseparable ink
+    stays in one part and cannot establish independent dot ownership.
+    """
+    import numpy as np
+
+    columns = np.flatnonzero(delta.any(axis=0))
+    groups = []
+    for x in columns:
+        if not groups or x-groups[-1][-1]-1 > max(1, math.floor(.12*gap)):
+            groups.append([])
+        groups[-1].append(int(x))
+    parts = []
+    for group in groups:
+        left, right = group[0], group[-1]
+        rows = np.flatnonzero(delta[:, left:right+1].any(axis=1))
+        top, bottom = int(rows[0]), int(rows[-1])
+        mask = delta[top:bottom+1, left:right+1]
+        parts.append(dict(mask=mask, box=[left, top, right, bottom]))
+    return sorted(parts, key=lambda part: int(part["mask"].sum()), reverse=True)
+
+
+def _rectangular_rest_orientation(box: list[int], staff) -> dict:
+    """Distinguish hanging/sitting ink modulo a measured staff space.
+
+    Whole-space voice displacements preserve the edge phase even outside
+    the five printed rails. Quarter-space or poorly resolved rectangles do
+    not supply an orientation. Pixel edges lie half a pixel outside centres.
+    """
+    gap = staff.gap
+    top, bottom = box[1]-.5, box[3]+.5
+
+    def line_distance(edge):
+        phase = (edge-staff.lines[0])/gap
+        return abs(phase-round(phase))
+
+    hanging, sitting = line_distance(top), line_distance(bottom)
+    height = (bottom-top)/gap
+    observed = None
+    if .35 <= height <= .65:
+        if hanging <= .13 and sitting >= .30:
+            observed = "whole"
+        elif sitting <= .13 and hanging >= .30:
+            observed = "half"
+    return dict(observed_rest=observed, staff_lines=list(staff.lines), staff_gap=gap,
+                hanging_edge_error_spaces=round(hanging, 4),
+                sitting_edge_error_spaces=round(sitting, 4),
+                height_spaces=round(height, 4))
+
+
+@lru_cache(maxsize=32)
+def _rest_dot_template_mask(gap: float):
+    """Read SMuFL augmentation-dot ink from the external Leipzig font."""
+    from xml.etree import ElementTree as ET
+    import verovio
+
+    resources = Path(verovio.__file__).resolve().parent / "data"
+    metric = ET.parse(resources/"Leipzig.xml").getroot().find("g[@c='E1E7']")
+    if metric is None:
+        raise ValueError("External font lacks an augmentation-dot metric")
+    x, y, w, h = (float(metric.get(k)) for k in ("x", "y", "w", "h"))
+    bounds = [x-12, -y-h-12, w+24, h+24]
+    svg = ET.Element("svg", xmlns="http://www.w3.org/2000/svg",
+                     viewBox=" ".join(map(str, bounds)), fill="white")
+    svg.append(ET.parse(resources/"Leipzig/E1E7.xml").getroot())
+    return _rest_template_mask(dict(svg=ET.tostring(svg, encoding="unicode"),
+                                    bounds=bounds), gap)
+
+
+def _rest_dot_evidence(parts: list[dict], body_box: list[int],
+                       count: int, gap: float) -> dict:
+    """Require distinct, detached, rightward dot contours in removed ink.
+
+    No unchanged neighbor can supply a dot, and no changed part is ignored.
+    Touching/occluded dots and more than two dots remain nonverified.
+    """
+    evidence = dict(status="unverified", expected_count=count,
+                    observed_count=0, dots=[])
+    if count > 2:
+        return dict(evidence, status="unsupported", reason="More than two rest dots needs separate bounded assignment")
+    if not parts and not count:
+        return dict(evidence, status="verified", reason="No detached changed ink or written dots")
+    reference = _rest_dot_template_mask(gap)
+    previous = None
+    for part in sorted(parts, key=lambda p: p["box"][0]):
+        box = part["box"]
+        x, y = (box[0]+box[2])/2, (box[1]+box[3])/2
+        match = _compare_isolated_masks(part["mask"], reference)
+        separated = (.1*gap <= box[0]-body_box[2] <= 2.2*gap and
+                     body_box[1]-.75*gap <= y <= body_box[3]+.75*gap)
+        if previous is not None:
+            separated = separated and .4*gap <= x-previous[0] <= .9*gap and abs(y-previous[1]) <= .15*gap
+        if match < .8 or not separated:
+            return dict(evidence, reason="Detached changed ink cannot establish separate rest-dot contours")
+        evidence["dots"].append(dict(box=box, shape_match=round(match, 4)))
+        evidence["observed_count"] += 1
+        previous = x, y
+    if evidence["observed_count"] != count:
+        return dict(evidence, status="mismatch" if evidence["observed_count"] > count else "unverified",
+                    reason="Observed isolated rest-dot count differs from written count")
+    return dict(evidence, status="verified", reason="Every written rest dot has distinct suppressed external-font ink")
+
+
+def _rest_placement_registration(body: dict, glyph: dict, gap: float) -> dict:
+    """Register external ink without resizing it or choosing a staff lane.
+
+    Retain every near-best raster registration. All of their independently
+    inferred font origins must support the same staff-grid phase.
+    """
+    import numpy as np
+
+    raw = _rest_template_mask(glyph, gap)
+    ys, xs = np.nonzero(raw)
+    template = raw[ys.min():ys.max()+1, xs.min():xs.max()+1]
+    observed = body["mask"]
+    h, w = max(observed.shape[0], template.shape[0])+8, max(observed.shape[1], template.shape[1])+8
+    ink = np.zeros((h, w), dtype=bool)
+    ink[4:4+observed.shape[0], 4:4+observed.shape[1]] = observed
+    denominator = int(ink.sum())+int(template.sum())
+    candidates = []
+    for dy in range(-2, 3):
+        for dx in range(-2, 3):
+            expected = np.zeros((h, w), dtype=bool)
+            expected[4+dy:4+dy+template.shape[0], 4+dx:4+dx+template.shape[1]] = template
+            score = 2*int((ink & expected).sum())/denominator
+            candidates.append(dict(score=score, x=body["box"][0]+dx, y=body["box"][1]+dy))
+    best = max(c["score"] for c in candidates)
+    registrations = [c for c in candidates if c["score"] >= best-.02]
+    for c in registrations:
+        c["baseline_y"] = c["y"]-int(ys.min())-float(glyph["bounds"][1])*gap/250
+    return dict(match=best, template=template, registrations=registrations)
+
+
+def _rest_clearance(silhouette, other_ink, gap: float) -> tuple[float, bool]:
+    """Conservative pixel-edge clearance, bounded to one staff space.
+
+    Eight-neighbor dilation measures Chebyshev distance, a lower bound on
+    Euclidean clearance. Adjacent pixel squares touch and have zero clearance.
+    A capped result states a lower bound, never infinite clearance.
+    """
+    import numpy as np
+
+    grown = silhouette.copy()
+    limit = math.ceil(gap)+1
+    for distance in range(limit+1):
+        if np.any(grown & other_ink):
+            return float(max(0, distance-1)), False
+        padded = np.pad(grown, 1)
+        grown = np.logical_or.reduce([
+            padded[dy:dy+grown.shape[0], dx:dx+grown.shape[1]]
+            for dy in range(3) for dx in range(3)])
+    return float(limit-1), True
+
+
+def _rest_placement_evidence(body: dict, glyph: dict, delta, suppressed_ink,
+                             staves: dict, staff_name: str, *, note_type: str) -> dict:
+    """Prove a readable grid-relative layout, never an intended voice lane."""
+    import numpy as np
+
+    staff = staves[staff_name]
+    gap, center = staff.gap, staff.lines[2]
+    ys, xs = np.nonzero(delta)
+    bbox = [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())]
+    required_clearance = .12
+    # Two and a half spaces beyond the printed rails, clipped at the midpoint
+    # to an adjacent staff. This is an explicit readability bound, not a
+    # source-derived declaration of the intended rest voice or lane.
+    top, bottom = max(0., staff.lines[0]-2.5*gap), min(delta.shape[0]-1., staff.lines[-1]+2.5*gap)
+    for name, other in staves.items():
+        if name == staff_name:
+            continue
+        midpoint = (other.lines[2]+center)/2
+        if other.lines[2] < center:
+            top = max(top, midpoint+required_clearance*gap)
+        else:
+            bottom = min(bottom, midpoint-required_clearance*gap)
+    evidence = dict(status="unverified", bbox=bbox, body_bbox=body["box"],
+                    staff_lines=list(staff.lines), staff_gap=gap,
+                    corridor_y=[top, bottom], required_clearance_spaces=required_clearance,
+                    grid_phase_tolerance_spaces=.13)
+    registered = _rest_placement_registration(body, glyph, gap)
+    evidence["registration_match"] = round(registered["match"], 4)
+    if registered["match"] < .79:
+        return dict(evidence, reason="Rest contour cannot independently establish a bounded font-origin registration")
+    registrations = registered["registrations"]
+    best = max(registrations, key=lambda c: c["score"])
+    baseline = best["baseline_y"]
+    offsets = [(c["baseline_y"]-center)/gap for c in registrations]
+    # Rectangular rests must preserve hanging/sitting phase. Other native
+    # rest glyphs can occupy either a line or space in a readable voice lane.
+    grid_step = 1. if note_type in {"whole", "half"} else .5
+    errors = [abs(offset-round(offset/grid_step)*grid_step) for offset in offsets]
+    evidence.update(baseline_y=baseline, relative_offset_spaces=round((baseline-center)/gap, 4),
+                    baseline_range_y=[min(c["baseline_y"] for c in registrations),
+                                      max(c["baseline_y"] for c in registrations)],
+                    grid_phase_error_spaces=round(max(errors), 4))
+
+    # Reconstruct the full external body, including ink hidden beneath another
+    # symbol. Visible subtraction alone could miss same-colored overlapping
+    # ink. Dots additionally contribute their actual isolated removed pixels.
+    template = registered["template"]
+    left = min(bbox[0], min(c["x"] for c in registrations))
+    right = max(bbox[2], max(c["x"]+template.shape[1]-1 for c in registrations))
+    upper = min(bbox[1], min(c["y"] for c in registrations))
+    lower = max(bbox[3], max(c["y"]+template.shape[0]-1 for c in registrations))
+    evidence["silhouette_bbox"] = [left, upper, right, lower]
+    if left < 0 or upper < 0 or right >= delta.shape[1] or lower >= delta.shape[0]:
+        return dict(evidence, reason="Complete external rest outline is clipped by the framebuffer")
+    pad = math.ceil(gap)+1
+    x0, y0 = max(0, left-pad), max(0, upper-pad)
+    x1, y1 = min(delta.shape[1], right+pad+1), min(delta.shape[0], lower+pad+1)
+    silhouette = delta[y0:y1, x0:x1].copy()
+    for c in registrations:
+        y, x = c["y"]-y0, c["x"]-x0
+        silhouette[y:y+template.shape[0], x:x+template.shape[1]] |= template
+    clearance, capped = _rest_clearance(silhouette, suppressed_ink[y0:y1, x0:x1], gap)
+    evidence.update(min_clearance_pixels=clearance, min_clearance_spaces=round(clearance/gap, 4),
+                    clearance_capped=capped, clearance_search_spaces=1.)
+    if clearance/gap < required_clearance:
+        return dict(evidence, status="mismatch", reason="Other bright framebuffer ink touches, overlaps or crowds the rest/dot silhouette")
+    if upper-.5 < top or lower+.5 > bottom:
+        return dict(evidence, status="mismatch", reason="Rest/dot silhouette lies outside its readable staff corridor")
+    if max(errors) > .13:
+        return dict(evidence, status="mismatch" if min(errors) > .2 else "ambiguous",
+                    reason="Independent font-origin registration does not establish the rest type's staff-grid phase")
+    return dict(evidence, status="verified", reason="External-font baseline follows the staff grid inside a readable corridor with independent bright-ink clearance")
+
+
 def verify_all_rest_pixels(generated_xml: str, folder: Path,
                            *, hand: str = "both") -> dict:
     """Check rest contours using a reversible, full-frame image intervention.
 
     No-op and restored frames must equal the source framebuffer. Suppression
-    may only remove ink in a bounded rest region. Source duration remains
-    ambiguous for the indistinguishable half/whole rectangular family.
+    may only remove ink in a bounded rest region. Rectangular rest identity
+    needs an unambiguous hanging/sitting edge relative to detected staff rails.
+    Detached dots require their own external-font contours in the same delta.
     Missing/contaminated captures are failed evidence, not musical defects.
+    Per-event placement additionally requires a font-derived staff-grid origin,
+    readable corridor and local clearance in the suppressed bright framebuffer.
+    ``complete`` covers glyphs; ``placement_complete`` separately gates layout.
     """
     import numpy as np
 
@@ -321,7 +672,8 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
             identity = event.get("id") or f"measure-{event['measure']}-voice-{voice}-rest-{len(measured)}"
             row = {"source_id":identity, "measure":event["measure"], "beat":beat,
                    "staff":staff, "voice":voice, "required_rest":event["note_type"],
-                   "status":"unverified"}
+                   "status":"unverified", "placement_evidence":dict(status="unverified",
+                       reason="Unique rest identity and controlled contour evidence required before placement")}
             reason = frame_error
             # Prefer an exact source ID; do not pair duplicate voice/onset
             # rests in arbitrary order and claim an identity match.
@@ -368,9 +720,11 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
                 # Preserve full-frame pixel addresses, without contour trimming
                 # or registration: different voices must not reuse one glyph.
                 identity_deltas[beat].append((row, np.flatnonzero(delta)))
+                parts = _rest_delta_parts(delta, gap)
+                body, marks = parts[0], parts[1:]
                 # Font expectation is read independently of fixture assets.
                 scores = {name.removeprefix("rest_"):round(_compare_isolated_masks(
-                    delta, _rest_template_mask(glyph,gap)),4)
+                    body["mask"], _rest_template_mask(glyph,gap)),4)
                     for name,glyph in glyphs.items() if name.startswith("rest_")}
                 expected = event["note_type"]
                 if expected not in scores:
@@ -383,9 +737,28 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
                                type_ambiguity=len(family)>1,
                                observed_box=[int(xs.min()),int(ys.min()),int(xs.max()),int(ys.max())])
                     if match >= .65 and match-rival >= .03:
-                        row["status"] = "ambiguous" if len(family)>1 else "verified"
-                        if row["status"] == "ambiguous":
-                            row["reason"] = "half/whole contour family; value and displaced voice lane not distinguishable"
+                        row["status"] = "verified"
+                        row["observed_rest"] = expected
+                        if len(family)>1:
+                            orientation = _rectangular_rest_orientation(body["box"], rails[staff])
+                            row["orientation_evidence"] = orientation
+                            observed = orientation["observed_rest"]
+                            row["type_ambiguity"] = observed is None
+                            row["observed_rest"] = observed
+                            if observed is None:
+                                row.update(status="ambiguous", reason="Rectangular rest edges do not establish hanging/sitting identity on the measured staff grid")
+                            elif observed != expected:
+                                row.update(status="mismatch", reason=f"Measured staff-relative contour identifies {observed} instead of written {expected}")
+                                failures.append(f"{key} {identity}: {row['reason']}")
+                        dots = _rest_dot_evidence(marks, body["box"], event["dots"], gap)
+                        row["dot_evidence"] = dots
+                        if dots["status"] != "verified" and row["status"] != "mismatch":
+                            row.update(status=dots["status"], reason=dots["reason"])
+                            failures.append(f"{key} {identity}: {row['reason']}")
+                        if row["status"] == "verified":
+                            row["placement_evidence"] = _rest_placement_evidence(
+                                body, glyphs["rest_"+expected], delta, suppressed_ink, rails, staff,
+                                note_type=expected)
                     else:
                         ranked=sorted(scores.items(),key=lambda kv:kv[1],reverse=True)
                         winner,winning_score=ranked[0]
@@ -418,13 +791,19 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
             coverage[row["status"]] -= 1
             row.update(status="ambiguous", reason=
                        "Same-frame rest interventions share changed pixels; source identities are inseparable")
+            row["placement_evidence"].update(status="ambiguous", reason=row["reason"])
             coverage["ambiguous"] += 1
             failures.append(f"{beat} {row['source_id']}: {row['reason']}")
+    placement_coverage = dict(expected=len(written), **{status:sum(
+        r["placement_evidence"]["status"] == status for r in measured)
+        for status in ("verified", "ambiguous", "unsupported", "unverified", "mismatch")})
     return {"passed":not failures, "complete":coverage["verified"] == len(written),
             "written_active_rests":len(written),
             "image_rest_glyphs_verified":coverage["verified"],
             "intrinsically_indistinguishable_half_whole":sum(
                 r["status"] == "ambiguous" and r.get("type_ambiguity", False) for r in measured),
             "coverage":coverage, "failures":failures, "measured":measured,
+            "placement_coverage":placement_coverage,
+            "placement_complete":placement_coverage["verified"] == len(written),
             "scope":"visible isolated contour against external Verovio font; full-frame repeat and restore invariance",
-            "limitation":"contour proof does not establish rest placement, dots, half/whole identity or absence of overlaps"}
+            "limitation":"Glyph and placement coverage are separate; placement proves only a bounded readable staff-grid lane and local bright-ink clearance, not the intended voice lane or global extra-symbol absence; touching/occluded dots and more than two dots remain nonverified"}

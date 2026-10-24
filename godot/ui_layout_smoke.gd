@@ -206,33 +206,41 @@ func _run() -> void:
     count_in.present(1.0, 3, true, false)
     _check(not count_in.visible, "No fake countdown once musical playing begins")
 
-    # Check wrong physical pitches use the real staff's pitch spacing and
-    # do not move a correct chord note or invent a separate score location.
-    scene.set("score_layout", {"systems": [ {
-        "page": 0, "left": 0.05, "right": 0.95,
-        "staff_lines": [0.10, 0.12, 0.14, 0.16, 0.18,
-                        0.30, 0.32, 0.34, 0.36, 0.38]
-    }]})
-    var ghost: Dictionary = scene.call("_wrong_note_ghost", 62,
-        {"id": "real-attack", "pitch": 60, "page": 0,
-         "x": 0.3, "y": 0.14, "hand": "right"})
-    _check(not ghost.is_empty(), "An adjacent wrong pitch was not positioned on the staff")
-    if not ghost.is_empty():
-        _check(absf(float(ghost["y"]) - 0.13) < 0.0001,
-            "Wrong pitch should be exactly one diatonic step above C")
-        _check(str(ghost["label"]) == "D4", "Wrong staff note label incorrect")
-    var outside: Dictionary = scene.call("_wrong_note_ghost", 75,
-        {"id": "real-attack", "pitch": 60, "page": 1,
-         "x": 0.3, "y": 0.14, "hand": "right"})
-    _check(outside.is_empty(), "Wrong note must not fabricate a missing source staff")
-    var live_overlay: Control = scene.get("score_overlay")
-    live_overlay.wrong_ghosts.append({"until_ms": Time.get_ticks_msec() - 2,
-        "page": 0, "x": 0.3, "y": 0.14, "label": "D4"})
-    live_overlay.hit_pulses.append({"until_ms": Time.get_ticks_msec() - 2,
-        "page": 0, "x": 0.3, "y": 0.14, "status": "on_time"})
-    scene.call("_process", 0.016)
-    _check(live_overlay.wrong_ghosts.is_empty() and live_overlay.hit_pulses.is_empty(),
-        "Expired played-note ghosts must vanish even while the score is stationary")
+    # Wrong physical pitches attach to the original native source attack.
+    # A page-coordinate ghost must never invent or displace source notation.
+    var view: Control = scene.timeline_preview
+    var atlas = load("res://tests/native_glyph_fixture.gd")
+    _check(view.set_verovio_glyphs(atlas.catalogue(), atlas.note_catalogue(),
+        atlas.tie_catalogue()), "Native feedback fixture loads source glyph assets")
+    var attack := {"id":"engraved-head", "source_id":"real-attack", "kind":"note",
+        "staff":"right", "voice":"1", "measure":1, "beat":0.0,
+        "duration_beats":1.0, "note_type":"quarter", "dots":0,
+        "is_attack":true, "spelling":{"step":"C","octave":4,"alter":0}}
+    var model := {"schema":"piano-teacher-score-model-v1", "revision":11,
+        "beat_unit":"quarter", "duration_beats":4.0, "active_hand":"right",
+        "active_note_ids":["real-attack"], "notation_events":[attack],
+        "notes":[{"id":"real-attack", "onset_beats":0.0, "duration_beats":1.0,
+            "hand":"right", "midi_pitch":60}],
+        "measures":[{"number":1, "start_beat":0.0, "end_beat":4.0,
+            "meter":[4,4], "keys":{"right":0,"left":0},
+            "clefs":{"right":{"sign":"G","line":2},"left":{"sign":"F","line":4}}}]}
+    _check(view.load_score(model), "Native feedback fixture accepts source notation")
+    var live_feedback: Control = scene.native_score_feedback
+    live_feedback.bind_score(view, 11)
+    live_feedback.present({"revision":11, "running":true, "phase":"playing",
+        "transport_id":4, "midi_visual_events":[{"sequence":1, "transport_id":4,
+            "reference_source_id":"real-attack", "status":"unexpected", "age":0.0}]})
+    _check(live_feedback.pulses.size() == 1 and
+        live_feedback.pulses[0].id == "engraved-head",
+        "Wrong MIDI pitch attaches to the authentic source head")
+    live_feedback.pulses[0]["until"] = Time.get_ticks_msec() - 2
+    live_feedback._process(0.016)
+    _check(live_feedback.pulses.is_empty(),
+        "Expired native feedback vanishes while the score is stationary")
+    live_feedback.present({"revision":11, "running":true, "phase":"playing",
+        "transport_id":4, "midi_visual_events":[{"sequence":2, "transport_id":4,
+            "reference_source_id":"unknown", "status":"unexpected", "age":0.0}]})
+    _check(live_feedback.pulses.is_empty(), "Feedback cannot fabricate a missing source head")
 
     # Mapped notes belong on the engraved staff, not under a large red
     # rectangle. Reserve a small fallback warning for unmapped backend data.

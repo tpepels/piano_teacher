@@ -1,5 +1,4 @@
-"""Count-in must wait until Godot has decoded the new score."""
-from pathlib import Path
+"""Count-in must wait for the matching native assets and semantic model."""
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.server import PracticeEngine
@@ -59,8 +58,9 @@ def test_stop_cancels_pending_render(tmp_path):
     finally:
         e.db.close()
 
-def test_frontend_ack_requires_current_png():
-    gd=(Path(__file__).resolve().parents[1] / 'godot/main.gd').read_text()
-    assert '"action": "score_ready", "revision": revision' in gd
-    assert 'rendered_revision == revision and score_view.texture != null' in gd
-    assert 'str(last_state.get("phase", "")) == "loading"' in gd
+def test_frontend_ack_requires_matching_native_assets_and_model(tmp_path):
+    # Delegate to the real production app regression: stale models, rejected
+    # atlases/notation and matching score_ready, without a PNG sentinel.
+    from test_native_production import test_native_production_readiness_and_failure_gate
+
+    test_native_production_readiness_and_failure_gate(tmp_path, "default")

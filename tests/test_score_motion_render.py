@@ -1,5 +1,4 @@
-"""Real Godot score projection regression, including transparent PNG margins."""
-import json
+"""Production native noteheads keep a fixed line and constant beat travel."""
 from pathlib import Path
 import shutil
 import subprocess
@@ -11,26 +10,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def make_render_fixture(folder, bars=2):
     from piano_teacher.music import Note, Phrase
-    from piano_teacher.exercise_generator import generate_variants
-    from piano_teacher.notation.lesson import build_lesson_score
-    from piano_teacher.score import render_layout
-    from piano_teacher.raster import rasterize_score
-    from piano_teacher.notation.assets.glyphs import preparation_symbols
+    from test_recovery_motion import make_phrase_fixture
 
     duration = bars * 3
     notes = tuple(Note(i, i + .5, 77 - (i // 3) % 5, 0, 0, "right")
                   for i in range(duration))
     phrase = Phrase(1, 1, bars, 0, duration, notes)
-    variant = generate_variants(phrase, "right")[-1]
-    score = build_lesson_score(variant.phrase, boundaries=tuple(range(0, duration + 1, 3)))
-    # Render at an actual lesson tempo. Without bpm the renderer does not
-    # enable the system-header trimming used during live practice.
-    engraved = render_layout(score, 1, bars, "right", total_beats=duration, bpm=68)
-    engraved.layout["symbols"] = preparation_symbols()
-    (folder / "layout.json").write_text(json.dumps(engraved.layout))
-    (folder / "score.png").write_bytes(rasterize_score(engraved.pages[0]))
-    for page, svg in enumerate(engraved.pages):
-        (folder / f"page-{page}.png").write_bytes(rasterize_score(svg))
+    return make_phrase_fixture(folder, phrase, hand="right", bpm=68,
+        boundaries=tuple(range(0, duration + 1, 3)), time_signatures=((0,3,4),))
 
 
 @pytest.mark.parametrize("bars", [2, 40])
@@ -43,4 +30,7 @@ def test_actual_score_transforms_keep_fixed_line_and_exact_downbeat(tmp_path, ba
         [godot, "--headless", "--path", str(ROOT / "godot"), "--script",
          str(ROOT / "tests/godot/score_motion.gd"), "--", str(tmp_path)],
         capture_output=True, text=True, timeout=40)
-    assert result.returncode == 0, result.stdout[-6000:] + result.stderr
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "SCRIPT ERROR" not in output, output
+    assert "SCORE_MOTION_FAILURES:0" in output, output

@@ -118,5 +118,10 @@
     "file": "chords/native-7.00000.png",
     "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/prior-final/phase2-native-pixel-proof/independent-grand-staff-pixel-chords/native-7.00.png",
     "sha256": "94890d8e780f2e8b9f7918371af59e93fb2da6e08892bec658f4e715b5d958a1"
+  },
+  {
+    "file": "waltz/native-3.00000.png",
+    "retained_from": "/home/tom/Projects/piano_teacher_phase5_evidence/visual-final/reference/phase3-report-6-both/Waltz_for_Debby/measures-001-004/native-3.00000.png",
+    "sha256": "140d2893e914ba21ad2f49871422d0e108d886f190f7d9a2e90e40df0f786c61"
   }
 ]

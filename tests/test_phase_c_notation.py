@@ -1,4 +1,4 @@
-"""Phase C native notation and safe fallback acceptance."""
+"""Native notation, authentic source assets and collision-scale acceptance."""
 import shutil
 import subprocess
 import os
@@ -21,25 +21,12 @@ def test_phase_c_native_renderer_and_global_collision_scale():
     assert "PHASE_C_NOTATION_FAILURES:0" in output, output
     assert "SCRIPT ERROR" not in output and "Parse Error" not in output, output
 
-def test_native_mode_is_canonical_and_unsupported_music_reverts_to_legacy():
+def test_native_view_uses_authentic_source_assets_and_indexed_notation():
     app = (ROOT / "godot" / "main.gd").read_text()
     native = (ROOT / "godot" / "notation/native/view.gd").read_text()
     geometry = (ROOT / "godot" / "notation/native/geometry.gd").read_text()
     index = (ROOT / "godot/notation/native/score_index.gd").read_text()
     preparation = (ROOT / "piano_teacher/application/score_preparation.py").read_text()
-    # Native is default; explicit env/CLI switches enable compatibility
-    # comparisons. Missing source glyphs must still reveal Verovio pages.
-    assert 'PIANO_TEACHER_RENDERER").to_lower() != "legacy"' in app
-    assert 'PIANO_TEACHER_NATIVE_NOTATION").to_lower() not in' in app
-    assert 'OS.get_cmdline_user_args().has("--legacy-notation")' in app
-    assert 'score_view.visible = true' in app
-    assert 'PIANO_TEACHER_EXACT_VEROVIO_GRID") == "1"' in app
-    assert 'not native_notation_enabled' in app
-    assert 'var retired_native_flag' not in app
-    assert 'timeline_preview = (NativeNotation.new() if native_notation_enabled' in app
-    assert 'timeline_model_request.request(URL + "/score/model")' in app
-    assert 'timeline_preview.visible = false' in app
-    assert 'push_warning("Native notation fallback: "' in app
     assert 'timeline.screen_x(' in native
     assert 'var index: Dictionary = ScoreIndex.build(timeline.model, glyphs)' in native
     assert 'var ordered_events: Array = model.get("notation_events", []).duplicate()' in index
@@ -59,7 +46,7 @@ def test_native_mode_is_canonical_and_unsupported_music_reverts_to_legacy():
     assert 'def native_glyphs' in (ROOT / "piano_teacher/notation/assets/glyphs.py").read_text()
     assert 'from ..notation.assets.glyphs import native_glyphs, preparation_symbols' in preparation
     assert 'parsed.get("native_glyphs", {})' in app
-    assert 'glyph_catalog, note_catalog, tie_catalog, chord_catalog,' in app
+    assert 'parsed.get("native_chord_templates", {})' in app
     assert 'glyphs.paint_note(self, kind, normal_up, x, y, gap, ink)' in native
     assert 'note_templates(cache)' in preparation
     assert 'assemble_layout(source_score, native_notes=True,' in (

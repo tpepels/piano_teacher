@@ -1,0 +1,5 @@
+{
+  "capture": "Actual Godot gl_compatibility native_verovio_overlay.gd framebuffer; software OpenGL; unmutated PNGs",
+  "expectations": "score.musicxml and original verovio-0.svg only; native atlases/diagnostics deliberately excluded",
+  "fixture": "singleton-note"
+}

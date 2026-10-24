@@ -22,5 +22,7 @@ def test_rendered_playhead_stays_fixed_on_every_moving_frame(tmp_path):
                              "--", str(tmp_path), str(tmp_path),
                              "res://visual_transport_clock.gd", "--check"],
                             capture_output=True, text=True, timeout=30)
-    assert result.returncode == 0, result.stdout + result.stderr
+    output = result.stdout + result.stderr
+    assert result.returncode == 0, output
+    assert "SCRIPT ERROR" not in output, output
     assert "RECOVERY_PLAYHEAD_FAILURES:0" in result.stdout

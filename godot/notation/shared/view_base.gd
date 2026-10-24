@@ -1,8 +1,7 @@
 extends Control
-# Phase B diagnostic display. NOT a notation renderer: circles/bars visualize
-# source note attacks and durations while validating the new time axis.
-# It runs above the legacy score only when explicitly enabled. Phase C will
-# consume the same ScoreTimeline with real notation glyphs.
+# Shared semantic score state, musical clock projection and density controls.
+# The native production view and standalone timeline diagnostic share this
+# time axis; their drawing implementations remain separate.
 const Timeline := preload("res://notation/shared/timeline.gd")
 const BACKGROUND := Color("#192F30")
 const GRID := Color("#668982")

@@ -162,7 +162,8 @@ def test_native_compound_code_has_no_drawn_tie_path():
     root=Path(__file__).resolve().parents[1]
     source=(root/"godot/notation/native/view.gd").read_text()
     assert "func _tie_shape(" not in source
-    assert "glyphs.paint_tie(self" in source
+    # Real source-contour framebuffer checks live in test_native_tie_attachments;
+    # endpoint adaptation belongs to the production view's contour painter.
     assert "glyphs.paint_chord(self" in source
 
 

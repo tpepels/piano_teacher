@@ -1,6 +1,6 @@
 extends SceneTree
 
-class FixtureApp extends "res://main.gd":
+class FixtureApp extends "native_production_fixture.gd":
     var commands: Array = []
     func _ready() -> void:
         _build_interface()
@@ -17,6 +17,7 @@ class FixtureApp extends "res://main.gd":
 
 var app: FixtureApp
 var failures: Array = []
+var target: Dictionary = {}
 
 func _initialize() -> void: call_deferred("run")
 func check(ok: bool, message: String) -> void:
@@ -28,14 +29,14 @@ func state(phase: String, hint: bool = false) -> Dictionary:
     return {"loaded": true, "mode": "learn", "phase": phase, "running": false,
         "paused": phase == "paused", "revision": 1, "transport_id": 4,
         "title": "Learn a short imported idea", "hand": "right", "hands": ["right"],
-        "bpm": 80, "target_bpm": 100, "duration_beats": 8, "clock_beat": 0,
+        "bpm": 80, "target_bpm": 100, "duration_beats": app.timeline_preview.timeline.duration_beats, "clock_beat": 0,
         "first_bar": 1, "last_bar": 2, "required_notes": 4, "lesson_level": "original",
         "feedback": "Find C4 at your own pace.", "streak": 0,
-        "feedback_marks": [{"page": 0,"x": .3,"y": .2,"status":"expected"}],
+        "feedback_marks": [{"source_id":str(target.id),"status":"expected"}],
         "teaching": {"phase": phase, "revision": 1, "target_index": 0, "target_count": 3,
             "completed": phase == "guided_complete", "hint_visible": hint,
             "hint_reason": "wrong_note" if hint else "", "heard_pitches": [61] if hint else [],
-            "expected_notes": [] if phase == "guided_complete" else [{"id":"event-1", "pitch":60,"label":"C4","beat":0}],
+            "expected_notes": [] if phase == "guided_complete" else [{"id":str(target.id), "pitch":int(target.midi_pitch),"label":"Source note","beat":float(target.onset_beats)}],
             "fragment": {"first_bar":1,"last_bar":2,"start_beat":0,"end_beat":8}}}
 
 func show(phase: String, hint: bool = false) -> void:
@@ -53,15 +54,12 @@ func run() -> void:
     root.add_child(app)
     await process_frame
     app._navigate("practice")
-    app.revision=1
-    app.layout_revision=1
-    app.rendered_revision=1
-    app.current_page=0
-    var picture:=Image.create(1000,300,false,Image.FORMAT_RGBA8)
-    picture.fill(Color("#2D3532"))
-    app.score_view.texture=ImageTexture.create_from_image(picture)
-    app.score_overlay.image_size=Vector2(1000,300)
-    app.score_layout={"anchors":[{"beat":0,"page":0,"x":.3,"top":.1,"bottom":.9}],"notes":[]}
+    var fixture_error: String = app.load_native_fixture(OS.get_cmdline_user_args()[0])
+    check(fixture_error.is_empty(), fixture_error)
+    if not fixture_error.is_empty():
+        quit(1)
+        return
+    target = app.timeline_preview.timeline.notes[0]
     show("guided_wait")
     app.start_button.pressed.emit()
     expect("pause","Learn primary pauses without starting timed playback: ")
@@ -89,10 +87,28 @@ func run() -> void:
         check(not keyboard.visible,"Successful unaided acquisition keeps hints hidden")
     show("guided_wait")
     app._process(0.0)
-    var position: Vector2=app.score_content.position
+    await process_frame
+    await process_frame
+    RenderingServer.force_draw()
+    var id: String = str(app.native_score_feedback.source_to_id.get(str(target.id), ""))
+    check(app.timeline_preview.drawn_noteheads.has(id), "Guided source target is actually painted")
+    var painted: Dictionary = app.timeline_preview.drawn_noteheads.duplicate()
+    var position: float = app.timeline_preview.clock_beat
     app.last_state_tick -= 100000
     app._process(0.0)
-    check(app.score_content.position == position,"Guided score never advances with wall-clock time")
-    check(app.score_overlay.get("guided_active") == true,"Guided target path is distinct from the musical timing line")
+    app.timeline_preview.queue_redraw()
+    await process_frame
+    await process_frame
+    RenderingServer.force_draw()
+    check(app.timeline_preview.clock_beat == position,"Guided score never advances with wall-clock time")
+    check(app.timeline_preview.drawn_noteheads == painted,
+        "Actual guided source head projection stays fixed across wall-clock time")
+    check(app.native_score_feedback.markers.get(id, "") == "expected",
+        "Guided feedback marks the real source target")
+    if painted.has(id):
+        check(app.native_score_feedback.note_position(id) == painted[id],
+            "Guided feedback uses the compositor's painted source head")
+    check(app.native_score_feedback.score == app.timeline_preview, "Guided feedback binds the actual production view")
+    check(app._native_score_ready(), "Guided transport preserves native revision readiness")
     print("GUIDED_UI_FAILURES:",failures.size())
     quit(0 if failures.is_empty() else 1)

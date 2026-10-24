@@ -1,8 +1,6 @@
-"""Stitch real Verovio systems/pages with Godot's actual texture geometry."""
-import json
-from pathlib import Path
-import shutil
-import subprocess
+"""Independent multi-page Verovio source mapping and rasterization checks."""
+from io import BytesIO
+from PIL import Image
 
 import pytest
 
@@ -13,14 +11,9 @@ from piano_teacher.raster import rasterize_score
 from piano_teacher.score import render_layout
 
 
-ROOT = Path(__file__).resolve().parents[1]
-GODOT = shutil.which('godot') or shutil.which('godot4')
-
-
-@pytest.mark.skipif(GODOT is None, reason='Godot 4 is not installed')
 @pytest.mark.parametrize('bars,held,crossed', [(2, False, False), (40, False, False),
                                            (40, True, False), (24, False, True)])
-def test_real_score_system_tiles_preserve_notehead_and_feedback_geometry(tmp_path, bars, held, crossed):
+def test_reference_engraving_preserves_source_mapping_and_real_raster(bars, held, crossed):
     pytest.importorskip('verovio')
     pytest.importorskip('music21')
     def pitch(i, hand):
@@ -44,12 +37,11 @@ def test_real_score_system_tiles_preserve_notehead_and_feedback_geometry(tmp_pat
     if bars > 2:
         assert score.layout['pages'] > 1
         assert len(score.layout['systems']) > 2
-    (tmp_path / 'layout.json').write_text(json.dumps(score.layout))
+    # Preserve the independent source SVG/PNG proof after retiring the
+    # Godot page-strip producer. No production renderer transforms this ink.
     for page, svg in enumerate(score.pages):
-        (tmp_path / f'page-{page}.png').write_bytes(rasterize_score(svg))
-    result = subprocess.run(
-        [GODOT, '--headless', '--path', str(ROOT / 'godot'), '--script',
-         str(ROOT / 'tests/godot/score_strip.gd'), '--', str(tmp_path)],
-        capture_output=True, text=True, timeout=60)
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert 'SCORE_STRIP_FAILURES:0' in result.stdout, result.stdout + result.stderr
+        with Image.open(BytesIO(rasterize_score(svg))) as image:
+            assert image.width >= 32 and image.height >= 32
+            assert image.convert("RGBA").getchannel("A").getbbox() is not None
+            assert all(0 <= float(note["x"]) <= 1 and 0 <= float(note["y"]) <= 1
+                       for note in score.layout["notes"] if note["page"] == page)

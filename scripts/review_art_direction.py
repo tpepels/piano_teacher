@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Review the actual native application at full desktop and compact resolution.
 
-rtk proxy env PIANO_TEACHER_NATIVE_NOTATION=1 .venv/bin/python \
+rtk proxy .venv/bin/python \
     scripts/review_art_direction.py --render --output /tmp/piano-art-direction
 
 Owns a temporary HTTP server on 127.0.0.1:8765; refuses an occupied port. Without
@@ -71,7 +71,6 @@ def validate_report(report: dict, size: tuple[int, int], *, output: Path,
                 f"{name}: native window mode must only gate visible display servers")
 
     require(report.get("schema_version") == 1, "Missing composition report schema")
-    require(report.get("native_environment") == "1", "Native environment was not asserted")
     require(report.get("viewport") == list(size), "Actual viewport differs from requested pixels")
     require(report.get("render") is render, "Unexpected screenshot mode")
     check_window_geometry(report.get("window_geometry", {}), "window")
@@ -151,10 +150,12 @@ def validate_report(report: dict, size: tuple[int, int], *, output: Path,
         if name == "practice_ready" and size[0] >= 1280 and size[1] >= 800:
             require(sample.get("score_height_ratio", 0) > .60, "Desktop score stage must dominate height (>60%)")
         native = sample.get("native", {})
-        require(native.get("enabled") is True, f"{name}: application native flag is off")
+        require(native.get("renderer_script") == "res://notation/native/view.gd",
+                f"{name}: application renderer is not the native view")
         require(native.get("checked") is require_native, f"{name}: unexpected native evidence mode")
         if require_native:
-            require(native.get("native_ready") is True and native.get("visible") is True,
+            require(native.get("score_ready") is True and native.get("native_ready") is True
+                    and native.get("visible") is True,
                     f"{name}: native notation is not ready and visible")
             require(native.get("drawn_noteheads", 0) > 0 and native.get("visible_noteheads", 0) > 0,
                     f"{name}: no native noteheads drawn within the stage")
@@ -255,8 +256,6 @@ def main(argv: list[str] | None = None) -> int:
                         help="Default: 1920x1080 800x600; optionally add 1280x800")
     parser.add_argument("--timeout", type=float, default=240, help="Total wall time budget in seconds (default 240)")
     args = parser.parse_args(argv)
-    if os.environ.get("PIANO_TEACHER_NATIVE_NOTATION") != "1":
-        parser.error("Set PIANO_TEACHER_NATIVE_NOTATION=1 explicitly")
     if not math.isfinite(args.timeout) or args.timeout < 10 or args.measure < 1:
         parser.error("--timeout must be finite and >=10; --measure must be positive")
     if args.render and args.geometry_only:
@@ -274,13 +273,13 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"MIDI file not found: {args.file}")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    env = {**os.environ, "PIANO_TEACHER_NATIVE_NOTATION": "1",
+    env = {**os.environ,
            "XDG_DATA_HOME": str(output / "data"), "XDG_CONFIG_HOME": str(output / "config"),
            "XDG_CACHE_HOME": str(output / "cache"),
            "PYTHONPATH": str(ROOT) + os.pathsep + os.environ.get("PYTHONPATH", "")}
     deadline = time.monotonic() + args.timeout
     summary = {"status": "running", "mode": "geometry" if args.geometry_only else "http",
-               "native_environment": "1", "file": str(args.file.resolve()), "measure": args.measure,
+               "file": str(args.file.resolve()), "measure": args.measure,
                "render": args.render, "runs": []}
     backend = None
     backend_log = None

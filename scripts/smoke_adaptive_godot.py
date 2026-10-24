@@ -79,16 +79,11 @@ def until(predicate, *, timeout: float, label: str, godot: subprocess.Popen,
 
 
 def lesson_rendered(log: str, revision: int) -> bool:
-    """Require this exact revision to be ready on either supported renderer.
-
-    Native uses genuine Verovio fragments and deliberately skips full-page
-    PNGs. Its model must also have loaded before a lesson is considered
-    render-ready; the legacy path publishes its existing score-ready marker.
-    """
-    legacy = f"PHASE0_LESSON_READY: REVISION:{revision}"
-    native = f"PHASE0_SCORE_READY_NATIVE: REVISION:{revision}"
-    model = f"PHASE_B_MODEL_READY: {revision} NOTES:"
-    return legacy in log or (native in log and model in log)
+    """Require native assets and the model for the exact requested revision."""
+    native = rf"^PHASE0_SCORE_READY_NATIVE: REVISION:{revision}[ \t]*\r?$"
+    model = rf"^NATIVE_MODEL_READY:[ \t]+{revision}[ \t]+NOTES:"
+    return (re.search(native, log, re.MULTILINE) is not None and
+            re.search(model, log, re.MULTILINE) is not None)
 
 
 def inject_full_performance(engine: PracticeEngine) -> tuple[int, int]:
@@ -135,14 +130,12 @@ def run() -> None:
             assert engine.plan is not None
             assert engine.plan.active_variant.level == "skeleton"
             engine.plan.set_bpm(240)
-            # Expose real Verovio/CairoSVG failures *before* starting Godot.
-            # Otherwise a missing notehead can look like a silent GUI timeout.
+            # Expose native asset preparation failures before starting Godot.
             layout = engine.geometry()
-            image = engine.engraved_png(0)
-            assert len(layout["anchors"]) >= 2 and image.startswith(b"\x89PNG"), (
-                "The initial generated skeleton failed engraving/raster validation")
+            assert len(layout["anchors"]) >= 2 and layout["native_note_templates"] and \
+                layout["native_tie_templates"], "The generated skeleton lacks native assets"
             print(f"PASS preflight generated skeleton: {len(layout['notes'])} mapped notes, "
-                  f"{len(image)} PNG bytes", flush=True)
+                  f"{len(layout['native_note_templates'])} native note templates", flush=True)
             engine.midi_port = object()  # Isolated harness; no production mock MIDI.
             http = ThreadingHTTPServer(("127.0.0.1",8765),Handler)
             Handler.engine = engine
@@ -177,13 +170,15 @@ def run() -> None:
                     else:
                         raise RuntimeError(f"Clean attempt {attempt} did not finish")
                     if attempt < 3:
-                        # Feedback interval ends with another automatic
-                        # count-in; the next simulated take starts manually.
-                        # Intervene only *after* the result is committed.
+                        # The visual loop gap supplies preparation. Repeating
+                        # unchanged notation does not add another count-in or
+                        # renderer handshake. Inject only after result commit.
                         deadline = time.monotonic() + 8
                         while time.monotonic() < deadline:
                             state = engine.state()
-                            if state["phase"] == "count_in" and engine.transport_id != ident:
+                            if state["phase"] == "playing" and engine.transport_id != ident:
+                                assert state["revision"] == first_revision
+                                assert state["count_in_beats"] == 0
                                 break
                             time.sleep(.04)
                         else:

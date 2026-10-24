@@ -1,0 +1,15 @@
+{
+  "source": "Gymnop\u00e9die_No_1_\u2013_Satie.midi",
+  "case": "learn-0046-right-original",
+  "measures": [
+    77,
+    78
+  ],
+  "producer": "tests/godot/native_verovio_overlay.gd",
+  "actual_framebuffer": true,
+  "sha256": {
+    "score.musicxml": "63e66eab1c74f4d78ff6152587671ed828906d64d8d90099f907dfffde0e6d95",
+    "native-0.00000.png": "0c1e2be04f460587f3899a73850d2505cfffca258963db4b9534987f16f1bc49",
+    "native-3.00000.png": "565afb1f3fa407042834d10a8d4de32abe3f02e327ef0b3118f4db2acc874bfd"
+  }
+}

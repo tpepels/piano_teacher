@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end Phase 0: real Godot practice screen, PNG, count-in and playback.
+"""End-to-end Phase 0: native Godot practice, count-in and playback.
 
 Requires Godot, music21, Verovio and CairoSVG, but no USB piano or display.
 Use --file to test a real user-owned MIDI/MusicXML instead of a generated fixture.
@@ -180,13 +180,13 @@ def run(file: Path | None = None) -> int:
                 godot_process = subprocess.Popen(
                     [godot, "--headless", "--resolution", "1536x960", "--path", str(ROOT / "godot"),
                      "--", "--phase0-smoke"],
-                    cwd=ROOT, env={**env, "PIANO_TEACHER_RENDERER": "legacy"}, stdout=ui_output,
+                    cwd=ROOT, env=env, stdout=ui_output,
                     stderr=subprocess.STDOUT)
                 await_condition(
-                    lambda log: "PHASE0_SCORE_READY:" in log,
+                    lambda log: "PHASE0_SCORE_READY_NATIVE: REVISION:" in log,
                     godot_process, ui_log, timeout=100,
-                    description="Godot PNG notation display")
-                print("PASS Godot scene displayed an engraved PNG score", flush=True)
+                    description="Godot native notation display")
+                print("PASS Godot scene prepared the native score", flush=True)
                 geom = api("/score/layout")
                 print("REAL SCORE NOTE GEOMETRY:", json.dumps(geom.get("notes", [])[:4]), flush=True)
                 print("REAL SCORE CURSOR ANCHORS:", json.dumps(geom.get("anchors", [])[:4]), flush=True)
@@ -220,8 +220,8 @@ def run(file: Path | None = None) -> int:
                     description="Godot timed playing state")
                 print("PASS Godot observed count-in and playing phases", flush=True)
                 # Moving cursor logs can pass with every printed note offscreen.
-                # Demand that Godot's actual cropped-PNG-to-panel transform
-                # leaves an engraved required notehead inside the viewport.
+                # Demand that the production native view leaves a required
+                # notehead inside the viewport.
                 await_condition(
                     lambda log: re.search(r"PHASE0_VISIBLE_NOTES:([1-9][0-9]*)", log) is not None,
                     godot_process, ui_log, timeout=5,
@@ -252,8 +252,12 @@ def run(file: Path | None = None) -> int:
                 while time.monotonic() < deadline:
                     state = api("/state", timeout=2)
                     if not state["running"]:
-                        if state["mastered"] != 0 or state["phase"] != "ready":
-                            raise RuntimeError("Preview changed mastery or did not finish")
+                        if (state["mastered"] != 0 or state["phase"] != "preview_gap"
+                                or state.get("performance_summary") is not None):
+                            raise RuntimeError(f"Preview changed mastery or did not enter its repeat gap: {state}")
+                        stopped = api("/control", {"action": "stop"})
+                        if stopped["phase"] != "ready" or stopped["mastered"] != 0:
+                            raise RuntimeError(f"Preview did not stop cleanly: {stopped}")
                         break
                     time.sleep(.1)
                 else:
@@ -264,7 +268,7 @@ def run(file: Path | None = None) -> int:
                 if any(error in transcript for error in
                        ("SCRIPT ERROR", "Parse Error:", "Failed to load script", "ERROR:")):
                     raise RuntimeError("Godot runtime error during practice:\n" + transcript)
-                print("PASS silent preview finished without awarding mastery", flush=True)
+                print("PASS silent preview reached its repeat gap and stopped without awarding mastery", flush=True)
                 print("PHASE 0 GODOT PRACTICE SMOKE PASSED", flush=True)
                 return 0
             finally:

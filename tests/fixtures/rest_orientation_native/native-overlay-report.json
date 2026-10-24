@@ -1,0 +1,208 @@
+{
+  "density": 96.0,
+  "density_witness": {
+    "available_lookahead_beats": 9.28,
+    "reason": "configured-density",
+    "required_density": 96.0,
+    "selected_density": 96.0,
+    "staff_gap": 22.0
+  },
+  "frames": [
+    {
+      "clock": 0.0,
+      "expected_noteheads": {
+        "pt52504afbaec6cbdccb6e6235ef97c519s0": 837.12,
+        "pt7833826ccfd76ea08f6611a7ffe73c12s0": 933.12,
+        "pta70b2542b014b675e221eb401a696e88s0": 645.12,
+        "ptaaabffcb5be576e990f27691bd0ab21cs0": 741.12
+      },
+      "file": "native-0.00000.png",
+      "noteheads": {
+        "pt52504afbaec6cbdccb6e6235ef97c519s0": [
+          837.119995117188,
+          230.880004882812
+        ],
+        "pt7833826ccfd76ea08f6611a7ffe73c12s0": [
+          933.119995117188,
+          219.960006713867
+        ],
+        "pta70b2542b014b675e221eb401a696e88s0": [
+          645.119995117188,
+          252.720001220703
+        ],
+        "ptaaabffcb5be576e990f27691bd0ab21cs0": [
+          741.119995117188,
+          241.800003051758
+        ]
+      },
+      "rests": [
+        {
+          "dots": 0.0,
+          "hand": "left",
+          "id": "rest:left:1:4",
+          "type": "whole",
+          "x": 645.12,
+          "y": 336.96
+        }
+      ],
+      "visible_symbols": 5
+    },
+    {
+      "clock": 1.0,
+      "expected_noteheads": {
+        "pt52504afbaec6cbdccb6e6235ef97c519s0": 741.12,
+        "pt7833826ccfd76ea08f6611a7ffe73c12s0": 837.12,
+        "pta70b2542b014b675e221eb401a696e88s0": 549.12,
+        "ptaaabffcb5be576e990f27691bd0ab21cs0": 645.12
+      },
+      "file": "native-1.00000.png",
+      "noteheads": {
+        "pt52504afbaec6cbdccb6e6235ef97c519s0": [
+          741.119995117188,
+          230.880004882812
+        ],
+        "pt7833826ccfd76ea08f6611a7ffe73c12s0": [
+          837.119995117188,
+          219.960006713867
+        ],
+        "pta70b2542b014b675e221eb401a696e88s0": [
+          549.119995117188,
+          252.720001220703
+        ],
+        "ptaaabffcb5be576e990f27691bd0ab21cs0": [
+          645.119995117188,
+          241.800003051758
+        ]
+      },
+      "rests": [
+        {
+          "dots": 0.0,
+          "hand": "left",
+          "id": "rest:left:1:4",
+          "type": "whole",
+          "x": 549.12,
+          "y": 336.96
+        }
+      ],
+      "visible_symbols": 5
+    },
+    {
+      "clock": 2.0,
+      "expected_noteheads": {
+        "pt52504afbaec6cbdccb6e6235ef97c519s0": 645.12,
+        "pt7833826ccfd76ea08f6611a7ffe73c12s0": 741.12,
+        "pta70b2542b014b675e221eb401a696e88s0": 453.12,
+        "ptaaabffcb5be576e990f27691bd0ab21cs0": 549.12
+      },
+      "file": "native-2.00000.png",
+      "noteheads": {
+        "pt52504afbaec6cbdccb6e6235ef97c519s0": [
+          645.119995117188,
+          230.880004882812
+        ],
+        "pt7833826ccfd76ea08f6611a7ffe73c12s0": [
+          741.119995117188,
+          219.960006713867
+        ],
+        "pta70b2542b014b675e221eb401a696e88s0": [
+          453.119995117188,
+          252.720001220703
+        ],
+        "ptaaabffcb5be576e990f27691bd0ab21cs0": [
+          549.119995117188,
+          241.800003051758
+        ]
+      },
+      "rests": [
+        {
+          "dots": 0.0,
+          "hand": "left",
+          "id": "rest:left:1:4",
+          "type": "whole",
+          "x": 453.12,
+          "y": 336.96
+        }
+      ],
+      "visible_symbols": 5
+    },
+    {
+      "clock": 3.0,
+      "expected_noteheads": {
+        "pt52504afbaec6cbdccb6e6235ef97c519s0": 549.12,
+        "pt7833826ccfd76ea08f6611a7ffe73c12s0": 645.12,
+        "pta70b2542b014b675e221eb401a696e88s0": 357.12,
+        "ptaaabffcb5be576e990f27691bd0ab21cs0": 453.12
+      },
+      "file": "native-3.00000.png",
+      "noteheads": {
+        "pt52504afbaec6cbdccb6e6235ef97c519s0": [
+          549.119995117188,
+          230.880004882812
+        ],
+        "pt7833826ccfd76ea08f6611a7ffe73c12s0": [
+          645.119995117188,
+          219.960006713867
+        ],
+        "pta70b2542b014b675e221eb401a696e88s0": [
+          357.119995117188,
+          252.720001220703
+        ],
+        "ptaaabffcb5be576e990f27691bd0ab21cs0": [
+          453.119995117188,
+          241.800003051758
+        ]
+      },
+      "rests": [
+        {
+          "dots": 0.0,
+          "hand": "left",
+          "id": "rest:left:1:4",
+          "type": "whole",
+          "x": 357.12,
+          "y": 336.96
+        }
+      ],
+      "visible_symbols": 5
+    }
+  ],
+  "height": 520.0,
+  "rest_difference_controls": [
+    {
+      "clock": 0.0,
+      "file": "rest-without-0-0.00000.png",
+      "id": "rest:left:1:4",
+      "staff": "left",
+      "voice": "1"
+    }
+  ],
+  "rest_difference_frames": [
+    {
+      "clock": 0.0,
+      "repeat_file": "repeat-0.00000.png",
+      "restored_file": "restored-0.00000.png"
+    },
+    {
+      "clock": 1.0,
+      "repeat_file": "repeat-1.00000.png",
+      "restored_file": "restored-1.00000.png"
+    },
+    {
+      "clock": 2.0,
+      "repeat_file": "repeat-2.00000.png",
+      "restored_file": "restored-2.00000.png"
+    },
+    {
+      "clock": 3.0,
+      "repeat_file": "repeat-3.00000.png",
+      "restored_file": "restored-3.00000.png"
+    }
+  ],
+  "rest_difference_protocol": 2,
+  "staff_centers": {
+    "left": 358.8,
+    "right": 187.2
+  },
+  "staff_gap": 21.84,
+  "unavoidable_rest_overlaps": 0,
+  "width": 1536.0
+}

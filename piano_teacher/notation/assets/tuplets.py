@@ -4,6 +4,8 @@ Musical positions belong to Piano Teacher's fixed beat axis. The two masks
 retain their original Verovio staff-space Y/height, while the bracket's two
 halves may span the source group's independently positioned endpoints. The
 number remains at native scale, never stretched as part of a page strip.
+Singletons retain the original masks at their sole source event; their span
+is artwork width. The legacy ``note_ids`` field also accepts source rest IDs.
 """
 from __future__ import annotations
 
@@ -15,7 +17,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 3
+VERSION = 5
 
 
 def classes(node: ET.Element) -> set[str]:
@@ -24,7 +26,7 @@ def classes(node: ET.Element) -> set[str]:
 
 def source_ids(node: ET.Element) -> tuple[str,...]:
     return tuple(el.get("id") for el in node.iter()
-                 if "note" in classes(el)
+                 if classes(el) & {"note", "rest", "mRest", "multiRest"}
                  and not classes(el) & {"bounding-box","content-bounding-box"}
                  and el.get("id"))
 
@@ -55,13 +57,12 @@ def semantic_tuplets(model: dict) -> dict[tuple[str,...],dict]:
                 if mark.get("type") == "start":
                     opened[str(mark.get("number","1"))] = []
             for group in opened.values():
-                if event.get("kind") == "note":
-                    group.append(str(event["id"]))
+                group.append(str(event.get("id") or ""))
             for mark in event.get("tuplet_marks",[]):
                 if mark.get("type") == "stop":
                     key = str(mark.get("number","1"))
                     ids = tuple(opened.pop(key,[]))
-                    if len(ids)>1 and all(ids):
+                    if ids and all(ids):
                         groups[ids]={"staff":event.get("staff","right")}
     return groups
 
@@ -97,17 +98,80 @@ def crop_art(svg: str, staff_space: float,
             "png_base64":base64.b64encode(encoded.getvalue()).decode()}
 
 
+def _canonical_rest_aliases(pages, model: dict) -> dict[str, str]:
+    """Bind generated rest IDs by the complete source document inventory.
+
+    The canonical model names rests by staff/measure/global symbol ordinal;
+    MusicXML does not preserve those IDs and Verovio assigns opaque ones.
+    Match explicit staff order and measure order, every symbol kind and every
+    retained pitched ID before accepting any rest alias. This is structural
+    correspondence, never a nearest-glyph or nearest-onset search.
+    """
+    if model.get("schema") != "piano-teacher-score-model-v1":
+        return {}
+    order, measures = model.get("staff_order"), model.get("measures")
+    if (not isinstance(order, list) or not order or len(order) != len(set(order))
+            or any(hand not in {"right", "left"} for hand in order)
+            or not isinstance(measures, list) or not measures):
+        return {}
+    expected = defaultdict(list)
+    events = model.get("notation_events", [])
+    identifiers = [e.get("id") for e in events]
+    if len(identifiers) != len(set(identifiers)):
+        return {}
+    for ordinal, event in enumerate(events):
+        expected[event.get("measure"), event.get("staff")].append((ordinal, event))
+    source_measures = [(measure, geom) for root, geom in pages for measure in root.iter()
+                       if "measure" in classes(measure) and not classes(measure) & {
+                           "bounding-box", "content-bounding-box"}]
+    if len(source_measures) != len(measures):
+        return {}
+    aliases, seen = {}, set()
+    for (measure, geom), original in zip(source_measures, measures):
+        staves = [n for n in measure if "staff" in classes(n) and not classes(n) & {
+            "bounding-box", "content-bounding-box"}]
+        if len(staves) != len(order):
+            return {}
+        for staff, hand in zip(staves, order):
+            symbols = [n for n in staff.iter()
+                       if classes(n) & {"note", "rest", "mRest", "multiRest"}
+                       and not classes(n) & {"bounding-box", "content-bounding-box"}
+                       and n.get("id") in geom.elements]
+            required = expected[original["number"], hand]
+            if len(symbols) != len(required):
+                return {}
+            for source, (ordinal, event) in zip(symbols, required):
+                identifier = source.get("id")
+                kind = "note" if "note" in classes(source) else "rest"
+                if identifier in seen or kind != event.get("kind"):
+                    return {}
+                seen.add(identifier)
+                if identifier == event.get("id"):
+                    continue
+                canonical = f"rest:{hand}:{original['number']}:{ordinal}"
+                if (kind != "rest" or event.get("id") != canonical
+                        or identifier in identifiers):
+                    return {}
+                aliases[identifier] = canonical
+    if sum(len(rows) for rows in expected.values()) != len(seen):
+        return {}
+    return aliases
+
+
 def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
     from .svg_geometry import parse_svg_geometry
     desired=semantic_tuplets(model)
     if not desired:
         return {}
     events={str(event["id"]):event for event in model.get("notation_events",[])
-            if event.get("kind")=="note" and event.get("id")}
+            if event.get("kind") in {"note", "rest"} and event.get("id")}
     output={}
-    for page in svgs:
-        root=ET.fromstring(page)
-        geom=parse_svg_geometry(page)
+    pages=[(ET.fromstring(page),parse_svg_geometry(page)) for page in svgs]
+    aliases=_canonical_rest_aliases(pages,model)
+    for root,geom in pages:
+        for source,canonical in aliases.items():
+            if source in geom.elements:
+                geom.elements[canonical]=geom.elements[source]
         viewport=[float(v) for v in root.get("viewBox","").replace(","," ").split()]
         aspect=viewport[2]/viewport[3]
         for group in root.iter():
@@ -121,7 +185,8 @@ def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
             bracket_nodes=[node for node in art if "tupletBracket" in classes(node)]
             if len(number_nodes)!=1:
                 continue
-            contained=source_ids(group)
+            contained=tuple(aliases.get(identifier,identifier)
+                            for identifier in source_ids(group))
             if any(identifier not in events for identifier in contained):
                 continue
             # A Verovio tuplet contains every pitch of its chords, while
@@ -135,13 +200,17 @@ def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
             for ids in desired:
                 if contained and contained != ids:
                     continue
+                # One anchor has no independently measurable endpoint span.
+                # A nearby numeral alone cannot establish singleton ownership.
+                if len(ids)==1 and not contained:
+                    continue
                 if "|".join(ids) in output or not all(
                         note in geom.elements for note in ids):
                     continue
                 anchors=[geom.elements[note] for note in ids]
                 x0,y0,sys=anchors[0]
                 x1,_,syslast=anchors[-1]
-                if sys != syslast or x1<=x0 or any(
+                if sys != syslast or (len(ids)>1 and x1<=x0) or any(
                         a[0]>=b[0] or b[2]!=sys
                         for a,b in zip(anchors,anchors[1:])):
                     continue
@@ -183,6 +252,14 @@ def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
                 continue
             ids,x0,y0,space,numeral,bracket=candidates[0]
             span=(geom.elements[ids[-1]][0]-x0)*aspect*250/space
+            if len(ids)==1:
+                # The sole event anchors authentic, unstretched artwork. Its
+                # positive span is actual ink width, not a fabricated second
+                # onset or duration-dependent horizontal interval. Consumers
+                # distinguish this mode by len(note_ids)==1 and use each
+                # number/bracket's original bounds relative to the one anchor.
+                span=max(numeral["bounds"][2],
+                         bracket["bounds"][2] if bracket is not None else 0.)
             if span<=0 or not math.isfinite(span):
                 continue
             output["|".join(ids)]={

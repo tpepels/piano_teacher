@@ -83,7 +83,7 @@ def fail_later_chunk(e, now, grid):
 
 @pytest.mark.parametrize('bpm', (30, 40, 80, 120))
 @pytest.mark.parametrize('mixed', (False, True))
-def test_repeated_failed_chunk_teaches_exact_source_then_returns_to_its_count_in(lesson, bpm, mixed):
+def test_repeated_failed_chunk_reuses_native_score_then_teaches_exact_source(lesson, bpm, mixed):
     e, now, grid = lesson(bpm, mixed)
     original = e.plan.identity
     first = fail_later_chunk(e, now, grid)
@@ -93,7 +93,9 @@ def test_repeated_failed_chunk_teaches_exact_source_then_returns_to_its_count_in
     assert 'Retry bars 3-4' in first['next_action']
     assert first['transition_in_seconds'] == pytest.approx(1.5)
     retry = after_break(e, now)
-    assert retry['phase'] == 'count_in' and retry['play_from_beat'] == grid[2]
+    assert retry['phase'] == 'playing' and retry['play_from_beat'] == grid[2]
+    assert retry['count_in_beats'] == 0 and retry['awaiting_score_revision'] is None
+    assert retry['revision'] == first['revision']
     second = boundary(e, now, grid[-1])
     assert second['phase'] == 'recovering' and second['guided_recovery']
     assert 'Learn bars 3-4' in second['next_action']
@@ -204,7 +206,8 @@ def test_failed_full_imported_practice_repeats_after_its_feedback_interval(lesso
     now[0] = e.next_at - .01
     assert e.state()['phase'] == 'feedback' and e.transport_id == transport
     repeated = after_break(e, now)
-    assert repeated['phase'] == 'count_in' and e.transport_id == transport + 1
+    assert repeated['phase'] == 'playing' and e.transport_id == transport + 1
+    assert repeated['count_in_beats'] == 0 and repeated['awaiting_score_revision'] is None
     assert e.plan.identity == stage and repeated['play_from_beat'] == 0
     assert repeated['streak'] == 0 and not e.plan.mastered
 
@@ -244,9 +247,9 @@ def test_recovery_pause_freezes_retry_then_stop_cancels_it(lesson):
     assert e.state()['phase'] == 'recovering'
     now[0] += .02
     waiting = e.state()
-    assert waiting['phase'] == 'loading'
+    assert waiting['phase'] == 'playing' and waiting['awaiting_score_revision'] is None
     e.control('pause')
-    e.control('score_ready', revision=waiting['revision'])
+    assert e.state()['phase'] == 'paused'
     e.control('stop')
     now[0] += 500
     assert e.state()['phase'] == 'ready' and not e.state()['running']

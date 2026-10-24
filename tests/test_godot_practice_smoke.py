@@ -1,23 +1,21 @@
 """The integration smoke must reach the real Godot practice and score paths."""
 from pathlib import Path
+from test_phase1_camera import native_camera_run
 ROOT = Path(__file__).resolve().parents[1]
 SCENE = (ROOT / "godot" / "main.gd").read_text(encoding="utf-8")
 SMOKE = (ROOT / "scripts" / "smoke_godot.py").read_text(encoding="utf-8")
 
 
-def test_smoke_enters_practice_and_waits_for_png_and_playing():
-    assert 'OS.get_cmdline_user_args().has("--phase0-smoke")' in SCENE
-    assert 'if phase0_smoke_mode:\n        _navigate("practice")' in SCENE
-    assert 'print("PHASE0_SCORE_READY:"' in SCENE
-    # The score view is a readiness sentinel: actual ink lives on system
-    # tiles, not a second hidden full-page GPU texture.
-    assert 'score_view.texture = ImageTexture.create_from_image(ready_pixel)' in SCENE
-    assert 'tile.texture = item.get("texture") as Texture2D' in SCENE
-    assert 'ScoreStrip.tile_texture(strip_tiles[i])' in SCENE
-    assert 'lambda log: "PHASE0_SCORE_READY:" in log' in SMOKE
+def test_smoke_enters_practice_and_prepares_native_score(native_camera_run):
+    report, output = native_camera_run
+    assert report["screen"] == "practice" and report["native_ready"]
+    assert "PHASE0_SCORE_READY_NATIVE: REVISION:" in output
+    assert "NATIVE_MODEL_READY:" in output
+    assert report["lead_samples"] >= 2 and report["playing_samples"] >= 3
     assert 'lambda log: "PHASE0_PHASE:count_in" in log' in SMOKE
     assert 'lambda log: "PHASE0_PHASE:playing" in log' in SMOKE
-    assert 'if state["mastered"] != 0 or state["phase"] != "ready":' in SMOKE
+    assert 'state["mastered"] != 0 or state["phase"] != "preview_gap"' in SMOKE
+    assert 'stopped["phase"] != "ready" or stopped["mastered"] != 0' in SMOKE
 
 
 def test_smoke_uses_isolated_storage_and_accepts_a_real_song():
@@ -28,16 +26,21 @@ def test_smoke_uses_isolated_storage_and_accepts_a_real_song():
     assert 'fixture.write_bytes(file.read_bytes())' in SMOKE
 
 
-def test_smoke_requires_moving_visible_cursor_and_scheduled_count_in_clicks():
-    assert "await_condition(moving_cursor_observed" in SMOKE
-    assert "PHASE0_CURSOR_BEAT:" in SCENE
-    assert 'log.count("PHASE0_CLICK:count_in") >= 2' in SMOKE
-    assert "PHASE0_CLICK:" in SCENE
+def test_smoke_requires_moving_visible_cursor_and_scheduled_count_in_clicks(native_camera_run):
+    from scripts.smoke_godot import moving_cursor_observed
+
+    _, output = native_camera_run
+    transport = output.split("NATIVE_CAMERA_TRANSPORT_BEGIN", 1)[1].split(
+        "NATIVE_CAMERA_TRANSPORT_END", 1)[0]
+    assert moving_cursor_observed(transport), transport
+    assert output.count("PHASE0_CLICK:count_in") >= 2
+    assert "PHASE0_VISIBLE_NOTES:" in transport
 
 
-def test_score_motion_during_lead_is_an_acceptance_gate():
-    assert "lambda log: moving_lead_in_observed(" in SMOKE
-    assert 'count_in_beats=float(started["count_in_beats"])' in SMOKE
-    assert "minimum_samples = 2 if short else 3" in SMOKE
-    assert "PHASE0_LEAD_BEAT:" in SCENE
-    assert "target_x = viewport.x * 0.42 - note_x * displayed_width" in SCENE
+def test_score_motion_during_lead_is_an_acceptance_gate(native_camera_run):
+    from scripts.smoke_godot import moving_lead_in_observed
+
+    _, output = native_camera_run
+    transport = output.split("NATIVE_CAMERA_TRANSPORT_BEGIN", 1)[1].split(
+        "NATIVE_CAMERA_TRANSPORT_END", 1)[0]
+    assert moving_lead_in_observed(transport, count_in_beats=.5), transport

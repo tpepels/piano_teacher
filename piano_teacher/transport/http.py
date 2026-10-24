@@ -59,8 +59,11 @@ class Handler(BaseHTTPRequestHandler):
                         self.wfile.write(block)
             elif route=="/score/layout":
                 from urllib.parse import parse_qs
-                native = parse_qs(urlsplit(self.path).query).get(
-                    "native", ["0"])[0] == "1"
+                native_option = parse_qs(urlsplit(self.path).query).get(
+                    "native", ["1"])[0]
+                if native_option not in ("0", "1"):
+                    raise ValueError("native must be 1, or 0 for reference-only layout")
+                native = native_option == "1"
                 self._json(200,self.engine.geometry(native_notes=native))
             elif route=="/score/model":
                 self._json(200,self.engine.semantic_score())

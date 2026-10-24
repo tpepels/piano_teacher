@@ -1,6 +1,6 @@
 """Clock tests: count-in and score timing do not wait for MIDI input."""
-from pathlib import Path
 import pytest
+from test_phase1_camera import native_camera_run
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.server import PracticeEngine
@@ -77,15 +77,13 @@ def test_tempo_control_changes_count_in_and_cursor_speed(tmp_path, monkeypatch):
         engine.db.close()
 
 
-def test_frontend_has_time_driven_beam_and_prevents_start_before_notation():
-    gd = (Path(__file__).resolve().parents[1] / "godot" / "main.gd").read_text()
-    assert 'func _transport_beat_now() -> float:' in gd
-    assert 'float(last_state.get("clock_beat", 0.0))' in gd
-    assert 'beat += elapsed * float(last_state.get("bpm", 60.0)) / 60.0' in gd
-    assert 'score_overlay.transport_active = active' in gd
-    assert 'target_x = viewport.x * 0.42 - note_x * displayed_width' in gd
-    # Musical projection must not lag behind the backend clock.
-    assert 'score_content.position = target' in gd
-    assert 'score_content.position.lerp' not in gd
-    assert 'start_button.disabled = false' in gd
-    assert 'Preparing sheet music - wait for the notes' in gd
+def test_frontend_has_time_driven_native_beam(native_camera_run):
+    report, _ = native_camera_run
+    assert report["clock_matched"] and report["resume_advanced"]
+    assert report["pause_frozen"]
+
+
+def test_frontend_prevents_start_before_native_notation(tmp_path):
+    from test_native_production import test_native_production_readiness_and_failure_gate
+
+    test_native_production_readiness_and_failure_gate(tmp_path, "default")

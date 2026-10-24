@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Compare the *actual* native Godot renderer with Verovio on real MIDI.
+"""Canonical source/Verovio/native notation test for the entire MIDI library.
 
-The existing check_user_midi_visual_regression.py tests the retired raster
-ScoreStrip against its source pixels; it cannot see the native renderer.
-This audit instead loads the actual native view.gd, compares note identities
-with original Verovio engraving, checks visible note/rest pixels, and writes
-registered red-Verovio / pale-Godot overlay PNGs for human inspection.
+Loads the production native view.gd with the selected source and curriculum
+scores. Independent MIDI/XML readers and actual framebuffer checks account
+for source events, notation features and relative musical relationships.
+Unresolved symbols fail explicitly; diagnostic PNGs remain beside failures.
+--case retains the existing focused Verovio/native overlay regressions.
 
 This is intentionally NOT a raw full-page pixel equality check: native
 practice uses constant beats-per-pixel, whereas Verovio print spacing is
@@ -16,6 +16,10 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from bisect import bisect_right
+from collections import Counter
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from functools import lru_cache
 import json
 from pathlib import Path
 import shutil
@@ -26,8 +30,8 @@ import hashlib
 from PIL import Image, ImageDraw
 
 from piano_teacher.application.score_preparation import assemble_layout
-from piano_teacher.music import Phrase
-from piano_teacher.notation.lesson import build_lesson_score
+from piano_teacher.music import Phrase, source_note_id
+from piano_teacher.notation.lesson import build_lesson_score, infer_piece_clefs
 from piano_teacher.notation.model import build_score_model
 from piano_teacher.raster import rasterize_score
 from piano_teacher.score import import_piece, render_layout
@@ -100,31 +104,172 @@ def selected_cases(only: str | None = None) -> tuple[AuditCase, ...]:
     return matches
 
 
-def fixture(case: AuditCase = CASES[0]) -> tuple[dict, object]:
+def library_sources(directory: Path = ROOT / "midi", *, only: str = "") -> tuple[Path, ...]:
+    """Discover the complete source library, including future bundled files."""
+    sources = tuple(sorted((p for p in directory.iterdir()
+                            if p.is_file() and p.suffix.casefold() in {".mid", ".midi"}),
+                           key=lambda p: p.name.casefold()))
+    if not sources:
+        raise ValueError(f"No MIDI files in {directory}")
+    selected = tuple(p for p in sources if only.casefold() in p.name.casefold())
+    if not selected:
+        raise ValueError(f"No MIDI files match {only!r}")
+    return selected
+
+
+def variant_errors(source: Phrase, variant) -> list[str]:
+    """A learning stage may select source attacks, never change or invent them."""
+    indices = variant.source_indices
+    if len(indices) != len(set(indices)):
+        return ["Learning variant duplicates a source note"]
+    if any(not isinstance(i, int) or not 0 <= i < len(source.notes) for i in indices):
+        return ["Learning variant has an unknown source note index"]
+    if tuple(source.notes[i] for i in indices) != variant.phrase.notes:
+        return ["Learning variant changes or invents source pitch, timing or identity"]
+    if (source.start, source.end, source.first_bar, source.last_bar) != (
+            variant.phrase.start, variant.phrase.end,
+            variant.phrase.first_bar, variant.phrase.last_bar):
+        return ["Learning variant changes its source measure boundaries"]
+    return []
+
+
+def selected_source_errors(phrase: Phrase, model: dict) -> list[str]:
+    """Bind the exact rendered payload to immutable selected source events."""
+    expected = {}
+    for i, note in enumerate(phrase.notes):
+        expected[source_note_id(note, i)] = {
+            "midi_pitch": note.pitch, "hand": note.hand,
+            "track": note.track, "channel": note.channel, "velocity": note.velocity,
+            "onset_beats": round(note.start-phrase.start, 8),
+            "duration_beats": round(min(note.end, phrase.end)-note.start, 8)}
+    errors = []
+    actual = {note.get("id"): note for note in model.get("notes", [])}
+    if len(actual) != len(model.get("notes", [])) or actual.keys() != expected.keys():
+        errors.append("Captured payload has missing, duplicate or invented source-note identities")
+    for ident, fields in expected.items():
+        for field, value in fields.items():
+            if actual.get(ident, {}).get(field) != value:
+                errors.append(f"Source note {ident} {field}: expected {value}, "
+                              f"observed {actual.get(ident, {}).get(field)}")
+    active = {ident for ident, note in expected.items()
+              if model.get("active_hand") in ("both", note["hand"])}
+    if (set(model.get("active_note_ids", [])) != active or
+            len(model.get("active_note_ids", [])) != len(active)):
+        errors.append("Captured payload has an incorrect active-hand source-note set")
+    return errors
+
+
+def context_first_bar(piece, first_bar: int) -> int:
+    """Keep incoming ties by including their real attacks, without inventing one."""
+    while first_bar > 1:
+        start = piece.bar_boundaries[first_bar - 1]
+        incoming = [note.start for note in piece.notes
+                    if note.start < start - 1e-7 and note.end > start + 1e-7]
+        if not incoming:
+            break
+        earlier = max(1, bisect_right(piece.bar_boundaries, min(incoming) + 1e-7))
+        if earlier >= first_bar:
+            break
+        first_bar = earlier
+    return first_bar
+
+
+def original_cases(path: Path, piece, *, max_bars: int = 4):
+    if max_bars < 1:
+        raise ValueError("Window size must be positive")
+    count = len(piece.bar_boundaries) - 1
+    for first in range(1, count + 1, max_bars):
+        last = min(first + max_bars - 1, count)
+        context = context_first_bar(piece, first)
+        for hand in ("right", "left", "both"):
+            yield AuditCase(f"original-{first:04d}-{last:04d}-{hand}",
+                            str(path), context, last, hand)
+
+
+def feature_evidence_errors(report: dict) -> list[str]:
+    """Inspect each observation; aggregate pass flags never authorize a glyph."""
+    errors = []
+    for row in report.get("measured", []):
+        for feature, observation in row.get("features", {}).items():
+            if observation.get("status") != "verified":
+                errors.append(f"measure {row.get('measure')} {row.get('staff')} "
+                              f"voice {row.get('voice')} {row.get('source_id')} "
+                              f"{feature}: {observation.get('status', 'unverified')} "
+                              f"{observation.get('reason', 'no independent pixel evidence')}")
+    if not report.get("complete", False) and not errors:
+        errors.append("Incomplete note-feature pixel accounting")
+    return errors
+
+
+def absence_evidence_errors(report: dict) -> list[str]:
+    """A clear tile or aggregate pass cannot clear an unexplained viewport."""
+    rows = [row for row in report.get('measured', []) if row.get('region') == 'viewport']
+    unresolved = [row for row in rows if row.get('status') != 'verified']
+    errors = [f"Unexpected-symbol check {row.get('frame')} beat {row.get('clock')}: "
+              f"{row.get('status', 'unverified')} {row.get('reason', 'unexplained ink')}"
+              for row in unresolved[:30]]
+    if len(unresolved) > 30:
+        errors.append(f"And {len(unresolved)-30} more incomplete viewport observations "
+                      "(see independent-unexpected-symbols.json)")
+    if not rows or not report.get('complete', False) or (
+            report.get('coverage', {}).get('full_absence_status') != 'verified'):
+        errors.append('Incomplete independent accounting for unexpected or duplicated symbols')
+    return errors
+
+
+def symbol_error(row: dict) -> str:
+    source = row.get("source", {})
+    return (f"measure {source.get('measure')} {source.get('staff')} "
+            f"voice {source.get('voice')} {source.get('id')} {row['construct']}: "
+            f"{row['status']} {row.get('reason', row.get('differences', 'no independent evidence'))}")
+
+
+def capture_clocks(xml: str) -> list[float]:
+    from piano_teacher.notation.proof import read_written_score
+    written = read_written_score(xml)
+    clocks = {round(float(e["beat"]), 8) for e in written.symbols}
+    clocks.update(round(float(beat), 8) for beat in written.bars)
+    step = min(.0625, float(written.bars[-1])/4)
+    clocks.update((0.0, round(step, 8), round(2*step, 8)))
+    for boundary in written.bars[1:-1]:
+        # Equal musical steps on either side expose a jump or freeze at a
+        # measure join without prescribing the renderer's horizontal spacing.
+        clocks.update((round(float(boundary)-step, 8),
+                       round(float(boundary)+step, 8)))
+    return sorted(clocks)
+
+
+def fixture(case: AuditCase = CASES[0], *, piece=None,
+            phrase: Phrase | None = None, cache=None) -> tuple[dict, object]:
     source = ROOT / (case.filename if "/" in case.filename
                      else "midi/" + case.filename)
-    piece, _ = import_piece(source)
+    if piece is None:
+        piece, _ = import_piece(source)
     assert 1 <= case.first_bar <= case.last_bar < len(piece.bar_boundaries)
     first = piece.bar_boundaries[case.first_bar - 1]
     end = piece.bar_boundaries[case.last_bar]
     notes = tuple(n for n in piece.notes if first <= n.start < end)
-    assert notes, f"{case.name}: source passage unexpectedly empty"
-    phrase = Phrase(1, case.first_bar, case.last_bar, first, end, notes)
+    original = phrase is None
+    if phrase is None:
+        phrase = Phrase(1, case.first_bar, case.last_bar, first, end, notes)
     score = build_lesson_score(
         phrase, boundaries=piece.bar_boundaries,
         time_signatures=piece.time_signatures,
         key_signatures=piece.key_signatures,
         clef_changes=piece.clef_changes,
-        default_clefs=None,
+        default_clefs=None if piece.source_musicxml else infer_piece_clefs(piece.notes),
         barlines=piece.barlines,
         source_musicxml=piece.source_musicxml,
     )
     model = build_score_model(score, boundaries=piece.bar_boundaries,
                               hand=case.hand)
+    compact = (phrase.last_bar-phrase.first_bar+1 <= 12 and phrase.end-phrase.start <= 48)
     engraving = render_layout(score, case.first_bar, case.last_bar, case.hand,
-                              total_beats=end-first, bpm=40, continuous=True)
+                              total_beats=end-first, bpm=piece.bpm, continuous=compact)
+    key = cache.key("native-comparison-art", score.musicxml, case.hand,
+                    piece.bpm, compact) if cache is not None else ""
     atlas = assemble_layout(engraving, native_notes=True, native_model=model,
-                            notation_xml=score.musicxml)
+                            notation_xml=score.musicxml, cache=cache, cache_key=key)
     return {
         "model": model,
         "assets": {key: atlas[key] for key in (
@@ -137,6 +282,8 @@ def fixture(case: AuditCase = CASES[0]) -> tuple[dict, object]:
         "sample_beats": [round(i * (end-first) / 4, 8) for i in range(4)],
         "hand": case.hand,
         "xml": score.musicxml,
+        "original_xml": piece.source_musicxml if original else "",
+        "source_errors": selected_source_errors(phrase, model),
     }, engraving
 
 
@@ -309,7 +456,8 @@ def capture_dependency_hash(root: Path = ROOT) -> str:
     sources=[root/"tests/godot/native_verovio_overlay.gd"]
     sources.extend(p for p in (root/"godot").rglob("*")
                    if p.is_file() and ".godot" not in p.relative_to(root/"godot").parts
-                   and p.suffix in {".gd",".gdshader",".gdshaderinc",".tscn",".tres",".godot"})
+                   and p.suffix in {".gd",".gdshader",".gdshaderinc",".tscn",".tres",".godot",
+                                    ".ttf",".otf",".woff",".woff2",".png",".svg"})
     digest=hashlib.sha256()
     for path in sorted(sources):
         digest.update(path.relative_to(root).as_posix().encode())
@@ -328,35 +476,45 @@ def validate_capture_manifest(folder: Path, *, dependency_hash: str, godot_versi
     captures=manifest.get("screenshots")
     if not isinstance(captures,list) or not captures:
         raise AssertionError("Cached capture manifest has no actual screenshot hashes")
+    observed={path.name for pattern in ('native-*.png','rest-without-*.png','repeat-*.png','restored-*.png')
+              for path in folder.glob(pattern)}
+    recorded=[entry.get('file') for entry in captures]
+    if len(set(recorded))!=len(recorded) or set(recorded)!=observed:
+        raise AssertionError('Cached screenshot inventory differs from this capture manifest')
     for entry in captures:
         if hashlib.sha256((folder/entry["file"]).read_bytes()).hexdigest()!=entry["sha256"]:
             raise AssertionError(f"Cached actual screenshot changed: {entry['file']}")
 
 
+def verification_inputs_hash(sources) -> str:
+    """A long sweep must finish against the inputs and code it started with."""
+    paths=[*sources,ROOT/'scripts/check_native_verovio_overlay.py',
+           *sorted((ROOT/'piano_teacher').rglob('*.py')),
+           ROOT/'tests/fixtures/musical_fidelity/manifest.json']
+    digest=hashlib.sha256(capture_dependency_hash().encode())
+    for path in sorted(paths):
+        digest.update(str(path).encode()+b'\0'+path.read_bytes()+b'\0')
+    return digest.hexdigest()
+
+
 def run(out: Path, godot: str, case: AuditCase = CASES[0],
         *, all_symbols: bool = False, strict: bool = True,
-        reuse_captures: bool = False) -> dict:
+        reuse_captures: bool = False, prepared=None) -> dict:
     out.mkdir(parents=True,exist_ok=True)
-    data, engraving = fixture(case)
+    data, engraving = fixture(case) if prepared is None else prepared
+    data = dict(data)
     model = data["model"]
     if all_symbols:
         # Every score symbol is positioned at the playhead in at least one
         # actual native frame. Every measure is also sampled even if silent.
         # No best-effort subset or fixed four-frame sampling is permitted.
-        from piano_teacher.notation.proof import read_written_score
-        written = read_written_score(data["xml"])
-        onsets = {round(float(e["beat"]), 8) for e in written.symbols}
-        measure_starts = set(written.bars[:-1])
-        data["sample_beats"] = sorted(onsets | measure_starts)
+        data["sample_beats"] = capture_clocks(data["xml"])
         data["phase3_full"] = True
+        data["full_symbol_inventory"] = True
         if not data["sample_beats"]:
             raise AssertionError("Full-score witness has no sample clocks")
         if len({f"{at:.5f}" for at in data["sample_beats"]}) != len(data["sample_beats"]):
             raise AssertionError("Distinct source onsets would overwrite a screenshot filename")
-        if len(data["sample_beats"]) > 256:
-            raise AssertionError(
-                f"Window has {len(data['sample_beats'])} onsets: split into smaller "
-                "measure windows rather than silently sampling a subset")
     # Preserve the actual lesson MusicXML as the single reference score.
     xml=data.pop("xml")
     capture_sources=[ROOT/"tests/godot/native_verovio_overlay.gd",
@@ -364,24 +522,39 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
     data["capture_protocol_sha256"]=hashlib.sha256(b"".join(
         p.relative_to(ROOT).as_posix().encode()+p.read_bytes()
         for p in capture_sources)).hexdigest()
+    dependencies = capture_dependency_hash()
     if reuse_captures:
         if json.loads((out/"fixture.json").read_text()) != data or (
                 (out/"score.musicxml").read_text()!=xml):
             raise AssertionError("Cached capture provenance does not match current source/layout/protocol")
-        validate_capture_manifest(out,dependency_hash=capture_dependency_hash(),
+        validate_capture_manifest(out,dependency_hash=dependencies,
             godot_version=subprocess.check_output([godot,"--version"],text=True).strip())
+    else:
+        # A fresh producer must never inherit pixels or reference pages from
+        # an older, longer score. Keep unrelated user files in the output dir.
+        for pattern in ('native-*.png','rest-without-*.png','repeat-*.png',
+                        'restored-*.png','verovio-*.svg','verovio-*.png',
+                        'capture-manifest.json','native-overlay-report.json'):
+            for artifact in out.glob(pattern):
+                artifact.unlink()
     (out/"score.musicxml").write_text(xml,encoding="utf-8")
     (out/"fixture.json").write_text(json.dumps(data))
     for page, svg in enumerate(engraving.pages):
         (out/f"verovio-{page}.svg").write_text(svg)
-        (out/f"verovio-{page}.png").write_bytes(rasterize_score(svg,width=2400))
+        if not all_symbols:
+            (out/f"verovio-{page}.png").write_bytes(rasterize_score(svg,width=2400))
     if not reuse_captures:
         result = subprocess.run([
             godot, "--path",str(ROOT/"godot"),"--rendering-method","gl_compatibility",
+            "--windowed", "--resolution", "16x16", "--position", "-16384,-16384",
+            "--disable-vsync", "--max-fps", "0",
+            "--audio-driver", "Dummy",
             "--script",str(ROOT/"tests/godot/native_verovio_overlay.gd"),
             "--",str(out/"fixture.json"),str(out)],
-            capture_output=True,text=True,timeout=180)
+            capture_output=True,text=True,timeout=max(180, 2*len(data["sample_beats"])))
         (out/"godot.log").write_text(result.stdout+result.stderr)
+        if capture_dependency_hash() != dependencies:
+            raise AssertionError("Renderer dependencies changed during actual capture; rerun the passage")
         assert result.returncode == 0 and "NATIVE_VEROVIO_OVERLAY_FAILURES:0" in result.stdout, (
             "Actual native renderer failed:\n"+(result.stdout+result.stderr)[-9000:])
         import platform
@@ -390,7 +563,7 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
                   for pattern in ("native-*.png","rest-without-*.png","repeat-*.png","restored-*.png")
                   for p in sorted(out.glob(pattern))]
         manifest={"capture_protocol_sha256":data["capture_protocol_sha256"],
-                  "renderer_dependencies_sha256":capture_dependency_hash(),
+                  "renderer_dependencies_sha256":dependencies,
                   "python":platform.python_version(),
                   "verovio":verovio.toolkit().getVersion(),
                   "godot":subprocess.check_output([godot,"--version"],text=True).strip(),
@@ -401,8 +574,10 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
     # The older editorial audit uses renderer geometry and per-passage
     # readability budgets. Those are diagnostics, not independent evidence
     # that legitimate full-piece notation is incorrect.
-    errors = [] if all_symbols else list(legacy_diagnostics)
-    reference = Image.open(out/"verovio-0.png")
+    errors = list(data.get("source_errors", []))
+    if not all_symbols:
+        errors.extend(legacy_diagnostics)
+    reference = Image.open(out/"verovio-0.png") if not all_symbols else None
     refnotes = engraving.layout["notes"]
     printed_ids = {n["id"] for n in model["notation_events"] if n["kind"] == "note"}
     reference_ids = {n["id"] for n in refnotes}
@@ -497,12 +672,19 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
         # from MusicXML, then extracts staff lines and notehead positions
         # directly from PNG pixels. No Godot head/staff Y is permitted.
         from piano_teacher.notation.phase3_pixels import (
-            verify_all_notehead_pixels, verify_all_rest_pixels)
+            verify_all_notehead_pixels, verify_all_rest_pixels, verify_scroll_pixels)
         engraving_xml=(out/"score.musicxml").read_text(encoding="utf-8")
         independent = verify_all_notehead_pixels(
             engraving_xml,out,hand=case.hand)
         rests_independent = verify_all_rest_pixels(
             engraving_xml,out,hand=case.hand)
+        motion = verify_scroll_pixels(engraving_xml, out)
+        (out/"independent-motion.json").write_text(json.dumps(motion,indent=2)+"\n")
+        for row in motion["measured"]:
+            if not row["passed"]:
+                errors.append(f"measure transition at beat {row['clock']}: "
+                              f"{row['reason']} {row.get('pixel_steps', [])}")
+        full_coverage["independent_motion"] = motion
         full_coverage["independent_image_rests"] = {
             key:value for key,value in rests_independent.items()
             if key!="measured"
@@ -526,7 +708,75 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
             if len(independent["failures"])>30:
                 errors.append(f"And {len(independent['failures'])-30} more independent "
                               "pixel errors (see independent-pixels.json)")
-    if checked == 0:
+        # A detector's 'passed' means no established mismatch. It must not
+        # turn an ambiguous or unavailable symbol witness into a visual pass.
+        for kind, proof in (("notehead", independent), ("rest", rests_independent)):
+            for row in proof.get("measured", []):
+                if row.get("status") != "verified":
+                    errors.append(f"measure {row.get('measure')} {row.get('staff')} "
+                                  f"voice {row.get('voice')} {row.get('source_id')} "
+                                  f"{kind}: {row.get('status', 'unverified')} "
+                                  f"{row.get('reason', 'incomplete independent image evidence')}")
+        from piano_teacher.notation.symbol_pixel_proof import verify_connector_pixels
+        from piano_teacher.notation.connector_pixels import verify_beam_pixels, verify_tuplet_pixels
+        connectors=verify_connector_pixels(engraving_xml,out,hand=case.hand)
+        beams=verify_beam_pixels(engraving_xml,out,hand=case.hand)
+        tuplets=verify_tuplet_pixels(engraving_xml,out,hand=case.hand)
+        by_id={event['id']:event for event in model['notation_events']}
+        for label,proof in (('connectors',connectors),('beams',beams),('tuplets',tuplets)):
+            (out/f'independent-{label}.json').write_text(json.dumps(proof,indent=2)+'\n')
+            full_coverage[f'independent_{label}']=proof['coverage']
+            for observation in proof.get('observations',proof.get('measured',[])):
+                if observation.get('graphical',True) and observation['status']!='verified':
+                    ids=observation.get('event_ids',observation.get('source_ids',[]))
+                    source=next((by_id[identity] for identity in ids if identity in by_id),observation)
+                    errors.append(symbol_error(dict(construct=observation['construct'],
+                        source=dict(source,id='|'.join(str(i) for i in ids)),status=observation['status'],
+                        reason=observation.get('reason') or observation.get('evidence',{}).get('reason','No independent connector evidence'))))
+        from piano_teacher.notation.feature_pixels import verify_note_feature_pixels, verify_structure_pixels, verify_ledger_pixels
+        features = verify_note_feature_pixels(engraving_xml, out, hand=case.hand)
+        ledgers=verify_ledger_pixels(engraving_xml,out,hand=case.hand)
+        (out/'independent-ledgers.json').write_text(json.dumps(ledgers,indent=2)+'\n')
+        errors.extend(feature_evidence_errors(ledgers))
+        full_coverage['independent_ledgers']=ledgers['coverage']
+        (out/"independent-features.json").write_text(json.dumps(features,indent=2)+"\n")
+        errors.extend(feature_evidence_errors(features))
+        full_coverage["independent_note_features"] = features["coverage"]
+        from piano_teacher.notation.semantic_contract import verify_generated_contract
+        semantics = verify_generated_contract(engraving_xml, model)
+        (out/"semantics.json").write_text(json.dumps(semantics,indent=2)+"\n")
+        for row in semantics["elements"]:
+            if row["status"] != "verified":
+                errors.append("Generated/native " + symbol_error(row))
+        from piano_teacher.notation.visual_coverage import visual_elements, coverage_counts
+        elements = visual_elements(data.get("original_xml") or None,
+            engraving_xml, independent, rests_independent, hand=case.hand,
+            first_bar=case.first_bar, last_bar=case.last_bar,
+            source_name=case.filename, feature_report=features,connector_report=connectors,
+            beam_report=beams,tuplet_report=tuplets,ledger_report=ledgers,
+            semantic_report=semantics)
+        structures = verify_structure_pixels(engraving_xml, out, elements,
+                                              hand=case.hand, first_bar=case.first_bar)
+        structural = {row["id"]: row for row in structures}
+        for row in elements:
+            if row["id"] in structural and row["status"] != "mismatch":
+                observation = structural[row["id"]]
+                row.update({key: observation[key] for key in ("status", "reason", "evidence")})
+        (out/"independent-structure.json").write_text(json.dumps(structures,indent=2)+"\n")
+        # MIDI has no unique authored spelling. That is an interpretation
+        # limit, separate from checking every symbol of its chosen score.
+        required = [row for row in elements if row["construct"] != "midi_written_transcription"]
+        (out/"independent-symbols.json").write_text(json.dumps(elements,indent=2)+"\n")
+        full_coverage["symbols"] = coverage_counts(required)
+        for row in required:
+            if row["status"] != "verified":
+                errors.append(symbol_error(row))
+        from piano_teacher.notation.extra_symbol_pixels import verify_extra_symbol_pixels
+        absence = verify_extra_symbol_pixels(engraving_xml, out, hand=case.hand)
+        (out/'independent-unexpected-symbols.json').write_text(json.dumps(absence,indent=2)+'\n')
+        full_coverage['unexpected_symbols'] = absence['coverage']
+        errors.extend(absence_evidence_errors(absence))
+    if checked == 0 and printed_ids:
         errors.append("No on-screen native noteheads were checked")
     active_written_notes = sum(
         1 for event in model["notation_events"]
@@ -535,7 +785,7 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
         errors.append("No active-hand noteheads were pixel-verified")
     # A hand with no written notes is a valid silent practice mode, not
     # evidence of missing pixels. Its rests still require screenshot coverage.
-    if not registered_ids:
+    if not registered_ids and reference_ids:
         errors.append("Original Verovio identities never aligned with native frames")
     if rendered_ids - reference_ids:
         errors.append(f"Native rendered {len(rendered_ids-reference_ids)} "
@@ -560,6 +810,9 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
         "passed":not errors,
         "legacy_renderer_diagnostics":legacy_diagnostics,
         "whole_window_coverage":full_coverage,
+        "nonverified_symbols": (dict(Counter(
+            f"{row['construct']}:{row['status']}" for row in required
+            if row['status'] != 'verified')) if all_symbols else {}),
     }
     (out/"audit.json").write_text(json.dumps(summary,indent=2)+"\n")
     if errors and strict:
@@ -567,16 +820,200 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
     return summary
 
 
+def curriculum_cases(path: Path, piece):
+    """Enumerate the actual production curriculum, including dense focus stages."""
+    from piano_teacher.learning import LearningPlan
+    plan = LearningPlan(piece)
+    for index, exercise in enumerate(plan.exercises):
+        plan.select(index)
+        for hand in plan.hands:
+            plan.set_hand(hand)
+            for variant in plan.variants:
+                case = AuditCase(f"{exercise.kind}-{index:04d}-{hand}-{variant.level}",
+                                 str(path), variant.phrase.first_bar,
+                                 variant.phrase.last_bar, hand)
+                yield case, exercise.phrase, variant
+
+
+@lru_cache(maxsize=32)
+def _library_piece(path: str):
+    return import_piece(Path(path))[0]
+
+
+def _library_job(case, source_phrase, variant, directory, godot, reuse_captures=False):
+    """An isolated worker retains the existing comparison and its failure PNGs."""
+    try:
+        if variant is not None:
+            problems = variant_errors(source_phrase, variant)
+            if problems:
+                raise AssertionError("; ".join(problems))
+        piece = _library_piece(case.filename)
+        from piano_teacher.preprocessing_cache import PreprocessingCache
+        cache = PreprocessingCache(directory.parent.parent/"cache")
+        prepared = fixture(case, piece=piece,
+                           phrase=variant.phrase if variant is not None else None, cache=cache)
+        result=None
+        if reuse_captures and (directory/'capture-manifest.json').is_file():
+            try:
+                result=run(directory,godot,case,all_symbols=True,strict=False,
+                           prepared=prepared,reuse_captures=True)
+            except (AssertionError,OSError,ValueError) as exc:
+                print(f'RECAPTURE {case.name}: {exc}',flush=True)
+        if result is None:
+            result=run(directory,godot,case,all_symbols=True,strict=False,prepared=prepared)
+        if not result["errors"]:
+            for picture in directory.glob("*.png"):
+                picture.unlink()
+        return {"errors": result["errors"][:25], "error_count": len(result["errors"]),
+                "captured": True,
+                "nonverified_symbols": result["nonverified_symbols"],
+                "symbols": result["whole_window_coverage"].get("symbols", {})}
+    except Exception as exc:
+        return {"errors": [f"{type(exc).__name__}: {exc}"], "error_count": 1,
+                "captured": False, "symbols": {}}
+
+
+def audit_library(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
+                  include_fixtures: bool = True, workers: int = 4,
+                  reuse_captures: bool = False) -> dict:
+    """One source/Verovio/native test; no second renderer or certification stack."""
+    def discover_sources():
+        discovered=list(library_sources(only=only))
+        if include_fixtures and not only:
+            manifest_dir=ROOT/'tests/fixtures/musical_fidelity'
+            manifest=json.loads((manifest_dir/'manifest.json').read_text())
+            discovered.extend(manifest_dir/entry['file'] for entry in manifest['supported'])
+        return discovered
+    sources=discover_sources()
+    inputs_hash=verification_inputs_hash(sources)
+    out = out.resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    summary = {"passed": False, "sources_expected": len(sources),
+               "inputs_sha256": inputs_hash,
+               "sources_checked": 0, "cases_expected": 0, "cases_checked": 0,
+               "measures_expected": 0, "measures_checked": 0,
+               "failures": [], "nonverified_symbols": {}}
+    from piano_teacher.notation.semantic_contract import (
+        verify_midi_performance, verify_musicxml_contract)
+    plans=[]
+    for source_index, path in enumerate(sources):
+        try:
+            piece = _library_piece(str(path))
+            whole = Phrase(1, 1, len(piece.bar_boundaries)-1,
+                           piece.bar_boundaries[0], piece.bar_boundaries[-1], piece.notes)
+            score = build_lesson_score(whole, boundaries=piece.bar_boundaries,
+                time_signatures=piece.time_signatures, key_signatures=piece.key_signatures,
+                clef_changes=piece.clef_changes, barlines=piece.barlines,
+                source_musicxml=piece.source_musicxml,
+                default_clefs=None if piece.source_musicxml else infer_piece_clefs(piece.notes))
+            model = build_score_model(score, boundaries=piece.bar_boundaries, hand="both")
+            if path.suffix.casefold() in {".mid", ".midi"}:
+                model["import_warnings"] = list(piece.import_warnings)
+                semantics = verify_midi_performance(path, model, generated_xml=score.musicxml)
+            else:
+                semantics = verify_musicxml_contract(path.read_text(), score.musicxml, model)
+            for row in semantics["elements"]:
+                if row["status"] in {"mismatch", "unverified"}:
+                    summary["failures"].append(f"{path.name}: " + symbol_error(row))
+            originals = tuple(original_cases(path, piece, max_bars=max_bars))
+            stages = tuple(curriculum_cases(path, piece))
+            summary["cases_expected"] += len(originals) + len(stages)
+            summary["measures_expected"] += len(piece.bar_boundaries)-1
+            plans.append((source_index,path,[(case,None,None) for case in originals],list(stages)))
+            directory=out/f"{source_index:02d}-{path.stem}"
+            directory.mkdir(parents=True,exist_ok=True)
+            (directory/"source-semantics.json").write_text(json.dumps(semantics,indent=2)+"\n")
+        except Exception as exc:
+            message = f"{path.name}: {type(exc).__name__}: {exc}"
+            summary["failures"].append(message)
+            print("FAIL " + message, flush=True)
+    # Freeze all source/case denominators before any framebuffer is launched.
+    # Complete every original window first, then every real learning stage;
+    # Hanon's thousands of variants cannot postpone the other source files.
+    completed=Counter()
+    visited={index:set() for index,_,_,_ in plans}
+    totals={index:len(originals)+len(stages) for index,_,originals,stages in plans}
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        for phase in (2,3):
+            submitted = {}
+            for plan in plans:
+                source_index,path=plan[:2]
+                for case,source_phrase,variant in plan[phase]:
+                    directory=out/f"{source_index:02d}-{path.stem}"/case.name
+                    future=pool.submit(_library_job,case,source_phrase,variant,directory,godot,reuse_captures)
+                    submitted[future]=(source_index,path,case,variant,directory)
+            for future in as_completed(submitted):
+                source_index,path,case,variant,directory=submitted[future]
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    result = {"errors": [f"Worker failed: {exc}"], "captured": False}
+                if result["errors"]:
+                    message = f"{path.name} {case.name}: {result['errors'][0]}"
+                    summary["failures"].append(message)
+                    print("FAIL " + message + f" (details: {directory})", flush=True)
+                else:
+                    print(f"PASS {path.name} {case.name}", flush=True)
+                for kind, count in result.get("nonverified_symbols", {}).items():
+                    summary["nonverified_symbols"][kind] = summary["nonverified_symbols"].get(kind, 0)+count
+                if variant is None and result["captured"]:
+                    visited[source_index].update(range(case.first_bar, case.last_bar+1))
+                summary["cases_checked"] += 1
+                completed[source_index]+=1
+                if completed[source_index]==totals[source_index]:
+                    summary["sources_checked"]+=1
+                summary["measures_checked"]=sum(map(len,visited.values()))
+                if summary["cases_checked"]%25==0 or completed[source_index]==totals[source_index]:
+                    (out/"summary.json").write_text(json.dumps(summary,indent=2)+"\n")
+    from piano_teacher.preprocessing_cache import PreprocessingCache
+    PreprocessingCache(out/"cache").prune()
+    try:
+        current_sources=discover_sources()
+        if current_sources!=sources:
+            summary['failures'].append('Source membership changed during this audit; rerun the complete check')
+        elif verification_inputs_hash(sources)!=inputs_hash:
+            summary['failures'].append('Source inputs or verification code changed during this audit; rerun the complete check')
+    except (OSError,ValueError) as exc:
+        summary['failures'].append(f'Source membership changed or became unreadable during this audit: {exc}')
+    summary["passed"] = (not summary["failures"] and
+                         summary["sources_checked"] == summary["sources_expected"] and
+                         summary["cases_checked"] == summary["cases_expected"] and
+                         summary["measures_checked"] == summary["measures_expected"])
+    (out/"summary.json").write_text(json.dumps(summary,indent=2)+"\n")
+    return summary
+
+
 def main() -> int:
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out",type=Path,
                         default=Path("/tmp/piano-native-verovio-overlay"))
-    parser.add_argument("--only", help="Case name or MIDI filename substring")
+    parser.add_argument("--only", default="", help="MIDI filename substring (focused diagnosis)")
+    parser.add_argument("--case", help="Run one existing focused regression case")
+    parser.add_argument("--window-bars", type=int, default=4)
+    parser.add_argument("--workers", type=int, default=4,
+                        help="Independent Godot capture processes (default: 4)")
+    parser.add_argument("--reuse-captures",action="store_true",
+                        help="Recheck unchanged retained PNGs; changed or missing captures are rendered again")
     a=parser.parse_args()
     godot=shutil.which("godot") or shutil.which("godot4")
     if not godot:
         parser.error("Actual Godot 4 renderer is required")
-    cases = selected_cases(a.only)
+    if a.window_bars < 1:
+        parser.error("--window-bars must be positive")
+    if a.workers < 1:
+        parser.error("--workers must be positive")
+    if not a.case:
+        try:
+            summary = audit_library(a.out, godot, only=a.only, max_bars=a.window_bars,
+                                    workers=a.workers,reuse_captures=a.reuse_captures)
+        except ValueError as exc:
+            parser.error(str(exc))
+        print(f"Native notation: {summary['sources_checked']}/{summary['sources_expected']} sources, "
+              f"{summary['measures_checked']}/{summary['measures_expected']} measures, "
+              f"{summary['cases_checked']}/{summary['cases_expected']} cases, "
+              f"{len(summary['failures'])} failures; {a.out}", flush=True)
+        return int(not summary["passed"])
+    cases = selected_cases(a.case)
     results = []
     errors = []
     for case in cases:

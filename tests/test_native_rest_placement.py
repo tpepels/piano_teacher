@@ -10,6 +10,21 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_polyphonic_rectangular_rests_preserve_staff_line_orientation(tmp_path):
+    from scripts.check_native_verovio_overlay import fixture, AuditCase, AUTUMN_FILE
+    godot = shutil.which("godot") or shutil.which("godot4")
+    if not godot:
+        pytest.skip("Godot is required")
+    data, _ = fixture(AuditCase("rectangular-rest-lanes", AUTUMN_FILE, 1, 4))
+    path = tmp_path/"score.json"
+    path.write_text(json.dumps(data))
+    result = subprocess.run([godot, "--headless", "--path", str(ROOT/"godot"),
+        "--script", str(ROOT/"tests/godot/native_rest_lanes.gd"), "--", str(path)],
+        capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stdout+result.stderr
+    assert "RECTANGULAR_RESTS_CHECKED:" in result.stdout
+
+
 def test_verovio_native_rest_positions_and_pixels(tmp_path):
     godot = shutil.which("godot") or shutil.which("godot4")
     xvfb = shutil.which("xvfb-run")

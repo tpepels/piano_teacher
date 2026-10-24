@@ -113,6 +113,7 @@ def run(output: Path, resolution: tuple[int, int] = (1536, 960)) -> dict:
 
     def until(predicate,label,timeout=25):
         deadline = time.monotonic()+timeout
+        waiting_steps = 0
         while time.monotonic() < deadline:
             text = transcript.read_text(errors="replace") if transcript.exists() else ""
             if any(token in text for token in ("SCRIPT ERROR","ERROR:","MODES_FAIL:")):
@@ -122,6 +123,13 @@ def run(output: Path, resolution: tuple[int, int] = (1536, 960)) -> dict:
             result = predicate(text)
             if result:
                 return result
+            # Godot bounds each real UI/readiness wait independently. Let a
+            # completed step start the next deadline instead of timing the
+            # entire import/settings/score sequence as one 25-second wait.
+            progress = text.count("MODES_WAIT:")
+            if progress > waiting_steps:
+                waiting_steps = progress
+                deadline = time.monotonic()+timeout
             time.sleep(.01)
         raise RuntimeError(f"Timed out: {label}\n{text}")
 
@@ -137,11 +145,12 @@ def run(output: Path, resolution: tuple[int, int] = (1536, 960)) -> dict:
                 assert "demo" in initial, "Listen demo contract is required"
                 assert initial["bpm"] == initial["target_bpm"] == 240
                 identity = engine.plan.identity
-                assert engine.plan.exercise.kind == "connect"
+                assert engine.plan.exercise.kind == "perform"
                 assert (engine.plan.active_phrase.first_bar, engine.plan.active_phrase.last_bar) == (1, 4)
-                assert (initial["first_bar"], initial["last_bar"]) == (1, 2)
+                assert (initial["first_bar"], initial["last_bar"]) == (1, 4)
                 assert initial["learner"]["total_units"] == 2 and initial["mastered"] == 0
                 assert initial["lesson_level"] == "original" and len(engine.plan.active_variant.notes) == 26
+                assert engine.plan.active_phrase.notes == engine.plan.piece.notes
                 until(lambda text: "MODES_STAGE:audio-playing" in text,"real AudioStreamWAV playback")
                 listening = engine.state()
                 assert listening["mode"] == "listen" and listening["running"]

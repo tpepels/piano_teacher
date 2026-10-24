@@ -16,7 +16,6 @@ qt = ["PySide6>=6.6,<7"]
 
 [project.scripts]
 piano-teacher = "piano_teacher.server:main"
-piano-teacher-qt = "piano_teacher.ui:main"
 
 [tool.setuptools.package-data]
 piano_teacher = ["lesson_settings.json"]

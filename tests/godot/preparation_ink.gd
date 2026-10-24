@@ -1,93 +1,101 @@
 extends SceneTree
 
-class FixtureApp extends "res://main.gd":
-    func _ready() -> void:
-        _build_interface()
-        _navigate("practice")
-        resized.connect(_update_responsive_layout)
-        _update_responsive_layout()
-        set_process(false)
+class FixtureApp extends "native_production_fixture.gd":
+    func _transport_beat_now() -> float:
+        return float(last_state.get("clock_beat", 0.0))
 
 var failures: Array[String] = []
-
 func check(ok: bool, message: String) -> void:
     if not ok:
         failures.append(message)
-        print("FAIL:", message)
-
+        print("PREPARATION_INK_FAIL:", message)
+func _initialize() -> void: call_deferred("run")
 func frame() -> Image:
     await process_frame
     await process_frame
     RenderingServer.force_draw()
     return root.get_texture().get_image()
 
-func _initialize() -> void:
-    call_deferred("run")
-
 func run() -> void:
     var folder: String = OS.get_cmdline_user_args()[0]
     root.mode = Window.MODE_WINDOWED
-    root.size = Vector2i(1220, 780)
+    root.size = Vector2i(1220,780)
     var app := FixtureApp.new()
     app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_child(app)
     await process_frame
     await process_frame
-    app.revision = 0
-    app.layout_revision = 0
-    app.requested_revision = 0
-    app.requested_page = 0
-    app.score_layout = JSON.parse_string(FileAccess.get_file_as_string(folder + "/layout.json"))
-    for page in range(int(app.score_layout.pages)):
-        app.page_images.append(Image.load_from_file(folder + "/page-%d.png" % page))
-    app.source_layout = app.score_layout
-    app.last_state = {"phase": "ready"}
-    app._on_score(0, 200, PackedStringArray(), FileAccess.get_file_as_bytes(folder + "/page-0.png"))
-    await process_frame
-    for onset in [0.0, 4.0]:
-        app.last_state = {"running": true, "paused": true, "clock_beat": -.1,
-            "play_from_beat": onset, "duration_beats": 8.0, "bpm": 80,
-            "count_in_beats": 4.0, "count_in_meter": [4, 4]}
+    var error: String = app.load_native_fixture(folder)
+    check(error.is_empty(),error)
+    if not error.is_empty():
+        quit(1)
+        return
+    var view = app.timeline_preview
+    for onset in [0.0,4.0]:
+        app.last_state = {"loaded":true,"revision":app.revision,"running":false,
+            "paused":false,"phase":"ready","clock_beat":0.0,"hand":"right",
+            "mode":"practice","preview_only":true,"bpm":80,"transport_id":7,
+            "play_from_beat":onset,"duration_beats":8.0,"count_in_beats":0.0}
         app._process(0.0)
-        app.score_overlay.cursor = {} # Compare ink without the timing beam.
-        # The anticipation outline breathes on wall time even while transport
-        # is paused. Isolate preparation ink in both frames: a changing cue
-        # cannot establish whether showing the preparation removed notation.
-        app.score_overlay.next_chord = []
-        app.score_overlay.showing = false
-        app.score_overlay.queue_redraw()
         var original: Image = await frame()
         var repeated: Image = await frame()
         check(original.get_data() == repeated.get_data(),
-            "preparation baseline is unchanged before intervention at %.0f" % onset)
-        original.save_png(folder + "/original-%.0f.png" % onset)
-        app.score_overlay.showing = true
-        app.score_overlay.queue_redraw()
+            "Frozen native baseline is stable before preparation intervention")
+        var heads: Dictionary = view.drawn_noteheads.duplicate()
+        app.last_state.count_in_beats = 4.0
+        app.last_state.running = true
+        app.last_state.paused = false
+        app.last_state.phase = "count_in"
+        # An exact logical-pixel translation makes the independent before/
+        # after pixel comparison insensitive to camera movement itself.
+        app.last_state.clock_beat = -10.0/view.timeline.pixels_per_beat
+        app._process(0.0)
         var prepared: Image = await frame()
-        prepared.save_png(folder + "/prepared-%.0f.png" % onset)
-        var anchor: Dictionary = app._position_at_beat(onset)
+        check(app.game_count_in.visible, "Backend count-in actually enables preparation lights")
+        check(original.get_data() != prepared.get_data(), "Preparation intervention changes the actual stage")
+        original.save_png(folder.path_join("original-%.0f.png" % onset))
+        prepared.save_png(folder.path_join("prepared-%.0f.png" % onset))
         var pixel_scale := Vector2(original.get_size()) / root.get_visible_rect().size
-        var first: Vector2 = (app.score_content.global_position + Vector2(float(anchor.x), float(anchor.top)) * app.score_content.size) * pixel_scale
-        var left: float = (app.score_content.global_position.x + float(anchor.ink_left) * app.score_content.size.x) * pixel_scale.x
-        var bottom: float = (app.score_content.global_position.y + float(anchor.bottom) * app.score_content.size.y) * pixel_scale.y
+        var transform: Transform2D = view.get_global_transform_with_canvas()
+        var gap: float = view._gap()
         var expected := 0
         var retained := 0
-        for y in range(maxi(0, floori(first.y)), mini(original.get_height(), ceili(bottom))):
-            var staff_line := false
-            for line in app.score_overlay.lead_staff_lines:
-                var staff_y: float = (app.score_content.global_position.y + float(line) * app.score_content.size.y) * pixel_scale.y
-                if absf(float(y) - staff_y) < 2.0:
-                    staff_line = true
-            if staff_line:
+        var tested := 0
+        for event in view.ordered_events:
+            if str(event.get("kind","")) != "note" or absf(float(event.beat)-onset) > .00001:
                 continue
-            for x in range(maxi(0, floori(left)-1), mini(original.get_width(), floori(first.x))):
-                var before: Color = original.get_pixel(x, y)
-                if minf(before.r, minf(before.g, before.b)) > .65:
-                    expected += 1
-                    var after: Color = prepared.get_pixel(x, y)
-                    if minf(after.r, minf(after.g, after.b)) > .65:
-                        retained += 1
-        check(expected > 15, "fixture contains actual accidental/ledger ink left of onset %.0f" % onset)
-        check(retained >= expected * .98, "preparation preserves opening ink at %.0f: %d of %d pixels" % [onset, retained, expected])
+            var id: String = str(event.id)
+            if not heads.has(id):
+                continue
+            var head: Vector2 = heads[id]
+            check(view.drawn_noteheads.has(id), "Preparation retains the source head")
+            if not view.drawn_noteheads.has(id):
+                continue
+            var after_head: Vector2 = view.drawn_noteheads[id]
+            var displacement: Vector2 = (transform*after_head-transform*head)*pixel_scale
+            check(absf(displacement.y) < .01, "Preparation preserves source pitch")
+            var staff: String = str(event.get("staff","right"))
+            var ink_left: Vector2 = (transform * (head-Vector2(gap*2.7,gap*2.0))) * pixel_scale
+            var ink_right: Vector2 = (transform * (head+Vector2(-gap*.65,gap*2.0))) * pixel_scale
+            for y in range(maxi(0,floori(ink_left.y)),mini(original.get_height(),ceili(ink_right.y))):
+                var local_y: float = (float(y)/pixel_scale.y-view.global_position.y)
+                var on_rail := false
+                for line in range(5):
+                    if absf(local_y-(view._staff_center(staff)+(line-2)*gap)) < 2.0:
+                        on_rail = true
+                if on_rail:
+                    continue
+                for x in range(maxi(0,floori(ink_left.x)),mini(original.get_width(),ceili(ink_right.x))):
+                    var before: Color = original.get_pixel(x,y)
+                    if minf(before.r,minf(before.g,before.b)) > .65:
+                        expected += 1
+                        var after: Color = prepared.get_pixel(x+roundi(displacement.x),y+roundi(displacement.y))
+                        if minf(after.r,minf(after.g,after.b)) > .65:
+                            retained += 1
+            tested += 1
+        check(tested >= 2 and expected > 15,
+            "Fixture contains actual accidental/ledger ink at source onset %.0f (%d pixels)" % [onset,expected])
+        check(retained >= expected*.98,
+            "Native preparation retains source accidental/ledger pixels at %.0f: %d/%d" % [onset,retained,expected])
     print("PREPARATION_INK_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

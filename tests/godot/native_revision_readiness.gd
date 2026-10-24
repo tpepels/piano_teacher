@@ -21,7 +21,6 @@ func run() -> void:
         push_error("A layout from a newer server revision replaced this lesson's assets")
         quit(1)
         return
-    app.native_notation_enabled = true
     app.timeline_preview = load("res://notation/native/view.gd").new()
     app.add_child(app.timeline_preview)
     var fixture = load("res://tests/native_glyph_fixture.gd")

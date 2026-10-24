@@ -5,11 +5,25 @@ MIDI or MusicXML, learn simplified passages, restore the original notes, then
 connect the passages into a complete performance. All progress stays local.
 
 Native notation uses a continuous score timeline and a fixed playhead.
-Independent semantic and screenshot verification have separate coverage ledgers;
-passing application tests does not certify an entire score. See the
-[verification phases](docs/native-notation-proof-phases.md),
-[strict release decision](docs/native-notation-phase4-release-evidence.md), and
-[Phase 5 real-score remediation and limitations](docs/native-notation-phase5-remediation.md).
+The single `native-notation` CI requirement checks all 17 bundled MIDI files,
+every measure, left/right/both hands and every learning variant through the
+real Godot framebuffer against Verovio. Run the same comprehensive check locally:
+
+```bash
+.venv/bin/python scripts/check_native_verovio_overlay.py --out /tmp/native-notation
+```
+
+A graphical display is required; CI supplies Xvfb and software OpenGL on Arch
+Linux. No native-renderer environment flag is needed. `--only` is an optional
+debugging filter; CI always runs the complete default corpus. Reports and images
+are written to the output directory and uploaded by CI even on failure. This
+same gate runs for every pull request, main push and tagged native release;
+release candidates are built and published as drafts only after it passes.
+General application integration checks run separately.
+
+For detector development, `--reuse-captures` rechecks retained PNGs only when
+their exact source, assets, renderer resources and Godot version still match.
+Changed or missing captures are rendered again; CI always starts with fresh captures.
 
 The interface follows `moodboard.png`: forest, pine and charcoal surfaces,
 serif music titles, white active staves, a restrained teal timing line and a

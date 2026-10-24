@@ -10,20 +10,25 @@ from scripts.smoke_modes_godot import make_fixture, run
 
 
 def expected_route(piece):
-    """Find the full-source connection exposed by the ordinary lesson picker."""
+    """Select the full-source performance through the ordinary lesson picker."""
     plan = LearningPlan(piece)
-    step = next(step for step in plan.lesson_steps if step.kind == "connect")
+    step = next(step for step in plan.lesson_steps if step.kind == "perform")
     plan.select_step(plan.lesson_steps.index(step) + 1)
     phrase = plan.active_phrase
+    assert phrase.notes == piece.notes
+    assert plan.active_variant.source_indices == tuple(range(len(piece.notes)))
+    assert not plan.mastered
     return (step.kind, step.first_bar, step.last_bar, step.level,
             step.required_notes, phrase.start, phrase.end,
             min(note.start for note in phrase.notes), max(note.end for note in phrase.notes))
 
 
-def test_modes_fixture_full_connection_keeps_source_rests_and_held_ending(tmp_path):
+def test_modes_fixture_full_performance_keeps_source_rests_and_held_ending(tmp_path):
     source = tmp_path / "modes.mid"
     make_fixture(source)
-    assert expected_route(load_midi(source)) == ("connect", 1, 4, "original", 26, 0, 16, 1, 16)
+    piece = load_midi(source)
+    assert expected_route(piece) == ("perform", 1, 4, "original", 26, 0, 16, 1, 16)
+    assert all(note.end <= 7 or note.start >= 8 for note in piece.notes)
 
 
 def test_real_listen_pcm_and_all_missed_perform_end_with_actionable_summary(tmp_path, monkeypatch):

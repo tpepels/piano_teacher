@@ -9,6 +9,25 @@ const BARLINE_STYLES := ["regular", "light-light", "light-heavy",
 const NOTE_BEATS := {"whole":4.0,"half":2.0,"quarter":1.0,
     "eighth":.5,"16th":.25,"32nd":.125,"64th":.0625,"128th":.03125}
 
+const KEY_SIGNATURE_PATTERNS := {
+    "G1": [[6,3,7,4,1,5,2], [2,5,1,4,0,3,-1]],
+    "G2": [[8,5,9,6,3,7,4], [4,7,3,6,2,5,1]],
+    "G3": [[3,0,4,1,5,2,6], [6,2,5,1,4,0,3]],
+    "G4": [[5,2,6,3,7,4,8], [1,4,0,3,6,2,5]],
+    "G5": [[7,4,8,5,2,6,3], [3,6,2,5,1,4,0]],
+    "F1": [[0,-3,1,-2,-5,-1,-4], [-4,-1,-5,-2,1,-3,0]],
+    "F2": [[2,-1,3,0,-3,1,-2], [-2,1,-3,0,3,-1,2]],
+    "F3": [[4,1,5,2,6,3,7], [7,3,6,2,5,1,4]],
+    "F4": [[6,3,7,4,1,5,2], [2,5,1,4,0,3,-1]],
+    "F5": [[8,5,9,6,3,7,4], [4,7,3,6,9,5,8]],
+    "C1": [[3,0,4,1,5,2,6], [6,2,5,1,4,0,3]],
+    "C2": [[5,2,6,3,7,4,8], [1,4,0,3,6,2,5]],
+    "C3": [[7,4,8,5,2,6,3], [3,6,2,5,1,4,0]],
+    "C4": [[2,6,3,7,4,8,5], [5,8,4,7,3,6,2]],
+    "C5": [[4,1,5,2,6,3,7], [7,3,6,2,5,1,4]],
+}
+
+
 static func dotted_multiplier(dots: int) -> float:
     var result := 1.0
     var fraction := .5
@@ -205,29 +224,17 @@ static func beamed_ids(groups: Array) -> Dictionary:
 # Key signatures use the circle-of-fifths order. Their steps are measured
 # against each clef, never repeated at one arbitrary y like a text label.
 static func signature_steps(clef: Dictionary, fifths: int) -> Array:
-    var sharps: Array = [
-        {"step":"F","octave":5}, {"step":"C","octave":5},
-        {"step":"G","octave":5}, {"step":"D","octave":5},
-        {"step":"A","octave":4}, {"step":"E","octave":5},
-        {"step":"B","octave":4}]
-    var flats: Array = [
-        {"step":"B","octave":4}, {"step":"E","octave":5},
-        {"step":"A","octave":4}, {"step":"D","octave":5},
-        {"step":"G","octave":4}, {"step":"C","octave":5},
-        {"step":"F","octave":4}]
-    var pitches: Array = sharps if fifths > 0 else flats
-    var result: Array = []
-    for i in range(mini(7, absi(fifths))):
-        var written: Dictionary = pitches[i].duplicate()
-        var step: int = staff_step(written, clef)
-        # Shift each symbol by octaves to live near the staff. This
-        # preserves correct letter placement across G/F/C clefs.
-        while step > 10:
-            step -= 7
-        while step < 0:
-            step += 7
-        result.append(step)
-    return result
+    # Conventional key patterns depend on the complete clef, not separate
+    # octave clamps for each letter. Steps are diatonic half-spaces above
+    # the bottom rule. Independent tests recover these positions directly
+    # from Verovio keyAccid anchors for every supported G/F/C staff line.
+    var sign: String = str(clef.get("sign","G"))
+    var default_line: int = 2 if sign == "G" else 4 if sign == "F" else 3
+    var key: String = sign+str(int(clef.get("line",default_line)))
+    if not KEY_SIGNATURE_PATTERNS.has(key) or fifths == 0:
+        return []
+    var pattern: Array = KEY_SIGNATURE_PATTERNS[key][0 if fifths > 0 else 1]
+    return pattern.slice(0,mini(7,absi(fifths)))
 
 static func key_cancellation_steps(clef: Dictionary, before: int,
         after: int) -> Array:
@@ -389,8 +396,6 @@ static func accidental_offsets(events: Array, gap: float,
 
 static func tuplet_groups(model: Dictionary) -> Array:
     # Group from explicit MusicXML start/stop, not from guessed X intervals.
-    # An unusual standalone time-modification is displayed with its
-    # full actual:normal ratio instead of being silently misrepresented.
     var lanes: Dictionary = {}
     for event in model.get("notation_events", []):
         if not event is Dictionary:
@@ -421,20 +426,8 @@ static func tuplet_groups(model: Dictionary) -> Array:
                         "bracket":str(mark.get("bracket", "yes")),
                         "show_number":str(mark.get("show_number", "actual"))
                     }
-            var attached := false
-            if modifier is Dictionary:
-                for number in opened:
-                    var group: Dictionary = opened[number]
-                    if group["actual"] == int(modifier.get("actual", 0)) \
-                            and group["normal"] == int(modifier.get("normal", 0)):
-                        group["events"].append(event)
-                        attached = true
-                if not attached:
-                    groups.append({"events":[event],
-                        "staff":event.get("staff", "right"),
-                        "actual":int(modifier.get("actual", 1)),
-                        "normal":int(modifier.get("normal", 1)),
-                        "bracket":"yes", "show_number":"ratio"})
+            for number in opened:
+                opened[number]["events"].append(event)
             for mark in marks:
                 if str(mark.get("type", "")) == "stop":
                     var number: String = str(mark.get("number", "1"))

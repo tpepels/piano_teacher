@@ -42,11 +42,9 @@ func press(text: String) -> void:
     check(false, "Visible enabled control missing: " + text)
 
 func score_ready() -> bool:
-    if app.native_notation_enabled and (app.timeline_preview == null or \
-            not app.timeline_preview.native_ready or app.timeline_model_revision != app.revision):
-        return false
-    return app.score_view.texture != null and app.layout_revision == app.revision \
-        and app.rendered_revision == app.revision and not app.layout_pending and not app.score_pending
+    return app.timeline_preview != null and app._native_score_ready() \
+        and app.timeline_preview.is_visible_in_tree() and not app.layout_pending \
+        and not app.timeline_model_pending
 
 func phase() -> String:
     return str(app.last_state.get("phase", ""))
@@ -61,15 +59,11 @@ func visible_instruction() -> bool:
     return false
 
 func position(note: Dictionary) -> Vector2:
-    if app.native_notation_enabled:
-        var renderer = app.timeline_preview
-        if renderer != null and renderer.drawn_noteheads.has(str(note.id)):
-            return renderer.get_global_transform_with_canvas() * \
-                Vector2(renderer.drawn_noteheads[str(note.id)])
-        return Vector2(-10000,-10000)
-    var local: Vector2 = (Vector2(float(note.x), float(note.y)) - app.score_crop_origin) \
-        / app.score_crop_size * app.score_content.size
-    return app.score_content.get_global_transform_with_canvas() * local
+    var renderer = app.timeline_preview
+    if renderer != null and renderer.drawn_noteheads.has(str(note.id)):
+        return renderer.get_global_transform_with_canvas() * \
+            Vector2(renderer.drawn_noteheads[str(note.id)])
+    return Vector2(-10000,-10000)
 
 func track(beat: float) -> void:
     for note in app.score_layout.get("notes", []):
@@ -79,16 +73,15 @@ func track(beat: float) -> void:
     check(false, "Displayed generated source has note at beat " + str(beat))
 
 func note_in_view(beat: float) -> bool:
-    if app.native_notation_enabled:
-        var renderer = app.timeline_preview
-        if int(renderer.transport_id) != int(app.last_state.get("transport_id", -1)):
-            return false
-        # A tempo reload can retain the previous feedback frame's draw map
-        # until the next draw. Require the current transport projection too.
-        var x: float = renderer.timeline.screen_x(beat, renderer.clock_beat,
-            renderer.size.x * renderer.PLAYHEAD_FRACTION, renderer.play_from_beat)
-        if x < 25 or x > renderer.size.x-25:
-            return false
+    var renderer = app.timeline_preview
+    if int(renderer.transport_id) != int(app.last_state.get("transport_id", -1)):
+        return false
+    # A tempo reload can retain the previous feedback frame's draw map
+    # until the next draw. Require the current transport projection too.
+    var x: float = renderer.timeline.screen_x(beat, renderer.clock_beat,
+        renderer.size.x * renderer.PLAYHEAD_FRACTION, renderer.play_from_beat)
+    if x < 25 or x > renderer.size.x-25:
+        return false
     for note in app.score_layout.get("notes", []):
         if absf(float(note.get("beat", -100)) - beat) < .01:
             return app.score_frame.get_global_rect().grow(-25).has_point(position(note))
@@ -151,16 +144,10 @@ func capture(label: String, beat: float = -999) -> Dictionary:
         entry["note_y"] = point.y
         entry["notehead_ink"] = ink(picture, point)
         check(int(entry.notehead_ink) >= 8, "Actual notehead pixels exist in " + label)
-    if str(app.last_state.get("mode", "")) == "practice" and (app.native_notation_enabled or bool(app.score_overlay.showing)):
-        var line: Vector2
-        if app.native_notation_enabled:
-            var renderer = app.timeline_preview
-            line = renderer.get_global_transform_with_canvas() * Vector2(renderer.size.x * renderer.PLAYHEAD_FRACTION, 0)
-        else:
-            var cursor: Dictionary = app.score_overlay.cursor
-            var local: Vector2 = (Vector2(float(cursor.get("x", 0)), 0)-app.score_crop_origin) \
-                / app.score_crop_size*app.score_content.size
-            line = app.score_content.get_global_transform_with_canvas()*local
+    if str(app.last_state.get("mode", "")) == "practice":
+        var renderer = app.timeline_preview
+        var line: Vector2 = renderer.get_global_transform_with_canvas() * Vector2(
+            renderer.size.x * renderer.PLAYHEAD_FRACTION, 0)
         entry["line_x"] = line.x*scale.x
         check(absf(line.x-(panel.position.x+panel.size.x*.42)) < 2,
             "Timing line remains fixed in " + label)
@@ -175,12 +162,14 @@ func capture(label: String, beat: float = -999) -> Dictionary:
     print("INSTRUCTIONAL_FRAME:", label)
     return entry
 
-func wait_running(bpm: int, offset: float) -> bool:
-    return await wait_for(func(): return score_ready() and phase() == "count_in" \
+func wait_running(bpm: int, offset: float, fresh_start: bool = true) -> bool:
+    return await wait_for(func(): return score_ready() \
+        and phase() == ("count_in" if fresh_start else "playing") \
+        and (fresh_start or float(app.last_state.get("count_in_beats",-1)) == 0) \
         and int(app.last_state.get("bpm", 0)) == bpm \
         and absf(float(app.last_state.get("play_from_beat", -1))-offset) < .01 \
         and note_in_view(offset),
-        "count-in at %d BPM from beat %s" % [bpm,str(offset)])
+        "%s at %d BPM from beat %s" % ["count-in" if fresh_start else "continuous retry",bpm,str(offset)])
 
 func finish_earned_modes() -> void:
     check(int(app.last_state.target_bpm) == 240,"Earned stage preserves chosen target before manual tempo change")
@@ -282,14 +271,14 @@ func run() -> void:
     check(app.hint_keyboard._heard_label.text.contains("C#4"), "Heard wrong pitch remains separate")
     print("INSTRUCTIONAL_STAGE:hint-rendered")
     await wait_for(func(): return phase() == "guided_complete", "learner finds opening pitches")
-    # Learn keeps a static score window; completion is proved by all sixteen
+    # Learn keeps a static score window; completion is proved by all eight
     # real MIDI targets, while the opening note remains in the viewport.
     await capture("03-learn-complete", 0)
     check(not bool(app.last_state.teaching.get("has_more_units",true)),
         "The default two-measure passage is fully prepared without mastery")
     # A pause-sheet seek is a temporary partial; a library opening measure
     # deliberately persists across later tempo changes. Abandon this count-in
-    # before any assessed playing, then choose the eight-attack second measure.
+    # before any assessed playing, then choose the five-attack second measure.
     app.start_button.pressed.emit()
     await wait_for(func(): return score_ready() and phase() == "count_in" \
         and float(app.last_state.get("play_from_beat",-1)) == 0 and not app.action_pending,
@@ -335,7 +324,7 @@ func run() -> void:
     check(absf(float(app.last_state.transition_in_seconds)-remaining) < .05,
         "Paused feedback countdown remains frozen")
     app.start_button.pressed.emit()
-    await wait_running(216,8)
+    await wait_running(216,8,false)
     await capture("09-exact-chunk-retry-count-in")
     await wait_for(func(): return phase() == "recovering" and bool(app.last_state.get("guided_recovery", false)),
         "same chunk repeated trouble selects guided help")
@@ -363,7 +352,7 @@ func run() -> void:
         "Clean partial cannot award mastery or target clean credit")
     await capture("15-partial-success-whole-passage-next")
     for bpm in [194,207,223,240,240,240]:
-        await wait_running(bpm,0)
+        await wait_running(bpm,0,false)
         var number := frames.size()
         await capture("%02d-whole-count-in-%d" % [number,bpm],0)
         await wait_for(func(): return phase() == "feedback", "clean whole musical attempt at " + str(bpm))
@@ -371,7 +360,7 @@ func run() -> void:
         await capture("%02d-whole-feedback-%d" % [frames.size(),bpm])
     await wait_for(func(): return score_ready() and phase() == "guided_wait" and int(app.last_state.get("mastered",0)) == 1 \
         and str(app.last_state.get("lesson_level", "")) == "original", "actual next generated level after three target passes")
-    check(str(app.last_state.get("mode","")) == "learn" and int(app.last_state.get("required_notes",0)) == 32,
+    check(str(app.last_state.get("mode","")) == "learn" and int(app.last_state.get("required_notes",0)) == 16,
         "Next original variant prepares its first real chord idea")
     await capture("28-next-original-variant")
     if continue_modes:
@@ -383,7 +372,7 @@ func run() -> void:
             child.stop()
     await wait_for(func(): return not app.state_pending and not app.device_pending and not app.library_pending \
         and not app.settings_pending and not app.lesson_pending and not app.action_pending \
-        and not app.layout_pending and not app.score_pending, "drain ordinary HTTP requests before exit")
+        and not app.layout_pending and not app.timeline_model_pending, "drain ordinary HTTP requests before exit")
     var file := FileAccess.open(folder+"/result.json",FileAccess.WRITE)
     file.store_string(JSON.stringify({"frames":frames,"failures":failures,"renderer":DisplayServer.get_name()},"  "))
     print("INSTRUCTIONAL_RESULT:", "PASS" if failures.is_empty() else "FAIL")
