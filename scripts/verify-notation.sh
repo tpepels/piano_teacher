@@ -25,7 +25,8 @@ quick_checks() {
   "$PYTHON" -m pytest -q \
     tests/test_native_notation_library.py \
     tests/test_connector_pixels.py \
-    tests/test_phase3_scroll_pixels.py || return $?
+    tests/test_phase3_scroll_pixels.py \
+    tests/test_notation_diagnostic_package.py || return $?
   "$GODOT" --headless --path godot --check-only --script res://main.gd
 }
 
