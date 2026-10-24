@@ -820,10 +820,16 @@ def _verify(xml, folder, hand, reference_svgs, kind):
             bad = next((w for w in witnesses if w['status'] != 'verified'), None)
             if bad:
                 record.update(status=bad['status'], reason=bad['reason'], evidence=bad)
+            elif witnesses and failures:
+                # A successful nearby frame cannot certify a missing or
+                # independently unregistrable source-onset frame.
+                record.update(status='unverified',
+                    reason='Some required source clocks could not be independently registered',
+                    evidence=dict(witnesses=witnesses, unavailable_witnesses=failures))
             elif witnesses:
                 record.update(status='verified', reason=witnesses[0]['reason'], evidence=dict(
                     **{k: v for k, v in witnesses[0].items() if k not in {'status', 'reason'}},
-                    witnesses=witnesses, unavailable_witnesses=failures))
+                    witnesses=witnesses, unavailable_witnesses=[]))
             else:
                 record.update(reason='No unambiguous common PNG witness', evidence=dict(unavailable_witnesses=failures))
         measured.append(record)

@@ -271,3 +271,29 @@ def test_grouped_source_ids_do_not_depend_on_anonymous_rest_ordinal():
     graphical = [g for g in groups if g.get('graphical', True)]
     assert graphical and all(g['events'] and not g.get('error') for g in graphical)
     assert len({e['source']['id'] for g in graphical for e in g['events']}) >= 5
+
+
+
+def test_missing_source_onset_frame_cannot_be_overruled_by_nearby_good_frame(monkeypatch):
+    from piano_teacher.notation import connector_pixels as matcher
+    from types import SimpleNamespace
+    from pathlib import Path
+    source = (FIXTURES / "beams" / "score.musicxml").read_text()
+    written = matcher.read_written_score(source)
+    svg = (FIXTURES / "beams" / "verovio-0.svg").read_text()
+    groups = matcher._inventory(written, [svg], "beam", "right")
+    assert groups and groups[0]["events"]
+    # Reuse the real source and reference art, but simulate one unavailable
+    # source-onset capture. Nothing else can certify the missing observation.
+    class Frames:
+        def __init__(self, *_): pass
+        def nearby_clocks(self, *_): return [0.5]
+        def frame(self, clock):
+            if clock != 0.5:
+                raise OSError("Missing source-onset framebuffer")
+            return {'name':'native-0.50000.png'}
+    monkeypatch.setattr(matcher, "_Frames", Frames)
+    monkeypatch.setattr(matcher, "_beam", lambda *_: (
+        "verified", "Good nearby image", {"bbox":[0,0,10,10]}))
+    report = matcher._verify(source, Path("/unused"), "right", [svg], "beam")
+    assert all(row["status"] != "verified" for row in report["measured"])

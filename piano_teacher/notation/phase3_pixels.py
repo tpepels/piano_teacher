@@ -45,7 +45,7 @@ def verify_translation_sequence(first: Image.Image, middle: Image.Image,
     masks = [bright(p)[:, margin:width-margin] for p in pictures]
     if any(np.count_nonzero(mask) < 24 for mask in masks):
         return dict(passed=False, status="unverified", reason="Insufficient moving score ink")
-    steps, scores = [], []
+    steps, scores, competing = [], [], []
     limit = min(round(width*.18), masks[0].shape[1]//3)
     for a, b in zip(masks, masks[1:]):
         left, right = a.sum(axis=0).astype(float), b.sum(axis=0).astype(float)
@@ -56,23 +56,34 @@ def verify_translation_sequence(first: Image.Image, middle: Image.Image,
             norm = float(np.linalg.norm(aa)*np.linalg.norm(bb))
             candidates.append((float(aa.dot(bb))/norm if norm else 0, shift))
         best = None
+        alternatives = []
         for _score, shift in sorted(candidates, reverse=True)[:8]:
             aa, bb = (a[:, shift:], b[:, :-shift]) if shift > 0 else (
                 (a[:, :shift], b[:, -shift:]) if shift < 0 else (a, b))
             dice = float(2*np.count_nonzero(aa & bb)/(np.count_nonzero(aa)+np.count_nonzero(bb)))
             candidate = (dice, -abs(shift), shift)
+            alternatives.append((dice, shift))
             if best is None or candidate > best:
                 best = candidate
         scores.append(round(best[0], 4))
         steps.append(best[2])
+        # Repeated musical patterns may register at more than one displacement.
+        # The larger displacement must not be asserted as an actual camera
+        # jump if a different alignment is nearly equally convincing.
+        competing.append([shift for dice, shift in alternatives
+                          if abs(shift-best[2]) > 2 and dice >= max(.80, best[0]-.01)])
     coherent = min(scores) >= .80
     forward = min(steps) > 0
     uniform = abs(steps[0]-steps[1]) <= 1
-    passed = coherent and forward and uniform
+    unique = not any(competing)
+    passed = coherent and forward and uniform and unique
+    reason = ("Image registration has multiple plausible translations in repeated notation"
+              if not unique else
+              "Equal musical steps preserve forward score translation" if passed else
+              "Score froze, reversed, jumped or lacked coherent image correspondence")
     return dict(passed=passed, status="verified" if passed else "unverified",
                 pixel_steps=steps, contour_agreement=scores,
-                reason="Equal musical steps preserve forward score translation" if passed else
-                       "Score froze, reversed, jumped or lacked coherent image correspondence")
+                competing_shifts=competing, reason=reason)
 
 
 def verify_scroll_pixels(xml: str, folder: Path) -> dict:

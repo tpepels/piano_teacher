@@ -30,3 +30,20 @@ def test_no_foreground_is_explicitly_unverified():
     result = phase3_pixels.verify_translation_sequence(blank, blank, blank)
     assert not result["passed"]
     assert result["status"] == "unverified"
+
+
+
+def test_repeated_ink_does_not_prove_an_arbitrary_scroll_displacement():
+    """Tiled identical music must not authorize a single guessed jump."""
+    from PIL import Image, ImageDraw
+    def repeated(offset):
+        photo = Image.new("RGB", (480, 240), "#102923")
+        draw = ImageDraw.Draw(photo)
+        for x in range(45, 490, 28):
+            draw.rectangle((x-offset, 70, x-offset+9, 81), fill="#E5F2EA")
+        return photo
+    result = phase3_pixels.verify_translation_sequence(
+        repeated(0), repeated(6), repeated(12))
+    assert result["passed"] or result["status"] == "unverified"
+    if result["competing_shifts"]:
+        assert not result["passed"]
