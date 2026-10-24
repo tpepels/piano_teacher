@@ -936,22 +936,31 @@ def audit_library(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
     for source_index, path in enumerate(sources):
         try:
             piece = _library_piece(str(path))
-            whole = Phrase(1, 1, len(piece.bar_boundaries)-1,
-                           piece.bar_boundaries[0], piece.bar_boundaries[-1], piece.notes)
-            score = build_lesson_score(whole, boundaries=piece.bar_boundaries,
-                time_signatures=piece.time_signatures, key_signatures=piece.key_signatures,
-                clef_changes=piece.clef_changes, barlines=piece.barlines,
-                source_musicxml=piece.source_musicxml,
-                default_clefs=None if piece.source_musicxml else infer_piece_clefs(piece.notes))
-            model = build_score_model(score, boundaries=piece.bar_boundaries, hand="both")
-            if path.suffix.casefold() in {".mid", ".midi"}:
-                model["import_warnings"] = list(piece.import_warnings)
-                semantics = verify_midi_performance(path, model, generated_xml=score.musicxml)
-            else:
-                semantics = verify_musicxml_contract(path.read_text(), score.musicxml, model)
-            for row in semantics["elements"]:
-                if row["status"] in {"mismatch", "unverified"}:
-                    summary["failures"].append(f"{path.name}: " + symbol_error(row))
+            # Full-source semantic import is independent of rendered
+            # four-bar cases. Assign it to exactly one deterministic shard
+            # instead of rebuilding an enormous complete score 24 times.
+            semantic_case = AuditCase("source-semantics", str(path), 1, 1)
+            if case_shard(path, semantic_case, shard_count) == shard_index:
+                whole = Phrase(1, 1, len(piece.bar_boundaries)-1,
+                               piece.bar_boundaries[0], piece.bar_boundaries[-1], piece.notes)
+                score = build_lesson_score(whole, boundaries=piece.bar_boundaries,
+                    time_signatures=piece.time_signatures, key_signatures=piece.key_signatures,
+                    clef_changes=piece.clef_changes, barlines=piece.barlines,
+                    source_musicxml=piece.source_musicxml,
+                    default_clefs=None if piece.source_musicxml else infer_piece_clefs(piece.notes))
+                model = build_score_model(score, boundaries=piece.bar_boundaries, hand="both")
+                if path.suffix.casefold() in {".mid", ".midi"}:
+                    model["import_warnings"] = list(piece.import_warnings)
+                    semantics = verify_midi_performance(path, model, generated_xml=score.musicxml)
+                else:
+                    semantics = verify_musicxml_contract(path.read_text(), score.musicxml, model)
+                for row in semantics["elements"]:
+                    if row["status"] in {"mismatch", "unverified"}:
+                        summary["failures"].append(f"{path.name}: " + symbol_error(row))
+                directory = out/f"{source_index:02d}-{path.stem}"
+                directory.mkdir(parents=True,exist_ok=True)
+                (directory/"source-semantics.json").write_text(
+                    json.dumps(semantics,indent=2)+"\n")
             originals = tuple(case for case in original_cases(path, piece, max_bars=max_bars)
                               if case_shard(path, case, shard_count) == shard_index)
             stages = tuple((case, source_phrase, variant)
@@ -976,9 +985,7 @@ def audit_library(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
                 for bar in range(case.first_bar, case.last_bar + 1)})
             plans.append((source_index,path,[(case,None,None) for case in originals],
                           list(stages),list(focused)))
-            directory=out/f"{source_index:02d}-{path.stem}"
-            directory.mkdir(parents=True,exist_ok=True)
-            (directory/"source-semantics.json").write_text(json.dumps(semantics,indent=2)+"\n")
+
         except Exception as exc:
             message = f"{path.name}: {type(exc).__name__}: {exc}"
             summary["failures"].append(message)
