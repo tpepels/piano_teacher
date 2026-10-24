@@ -862,8 +862,9 @@ def _library_piece(path: str):
     return import_piece(Path(path))[0]
 
 
-def _library_job(case, source_phrase, variant, directory, godot, reuse_captures=False):
-    """An isolated worker retains the existing comparison and its failure PNGs."""
+def _library_job(case, source_phrase, variant, directory, godot, reuse_captures=False,
+                 focused=False):
+    """One native/Verovio worker; named editorial regressions share the renderer."""
     try:
         if variant is not None:
             problems = variant_errors(source_phrase, variant)
@@ -877,19 +878,19 @@ def _library_job(case, source_phrase, variant, directory, godot, reuse_captures=
         result=None
         if reuse_captures and (directory/'capture-manifest.json').is_file():
             try:
-                result=run(directory,godot,case,all_symbols=True,strict=False,
+                result=run(directory,godot,case,all_symbols=not focused,strict=False,
                            prepared=prepared,reuse_captures=True)
             except (AssertionError,OSError,ValueError) as exc:
                 print(f'RECAPTURE {case.name}: {exc}',flush=True)
         if result is None:
-            result=run(directory,godot,case,all_symbols=True,strict=False,prepared=prepared)
+            result=run(directory,godot,case,all_symbols=not focused,strict=False,prepared=prepared)
         if not result["errors"]:
             for picture in directory.glob("*.png"):
                 picture.unlink()
         return {"errors": result["errors"][:25], "error_count": len(result["errors"]),
                 "captured": True,
                 "nonverified_symbols": result["nonverified_symbols"],
-                "symbols": result["whole_window_coverage"].get("symbols", {})}
+                "symbols": (result["whole_window_coverage"] or {}).get("symbols", {})}
     except Exception as exc:
         return {"errors": [f"{type(exc).__name__}: {exc}"], "error_count": 1,
                 "captured": False, "symbols": {}}
@@ -939,9 +940,16 @@ def audit_library(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
                     summary["failures"].append(f"{path.name}: " + symbol_error(row))
             originals = tuple(original_cases(path, piece, max_bars=max_bars))
             stages = tuple(curriculum_cases(path, piece))
-            summary["cases_expected"] += len(originals) + len(stages)
+            # The named hard passages enforce editorial constraints (notably
+            # the user's Autumn Leaves density and Chopin triplet turn) that
+            # are not checked by the full-symbol pixel comparisons alone.
+            focused = tuple((case,None,None) for case in CASES
+                if (ROOT / (case.filename if "/" in case.filename
+                            else "midi/" + case.filename)).resolve() == path.resolve())
+            summary["cases_expected"] += len(originals) + len(stages) + len(focused)
             summary["measures_expected"] += len(piece.bar_boundaries)-1
-            plans.append((source_index,path,[(case,None,None) for case in originals],list(stages)))
+            plans.append((source_index,path,[(case,None,None) for case in originals],
+                          list(stages),list(focused)))
             directory=out/f"{source_index:02d}-{path.stem}"
             directory.mkdir(parents=True,exist_ok=True)
             (directory/"source-semantics.json").write_text(json.dumps(semantics,indent=2)+"\n")
@@ -949,20 +957,21 @@ def audit_library(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
             message = f"{path.name}: {type(exc).__name__}: {exc}"
             summary["failures"].append(message)
             print("FAIL " + message, flush=True)
-    # Freeze all source/case denominators before any framebuffer is launched.
-    # Complete every original window first, then every real learning stage;
-    # Hanon's thousands of variants cannot postpone the other source files.
+    # Freeze all denominators before capture. Cover every original measure,
+    # then the named hard passages, then the generated learning curriculum.
     completed=Counter()
-    visited={index:set() for index,_,_,_ in plans}
-    totals={index:len(originals)+len(stages) for index,_,originals,stages in plans}
+    visited={index:set() for index,_,_,_,_ in plans}
+    totals={index:len(originals)+len(stages)+len(focused)
+            for index,_,originals,stages,focused in plans}
     with ProcessPoolExecutor(max_workers=workers) as pool:
-        for phase in (2,3):
+        for phase in (2,4,3):
             submitted = {}
             for plan in plans:
                 source_index,path=plan[:2]
                 for case,source_phrase,variant in plan[phase]:
                     directory=out/f"{source_index:02d}-{path.stem}"/case.name
-                    future=pool.submit(_library_job,case,source_phrase,variant,directory,godot,reuse_captures)
+                    future=pool.submit(_library_job,case,source_phrase,variant,
+                                       directory,godot,reuse_captures,phase==4)
                     submitted[future]=(source_index,path,case,variant,directory)
             for future in as_completed(submitted):
                 source_index,path,case,variant,directory=submitted[future]
@@ -978,7 +987,7 @@ def audit_library(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
                     print(f"PASS {path.name} {case.name}", flush=True)
                 for kind, count in result.get("nonverified_symbols", {}).items():
                     summary["nonverified_symbols"][kind] = summary["nonverified_symbols"].get(kind, 0)+count
-                if variant is None and result["captured"]:
+                if phase == 2 and result["captured"]:
                     visited[source_index].update(range(case.first_bar, case.last_bar+1))
                 summary["cases_checked"] += 1
                 completed[source_index]+=1
