@@ -20,10 +20,12 @@ if [[ -z "$GODOT" ]]; then
 fi
 
 quick_checks() {
+  # Explicit error propagation matters: Bash disables errexit within
+  # a function used on the left of a pipeline/conditional.
   "$PYTHON" -m pytest -q \
     tests/test_native_notation_library.py \
     tests/test_connector_pixels.py \
-    tests/test_phase3_scroll_pixels.py
+    tests/test_phase3_scroll_pixels.py || return $?
   "$GODOT" --headless --path godot --check-only --script res://main.gd
 }
 
