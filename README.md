@@ -5,25 +5,35 @@ MIDI or MusicXML, learn simplified passages, restore the original notes, then
 connect the passages into a complete performance. All progress stays local.
 
 Native notation uses a continuous score timeline and a fixed playhead.
-The single `native-notation` CI requirement checks all 17 bundled MIDI files,
-every measure, left/right/both hands and every learning variant through the
-real Godot framebuffer against Verovio. Run the same comprehensive check locally:
+The established Verovio-versus-native framebuffer comparison runs **locally**.
+GitHub CI runs only fast fixture regressions and Godot script validation;
+**a green CI run does not certify the complete MIDI library**.
+
+From the repository root (after installing `.[godot,test]`):
 
 ```bash
-.venv/bin/python scripts/check_native_verovio_overlay.py --out /tmp/native-notation
+sudo pacman -S --needed godot xorg-server-xvfb xorg-xauth
+./scripts/verify-notation.sh quick
+./scripts/verify-notation.sh case chopin-5-6-both
+./scripts/verify-notation.sh file Danny_Boy
+./scripts/verify-notation.sh shard 0
+./scripts/verify-notation.sh full
 ```
 
-A graphical display is required; CI supplies Xvfb and software OpenGL on Arch
-Linux. No native-renderer environment flag is needed. `--only` is an optional
-debugging filter; CI always runs the complete default corpus. Reports and images
-are written to the output directory and uploaded by CI even on failure. This
-same gate runs for every pull request, main push and tagged native release;
-release candidates are built and published as drafts only after it passes.
-General application integration checks run separately.
+`quick` is the same short validation used by CI. `case` runs one named
+Verovio/native regression; `file` checks every original measure, hand and
+learning variant matching a MIDI filename. `shard N` runs batch N (0–23);
+`full` processes all 24 batches in sequence, continuing even if one fails.
+A full pass requires **every** shard to pass. The sweep can be long-running.
 
-For detector development, `--reuse-captures` rechecks retained PNGs only when
-their exact source, assets, renderer resources and Godot version still match.
-Changed or missing captures are rendered again; CI always starts with fresh captures.
+Capture concurrency defaults to two Godot workers. For example,
+`PIANO_VERIFY_WORKERS=4 ./scripts/verify-notation.sh file Danny_Boy`.
+Results and `run.log` files stay under `notation-check-results/` (gitignored).
+Set `PIANO_VERIFY_OUT` for another location or `PIANO_VERIFY_REUSE=1`
+to recheck still-valid retained captures without rebuilding them.
+
+Tagged release candidates are gated by CI's **quick** checks only. Run the
+full local comparison yourself before treating a build as notation-verified.
 
 The interface follows `moodboard.png`: forest, pine and charcoal surfaces,
 serif music titles, white active staves, a restrained teal timing line and a

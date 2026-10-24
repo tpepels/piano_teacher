@@ -1,4 +1,4 @@
-name: Gated native release candidate
+name: Native release candidate (quick CI checks)
 
 on:
   push:
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   exact-release-gate:
-    name: Exact native release gate
+    name: Quick native release checks
     uses: ./.github/workflows/native-notation.yml
 
   release-context:
@@ -58,7 +58,7 @@ jobs:
           PY
 
   build-candidate:
-    name: Build distribution and native Godot source only after the gate
+    name: Build distribution and native Godot source after quick checks
     needs: [exact-release-gate, release-context]
     if: >-
       needs.exact-release-gate.result == 'success' &&
@@ -100,7 +100,7 @@ jobs:
           retention-days: 30
 
   publish-draft:
-    name: Publish a draft only for a passing exact native gate
+    name: Publish a draft only after quick checks
     needs: [exact-release-gate, release-context, build-candidate]
     if: >-
       needs.exact-release-gate.result == 'success' &&
@@ -132,4 +132,4 @@ jobs:
           gh release create "$TAG" /tmp/native-candidate/* \
             --repo "$GH_REPO" --draft --verify-tag --target "$REVISION" \
             --title "Native $TAG" \
-            --notes "Candidate passed the comprehensive native notation check at $REVISION."
+            --notes "Candidate passed fast CI fixture checks at $REVISION. The exhaustive Verovio/native notation comparison runs locally and was not performed by GitHub Actions."
