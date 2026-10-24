@@ -90,6 +90,7 @@ for (( index=0; index<SHARDS; index++ )); do
       echo "Stopping after batch $attempted/$SHARDS: at least one failed batch."
       echo "Remaining batches have NOT been checked. Fix common errors first."
       echo "For deliberate exhaustive diagnosis set PIANO_VERIFY_CONTINUE_ON_FAILURE=1."
+      "$PYTHON" scripts/package_notation_diagnostics.py "$output" "$OUT/triage.zip" || true
       break
     fi
   fi
