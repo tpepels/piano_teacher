@@ -28,7 +28,7 @@ take a long time and is intentionally **local**, not a GitHub Actions job.
 Progress, failure messages and captured evidence are written to
 `notation-check-results/` (gitignored). Rerunning the command starts the
 checks again; `PIANO_VERIFY_REUSE=1` can reuse valid unchanged captures
-for detector development. Two Godot workers are used by default.
+for detector development. Seven Godot capture workers are used by default (seven parallel processes).
 
 GitHub CI calls the same script with its internal `--ci` flag, which runs
 only the short regressions and Godot validation. A green CI check or tagged

@@ -54,7 +54,7 @@ else
   exit 2
 fi
 
-WORKERS="${PIANO_VERIFY_WORKERS:-2}"
+WORKERS="${PIANO_VERIFY_WORKERS:-7}"
 if ! [[ "$WORKERS" =~ ^[1-9][0-9]*$ ]]; then
   echo "PIANO_VERIFY_WORKERS must be a positive integer." >&2
   exit 2
