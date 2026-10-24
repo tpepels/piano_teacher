@@ -8,20 +8,22 @@ on:
   workflow_call:
     outputs:
       revision:
-        description: Event commit that passed the comprehensive native notation check
-        value: ${{ jobs.native-notation.outputs.revision }}
+        description: Event commit that passed every native notation shard
+        value: ${{ jobs.native-gate.outputs.revision }}
 
 permissions:
   contents: read
 
 jobs:
-  native-notation:
-    name: native-notation
+  native-shard:
+    name: native-notation-${{ matrix.shard }}
     runs-on: ubuntu-latest
     container: archlinux:latest
     timeout-minutes: 360
-    outputs:
-      revision: ${{ steps.passed.outputs.revision }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
     steps:
       - name: Install Godot and framebuffer dependencies
         run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango xorg-server-xvfb xorg-xauth mesa
@@ -34,21 +36,34 @@ jobs:
         run: |
           python -m venv .venv
           .venv/bin/python -m pip install -e '.[godot,test]'
-      - name: Check all 17 bundled MIDI files, every measure, hand and learning variant
+      - name: Compare native score and Verovio on assigned cases
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           xvfb-run -a -s "-screen 0 1600x1000x24" \
-            .venv/bin/python scripts/check_native_verovio_overlay.py --out /tmp/native-notation
-      - name: Upload native notation reports and framebuffer images
-        if: always()
+            .venv/bin/python -u scripts/check_native_verovio_overlay.py \
+            --shard-index ${{ matrix.shard }} --shard-count 24 --workers 2 \
+            --out /tmp/native-notation
+      - name: Keep compact evidence on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: native-notation
-          path: /tmp/native-notation/
+          name: native-notation-${{ matrix.shard }}
+          path: |
+            /tmp/native-notation/summary.json
+            /tmp/native-notation/**/audit.json
+            /tmp/native-notation/**/source-semantics.json
           if-no-files-found: warn
-          retention-days: 14
-      - name: Export passing revision for release builds
+          retention-days: 7
+
+  native-gate:
+    name: native-notation
+    needs: [native-shard]
+    runs-on: ubuntu-latest
+    outputs:
+      revision: ${{ steps.passed.outputs.revision }}
+    steps:
+      - name: Confirm all shards passed the exact revision
         id: passed
         env:
           REVISION: ${{ github.sha }}

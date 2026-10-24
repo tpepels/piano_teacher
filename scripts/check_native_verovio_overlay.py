@@ -898,10 +898,21 @@ def _library_job(case, source_phrase, variant, directory, godot, reuse_captures=
                 "captured": False, "symbols": {}}
 
 
+def case_shard(path: Path, case: AuditCase, shard_count: int) -> int:
+    """Stable, disjoint case partition; each case belongs to exactly one shard."""
+    if shard_count < 1:
+        raise ValueError("shard_count must be positive")
+    identity = path.name + "\0" + case.name
+    return int.from_bytes(hashlib.sha256(identity.encode()).digest()[:8], "big") % shard_count
+
+
 def audit_library(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
                   include_fixtures: bool = True, workers: int = 4,
-                  reuse_captures: bool = False) -> dict:
-    """One source/Verovio/native test; no second renderer or certification stack."""
+                  reuse_captures: bool = False, shard_index: int = 0,
+                  shard_count: int = 1) -> dict:
+    """One source/Verovio/native test, partitionable without skipping cases."""
+    if shard_count < 1 or not 0 <= shard_index < shard_count:
+        raise ValueError("Expected 0 <= shard-index < shard-count")
     def discover_sources():
         discovered=list(library_sources(only=only))
         if include_fixtures and not only:
@@ -913,7 +924,8 @@ def audit_library(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
     inputs_hash=verification_inputs_hash(sources)
     out = out.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    summary = {"passed": False, "sources_expected": len(sources),
+    summary = {"passed": False, "sources_expected": 0,
+               "shard_index": shard_index, "shard_count": shard_count,
                "inputs_sha256": inputs_hash,
                "sources_checked": 0, "cases_expected": 0, "cases_checked": 0,
                "measures_expected": 0, "measures_checked": 0,
@@ -940,16 +952,28 @@ def audit_library(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
             for row in semantics["elements"]:
                 if row["status"] in {"mismatch", "unverified"}:
                     summary["failures"].append(f"{path.name}: " + symbol_error(row))
-            originals = tuple(original_cases(path, piece, max_bars=max_bars))
-            stages = tuple(curriculum_cases(path, piece))
+            originals = tuple(case for case in original_cases(path, piece, max_bars=max_bars)
+                              if case_shard(path, case, shard_count) == shard_index)
+            stages = tuple((case, source_phrase, variant)
+                           for case, source_phrase, variant in curriculum_cases(path, piece)
+                           if case_shard(path, case, shard_count) == shard_index)
             # The named hard passages enforce editorial constraints (notably
             # the user's Autumn Leaves density and Chopin triplet turn) that
             # are not checked by the full-symbol pixel comparisons alone.
             focused = tuple((case,None,None) for case in CASES
                 if (ROOT / (case.filename if "/" in case.filename
-                            else "midi/" + case.filename)).resolve() == path.resolve())
+                            else "midi/" + case.filename)).resolve() == path.resolve()
+                and case_shard(path, case, shard_count) == shard_index)
+            if not (originals or stages or focused):
+                continue
+            summary["sources_expected"] += 1
             summary["cases_expected"] += len(originals) + len(stages) + len(focused)
-            summary["measures_expected"] += len(piece.bar_boundaries)-1
+            # Each source's original measures are partitioned across shards.
+            # Context windows may overlap, but a source bar must be witnessed
+            # by at least one original window across the full matrix.
+            summary["measures_expected"] += len({
+                bar for case in originals
+                for bar in range(case.first_bar, case.last_bar + 1)})
             plans.append((source_index,path,[(case,None,None) for case in originals],
                           list(stages),list(focused)))
             directory=out/f"{source_index:02d}-{path.stem}"
@@ -1027,6 +1051,10 @@ def main() -> int:
                         help="Independent Godot capture processes (default: 4)")
     parser.add_argument("--reuse-captures",action="store_true",
                         help="Recheck unchanged retained PNGs; changed or missing captures are rendered again")
+    parser.add_argument("--shard-index", type=int, default=0,
+                        help="Zero-based partition of original and curriculum cases")
+    parser.add_argument("--shard-count", type=int, default=1,
+                        help="Total partitions (every one must pass for full coverage)")
     a=parser.parse_args()
     godot=shutil.which("godot") or shutil.which("godot4")
     if not godot:
@@ -1035,10 +1063,15 @@ def main() -> int:
         parser.error("--window-bars must be positive")
     if a.workers < 1:
         parser.error("--workers must be positive")
+    if a.shard_count < 1 or not 0 <= a.shard_index < a.shard_count:
+        parser.error("Expected 0 <= --shard-index < --shard-count")
+    if a.case and a.shard_count != 1:
+        parser.error("--case uses its focused overlay command; shard only the full-library test")
     if not a.case:
         try:
             summary = audit_library(a.out, godot, only=a.only, max_bars=a.window_bars,
-                                    workers=a.workers,reuse_captures=a.reuse_captures)
+                                    workers=a.workers,reuse_captures=a.reuse_captures,
+                                    shard_index=a.shard_index,shard_count=a.shard_count)
         except ValueError as exc:
             parser.error(str(exc))
         print(f"Native notation: {summary['sources_checked']}/{summary['sources_expected']} sources, "

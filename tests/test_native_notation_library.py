@@ -319,3 +319,35 @@ def test_focused_midi_file_is_resolved_under_bundled_library(tmp_path, monkeypat
     result = audit._library_job(case, None, None, tmp_path, "godot", focused=True)
     assert result['captured'] and not result['errors']
     assert observed == [str(source.resolve())]
+
+
+
+def test_shards_are_disjoint_and_cover_every_source_measure():
+    from types import SimpleNamespace
+    piece = SimpleNamespace(bar_boundaries=tuple(range(0, 69, 4)), notes=())
+    path = Path("new-piece.mid")
+    cases = tuple(audit.original_cases(path, piece, max_bars=4))
+    shards = 24
+    assigned = [[case for case in cases if audit.case_shard(path, case, shards) == index]
+                for index in range(shards)]
+    assert len(cases) == sum(map(len, assigned))
+    assert len({(case.name, case.hand) for group in assigned for case in group}) == len(cases)
+    assert {bar for group in assigned for case in group
+            for bar in range(case.first_bar, case.last_bar + 1)} == set(range(1, 18))
+    assert all(audit.case_shard(path, case, shards) == audit.case_shard(path, case, shards)
+               for case in cases)
+
+
+def test_single_shard_matches_the_previous_complete_case_set():
+    from types import SimpleNamespace
+    piece = SimpleNamespace(bar_boundaries=(0, 4, 8), notes=())
+    path = Path("two-bars.mid")
+    cases = tuple(audit.original_cases(path, piece))
+    assert {case.name for case in cases if audit.case_shard(path, case, 1) == 0} == {
+        case.name for case in cases}
+
+
+@pytest.mark.parametrize(("index","count"), [(-1, 24), (24, 24), (0, 0)])
+def test_invalid_shard_configuration_is_rejected(index, count, tmp_path):
+    with pytest.raises(ValueError, match="shard"):
+        audit.audit_library(tmp_path, "godot", shard_index=index, shard_count=count)
