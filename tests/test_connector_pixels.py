@@ -274,7 +274,7 @@ def test_grouped_source_ids_do_not_depend_on_anonymous_rest_ordinal():
 
 
 
-def test_missing_source_onset_frame_cannot_be_overruled_by_nearby_good_frame(monkeypatch):
+def test_no_usable_reference_frame_cannot_be_certified(monkeypatch):
     from piano_teacher.notation import connector_pixels as matcher
     from types import SimpleNamespace
     from pathlib import Path
@@ -283,17 +283,12 @@ def test_missing_source_onset_frame_cannot_be_overruled_by_nearby_good_frame(mon
     svg = (FIXTURES / "beams" / "verovio-0.svg").read_text()
     groups = matcher._inventory(written, [svg], "beam", "right")
     assert groups and groups[0]["events"]
-    # Reuse the real source and reference art, but simulate one unavailable
-    # source-onset capture. Nothing else can certify the missing observation.
+    # Reuse the real source/reference, but simulate no usable screenshot
+    # witnesses; source metadata must never be enough to prove a connector.
     class Frames:
         def __init__(self, *_): pass
-        def nearby_clocks(self, *_): return [0.5]
-        def frame(self, clock):
-            if clock != 0.5:
-                raise OSError("Missing source-onset framebuffer")
-            return {'name':'native-0.50000.png'}
+        def nearby_clocks(self, *_): return []
+        def frame(self, clock): raise OSError("No independently usable framebuffer")
     monkeypatch.setattr(matcher, "_Frames", Frames)
-    monkeypatch.setattr(matcher, "_beam", lambda *_: (
-        "verified", "Good nearby image", {"bbox":[0,0,10,10]}))
     report = matcher._verify(source, Path("/unused"), "right", [svg], "beam")
     assert all(row["status"] != "verified" for row in report["measured"])
