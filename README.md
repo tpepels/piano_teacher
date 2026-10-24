@@ -9,31 +9,30 @@ The established Verovio-versus-native framebuffer comparison runs **locally**.
 GitHub CI runs only fast fixture regressions and Godot script validation;
 **a green CI run does not certify the complete MIDI library**.
 
-From the repository root (after installing `.[godot,test]`):
+Install Godot and Xvfb once on Arch Linux (`sudo pacman -S --needed
+godot xorg-server-xvfb xorg-xauth`). With `.[godot,test]` installed,
+verify the entire project using **one command** from the repository root:
 
 ```bash
-sudo pacman -S --needed godot xorg-server-xvfb xorg-xauth
-./scripts/verify-notation.sh quick
-./scripts/verify-notation.sh case chopin-5-6-both
-./scripts/verify-notation.sh file Danny_Boy
-./scripts/verify-notation.sh shard 0
-./scripts/verify-notation.sh full
+./scripts/verify-notation.sh
 ```
 
-`quick` is the same short validation used by CI. `case` runs one named
-Verovio/native regression; `file` checks every original measure, hand and
-learning variant matching a MIDI filename. `shard N` runs batch N (0–23);
-`full` processes all 24 batches in sequence, continuing even if one fails.
-A full pass requires **every** shard to pass. The sweep can be long-running.
+The command first runs the fast Python regression fixtures and Godot parsing
+checks. If those pass, it automatically works through all 24 batches of the
+existing Verovio/native framebuffer comparison: all bundled MIDI sources,
+every original measure and hand, learning variants, and supported MusicXML
+fixtures. Failed batches do not prevent later batches from being checked.
+A complete pass requires all batches to succeed. This exhaustive check can
+take a long time and is intentionally **local**, not a GitHub Actions job.
 
-Capture concurrency defaults to two Godot workers. For example,
-`PIANO_VERIFY_WORKERS=4 ./scripts/verify-notation.sh file Danny_Boy`.
-Results and `run.log` files stay under `notation-check-results/` (gitignored).
-Set `PIANO_VERIFY_OUT` for another location or `PIANO_VERIFY_REUSE=1`
-to recheck still-valid retained captures without rebuilding them.
+Progress, failure messages and captured evidence are written to
+`notation-check-results/` (gitignored). Rerunning the command starts the
+checks again; `PIANO_VERIFY_REUSE=1` can reuse valid unchanged captures
+for detector development. Two Godot workers are used by default.
 
-Tagged release candidates are gated by CI's **quick** checks only. Run the
-full local comparison yourself before treating a build as notation-verified.
+GitHub CI calls the same script with its internal `--ci` flag, which runs
+only the short regressions and Godot validation. A green CI check or tagged
+release does **not** establish a passing full-library notation audit.
 
 The interface follows `moodboard.png`: forest, pine and charcoal surfaces,
 serif music titles, white active staves, a restrained teal timing line and a

@@ -34,7 +34,7 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install -e '.[godot,test]'
       - name: Run fast verification (no corpus rendering)
-        run: bash scripts/verify-notation.sh quick
+        run: bash scripts/verify-notation.sh --ci
       - name: Record quick-check revision
         id: passed
         env:

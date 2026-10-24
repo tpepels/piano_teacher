@@ -1,146 +1,95 @@
 #!/usr/bin/env bash
-# One entry point for the existing Godot-versus-Verovio verification.
+# One local command: fast regressions, then the complete native/Verovio library.
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 
-usage() {
-  cat <<'HELP'
-Piano Teacher notation verification
-
-  ./scripts/verify-notation.sh quick
-      Fast source/pixel regressions and Godot script validation.
-  ./scripts/verify-notation.sh case chopin-5-6-both
-      A named, focused real-Godot/Verovio case.
-  ./scripts/verify-notation.sh file Danny_Boy
-      Every measure, hand and learning variant of matching MIDI file(s).
-  ./scripts/verify-notation.sh shard 0 [24]
-      One deterministic batch of the complete corpus (zero-based index).
-  ./scripts/verify-notation.sh full [24]
-      All batches sequentially, continuing after failures.
-
-Settings:
-  PIANO_VERIFY_WORKERS=2     Godot capture workers (default: 2).
-  PIANO_VERIFY_OUT=<path>    Logs and failure evidence directory.
-  PIANO_VERIFY_REUSE=1       Recheck retained captures when inputs match.
-
-Outputs are kept in notation-check-results/ (gitignored).
-Use 'grep "^FAIL " notation-check-results/*/run.log' for failure headlines.
-On Arch, install: sudo pacman -S --needed godot xorg-server-xvfb xorg-xauth
-HELP
-}
-
-if [[ $# -eq 0 ]]; then
-  usage
-  exit 0
+if [[ $# -gt 1 || ( $# -eq 1 && "$1" != "--ci" ) ]]; then
+  echo "Usage: ./scripts/verify-notation.sh  (CI only: --ci)" >&2
+  exit 2
 fi
 
-mode="$1"
-shift
 PYTHON="$PWD/.venv/bin/python"
 if [[ ! -x "$PYTHON" ]]; then
-  echo "Missing .venv. Run: python -m venv .venv && .venv/bin/pip install -e '.[godot,test]'" >&2
+  echo "Missing environment: python -m venv .venv && .venv/bin/pip install -e '.[godot,test]'" >&2
   exit 2
 fi
 GODOT="$(command -v godot || command -v godot4 || true)"
 if [[ -z "$GODOT" ]]; then
-  echo "Godot 4 not found. On Arch: sudo pacman -S godot" >&2
+  echo "Missing Godot 4. Install it with: sudo pacman -S godot" >&2
   exit 2
 fi
 
-if [[ "$mode" == quick ]]; then
-  if [[ $# -ne 0 ]]; then
-    usage >&2
-    exit 2
-  fi
+quick_checks() {
   "$PYTHON" -m pytest -q \
     tests/test_native_notation_library.py \
     tests/test_connector_pixels.py \
     tests/test_phase3_scroll_pixels.py
   "$GODOT" --headless --path godot --check-only --script res://main.gd
+}
+
+# GitHub Actions deliberately stops after fast fixture/parse checks.
+if [[ ${1:-} == "--ci" ]]; then
+  quick_checks
   exit
+fi
+
+OUT="$PWD/notation-check-results"
+mkdir -p "$OUT"
+echo "Step 1/2: fast regressions and Godot validation"
+if ! quick_checks 2>&1 | tee "$OUT/quick.log"; then
+  echo "FAIL: fast regression checks. Fix these before starting the full library."
+  echo "Log: $OUT/quick.log"
+  exit 1
 fi
 
 if command -v xvfb-run >/dev/null 2>&1; then
   DISPLAY_COMMAND=(xvfb-run -a -s "-screen 0 1600x1000x24")
 elif [[ -n "${DISPLAY:-}" ]]; then
-  echo "xvfb-run missing; using your current display. For reproducible captures install xorg-server-xvfb xorg-xauth." >&2
+  echo "xvfb-run unavailable; using the current graphical display." >&2
   DISPLAY_COMMAND=()
 else
-  echo "No display or xvfb-run; install: sudo pacman -S xorg-server-xvfb xorg-xauth" >&2
+  echo "No graphical display. On Arch: sudo pacman -S xorg-server-xvfb xorg-xauth" >&2
   exit 2
 fi
 
 WORKERS="${PIANO_VERIFY_WORKERS:-2}"
 if ! [[ "$WORKERS" =~ ^[1-9][0-9]*$ ]]; then
-  echo "PIANO_VERIFY_WORKERS must be a positive integer" >&2
+  echo "PIANO_VERIFY_WORKERS must be a positive integer." >&2
   exit 2
 fi
-OUTPUT_ROOT="${PIANO_VERIFY_OUT:-$PWD/notation-check-results}"
-mkdir -p "$OUTPUT_ROOT"
 
-run_comparison() {
-  local name="$1"
-  shift
-  local output="$OUTPUT_ROOT/$name"
+# The same canonical comparison runs on every original measure, every hand,
+# generated learning variant, and the supported MusicXML fixtures.
+# Partition for bounded memory usage; a full pass needs all 24 shards.
+SHARDS=24
+failed=0
+echo "Step 2/2: full native Godot / Verovio comparison (24 batches)"
+for (( index=0; index<SHARDS; index++ )); do
+  output="$OUT/shard-$index-of-$SHARDS"
   mkdir -p "$output"
-  local args=("--workers" "$WORKERS" "--out" "$output")
+  echo "Batch $((index+1))/$SHARDS: capturing and comparing notation"
+  args=(--shard-index "$index" --shard-count "$SHARDS"
+        --workers "$WORKERS" --out "$output")
   if [[ "${PIANO_VERIFY_REUSE:-0}" == 1 ]]; then
-    args+=("--reuse-captures")
+    args+=(--reuse-captures)
   fi
-  echo "Verification: $name | workers=$WORKERS | output=$output"
-  local status
-  set +e
-  LIBGL_ALWAYS_SOFTWARE=1 "${DISPLAY_COMMAND[@]}" \
-    "$PYTHON" -u scripts/check_native_verovio_overlay.py \
-    "${args[@]}" "$@" 2>&1 | tee "$output/run.log"
-  status="${PIPESTATUS[0]}"
-  set -e
-  echo "$name: $([[ $status -eq 0 ]] && echo PASS || echo FAIL) | log: $output/run.log"
-  return "$status"
-}
+  # Show per-case progress, retain diagnostics, and continue past failures.
+  if LIBGL_ALWAYS_SOFTWARE=1 "${DISPLAY_COMMAND[@]}" \
+      "$PYTHON" -u scripts/check_native_verovio_overlay.py \
+      "${args[@]}" 2>&1 | tee "$output/run.log"; then
+    echo "Batch $((index+1))/$SHARDS: PASS"
+  else
+    echo "Batch $((index+1))/$SHARDS: FAIL (details: $output/run.log)"
+    failed=$((failed+1))
+  fi
+done
 
-case "$mode" in
-  case)
-    if [[ $# -ne 1 ]]; then usage >&2; exit 2; fi
-    safe="$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_')"
-    run_comparison "case-$safe" --case "$1"
-    ;;
-  file)
-    if [[ $# -ne 1 ]]; then usage >&2; exit 2; fi
-    safe="$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_')"
-    run_comparison "file-$safe" --only "$1"
-    ;;
-  shard)
-    if [[ $# -lt 1 || $# -gt 2 ]]; then usage >&2; exit 2; fi
-    index="$1"
-    count="${2:-24}"
-    if ! [[ "$index" =~ ^(0|[1-9][0-9]*)$ && "$count" =~ ^[1-9][0-9]*$ ]] || (( index >= count )); then
-      echo "Expected shard INDEX COUNT where 0 <= INDEX < COUNT" >&2
-      exit 2
-    fi
-    run_comparison "shard-$index-of-$count" --shard-index "$index" --shard-count "$count"
-    ;;
-  full)
-    if [[ $# -gt 1 ]]; then usage >&2; exit 2; fi
-    count="${1:-24}"
-    if ! [[ "$count" =~ ^[1-9][0-9]*$ ]]; then
-      echo "Expected a positive shard count" >&2
-      exit 2
-    fi
-    failed=0
-    for (( index=0; index<count; index++ )); do
-      if ! run_comparison "shard-$index-of-$count" --shard-index "$index" --shard-count "$count"; then
-        failed=$((failed+1))
-      fi
-    done
-    echo "Complete corpus: $((count-failed))/$count batches passed. Evidence: $OUTPUT_ROOT"
-    (( failed == 0 ))
-    ;;
-  help|-h|--help)
-    usage
-    ;;
-  *)
-    usage >&2
-    exit 2
-    ;;
-esac
+echo
+if (( failed == 0 )); then
+  echo "PASS: fast checks and all $SHARDS Verovio/native comparison batches."
+else
+  echo "FAIL: $failed/$SHARDS native comparison batches failed."
+  echo "Failure details are in $OUT/shard-*/run.log"
+fi
+echo "All logs and captures: $OUT"
+(( failed == 0 ))
