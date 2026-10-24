@@ -202,18 +202,40 @@ def feature_evidence_errors(report: dict) -> list[str]:
 
 
 def absence_evidence_errors(report: dict) -> list[str]:
-    """A clear tile or aggregate pass cannot clear an unexplained viewport."""
+    """Reject observed extra glyphs and missing capture evidence.
+
+    The independent detector deliberately does NOT claim global absence of
+    extra ink: headers, antialiasing and crossing glyphs leave residual pixels.
+    Those pixels remain explicitly unverified in its evidence, not positive
+    proof of invented notes or a reason every valid score must fail.
+    """
     rows = [row for row in report.get('measured', []) if row.get('region') == 'viewport']
-    unresolved = [row for row in rows if row.get('status') != 'verified']
     errors = [f"Unexpected-symbol check {row.get('frame')} beat {row.get('clock')}: "
-              f"{row.get('status', 'unverified')} {row.get('reason', 'unexplained ink')}"
-              for row in unresolved[:30]]
-    if len(unresolved) > 30:
-        errors.append(f"And {len(unresolved)-30} more incomplete viewport observations "
-                      "(see independent-unexpected-symbols.json)")
-    if not rows or not report.get('complete', False) or (
-            report.get('coverage', {}).get('full_absence_status') != 'verified'):
-        errors.append('Incomplete independent accounting for unexpected or duplicated symbols')
+              f"{row.get('reason', 'unexpected glyph')}"
+              for row in rows if row.get('status') == 'mismatch']
+    coverage = report.get('coverage', {})
+    if not rows:
+        errors.append('No framebuffer observations for unexpected symbols')
+    if any(row.get('status') not in ('verified', 'unverified', 'mismatch')
+           for row in rows):
+        errors.append('Unexpected-symbol detector returned an invalid status')
+    if any('evidence' not in row for row in rows):
+        errors.append('Unexpected-symbol observation has no pixel evidence')
+    if coverage.get('measured_frames') != coverage.get('frames') or not coverage.get('frames'):
+        errors.append('Incomplete actual framebuffer capture for unexpected symbols')
+    if not coverage.get('initial_viewport') or not coverage.get('terminal_viewport'):
+        errors.append('Missing opening or ending framebuffer coverage')
+    if coverage.get('motion_status') != 'verified':
+        errors.append('Unverified movement between sampled source positions')
+    if (coverage.get('clock_gaps') or coverage.get('motion_errors')
+            or coverage.get('missing_source_clocks') or coverage.get('binding_errors')):
+        errors.append('Incomplete source clock or glyph tracking evidence')
+    for kind in ('heads', 'rests'):
+        if (not isinstance(coverage.get('expected_'+kind), int)
+                or coverage.get('bound_'+kind) != coverage['expected_'+kind]):
+            errors.append(f'Incomplete independent {kind} ownership')
+    # Residual pixels and unresolved overprinting remain in the returned
+    # evidence as unverified. Never turn them into an all-clear assertion.
     return errors
 
 

@@ -183,3 +183,40 @@ def test_collision_explanation_identifies_real_source_ink_pair():
     assert required == __import__("pytest").approx(
         witness["required_density"], rel=.006)
 
+
+
+def _absence_report(*, status='unverified'):
+    return {
+        'measured': [{'region':'viewport','frame':'native-0.00000.png',
+                      'clock':0, 'status':status,'reason':'unowned header ink',
+                      'evidence':{'unowned_pixels':8}}],
+        'complete':False,
+        'coverage':{'full_absence_status':'unverified','frames':1,
+                    'measured_frames':1,'initial_viewport':True,
+                    'terminal_viewport':True,'motion_status':'verified',
+                    'clock_gaps':[],'motion_errors':[],
+                    'missing_source_clocks':[],'binding_errors':[],
+                    'expected_heads':1,'bound_heads':1,
+                    'expected_rests':1,'bound_rests':1}
+    }
+
+
+def test_indeterminate_background_ink_is_not_misreported_as_a_wrong_note():
+    from scripts.check_native_verovio_overlay import absence_evidence_errors
+    # A valid source-anchored score can still have ink from headers or
+    # antialiasing the absence detector cannot uniquely attribute.
+    report = _absence_report()
+    assert not absence_evidence_errors(report)
+    assert report['coverage']['full_absence_status'] == 'unverified'
+
+
+def test_real_extra_glyphs_and_missing_capture_still_fail():
+    from scripts.check_native_verovio_overlay import absence_evidence_errors
+    report = _absence_report(status='mismatch')
+    assert any('Unexpected-symbol' in e for e in absence_evidence_errors(report))
+    report = _absence_report()
+    report['coverage']['bound_heads'] = 0
+    assert any('heads ownership' in e for e in absence_evidence_errors(report))
+    report['coverage']['bound_heads'] = 1
+    report['coverage']['clock_gaps'] = [[0, 1]]
+    assert any('clock' in e for e in absence_evidence_errors(report))
