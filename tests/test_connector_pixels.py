@@ -288,7 +288,20 @@ def test_no_usable_reference_frame_cannot_be_certified(monkeypatch):
     class Frames:
         def __init__(self, *_): pass
         def nearby_clocks(self, *_): return []
+        def anchors(self, events, target):
+            # This is the public image-witness interface used by _beam.
+            # An unavailable capture must fail closed, not raise AttributeError
+            # because the test double forgot a method.
+            raise OSError("No independently usable framebuffer")
         def frame(self, clock): raise OSError("No independently usable framebuffer")
     monkeypatch.setattr(matcher, "_Frames", Frames)
     report = matcher._verify(source, Path("/unused"), "right", [svg], "beam")
-    assert all(row["status"] != "verified" for row in report["measured"])
+    assert report["coverage"]["expected"] > 0
+    assert report["coverage"]["verified"] == 0
+    assert not report["complete"]
+    assert all(row["status"] == "unverified" for row in report["measured"])
+    assert all(
+        row["evidence"]["unavailable_witnesses"]
+        and "No independently usable framebuffer" in row["evidence"]["unavailable_witnesses"][0]["reason"]
+        for row in report["measured"]
+    )
