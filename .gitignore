@@ -3,6 +3,8 @@ __pycache__/
 .pytest_cache/
 # Local piano sessions may contain file paths, timing traces and device names.
 playtest-results/
+# Full Verovio/native verification creates local screenshots and logs.
+notation-check-results/
 *.py[cod]
 *.egg-info/
 !tests/fixtures/musical_fidelity/*.mid
