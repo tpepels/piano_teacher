@@ -65,8 +65,11 @@ fi
 # Partition for bounded memory usage; a full pass needs all 24 shards.
 SHARDS=24
 failed=0
+attempted=0
 echo "Step 2/2: full native Godot / Verovio comparison (24 batches)"
+echo "A failing batch stops the sweep: diagnose common errors before more captures."
 for (( index=0; index<SHARDS; index++ )); do
+  attempted=$((attempted+1))
   output="$OUT/shard-$index-of-$SHARDS"
   mkdir -p "$output"
   echo "Batch $((index+1))/$SHARDS: capturing and comparing notation"
@@ -83,15 +86,21 @@ for (( index=0; index<SHARDS; index++ )); do
   else
     echo "Batch $((index+1))/$SHARDS: FAIL (details: $output/run.log)"
     failed=$((failed+1))
+    if [[ "${PIANO_VERIFY_CONTINUE_ON_FAILURE:-0}" != 1 ]]; then
+      echo "Stopping after batch $attempted/$SHARDS: at least one failed batch."
+      echo "Remaining batches have NOT been checked. Fix common errors first."
+      echo "For deliberate exhaustive diagnosis set PIANO_VERIFY_CONTINUE_ON_FAILURE=1."
+      break
+    fi
   fi
 done
 
 echo
-if (( failed == 0 )); then
+if (( failed == 0 && attempted == SHARDS )); then
   echo "PASS: fast checks and all $SHARDS Verovio/native comparison batches."
 else
-  echo "FAIL: $failed/$SHARDS native comparison batches failed."
+  echo "FAIL: $failed failed among $attempted/$SHARDS attempted batches."
   echo "Failure details are in $OUT/shard-*/run.log"
 fi
 echo "All logs and captures: $OUT"
-(( failed == 0 ))
+(( failed == 0 && attempted == SHARDS ))

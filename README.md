@@ -21,9 +21,12 @@ The command first runs the fast Python regression fixtures and Godot parsing
 checks. If those pass, it automatically works through all 24 batches of the
 existing Verovio/native framebuffer comparison: all bundled MIDI sources,
 every original measure and hand, learning variants, and supported MusicXML
-fixtures. Failed batches do not prevent later batches from being checked.
-A complete pass requires all batches to succeed. This exhaustive check can
-take a long time and is intentionally **local**, not a GitHub Actions job.
+fixtures. The first failed batch stops the sweep so systematic problems can be
+fixed before spending hours on the remaining batches. For a deliberate
+complete diagnostic run even when cases fail, set
+`PIANO_VERIFY_CONTINUE_ON_FAILURE=1`. A complete pass requires all
+24 batches to succeed. This exhaustive check can take a long time
+and is intentionally **local**, not a GitHub Actions job.
 
 Progress, failure messages and captured evidence are written to
 `notation-check-results/` (gitignored). Rerunning the command starts the
