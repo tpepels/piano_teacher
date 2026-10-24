@@ -25,22 +25,31 @@ def test_empty_library_and_unmatched_selection_are_errors(tmp_path):
         audit.library_sources(tmp_path, only="absent")
 
 
-def test_unexpected_ink_and_unmeasured_viewports_block_the_complete_audit():
-    report = dict(passed=True, complete=True, coverage=dict(full_absence_status='verified'),
+def test_observed_extra_ink_and_missing_frames_fail_without_fabricating_global_certainty():
+    coverage = dict(full_absence_status='unverified',
+                    frames=2, measured_frames=2,
+                    initial_viewport=True, terminal_viewport=True,
+                    motion_status='verified', clock_gaps=[], motion_errors=[],
+                    missing_source_clocks=[], binding_errors=[],
+                    expected_heads=1, bound_heads=1, expected_rests=0, bound_rests=0)
+    report = dict(complete=False, coverage=coverage,
         measured=[dict(frame='native-0.00000.png', clock=0., region='viewport',
-                       status='verified', reason='Owned source ink'),
+                       status='verified', reason='Owned source ink', evidence={}),
                   dict(frame='native-1.00000.png', clock=1., region='viewport',
-                       status='mismatch', reason='An extra detached notehead'),
-                  dict(frame='native-1.00000.png', clock=1., region='clear_or_owned_tiles',
-                       status='verified', reason='An unrelated clear tile')])
+                       status='mismatch', reason='An extra detached notehead',
+                       evidence={'unexpected': ['head']})])
     errors = audit.absence_evidence_errors(report)
-    assert any('native-1.00000.png' in error and 'extra detached notehead' in error for error in errors)
-    report['measured'][1].update(status='unverified', reason='An unexplained contour')
-    assert any('unverified' in error for error in audit.absence_evidence_errors(report))
-    report['measured'][1]['status'] = 'verified'
-    report['complete'] = False
+    assert any('native-1.00000.png' in error and 'extra detached notehead' in error
+               for error in errors)
+    # Unclassified antialiasing/header ink is an explicit limitation, not
+    # evidence that a second note was rendered or proof that none was.
+    report['measured'][1].update(status='unverified', reason='Unowned ink',
+                                  evidence={'unowned_pixels':8})
+    assert not audit.absence_evidence_errors(report)
+    assert report['coverage']['full_absence_status'] == 'unverified'
+    report['coverage']['measured_frames'] = 1
     assert audit.absence_evidence_errors(report)
-    report['complete'] = True
+    report['coverage']['measured_frames'] = 2
     report['measured'] = []
     assert audit.absence_evidence_errors(report)
 
