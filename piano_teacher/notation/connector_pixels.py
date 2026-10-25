@@ -204,8 +204,18 @@ def _inventory(written, strings, kind, hand):
             ids = [n.get('id') for n in group.iter() if _real(n)
                    and _classes(n) & {'note', 'rest', 'mRest', 'multiRest'}]
             members = [aliases.get((page, i)) for i in ids]
-            if not ids or any(e is None for e in members):
-                # Retain unresolved SVG groups as explicit blocking records.
+            if not ids:
+                # Verovio emits class=tuplet around invisible class=space
+                # placeholders. No glyph and no source members means this
+                # wrapper is not a graphical obligation. Explicit semantic
+                # tuplet obligations are still checked below.
+                if kind == 'tuplet' and not (list(_art(group, 'tupletNum'))
+                                              or list(_art(group, 'tupletBracket'))):
+                    continue
+                expected.append(dict(events=[], ids=ids, group=group.get('id'),
+                                     error='Graphical connector has no bound source events'))
+                continue
+            if any(e is None for e in members):
                 expected.append(dict(events=[], ids=ids, group=group.get('id'),
                                      error='Reference source event IDs are absent or ambiguous'))
                 continue

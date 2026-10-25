@@ -266,3 +266,13 @@ def test_erasure_can_create_an_unexpected_family_without_adding_foreground():
     # it needs contour rechecks, not all-family FFTs on every later clock.
     areas = _areas(photo(current), photo(current), -10, False)
     assert areas == [[581, 0, 709, 520]], areas
+
+
+def test_real_playhead_overlap_is_ambiguous_without_exempting_detached_heads():
+    from piano_teacher.notation.extra_symbol_pixels import _playhead_occludes_candidate
+    photo = {'occlusion': np.zeros((60, 140), dtype=bool)}
+    photo['occlusion'][20:50, 62:64] = True
+    under_playhead = {'bbox':[60,24,81,44]}
+    detached = {'bbox':[98,24,119,44]}
+    assert _playhead_occludes_candidate(photo, under_playhead)
+    assert not _playhead_occludes_candidate(photo, detached)

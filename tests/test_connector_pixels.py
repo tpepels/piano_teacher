@@ -352,3 +352,38 @@ def test_unanchored_extra_reference_measure_cannot_invent_rest_ownership():
                   {'class':'measure', 'id':'unanchored-extra-measure'})
     _pages_result, aliases = _pages(written, [ET.tostring(root, encoding='unicode')])
     assert all(e['kind'] != 'rest' for e in aliases.values())
+
+
+def test_space_only_reference_tuplet_does_not_add_false_group_failure():
+    from xml.etree import ElementTree as ET
+    from piano_teacher.notation.connector_pixels import _inventory
+    from piano_teacher.notation.proof import read_written_score
+    folder = FIXTURES / 'tuplets'
+    written = read_written_score((folder/'score.musicxml').read_text())
+    root = ET.fromstring((folder/'verovio-0.svg').read_text())
+    baseline = _inventory(written, [ET.tostring(root, encoding='unicode')], 'tuplet', 'right')
+    layer = next(e for e in root.iter() if 'layer' in e.get('class','').split())
+    group = ET.SubElement(layer, '{http://www.w3.org/2000/svg}g',
+                          {'class':'tuplet','id':'layout-space-only'})
+    ET.SubElement(group, '{http://www.w3.org/2000/svg}g',
+                  {'class':'space','id':'layout-space-event'})
+    observed = _inventory(written, [ET.tostring(root, encoding='unicode')], 'tuplet','right')
+    assert len(observed) == len(baseline)
+    assert [r.get('error') for r in observed] == [r.get('error') for r in baseline]
+
+
+def test_unbound_visible_tuplet_graphic_is_not_ignored():
+    from xml.etree import ElementTree as ET
+    from piano_teacher.notation.connector_pixels import _inventory
+    from piano_teacher.notation.proof import read_written_score
+    folder = FIXTURES / 'tuplets'
+    written = read_written_score((folder/'score.musicxml').read_text())
+    root = ET.fromstring((folder/'verovio-0.svg').read_text())
+    layer = next(e for e in root.iter() if 'layer' in e.get('class','').split())
+    group = ET.SubElement(layer, '{http://www.w3.org/2000/svg}g',
+                          {'class':'tuplet','id':'unbound-tuplet-number'})
+    ET.SubElement(group, '{http://www.w3.org/2000/svg}g',
+                  {'class':'tupletNum','id':'number-without-source'})
+    observed = _inventory(written, [ET.tostring(root, encoding='unicode')], 'tuplet','right')
+    assert any(row.get('group') == 'unbound-tuplet-number' and row.get('error')
+               for row in observed)

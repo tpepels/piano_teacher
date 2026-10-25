@@ -442,6 +442,16 @@ def _possible_owner(tree, world_x, error):
     return False
 
 
+def _playhead_occludes_candidate(photo, obj):
+    """A foreground candidate crossed by colored ink cannot be excluded.
+
+    Only actual photographed overlap counts. An extra glyph elsewhere is
+    still subject to the strict source-exclusion and contour checks.
+    """
+    left, top, right, bottom = obj['bbox']
+    return bool(photo['occlusion'][top:bottom, left:right].any())
+
+
 def _isolated_rectangle(photo, obj):
     """A ledger/head/stem intersection is not an independently seen rest."""
     x0, y0, x1, y1 = obj['bbox']
@@ -604,6 +614,10 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
                           or (obj['family'] == 'rest' and all_rests)
                           or (obj['family'] == 'dot' and not expected_dots and source_supported)
                           or (obj['family'] == 'flag' and not expected_flags and source_supported))
+            # An actual chord head in Ala beat 0.90000 is crossed by the
+            # turquoise playhead; incomplete ink cannot prove an extra note.
+            if _playhead_occludes_candidate(photo, obj):
+                definitive = False
             if obj['name'] in ('rest_whole', 'rest_half') and not _isolated_rectangle(photo, obj):
                 definitive = False
             if definitive and not other and obj['family'] in ('head', 'rest'):
