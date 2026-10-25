@@ -73,6 +73,9 @@ var game_count_in: Control
 var score_status_panel: CenterContainer
 var score_status_label: Label
 var score_retry_button: Button
+var fingering_status_label: Label
+var fingering_save_error := ""
+var native_score_piece_fingerprint := ""
 var score_error := ""
 var library_error := ""
 var pending_library_piece := ""
@@ -1005,6 +1008,12 @@ func _build_interface() -> void:
     score_region.add_child(score_header)
     practice_stage_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     score_header.add_child(practice_stage_bar)
+    fingering_status_label = _label("",12,Design.SECONDARY_INK)
+    fingering_status_label.visible = false
+    fingering_status_label.clip_text = true
+    fingering_status_label.custom_minimum_size.x = 180
+    fingering_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+    score_header.add_child(fingering_status_label)
     var score_area := Control.new()
     score_area.size_flags_vertical = Control.SIZE_EXPAND_FILL
     score_area.custom_minimum_size = Vector2(0, 210)
@@ -1018,6 +1027,7 @@ func _build_interface() -> void:
     timeline_preview.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     timeline_preview.visible = false
     score_frame.add_child(timeline_preview)
+    timeline_preview.fingering_change_requested.connect(_on_fingering_change_requested)
     game_stage.surface_visible = false
     game_stage.z_index = 1
     native_score_feedback = preload("res://native_score_feedback.gd").new()
@@ -2464,6 +2474,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         game_streak.pulse_unlock()
         call_deferred("_pulse_hand_stage")
     last_state = parsed
+    _present_fingering_status(parsed.get("fingering",{}))
     if path_reset_confirmation != null:
         if not bool(parsed.get("loaded", false)) or (
                 path_reset_confirmation.visible
@@ -3063,6 +3074,7 @@ func _on_timeline_model(_result: int, code: int,
         if not timeline_preview.load_score(candidate):
             _score_failed(str(timeline_preview.failure_reason))
             return
+        native_score_piece_fingerprint = str(last_state.get("piece_fingerprint",""))
         timeline_model_revision = revision
         timeline_preview.visible = true
         _finish_native_score()
@@ -3102,6 +3114,56 @@ func _send_action(command: Dictionary) -> void:
         practice_playback_banner.visible = true
     _send_post("/control", command)
 
+
+func _present_fingering_status(summary: Variant) -> void:
+    if fingering_status_label == null:
+        return
+    if not summary is Dictionary:
+        summary = {}
+    var status: String = str(summary.get("status",""))
+    var unknown: int = int(summary.get("unknown",0))
+    var review: int = int(summary.get("review",0))
+    var unavailable: bool = status in ["unavailable","failed","error"]
+    var detail: String = str(summary.get("error",""))
+    var issues := PackedStringArray()
+    for issue in summary.get("issues",[]):
+        issues.append(str(issue))
+    if not issues.is_empty():
+        detail += ("\n" if not detail.is_empty() else "")+"\n".join(issues)
+    fingering_status_label.visible = unavailable or unknown > 0 or review > 0 or not fingering_save_error.is_empty()
+    if not fingering_save_error.is_empty():
+        fingering_status_label.text = "Fingering not saved"
+        detail = fingering_save_error
+    elif unavailable:
+        fingering_status_label.text = "Automatic fingering unavailable"
+    elif unknown > 0:
+        fingering_status_label.text = "%d unknown finger%s" % [unknown,"" if unknown == 1 else "s"]
+        if detail.is_empty():
+            detail = "Some source notes have no reliable finger assignment."
+    elif review > 0:
+        fingering_status_label.text = "Check %d fingering%s" % [review,"" if review == 1 else "s"]
+    else:
+        fingering_status_label.text = ""
+    fingering_status_label.tooltip_text = (detail+"\n" if not detail.is_empty() else "")+ \
+        "Right-click any attack note, or tap a finger number, to correct it. Unknown notes can also be edited."
+
+
+func _on_fingering_change_requested(source_id: String, finger: Variant) -> void:
+    if action_pending or not _native_score_ready() or layout_pending or timeline_model_pending or \
+            int(last_state.get("revision",-1)) != timeline_model_revision or \
+            native_score_piece_fingerprint != str(last_state.get("piece_fingerprint","")):
+        fingering_save_error = "Wait for the current score operation to finish, then try again."
+        _present_fingering_status(last_state.get("fingering",{}))
+        return
+    fingering_save_error = ""
+    var payload: Dictionary = {"source_id":source_id,"finger":finger}
+    # XML identities repeat between pieces. Bind a correction to the piece
+    # visible when the popup was opened even if another client loads music.
+    var fingerprint: String = native_score_piece_fingerprint
+    if not fingerprint.is_empty():
+        payload["fingerprint"] = fingerprint
+    _send_post("/fingering",payload)
+
 func _flush_transport_action() -> void:
     if not pending_transport_action.is_empty():
         var action := pending_transport_action
@@ -3112,6 +3174,9 @@ func _send_post(path: String, payload: Dictionary) -> void:
     if action_pending:
         return
     action_pending = true
+    # A complete local composition can take longer than a small control
+    # request. Allow the bounded whole-piece inference to finish saving.
+    action_request.timeout = 360.0 if path in ["/fingering","/load","/library/open"] else 5.0
     last_post_path = path
     action_request_started_ms = Time.get_ticks_msec()
     var err := action_request.request(URL + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(payload))
@@ -3119,6 +3184,9 @@ func _send_post(path: String, payload: Dictionary) -> void:
         action_pending = false
         feedback_label.text = "Cannot reach practice engine"
         feedback_label.visible = true
+        if path == "/fingering":
+            fingering_save_error = "Cannot reach practice engine. Try the correction again."
+            _present_fingering_status(last_state.get("fingering",{}))
 
 func _on_action(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     action_pending = false
@@ -3131,6 +3199,9 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     var completed_action := last_control_action
     if code != 200:
         var message := _http_failure(code, body)
+        if path == "/fingering":
+            fingering_save_error = message
+            _present_fingering_status(last_state.get("fingering",{}))
         var queued_library_failed: bool = not pending_library_piece.is_empty()
         pending_library_piece = ""
         pending_library_resume = false
@@ -3146,7 +3217,10 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         home_recent_label.text = message
         _flush_transport_action()
         return
-    if path == "/control":
+    if path == "/fingering":
+        fingering_save_error = ""
+        _on_state(_result,code,_headers,body,action_request_started_ms)
+    elif path == "/control":
         if completed_action == "reset_path":
             # The fingerprint stays the same after a reset; invalidate the
             # cached lesson overview so mastered/skip badges refresh.

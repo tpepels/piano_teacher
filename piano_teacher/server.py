@@ -4,6 +4,7 @@ Start: python -m piano_teacher.server. No Internet, account, or Qt required.
 """
 from __future__ import annotations
 import argparse
+from dataclasses import asdict, replace
 import hashlib
 import json
 import math
@@ -22,6 +23,7 @@ from .practice import Recorder, evaluate
 from .importing.pieces import import_piece
 from .score import render_layout, EngravedScore
 from .feedback import project_assessment
+from .fingering import FingeringService, authored_projection_sources, project_model
 from .library import ScoreLibrary
 from .preprocessing_cache import PreprocessingCache
 from .library_health import LibraryHealth
@@ -45,6 +47,10 @@ from .lesson_settings import SETTINGS
 class PracticeEngine:
     def __init__(self, data_dir: Path | None = None, enable_midi: bool = True):
         self.lock = threading.RLock()
+        # Whole-source inference must never block MIDI or state polling.
+        # Serialize source loads and durable corrections separately instead.
+        self._fingering_lock = threading.Lock()
+        self._piece_generation = 0
         self.plan: LearningPlan | None = None
         self.score = None
         self.source = None
@@ -133,6 +139,7 @@ class PracticeEngine:
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
         data_dir.mkdir(parents=True, exist_ok=True)
         self._data_dir = data_dir
+        self.fingering = FingeringService(data_dir / "fingering")
         self.preprocessing = PreprocessingCache(data_dir / "preprocessed")
         self.db = sqlite3.connect(data_dir / "progress.db", check_same_thread=False)
         self.db.execute("CREATE TABLE IF NOT EXISTS sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER, target_bpm INTEGER)")
@@ -364,34 +371,84 @@ class PracticeEngine:
         return self.midi_port is not None and not getattr(self.midi_port, "closed", False)
 
     def load(self, path: str, *, warmup: bool = False):
-        source = Path(path).expanduser().resolve()
-        fingerprint = hashlib.sha256(source.read_bytes()).hexdigest()
-        piece, score = self.preprocessing.load_import(
-            source, fingerprint, importer=import_piece)
+        with self._fingering_lock:
+            source = Path(path).expanduser().resolve()
+            fingerprint = hashlib.sha256(source.read_bytes()).hexdigest()
+            piece, score = self.preprocessing.load_import(
+                source, fingerprint, importer=import_piece)
+            piece = replace(piece, fingering_plan=self.fingering.prepare(piece, fingerprint))
+            with self.lock:
+                self._stop()
+                self._reset_trouble()
+                self.course_guided = False
+                self.source = str(source)
+                self.is_builtin_warmup = warmup
+                self.open_from_beat = 0.0
+                self.fingerprint = fingerprint
+                self._piece_generation += 1
+                self._layout_cache = None
+                self._layout_revision = -1
+                self._layout_cache_key = None
+                self._page_png.clear()
+                self.plan = LearningPlan(piece, warmup=warmup)
+                self.mode = "practice"
+                self.teaching = None
+                self.guided_range = None
+                self.score = score
+                self._restore()
+                self.feedback = "Press Start to practice"
+                self.next_action = "Press Start to practice."
+                self.score_revision += 1
+                self.pending_result = None
+                self.feedback_marks = []
+                self.feedback_unmapped = 0
+
+    def fingering_status(self) -> dict:
+        """Return the complete original-piece assignments, independent of stage."""
         with self.lock:
-            self._stop()
-            self._reset_trouble()
-            self.course_guided = False
-            self.source = str(Path(path).resolve())
-            self.is_builtin_warmup = warmup
-            self.open_from_beat = 0.0
-            self.fingerprint = fingerprint
-            self._layout_cache = None
-            self._layout_revision = -1
-            self._layout_cache_key = None
-            self._page_png.clear()
-            self.plan = LearningPlan(piece, warmup=warmup)
-            self.mode = "practice"
-            self.teaching = None
-            self.guided_range = None
-            self.score = score
-            self._restore()
-            self.feedback = "Press Start to practice"
-            self.next_action = "Press Start to practice."
-            self.score_revision += 1
-            self.pending_result = None
-            self.feedback_marks = []
-            self.feedback_unmapped = 0
+            plan = self.plan.piece.fingering_plan if self.plan is not None else None
+            return {"summary": plan.summary() if plan is not None else None,
+                    "assignments": {sid: asdict(assignment)
+                                    for sid, assignment in plan.assignments.items()}
+                    if plan is not None else {}}
+
+    def correct_fingering(self, source_id: str, finger: int | None,
+                         *, fingerprint: str | None = None) -> None:
+        """Save a source correction without rebuilding learning or grading notes."""
+        if not isinstance(source_id, str) or not source_id:
+            raise ValueError("Choose an original source note")
+        if finger is not None and (type(finger) is not int or not 1 <= finger <= 5):
+            raise ValueError("Finger must be an integer from 1 to 5, or null to remove a correction")
+        with self.lock:
+            if self.plan is None:
+                raise ValueError("Open a piece before correcting fingering")
+            if fingerprint is not None and fingerprint != self.fingerprint:
+                raise ValueError("The loaded piece changed; refresh the score before correcting fingering")
+            generation = self._piece_generation
+        with self._fingering_lock:
+            with self.lock:
+                if generation != self._piece_generation:
+                    raise ValueError("The loaded piece changed; refresh the score before correcting fingering")
+                piece, source_fingerprint = self.plan.piece, self.fingerprint
+            plan = self.fingering.correct(piece, source_fingerprint, source_id, finger)
+            with self.lock:
+                # Navigation/reset may replace LearningPlan while inference is
+                # running. Update its current Piece, never the captured plan.
+                if (generation != self._piece_generation or self.plan is None
+                        or self.fingerprint != source_fingerprint
+                        or self.plan.piece.notes is not piece.notes):
+                    raise ValueError("The loaded piece changed; refresh the score before correcting fingering")
+                self.plan.piece = replace(self.plan.piece, fingering_plan=plan)
+                self._layout_cache = None
+                self._layout_revision = -1
+                self._layout_bpm = None
+                self._layout_cache_key = None
+                self._page_png.clear()
+                self.score_revision += 1
+                if self.awaiting_score_revision is not None:
+                    self.awaiting_score_revision = self.score_revision
+                    self._deferred_score_ack = None
+                    self._demo_score_ready = False
 
     def _restore(self):
         p = self.plan
@@ -875,23 +932,23 @@ class PracticeEngine:
                                     for index in variant.source_indices],
                      "canonical_source_ids": [source_note_id(note, index)
                                               for index, note in enumerate(variant.notes)]}
-        revision, cache = self.score_revision, self._demo_cache
+        cache = self._demo_cache
         # Waveform synthesis never holds the transport/MIDI lock. Immutable
-        # inputs and the token+revision guard make Stop/navigation authoritative
+        # inputs and the unique token guard make Stop/navigation authoritative
         # even when an obsolete render finishes much later.
         def render():
             try:
                 audio = cache.render(variant, bpm)
             except Exception as exc:
                 with self.lock:
-                    if self.demo is not None and self.demo["token"] == token and self.score_revision == revision:
+                    if self.demo is not None and self.demo["token"] == token:
                         self.awaiting_score_revision = None
                         self.feedback = f"Listen audio could not be prepared: {exc}"
                         self.next_action = self.feedback
                         self.demo["error"] = self.feedback
                 return
             with self.lock:
-                if self.demo is not None and self.demo["token"] == token and self.score_revision == revision:
+                if self.demo is not None and self.demo["token"] == token:
                     self._demo_audio = audio
                     self.demo.update(url=f"/demo.wav?token={token}", audio_available=True,
                                      duration_seconds=audio.duration_seconds,
@@ -1205,10 +1262,12 @@ class PracticeEngine:
                                    mode="perform" if self.mode == "perform" else "practice")
                 return
             if action == "demo_ready":
+                # The token identifies unchanged PCM even when a fingering
+                # correction advances the score revision during download.
+                # Stop, tempo changes and navigation discard that token.
                 if (self.mode == "listen" and self.demo is not None
                         and self.demo["audio_available"]
-                        and kwargs.get("token") == self.demo["token"]
-                        and int(kwargs.get("revision", -1)) == self.score_revision):
+                        and kwargs.get("token") == self.demo["token"]):
                     self.demo["ready"] = True
                     self._start_listen_if_ready()
                 return
@@ -1828,6 +1887,8 @@ class PracticeEngine:
                                    if self.midi_input_at is not None else None),
                 "metronome": self.library.settings["metronome"],
                 "hints_enabled": self.persistent_hints,
+                "fingering": p.piece.fingering_plan.summary()
+                    if p is not None and p.piece.fingering_plan is not None else None,
             }
             visual_now = self.paused_at if self.paused else time.monotonic()
             visual_beat = self.play_from_beat
@@ -2034,10 +2095,12 @@ class PracticeEngine:
                 clef_changes=p.piece.clef_changes,
                 default_clefs=infer_piece_clefs(p.piece.notes),
                 barlines=p.piece.barlines,
-                source_musicxml=p.piece.source_musicxml)
-            return build_score_model(
+                source_musicxml=p.piece.source_musicxml,
+                fingering_sources=authored_projection_sources(p.piece.fingering_plan))
+            model = build_score_model(
                 notation, boundaries=p.piece.bar_boundaries,
                 hand=p.hand, revision=self.score_revision)
+            return project_model(model, p.piece.fingering_plan)
 
     def engraving(self) -> EngravedScore:
         with self.lock:
@@ -2052,13 +2115,15 @@ class PracticeEngine:
             if (self._layout_revision != self.score_revision or self._layout_cache is None
                     or self._layout_bpm != p.piece.bpm):
                 phrase=self.display_phrase()
+                fingering_sources = authored_projection_sources(p.piece.fingering_plan)
                 notation=build_lesson_score(phrase, boundaries=p.piece.bar_boundaries,
                                             time_signatures=p.piece.time_signatures,
                                             key_signatures=p.piece.key_signatures,
                                             clef_changes=p.piece.clef_changes,
                                             default_clefs=infer_piece_clefs(p.piece.notes),
                                             barlines=p.piece.barlines,
-                source_musicxml=p.piece.source_musicxml)
+                                            source_musicxml=p.piece.source_musicxml,
+                                            fingering_sources=fingering_sources)
                 # Short lessons are freshly engraved as a continuous system.
                 # This avoids raster-copying printed Verovio lines together.
                 # Large works retain paginated rendering to bound GPU memory.
@@ -2069,12 +2134,18 @@ class PracticeEngine:
                 # Cache by immutable source bytes, curriculum stage, rendered
                 # phrase, hand, BPM and engraver version, not ephemeral revision.
                 # Never share one stage's PNG/geometry with another.
+                # Handled authored fingers belong only to the projected native
+                # model. Distinguish their clean base from historical SVGs
+                # containing original numbers, while preserving MIDI keys.
+                fingering_key = (
+                    (("fingering_sources", tuple(sorted(fingering_sources))),)
+                    if fingering_sources else ())
                 self._layout_cache_key = self.preprocessing.key(
                     "engraving", "readable-midi-engraving-v2", self.fingerprint, p.identity,
                     phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
                     p.hand, p.piece.bpm, compact_exercise,
                     tuple((n.source_id, n.start, n.end, n.pitch, n.hand)
-                          for n in phrase.notes))
+                          for n in phrase.notes), *fingering_key)
                 cached = self.preprocessing.read_json("engraving", self._layout_cache_key)
                 layout = None
                 if cached is not None:
@@ -2166,10 +2237,12 @@ class PracticeEngine:
                 clef_changes=p.piece.clef_changes,
                 default_clefs=infer_piece_clefs(p.piece.notes),
                 barlines=p.piece.barlines,
-                source_musicxml=p.piece.source_musicxml)
+                source_musicxml=p.piece.source_musicxml,
+                fingering_sources=authored_projection_sources(p.piece.fingering_plan))
             native_model = build_score_model(notation,
                 boundaries=p.piece.bar_boundaries,
                 hand=p.hand, revision=self.score_revision)
+            native_model = project_model(native_model, p.piece.fingering_plan)
             return assemble_layout(source_score, native_notes=True,
                 native_model=native_model, notation_xml=notation.musicxml,
                 cache=self.preprocessing, cache_key=self._layout_cache_key or "",

@@ -19,6 +19,17 @@ const MAX_STAFF_GAP := 22.0
 # fixed playhead. No temporal warping, font imitation or overlap is allowed.
 const MIN_LOOKAHEAD_BEATS := 1.75
 const MIN_READABLE_STAFF_GAP := 14.0
+const FINGERING_FONT_SIZE := 16
+
+signal fingering_change_requested(source_id: String, finger: Variant)
+
+# Annotation cells live on the same immutable score axis as the note ink.
+# Cache once per score/vertical size; scrolling only translates their X.
+var fingering_layout: Array = []
+var drawn_fingerings: Array = []
+var fingering_layout_gap := -1.0
+var fingering_layout_height := -1.0
+var fingering_popup: PopupMenu
 
 var glyphs = VerovioGlyphs.new()
 var native_ready := false
@@ -61,7 +72,21 @@ var cached_offsets_gap := -1.0
 var frame_scanned_events := 0
 var frame_visible_beam_groups := 0
 
+func _init() -> void:
+    mouse_filter = Control.MOUSE_FILTER_PASS
+    tooltip_text = "Right-click a note or tap a finger number to change its fingering"
+
+
+func _reset_fingering() -> void:
+    fingering_layout.clear()
+    drawn_fingerings.clear()
+    fingering_layout_gap = -1.0
+    if fingering_popup != null:
+        fingering_popup.hide()
+
+
 func clear_score() -> void:
+    _reset_fingering()
     super.clear_score()
     timeline.set_density(configured_density)
     staff_gap_limit = MAX_STAFF_GAP
@@ -145,6 +170,7 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
 
 
 func load_score(candidate: Dictionary) -> bool:
+    _reset_fingering()
     native_ready = false
     if not glyphs.ready() or not glyphs.note_ready() or not glyphs.ties_ready():
         failure_reason = "Authentic Verovio symbol, note or tie atlas is not loaded"
@@ -279,6 +305,313 @@ func load_score(candidate: Dictionary) -> bool:
     queue_redraw()
     return true
 
+# No provider-specific state reaches this view. Invalid and genuinely unknown
+# assignments produce no number; the source attack remains editable.
+func _fingering_assignment(event: Dictionary) -> Dictionary:
+    if str(event.get("kind", "")) != "note" or not bool(event.get("is_attack", false)):
+        return {}
+    var value: Variant = event.get("fingering")
+    if not value is Dictionary:
+        return {}
+    var finger: Variant = value.get("finger")
+    if typeof(finger) not in [TYPE_INT, TYPE_FLOAT] or \
+            not is_finite(float(finger)) or float(finger) != floorf(float(finger)) or \
+            int(finger) < 1 or int(finger) > 5:
+        return {}
+    if value.get("hand") not in ["left", "right"] or \
+            not value.get("source_id") is String or str(value["source_id"]).is_empty() or \
+            value.get("origin") not in ["manual", "authored", "automatic"]:
+        return {}
+    return value
+
+
+func _fingering_source(event: Dictionary) -> String:
+    var assignment: Variant = event.get("fingering")
+    if assignment is Dictionary and assignment.get("source_id") is String:
+        return assignment["source_id"]
+    var source: Variant = event.get("source_id")
+    return source if source is String else ""
+
+
+func _fingering_block(rect: Rect2, bins: Dictionary, cell: float) -> void:
+    for column in range(floori(rect.position.x/cell), floori(rect.end.x/cell)+1):
+        if not bins.has(column):
+            bins[column] = []
+        bins[column].append(rect)
+
+
+func _fingering_clear(rect: Rect2, bins: Dictionary, cell: float) -> bool:
+    if rect.position.y < 4.0 or rect.end.y > size.y-4.0:
+        return false
+    for column in range(floori((rect.position.x-3.0)/cell), floori((rect.end.x+3.0)/cell)+1):
+        for other in bins.get(column, []):
+            if rect.grow(3.0).intersects(other):
+                return false
+    return true
+
+
+func _fingering_obstacles(gap: float, bins: Dictionary, cell: float) -> void:
+    var density: float = timeline.pixels_per_beat
+    var unit: float = gap/250.0
+    for event in ordered_events:
+        var rect: Rect2 = _event_ink_rect(event,gap,cached_head_offsets,cached_accidental_offsets)
+        rect.position.x += float(event.get("beat",0.0))*density
+        _fingering_block(rect,bins,cell)
+    # Source beam masks and their stretched native stems, including chords.
+    for group in beam_groups:
+        var ids := PackedStringArray()
+        for event in group:
+            ids.append(str(event.get("id","")))
+        var key: String = "|".join(ids)
+        if not glyphs.beam_metadata.has(key):
+            continue
+        var info: Dictionary = glyphs.beam_metadata[key]
+        var box: Array = info["bounds"]
+        var first: Dictionary = group[0]
+        var last: Dictionary = group[-1]
+        var x0: float = float(first["beat"])*density+_voice_column_offset(first,gap,cached_head_offsets)
+        var x1: float = float(last["beat"])*density+_voice_column_offset(last,gap,cached_head_offsets)
+        var source_offsets: Array = info["head_offsets"]
+        _fingering_block(Rect2(x0+(float(box[0])-float(source_offsets[0]))*unit,
+            _event_y(first,gap)+float(box[1])*unit,
+            x1-x0+(float(box[2])-float(source_offsets[-1])+float(source_offsets[0]))*unit,
+            float(box[3])*unit),bins,cell)
+        for index in range(group.size()):
+            var event: Dictionary = group[index]
+            var extents: Dictionary = _chord_extents(event,gap,cached_head_offsets)
+            var head_y: float = float(extents["bottom_y" if info["stem_up"] else "top_y"])
+            var tip_y: float = head_y+float(info["tip_offsets"][index])*unit
+            var x: float = float(event["beat"])*density+_voice_column_offset(event,gap,cached_head_offsets)
+            var stem: Array = _source_stem_bounds(event,bool(info["stem_up"]))
+            if stem.size() == 4:
+                _fingering_block(Rect2(x+float(stem[0])*unit,minf(head_y,tip_y),
+                    float(stem[2])*unit,absf(head_y-tip_y)),bins,cell)
+    for pair in tie_pairs:
+        var first: Dictionary = pair["first"]
+        var last: Dictionary = pair["last"]
+        var place: Dictionary = _tie_placement(first,last,float(first["beat"])*density,
+            float(last["beat"])*density,gap)
+        if place.is_empty():
+            continue
+        var info: Dictionary = glyphs.tie_metadata["up" if place["down"] else "down"]
+        var box: Array = info["bounds"]
+        var scale: float = (float(place["x1"])-float(place["x0"]))/float(info["span"])
+        _fingering_block(Rect2(float(place["x0"])+float(box[0])*scale,
+            float(place["y"])+float(box[1])*unit,float(box[2])*scale,float(box[3])*unit),bins,cell)
+    for pair in slur_pairs:
+        var first: Dictionary = pair["first"]
+        var last: Dictionary = pair["last"]
+        var info: Dictionary = glyphs.slur_metadata[pair["key"]]
+        var box: Array = info["bounds"]
+        var x0: float = float(first["beat"])*density+float(cached_head_offsets.get(str(first["id"]),0.0))
+        var x1: float = float(last["beat"])*density+float(cached_head_offsets.get(str(last["id"]),0.0))
+        var change: float = _event_y(last,gap)-_event_y(first,gap)-float(info.get("original_end_y",0.0))*unit
+        var a: float = change*float(box[0])/float(info["span"])
+        var b: float = change*(float(box[0])+float(box[2]))/float(info["span"])
+        _fingering_block(Rect2(x0+float(box[0])*(x1-x0)/float(info["span"]),
+            _event_y(first,gap)+float(box[1])*unit+minf(a,b),
+            float(box[2])*(x1-x0)/float(info["span"]),float(box[3])*unit+absf(b-a)),bins,cell)
+    for group in notation_tuplets:
+        var events: Array = group.get("events",[])
+        if events.is_empty() or _tuplet_hidden(group):
+            continue
+        var ids := PackedStringArray()
+        for event in events:
+            ids.append(str(event["id"]))
+        var info: Dictionary = glyphs.tuplet_metadata.get("|".join(ids),{})
+        var first: Dictionary = events[0]
+        var x0: float = float(first["beat"])*density+_voice_column_offset(first,gap,cached_head_offsets)
+        var x1: float = float(events[-1]["beat"])*density+_voice_column_offset(events[-1],gap,cached_head_offsets)
+        var y: float = _rest_y(first,gap) if first["kind"] == "rest" else _event_y(first,gap)
+        for kind in ["number","bracket"]:
+            if not info.get(kind) is Dictionary or info[kind].is_empty():
+                continue
+            var box: Array = info[kind]["bounds"]
+            var left: float = (x0+x1)*.5-float(box[2])*unit*.5 if kind == "number" and events.size() > 1 else x0+float(box[0])*unit
+            var width: float = float(box[2])*unit if kind == "number" or events.size() == 1 else x1-x0+(float(box[2])-float(info["span"]))*unit
+            _fingering_block(Rect2(left,y+float(box[1])*unit,width,float(box[3])*unit),bins,cell)
+    for mark in source_expressions:
+        var hand: String = str(mark.get("hand","right"))
+        var kind: String = str(mark.get("kind",""))
+        var value: String = str(mark.get("value",""))
+        var x: float = float(mark.get("beat",0.0))*density
+        var y: float = _staff_center(hand)+gap*(3.0 if kind == "dynamic" else 3.55)
+        var name := ""
+        if kind == "dynamic":
+            name = "dynamic_"+value
+        elif kind == "pedal":
+            name = "pedal_start" if value == "start" else "pedal_stop"
+        elif kind == "articulation":
+            var event: Dictionary = expression_note_index.get(str(mark.get("note_id","")),{})
+            if event.is_empty():
+                continue
+            var step: int = Geometry.staff_step(event.get("spelling",{}),_clef_for(hand,_measure_for(event)))
+            var below: bool = step < 4
+            y = maxf(_event_y(event,gap)+gap*1.05,_staff_center(hand)+gap*2.9) if below else minf(_event_y(event,gap)-gap*1.05,_staff_center(hand)-gap*2.9)
+            x = float(event["beat"])*density+float(cached_head_offsets.get(str(event["id"]),0.0))
+            name = "artic_"+value+("_below" if below else "_above")
+        if glyphs.bounds.has(name):
+            var box: Array = glyphs.bounds[name]
+            var scale: float = unit*.9
+            _fingering_block(Rect2(x-float(box[2])*scale*.5,y+float(box[1])*scale,
+                float(box[2])*scale,float(box[3])*scale),bins,cell)
+
+
+func _layout_fingerings(gap: float) -> void:
+    fingering_layout.clear()
+    fingering_layout_gap = gap
+    fingering_layout_height = size.y
+    var cell: float = maxf(64.0,timeline.pixels_per_beat)
+    var bins: Dictionary = {}
+    _fingering_obstacles(gap,bins,cell)
+    var candidates: Array = []
+    var physical_keys: Dictionary = {}
+    for event in ordered_events:
+        var assignment: Dictionary = _fingering_assignment(event)
+        if assignment.is_empty():
+            continue
+        var key: String = "%.8f|%s|%s|%d" % [float(event["beat"]),assignment["hand"],
+            str(event.get("midi_pitch",event.get("spelling",{}))),int(assignment["finger"])]
+        if physical_keys.has(key):
+            physical_keys[key]["event_ids"].append(str(event["id"]))
+            continue
+        var item: Dictionary = {"event":event,"assignment":assignment,"event_ids":[str(event["id"])]}
+        physical_keys[key] = item
+        candidates.append(item)
+    candidates.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+        var ea: Dictionary = a["event"]
+        var eb: Dictionary = b["event"]
+        if absf(float(ea["beat"])-float(eb["beat"])) > .000001:
+            return float(ea["beat"]) < float(eb["beat"])
+        if a["assignment"]["hand"] != b["assignment"]["hand"]:
+            return a["assignment"]["hand"] < b["assignment"]["hand"]
+        var ya: float = _event_y(ea,gap)
+        var yb: float = _event_y(eb,gap)
+        return ya > yb if a["assignment"]["hand"] == "right" else ya < yb)
+    var font: Font = ThemeDB.fallback_font
+    for item in candidates:
+        var event: Dictionary = item["event"]
+        var assignment: Dictionary = item["assignment"]
+        var hand: String = assignment["hand"]
+        var text: String = str(int(assignment["finger"]))
+        var extent := Vector2(ceilf(font.get_string_size(text,HORIZONTAL_ALIGNMENT_LEFT,-1,FINGERING_FONT_SIZE).x),ceilf(font.get_height(FINGERING_FONT_SIZE)))
+        var head := Vector2(float(event["beat"])*timeline.pixels_per_beat+float(cached_head_offsets.get(str(event["id"]),0.0)),_event_y(event,gap))
+        var direction := -1.0 if hand == "right" else 1.0
+        var top: float = minf(head.y-gap*.85,_staff_center(str(event["staff"]))-gap*2.5)-extent.y if direction < 0.0 else maxf(head.y+gap*.85,_staff_center(str(event["staff"]))+gap*2.5)
+        top = clampf(top,4.0,size.y-extent.y-4.0)
+        var stride: float = maxf(extent.x+8.0,gap*.65)
+        var placed := false
+        # Search outward from the conventional hand lane, then small local
+        # horizontal alternatives. Never change a note's musical position.
+        for row in range(ceili(size.y/(extent.y+4.0))):
+            for shift in [0.0,-stride,stride,-stride*2.0,stride*2.0]:
+                var rect := Rect2(head.x-extent.x*.5+float(shift),
+                    top+direction*float(row)*(extent.y+4.0),extent.x,extent.y)
+                if not _fingering_clear(rect,bins,cell):
+                    continue
+                fingering_layout.append({"rect":rect,"head":head,"finger":int(assignment["finger"]),
+                    "hand":hand,"event_ids":item["event_ids"]})
+                _fingering_block(rect,bins,cell)
+                placed = true
+                break
+            if placed:
+                break
+
+
+func _paint_fingerings(clock: float, playhead_x: float, gap: float) -> void:
+    if absf(fingering_layout_gap-gap) > .001 or absf(fingering_layout_height-size.y) > .001:
+        _layout_fingerings(gap)
+    var translation := Vector2(timeline.screen_x(0.0,clock,playhead_x,play_from_beat),0.0)
+    for item in fingering_layout:
+        var rect: Rect2 = item["rect"]
+        rect.position += translation
+        if rect.end.x < 30.0 or rect.position.x > size.x:
+            continue
+        var ink: Color = _ink(str(item["hand"]))
+        if item["hand"] == "left":
+            ink = ink.lerp(Design.BLUE,.32)
+        draw_string(ThemeDB.fallback_font,rect.position+Vector2(0,ThemeDB.fallback_font.get_ascent(FINGERING_FONT_SIZE)),
+            str(item["finger"]),HORIZONTAL_ALIGNMENT_LEFT,-1,FINGERING_FONT_SIZE,ink)
+        var shown: Dictionary = item.duplicate()
+        shown["rect"] = rect
+        shown["head"] = item["head"]+translation
+        drawn_fingerings.append(shown)
+
+
+func _fill_fingering_menu(menu: PopupMenu, event: Dictionary) -> void:
+    var assignment: Dictionary = _fingering_assignment(event)
+    menu.add_item(str(event.get("staff","right")).capitalize()+" hand · fingering", 100)
+    menu.set_item_disabled(0,true)
+    for finger in range(1,6):
+        menu.add_radio_check_item(str(finger),finger)
+        menu.set_item_checked(menu.item_count-1,int(assignment.get("finger",0)) == finger)
+    menu.add_separator()
+    menu.add_item("Use original / automatic",0)
+    menu.id_pressed.connect(func(finger: int):
+        fingering_change_requested.emit(_fingering_source(event),null if finger == 0 else finger)
+        fingering_popup.hide())
+
+
+func _open_fingering_editor(point: Vector2) -> bool:
+    var selected: Dictionary = {}
+    var radius: float = maxf(12.0,_gap()*.8)
+    for item in drawn_fingerings:
+        if item["rect"].grow(5.0).has_point(point):
+            for id in item["event_ids"]:
+                selected[id] = true
+    for id in drawn_noteheads:
+        if drawn_noteheads[id].distance_to(point) <= radius:
+            selected[id] = true
+    var targets: Array = []
+    var sources: Dictionary = {}
+    for id in selected:
+        var event: Dictionary = expression_note_index.get(str(id),{})
+        var source: String = _fingering_source(event)
+        if not bool(event.get("is_attack",false)) or source.is_empty() or sources.has(source):
+            continue
+        sources[source] = true
+        targets.append(event)
+    if targets.is_empty():
+        return false
+    if fingering_popup != null:
+        remove_child(fingering_popup)
+        fingering_popup.queue_free()
+    fingering_popup = PopupMenu.new()
+    add_child(fingering_popup)
+    if targets.size() == 1:
+        _fill_fingering_menu(fingering_popup,targets[0])
+    else:
+        for i in range(targets.size()):
+            var event: Dictionary = targets[i]
+            var submenu := PopupMenu.new()
+            submenu.name = "Note%d" % i
+            fingering_popup.add_child(submenu)
+            _fill_fingering_menu(submenu,event)
+            var pitch: Dictionary = event.get("spelling",{})
+            fingering_popup.add_submenu_item("%s · voice %s · %s%s" % [
+                str(event.get("staff","right")).capitalize(),str(event.get("voice","1")),
+                str(pitch.get("step","")),str(pitch.get("octave",""))],submenu.name)
+    var screen: Vector2 = get_screen_transform()*point
+    fingering_popup.popup(Rect2i(Vector2i(screen),Vector2i.ZERO))
+    return true
+
+
+func _gui_input(event: InputEvent) -> void:
+    if not native_ready:
+        return
+    if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
+        if _open_fingering_editor(event.position):
+            accept_event()
+    elif event is InputEventScreenTouch and event.pressed:
+        if _open_fingering_editor(event.position):
+            accept_event()
+    elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+        for item in drawn_fingerings:
+            if item["rect"].grow(5.0).has_point(event.position):
+                if _open_fingering_editor(event.position):
+                    accept_event()
+                break
+
 # Only native compositor fragments with unambiguous original Verovio ink.
 # Reject incomplete engraving before playback can become ready.
 func _missing_source_engraving() -> String:
@@ -350,10 +683,13 @@ func _gap() -> float:
         var step: int = Geometry.staff_step(event.get("spelling", {}), clef)
         var factor: float = 2.0 - float(step)*.5
         var center: float = _staff_center(staff)
+        var assignment: Dictionary = _fingering_assignment(event)
+        var above: float = 45.0 if not assignment.is_empty() and assignment["hand"] == "right" else 32.0
+        var below: float = 45.0 if not assignment.is_empty() and assignment["hand"] == "left" else 32.0
         if factor < -.001:
-            gap = minf(gap, (center-32.0) / -factor)
+            gap = minf(gap, (center-above) / -factor)
         elif factor > .001:
-            gap = minf(gap, (size.y-32.0-center) / factor)
+            gap = minf(gap, (size.y-below-center) / factor)
     # A note that truly cannot fit is still drawn deterministically; the
     # score is not cropped, and no horizontal position can change.
     cached_staff_gap = maxf(5.0, gap)
@@ -1865,8 +2201,10 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float) -> v
     _paint_expressions(left,right,camera_clock,playhead_x,gap)
     _paint_hairpins(left,right,camera_clock,playhead_x,gap)
     _paint_grace_notes(gap)
+    _paint_fingerings(camera_clock,playhead_x,gap)
 
 func _draw() -> void:
+    drawn_fingerings.clear()
     if size.x < 100.0 or size.y < 100.0:
         return
     draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)

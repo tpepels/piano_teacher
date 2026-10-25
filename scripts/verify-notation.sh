@@ -23,6 +23,11 @@ quick_checks() {
   # Explicit error propagation matters: Bash disables errexit within
   # a function used on the left of a pipeline/conditional.
   "$PYTHON" -m pytest -q \
+    tests/test_fingering_provider.py \
+    tests/test_fingering_annotations.py \
+    tests/test_fingering_real_pieces.py \
+    tests/test_fingering_backend.py \
+    tests/test_native_fingering.py \
     tests/test_native_notation_library.py \
     tests/test_connector_pixels.py \
     tests/test_phase3_scroll_pixels.py \

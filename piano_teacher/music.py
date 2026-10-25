@@ -5,8 +5,12 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from collections import defaultdict, deque
 from statistics import median
+from typing import TYPE_CHECKING
 import re
 import mido
+
+if TYPE_CHECKING:
+    from .fingering.types import FingeringPlan
 
 
 @dataclass(frozen=True)
@@ -81,6 +85,8 @@ class Piece:
     # includes direction, articulation, pedal, ornament, slur and grouping
     # elements that timed MIDI notes cannot faithfully represent.
     source_musicxml: str = ""
+    # Computed for this complete original piece, never for a lesson variant.
+    fingering_plan: FingeringPlan | None = None
 
 
 def note_name(pitch: int) -> str:

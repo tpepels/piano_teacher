@@ -33,6 +33,8 @@ class Handler(BaseHTTPRequestHandler):
             route=urlsplit(self.path).path
             if route=="/state":
                 self._json(200,self.engine.state())
+            elif route=="/fingering":
+                self._json(200,self.engine.fingering_status())
             elif route=="/library":
                 self._json(200,self.engine.library_listing())
             elif route=="/library/health":
@@ -100,8 +102,13 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("Request too large")
             args=json.loads(self.rfile.read(length)) if length else {}
             route=urlsplit(self.path).path
+            if not isinstance(args, dict):
+                raise ValueError("Request must be a JSON object")
             if route=="/load":
                 self.engine.load(args["path"])
+            elif route=="/fingering":
+                self.engine.correct_fingering(args["source_id"], args["finger"],
+                                             fingerprint=args.get("fingerprint"))
             elif route=="/library/open":
                 self.engine.load_library(args["id"])
             elif route=="/library/health":

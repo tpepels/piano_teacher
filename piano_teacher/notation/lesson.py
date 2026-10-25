@@ -651,7 +651,8 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                        time_signatures: tuple[tuple[float, int, int], ...] = (),
                        key_signatures=(), clef_changes=(),
                        default_clefs: dict | None = None,
-                       barlines: tuple = (), source_musicxml: str = "") -> LessonScore:
+                       barlines: tuple = (), source_musicxml: str = "",
+                       fingering_sources: frozenset[str] = frozenset()) -> LessonScore:
     """Create notation from the source measure grid, not averaged bars."""
     identities = [source_note_id(note,index) for index,note in enumerate(phrase.notes)]
     if len(set(identities)) != len(identities):
@@ -783,5 +784,5 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             append_barline(measure,phrase.start+grid[b+1],"right")
     xml, unsupported = project_annotations(
         source_musicxml, ET.tostring(root, encoding="unicode"),
-        bindings, phrase, boundaries=boundaries)
+        bindings, phrase, boundaries=boundaries, fingering_sources=fingering_sources)
     return LessonScore(xml, phrase, bindings, staff_clefs, unsupported)

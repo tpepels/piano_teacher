@@ -4,6 +4,11 @@ An offline Linux piano teacher built with Godot 4 and Python. Import your own
 MIDI or MusicXML, learn simplified passages, restore the original notes, then
 connect the passages into a complete performance. All progress stays local.
 
+Piano fingering uses the real pretrained Lumikey models locally. Install Node.js
+20+ and npm, then run `./scripts/setup-fingering.sh` once. Original-piece plans
+persist across the whole lesson path; right-click a note to save a correction.
+See [setup, architecture and verification](docs/piano-fingering.md).
+
 Native notation uses a continuous score timeline and a fixed playhead.
 The established Verovio-versus-native framebuffer comparison runs **locally**.
 GitHub CI runs only fast fixture regressions and Godot script validation;
@@ -76,6 +81,7 @@ sudo pacman -S godot python python-pip alsa-utils
 python -m venv .venv
 source .venv/bin/activate
 pip install -e '.[godot,test]'
+./scripts/setup-fingering.sh
 ./run.sh
 ```
 

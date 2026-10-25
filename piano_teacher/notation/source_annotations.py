@@ -49,7 +49,8 @@ def _native_direction(element: ET.Element) -> bool:
 
 
 def project_annotations(source_musicxml: str, lesson_xml: str,
-                        bindings: dict, phrase, *, boundaries: tuple[float, ...]
+                        bindings: dict, phrase, *, boundaries: tuple[float, ...],
+                        fingering_sources: frozenset[str] = frozenset()
                         ) -> tuple[str, tuple[str, ...]]:
     if not source_musicxml:
         return lesson_xml, ()
@@ -210,6 +211,15 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
         if original_notations is not None:
             target_notations = dest.find("notations")
             for item in original_notations:
+                if item.tag == 'technical' and sid in fingering_sources:
+                    # The durable original-piece plan supplies this ink in
+                    # the native view, including manual replacements. Preserve
+                    # every other technical mark and its fallback obligation.
+                    item = deepcopy(item)
+                    for finger in item.findall('fingering'):
+                        item.remove(finger)
+                    if not len(item):
+                        continue
                 if item.tag in ("tied", "tuplet"):
                     # Recomputed from the exercise's own note durations.
                     continue

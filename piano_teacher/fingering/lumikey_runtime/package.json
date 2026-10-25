@@ -1,0 +1,14 @@
+{
+  "name": "piano-teacher-local-fingering",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline CPU runtime for the production Lumikey adapter",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@lumikey/piano-fingering-model": "0.3.0",
+    "onnxruntime-common": "1.30.0",
+    "onnxruntime-node": "1.30.0"
+  }
+}

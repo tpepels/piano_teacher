@@ -38,16 +38,27 @@ const RADIUS_INPUT := 6
 const RADIUS_CARD := 9
 const RADIUS_MODAL := 11
 
+static var _fonts: Dictionary = {}
+static var _title_face: SystemFont
+
 static func font(weight: int = 400) -> SystemFont:
+    # SystemFont owns native font data and glyph caches. Share each face
+    # across labels, including thousands of rows in a long lesson path.
+    if _fonts.has(weight):
+        return _fonts[weight]
     var result := SystemFont.new()
     result.font_names = PackedStringArray(["Inter", "Noto Sans", "DejaVu Sans"])
     result.font_weight = weight
+    _fonts[weight] = result
     return result
 
 static func title_font() -> SystemFont:
+    if _title_face != null:
+        return _title_face
     var result := SystemFont.new()
     result.font_names = PackedStringArray(["Noto Serif", "DejaVu Serif"])
     result.font_weight = 400
+    _title_face = result
     return result
 
 static func surface(color: Color, radius: int = RADIUS_INPUT) -> StyleBoxFlat:
