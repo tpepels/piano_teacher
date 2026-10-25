@@ -56,6 +56,8 @@ release does **not** establish a passing full-library notation audit.
 
 The [25 October recovery report](docs/notation-audit-recovery-2026-10-25.md)
 records the interrupted run's cause, focused fixes and remaining blockers.
+The [native unison and tuplet follow-up](docs/native-engraving-unisons-tuplets-2026-10-25.md)
+records the subsequent engraving fixes and focused framebuffer regressions.
 
 The interface follows `moodboard.png`: forest, pine and charcoal surfaces,
 serif music titles, white active staves, a restrained teal timing line and a

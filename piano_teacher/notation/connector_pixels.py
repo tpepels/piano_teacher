@@ -802,6 +802,14 @@ def _tuplet(row, frames, target):
             if any(a >= b for a, b in zip(source_x, source_x[1:])) or any(a >= b for a, b in zip(actual_x, actual_x[1:])):
                 raise ValueError('Bracket endpoints or numeral centre are not separately ordered')
         mask, box = _bracket_mask(bracket, source_x, actual_x, scale, ny-y0*scale)
+        expected_columns = mask.any(axis=0)
+        # Check the full permitted one-pixel fit corridor before fitting.
+        # A playhead can erase an endpoint hook and make the best contour
+        # shift away from that column. Checking only that fitted position
+        # would then misreport occluded source ink as a detached hook.
+        if any(0 <= x-box[0]+dx < mask.shape[1] and expected_columns[x-box[0]+dx]
+               for x in frame['occluded_columns'] for dx in (-1, 0, 1)):
+            raise ValueError('Measured coloured playhead occludes the bracket witness')
         fit, bx, by, overlapping_pixels = _fit_bracket(frame['pixels'], mask, box, template, number_box)
         if overlapping_pixels > max(2, mask.sum()*.02):
             return 'ambiguous', 'Bracket and independently matched numeral silhouettes overlap', dict(
@@ -813,9 +821,6 @@ def _tuplet(row, frames, target):
         # Dice score alone could bless a missing short endpoint hook.
         h, w = mask.shape
         block = frame['pixels'][by:by+h, bx:bx+w]
-        expected_columns = mask.any(axis=0)
-        if any(0 <= x-bx < w and expected_columns[x-bx] for x in frame['occluded_columns']):
-            raise ValueError('Measured coloured playhead occludes the bracket witness')
         padded = np.pad(block, 1)
         supported = np.logical_or.reduce([padded[dy:dy+h, dx:dx+w]
                                           for dy in range(3) for dx in range(3)])

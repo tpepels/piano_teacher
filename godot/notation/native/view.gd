@@ -575,6 +575,10 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
             float(first.get("beat",0.0)),clock,playhead_x,play_from_beat)
         var x1: float = timeline.screen_x(
             float(last.get("beat",0.0)),clock,playhead_x,play_from_beat)
+        if str(first.get("kind","")) == "note":
+            x0 += _voice_column_offset(first,gap,cached_head_offsets)
+        if str(last.get("kind","")) == "note":
+            x1 += _voice_column_offset(last,gap,cached_head_offsets)
         if x1 < -50.0 or x0 > size.x+50.0:
             continue
         glyphs.paint_tuplet(self,"|".join(ids),x0,x1,
@@ -743,8 +747,7 @@ func _source_stem_bounds(event: Dictionary, up: bool) -> Array:
 
 # Two independent simultaneous voices need separate shafts even when both
 # lie on the same side of the staff. Index once per score, never per frame.
-# Source beam and explicit stem directions remain authoritative. Interleaved
-# chords and three-or-more voices require separate collision layout.
+# Source beam and explicit stem directions remain authoritative.
 func _polyphonic_stem_directions() -> Dictionary:
     var onsets: Dictionary = {}
     for event in ordered_events:
@@ -762,6 +765,8 @@ func _polyphonic_stem_directions() -> Dictionary:
         if leaders.size() != 2 or \
                 str(leaders[0].get("voice","1")) == str(leaders[1].get("voice","1")):
             continue
+        leaders.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+            return str(a.get("voice","1")).naturalnocasecmp_to(str(b.get("voice","1"))) < 0)
         var ranges: Array = []
         for leader in leaders:
             var low := INF
@@ -778,7 +783,10 @@ func _polyphonic_stem_directions() -> Dictionary:
         elif ranges[1].y < ranges[0].x:
             upper = 1
         if upper < 0:
-            continue
+            # Overlapping voices still require independent shafts. Use the
+            # source voice order when pitch ranges cannot choose the upper
+            # voice; explicit stems and source beams override this default.
+            upper = 0
         for i in range(2):
             var members: Array = chord_members.get(str(leaders[i].get("id","")),[leaders[i]])
             for member in members:
@@ -876,7 +884,105 @@ func _engraved_head_offsets(gap: float) -> Dictionary:
         for i in range(members.size()):
             offsets[str(members[i].get("id",""))] = \
                 float(positions[i][0])*gap/250.0
+    var columns: Dictionary = _polyphonic_column_offsets(gap,offsets)
+    for id in columns:
+        offsets[id] = float(offsets.get(id,0.0))+float(columns[id])
     return offsets
+
+
+func _head_family(event: Dictionary) -> String:
+    var kind: String = str(event.get("note_type","quarter"))
+    return "head_"+(kind if kind in ["whole","half"] else "black")
+
+
+func _polyphonic_column_offsets(gap: float, heads: Dictionary) -> Dictionary:
+    # Translate complete source voice columns, never individual chord tones.
+    # A filled head cannot cover a hollow unison. Equal heads may share only
+    # with opposing stems; equal-direction shafts need separate columns too.
+    var onsets: Dictionary = {}
+    for event in ordered_events:
+        if str(event.get("kind","")) != "note" or bool(event.get("chord",false)):
+            continue
+        var key: String = "%s|%s|%.8f" % [event.get("staff","right"),
+            event.get("measure",0),float(event.get("beat",0.0))]
+        if not onsets.has(key):
+            onsets[key] = []
+        onsets[key].append(event)
+    var result: Dictionary = {}
+    for leaders in onsets.values():
+        if leaders.size() < 2:
+            continue
+        leaders.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+            var a_up: bool = bool(beam_stem_up_by_note.get(str(a.get("id","")),_chord_extents(a,gap)["up"]))
+            var b_up: bool = bool(beam_stem_up_by_note.get(str(b.get("id","")),_chord_extents(b,gap)["up"]))
+            if a_up != b_up:
+                return not a_up
+            return str(a.get("voice","1")).naturalnocasecmp_to(str(b.get("voice","1"))) < 0)
+        var placed: Array = []
+        var shifts: Array[float] = []
+        var links: Dictionary = {}
+        for leader in leaders:
+            var index: int = placed.size()
+            links[index] = []
+            var members: Array = chord_members.get(str(leader.get("id","")),[leader])
+            var up: bool = bool(beam_stem_up_by_note.get(str(leader.get("id","")),_chord_extents(leader,gap)["up"]))
+            var shift := 0.0
+            for previous in placed:
+                if str(previous["leader"].get("voice","1")) == str(leader.get("voice","1")):
+                    continue
+                for member in members:
+                    for other in previous["members"]:
+                        if absf(_event_y(member,gap)-_event_y(other,gap)) > gap*.51:
+                            continue
+                        var same_pitch: bool = absf(_event_y(member,gap)-_event_y(other,gap)) < .001
+                        if same_pitch and _head_family(member) == _head_family(other) and up != bool(previous["up"]):
+                            continue
+                        if not int(previous["index"]) in links[index]:
+                            links[index].append(int(previous["index"]))
+                            links[int(previous["index"])].append(index)
+                        var box: Array = glyphs.bounds[_head_family(member)]
+                        var other_box: Array = glyphs.bounds[_head_family(other)]
+                        var left: float = float(heads.get(str(member.get("id","")),0.0))-float(box[2])*gap/500.0
+                        var right: float = float(heads.get(str(other.get("id","")),0.0))+float(other_box[2])*gap/500.0
+                        shift = maxf(shift,right+float(previous["shift"])+gap*.20-left)
+            placed.append({"leader":leader,"members":members,"up":up,"shift":shift,"index":index})
+            shifts.append(shift)
+        var centers: Dictionary = {}
+        for i in range(placed.size()):
+            if centers.has(i):
+                continue
+            var pending: Array = [i]
+            var component: Dictionary = {}
+            var minimum := INF
+            var maximum := -INF
+            while not pending.is_empty():
+                var index: int = int(pending.pop_back())
+                if component.has(index):
+                    continue
+                component[index] = true
+                minimum = minf(minimum,shifts[index])
+                maximum = maxf(maximum,shifts[index])
+                pending.append_array(links[index])
+            for index in component:
+                centers[index] = (minimum+maximum)*.5
+        for i in range(placed.size()):
+            for member in placed[i]["members"]:
+                result[str(member.get("id",""))] = shifts[i]-float(centers[i])
+    return result
+
+
+func _voice_column_offset(event: Dictionary, gap: float, heads: Dictionary) -> float:
+    var id: String = str(event.get("id",""))
+    var intrinsic := 0.0
+    var members: Array = chord_members.get(id,[]).duplicate()
+    var positions: Array = glyphs.chord_heads(_chord_template_key(event))
+    if positions.size() == members.size():
+        members.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+            return Geometry.diatonic_index(a.get("spelling",{})) < Geometry.diatonic_index(b.get("spelling",{})))
+        for i in range(members.size()):
+            if str(members[i].get("id","")) == id:
+                intrinsic = float(positions[i][0])*gap/250.0
+    return float(heads.get(id,0.0))-intrinsic
 
 
 func _event_ink_rect(event: Dictionary, gap: float,
@@ -919,15 +1025,16 @@ func _event_ink_rect(event: Dictionary, gap: float,
     var y: float = _event_y(event,gap)
     var top: float = y+float(head_box[1])*unit
     var bottom: float = y+(float(head_box[1])+float(head_box[3]))*unit
+    var sprite_x: float = _voice_column_offset(event,gap,heads) if chord_members.has(id) else head_x
     if box.size() == 4:
-        left = minf(left,float(box[0])*unit)
-        right = maxf(right,(float(box[0])+float(box[2]))*unit)
+        left = minf(left,sprite_x+float(box[0])*unit)
+        right = maxf(right,sprite_x+(float(box[0])+float(box[2]))*unit)
         top = minf(top,y+float(box[1])*unit)
         bottom = maxf(bottom,y+(float(box[1])+float(box[3]))*unit)
     if beamed_note_ids.has(id):
         var stem: Array = _source_stem_bounds(event,bool(beam_stem_up_by_note[id]))
-        left = minf(left,float(stem[0])*unit)
-        right = maxf(right,(float(stem[0])+float(stem[2]))*unit)
+        left = minf(left,sprite_x+float(stem[0])*unit)
+        right = maxf(right,sprite_x+(float(stem[0])+float(stem[2]))*unit)
         top = minf(top,y+float(stem[1])*unit)
         bottom = maxf(bottom,y+(float(stem[1])+float(stem[3]))*unit)
     var step: int = Geometry.staff_step(event.get("spelling",{}),
@@ -1074,6 +1181,7 @@ func _paint_engraved_chord(event: Dictionary, x: float,
     var heads: Array = glyphs.chord_heads(key)
     if heads.size() != group.size():
         return []
+    x += _voice_column_offset(event,gap,cached_head_offsets)
     var sorted_heads: Array = group.duplicate()
     sorted_heads.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
         return Geometry.diatonic_index(a.get("spelling",{})) < \
@@ -1231,7 +1339,7 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
             var chord: Dictionary = _chord_extents(event,gap,head_offsets)
             var stem_box: Array = _source_stem_bounds(event,up)
             var attachment: float = float(stem_box[0])+float(stem_box[2])*.5
-            var stem_x: float = x+attachment*gap/250.0
+            var stem_x: float = x+_voice_column_offset(event,gap,head_offsets)+attachment*gap/250.0
             # The beam PNG uses source font origins, while stem masks use
             # centred heads. Map each measured stem centre in BOTH spaces;
             # mapping head centres stretches the first beam cap away from

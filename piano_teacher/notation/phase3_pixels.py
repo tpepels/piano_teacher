@@ -246,13 +246,23 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                     displaced_group=any(
                         a is not b and abs(ay-by)<=1.05*staves[staff].gap
                         for ay,a in group for by,b in group)
+                    unisons=[n for y,n in pitches if n is not note and abs(y-target)<.001]
+                    displaced_group = displaced_group or any(n['voice']!=note['voice'] for n in unisons)
                     x_search=range(-32,33) if displaced_group else range(-16,17)
+                    def family(n):
+                        return n['note_type'] if n['note_type'] in ('whole','half') else 'black'
+                    # Equal compatible heads may genuinely be shared. A
+                    # hollow/filled pair, or equal heads explicitly stemmed
+                    # the same way, requires distinct actual contour owners.
+                    shareable=any(family(n)==family(note) and not (
+                        note.get('stem') in ('up','down') and n.get('stem')==note['stem'])
+                        for n in unisons)
                     requests.append(dict(note=note,glyph=glyphs[glyph],name=glyph,
                         gap=staves[staff].gap,origin_y=target,dxs=x_search,
                         alternatives=tuple((name,glyphs[name]) for name in ("head_black","head_half","head_whole") if name!=glyph),
                         background_rows=ledger_rows if glyph!="head_black" else (),
                         occlusion_columns=occlusion_columns,
-                        unison=sum(abs(y-target)<.001 for y,_ in pitches)>1))
+                        unison=shareable))
             except (ValueError,AssertionError,TypeError) as exc:
                 failures.append(f"{clock} {staff}: {exc}")
                 for note in notes:

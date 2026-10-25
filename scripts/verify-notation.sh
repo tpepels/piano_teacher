@@ -33,6 +33,9 @@ quick_checks() {
     tests/test_connector_source_layers.py \
     tests/test_extra_symbol_shard_regressions.py \
     tests/test_rest_dot_retained_pixels.py \
+    tests/test_polyphonic_stem_pixels.py \
+    tests/test_native_voice_collisions.py \
+    tests/test_moonlight_tuplet_pixels.py \
     tests/test_extra_symbol_pixels.py::test_real_playhead_overlap_is_ambiguous_without_exempting_detached_heads || return $?
   "$GODOT" --headless --path godot --check-only --script res://main.gd
 }

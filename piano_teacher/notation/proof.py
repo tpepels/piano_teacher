@@ -244,6 +244,7 @@ def read_written_score(xml: str, *, strict: bool = True) -> WrittenScore:
                     kind="note" if pitched is not None else "rest",
                     note_type=element.findtext("type"),
                     dots=len(element.findall("dot")), chord=chord,
+                    stem=element.findtext("stem"),
                     tie_start="start" in tie_types, tie_stop="stop" in tie_types,
                     tied_marks=tuple(tuple(sorted(t.attrib.items()))
                                      for t in element.findall("notations/tied")),
