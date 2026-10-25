@@ -15,10 +15,12 @@ def test_fresh_capture_never_certifies_leftover_pixels_or_reference_pages(tmp_pa
                  'verovio-9.svg','capture-manifest.json','native-overlay-report.json'):
         (folder/name).write_text('previous run')
     def actual_process(*args,**kwargs):
-        assert not (folder/'native-9.99999.png').exists()
-        assert not (folder/'verovio-9.svg').exists()
-        (folder/'native-0.00000.png').write_bytes(b'current frame')
-        (folder/'native-overlay-report.json').write_text('{"frames":[]}')
+        current=capture.Path(args[0][-1])
+        assert current!=folder
+        assert not (current/'native-9.99999.png').exists()
+        assert not (current/'verovio-9.svg').exists()
+        (current/'native-0.00000.png').write_bytes(b'current frame')
+        (current/'native-overlay-report.json').write_text('{"frames":[]}')
         return subprocess.CompletedProcess(args[0],0,'NATIVE_VEROVIO_OVERLAY_FAILURES:0','')
     monkeypatch.setattr(capture.subprocess,'run',actual_process)
     monkeypatch.setattr(capture.subprocess,'check_output',lambda *_,**__:'current-engine')
@@ -29,6 +31,54 @@ def test_fresh_capture_never_certifies_leftover_pixels_or_reference_pages(tmp_pa
         capture.run(folder,'godot',prepared=(payload,SimpleNamespace(pages=[])))
     manifest=json.loads((folder/'capture-manifest.json').read_text())
     assert [row['file'] for row in manifest['screenshots']]==['native-0.00000.png']
+
+
+def test_failed_fresh_capture_preserves_previous_successful_inputs_and_pixels(tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    import subprocess
+    previous={name:('previous '+name).encode() for name in (
+        'fixture.json','score.musicxml','native-0.00000.png','capture-manifest.json','verovio-0.svg')}
+    for name,data in previous.items():(tmp_path/name).write_bytes(data)
+    monkeypatch.setattr(capture.subprocess,'run',lambda *args,**kwargs:
+        subprocess.CompletedProcess(args[0],1,'','renderer failed during capture'))
+    payload=dict(model={},xml='<score-partwise/>',sample_beats=[0.],assets={})
+    with pytest.raises(AssertionError,match='Actual native renderer failed'):
+        capture.run(tmp_path,'godot',prepared=(payload,SimpleNamespace(pages=[])))
+    assert {name:(tmp_path/name).read_bytes() for name in previous}==previous
+    attempt,=tmp_path.glob('capture-incomplete-*')
+    assert 'renderer failed during capture' in (attempt/'godot.log').read_text()
+
+
+def test_interrupted_publish_recovers_complete_capture_without_rerendering(tmp_path,monkeypatch):
+    from types import SimpleNamespace
+    import subprocess
+    def actual_process(*args,**kwargs):
+        current=capture.Path(args[0][-1])
+        (current/'native-0.00000.png').write_bytes(b'completed real capture')
+        (current/'native-overlay-report.json').write_text('{"frames":[]}')
+        return subprocess.CompletedProcess(args[0],0,'NATIVE_VEROVIO_OVERLAY_FAILURES:0','')
+    monkeypatch.setattr(capture.subprocess,'run',actual_process)
+    monkeypatch.setattr(capture.subprocess,'check_output',lambda *_,**__:'current-engine')
+    original=capture._copy_capture_file
+    copied=[]
+    def interrupted_copy(source,destination):
+        if copied:raise OSError('publication interrupted')
+        original(source,destination);copied.append(destination.name)
+    monkeypatch.setattr(capture,'_copy_capture_file',interrupted_copy)
+    payload=dict(model={},xml='<score-partwise/>',sample_beats=[0.],assets={})
+    prepared=payload,SimpleNamespace(pages=[])
+    with pytest.raises(OSError,match='publication interrupted'):
+        capture.run(tmp_path,'godot',prepared=prepared)
+    assert (tmp_path/'capture-publish.json').is_file()
+    monkeypatch.setattr(capture,'_copy_capture_file',original)
+    def forbidden_renderer(*_,**__):raise AssertionError('Completed capture was rendered again')
+    monkeypatch.setattr(capture.subprocess,'run',forbidden_renderer)
+    def stop_after_recovery(*_):raise RuntimeError('recovered and validated')
+    monkeypatch.setattr(capture,'readability_errors',stop_after_recovery)
+    with pytest.raises(RuntimeError,match='recovered and validated'):
+        capture.run(tmp_path,'godot',prepared=prepared,reuse_captures=True)
+    assert (tmp_path/'native-0.00000.png').read_bytes()==b'completed real capture'
+    assert not (tmp_path/'capture-publish.json').exists()
 
 
 def test_capture_reuse_rejects_unrecorded_native_images(tmp_path):

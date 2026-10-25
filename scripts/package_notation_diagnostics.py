@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from collections import Counter
+from contextlib import contextmanager
 import json
+import os
 from pathlib import Path
 import re
 import sys
+import tempfile
 from zipfile import ZIP_DEFLATED, ZipFile
 
 MARKERS = (
@@ -28,6 +31,26 @@ MAX_FILE_BYTES = 8 * 1024 * 1024
 FRAME_PATTERN = re.compile(r'native--?\d+\.\d+\.png')
 
 
+@contextmanager
+def atomic_archive(output):
+    with tempfile.NamedTemporaryFile(dir=output.parent,prefix='.triage-',suffix='.zip',delete=False) as stream:
+        temporary=Path(stream.name)
+    try:
+        with ZipFile(temporary,'w',ZIP_DEFLATED,strict_timestamps=False) as archive:
+            yield archive
+        os.replace(temporary,output)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def read_record(path):
+    try:
+        value=json.loads(path.read_text())
+        return value if isinstance(value,dict) else {}
+    except (OSError,ValueError):
+        return {}
+
+
 def classify(message: str) -> str:
     for label, marker in MARKERS:
         if marker in message:
@@ -40,8 +63,26 @@ def package(shard: Path, output: Path) -> dict:
     output.parent.mkdir(parents=True, exist_ok=True)
     counts = Counter()
     selections = {}
+    interrupted={}
+    directories={p.parent for pattern in ('*/*/fixture.json','*/*/case-state.json','*/*/case-result.json')
+                 for p in shard.glob(pattern)}
+    for directory in sorted(directories):
+        fixture=directory/'fixture.json'
+        audit=directory/'audit.json'
+        state=read_record(directory/'case-state.json')
+        result=read_record(directory/'case-result.json')
+        stale=audit.is_file() and fixture.is_file() and audit.stat().st_mtime<fixture.stat().st_mtime
+        partial=(state and state.get('stage')!='completed') or (result and result.get('state')!='completed')
+        if not audit.is_file() or stale or partial:
+            interrupted[directory]=dict(stale_audit=stale,stage=state.get('stage','unrecorded'))
+    if interrupted:
+        counts['interrupted']=len(interrupted)
+        first=next(iter(interrupted))
+        selections['interrupted']=(first/'audit.json','Incomplete case: '+interrupted[first]['stage'])
     cases = sorted(shard.rglob('audit.json'))
     for audit in cases:
+        if audit.parent in interrupted:
+            continue
         try:
             record = json.loads(audit.read_text())
         except (OSError, ValueError):
@@ -52,29 +93,43 @@ def package(shard: Path, output: Path) -> dict:
             if category != 'other' and category not in selections:
                 selections[category] = (audit, message)
     summary = {'audit_files': len(cases), 'error_counts': counts,
+               'interrupted_cases':[str(p.relative_to(shard)) for p in interrupted],
                'selected_examples': {kind: str(file.relative_to(shard))
                                      for kind, (file, _) in selections.items()}}
     total = 0
-    with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
+    with atomic_archive(output) as archive:
         included = set()
 
-        def add(path: Path) -> None:
+        def add(path: Path, name=None) -> None:
             nonlocal total
             if not path.is_file() or path in included:
                 return
             size = path.stat().st_size
             if size > MAX_FILE_BYTES or total + size > MAX_ARCHIVE_BYTES:
                 return
-            archive.write(path, path.relative_to(shard).as_posix())
+            archive.write(path, name or path.relative_to(shard).as_posix())
             included.add(path)
             total += size
 
-        for name in ('summary.json', 'run.log'):
+        for name in ('summary.json', 'run.log','investigation.json'):
             add(shard / name)
         archive.writestr('triage-summary.json', json.dumps(summary, indent=2) + '\n')
         for kind, (audit, trigger) in list(selections.items())[:MAX_CASES]:
             directory = audit.parent
-            add(audit)
+            if interrupted.get(directory,{}).get('stale_audit'):
+                add(audit,(directory.relative_to(shard)/'previous-audit.json').as_posix())
+            else:
+                add(audit)
+            for name in ('case-state.json','case-result.json','worker-stack.log',
+                         'interruption-stack.log','capture-manifest.json','fixture.json','godot.log',
+                         'capture-publish.json'):
+                add(directory/name)
+            attempts=sorted(directory.glob('capture-incomplete-*'),key=lambda p:p.stat().st_mtime,reverse=True)
+            for attempt in attempts[:1]:
+                for name in ('godot.log','capture-error.txt','fixture.json','score.musicxml'):
+                    add(attempt/name)
+                for frame in sorted(attempt.glob('native-*.png'))[:2]:
+                    add(frame)
             for filename in ('independent-connectors.json', 'independent-beams.json',
                              'independent-tuplets.json', 'independent-structure.json',
                              'independent-ledgers.json', 'independent-features.json'):

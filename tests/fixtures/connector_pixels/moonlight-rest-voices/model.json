@@ -1,0 +1,833 @@
+{
+  "schema": "piano-teacher-score-model-v1",
+  "revision": 0,
+  "first_bar": 29,
+  "last_bar": 29,
+  "duration_beats": 4.0,
+  "beat_unit": "quarter",
+  "active_hand": "right",
+  "staff_order": [
+    "right",
+    "left"
+  ],
+  "measures": [
+    {
+      "number": 29,
+      "start_beat": 0.0,
+      "end_beat": 4.0,
+      "meter": [
+        4,
+        4
+      ],
+      "keys": {
+        "right": 4,
+        "left": 4
+      },
+      "clefs": {
+        "right": {
+          "sign": "G",
+          "line": 2,
+          "octave_change": 0
+        },
+        "left": {
+          "sign": "F",
+          "line": 4,
+          "octave_change": 0
+        }
+      },
+      "left_barline": null,
+      "right_barline": {
+        "style": "regular",
+        "repeat": ""
+      }
+    }
+  ],
+  "notes": [
+    {
+      "id": "midi-t0-e796",
+      "onset_beats": 0.33333333,
+      "duration_beats": 0.31458333,
+      "midi_pitch": 60,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e798",
+      "onset_beats": 0.66666667,
+      "duration_beats": 0.31458333,
+      "midi_pitch": 63,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e800",
+      "onset_beats": 1.0,
+      "duration_beats": 0.31458333,
+      "midi_pitch": 56,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e801",
+      "onset_beats": 1.0,
+      "duration_beats": 0.94791667,
+      "midi_pitch": 56,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e803",
+      "onset_beats": 1.33333333,
+      "duration_beats": 0.31458333,
+      "midi_pitch": 60,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e805",
+      "onset_beats": 1.66666667,
+      "duration_beats": 0.31458333,
+      "midi_pitch": 63,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e808",
+      "onset_beats": 2.0,
+      "duration_beats": 0.31458333,
+      "midi_pitch": 57,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e809",
+      "onset_beats": 2.0,
+      "duration_beats": 0.94791667,
+      "midi_pitch": 57,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e811",
+      "onset_beats": 2.33333333,
+      "duration_beats": 0.31458333,
+      "midi_pitch": 60,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e813",
+      "onset_beats": 2.66666667,
+      "duration_beats": 0.31458333,
+      "midi_pitch": 63,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e816",
+      "onset_beats": 3.0,
+      "duration_beats": 0.31458333,
+      "midi_pitch": 54,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e817",
+      "onset_beats": 3.0,
+      "duration_beats": 0.94791667,
+      "midi_pitch": 54,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e819",
+      "onset_beats": 3.33333333,
+      "duration_beats": 0.31458333,
+      "midi_pitch": 60,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    },
+    {
+      "id": "midi-t0-e821",
+      "onset_beats": 3.66666667,
+      "duration_beats": 0.31458333,
+      "midi_pitch": 63,
+      "velocity": 79,
+      "hand": "right",
+      "voice": "midi-t0-c0",
+      "track": 0,
+      "channel": 0,
+      "spelling": null
+    }
+  ],
+  "notation_events": [
+    {
+      "id": "rest:right:29:0",
+      "source_id": null,
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 0.0,
+      "duration_beats": 0.33333333,
+      "kind": "rest",
+      "midi_pitch": null,
+      "spelling": null,
+      "note_type": "eighth",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": false,
+      "accidental": null,
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [
+        {
+          "type": "start",
+          "number": "1",
+          "bracket": "yes",
+          "show_number": "actual"
+        }
+      ],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [
+        []
+      ],
+      "stem": null
+    },
+    {
+      "id": "ptd3008fcebe8d7aa2a3fd348cc7e9a0eas0",
+      "source_id": "midi-t0-e796",
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 0.33333333,
+      "duration_beats": 0.33333333,
+      "kind": "note",
+      "midi_pitch": 60,
+      "spelling": {
+        "step": "C",
+        "alter": 0,
+        "octave": 4
+      },
+      "note_type": "eighth",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": "natural",
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [],
+      "stem": null
+    },
+    {
+      "id": "pta8a78123b2ef55ec1b74100c266d7194s0",
+      "source_id": "midi-t0-e798",
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 0.66666667,
+      "duration_beats": 0.33333333,
+      "kind": "note",
+      "midi_pitch": 63,
+      "spelling": {
+        "step": "D",
+        "alter": 1,
+        "octave": 4
+      },
+      "note_type": "eighth",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [
+        {
+          "type": "stop",
+          "number": "1",
+          "bracket": "yes",
+          "show_number": "actual"
+        }
+      ],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [
+        []
+      ],
+      "stem": null
+    },
+    {
+      "id": "pt7b8acc825109479697c1408477f9b901s0",
+      "source_id": "midi-t0-e800",
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 1.0,
+      "duration_beats": 0.25,
+      "kind": "note",
+      "midi_pitch": 56,
+      "spelling": {
+        "step": "G",
+        "alter": 1,
+        "octave": 3
+      },
+      "note_type": "16th",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": null,
+      "tuplet_marks": [],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [],
+      "stem": null
+    },
+    {
+      "id": "pt410aa1621247fb1bcab4132544731552s0",
+      "source_id": "midi-t0-e803",
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 1.33333333,
+      "duration_beats": 0.33333333,
+      "kind": "note",
+      "midi_pitch": 60,
+      "spelling": {
+        "step": "C",
+        "alter": 0,
+        "octave": 4
+      },
+      "note_type": "eighth",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [
+        {
+          "type": "start",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "none"
+        },
+        {
+          "type": "stop",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "actual"
+        }
+      ],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [
+        [],
+        []
+      ],
+      "stem": null
+    },
+    {
+      "id": "pte6805c7902617e23420ca00d74776df5s0",
+      "source_id": "midi-t0-e805",
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 1.66666667,
+      "duration_beats": 0.33333333,
+      "kind": "note",
+      "midi_pitch": 63,
+      "spelling": {
+        "step": "D",
+        "alter": 1,
+        "octave": 4
+      },
+      "note_type": "eighth",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [
+        {
+          "type": "start",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "none"
+        },
+        {
+          "type": "stop",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "actual"
+        }
+      ],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [
+        [],
+        []
+      ],
+      "stem": null
+    },
+    {
+      "id": "pteb9c65349856b610741ca8cf778a81fes0",
+      "source_id": "midi-t0-e808",
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 2.0,
+      "duration_beats": 0.25,
+      "kind": "note",
+      "midi_pitch": 57,
+      "spelling": {
+        "step": "A",
+        "alter": 0,
+        "octave": 3
+      },
+      "note_type": "16th",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": null,
+      "tuplet_marks": [],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [],
+      "stem": null
+    },
+    {
+      "id": "pt3f4438d1b927bfb8faedb2d704204e4fs0",
+      "source_id": "midi-t0-e811",
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 2.33333333,
+      "duration_beats": 0.33333333,
+      "kind": "note",
+      "midi_pitch": 60,
+      "spelling": {
+        "step": "C",
+        "alter": 0,
+        "octave": 4
+      },
+      "note_type": "eighth",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [
+        {
+          "type": "start",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "none"
+        },
+        {
+          "type": "stop",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "actual"
+        }
+      ],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [
+        [],
+        []
+      ],
+      "stem": null
+    },
+    {
+      "id": "pt19c04f0b49af1ba667d2bdb4b994d788s0",
+      "source_id": "midi-t0-e813",
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 2.66666667,
+      "duration_beats": 0.33333333,
+      "kind": "note",
+      "midi_pitch": 63,
+      "spelling": {
+        "step": "D",
+        "alter": 1,
+        "octave": 4
+      },
+      "note_type": "eighth",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [
+        {
+          "type": "start",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "none"
+        },
+        {
+          "type": "stop",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "actual"
+        }
+      ],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [
+        [],
+        []
+      ],
+      "stem": null
+    },
+    {
+      "id": "ptda2ce43c85d0fa9c98b52a2f1cab69f9s0",
+      "source_id": "midi-t0-e816",
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 3.0,
+      "duration_beats": 0.25,
+      "kind": "note",
+      "midi_pitch": 54,
+      "spelling": {
+        "step": "F",
+        "alter": 1,
+        "octave": 3
+      },
+      "note_type": "16th",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": null,
+      "tuplet_marks": [],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [],
+      "stem": null
+    },
+    {
+      "id": "ptba2275ce9709e4c96e7aeb62af4352cbs0",
+      "source_id": "midi-t0-e819",
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 3.33333333,
+      "duration_beats": 0.33333333,
+      "kind": "note",
+      "midi_pitch": 60,
+      "spelling": {
+        "step": "C",
+        "alter": 0,
+        "octave": 4
+      },
+      "note_type": "eighth",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [
+        {
+          "type": "start",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "none"
+        },
+        {
+          "type": "stop",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "actual"
+        }
+      ],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [
+        [],
+        []
+      ],
+      "stem": null
+    },
+    {
+      "id": "pta5d8a5fb09fa888ea263d23692a76830s0",
+      "source_id": "midi-t0-e821",
+      "staff": "right",
+      "voice": "1",
+      "measure": 29,
+      "beat": 3.66666667,
+      "duration_beats": 0.33333333,
+      "kind": "note",
+      "midi_pitch": 63,
+      "spelling": {
+        "step": "D",
+        "alter": 1,
+        "octave": 4
+      },
+      "note_type": "eighth",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [
+        {
+          "type": "start",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "none"
+        },
+        {
+          "type": "stop",
+          "number": "1",
+          "bracket": "no",
+          "show_number": "actual"
+        }
+      ],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [
+        [],
+        []
+      ],
+      "stem": null
+    },
+    {
+      "id": "pt3bd1739a3f671a3f23da4cabdb4c93ees0",
+      "source_id": "midi-t0-e801",
+      "staff": "right",
+      "voice": "2",
+      "measure": 29,
+      "beat": 1.0,
+      "duration_beats": 1.0,
+      "kind": "note",
+      "midi_pitch": 56,
+      "spelling": {
+        "step": "G",
+        "alter": 1,
+        "octave": 3
+      },
+      "note_type": "quarter",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": null,
+      "tuplet_marks": [],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [],
+      "stem": null
+    },
+    {
+      "id": "pt89cf92b7d98a841bc2f0c1bf4bbbfd1fs0",
+      "source_id": "midi-t0-e809",
+      "staff": "right",
+      "voice": "2",
+      "measure": 29,
+      "beat": 2.0,
+      "duration_beats": 1.0,
+      "kind": "note",
+      "midi_pitch": 57,
+      "spelling": {
+        "step": "A",
+        "alter": 0,
+        "octave": 3
+      },
+      "note_type": "quarter",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": null,
+      "tuplet_marks": [],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [],
+      "stem": null
+    },
+    {
+      "id": "pte59eab18396fd290ae89d45f2fb22b53s0",
+      "source_id": "midi-t0-e817",
+      "staff": "right",
+      "voice": "2",
+      "measure": 29,
+      "beat": 3.0,
+      "duration_beats": 1.0,
+      "kind": "note",
+      "midi_pitch": 54,
+      "spelling": {
+        "step": "F",
+        "alter": 1,
+        "octave": 3
+      },
+      "note_type": "quarter",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": null,
+      "tuplet_marks": [],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [],
+      "stem": null
+    },
+    {
+      "id": "rest:left:29:15",
+      "source_id": null,
+      "staff": "left",
+      "voice": "1",
+      "measure": 29,
+      "beat": 0.0,
+      "duration_beats": 4.0,
+      "kind": "rest",
+      "midi_pitch": null,
+      "spelling": null,
+      "note_type": "whole",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": false,
+      "accidental": null,
+      "time_modification": null,
+      "tuplet_marks": [],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [],
+      "stem": null
+    }
+  ],
+  "active_note_ids": [
+    "midi-t0-e796",
+    "midi-t0-e798",
+    "midi-t0-e800",
+    "midi-t0-e801",
+    "midi-t0-e803",
+    "midi-t0-e805",
+    "midi-t0-e808",
+    "midi-t0-e809",
+    "midi-t0-e811",
+    "midi-t0-e813",
+    "midi-t0-e816",
+    "midi-t0-e817",
+    "midi-t0-e819",
+    "midi-t0-e821"
+  ],
+  "expressions": [],
+  "grace_notes": [],
+  "unrendered_expressions": []
+}

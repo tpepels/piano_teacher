@@ -1,0 +1,8 @@
+{
+  "source_capture": "notation-check-results/shard-0-of-24/11-Mozart_-_Piano_Sonata_No_16_in_C_Major,_K_545,_1st_Movement/learn-0103-right-original",
+  "source_id": "measure-104-voice-1-rest-0",
+  "beat": 0.5,
+  "staff": "right",
+  "voice": "1",
+  "expected_count": 2
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "fixture": "danny-stripe",
+    "source": "notation-check-results/shard-0-of-24/04-Danny_Boy(Bill_Evans_Ver_)/original-0001-0004-left/native-3.75000.png",
+    "kind": "Actual canonical Godot framebuffer; XML given to Verovio; no synthesized baseline ink"
+  },
+  {
+    "fixture": "liszt-dots",
+    "source": "notation-check-results/shard-0-of-24/08-Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt/learn-0036-left-skeleton/native-0.00000.png",
+    "kind": "Actual canonical Godot framebuffer; XML given to Verovio; no synthesized baseline ink"
+  },
+  {
+    "fixture": "clair-onset",
+    "source": "notation-check-results/shard-0-of-24/03-Clair_de_Lune_\u2013_Debussy/learn-0017-left-original/native-0.00000.png",
+    "kind": "Actual canonical Godot framebuffer and independent generated MusicXML"
+  },
+  {
+    "fixture": "hanon-motion-0.png",
+    "source": "notation-check-results/shard-0-of-24/07-Le_Pianiste_virtuose_-_Premi\u00e8re_partie_(1-20)_-_C_L_Hanon/original-0093-0096-right/native-3.93750.png",
+    "kind": "Actual equal-source-clock measure-transition framebuffer"
+  },
+  {
+    "fixture": "hanon-motion-1.png",
+    "source": "notation-check-results/shard-0-of-24/07-Le_Pianiste_virtuose_-_Premi\u00e8re_partie_(1-20)_-_C_L_Hanon/original-0093-0096-right/native-4.00000.png",
+    "kind": "Actual equal-source-clock measure-transition framebuffer"
+  },
+  {
+    "fixture": "hanon-motion-2.png",
+    "source": "notation-check-results/shard-0-of-24/07-Le_Pianiste_virtuose_-_Premi\u00e8re_partie_(1-20)_-_C_L_Hanon/original-0093-0096-right/native-4.06250.png",
+    "kind": "Actual equal-source-clock measure-transition framebuffer"
+  },
+  {
+    "fixture": "clair-flag.png",
+    "source": "notation-check-results/shard-0-of-24/03-Clair_de_Lune_\u2013_Debussy/learn-0017-left-original/native-0.06250.png",
+    "kind": "Actual canonical framebuffer with a flag-loop/head-family alias"
+  },
+  {
+    "fixture": "clair-reference.svg",
+    "source": "notation-check-results/shard-0-of-24/03-Clair_de_Lune_\u2013_Debussy/learn-0017-left-original/verovio-0.svg",
+    "kind": "Original independent Verovio source reference for the same XML"
+  }
+]

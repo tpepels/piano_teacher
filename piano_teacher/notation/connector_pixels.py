@@ -79,11 +79,52 @@ def _semantic_groups(written, kind):
     return groups
 
 
+def _staff_bindings(staff, events, geom, explicit):
+    """Pair complete visible voices with uniquely identified printed layers.
+
+    Hidden cursor padding has no graphical identity. In a polyphonic staff,
+    preserved source IDs must identify each layer; neither its position nor
+    an anonymous rest's appearance can choose between source voices.
+    """
+    lanes = defaultdict(list)
+    for event in events:
+        if event['visible']:
+            lanes[event['voice']].append(event)
+    layers = [n for n in staff if 'layer' in _classes(n) and _real(n)] or [staff]
+    sequences = [[n for n in layer.iter() if _real(n)
+                  and _classes(n) & {'note', 'rest', 'mRest', 'multiRest'}
+                  and n.get('id') in geom.elements] for layer in layers]
+    sequences = [nodes for nodes in sequences if nodes]
+    identifiers = [n.get('id') for nodes in sequences for n in nodes]
+    if len(sequences) != len(lanes) or len(identifiers) != len(set(identifiers)):
+        return []
+    bindings, used = [], set()
+    for nodes in sequences:
+        candidates = []
+        for voice, required in lanes.items():
+            if len(nodes) != len(required):
+                continue
+            if not all((('note' in _classes(node)) == (event['kind'] == 'note'))
+                       and (event['id'] == node.get('id') and len(explicit[event['id']]) == 1
+                            if event['id'] else not explicit[node.get('id')])
+                       for node, event in zip(nodes, required)):
+                continue
+            if len(lanes) > 1 and not any(event['id'] for event in required):
+                continue
+            candidates.append((voice, required))
+        if len(candidates) != 1 or candidates[0][0] in used:
+            return []
+        voice, required = candidates[0]
+        used.add(voice)
+        bindings.extend(zip(nodes, required))
+    return bindings if used == set(lanes) else []
+
+
 def _pages(written, strings):
     """Complete structural binding; never nearest-rest or native-model aliases.
 
-    Every staff's event order/count/kind and every preserved XML ID must
-    agree. Anonymous rests in polyphonic staffs remain unresolved.
+    Every visible source voice's event order/count/kind and preserved XML ID
+    must agree with one complete SVG layer. Unanchored polyphony stays unknown.
     """
     pages = [(ET.fromstring(svg), parse_svg_geometry(svg)) for svg in strings]
     measures = [(p, node) for p, (root, _) in enumerate(pages)
@@ -132,22 +173,8 @@ def _pages(written, strings):
         if len(staves) != len(expected):
             continue
         for staff, (_lane, events) in zip(staves, sorted(expected.items())):
-            symbols = [n for n in staff.iter() if _real(n)
-                       and _classes(n) & {'note', 'rest', 'mRest', 'multiRest'}
-                       and n.get('id') in pages[page][1].elements]
-            # Assign anonymous rests only when the entire staff's source
-            # event sequence matches. Explicit IDs above are always bound
-            # individually, even when the printed count/order differs.
-            if len(symbols) != len(events):
-                continue
-            valid = all((('note' in _classes(n)) == (e['kind'] == 'note'))
-                        and (not e['id'] or e['id'] == n.get('id'))
-                        for n, e in zip(symbols, events))
-            if not valid:
-                continue
-            voices = {e['voice'] for e in events}
-            for node, event in zip(symbols, events):
-                if event['id'] or (event['kind'] != 'rest' or len(voices) != 1):
+            for node, event in _staff_bindings(staff, events, pages[page][1], explicit):
+                if event['id'] or event['kind'] != 'rest':
                     continue
                 identifier = node.get('id')
                 if (page, identifier) not in aliases:
@@ -323,6 +350,8 @@ class _Frames:
         self.frames, self.registrations, self.translations = OrderedDict(), {}, {}
         self.notes_by_beat, self.rests_by_onset = defaultdict(list), defaultdict(list)
         for event in written.symbols:
+            if not event['visible']:
+                continue
             if event['kind'] == 'note':
                 self.notes_by_beat[event['beat']].append(event)
             elif event['kind'] == 'rest':
@@ -385,6 +414,8 @@ class _Frames:
         return heads[sid]
 
     def rest(self, event):
+        if not event['visible']:
+            raise ValueError('Hidden source rest has no graphical anchor')
         frame = self.frame(event['beat'])
         staff = frame['staves'][event['staff']]
         simultaneous = self.rests_by_onset[event['staff'], event['beat']]

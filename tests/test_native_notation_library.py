@@ -163,13 +163,31 @@ def test_retained_capture_recheck_recaptures_changed_inputs(tmp_path,monkeypatch
         reuse=options.get('reuse_captures',False)
         calls.append(reuse)
         if reuse and stale:
-            raise AssertionError('Cached renderer dependencies changed')
+            raise audit.CaptureProvenanceError('Cached renderer dependencies changed')
         return dict(errors=[],nonverified_symbols={},whole_window_coverage=dict(symbols={}))
     monkeypatch.setattr(audit,'run',compare)
     case=audit.AuditCase('case','example.mid',1,1)
     result=audit._library_job(case,None,None,directory,'godot',reuse_captures=True)
     assert result['captured'] and not result['errors']
     assert calls==([True,False] if stale else [True])
+
+
+def test_verifier_exception_does_not_recapture_valid_retained_pngs(tmp_path,monkeypatch):
+    directory=tmp_path/'source'/'case';directory.mkdir(parents=True)
+    (directory/'capture-manifest.json').write_text('{}')
+    (directory/'native-0.00000.png').write_bytes(b'preserved successful capture')
+    monkeypatch.setattr(audit,'_library_piece',lambda *_:None)
+    monkeypatch.setattr(audit,'fixture',lambda *_,**__:(None,None))
+    calls=[]
+    def broken_probe(*_,**options):
+        calls.append(options.get('reuse_captures',False))
+        raise ValueError('Independent verifier could not process this symbol')
+    monkeypatch.setattr(audit,'run',broken_probe)
+    result=audit._library_job(audit.AuditCase('case','example.mid',1,1),None,None,
+                              directory,'godot',reuse_captures=True)
+    assert not result['captured']
+    assert calls==[True]
+    assert (directory/'native-0.00000.png').read_bytes()==b'preserved successful capture'
 
 
 def test_variant_rejects_invented_duplicated_and_changed_source_notes():

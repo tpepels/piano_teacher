@@ -27,6 +27,32 @@ from .raster_matching import glyph_search_components, match_glyphs_joint, photog
 from .reference_font import reference_glyphs
 
 
+def _horizontal_dice(a, b, limit):
+    """Exact 2-D intersections at every allowed horizontal displacement.
+
+    Repeated stems can rank a genuine translation below arbitrary column-
+    projection shortlists. Row-preserving FFT correlation measures all shifts
+    in bounded memory; rounding recovers integer binary-pixel intersections.
+    """
+    import numpy as np
+
+    width = a.shape[1]
+    size = 1 << (2*width-2).bit_length()
+    fa = np.fft.rfft(a.astype(np.float64), n=size, axis=1)
+    fb = np.fft.rfft(b.astype(np.float64), n=size, axis=1)
+    intersections = np.rint(np.fft.irfft((fa*fb.conj()).sum(axis=0), n=size))
+    first = np.r_[0, a.sum(axis=0).cumsum()]
+    second = np.r_[0, b.sum(axis=0).cumsum()]
+    result = []
+    for shift in range(-limit, limit+1):
+        low, high = max(0, shift), min(width, width+shift)
+        other_low, other_high = max(0, -shift), min(width, width-shift)
+        denominator = int(first[high]-first[low]+second[other_high]-second[other_low])
+        result.append((2*max(0, int(intersections[shift % size]))/denominator
+                       if denominator else 0., shift))
+    return result
+
+
 def verify_translation_sequence(first: Image.Image, middle: Image.Image,
                                 last: Image.Image) -> dict:
     """Measure two equal-time steps from pale score ink, never native telemetry.
@@ -48,23 +74,8 @@ def verify_translation_sequence(first: Image.Image, middle: Image.Image,
     steps, scores, competing = [], [], []
     limit = min(round(width*.18), masks[0].shape[1]//3)
     for a, b in zip(masks, masks[1:]):
-        left, right = a.sum(axis=0).astype(float), b.sum(axis=0).astype(float)
-        candidates = []
-        for shift in range(-limit, limit+1):
-            aa, bb = (left[shift:], right[:-shift]) if shift > 0 else (
-                (left[:shift], right[-shift:]) if shift < 0 else (left, right))
-            norm = float(np.linalg.norm(aa)*np.linalg.norm(bb))
-            candidates.append((float(aa.dot(bb))/norm if norm else 0, shift))
-        best = None
-        alternatives = []
-        for _score, shift in sorted(candidates, reverse=True)[:8]:
-            aa, bb = (a[:, shift:], b[:, :-shift]) if shift > 0 else (
-                (a[:, :shift], b[:, -shift:]) if shift < 0 else (a, b))
-            dice = float(2*np.count_nonzero(aa & bb)/(np.count_nonzero(aa)+np.count_nonzero(bb)))
-            candidate = (dice, -abs(shift), shift)
-            alternatives.append((dice, shift))
-            if best is None or candidate > best:
-                best = candidate
+        alternatives = _horizontal_dice(a, b, limit)
+        best = max((dice, -abs(shift), shift) for dice, shift in alternatives)
         scores.append(round(best[0], 4))
         steps.append(best[2])
         # Repeated musical patterns may register at more than one displacement.
@@ -452,32 +463,80 @@ def _rest_dot_template_mask(gap: float):
                                     bounds=bounds), gap)
 
 
+def _rest_dot_components(parts: list[dict]) -> list[dict]:
+    """Recover actual detached contours inside column-grouped changed ink.
+
+    Body grouping tolerates narrow raster/playhead cuts. That tolerance must
+    not merge nearby dot circles: only eight-connected original changed
+    pixels belong to one mark. Every input pixel remains in exactly one part.
+    """
+    import numpy as np
+
+    components = []
+    for part in parts:
+        remaining = set(zip(*np.nonzero(part["mask"])))
+        while remaining:
+            first = remaining.pop()
+            pending, seen = [first], {first}
+            while pending:
+                y, x = pending.pop()
+                for dy in (-1, 0, 1):
+                    for dx in (-1, 0, 1):
+                        neighbor = (y+dy, x+dx)
+                        if neighbor in remaining:
+                            remaining.remove(neighbor)
+                            seen.add(neighbor)
+                            pending.append(neighbor)
+            ys, xs = zip(*seen)
+            left, top, right, bottom = map(int, (min(xs), min(ys), max(xs), max(ys)))
+            mask = np.zeros((bottom-top+1, right-left+1), dtype=bool)
+            for y, x in seen:
+                mask[y-top, x-left] = True
+            components.append(dict(part, mask=mask, box=[part["box"][0]+left,
+                part["box"][1]+top, part["box"][0]+right, part["box"][1]+bottom]))
+    return components
+
+
 def _rest_dot_evidence(parts: list[dict], body_box: list[int],
-                       count: int, gap: float) -> dict:
+                       count: int, gap: float, *, visible_removed) -> dict:
     """Require distinct, detached, rightward dot contours in removed ink.
 
-    No unchanged neighbor can supply a dot, and no changed part is ignored.
-    Touching/occluded dots and more than two dots remain nonverified.
+    No unchanged neighbor or control-only addition can supply a dot, and no
+    changed part is ignored. Each actual removed pale contour independently
+    passes the same external-font threshold as its full changed contour.
+    Touching/occluded dots and more than three dots remain nonverified.
     """
     evidence = dict(status="unverified", expected_count=count,
                     observed_count=0, dots=[])
-    if count > 2:
-        return dict(evidence, status="unsupported", reason="More than two rest dots needs separate bounded assignment")
+    if count > 3:
+        return dict(evidence, status="unsupported", reason="More than three rest dots needs separate bounded assignment")
     if not parts and not count:
         return dict(evidence, status="verified", reason="No detached changed ink or written dots")
     reference = _rest_dot_template_mask(gap)
     previous = None
-    for part in sorted(parts, key=lambda p: p["box"][0]):
+    for part in sorted(_rest_dot_components(parts), key=lambda p: p["box"][0]):
         box = part["box"]
         x, y = (box[0]+box[2])/2, (box[1]+box[3])/2
         match = _compare_isolated_masks(part["mask"], reference)
-        separated = (.1*gap <= box[0]-body_box[2] <= 2.2*gap and
+        right = part.get("body_right_at_dot", body_box[2])
+        separated = (.1*gap <= box[0]-right <= 2.2*gap and
                      body_box[1]-.75*gap <= y <= body_box[3]+.75*gap)
         if previous is not None:
             separated = separated and .4*gap <= x-previous[0] <= .9*gap and abs(y-previous[1]) <= .15*gap
         if match < .8 or not separated:
             return dict(evidence, reason="Detached changed ink cannot establish separate rest-dot contours")
-        evidence["dots"].append(dict(box=box, shape_match=round(match, 4)))
+        x0,y0,x1,y1 = box
+        removed = part["mask"] & visible_removed[y0:y1+1,x0:x1+1]
+        removed_match = _compare_isolated_masks(removed, reference)
+        if removed_match < .8:
+            return dict(evidence, visible_removed_match=round(removed_match, 4),
+                        reason="Dot lacks an independently matching removed visible pale contour")
+        dot = dict(box=box, shape_match=round(match, 4),
+                   visible_removed_match=round(removed_match, 4))
+        if "body_reference_match" in part:
+            dot.update(body_reference_match=part["body_reference_match"],
+                       body_right_at_dot=right)
+        evidence["dots"].append(dot)
         evidence["observed_count"] += 1
         previous = x, y
     if evidence["observed_count"] != count:
@@ -514,6 +573,71 @@ def _rest_placement_registration(body: dict, glyph: dict, gap: float) -> dict:
     for c in registrations:
         c["baseline_y"] = c["y"]-int(ys.min())-float(glyph["bounds"][1])*gap/250
     return dict(match=best, template=template, registrations=registrations)
+
+
+def _rest_body_dot_partition(body: dict, marks: list[dict], glyph: dict,
+                             gap: float, count: int) -> tuple[dict, list[dict]]:
+    """Separate a detached dot sharing the body's horizontal projection.
+
+    A short rest has dot-like flag bulbs of its own. No bulb owned by ANY
+    near-best independently registered font body can become an augmentation
+    dot. Removing candidate dots must leave a .79 authentic body, then each
+    dot must be detached and rightward of that body's ink at the dot's Y.
+    """
+    import numpy as np
+
+    if not 0 < count <= 3:
+        return body, marks
+    reference = _rest_dot_template_mask(gap)
+    candidates = [part for part in _rest_dot_components([body])
+                  if _compare_isolated_masks(part["mask"], reference) >= .8]
+    if not candidates:
+        return body, marks
+
+    def footprint(registered):
+        ys, xs = np.nonzero(registered["template"])
+        return set().union(*(set(zip(ys+c["y"], xs+c["x"]))
+                             for c in registered["registrations"]))
+
+    registered = _rest_placement_registration(body, glyph, gap)
+    if registered["match"] < .65:
+        return body, marks
+    owned = footprint(registered)
+    detached = []
+    for part in candidates:
+        ys, xs = np.nonzero(part["mask"])
+        support = set(zip(ys+part["box"][1], xs+part["box"][0]))
+        if not owned.intersection(support):
+            detached.append((part, support))
+    if not detached:
+        return body, marks
+    remaining = body["mask"].copy()
+    for _, support in detached:
+        for y, x in support:
+            remaining[y-body["box"][1], x-body["box"][0]] = False
+    ys, xs = np.nonzero(remaining)
+    if len(xs) < 12:
+        return body, marks
+    left, top, right, bottom = map(int, (xs.min(), ys.min(), xs.max(), ys.max()))
+    clean = dict(mask=remaining[top:bottom+1,left:right+1],
+                 box=[body["box"][0]+left,body["box"][1]+top,
+                      body["box"][0]+right,body["box"][1]+bottom])
+    registered = _rest_placement_registration(clean, glyph, gap)
+    if registered["match"] < .79:
+        return body, marks
+    owned = footprint(registered)
+    extracted = []
+    for part, support in detached:
+        box = part["box"]
+        band = [x for y, x in owned if box[1] <= y <= box[3]]
+        if not band or owned.intersection(support):
+            return body, marks
+        body_right = int(max(band))
+        if not .1*gap <= box[0]-body_right <= 2.2*gap:
+            return body, marks
+        extracted.append(dict(part,body_right_at_dot=body_right,
+                              body_reference_match=round(registered["match"],4)))
+    return clean, marks+extracted
 
 
 def _rest_clearance(silhouette, other_ink, gap: float) -> tuple[float, bool]:
@@ -733,11 +857,22 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
                 identity_deltas[beat].append((row, np.flatnonzero(delta)))
                 parts = _rest_delta_parts(delta, gap)
                 body, marks = parts[0], parts[1:]
+                expected = event["note_type"]
+                if "rest_"+expected in glyphs:
+                    body, marks = _rest_body_dot_partition(body, marks,
+                        glyphs["rest_"+expected], gap, event["dots"])
+                    # Absolute RGB deltas can also contain dark ink ADDED by
+                    # a corrupt control. Genuine removed dots must not supply
+                    # the visibility witness for an absent rest body.
+                    x0,y0,x1,y1 = body["box"]
+                    removed_body = body["mask"] & visible_removed[y0:y1+1,x0:x1+1]
+                    removed_match = _compare_isolated_masks(removed_body,
+                        _rest_template_mask(glyphs["rest_"+expected],gap))
+                    row["visible_removed_body_match"] = round(removed_match,4)
                 # Font expectation is read independently of fixture assets.
                 scores = {name.removeprefix("rest_"):round(_compare_isolated_masks(
                     body["mask"], _rest_template_mask(glyph,gap)),4)
                     for name,glyph in glyphs.items() if name.startswith("rest_")}
-                expected = event["note_type"]
                 if expected not in scores:
                     row.update(status="unsupported",reason=f"external font lacks rest type {expected}")
                 else:
@@ -761,12 +896,15 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
                             elif observed != expected:
                                 row.update(status="mismatch", reason=f"Measured staff-relative contour identifies {observed} instead of written {expected}")
                                 failures.append(f"{key} {identity}: {row['reason']}")
-                        dots = _rest_dot_evidence(marks, body["box"], event["dots"], gap)
+                        dots = _rest_dot_evidence(marks, body["box"], event["dots"], gap,
+                                                  visible_removed=visible_removed)
                         row["dot_evidence"] = dots
                         if dots["status"] != "verified" and row["status"] != "mismatch":
                             row.update(status=dots["status"], reason=dots["reason"])
                             failures.append(f"{key} {identity}: {row['reason']}")
                         if row["status"] == "verified":
+                            if removed_match < .65:
+                                raise ValueError("Rest body lacks an independently matching removed visible pale contour")
                             row["placement_evidence"] = _rest_placement_evidence(
                                 body, glyphs["rest_"+expected], delta, suppressed_ink, rails, staff,
                                 note_type=expected)
@@ -817,4 +955,4 @@ def verify_all_rest_pixels(generated_xml: str, folder: Path,
             "placement_coverage":placement_coverage,
             "placement_complete":placement_coverage["verified"] == len(written),
             "scope":"visible isolated contour against external Verovio font; full-frame repeat and restore invariance",
-            "limitation":"Glyph and placement coverage are separate; placement proves only a bounded readable staff-grid lane and local bright-ink clearance, not the intended voice lane or global extra-symbol absence; touching/occluded dots and more than two dots remain nonverified"}
+            "limitation":"Glyph and placement coverage are separate; placement proves only a bounded readable staff-grid lane and local bright-ink clearance, not the intended voice lane or global extra-symbol absence; touching/occluded dots and more than three dots remain nonverified"}

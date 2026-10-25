@@ -25,7 +25,7 @@ from .feature_pixels import _closed_component, _feature_glyphs, _register
 from .phase3_pixels import _clef_at, _rectangular_rest_orientation
 from .pixel_proof import detect_staff_lines, expected_y
 from .proof import read_written_score
-from .symbol_pixel_proof import _outline
+from .symbol_pixel_proof import _outline, bright
 
 STRIPE_HALF_WIDTH = 64
 MAX_CLOCK_STEP = .15
@@ -96,7 +96,7 @@ def _photo(path):
     layers = [mask & ~rails for mask in layers]
     columns = np.flatnonzero(colored.sum(axis=0) > image.height*.35)
     camera = float(np.mean(columns)) if len(columns) in (1, 2, 3, 4) else None
-    return dict(ink=ink, layers=layers, staves=staves, camera=camera,
+    return dict(ink=ink, layers=layers, head_pixels=bright(image), staves=staves, camera=camera,
                 occlusion=colored, occlusion_columns=columns,
                 occluded=int(colored.sum()), shape=ink.shape)
 
@@ -173,6 +173,23 @@ def _scan(photo, areas, controls=None):
              or n == 'augmentation_dot' or (n.startswith(('clef_', 'time_'))
                                             and (controls is None or n in controls))]
     gap = round(min(s.gap for s in photo['staves'].values()), 3)
+    requested = areas
+    # A search boundary is not an image boundary. Include complete competing
+    # glyphs before NMS: a clipped search can otherwise prefer a .79 partial
+    # head to its genuine .97 contour just outside the stripe.
+    padding_x = max(_template(name, gap).shape[1] for name in names)
+    padding_y = max(_template(name, gap).shape[0] for name in names)
+    H, W = photo['shape']
+    expanded = sorted([max(0, a-padding_x), max(0, b-padding_y),
+                       min(W, c+padding_x), min(H, d+padding_y)] for a, b, c, d in requested)
+    areas = []
+    for area in expanded:
+        if (areas and area[0] <= areas[-1][2]
+                and area[1] <= areas[-1][3] and area[3] >= areas[-1][1]):
+            areas[-1] = [min(areas[-1][0], area[0]), min(areas[-1][1], area[1]),
+                         max(areas[-1][2], area[2]), max(areas[-1][3], area[3])]
+        else:
+            areas.append(area)
     found = []
     for left, top, right, bottom in areas:
         original = [layer[top:bottom, left:right] for layer in photo['layers']]
@@ -232,7 +249,7 @@ def _scan(photo, areas, controls=None):
         selected.append(row)
         if len(selected) > MAX_CANDIDATES:
             raise ValueError('Family candidate budget exceeded; no absence claim')
-    return selected
+    return [row for row in selected if any(_overlap(row['bbox'], area) for area in requested)]
 
 
 def _shifted(mask, shift):
@@ -348,19 +365,26 @@ def _areas(photo, previous, shift, whole):
     return merged
 
 
-def _bind(written, events, photo, objects, owners, errors):
+def _bind(written, events, photo, objects, owners, errors, *, next_track=None):
     """Attach source identities only to fresh photographed onset contours."""
+    if next_track is None:
+        next_track = max([*owners, *(o['track'] for o in objects)], default=-1)+1
+    if not events:
+        return next_track
     camera = photo['camera']
     if camera is None:
         errors.extend(e['source']['id'] for e in events)
-        return
+        return next_track
     notes = [e for e in events if e['kind'] == 'note' and e['visible']]
     # Existing strict joint registration uses the public fixed playhead.
     # Reindex to the actual PNG playhead (integer pixels, no resampling).
     dx = round(photo['shape'][1]*.42-camera)
     heads, failures = {}, {}
-    for level in (1, 0):
-        pixels = _shifted(photo['layers'][level], dx)
+    # Use the same pale-ink calibration as the independent pitch oracle;
+    # neutral contrast layers additionally expose inactive-hand ink. The
+    # original strict joint/family/ledger/occlusion rules still apply.
+    for layer in (photo['head_pixels'], *reversed(photo['layers'])):
+        pixels = _shifted(layer, dx)
         matched, failed = _register(pixels, photo['staves'], written, notes, _feature_glyphs(),
             occlusion_columns=tuple(int(c+dx) for c in photo['occlusion_columns']))
         for sid, head in matched.items():
@@ -377,9 +401,25 @@ def _bind(written, events, photo, objects, owners, errors):
                 continue
             head = heads[sid]
             target_x, target_y = head['x']-dx, head['y']
+            name = ('head_whole' if event['note_type'] == 'whole' else
+                    'head_half' if event['note_type'] == 'half' else 'head_black')
             candidates = [o for o in objects if o['family'] == 'head'
+                and o['name'] == name
                 and abs((o['bbox'][0]+o['bbox'][2])/2-target_x) <= 3
                 and abs(o['bbox'][1]-(_feature_glyphs()[o['name']]['bounds'][1]*o['gap']/250)-target_y) <= 3]
+            if len(candidates) != 1:
+                # The source-directed oracle can prove a hollow head with
+                # measured ledger/playhead context that the generic family
+                # scan cannot classify. Retain that actual strict contour;
+                # do not require a second, context-free detection to bind it.
+                box = [head['bbox'][0]-dx, head['bbox'][1],
+                       head['bbox'][2]-dx, head['bbox'][3]]
+                observation = dict(name=name, family='head', bbox=box,
+                    score=head['score'], gap=head['gap'], track=next_track,
+                    source_registration=sid)
+                next_track += 1
+                objects.append(observation)
+                candidates = [observation]
         else:
             candidates = [o for o in objects if o['family'] == 'rest'
                 and abs((o['bbox'][0]+o['bbox'][2])/2-camera) <= 4
@@ -409,6 +449,7 @@ def _bind(written, events, photo, objects, owners, errors):
             errors.append(sid)
         else:
             owners[track] = sid
+    return next_track
 
 
 def _anchor_tree(anchors):
@@ -452,6 +493,61 @@ def _playhead_occludes_candidate(photo, obj):
     return bool(photo['occlusion'][top:bottom, left:right].any())
 
 
+def _head_boundary_evidence(photo, obj):
+    """Exclude partial bowls/flag loops from definite extra-head claims.
+
+    A family score inside a box alone cannot distinguish a head from an
+    internal patch of a larger glyph. Inspect actual touching ink outside
+    that box. Only thin edge shafts and photographed rail/ledger phases have
+    a bounded interpretation here; other attachments remain unresolved.
+    This supplies no source ownership and masks no pixels.
+    """
+    x0, y0, x1, y1 = obj['bbox']
+    H, W = photo['shape']
+    evidence = dict(bbox=obj['bbox'], unsupported_boundary_pixels=0)
+    if min(x0, y0, W-x1, H-y1) < 1:
+        return dict(evidence, status='unverified', reason='Head boundary is clipped')
+    layer = photo['layers'][0]
+    patch = layer[y0-1:y1+1, x0-1:x1+1]
+    w = x1-x0
+    # Restrict the witness to exterior pixels actually touching interior ink.
+    interior = np.zeros_like(patch)
+    interior[1:-1, 1:-1] = patch[1:-1, 1:-1]
+    touching = np.zeros_like(patch)
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            touching |= np.roll(interior, (dy, dx), axis=(0, 1))
+    boundary = touching & patch
+    boundary[1:-1, 1:-1] = False
+    allowed = np.zeros_like(patch)
+    edge = max(1, math.ceil(.18*obj['gap']))
+    allowed[0, 1:edge+1] = allowed[-1, 1:edge+1] = True
+    allowed[0, w-edge+1:w+1] = allowed[-1, w-edge+1:w+1] = True
+    # Horizontal ink may be an actual staff/ledger line, never an arbitrary
+    # broad connection through the middle of the candidate.
+    center = (y0+y1)/2
+    staff = min(photo['staves'].values(), key=lambda s:
+                max(s.lines[0]-center, center-s.bottom, 0))
+    rows = []
+    for row in range(y0-1, y1+1):
+        if staff.lines[0] <= row <= staff.bottom:
+            distance = min(abs(row-line) for line in staff.lines)
+        else:
+            edge_y = staff.lines[0] if row < staff.lines[0] else staff.bottom
+            phase = (row-edge_y)/staff.gap
+            distance = abs(phase-round(phase))*staff.gap
+        if distance <= max(1., .12*staff.gap):
+            rows.append(row)
+            allowed[row-y0+1, 0] = allowed[row-y0+1, -1] = True
+    unsupported = int(np.count_nonzero(boundary & ~allowed))
+    evidence.update(unsupported_boundary_pixels=unsupported,
+                    touching_boundary_pixels=int(boundary.sum()),
+                    shaft_edge_width=edge, rail_or_ledger_rows=sorted(set(rows)))
+    return dict(evidence, status='ambiguous' if unsupported else 'verified',
+                reason=('Connected contour exceeds bounded head attachments' if unsupported else
+                        'Head boundary is clear or has only bounded shaft/rail attachments'))
+
+
 def _isolated_rectangle(photo, obj):
     """A ledger/head/stem intersection is not an independently seen rest."""
     x0, y0, x1, y1 = obj['bbox']
@@ -459,8 +555,11 @@ def _isolated_rectangle(photo, obj):
     layer = photo['layers'][0]
     yy, xx = np.nonzero(template & layer[y0:y1, x0:x1])
     support = frozenset(((yy+y0)*layer.shape[1]+xx+x0).tolist())
-    component = _closed_component(layer, dict(bbox=obj['bbox'], support=support))
-    if not component:
+    # Starting from ALL support pixels unions unrelated connected components
+    # (notably two genuine augmentation dots). A rest body must be one actual
+    # connected contour; the reference template supplies no connecting ink.
+    component = _closed_component(layer, dict(bbox=obj['bbox'], support=support and {min(support)}))
+    if not component or not support.issubset(component):
         return False
     ys, xs = np.divmod(np.array(tuple(component)), layer.shape[1])
     box = [int(xs.min()), int(ys.min()), int(xs.max())+1, int(ys.max())+1]
@@ -556,7 +655,8 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
                 else:
                     obj['track'] = tracks
                     tracks += 1
-            _bind(written, events.get(clock, []), photo, objects, owners, binding_errors)
+            tracks = _bind(written, events.get(clock, []), photo, objects, owners,
+                           binding_errors, next_track=tracks)
             if motion:
                 travel += shift
                 travel_error += motion['position_error']
@@ -614,11 +714,17 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
                           or (obj['family'] == 'rest' and all_rests)
                           or (obj['family'] == 'dot' and not expected_dots and source_supported)
                           or (obj['family'] == 'flag' and not expected_flags and source_supported))
+            clipped_context = min(x0, y0, photo['shape'][1]-x1, photo['shape'][0]-y1) < 1
+            if clipped_context:
+                definitive = False
             # An actual chord head in Ala beat 0.90000 is crossed by the
             # turquoise playhead; incomplete ink cannot prove an extra note.
             if _playhead_occludes_candidate(photo, obj):
                 definitive = False
             if obj['name'] in ('rest_whole', 'rest_half') and not _isolated_rectangle(photo, obj):
+                definitive = False
+            head_context = _head_boundary_evidence(photo, obj) if obj['family'] == 'head' else None
+            if head_context and head_context['status'] != 'verified':
                 definitive = False
             if definitive and not other and obj['family'] in ('head', 'rest'):
                 # A lost contour track is not evidence of an invented note.
@@ -632,7 +738,10 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
                         definitive = False
                         break
             record = dict(family=obj['family'], glyph=obj['name'], bbox=obj['bbox'],
-                          score=obj['score'], track=obj['track'])
+                          score=obj['score'], track=obj['track'],
+                          context_status='clipped' if clipped_context else 'visible')
+            if head_context:
+                record['head_boundary'] = head_context
             # Competing larger authentic glyphs (e.g. a clef bowl) make a
             # small internal family candidate ambiguous, not an invented note.
             (unexpected if definitive and not other else unresolved).append(record)

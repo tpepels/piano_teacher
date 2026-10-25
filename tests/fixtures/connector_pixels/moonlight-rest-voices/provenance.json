@@ -1,0 +1,12 @@
+{
+  "source_case": "notation-check-results/shard-0-of-24/10-Moonlight_Sonata_I/learn-0028-right-original",
+  "review_revision": "a73b935",
+  "scope": "Retained original MusicXML, Verovio SVG and three actual Godot onset framebuffers; model is asset-binding comparison only, not independent oracle evidence",
+  "sha256": {
+    "score.musicxml": "258135b0f0302b9d6738115a9c5f7424d83f45b859f3fb80c5a09636254fc93f",
+    "verovio-0.svg": "803a3939f56ed1234ca8135b6305bd5240edb56b03bc3e9f2089bb1bb86264b7",
+    "native-0.00000.png": "7569777f4e5676c0475d8368435cf81e92c9c50b725f294556c4592e68ac7b22",
+    "native-0.33333.png": "5c7fb86330caeb1320668f5f633ad7cb79e04d8445e206859b3df7d5b0ca7cb2",
+    "native-0.66667.png": "d499f5fa73ed517d162565e27bb3706d622f3fec29a09e32d23b8fba8ea454fd"
+  }
+}

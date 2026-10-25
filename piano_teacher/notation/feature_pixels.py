@@ -175,15 +175,19 @@ def _register(pixels, staves, written, notes, glyphs, *, occlusion_columns=()):
     origin = round(pixels.shape[1] * .42)
     for indices in glyph_search_components(requests, dys=range(0, 1)):
         group = [requests[i] for i in indices]
+        registration = {}
         if len(group) == 1:
             candidates = _joint_candidates(pixels, group[0], origin, range(0, 1), HEAD_MINIMUM)
             assigned = candidates[:1] or None
         else:
-            assigned = match_glyphs_joint(pixels, group, origin, dys=range(0, 1), minimum=HEAD_MINIMUM)
+            assigned = match_glyphs_joint(pixels, group, origin, dys=range(0, 1),
+                                         minimum=HEAD_MINIMUM, diagnostics=registration)
         for i, request in enumerate(group):
             sid = request['note']['source']['id']
             if assigned is None:
-                errors[sid] = 'Current-image notehead lacks a unique bounded .79 contour assignment'
+                errors[sid] = ('Current-image notehead registration resource limit exhausted; no ownership verified'
+                    if registration.get('exhausted') else
+                    'Current-image notehead lacks a unique bounded .79 contour assignment')
                 continue
             row = assigned[i]
             b, gap = request['glyph']['bounds'], request['gap']

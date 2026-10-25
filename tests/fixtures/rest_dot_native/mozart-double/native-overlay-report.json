@@ -1,0 +1,19 @@
+{
+  "rest_difference_protocol": 2,
+  "rest_difference_frames": [
+    {
+      "clock": 0.5,
+      "repeat_file": "repeat-0.50000.png",
+      "restored_file": "restored-0.50000.png"
+    }
+  ],
+  "rest_difference_controls": [
+    {
+      "clock": 0.5,
+      "file": "rest-without-0-0.50000.png",
+      "id": "rest:right:104:1",
+      "staff": "right",
+      "voice": "1"
+    }
+  ]
+}

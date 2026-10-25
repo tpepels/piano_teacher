@@ -132,3 +132,41 @@ def test_joint_assignment_requires_the_unchanged_shape_score_after_shared_ink_is
     assert all(raster_matching.match_glyph(pixels,r["glyph"],20,100,r["origin_y"],
         centered=True,dxs=r["dxs"],dys=range(-4,5))>=.79 for r in requests)
     assert raster_matching.match_glyphs_joint(pixels,requests,100,dys=range(-4,5)) is None
+
+
+@pytest.mark.parametrize('erased', [None, 0, 2, 4])
+def test_five_head_capacity_keeps_legitimate_ink_and_rejects_head_erasures(erased):
+    positions=[('head_black',86,18),('head_black',112,28),
+               ('head_black',86,68),('head_black',112,78),
+               ('head_black',86,128)]
+    pixels=_head_pixels([row for i,row in enumerate(positions) if i!=erased])
+    requests=[_request('head_black',y) for y in (30,40,80,90,140)]
+    result=raster_matching.match_glyphs_joint(pixels,requests,100,dys=range(-4,5))
+    if erased is not None:
+        assert result is None
+    else:
+        assert result is not None
+        owned=set()
+        for row in result:
+            assert row['score']>=.79
+            assert owned.isdisjoint(row['support'])
+            owned.update(row['support'])
+
+
+def test_ownership_work_exhaustion_cannot_return_partial_head_credit():
+    pixels=_head_pixels([('head_black',86,48),('head_black',112,58)])
+    requests=[_request('head_black',60),_request('head_black',70)]
+    assert raster_matching.match_glyphs_joint(pixels,requests,100,dys=range(-4,5)) is not None
+    diagnostic={}
+    assert raster_matching.match_glyphs_joint(pixels,requests,100,
+        dys=range(-4,5),max_assignment_work=1,diagnostics=diagnostic) is None
+    assert diagnostic['exhausted']
+
+
+def test_excessive_candidate_envelope_fails_before_allocating_image_windows():
+    pixels=_head_pixels([('head_black',86,48)])
+    diagnostic={}
+    result=raster_matching.match_glyphs_joint(pixels,
+        [_request('head_black',60,dxs=range(-1000000,1000001))],100,
+        dys=range(-4,5),diagnostics=diagnostic)
+    assert result is None and diagnostic['exhausted']

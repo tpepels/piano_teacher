@@ -1,5 +1,6 @@
 """Efficient pixel comparison for the independent whole-piece image oracle."""
 import math
+from collections import defaultdict, deque
 import numpy as np
 
 from .symbol_pixel_proof import _outline
@@ -149,93 +150,173 @@ def _joint_candidates(pixels, request, origin_x, dys, minimum):
 
 
 def match_glyphs_joint(pixels, requests, origin_x, *, dys, minimum=.79,
-                      max_heads=6, max_search_nodes=20000):
-    """Find a bounded all-head assignment with disjoint observed support.
+                      max_heads=6, max_search_nodes=20000,
+                      max_assignment_work=500000, diagnostics=None):
+    """Find authentic heads with disjoint actual pixel ownership.
 
-    Requests contain authentic glyphs, image-measured gaps, source-derived
-    Y positions and the existing horizontal search ranges. Both candidate
-    Dice and final Dice must pass the unchanged threshold. Every observed
-    pixel belongs to at most one head, including where genuine chord heads
-    touch. Neither expected mask nor observed denominator is reduced for
-    shared head ink. A request can separately identify source-required ledger rows;
-    those occluders supply no head support to either isolated or joint scores.
-    Thus joint scores can only be stricter than isolated scores.
-
-    Return None when any head lacks evidence or the search bound is hit.
-    The returned support sets are actual image pixel indices, pairwise
-    disjoint, and can be independently checked by callers/tests. This
-    deliberately does not attempt to separate inseparable contours.
+    Candidate/final Dice, family margin and visible-contour requirements are
+    unchanged. Check the capacity of EVERY head subset, not just total ink.
+    Allocate through pixel-membership classes using integer max flow, never
+    recursive per-pixel augmentation. Placement, candidate search and capacity
+    work all have explicit bounds; exhaustion returns None, never partial proof.
     """
+    visited=work=0
+    exhausted=False
+    if diagnostics is not None:
+        diagnostics.update(exhausted=False,work_used=0,search_nodes=0)
+
+    def charge(amount=1):
+        nonlocal work,exhausted
+        work+=amount
+        if work>max_assignment_work:
+            exhausted=True
+        return not exhausted
+
+    def finish(result):
+        if diagnostics is not None:
+            diagnostics.update(exhausted=exhausted,work_used=work,
+                               search_nodes=visited)
+        return result
+
     if not requests or len(requests)>max_heads:
         return None
     dys=tuple(dys)
+    placements=sum(len(r['dxs'])*len(r.get('dys',dys)) for r in requests)
+    if placements>8192:
+        exhausted=True
+        return finish(None)
+    if not charge(placements):
+        return finish(None)
     candidates=[_joint_candidates(pixels,r,origin_x,dys,minimum) for r in requests]
     if any(not rows for rows in candidates):
-        return None
+        return finish(None)
+    # Compact actual pixel IDs: bitset size depends on observed candidates,
+    # not framebuffer dimensions. Expected/occluded pixels supply no capacity.
+    coordinates={}
+    masks={}
+    for rows in candidates:
+        for row in rows:
+            support=row['support']
+            if support not in masks:
+                if not charge(len(support)):
+                    return finish(None)
+                mask=0
+                for pixel in support:
+                    if pixel not in coordinates:
+                        coordinates[pixel]=len(coordinates)
+                    mask |= 1<<coordinates[pixel]
+                masks[support]=mask
     order=sorted(range(len(requests)),key=lambda i:len(candidates[i]))
-    visited=0
 
     def assign(selected):
-        # Capacitated bipartite matching: a head needs enough actual pixels
-        # for the same Dice threshold, and a pixel has capacity one. Throwing
-        # touching ink away from BOTH heads falsely rejects real seconds;
-        # counting it for BOTH could certify a missing or duplicated head.
+        # Pixels eligible for the same subset of heads form ONE capacity
+        # bucket. There are at most 2**heads-1 such buckets, regardless of ink.
+        membership={}
+        for i,row in enumerate(selected):
+            if not charge(len(row['support'])):
+                return None
+            for pixel in row['support']:
+                membership[pixel]=membership.get(pixel,0) | (1<<i)
+        buckets=defaultdict(list)
+        for pixel,mask in membership.items():
+            buckets[mask].append(pixel)
+        groups=list(buckets.items())
+        first_head=1+len(groups)
+        sink=first_head+len(selected)
+        graph=[[] for _ in range(sink+1)]
+
+        def edge(a,b,capacity):
+            forward=[b,capacity,len(graph[b])]
+            reverse=[a,0,len(graph[a])]
+            graph[a].append(forward)
+            graph[b].append(reverse)
+            return forward
+
+        allocations=[]
+        for index,(mask,ink) in enumerate(groups):
+            edge(0,index+1,len(ink))
+            allocations.append([(i,edge(index+1,first_head+i,len(ink)))
+                for i in range(len(selected)) if mask & (1<<i)])
+        required=[math.ceil(minimum*row['denominator']/2-1e-9) for row in selected]
+        for i,needed in enumerate(required):
+            edge(first_head+i,sink,needed)
+        remaining=sum(required)
+        while remaining:
+            parents={0:None}
+            pending=deque([0])
+            while pending and sink not in parents:
+                node=pending.popleft()
+                for index,link in enumerate(graph[node]):
+                    if not charge():
+                        return None
+                    target,capacity,_=link
+                    if capacity and target not in parents:
+                        parents[target]=(node,index)
+                        pending.append(target)
+            if sink not in parents:
+                return None
+            amount=remaining
+            node=sink
+            while node:
+                previous,index=parents[node]
+                amount=min(amount,graph[previous][index][1])
+                node=previous
+            node=sink
+            while node:
+                previous,index=parents[node]
+                link=graph[previous][index]
+                link[1]-=amount
+                graph[node][link[2]][1]+=amount
+                node=previous
+            remaining-=amount
         owned=[set() for _ in selected]
-        owners={}
-        def claim(index, visited):
-            visited.add(index)
-            support=selected[index]["support"]
-            free=support-owners.keys()
-            if free:
-                pixel=min(free)
-            else:
-                pixel=None
-                for candidate in support:
-                    previous=owners[candidate]
-                    if previous not in visited and claim(previous,visited):
-                        owned[previous].remove(candidate)
-                        pixel=candidate
-                        break
-                if pixel is None:
-                    return False
-            owners[pixel]=index
-            owned[index].add(pixel)
-            return True
-        for i,row in enumerate(selected):
-            needed=math.ceil(minimum*row["denominator"]/2-1e-9)
-            for _ in range(needed):
-                if not claim(i,set()):
-                    return None
-        for i,row in enumerate(selected):
-            for pixel in row["support"]-owners.keys():
-                owners[pixel]=i
-                owned[i].add(pixel)
+        for (_,ink),links in zip(groups,allocations):
+            at=0
+            for i,link in links:
+                count=len(ink)-link[1]
+                owned[i].update(ink[at:at+count])
+                at+=count
+            owned[links[0][0]].update(ink[at:])
         return owned
 
-    def search(selected, union):
-        nonlocal visited
+    def search(selected, subsets):
+        nonlocal visited,exhausted
         if len(selected)==len(order):
             exclusive=assign(selected)
             if exclusive is None:
                 return None
             result=[None]*len(order)
             for i,row,ink in zip(order,selected,exclusive):
-                result[i]=dict(x=row["x"],y=row["y"],support=ink,
-                    isolated_score=row["score"],score=2*len(ink)/row["denominator"],
+                result[i]=dict(x=row['x'],y=row['y'],support=ink,
+                    isolated_score=row['score'],score=2*len(ink)/row['denominator'],
                     visible_reference_pixels=row['visible_reference_pixels'],
                     reference_pixels=row['reference_pixels'])
             return result
         for row in candidates[order[len(selected)]]:
             if visited>=max_search_nodes:
+                exhausted=True
                 return None
             visited+=1
-            combined=union|row["support"]
-            choices=selected+[row]
-            if sum(math.ceil(minimum*c["denominator"]/2-1e-9) for c in choices)>len(combined):
-                continue
-            result=search(choices,combined)
-            if result is not None:
-                return result
+            mask=masks[row['support']]
+            needed=math.ceil(minimum*row['denominator']/2-1e-9)
+            added=[]
+            # Previous subsets already passed. Only subsets containing the
+            # new head need checking. An unrelated head's surplus cannot pay
+            # a touching pair's deficit (the stalled corpus counterexample).
+            for previous,capacity in [(0,0),*subsets]:
+                if not charge():
+                    return None
+                combined=previous|mask
+                demand=capacity+needed
+                if combined.bit_count()<demand:
+                    break
+                added.append((combined,demand))
+            else:
+                result=search(selected+[row],subsets+added)
+                if result is not None:
+                    return result
+                if exhausted:
+                    return None
         return None
 
-    return search([],frozenset())
+    return finish(search([],[]))

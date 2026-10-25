@@ -33,13 +33,29 @@ Progress, failure messages and captured evidence are written to
 `notation-check-results/triage.zip` collects the error summary, sample
 original Verovio SVGs, actual Godot PNG frames, and matching pixel reports
 so recurring causes can be diagnosed without uploading thousands of images.
-Rerunning the command starts the checks again; `PIANO_VERIFY_REUSE=1`
-can reuse valid unchanged captures for detector development.
-Seven Godot capture workers run in parallel by default.
+Rerunning the same command resumes completed cases whose source, verifier,
+runtime and captured evidence still match. Changed verifier code reruns the
+probes on valid retained PNGs; it does not require another Godot capture.
+Successful captures are kept. A failed replacement capture preserves the
+previous images and saves the incomplete attempt separately.
+
+Two workers run by default, with a bounded queue, one BLAS thread per worker,
+a 3 GiB virtual-memory ceiling per worker process (inherited by its renderer)
+and a ten-minute case deadline.
+Progress includes the active verification stage. Timeouts and interruptions
+leave pending cases explicit and package available screenshots, logs and
+worker stacks. Adjust `PIANO_VERIFY_WORKERS`, `PIANO_VERIFY_MEMORY_MIB` or
+`PIANO_VERIFY_CASE_TIMEOUT` when diagnosing a specific resource requirement.
+After a hard kill or power loss, the next invocation packages the previous
+atomic state as `shard-N-of-24-interrupted.zip` before planning the resumed run.
+`PIANO_VERIFY_RESUME=0 PIANO_VERIFY_REUSE=0` requests a fresh comparison.
 
 GitHub CI calls the same script with its internal `--ci` flag, which runs
 only the short regressions and Godot validation. A green CI check or tagged
 release does **not** establish a passing full-library notation audit.
+
+The [25 October recovery report](docs/notation-audit-recovery-2026-10-25.md)
+records the interrupted run's cause, focused fixes and remaining blockers.
 
 The interface follows `moodboard.png`: forest, pine and charcoal surfaces,
 serif music titles, white active staves, a restrained teal timing line and a

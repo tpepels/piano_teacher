@@ -6,6 +6,41 @@ from zipfile import ZipFile
 from scripts.package_notation_diagnostics import package
 
 
+def test_interrupted_case_without_an_audit_is_packaged(tmp_path):
+    root=tmp_path/'shard';case=root/'Liszt'/'unfinished';case.mkdir(parents=True)
+    (root/'run.log').write_text('PROGRESS 631/632; note-features\n')
+    (root/'summary.json').write_text('{partial JSON from a killed old run')
+    (case/'case-state.json').write_text(json.dumps(dict(stage='note-features',pid=123)))
+    (case/'fixture.json').write_text('{"hand":"both"}')
+    (case/'worker-stack.log').write_text('raster_matching.py claim\n')
+    (case/'score.musicxml').write_text('<score-partwise/>')
+    (case/'verovio-0.svg').write_text('<svg/>')
+    (case/'native-0.00000.png').write_bytes(b'retained framebuffer')
+    output=tmp_path/'triage.zip'
+    summary=package(root,output)
+    assert summary['interrupted_cases']==['Liszt/unfinished']
+    with ZipFile(output) as archive:
+        names=set(archive.namelist())
+        assert {'summary.json','run.log','Liszt/unfinished/case-state.json',
+                'Liszt/unfinished/worker-stack.log','Liszt/unfinished/score.musicxml',
+                'Liszt/unfinished/verovio-0.svg','Liszt/unfinished/native-0.00000.png'}<=names
+
+
+def test_old_audit_cannot_hide_a_newer_incomplete_capture(tmp_path):
+    import os
+    root=tmp_path/'shard';case=root/'piece'/'case';case.mkdir(parents=True)
+    (case/'audit.json').write_text('{"passed":true,"errors":[]}')
+    os.utime(case/'audit.json',(100,100))
+    (case/'fixture.json').write_text('{"new_capture":true}')
+    (case/'native-0.00000.png').write_bytes(b'new frame')
+    output=tmp_path/'triage.zip'
+    result=package(root,output)
+    assert result['interrupted_cases']==['piece/case']
+    with ZipFile(output) as archive:
+        assert 'piece/case/previous-audit.json' in archive.namelist()
+        assert 'piece/case/audit.json' not in archive.namelist()
+
+
 def test_failure_package_has_source_and_real_frame_witnesses(tmp_path):
     root = tmp_path / 'shard'
     case = root / 'piano' / 'original-0001-0004-right'
