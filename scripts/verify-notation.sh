@@ -26,7 +26,8 @@ quick_checks() {
     tests/test_native_notation_library.py \
     tests/test_connector_pixels.py \
     tests/test_phase3_scroll_pixels.py \
-    tests/test_notation_diagnostic_package.py || return $?
+    tests/test_notation_diagnostic_package.py \
+    tests/test_extra_symbol_pixels.py::test_real_playhead_overlap_is_ambiguous_without_exempting_detached_heads || return $?
   "$GODOT" --headless --path godot --check-only --script res://main.gd
 }
 
