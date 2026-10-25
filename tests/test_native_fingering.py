@@ -10,7 +10,7 @@ from threading import Event, Thread
 import xml.etree.ElementTree as ET
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -179,7 +179,10 @@ def _verify_numbers(folder, frame, expected_count):
         width = atlas.shape[1] // 5
         reference = atlas[:, (label["finger"]-1)*width:label["finger"]*width]
         reference_mask = reference.max(axis=2) > 100
-        crop = numbered[y0:y1, x0:x1].max(axis=2) > 100
+        # This dedicated annotation oracle compares a public-font reference
+        # against the actual normal/canonical framebuffer difference. Musical
+        # ink in the text cell's unused ascent/descent is not a digit pixel.
+        crop = (numbered[y0:y1, x0:x1].max(axis=2) > 100) & changed[y0:y1,x0:x1]
         assert crop.shape == reference_mask.shape
         scores = [(crop & (atlas[:,i*width:(i+1)*width].max(axis=2)>100)).sum() /
                   max(1,(crop | (atlas[:,i*width:(i+1)*width].max(axis=2)>100)).sum())
@@ -187,13 +190,27 @@ def _verify_numbers(folder, frame, expected_count):
         assert np.argmax(scores)+1 == label["finger"], (label,scores)
         assert scores[label["finger"]-1] > .80, (label,scores)
         assert scores[label["finger"]-1] - max(s for i,s in enumerate(scores) if i != label["finger"]-1) > .12
-        # Full text cell plus a margin must clear all pale source notation.
-        assert not (base[max(0,y0-2):y1+2, max(0,x0-2):x1+2].max(axis=2) > 145).any(), label
+        yy,xx=np.nonzero(reference_mask)
+        center=np.array([x0+(xx.min()+xx.max())/2,y0+(yy.min()+yy.max())/2])
+        offset=center-np.array(label['head'])
+        assert np.linalg.norm(offset)<=frame['gap']*2.5 and abs(offset[0])<=frame['gap']*2.1, \
+            'Fingering must remain locally attached to its source head'
+        # Use the independently rendered complete glyph, including pixels
+        # that would be invisible if painted on existing score ink.
+        expected_ink=np.zeros(changed.shape,dtype=np.uint8)
+        expected_ink[y0:y1,x0:x1]=reference_mask*255
+        clearance=np.asarray(Image.fromarray(expected_ink).filter(ImageFilter.MaxFilter(5)))>0
+        assert not (clearance & (base.max(axis=2)>145)).any(), label
         head = label["head"]
-        if label["hand"] == "right":
-            assert y1 < head[1], "Right-hand fingers belong above their heads"
-        else:
-            assert y0 > head[1], "Left-hand fingers belong below their heads"
+        yy,xx=np.nonzero(reference_mask)
+        orientation=label.get('orientation')
+        if orientation=='above':
+            assert y0+yy.max()<head[1], "Above placement must clear its own notehead"
+        elif orientation=='below':
+            assert y0+yy.min()>head[1], "Below placement must clear its own notehead"
+        elif orientation=='side':
+            assert abs(y0+(yy.min()+yy.max())/2-head[1])<frame['gap']*.7
+            assert abs(x0+(xx.min()+xx.max())/2-head[0])>frame['gap']*.7
         claimed[y0:y1, x0:x1] = True
     assert not (changed & ~claimed).any(), "Unexpected extra ink (including tied continuations)"
 
@@ -236,6 +253,72 @@ def test_compact_practice_canvas_keeps_chord_fingers_visible(captured):
     _verify_numbers(folder,report["frames"][3],data["expected_count"])
 
 
+def test_fingering_stays_locally_attached_to_each_actual_note(captured):
+    folder,_,report=captured
+    for frame in report['frames']:
+        if frame['file']=='insufficient-space.png':
+            continue
+        assert frame['placement_issues']==[]
+        for label in frame['labels']:
+            atlas=_rgb(folder,label['reference'])
+            width=atlas.shape[1]//5
+            mask=atlas[:,(label['finger']-1)*width:label['finger']*width].max(axis=2)>100
+            yy,xx=np.nonzero(mask)
+            x,y,_,_=label['rect']
+            center=np.array([np.floor(x)+(xx.min()+xx.max())/2,np.floor(y)+(yy.min()+yy.max())/2])
+            offset=center-np.array(label['head'])
+            assert np.linalg.norm(offset)<=frame['gap']*2.5, (label,offset,frame['gap'])
+            assert abs(offset[0])<=frame['gap']*2.1, (label,offset)
+
+
+def test_insufficient_staff_space_is_reported_without_losing_source_assignments(captured):
+    folder,data,report=captured
+    frame=report['frames'][4]
+    assert frame['file']=='insufficient-space.png'
+    assert frame['gap']<11  # Smaller than the minimum legible finger font.
+    assert frame['placement_issues']
+    displayed={sid for label in frame['labels'] for sid in label['event_ids']}
+    unplaced={sid for issue in frame['placement_issues'] for sid in issue['event_ids']}
+    assert displayed.isdisjoint(unplaced)
+    assert displayed|unplaced==set(data['expected'])
+    assert all(issue['source_id'] and issue['reason'] for issue in frame['placement_issues'])
+    _verify_numbers(folder,frame,len(frame['labels']))
+
+
+def test_repeat_loops_and_tempo_preserve_fingering_positions(captured):
+    folder,_,report=captured
+    normal=report['frames'][0]
+    loop,tempo=report['frames'][5:7]
+    for repeated in (loop,tempo):
+        _verify_numbers(folder,repeated,len(repeated['labels']))
+        for first in normal['labels']:
+            matches=[other for other in repeated['labels'] if other['event_ids']==first['event_ids']
+                     and abs(other['head'][0]-first['head'][0])<.02]
+            assert len(matches)==1
+            assert np.allclose(matches[0]['rect'],first['rect'],atol=.02)
+
+
+def test_clear_authored_placement_takes_precedence_over_hand_default(captured):
+    folder,_,report=captured
+    assert report['authored_horizontal_hint'], 'default-x must work without an accompanying default-y'
+    frame=report['frames'][7]
+    assert report['authored_ids']
+    _verify_numbers(folder,frame,len(frame['labels']))
+    for identity in report['authored_ids']:
+        label=next(item for item in frame['labels'] if identity in item['event_ids'])
+        assert label['orientation']=='above'
+        default=next(item for item in report['frames'][0]['labels'] if identity in item['event_ids'])
+        assert default['orientation']=='below'
+
+
+def test_authentic_sprite_obstacles_cover_faint_flag_and_stem_edges(captured):
+    _,_,report=captured
+    coverage=report['envelope_coverage']
+    assert coverage['templates']>=14 and coverage['pixels']>100
+    assert coverage['uncovered']==0
+    assert coverage['corrupted_uncovered']>100
+
+
 def test_pixel_oracle_rejects_erased_wrong_and_colliding_fingering(captured):
     folder, data, report = captured
     frame = report["frames"][0]
@@ -257,6 +340,24 @@ def test_pixel_oracle_rejects_erased_wrong_and_colliding_fingering(captured):
     collision["labels"][0]["rect"] = [label["head"][0]-w/2, label["head"][1]-h/2, w, h]
     with pytest.raises(AssertionError):
         _verify_numbers(folder, collision, data["expected_count"])
+    # Preserve the real digit, font raster phase and correct source assignment,
+    # but move its actual pixels and crop together far from its note.
+    remote=erased.copy()
+    dx,dy=-400,-int(y)+20
+    remote[y0+dy:y1+dy,x0+dx:x1+dx]=original[y0:y1,x0:x1]
+    Image.fromarray(remote).save(folder/'detached-digit.png')
+    detached=dict(frame,file='detached-digit.png',labels=[dict(v) for v in frame['labels']])
+    detached['labels'][0]['rect']=[x+dx,y+dy,w,h]
+    with pytest.raises(AssertionError,match='locally attached'):
+        _verify_numbers(folder,detached,data['expected_count'])
+    partial=erased.copy()
+    edge=partial.shape[1]-3
+    partial[y0:y1,edge:]=original[y0:y1,x0:x0+3]
+    Image.fromarray(partial).save(folder/'clipped-digit.png')
+    clipped=dict(frame,file='clipped-digit.png',labels=[dict(v) for v in frame['labels']])
+    clipped['labels'][0]['rect']=[edge+(x-x0),y,w,h]
+    with pytest.raises(AssertionError):
+        _verify_numbers(folder,clipped,data['expected_count'])
 
 
 @pytest.mark.parametrize("source", ["xml", "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",

@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import signal
 import sys
 import tempfile
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -29,6 +30,44 @@ MAX_CASES = 11
 MAX_ARCHIVE_BYTES = 40 * 1024 * 1024
 MAX_FILE_BYTES = 8 * 1024 * 1024
 FRAME_PATTERN = re.compile(r'native--?\d+\.\d+\.png')
+
+
+class TerminationSignals:
+    """Interrupt work once; defer further unwinding while publishing evidence."""
+
+    def __init__(self):
+        self.received = None
+        self._deferred = 0
+
+    @property
+    def exit_status(self):
+        return 128 + self.received if self.received is not None else 0
+
+    def _stop(self, signum, _frame):
+        # A later signal must neither replace the first status nor interrupt
+        # checkpoint/worker cleanup or the one atomic archive publication.
+        if self.received is None:
+            self.received = signum
+            if not self._deferred:
+                raise KeyboardInterrupt()
+
+    def __enter__(self):
+        self._handlers = {s: signal.getsignal(s) for s in (signal.SIGINT, signal.SIGTERM)}
+        for signum in self._handlers:
+            signal.signal(signum, self._stop)
+        return self
+
+    def __exit__(self, *_exc):
+        for signum, handler in self._handlers.items():
+            signal.signal(signum, handler)
+
+    @contextmanager
+    def defer(self):
+        self._deferred += 1
+        try:
+            yield
+        finally:
+            self._deferred -= 1
 
 
 @contextmanager
@@ -111,7 +150,7 @@ def package(shard: Path, output: Path) -> dict:
             included.add(path)
             total += size
 
-        for name in ('summary.json', 'run.log','investigation.json'):
+        for name in ('summary.json', 'run.log','quick.log','coordinator-error.log','investigation.json'):
             add(shard / name)
         archive.writestr('triage-summary.json', json.dumps(summary, indent=2) + '\n')
         for kind, (audit, trigger) in list(selections.items())[:MAX_CASES]:
@@ -162,9 +201,26 @@ def package(shard: Path, output: Path) -> dict:
     return summary
 
 
+def main():
+    args = sys.argv[1:]
+    publication_status = args[-1:] == ['--publication-status']
+    if publication_status:
+        args = args[:-1]
+    if len(args) != 2:
+        raise SystemExit('Usage: package_notation_diagnostics.py SHARD_DIRECTORY ZIP_PATH [--publication-status]')
+    with TerminationSignals() as signals, signals.defer():
+        try:
+            result = package(Path(args[0]), Path(args[1]))
+            print('Saved ' + result['archive'], flush=True)
+            print('Common error families:', dict(result['error_counts'].most_common(8)), flush=True)
+        except Exception as exc:
+            print(f'Could not package diagnostics: {exc}', file=sys.stderr, flush=True)
+            return 1 if publication_status else signals.exit_status or 1
+        # The outer driver already owns the audit's first-signal status.
+        # Report publication success independently, so a later, different
+        # signal cannot turn a completed archive into a false failure message.
+        return 0 if publication_status else signals.exit_status
+
+
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        raise SystemExit('Usage: package_notation_diagnostics.py SHARD_DIRECTORY ZIP_PATH')
-    result = package(Path(sys.argv[1]), Path(sys.argv[2]))
-    print('Saved ' + result['archive'])
-    print('Common error families:', dict(result['error_counts'].most_common(8)))
+    sys.exit(main())

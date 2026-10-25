@@ -44,6 +44,18 @@ func _audit() -> void:
         push_error("Invalid native overlay fixture")
         quit(2)
         return
+    # Canonical music and optional instructional ink have separate contracts.
+    # Fail closed before touching rendering when the producer did not opt in.
+    var config: Variant = fixture.get("capture_config")
+    if not config is Dictionary or config.size() != 4 or \
+            typeof(config.get("version")) not in [TYPE_INT, TYPE_FLOAT] or \
+            config.get("version") != 1 or config.get("score_ink") != "canonical" or \
+            typeof(config.get("fingering_annotations")) != TYPE_BOOL or \
+            config.get("fingering_annotations") != false or \
+            config.get("transport_overlay") != true or typeof(config.get("transport_overlay")) != TYPE_BOOL:
+        push_error("Explicit canonical capture_config version 1 with fingering_annotations=false is required")
+        quit(2)
+        return
     var folder: String = args[1]
     DirAccess.make_dir_recursive_absolute(folder)
     var view := SubViewport.new()
@@ -54,6 +66,8 @@ func _audit() -> void:
     var renderer = load("res://notation/native/view.gd").new()
     renderer.size = Vector2(1536, 520)
     view.add_child(renderer)
+    renderer.set_fingering_annotations_enabled(false)
+    renderer.set_transport_overlay_enabled(true)
     var assets: Dictionary = fixture["assets"]
     if not renderer.set_verovio_glyphs(
             assets["native_glyphs"], assets["native_note_templates"],
@@ -70,6 +84,7 @@ func _audit() -> void:
         quit(1)
         return
     var result := {
+        "capture_config": config.duplicate(true),
         "density": renderer.timeline.pixels_per_beat,
         "density_witness": renderer.selected_density_witness.duplicate(true),
         "staff_gap": renderer._gap(),
@@ -102,6 +117,8 @@ func _audit() -> void:
         await process_frame
         await process_frame
         await RenderingServer.frame_post_draw
+        if not renderer.drawn_fingerings.is_empty():
+            failures.append("Canonical frame contains instructional fingering ink")
         var frame: Image = view.get_texture().get_image()
         # Quarter-note subdivisions can be closer than .01 beats. Use
         # precise filenames in Phase 3 to prevent one frame overwriting

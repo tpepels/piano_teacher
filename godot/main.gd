@@ -3123,6 +3123,7 @@ func _present_fingering_status(summary: Variant) -> void:
     var status: String = str(summary.get("status",""))
     var unknown: int = int(summary.get("unknown",0))
     var review: int = int(summary.get("review",0))
+    var placement_issues: int = timeline_preview.fingering_placement_issues.size() if timeline_preview != null and _native_score_ready() else 0
     var unavailable: bool = status in ["unavailable","failed","error"]
     var detail: String = str(summary.get("error",""))
     var issues := PackedStringArray()
@@ -3130,7 +3131,7 @@ func _present_fingering_status(summary: Variant) -> void:
         issues.append(str(issue))
     if not issues.is_empty():
         detail += ("\n" if not detail.is_empty() else "")+"\n".join(issues)
-    fingering_status_label.visible = unavailable or unknown > 0 or review > 0 or not fingering_save_error.is_empty()
+    fingering_status_label.visible = unavailable or unknown > 0 or review > 0 or placement_issues > 0 or not fingering_save_error.is_empty()
     if not fingering_save_error.is_empty():
         fingering_status_label.text = "Fingering not saved"
         detail = fingering_save_error
@@ -3142,8 +3143,15 @@ func _present_fingering_status(summary: Variant) -> void:
             detail = "Some source notes have no reliable finger assignment."
     elif review > 0:
         fingering_status_label.text = "Check %d fingering%s" % [review,"" if review == 1 else "s"]
+    elif placement_issues > 0:
+        fingering_status_label.text = "%d fingering%s need%s space" % [placement_issues,"" if placement_issues == 1 else "s","s" if placement_issues == 1 else ""]
     else:
         fingering_status_label.text = ""
+    if placement_issues > 0:
+        if unknown > 0 or review > 0 or unavailable or not fingering_save_error.is_empty():
+            fingering_status_label.text += " · %d need%s space" % [placement_issues,"s" if placement_issues == 1 else ""]
+        detail += ("\n" if not detail.is_empty() else "")+ \
+            "Some fingerings cannot fit beside their notes at this staff size. Enlarge the practice window to give the score more space."
     fingering_status_label.tooltip_text = (detail+"\n" if not detail.is_empty() else "")+ \
         "Right-click any attack note, or tap a finger number, to correct it. Unknown notes can also be edited."
 

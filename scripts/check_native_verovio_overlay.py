@@ -34,14 +34,23 @@ import resource
 import signal
 import tempfile
 import time
+import traceback
 import uuid
 import fcntl
 from contextlib import contextmanager
 
 from PIL import Image, ImageDraw
 
+# Both production direct-file execution and `python -m scripts...` are valid.
+# A direct file has scripts/ (not its parent) on sys.path.
+if __package__:
+    from .package_notation_diagnostics import TerminationSignals, package
+else:
+    from package_notation_diagnostics import TerminationSignals, package
+
 from piano_teacher.application.score_preparation import assemble_layout
 from piano_teacher.music import Phrase, source_note_id
+from piano_teacher.notation.audit_annotations import CANONICAL_CAPTURE_CONFIG, canonical_piece
 from piano_teacher.notation.lesson import build_lesson_score, infer_piece_clefs
 from piano_teacher.notation.model import build_score_model
 from piano_teacher.raster import rasterize_score
@@ -673,6 +682,9 @@ def fixture(case: AuditCase = CASES[0], *, piece=None,
                      else "midi/" + case.filename)
     if piece is None:
         piece, _ = import_piece(source)
+    # Normalize authored fingering before building either the lesson score or
+    # its reference assets; the imported source and note identities stay intact.
+    piece = canonical_piece(piece)
     assert 1 <= case.first_bar <= case.last_bar < len(piece.bar_boundaries)
     first = piece.bar_boundaries[case.first_bar - 1]
     end = piece.bar_boundaries[case.last_bar]
@@ -695,10 +707,11 @@ def fixture(case: AuditCase = CASES[0], *, piece=None,
     engraving = render_layout(score, case.first_bar, case.last_bar, case.hand,
                               total_beats=end-first, bpm=piece.bpm, continuous=compact)
     key = cache.key("native-comparison-art", score.musicxml, case.hand,
-                    piece.bpm, compact) if cache is not None else ""
+                    piece.bpm, compact, CANONICAL_CAPTURE_CONFIG) if cache is not None else ""
     atlas = assemble_layout(engraving, native_notes=True, native_model=model,
                             notation_xml=score.musicxml, cache=cache, cache_key=key)
     return {
+        "capture_config": dict(CANONICAL_CAPTURE_CONFIG),
         "model": model,
         "assets": {key: atlas[key] for key in (
             "native_glyphs", "native_note_templates", "native_tie_templates",
@@ -897,6 +910,12 @@ def capture_dependency_hash(root: Path = ROOT) -> str:
 
 def validate_capture_manifest(folder: Path, *, dependency_hash: str, godot_version: str) -> None:
     manifest=json.loads((folder/"capture-manifest.json").read_text())
+    _validate_capture_files(folder,manifest,dependency_hash=dependency_hash,godot_version=godot_version)
+    if manifest.get('capture_config')!=CANONICAL_CAPTURE_CONFIG:
+        raise AssertionError('Cached capture configuration differs from the explicit canonical audit mode')
+
+
+def _validate_capture_files(folder,manifest,*,dependency_hash,godot_version):
     if manifest.get("renderer_dependencies_sha256")!=dependency_hash:
         raise AssertionError("Cached renderer dependencies changed or are unrecorded")
     if manifest.get("godot")!=godot_version:
@@ -937,8 +956,11 @@ def recover_capture_publish(out):
     if staging.parent!=out.parent or not staging.name.startswith('.capture-'+out.name+'-'):
         raise AssertionError('Capture staging directory does not belong to this case')
     manifest=json.loads((staging/'capture-manifest.json').read_text())
-    validate_capture_manifest(staging,dependency_hash=manifest['renderer_dependencies_sha256'],
-                              godot_version=manifest['godot'])
+    # Finish the previous producer's transaction even across a mode upgrade.
+    # Publishing preserves its bytes; callers must still validate the current
+    # configuration before reuse, just as they revalidate engine/dependencies.
+    _validate_capture_files(staging,manifest,dependency_hash=manifest['renderer_dependencies_sha256'],
+                            godot_version=manifest['godot'])
     # Staging stays intact until every file is published. A killed writer can
     # resume this copy without invoking Godot again or admitting older PNGs.
     for pattern in CAPTURE_PATTERNS:
@@ -956,6 +978,7 @@ def verification_inputs_hash(sources) -> str:
            *sorted((ROOT/'piano_teacher').rglob('*.py')),
            ROOT/'tests/fixtures/musical_fidelity/manifest.json']
     digest=hashlib.sha256(capture_dependency_hash().encode())
+    digest.update(json.dumps(CANONICAL_CAPTURE_CONFIG,sort_keys=True).encode()+b'\0')
     for path in sorted(paths):
         digest.update(str(path).encode()+b'\0'+path.read_bytes()+b'\0')
     return digest.hexdigest()
@@ -969,6 +992,11 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
     recover_capture_publish(out)
     data, engraving = fixture(case) if prepared is None else prepared
     data = dict(data)
+    if 'capture_config' in data and data['capture_config']!=CANONICAL_CAPTURE_CONFIG:
+        raise CaptureProvenanceError('Capture configuration must explicitly select canonical audit mode')
+    # run() owns the capture mode even for a caller supplying prepared assets.
+    # This explicit field is sent to Godot and compared with retained fixtures.
+    data['capture_config']=dict(CANONICAL_CAPTURE_CONFIG)
     model = data["model"]
     if all_symbols:
         # Every score symbol is positioned at the playhead in at least one
@@ -1031,6 +1059,7 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
                 for pattern in ('native-*.png','rest-without-*.png','repeat-*.png','restored-*.png')
                 for p in sorted(staging.glob(pattern))]
             atomic_json(staging/'capture-manifest.json',dict(
+                capture_config=data['capture_config'],
                 capture_protocol_sha256=data['capture_protocol_sha256'],
                 renderer_dependencies_sha256=dependencies,python=platform.python_version(),
                 verovio=verovio.toolkit().getVersion(),
@@ -1393,7 +1422,8 @@ def audit_library(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
     import PIL
     import verovio
     runtime=dict(godot=godot_version,python=sys.version,numpy=numpy.__version__,
-                 pillow=PIL.__version__,verovio=verovio.toolkit().getVersion())
+                 pillow=PIL.__version__,verovio=verovio.toolkit().getVersion(),
+                 capture_config=dict(CANONICAL_CAPTURE_CONFIG))
     available=next((int(line.split()[1])*1024 for line in Path('/proc/meminfo').read_text().splitlines()
                     if line.startswith('MemAvailable:')),0) if Path('/proc/meminfo').is_file() else 0
     effective_workers=min(workers,max(1,(available-1024**3)//(1536*1024**2))) if available else workers
@@ -1402,6 +1432,7 @@ def audit_library(out: Path, godot: str, *, only: str = "", max_bars: int = 4,
     summary = {"passed": False, "sources_expected": 0, "sources_discovered": len(sources),
                "shard_index": shard_index, "shard_count": shard_count,
                "inputs_sha256": inputs_hash,
+               "capture_config": dict(CANONICAL_CAPTURE_CONFIG),
                "state":'planning',"runtime":runtime,"cases_attempted":0,"cases_resumed":0,
                "denominators_complete":False,
                "requested_workers":workers,"workers":effective_workers,
@@ -1592,7 +1623,6 @@ def package_previous_interruption(out: Path):
         return None
     if not isinstance(previous,dict) or previous.get('state') not in {'planning','running','interrupted'}:
         return None
-    from scripts.package_notation_diagnostics import package
     archive=out.parent/(out.name+'-interrupted.zip')
     result=package(out,archive)
     print('Previous interrupted run diagnostics: '+result['archive'],flush=True)
@@ -1616,6 +1646,8 @@ def main() -> int:
                         help='Per-worker virtual-memory ceiling, inherited by Godot (default: 3072 MiB)')
     parser.add_argument("--reuse-captures",action="store_true",
                         help="Recheck unchanged retained PNGs; changed or missing captures are rendered again")
+    parser.add_argument('--no-package-diagnostics',action='store_true',
+                        help='Let the outer runner package current-run diagnostics after flushing logs')
     parser.add_argument("--shard-index", type=int, default=0,
                         help="Zero-based partition of original and curriculum cases")
     parser.add_argument("--shard-count", type=int, default=1,
@@ -1635,50 +1667,66 @@ def main() -> int:
     if a.case and a.shard_count != 1:
         parser.error("--case uses its focused overlay command; shard only the full-library test")
     if not a.case:
-        received_signal=[None]
-        def stop(signum,_frame):
-            received_signal[0]=signum
-            raise KeyboardInterrupt()
-        handlers={s:signal.getsignal(s) for s in (signal.SIGINT,signal.SIGTERM)}
-        try:
-            for s in handlers:
-                signal.signal(s,stop)
-            with audit_lock(a.out):
-                package_previous_interruption(a.out)
-                summary = audit_library(a.out, godot, only=a.only, max_bars=a.window_bars,
-                    workers=a.workers,reuse_captures=a.reuse_captures,resume=a.resume,
-                    case_timeout=a.case_timeout,memory_limit_mib=a.worker_memory_mib,
-                    shard_index=a.shard_index,shard_count=a.shard_count)
-        except ValueError as exc:
-            parser.error(str(exc))
-        except KeyboardInterrupt:
-            # Interruption during source planning precedes the worker-loop
-            # handler. Publish an honest partial state without inventing
-            # completed denominators or losing the prior on-disk checkpoint.
+        failure_status=1
+        with TerminationSignals() as signals:
             try:
-                summary=json.loads((a.out/'summary.json').read_text())
-            except (OSError,ValueError):
-                summary=dict(cases_checked=0,cases_expected=0,sources_checked=0,sources_expected=0,
-                             measures_checked=0,measures_expected=0,failures=[])
-            summary.update(passed=False,state='interrupted',finished_at=time.time(),
-                           denominators_complete=False,stop_reason='Interrupted during source planning')
-            summary.setdefault('failures',[]).append(summary['stop_reason'])
-            atomic_json(a.out/'summary.json',summary)
-        finally:
-            for s,handler in handlers.items():
-                signal.signal(s,handler)
-        if not summary['passed']:
-            try:
-                from scripts.package_notation_diagnostics import package
-                packaged=package(a.out,a.out.parent/'triage.zip')
-                print('Diagnostic package: '+packaged['archive'],flush=True)
-            except (OSError,ValueError) as exc:
-                print(f'Could not package diagnostics: {exc}',file=sys.stderr,flush=True)
-        print(f"Native notation: {summary['sources_checked']}/{summary['sources_expected']} sources, "
-              f"{summary['measures_checked']}/{summary['measures_expected']} measures, "
-              f"{summary['cases_checked']}/{summary['cases_expected']} cases, "
-              f"{len(summary['failures'])} failures; {a.out}", flush=True)
-        return 128+received_signal[0] if received_signal[0] else int(not summary["passed"])
+                with audit_lock(a.out):
+                    recovered=False
+                    try:
+                        with signals.defer():
+                            package_previous_interruption(a.out)
+                        if signals.exit_status:
+                            # Recovery finished its original archive. Leave that
+                            # checkpoint intact and do not begin another run.
+                            return signals.exit_status
+                        recovered=True
+                        summary = audit_library(a.out, godot, only=a.only, max_bars=a.window_bars,
+                            workers=a.workers,reuse_captures=a.reuse_captures,resume=a.resume,
+                            case_timeout=a.case_timeout,memory_limit_mib=a.worker_memory_mib,
+                            shard_index=a.shard_index,shard_count=a.shard_count)
+                    except (KeyboardInterrupt,Exception) as exc:
+                        if not recovered and isinstance(exc,ValueError):
+                            # Invalid prior process ownership must abort without
+                            # rewriting another worker's checkpoint or evidence.
+                            raise
+                        failure_status=2 if isinstance(exc,ValueError) else 1
+                        # Keep the last checkpoint's counts, even when planning,
+                        # progress reporting or pool cleanup fails unexpectedly.
+                        try:
+                            summary=json.loads((a.out/'summary.json').read_text())
+                            if not isinstance(summary,dict):
+                                summary={}
+                        except (OSError,ValueError):
+                            summary={}
+                        for field in ('cases_checked','cases_expected','sources_checked',
+                                      'sources_expected','measures_checked','measures_expected'):
+                            summary.setdefault(field,0)
+                        interrupted=isinstance(exc,KeyboardInterrupt)
+                        reason=('Interrupted during source planning' if interrupted else
+                                f'Coordinator failed: {type(exc).__name__}: {exc}')
+                        summary.update(passed=False,state='interrupted' if interrupted else 'error',
+                                       finished_at=time.time(),denominators_complete=False,stop_reason=reason,
+                                       capture_config=dict(CANONICAL_CAPTURE_CONFIG))
+                        summary.setdefault('failures',[]).append(reason)
+                        if not interrupted:
+                            detail=traceback.format_exc()
+                            print(detail,file=sys.stderr,flush=True)
+                            (a.out/'coordinator-error.log').write_text(detail)
+                        atomic_json(a.out/'summary.json',summary)
+                    if not summary['passed'] and not a.no_package_diagnostics:
+                        with signals.defer():
+                            try:
+                                packaged=package(a.out,a.out.parent/'triage.zip')
+                                print('Diagnostic package: '+packaged['archive'],flush=True)
+                            except Exception as exc:
+                                print(f'Could not package diagnostics: {exc}',file=sys.stderr,flush=True)
+            except ValueError as exc:
+                parser.error(str(exc))
+            print(f"Native notation: {summary['sources_checked']}/{summary['sources_expected']} sources, "
+                  f"{summary['measures_checked']}/{summary['measures_expected']} measures, "
+                  f"{summary['cases_checked']}/{summary['cases_expected']} cases, "
+                  f"{len(summary['failures'])} failures; {a.out}", flush=True)
+            return signals.exit_status or (0 if summary['passed'] else failure_status)
     cases = selected_cases(a.case)
     results = []
     errors = []

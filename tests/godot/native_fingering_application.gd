@@ -97,8 +97,20 @@ func _run() -> void:
             "Offline runtime missing" not in app.fingering_status_label.tooltip_text:
         failures.append("Unavailable fingering needs an actionable provider-neutral status")
     app._present_fingering_status({"status":"ready","unknown":0})
-    if app.fingering_status_label.visible:
+    if app.fingering_status_label.visible and app.timeline_preview.fingering_placement_issues.is_empty():
         failures.append("Available automatic predictions should not add status clutter")
+    var placement_issues: Array = app.timeline_preview.fingering_placement_issues.duplicate(true)
+    app.timeline_preview.fingering_placement_issues = [{"source_id":source,"reason":"No local space"}]
+    app._present_fingering_status({"status":"ready","unknown":0})
+    if not app.fingering_status_label.visible or "1 fingering needs space" != app.fingering_status_label.text or \
+            "Enlarge" not in app.fingering_status_label.tooltip_text:
+        failures.append("Unfit annotations must be reported with actionable space guidance")
+    for summary in [{"status":"partial","unknown":6},{"status":"partial","unknown":0,"review":2},
+            {"status":"unavailable","error":"Offline runtime missing"}]:
+        app._present_fingering_status(summary)
+        if "1 needs space" not in app.fingering_status_label.text or "Enlarge" not in app.fingering_status_label.tooltip_text:
+            failures.append("Unknown/review/provider status must not hide unfit annotations")
+    app.timeline_preview.fingering_placement_issues = placement_issues
     app._present_fingering_status({"status":"partial","unknown":0,"review":2,
         "issues":["Two fixed notes require the same finger"]})
     if not app.fingering_status_label.visible or "2" not in app.fingering_status_label.text or \

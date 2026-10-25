@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # One local command: fast regressions, then the complete native/Verovio library.
+# Parse the entire driver before starting long-running commands. Editing this
+# file during a sweep must not splice new bytes into Bash's next top-level read.
+main() {
 set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 
@@ -28,12 +31,17 @@ quick_checks() {
     tests/test_fingering_real_pieces.py \
     tests/test_fingering_backend.py \
     tests/test_native_fingering.py \
+    tests/test_fingering_real_placement.py \
+    tests/test_fingering_obstacle_geometry.py \
+    tests/test_fingering_placement_metadata.py \
+    tests/test_canonical_fingering_isolation.py \
     tests/test_native_notation_library.py \
     tests/test_connector_pixels.py \
     tests/test_phase3_scroll_pixels.py \
     tests/test_notation_diagnostic_package.py \
     tests/test_native_audit_recovery.py \
     tests/test_verify_notation_recovery.py \
+    tests/test_verification_runner_failures.py \
     tests/test_joint_registration_resources.py \
     tests/test_connector_source_layers.py \
     tests/test_extra_symbol_shard_regressions.py \
@@ -54,19 +62,56 @@ fi
 OUT="$PWD/notation-check-results"
 mkdir -p "$OUT"
 audit_pid=""
-output=""
+output="$OUT"
 failed_output=""
+first_signal_status=0
+signal_count=0
+record_signal() {
+  if (( first_signal_status == 0 )); then
+    first_signal_status=$1
+  fi
+  signal_count=$((signal_count+1))
+}
 package_on_exit() {
   local exit_status=$?
   local diagnostic_output="${failed_output:-$output}"
+  # EXIT owns the only package attempt. Keep handling signals without
+  # re-entering stop_current or abandoning the child publishing the ZIP.
+  trap 'record_signal 130' INT
+  trap 'record_signal 143' TERM
   if (( exit_status != 0 )) && [[ -n "$diagnostic_output" && -d "$diagnostic_output" ]]; then
-    "$PYTHON" scripts/package_notation_diagnostics.py "$diagnostic_output" "$OUT/triage.zip" || true
+    "$PYTHON" scripts/package_notation_diagnostics.py "$diagnostic_output" "$OUT/triage.zip" --publication-status &
+    local package_pid=$!
+    local package_status=0
+    local observed_signals
+    while true; do
+      observed_signals=$signal_count
+      if wait "$package_pid"; then
+        package_status=0
+      else
+        package_status=$?
+      fi
+      # A trapped signal interrupts Bash's wait before the child finishes.
+      # Wait again, even if the child exited concurrently with that signal.
+      if (( signal_count == observed_signals )); then
+        break
+      fi
+    done
+    if (( package_status != 0 )); then
+      echo "Could not package diagnostics; original failure status: $exit_status" >&2
+    fi
   fi
+  if (( first_signal_status != 0 )); then
+    exit_status=$first_signal_status
+  fi
+  trap - EXIT
+  exit "$exit_status"
 }
 stop_current() {
-  local exit_status=$1
+  record_signal "$1"
   failed_output="$output"
-  trap - INT TERM
+  trap 'record_signal 130' INT
+  trap 'record_signal 143' TERM
   if [[ -n "$audit_pid" ]]; then
     # The batch has its own session. The Python coordinator handles TERM,
     # checkpoints partial progress and terminates its owned Godot workers.
@@ -79,16 +124,19 @@ stop_current() {
     wait "$audit_pid" 2>/dev/null || true
   fi
   echo "Interrupted: completed case checkpoints and captures are retained."
-  exit "$exit_status"
+  exit "$first_signal_status"
 }
 trap package_on_exit EXIT
 trap 'stop_current 130' INT
 trap 'stop_current 143' TERM
 echo "Step 1/2: fast regressions and Godot validation"
-if ! quick_checks 2>&1 | tee "$OUT/quick.log"; then
+if quick_checks 2>&1 | tee "$OUT/quick.log"; then
+  :
+else
+  quick_status=$?
   echo "FAIL: fast regression checks. Fix these before starting the full library."
   echo "Log: $OUT/quick.log"
-  exit 1
+  exit "$quick_status"
 fi
 
 if command -v xvfb-run >/dev/null 2>&1; then
@@ -112,6 +160,7 @@ fi
 # Partition for bounded memory usage; a full pass needs all 24 shards.
 SHARDS=24
 failed=0
+failed_status=0
 attempted=0
 echo "Step 2/2: full native Godot / Verovio comparison (24 batches)"
 echo "A failing batch stops the sweep: diagnose common errors before more captures."
@@ -120,7 +169,9 @@ for (( index=0; index<SHARDS; index++ )); do
   output="$OUT/shard-$index-of-$SHARDS"
   mkdir -p "$output"
   echo "Batch $((index+1))/$SHARDS: capturing and comparing notation"
-  args=(--shard-index "$index" --shard-count "$SHARDS"
+  # The outer EXIT handler packages after the log writer has flushed, including
+  # coordinator crashes. Standalone coordinator commands package themselves.
+  args=(--no-package-diagnostics --shard-index "$index" --shard-count "$SHARDS"
         --workers "$WORKERS" --out "$output"
         --case-timeout "${PIANO_VERIFY_CASE_TIMEOUT:-600}"
         --worker-memory-mib "${PIANO_VERIFY_MEMORY_MIB:-3072}")
@@ -149,6 +200,7 @@ for (( index=0; index<SHARDS; index++ )); do
     echo "Batch $((index+1))/$SHARDS: FAIL (details: $output/run.log)"
     if [[ -z "$failed_output" ]]; then
       failed_output="$output"
+      failed_status="$audit_status"
     fi
     failed=$((failed+1))
     if [[ "${PIANO_VERIFY_CONTINUE_ON_FAILURE:-0}" != 1 ]]; then
@@ -168,4 +220,7 @@ else
   echo "Failure details are in $OUT/shard-*/run.log"
 fi
 echo "All logs and captures: $OUT"
-(( failed == 0 && attempted == SHARDS ))
+exit "$failed_status"
+}
+
+main "$@"

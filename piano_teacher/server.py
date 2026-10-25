@@ -2100,7 +2100,7 @@ class PracticeEngine:
             model = build_score_model(
                 notation, boundaries=p.piece.bar_boundaries,
                 hand=p.hand, revision=self.score_revision)
-            return project_model(model, p.piece.fingering_plan)
+            return project_model(model, p.piece.fingering_plan, source_musicxml=p.piece.source_musicxml)
 
     def engraving(self) -> EngravedScore:
         with self.lock:
@@ -2242,7 +2242,7 @@ class PracticeEngine:
             native_model = build_score_model(notation,
                 boundaries=p.piece.bar_boundaries,
                 hand=p.hand, revision=self.score_revision)
-            native_model = project_model(native_model, p.piece.fingering_plan)
+            native_model = project_model(native_model, p.piece.fingering_plan, source_musicxml=p.piece.source_musicxml)
             return assemble_layout(source_score, native_notes=True,
                 native_model=native_model, notation_xml=notation.musicxml,
                 cache=self.preprocessing, cache_key=self._layout_cache_key or "",

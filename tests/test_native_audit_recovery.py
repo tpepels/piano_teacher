@@ -17,7 +17,7 @@ from scripts import check_native_verovio_overlay as audit
 def process_running(pid):
     try:
         return Path(f'/proc/{pid}/stat').read_text().rsplit(')',1)[1].split()[0] not in {'Z','X'}
-    except FileNotFoundError:
+    except (FileNotFoundError,ProcessLookupError):
         return False
 
 
@@ -243,9 +243,47 @@ def checkpoint_worker(case, source, variant, directory, godot, reuse, focused):
     (directory/'score.musicxml').write_text('<score-partwise/>')
     (directory/'audit.json').write_text(json.dumps(dict(passed=True,errors=[])))
     (directory/'capture-manifest.json').write_text(json.dumps(dict(
+        capture_config=audit.CANONICAL_CAPTURE_CONFIG,
         renderer_dependencies_sha256=audit.capture_dependency_hash(),godot='test-engine',
         screenshots=[dict(file=frame.name,sha256=hashlib.sha256(frame.read_bytes()).hexdigest())])))
     return dict(errors=[],error_count=0,captured=True,nonverified_symbols={},symbols={})
+
+
+@pytest.mark.parametrize('capture_config', [None, {}, {'fingering_annotations': True}])
+def test_missing_or_incompatible_capture_mode_cannot_be_reused(tmp_path, capture_config):
+    frame=tmp_path/'native-0.00000.png'
+    frame.write_bytes(b'actual frame')
+    manifest=dict(renderer_dependencies_sha256=audit.capture_dependency_hash(),godot='test-engine',
+                  screenshots=[dict(file=frame.name,sha256=hashlib.sha256(frame.read_bytes()).hexdigest())])
+    if capture_config is not None:
+        manifest['capture_config']=capture_config
+    (tmp_path/'capture-manifest.json').write_text(json.dumps(manifest))
+    with pytest.raises(AssertionError,match='capture configuration'):
+        audit.validate_capture_manifest(tmp_path,dependency_hash=audit.capture_dependency_hash(),
+                                        godot_version='test-engine')
+
+
+def test_capture_mode_is_part_of_verification_input_identity(monkeypatch):
+    before=audit.verification_inputs_hash(())
+    monkeypatch.setattr(audit,'CANONICAL_CAPTURE_CONFIG',{'mode':'incompatible-capture'})
+    assert audit.verification_inputs_hash(()) != before
+
+
+def test_legacy_interrupted_publication_is_preserved_but_cannot_be_reused(tmp_path):
+    out=tmp_path/'case';out.mkdir()
+    staging=tmp_path/'.capture-case-previous';staging.mkdir()
+    frame=staging/'native-0.00000.png';frame.write_bytes(b'last completed historical capture')
+    (staging/'fixture.json').write_text('{"hand":"both"}')
+    manifest=dict(renderer_dependencies_sha256='historical-deps',godot='historical-engine',
+        screenshots=[dict(file=frame.name,sha256=hashlib.sha256(frame.read_bytes()).hexdigest())])
+    (staging/'capture-manifest.json').write_text(json.dumps(manifest))
+    (out/'capture-publish.json').write_text(json.dumps(dict(staging=str(staging))))
+    audit.recover_capture_publish(out)
+    assert (out/frame.name).read_bytes()==b'last completed historical capture'
+    assert not (out/'capture-publish.json').exists() and not staging.exists()
+    with pytest.raises(AssertionError,match='capture configuration'):
+        audit.validate_capture_manifest(out,dependency_hash='historical-deps',
+                                        godot_version='historical-engine')
 
 
 def blocking_worker(case,source,variant,directory,godot,reuse,focused):
