@@ -5,6 +5,7 @@ Start: python -m piano_teacher.server. No Internet, account, or Qt required.
 from __future__ import annotations
 import argparse
 from dataclasses import asdict, replace
+from copy import deepcopy
 import hashlib
 import json
 import math
@@ -33,6 +34,7 @@ from .recovery import check_rolling_two_bar_window, check_two_bar_window
 from .music import Phrase, source_note_id, note_name
 from .notation.lesson import build_lesson_score, infer_piece_clefs
 from .notation.model import build_score_model
+from .notation.practice_timeline import preparation_measure_descriptor
 from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats, preparation_meter
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
@@ -99,6 +101,11 @@ class PracticeEngine:
         self._visual_rewind_at = 0.0
         self._visual_rewind_seconds = SETTINGS.feedback_seconds
         self._retry_previous_pass = False
+        self.practice_preparation: dict | None = None
+        self._preparation_pending = False
+        self._preparation_at = 0.0
+        self._semantic_cache_key = None
+        self._semantic_cache: dict | None = None
         self.mode = "practice"
         self.teaching = None
         self.guided_range: tuple[float, float] | None = None
@@ -339,6 +346,24 @@ class PracticeEngine:
                 self.midi_input_count += 1
                 self.midi_input_note = message.note
                 self.midi_input_at = now
+            # A key can reach the next attempt's musical deadline before the
+            # next HTTP state poll, even if no poll observed the source ending.
+            # Settle only a due handoff; retain the hardware timestamp above.
+            if (message.type in ("note_on", "note_off") and self.plan is not None
+                    and self.mode in ("practice", "perform")
+                    and not self.paused and self.awaiting_score_revision is None):
+                due = (not self.running and self.next_at and now >= self.next_at
+                       and (self._preview_loop_pending
+                            or (self.pending_result is not None and self.auto)
+                            or self.pending_rewind is not None))
+                if (self.running and self.mode == "practice"
+                        and self.plan.exercise.kind != "perform"
+                        and self.review_end_beat is None and (self.auto or self.preview_only)):
+                    phrase = self.plan.active_phrase
+                    source_end = self.run_at + (phrase.end-phrase.start-self.play_from_beat)*60/self.plan.bpm
+                    due = now >= source_end + self.visual_gap_beats*60/self.plan.bpm
+                if due:
+                    self._update()
             if message.type in ("note_on", "note_off"):
                 is_on = message.type == "note_on" and message.velocity > 0
                 self.live_input.receive(
@@ -603,6 +628,9 @@ class PracticeEngine:
         self._visual_rewind_at = 0.0
         self._visual_rewind_seconds = SETTINGS.feedback_seconds
         self._retry_previous_pass = False
+        self.practice_preparation = None
+        self._preparation_pending = False
+        self._preparation_at = 0.0
         self.count_in_beats=0
         self.next_at=0
         self.awaiting_score_revision=None
@@ -1199,6 +1227,11 @@ class PracticeEngine:
             self._visual_rewind_from = None
             self._visual_rewind_to = None
             self._retry_previous_pass = False
+            self._preparation_pending = False
+            if loop_continuation and self.practice_preparation is not None:
+                self.practice_preparation["phase"] = "complete"
+            else:
+                self.practice_preparation = None
             self.auto=mode == "practice" and not self.preview_only
             self.next_at=0
             self.awaiting_score_revision=None
@@ -1224,7 +1257,7 @@ class PracticeEngine:
                 self.count_in_bar_beats = meter[0] * 4 / meter[1]
             # The empty staff measure BETWEEN loops already provides the
             # preparation interval. Do not prepend another count-in measure.
-            self.visual_gap_beats = grid[-1] - grid[-2]
+            self.visual_gap_beats = self._source_model()["practice_timeline"]["gap"]["duration_beats"]
             self.count_in_beats = (0.0 if loop_continuation else
                 lead_in_beats(self.count_in_bar_beats, self.plan.bpm))
             self.next_boundary_beat=next_chunk_end(grid,self.play_from_beat)
@@ -1232,6 +1265,63 @@ class PracticeEngine:
             self.feedback="Count in, then play"
             self.next_action = ("Watch the moving score; connect a piano for feedback." if self.preview_only
                 else f"Play from bar {bar_number_at(grid,self.play_from_beat,phrase.first_bar)} at {self.plan.bpm} BPM.")
+
+    def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
+        """Retain polling overshoot instead of moving the musical deadline."""
+        self.start(from_beat=from_beat, mode=self.mode, loop_continuation=True)
+        self.run_at = deadline
+
+    def _schedule_preparation(self, target: float, *, now: float,
+                              from_visual: float, reverse_seconds: float):
+        """Reverse on this pass, then traverse one semantic rest into target."""
+        model = self._source_model()
+        context = next(measure for measure in reversed(model["measures"])
+                       if measure["start_beat"] <= target + 1e-7)
+        measure = preparation_measure_descriptor(context, 0.0, model["staff_order"])
+        measure["end_beat"] = self.visual_offset_beats + target
+        measure["start_beat"] = measure["end_beat"] - measure["duration_beats"]
+        self.practice_preparation = {
+            "pass_start_beat": self.visual_offset_beats,
+            "source_from_beat": target, "measure": measure, "phase": "reverse"}
+        self._preparation_pending = True
+        self.pending_rewind = target
+        self._visual_rewind_from = from_visual
+        self._visual_rewind_to = measure["start_beat"]
+        self._visual_rewind_at = now
+        self._visual_rewind_seconds = max(.05, reverse_seconds)
+        self._preparation_at = now + self._visual_rewind_seconds
+        self.next_at = self._preparation_at + measure["duration_beats"] * 60 / self.plan.bpm
+        self.running = False
+        self.recorder = None
+        self._preview_loop_pending = False
+        self.count_in_beats = 0.0
+
+    def _visual_motion(self, now: float) -> tuple[float, float, float]:
+        """One visual projection for snapshots and interruption by Retry."""
+        length = self.plan.active_phrase.end - self.plan.active_phrase.start
+        position = self.visual_offset_beats + self.play_from_beat
+        speed = 0.0
+        target = self.visual_offset_beats + length
+        if self.running:
+            position += (now - self.run_at) * self.plan.bpm / 60
+        elif self._preparation_pending and now >= self._preparation_at:
+            measure = self.practice_preparation["measure"]
+            target = measure["end_beat"]
+            position = min(target, measure["start_beat"]
+                           + (now-self._preparation_at)*self.plan.bpm/60)
+            speed = self.plan.bpm/60 if position < target else 0.0
+        elif self._visual_rewind_from is not None:
+            target = self._visual_rewind_to
+            seconds = max(.05, self._visual_rewind_seconds)
+            progress = min(1.0, max(0.0, (now-self._visual_rewind_at)/seconds))
+            position = self._visual_rewind_from + (target-self._visual_rewind_from)*progress
+            speed = (target-self._visual_rewind_from)/seconds if progress < 1 else 0.0
+        elif ((self.pending_result is not None and self.auto) or self._preview_loop_pending):
+            target += self.visual_gap_beats
+            position = min(target, self.visual_offset_beats + max(length,
+                self.play_from_beat + (now-self.run_at)*self.plan.bpm/60))
+            speed = self.plan.bpm/60 if position < target else 0.0
+        return position, speed, target
 
     def control(self, action: str, **kwargs) -> None:
         with self.lock:
@@ -1413,6 +1503,25 @@ class PracticeEngine:
                     self.awaiting_score_revision = self.score_revision
                     self.feedback = "Preparing sheet music"
                     return
+                if (action == "restart" and self.plan is not None
+                        and self.mode == "practice" and self.plan.exercise.kind != "perform"):
+                    sampled = time.monotonic()
+                    visual_now = self.paused_at if self.paused else sampled
+                    position, _, _ = self._visual_motion(visual_now)
+                    target = (self.pending_rewind if self.pending_rewind is not None
+                              else self.play_from_beat)
+                    self.paused = False
+                    self.paused_at = 0.0
+                    self.pause_context = None
+                    self._deferred_score_ack = None
+                    self.awaiting_score_revision = None
+                    self.pending_result = None
+                    self._retry_previous_pass = False
+                    self._guided_recovery_pending = False
+                    self._schedule_preparation(target, now=sampled, from_visual=position,
+                                               reverse_seconds=self.feedback_seconds)
+                    self.feedback = "Get ready to retry"
+                    return
                 self.start(mode="perform" if self.mode == "perform" else "practice")
                 return
             if action == "pause":
@@ -1449,6 +1558,8 @@ class PracticeEngine:
                 # does not skip the remaining backward travel.
                 if self._visual_rewind_from is not None:
                     self._visual_rewind_at += duration
+                if self._preparation_pending:
+                    self._preparation_at += duration
                 self.paused_at = 0.0
                 self.paused = False
                 self.pause_context = None
@@ -1558,12 +1669,16 @@ class PracticeEngine:
             return
         if self._preview_loop_pending:
             if self.next_at and now >= self.next_at:
-                duration = self.plan.active_phrase.end - self.plan.active_phrase.start
-                self.visual_offset_beats += duration + self.visual_gap_beats
-                self.start(loop_continuation=True)
+                deadline = self.next_at
+                self.visual_offset_beats += self._source_model()["practice_timeline"]["stride_beats"]
+                self._continue_at(deadline)
             return
+        if self._preparation_pending:
+            self.practice_preparation["phase"] = (
+                "reverse" if now < self._preparation_at else "preparing")
         if self.pending_result is not None:
             if self.auto and self.next_at and now >= self.next_at:
+                deadline = self.next_at
                 previous_revision = self.score_revision
                 previous_identity = self.plan.identity
                 message = self._commit_pending()
@@ -1585,9 +1700,10 @@ class PracticeEngine:
                         # takes rewind the SAME copy (already animated during
                         # feedback); there is no jump/re-engrave on retry.
                         if not self._retry_previous_pass:
-                            duration = self.plan.active_phrase.end - self.plan.active_phrase.start
-                            self.visual_offset_beats += duration + self.visual_gap_beats
-                        self.start(loop_continuation=True)
+                            self.visual_offset_beats += self._source_model()["practice_timeline"]["stride_beats"]
+                        target = (self.practice_preparation["source_from_beat"]
+                                  if self._retry_previous_pass and self.practice_preparation else 0.0)
+                        self._continue_at(deadline, from_beat=target)
                 else:
                     self.next_at=0
                     self.auto=False
@@ -1599,13 +1715,8 @@ class PracticeEngine:
             if now >= self.next_at:
                 if self._guided_recovery_pending:
                     self._begin_learn(from_beat=self.pending_rewind, recovery=True)
-                elif self._rewind_requires_layout:
-                    # Only actual notation changes require a new model;
-                    # a lower tempo must not replace the scrolling score.
-                    self._rewind_requires_layout = False
-                    self.start(from_beat=self.pending_rewind, loop_continuation=True)
                 else:
-                    self.start(from_beat=self.pending_rewind, loop_continuation=True)
+                    self._continue_at(self.next_at, from_beat=self.pending_rewind)
             return
         if not self.running or self.paused or now < self.run_at:
             return
@@ -1658,11 +1769,9 @@ class PracticeEngine:
                 self.plan.bpm=max(SETTINGS.minimum_bpm,round(before*SETTINGS.recovery_tempo_multiplier))
                 self._rewind_requires_layout = False
                 self._save()
-                self.pending_rewind=decision.restart_beat
-                self._visual_rewind_from = self.visual_offset_beats + score_beat
-                self._visual_rewind_to = self.visual_offset_beats + decision.restart_beat
-                self._visual_rewind_at = now
-                self._visual_rewind_seconds = max(.05, self.feedback_seconds)
+                self._schedule_preparation(decision.restart_beat, now=now,
+                    from_visual=self.visual_offset_beats + score_beat,
+                    reverse_seconds=self.feedback_seconds)
                 self.recovery_notice = {
                     "kind": "slowdown", "errors": decision.errors,
                     "missed": decision.missed, "wrong": decision.wrong,
@@ -1680,9 +1789,6 @@ class PracticeEngine:
                     "last_bar": phrase.first_bar + next(i for i, beat in enumerate(grid)
                         if abs(beat-decision.end_beat) < 1e-6)-1,
                     "start_beat": decision.restart_beat, "end_beat": decision.end_beat}
-                self.running=False
-                self.recorder=None
-                self.next_at=now+self.feedback_seconds
                 self.feedback=(f"{decision.errors} wrong or missed notes - retrying from "
                                f"measure {bar_number_at(grid,decision.restart_beat,phrase.first_bar)} "
                                f"at {self.plan.bpm} BPM")
@@ -1697,7 +1803,12 @@ class PracticeEngine:
         ending = (min(total_beats, self.review_end_beat)
                   if self.review_end_beat is not None else total_beats)
         duration=(ending-self.play_from_beat)*60/self.plan.bpm
-        if now < self.run_at+duration+0.20:
+        # Settlement belongs inside the musical rest, including very short
+        # explicit meters. It must never extend the next attempt's deadline.
+        settlement = .20
+        if self.preview_only or (self.auto and self.review_end_beat is None):
+            settlement = min(settlement, self.visual_gap_beats*60/self.plan.bpm)
+        if now < self.run_at+duration+settlement:
             return
         if self.preview_only:
             # A preview loops visually just like graded practice, but never
@@ -1705,9 +1816,11 @@ class PracticeEngine:
             self.running = False
             self._preview_loop_pending = True
             gap_seconds = self.visual_gap_beats * 60 / self.plan.bpm
-            self.next_at = self.run_at + total_beats * 60 / self.plan.bpm + gap_seconds
+            self.next_at = self.run_at + duration + gap_seconds
             self.feedback = "Timing preview - repeating after one empty measure"
             self.next_action = "Connect your MIDI piano to earn clean runs."
+            if now >= self.next_at:
+                self._update()
             return
         active_phrase=Phrase(phrase.number,phrase.first_bar,phrase.last_bar,
             phrase.start+self.play_from_beat,phrase.start+ending,
@@ -1761,22 +1874,24 @@ class PracticeEngine:
             return
         if self.play_from_beat>1e-6:
             # A clean *partial* recovery cannot confer full passage mastery.
-            self.pending_rewind=0.0
+            self._schedule_preparation(0.0, now=now,
+                from_visual=self.visual_offset_beats + self.play_from_beat
+                    + (now-self.run_at)*self.plan.bpm/60,
+                reverse_seconds=self.feedback_seconds)
             self.feedback = "Selected section finished · " + result.summary
             self.next_action = "Next: play the whole passage from its beginning to earn mastery."
             self.retry_range = None
-            self.next_at=now+self.feedback_seconds
             return
         self.pending_result=result
         if not result.clean and self.auto:
             # Repeated wrong takes traverse backward over the visible source
             # instead of teleporting to beat zero or appending failed copies.
             self._retry_previous_pass = True
-            self._visual_rewind_from = self.visual_offset_beats + total_beats
-            self._visual_rewind_to = self.visual_offset_beats + self.play_from_beat
-            self._visual_rewind_at = now
-            self._visual_rewind_seconds = max(self.feedback_seconds,
-                min(4.0, total_beats * 60.0 / self.plan.bpm / 3.0))
+            self._schedule_preparation(self.play_from_beat, now=now,
+                from_visual=self.visual_offset_beats + self.play_from_beat
+                    + (now-self.run_at)*self.plan.bpm/60,
+                reverse_seconds=max(self.feedback_seconds,
+                    min(4.0, total_beats * 60.0 / self.plan.bpm / 3.0)))
         if not result.clean:
             # Failure breaks consecutive clean takes immediately, even if
             # Start/Restart/Stop discards this feedback before its commit.
@@ -1785,13 +1900,18 @@ class PracticeEngine:
             self._save()
             if self.is_builtin_warmup:
                 self.auto = False  # Keep the beginner-study review available.
+                self._preparation_pending = False
+                self.practice_preparation = None
+                self.pending_rewind = None
+                self._visual_rewind_from = None
+                self._visual_rewind_to = None
         self.next_action=next_full_attempt(self.plan, result)
-        self.next_at = (now + self._visual_rewind_seconds
-            if self.auto and self._retry_previous_pass else
-            max(now + self.feedback_seconds,
-                self.run_at + total_beats * 60 / self.plan.bpm
-                + self.visual_gap_beats * 60 / self.plan.bpm)
-            if self.auto else 0)
+        if not self.auto:
+            self.next_at = 0
+        elif not self._retry_previous_pass:
+            self.next_at = self.run_at + duration + self.visual_gap_beats*60/self.plan.bpm
+            if now >= self.next_at:
+                self._update()
 
     def _phase(self, now: float) -> str:
         if self.paused:
@@ -1905,6 +2025,8 @@ class PracticeEngine:
             if not p:
                 return {**input_activity,"mode":self.mode,"teaching":None,"loaded":False,"running":False,"paused":False,"transport_id":self.transport_id,
                         "clock_beat":0.0,"feedback":self.feedback,"device":self.midi_device,"revision":self.score_revision}
+            practice_timeline = self._source_model()["practice_timeline"]
+            self.visual_gap_beats = practice_timeline["gap"]["duration_beats"]
             ex=p.exercise
             variant=p.active_variant
             hand_stages = []
@@ -1949,29 +2071,8 @@ class PracticeEngine:
             } if latest_error is not None else None)
             # The absolute visual axis is separate from grading beat and
             # remains continuous as a new attempt is scheduled.
-            visual_length = p.active_phrase.end - p.active_phrase.start
             visual_gap = self.visual_gap_beats
-            visual_speed = 0.0
-            visual_target = self.visual_offset_beats + visual_length
-            visual_position = self.visual_offset_beats + self.play_from_beat
-            if self.running:
-                visual_position += elapsed * p.bpm / 60.0
-            elif self._visual_rewind_from is not None:
-                visual_target = self._visual_rewind_to
-                seconds = max(.05, self._visual_rewind_seconds)
-                visual_progress = min(1.0, max(0.0, (now - self._visual_rewind_at) / seconds))
-                visual_position = self._visual_rewind_from + (
-                    self._visual_rewind_to - self._visual_rewind_from) * visual_progress
-                visual_speed = ((self._visual_rewind_to - self._visual_rewind_from)
-                                / seconds if visual_progress < 1.0 else 0.0)
-            elif ((self.pending_result is not None and self.auto) or
-                    self._preview_loop_pending):
-                # Keep scrolling through the EMPTY source-measure gap. No new
-                # notation is requested until the lesson stage itself changes.
-                visual_target = self.visual_offset_beats + visual_length + visual_gap
-                visual_position = min(visual_target, self.visual_offset_beats
-                    + max(visual_length, (now - self.run_at) * p.bpm / 60.0))
-                visual_speed = (p.bpm / 60.0 if visual_position < visual_target else 0.0)
+            visual_position, visual_speed, visual_target = self._visual_motion(now)
             # When idle, leave the score stationary at the ready/retry target.
             result = {**input_activity,"mode":self.mode,"teaching":None,"loaded":True,"title":p.piece.title,"kind":ex.kind,
                     "clock_sampled_at_ms": sampled_at * 1000.0,
@@ -2021,6 +2122,8 @@ class PracticeEngine:
                     "visual_target_beat":visual_target,
                     "visual_scroll_speed":visual_speed,
                     "visual_gap_beats":visual_gap,
+                    "practice_timeline":deepcopy(practice_timeline),
+                    "practice_preparation":deepcopy(self.practice_preparation),
                     "score_loop_enabled":self.mode == "practice" and ex.kind != "perform",
                     "paused":self.paused,"transport_id":self.transport_id,
                     "awaiting_score_revision":self.awaiting_score_revision,
@@ -2077,7 +2180,7 @@ class PracticeEngine:
                     feedback=feedback, feedback_marks=self._guided_marks(teaching), feedback_unmapped=0)
             return result
 
-    def semantic_score(self) -> dict:
+    def _source_model(self) -> dict:
         """Phase A: source-accurate notation contract, without Verovio/SVG.
 
         Built from the same immutable active Phrase used for MIDI grading.
@@ -2088,6 +2191,10 @@ class PracticeEngine:
                 raise ValueError("No piece loaded")
             p = self.plan
             phrase = self.display_phrase()
+            key = (id(p.piece), p.identity, p.hand, self.score_revision,
+                   phrase.first_bar, phrase.last_bar, phrase.start, phrase.end)
+            if key == self._semantic_cache_key and self._semantic_cache is not None:
+                return self._semantic_cache
             notation = build_lesson_score(
                 phrase, boundaries=p.piece.bar_boundaries,
                 time_signatures=p.piece.time_signatures,
@@ -2100,7 +2207,15 @@ class PracticeEngine:
             model = build_score_model(
                 notation, boundaries=p.piece.bar_boundaries,
                 hand=p.hand, revision=self.score_revision)
-            return project_model(model, p.piece.fingering_plan, source_musicxml=p.piece.source_musicxml)
+            self._semantic_cache_key = key
+            self._semantic_cache = model
+            return model
+
+    def semantic_score(self) -> dict:
+        with self.lock:
+            model = self._source_model()
+            return project_model(deepcopy(model), self.plan.piece.fingering_plan,
+                                 source_musicxml=self.plan.piece.source_musicxml)
 
     def engraving(self) -> EngravedScore:
         with self.lock:

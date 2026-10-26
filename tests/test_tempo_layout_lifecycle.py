@@ -51,7 +51,11 @@ def test_recovery_keeps_feedback_then_reuses_native_score_for_same_chunk(harness
     assert failed["feedback_marks"]
     # Polling either endpoint while reading mistakes must keep their geometry.
     now[0] = e.next_at - .01
-    assert e.state()["phase"] == "recovering"
+    preparing = e.state()
+    assert preparing["phase"] == "recovering"
+    assert preparing['practice_preparation']['phase'] == 'preparing'
+    measure = preparing['practice_preparation']['measure']
+    assert (measure['start_beat'], measure['end_beat'], measure['duration_beats']) == (4, 8, 4)
     assert e.engraving() is original
     assert e.transport_id == transport
     now[0] = e.next_at + .01
@@ -65,7 +69,7 @@ def test_recovery_keeps_feedback_then_reuses_native_score_for_same_chunk(harness
     # The visual loop gap supplies preparation; a tempo-only retry neither
     # re-engraves notation nor prepends a second empty count-in measure.
     assert restarted["count_in_beats"] == 0
-    assert restarted["clock_beat"] == pytest.approx(0)
+    assert restarted["clock_beat"] == pytest.approx(.01*72/60)
     assert e.engraving() is original
 
 
@@ -108,24 +112,54 @@ def test_cache_reuses_source_ink_when_transport_bpm_changes(harness):
     now[0] = e.run_at + 1
     e.control("restart")
     assert e.engraving() is revised
-    assert e.state()["phase"] == "count_in"
-    assert e.state()["countdown"] == pytest.approx(10 / 3)
+    reversing = e.state()
+    assert reversing["phase"] == "recovering" and not reversing['running']
+    assert reversing['practice_preparation']['phase'] == 'reverse'
+    assert reversing['countdown'] == 0 and reversing['count_in_beats'] == 0
+    measure = reversing['practice_preparation']['measure']
+    assert (measure['start_beat'], measure['end_beat'], measure['duration_beats']) == (-4, 0, 4)
+    assert reversing['transition_in_seconds'] == pytest.approx(e.feedback_seconds + 10/3)
+    now[0] = e._preparation_at
+    preparing = e.state()
+    assert preparing['practice_preparation']['phase'] == 'preparing'
+    assert preparing['visual_scroll_beat'] == pytest.approx(-4)
+    assert preparing['transition_in_seconds'] == pytest.approx(10/3)
+    now[0] = e.next_at + .01
+    restarted = e.state()
+    assert restarted['phase'] == 'playing' and restarted['count_in_beats'] == 0
+    assert restarted['clock_beat'] == pytest.approx(.01*72/60)
+    assert e.engraving() is revised
 
 
-def test_manual_restart_during_recovery_keeps_native_score_and_fresh_count_in(harness):
+def test_manual_restart_during_recovery_keeps_native_score_and_visible_preparation(harness):
     e, now = harness
-    e.engraving()
+    original = e.engraving()
     e.start()
     now[0] = e.run_at + 16 * .75 + .02
     assert e.state()["phase"] == "recovering"
     revision = e.score_revision
     e.control("restart")
     waiting = e.state()
-    assert waiting["phase"] == "count_in"
+    assert waiting["phase"] == "recovering" and not waiting['running']
+    assert waiting['practice_preparation']['phase'] == 'reverse'
     assert waiting["revision"] == revision
     assert waiting["awaiting_score_revision"] is None
     assert waiting["play_from_beat"] == 0
-    assert 0 < waiting["countdown"] <= 4
+    assert waiting['practice_preparation']['source_from_beat'] == 0
+    assert waiting['practice_preparation']['measure']['duration_beats'] == 4
+    assert waiting['transition_in_seconds'] == pytest.approx(
+        e.feedback_seconds + 4*60/waiting['bpm'])
+    assert waiting['countdown'] == 0 and waiting['count_in_beats'] == 0
+    now[0] = e._preparation_at + 2*60/waiting['bpm']
+    preparing = e.state()
+    assert preparing['practice_preparation']['phase'] == 'preparing'
+    assert preparing['visual_scroll_beat'] == pytest.approx(-2)
+    assert not preparing['running'] and e.engraving() is original
+    now[0] = e.next_at + .01
+    restarted = e.state()
+    assert restarted['phase'] == 'playing' and restarted['play_from_beat'] == 0
+    assert restarted['count_in_beats'] == 0 and restarted['revision'] == revision
+    assert e.engraving() is original
 
 
 def test_pickup_count_in_uses_source_meter_instead_of_short_first_bar(harness):

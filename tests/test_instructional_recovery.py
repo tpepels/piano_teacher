@@ -91,7 +91,29 @@ def test_repeated_failed_chunk_reuses_native_score_then_teaches_exact_source(les
     assert first['retry_range'] == expected_range
     assert first['bpm'] == round(bpm*.9) and first['target_bpm'] == bpm
     assert 'Retry bars 3-4' in first['next_action']
-    assert first['transition_in_seconds'] == pytest.approx(1.5)
+    preparation = first['practice_preparation']
+    measure = preparation['measure']
+    assert preparation['phase'] == 'reverse'
+    assert preparation['source_from_beat'] == grid[2]
+    assert (measure['start_beat'], measure['end_beat'], measure['duration_beats']) == (
+        grid[2]-4, grid[2], 4)
+    assert measure['meter'] == [4, 4]
+    reverse_seconds = e.feedback_seconds
+    assert e._visual_rewind_seconds == reverse_seconds
+    assert first['transition_in_seconds'] == pytest.approx(
+        reverse_seconds + 4*60/first['bpm'])
+    reverse_end = e._visual_rewind_at + reverse_seconds
+    now[0] = reverse_end
+    preparing = e.state()
+    assert preparing['practice_preparation']['phase'] == 'preparing'
+    assert preparing['visual_scroll_beat'] == pytest.approx(grid[2]-4)
+    assert preparing['visual_scroll_speed'] == pytest.approx(first['bpm']/60)
+    assert not preparing['running'] and e.recorder is None
+    now[0] = reverse_end + 2*60/first['bpm']
+    halfway = e.state()
+    assert halfway['visual_scroll_beat'] == pytest.approx(grid[2]-2)
+    assert halfway['transition_in_seconds'] == pytest.approx(2*60/first['bpm'])
+    assert not halfway['running'] and not e.plan.mastered and e.plan.streak == 0
     retry = after_break(e, now)
     assert retry['phase'] == 'playing' and retry['play_from_beat'] == grid[2]
     assert retry['count_in_beats'] == 0 and retry['awaiting_score_revision'] is None
@@ -274,6 +296,15 @@ def test_no_device_preview_never_enters_retry_or_guided_recovery(lesson):
 
 
 def finish_take(e, now, end, *, jitter=True):
+    preparation = e.state().get('practice_preparation')
+    if preparation is not None and preparation['phase'] in ('reverse', 'preparing'):
+        # A manual Retry has an explicit rest before the new recording opens.
+        # Send the first physical key only after that musical deadline.
+        now[0] = e.next_at
+        prepared = e.state()
+        assert prepared['phase'] == 'playing' and prepared['running']
+        assert prepared['count_in_beats'] == 0
+        assert prepared['practice_preparation']['phase'] == 'complete'
     play(e, now, jitter=jitter)
     now[0] = e.run_at+(end-e.play_from_beat)*60/e.plan.bpm+.22
     return e.state()
@@ -499,12 +530,27 @@ def test_five_error_recovery_animates_backward_on_same_score(lesson):
     first = fail_later_chunk(e, now, grid)
     assert first["phase"] == "recovering"
     assert first["visual_scroll_speed"] < 0
-    assert first["visual_target_beat"] == pytest.approx(grid[2])
+    measure = first['practice_preparation']['measure']
+    assert (measure['start_beat'], measure['end_beat']) == (4, 8)
+    assert first["visual_target_beat"] == pytest.approx(4)
     assert first["visual_scroll_beat"] > first["visual_target_beat"]
     assert first["revision"] == revision
+    reverse_end = e._visual_rewind_at + e._visual_rewind_seconds
+    now[0] = reverse_end - .05
+    reversing = e.state()
+    assert reversing['practice_preparation']['phase'] == 'reverse'
+    assert 4 < reversing['visual_scroll_beat'] < first['visual_scroll_beat']
+    now[0] = reverse_end
+    preparing = e.state()
+    assert preparing['practice_preparation']['phase'] == 'preparing'
+    assert preparing['visual_scroll_beat'] == pytest.approx(4)
+    assert preparing['visual_target_beat'] == pytest.approx(8)
+    assert preparing['visual_scroll_speed'] == pytest.approx(72/60)
     now[0] = e.next_at - .05
     nearly = e.state()
-    assert nearly["visual_scroll_beat"] >= grid[2]
+    assert 4 < nearly["visual_scroll_beat"] < grid[2]
+    assert nearly['practice_preparation']['phase'] == 'preparing'
+    assert not nearly['running']
     assert nearly["visual_scroll_beat"] < first["visual_scroll_beat"]
     now[0] = e.next_at + .01
     repeated = e.state()

@@ -1,0 +1,230 @@
+{
+  "previous-pass-overlap": {
+    "expected": {
+      "name": "previous-pass-overlap",
+      "start": 3.0,
+      "end": 7.0
+    },
+    "preparation": {
+      "pass_start_beat": 6.0,
+      "source_from_beat": 1.0,
+      "measure": {
+        "kind": "measure_rest",
+        "origin": "practice",
+        "start_beat": 3.0,
+        "end_beat": 7.0,
+        "duration_beats": 4.0,
+        "meter": [
+          4,
+          4
+        ],
+        "keys": {
+          "right": -2,
+          "left": -2
+        },
+        "clefs": {
+          "right": {
+            "sign": "F",
+            "line": 4,
+            "octave_change": 0
+          },
+          "left": {
+            "sign": "F",
+            "line": 4,
+            "octave_change": 0
+          }
+        },
+        "staves": [
+          "right",
+          "left"
+        ],
+        "full_measure": true,
+        "note_type": "whole",
+        "dots": 0,
+        "left_barline": {
+          "style": "regular",
+          "repeat": ""
+        },
+        "right_barline": {
+          "style": "regular",
+          "repeat": ""
+        },
+        "events": [
+          {
+            "id": "practice:gap:right",
+            "source_id": null,
+            "kind": "rest",
+            "staff": "right",
+            "duration_beats": 4.0,
+            "full_measure": true,
+            "is_attack": false,
+            "graded": false
+          },
+          {
+            "id": "practice:gap:left",
+            "source_id": null,
+            "kind": "rest",
+            "staff": "left",
+            "duration_beats": 4.0,
+            "full_measure": true,
+            "is_attack": false,
+            "graded": false
+          }
+        ]
+      },
+      "phase": "preparing"
+    }
+  },
+  "regular-gap-overlap": {
+    "expected": {
+      "name": "regular-gap-overlap",
+      "start": 9.0,
+      "end": 13.0
+    },
+    "preparation": {
+      "pass_start_beat": 10.0,
+      "source_from_beat": 3.0,
+      "measure": {
+        "kind": "measure_rest",
+        "origin": "practice",
+        "start_beat": 9.0,
+        "end_beat": 13.0,
+        "duration_beats": 4.0,
+        "meter": [
+          4,
+          4
+        ],
+        "keys": {
+          "right": -2,
+          "left": -2
+        },
+        "clefs": {
+          "right": {
+            "sign": "F",
+            "line": 4,
+            "octave_change": 0
+          },
+          "left": {
+            "sign": "F",
+            "line": 4,
+            "octave_change": 0
+          }
+        },
+        "staves": [
+          "right",
+          "left"
+        ],
+        "full_measure": true,
+        "note_type": "whole",
+        "dots": 0,
+        "left_barline": {
+          "style": "regular",
+          "repeat": ""
+        },
+        "right_barline": {
+          "style": "regular",
+          "repeat": ""
+        },
+        "events": [
+          {
+            "id": "practice:gap:right",
+            "source_id": null,
+            "kind": "rest",
+            "staff": "right",
+            "duration_beats": 4.0,
+            "full_measure": true,
+            "is_attack": false,
+            "graded": false
+          },
+          {
+            "id": "practice:gap:left",
+            "source_id": null,
+            "kind": "rest",
+            "staff": "left",
+            "duration_beats": 4.0,
+            "full_measure": true,
+            "is_attack": false,
+            "graded": false
+          }
+        ]
+      },
+      "phase": "preparing"
+    }
+  },
+  "suppressed-context": {
+    "expected": {
+      "name": "suppressed-context",
+      "start": 3.0,
+      "end": 6.0
+    },
+    "preparation": {
+      "pass_start_beat": 0.0,
+      "source_from_beat": 6.0,
+      "measure": {
+        "kind": "measure_rest",
+        "origin": "practice",
+        "start_beat": 3.0,
+        "end_beat": 6.0,
+        "duration_beats": 3.0,
+        "meter": [
+          3,
+          4
+        ],
+        "keys": {
+          "right": -2,
+          "left": -2
+        },
+        "clefs": {
+          "right": {
+            "sign": "F",
+            "line": 4,
+            "octave_change": 0
+          },
+          "left": {
+            "sign": "F",
+            "line": 4,
+            "octave_change": 0
+          }
+        },
+        "staves": [
+          "right",
+          "left"
+        ],
+        "full_measure": true,
+        "note_type": "whole",
+        "dots": 0,
+        "left_barline": {
+          "style": "regular",
+          "repeat": ""
+        },
+        "right_barline": {
+          "style": "regular",
+          "repeat": ""
+        },
+        "events": [
+          {
+            "id": "practice:gap:right",
+            "source_id": null,
+            "kind": "rest",
+            "staff": "right",
+            "duration_beats": 3.0,
+            "full_measure": true,
+            "is_attack": false,
+            "graded": false
+          },
+          {
+            "id": "practice:gap:left",
+            "source_id": null,
+            "kind": "rest",
+            "staff": "left",
+            "duration_beats": 3.0,
+            "full_measure": true,
+            "is_attack": false,
+            "graded": false
+          }
+        ]
+      },
+      "phase": "preparing"
+    }
+  }
+}

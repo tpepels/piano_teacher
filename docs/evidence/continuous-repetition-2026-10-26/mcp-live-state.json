@@ -1,0 +1,79 @@
+{
+  "phase": "paused",
+  "hand": "left",
+  "lesson_level": "skeleton",
+  "required_notes": 3,
+  "revision": 2,
+  "visual_scroll_beat": 4.313949104670125,
+  "score_loop_enabled": true,
+  "practice_timeline": {
+    "schema": "piano-teacher-practice-timeline-v1",
+    "source_duration_beats": 3.0,
+    "stride_beats": 6.0,
+    "gap": {
+      "kind": "measure_rest",
+      "origin": "practice",
+      "start_beat": 3.0,
+      "end_beat": 6.0,
+      "duration_beats": 3.0,
+      "meter": [
+        3,
+        4
+      ],
+      "keys": {
+        "right": -2,
+        "left": -2
+      },
+      "clefs": {
+        "right": {
+          "sign": "G",
+          "line": 2,
+          "octave_change": 0
+        },
+        "left": {
+          "sign": "F",
+          "line": 4,
+          "octave_change": 0
+        }
+      },
+      "staves": [
+        "right",
+        "left"
+      ],
+      "full_measure": true,
+      "note_type": "whole",
+      "dots": 0,
+      "left_barline": {
+        "style": "regular",
+        "repeat": ""
+      },
+      "right_barline": {
+        "style": "regular",
+        "repeat": ""
+      },
+      "events": [
+        {
+          "id": "practice:gap:right",
+          "source_id": null,
+          "kind": "rest",
+          "staff": "right",
+          "duration_beats": 3.0,
+          "full_measure": true,
+          "is_attack": false,
+          "graded": false
+        },
+        {
+          "id": "practice:gap:left",
+          "source_id": null,
+          "kind": "rest",
+          "staff": "left",
+          "duration_beats": 3.0,
+          "full_measure": true,
+          "is_attack": false,
+          "graded": false
+        }
+      ]
+    }
+  },
+  "count_in_beats": 0
+}

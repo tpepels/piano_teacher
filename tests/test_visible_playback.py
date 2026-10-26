@@ -63,9 +63,10 @@ func probe() -> void:
         await process_frame
         RenderingServer.force_draw()
         var point: Vector2 = note_position(note)
-        if view.drawn_noteheads.has(str(note.id)):
-            var painted: Vector2 = view.drawn_noteheads[str(note.id)]
-            later_pass_seen = later_pass_seen or painted.x > view.size.x * .9
+        for instance in view.drawn_note_instances:
+            if str(instance.event_id) == str(note.id) and int(instance.pass_index)>0:
+                var painted: Vector2 = instance.position
+                later_pass_seen = later_pass_seen or painted.x > view.size.x * .9
         print("OCCURRENCE_SAMPLE:", JSON.stringify({{"beat":beat,
             "x":point.x,"density":view.timeline.pixels_per_beat,
             "beam":(view.get_global_transform_with_canvas() * Vector2(view.size.x*.42, 0)).x}}))

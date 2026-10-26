@@ -82,9 +82,7 @@ func note_position(note: Dictionary) -> Vector2:
                     # Repeated passes retain the same source IDs. The painted
                     # map may describe the next visible pass; keep measuring
                     # this attempt's occurrence, preserving its glyph offsets.
-                    var last: Dictionary = renderer.timeline.measures[-1]
-                    var gap_beats: float = maxf(.25, float(last.end_beat) - float(last.start_beat))
-                    var stride: float = (renderer.timeline.duration_beats + gap_beats) \
+                    var stride: float = float(renderer.practice_timeline["stride_beats"]) \
                         * renderer.timeline.pixels_per_beat
                     point.x -= roundf((point.x - x) / stride) * stride
             return renderer.get_global_transform_with_canvas() * point

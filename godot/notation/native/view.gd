@@ -57,6 +57,12 @@ var native_ready := false
 var failure_reason := ""
 var visible_symbols := 0
 var drawn_noteheads: Dictionary = {}
+var pass_noteheads: Dictionary = {}
+var drawn_note_instances: Array = []
+var preparation_history: Dictionary = {}
+var current_preparation: Dictionary = {}
+var paint_pass_index := 0
+var paint_pass_start := 0.0
 var selected_density := 0.0
 var staff_gap_limit := MAX_STAFF_GAP
 var configured_density: float = Timeline.DEFAULT_PIXELS_PER_BEAT
@@ -114,8 +120,6 @@ func clear_score() -> void:
     staff_gap_limit = MAX_STAFF_GAP
     native_ready = false
     failure_reason = ""
-    visible_symbols = 0
-    drawn_noteheads.clear()
     beam_groups.clear()
     beamed_note_ids.clear()
     beam_stem_up_by_note.clear()
@@ -194,6 +198,10 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
 
 func load_score(candidate: Dictionary) -> bool:
     _reset_fingering()
+    preparation_history.clear()
+    current_preparation.clear()
+    pass_noteheads.clear()
+    drawn_note_instances.clear()
     native_ready = false
     if not glyphs.ready() or not glyphs.note_ready() or not glyphs.ties_ready():
         failure_reason = "Authentic Verovio symbol, note or tie atlas is not loaded"
@@ -752,13 +760,19 @@ func _fingering_metrics(font_size: int) -> Dictionary:
     return value
 
 
-func _paint_fingerings(clock: float, playhead_x: float, gap: float) -> void:
+func _paint_fingerings(clock: float, playhead_x: float, gap: float,
+        pass_index: int = 0, pass_start: float = 0.0) -> void:
     if not fingering_annotations_enabled:
         return
     if absf(fingering_layout_gap-gap) > .001 or absf(fingering_layout_height-size.y) > .001:
         _layout_fingerings(gap)
     var translation := Vector2(timeline.screen_x(0.0,clock,playhead_x,play_from_beat),0.0)
+    paint_pass_index = pass_index
+    paint_pass_start = pass_start
+    current_preparation = preparation_history.get(pass_start,{}) if score_loop_enabled else {}
     for item in fingering_layout:
+        if not _practice_event_visible(expression_note_index.get(str(item["event_ids"][0]),{})):
+            continue
         var rect: Rect2 = item["rect"]
         rect.position += translation
         # A partial numeral can look like a different finger. Keep annotation
@@ -772,6 +786,7 @@ func _paint_fingerings(clock: float, playhead_x: float, gap: float) -> void:
         draw_string(ThemeDB.fallback_font,rect.position+Vector2(1.0,ThemeDB.fallback_font.get_ascent(font_size)),
             str(item["finger"]),HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,ink)
         var shown: Dictionary = item.duplicate()
+        shown["pass_index"] = pass_index
         shown["rect"] = rect
         shown["head"] = item["head"]+translation
         shown["ink_rect"] = Rect2(item["ink_rect"].position+translation,item["ink_rect"].size)
@@ -801,9 +816,9 @@ func _open_fingering_editor(point: Vector2) -> bool:
         if item["rect"].grow(5.0).has_point(point):
             for id in item["event_ids"]:
                 selected[id] = true
-    for id in drawn_noteheads:
-        if drawn_noteheads[id].distance_to(point) <= radius:
-            selected[id] = true
+    for instance in drawn_note_instances:
+        if instance["position"].distance_to(point) <= radius:
+            selected[instance["event_id"]] = true
     var targets: Array = []
     var sources: Dictionary = {}
     for id in selected:
@@ -959,6 +974,13 @@ func _event_y(event: Dictionary, gap: float) -> float:
 func _ink(staff: String) -> Color:
     var selected: bool = active_hand == "both" or active_hand == staff
     return NOTE_INK if selected else Color(DIM_INK, .46)
+
+
+func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
+    if state.get("phase","") == "ready" and state.get("practice_preparation") == null and \
+            absf(float(state.get("visual_offset_beats",0.0)))<.00001:
+        preparation_history.clear()
+    super.present(state,transport_beat,visual_beat)
 
 
 
@@ -1149,6 +1171,8 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
             ids.append(str(event.get("id","")))
         var first: Dictionary = events[0]
         var last: Dictionary = events[-1]
+        if not _practice_span_visible(first,last):
+            continue
         var x0: float = timeline.screen_x(
             float(first.get("beat",0.0)),clock,playhead_x,play_from_beat)
         var x1: float = timeline.screen_x(
@@ -1802,7 +1826,7 @@ func _paint_engraved_chord(event: Dictionary, x: float,
             int(current.get("dots",0)),ink,gap)
         _paint_note_accidental(current,center.x,center.y,ink,gap)
         var id: String = str(current.get("id",""))
-        drawn_noteheads[id] = center
+        _record_notehead(current,center)
         painted.append(id)
     return painted
 
@@ -1868,7 +1892,7 @@ func _paint_note(event: Dictionary, x: float,
             return
         _paint_rhythm_dots(x,y,int(event.get("dots",0)),ink,gap)
         _paint_note_accidental(event,x,y,ink,gap)
-        drawn_noteheads[str(event.get("id", ""))] = Vector2(x,y)
+        _record_notehead(event,Vector2(x,y))
         return
     var solid: bool = kind not in ["half","whole"]
     glyphs.paint(self, "head_black" if solid else (
@@ -1881,7 +1905,7 @@ func _paint_note(event: Dictionary, x: float,
             x,y,float(beam_stem["tip_y"]),gap,ink)
     _paint_rhythm_dots(x,y,int(event.get("dots",0)),ink,gap)
     _paint_note_accidental(event,x,y,ink,gap)
-    drawn_noteheads[str(event.get("id", ""))] = Vector2(x,y)
+    _record_notehead(event,Vector2(x,y))
 
 func _beam_layout(gap: float, clock: float, playhead_x: float,
         head_offsets: Dictionary = {}) -> Dictionary:
@@ -1892,6 +1916,8 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
     frame_visible_beam_groups = 0
     for group in beam_groups:
         if group.size() < 2:
+            continue
+        if not _practice_span_visible(group[0],group[-1]):
             continue
         var first_x: float = timeline.screen_x(
             float(group[0].get("beat", 0.0)), clock, playhead_x, play_from_beat)
@@ -2044,6 +2070,8 @@ func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
     for pair in tie_pairs:
         var previous: Dictionary = pair["first"]
         var event: Dictionary = pair["last"]
+        if not _practice_span_visible(previous,event):
+            continue
         var x0: float = timeline.screen_x(float(previous.get("beat",0.0)),
             clock,playhead_x,play_from_beat)
         var x1: float = timeline.screen_x(float(event.get("beat",0.0)),
@@ -2105,6 +2133,8 @@ func _paint_slurs(playhead_x: float,clock: float,gap: float) -> void:
     for pair in slur_pairs:
         var first: Dictionary = pair["first"]
         var last: Dictionary = pair["last"]
+        if not _practice_span_visible(first,last):
+            continue
         var x0: float = timeline.screen_x(float(first.get("beat",0.0)),
             clock,playhead_x,play_from_beat)
         var x1: float = timeline.screen_x(float(last.get("beat",0.0)),
@@ -2127,6 +2157,8 @@ func _paint_expressions(left: float, right: float, clock: float,
     var pedal_starts: Dictionary = {}
     for mark in source_expressions:
         var at: float = float(mark.get("beat", -1.0))
+        if not _practice_event_visible(mark):
+            continue
         var hand: String = str(mark.get("hand", "right"))
         var ink: Color = _ink(hand)
         var kind: String = str(mark.get("kind", ""))
@@ -2139,7 +2171,7 @@ func _paint_expressions(left: float, right: float, clock: float,
             elif value == "stop" and pedal_starts.has(hand):
                 var start_mark: Dictionary = pedal_starts[hand]
                 var begin: float = float(start_mark.get("beat", 0.0))
-                if bool(start_mark.get("line", false)) and begin < at and \
+                if _practice_span_visible(start_mark,mark) and bool(start_mark.get("line", false)) and begin < at and \
                         at >= left-.5 and begin <= right+.5:
                     var start_x: float = timeline.screen_x(
                         begin, clock, playhead_x, play_from_beat)
@@ -2160,11 +2192,11 @@ func _paint_expressions(left: float, right: float, clock: float,
                 _staff_center(hand)+gap*3.0, gap*.9, ink, true)
         elif kind == "articulation":
             var note_id: String = str(mark.get("note_id", ""))
-            if not drawn_noteheads.has(note_id) or not expression_note_index.has(note_id):
+            if not pass_noteheads.has(note_id) or not expression_note_index.has(note_id):
                 continue
             var source_event: Dictionary = expression_note_index[note_id]
             var center: float = _staff_center(hand)
-            var head: Vector2 = drawn_noteheads[note_id]
+            var head: Vector2 = pass_noteheads[note_id]
             var clef: Dictionary = _clef_for(hand, _measure_for(source_event))
             var step: int = Geometry.staff_step(source_event.get("spelling", {}),clef)
             var below: bool = step < 4
@@ -2193,6 +2225,8 @@ func _paint_hairpins(left: float, right: float, clock: float,
             continue
         var start: Dictionary = pending[key]
         pending.erase(key)
+        if not _practice_span_visible(start,mark):
+            continue
         var begin: float = float(start.get("beat", 0.0))
         var end: float = float(mark.get("beat", 0.0))
         if end <= begin or begin > right+.5 or end < left-.5:
@@ -2253,6 +2287,15 @@ func _paint_volta_endings(left: float, right: float, clock: float,
         var last: float = float(ending["end"])
         if first > right+.5 or last < left-.5 or last <= first:
             continue
+        var replaced := false
+        if score_loop_enabled:
+            var interval := {"start_beat":paint_pass_start+first,"end_beat":paint_pass_start+last}
+            for preparation in preparation_history.values():
+                if _practice_intervals_overlap(interval,preparation["measure"]):
+                    replaced = true
+                    break
+        if replaced:
+            continue
         var x0: float = timeline.screen_x(first,clock,playhead_x,play_from_beat)
         var x1: float = timeline.screen_x(last,clock,playhead_x,play_from_beat)
         var start_x: float = maxf(-gap,x0)
@@ -2276,14 +2319,14 @@ func _paint_grace_notes(gap: float) -> void:
     # it has no playback clock event, scored attack or independent X motion.
     for grace in attached_grace_notes:
         var target: String = str(grace.get("before_note_id", ""))
-        if not drawn_noteheads.has(target):
+        if not pass_noteheads.has(target):
             continue
         var hand: String = str(grace.get("hand", "right"))
         var spelling: Dictionary = grace.get("spelling", {})
         var clef: Dictionary = _clef_for(hand, _measure_for(grace))
         var step: int = Geometry.staff_step(spelling, clef)
         var y: float = Geometry.note_y(step, _staff_center(hand)+gap*2.0,gap)
-        var head: Vector2 = drawn_noteheads[target]
+        var head: Vector2 = pass_noteheads[target]
         var kind: String = str(grace.get("note_type", "eighth"))
         glyphs.paint_note(self, kind, step < 4,
             head.x-gap*1.4, y, gap*.66, _ink(hand))
@@ -2303,105 +2346,216 @@ func _visible_events(left: float, right: float) -> Array:
         var event: Dictionary = ordered_events[index]
         if float(event.get("beat", 0.0)) > right+.25:
             break
-        results.append(event)
+        if _practice_event_visible(event):
+            results.append(event)
     frame_scanned_events = results.size()
     return results
+
+
+func _record_notehead(event: Dictionary, point: Vector2) -> void:
+    var id: String = str(event["id"])
+    pass_noteheads[id] = point
+    drawn_note_instances.append({"event_id":id,"source_id":event.get("source_id"),
+        "pass_index":paint_pass_index,"instance_id":"%d:%s" % [paint_pass_index,id],"position":point})
+    if not drawn_noteheads.has(id) or absf(point.x-size.x*PLAYHEAD_FRACTION)<absf(drawn_noteheads[id].x-size.x*PLAYHEAD_FRACTION):
+        drawn_noteheads[id] = point
+
+
+func _practice_event_visible(event: Dictionary) -> bool:
+    if not score_loop_enabled:
+        return true
+    var at: float = paint_pass_start+float(event.get("beat",event.get("start_beat",0.0)))
+    for preparation in preparation_history.values():
+        var silence: Dictionary = preparation["measure"]
+        if at>=float(silence["start_beat"])-.00001 and at<float(silence["end_beat"])-.00001:
+            return false
+    return true
+
+
+func _practice_span_visible(first: Dictionary, last: Dictionary) -> bool:
+    if not score_loop_enabled:
+        return true
+    for preparation in preparation_history.values():
+        var silence: Dictionary = preparation["measure"]
+        if paint_pass_start+float(last["beat"])>=float(silence["start_beat"])-.00001 and \
+                paint_pass_start+float(first["beat"])<float(silence["end_beat"])-.00001:
+            return false
+    return true
+
+
+func _practice_intervals_overlap(first: Dictionary, second: Dictionary) -> bool:
+    return float(first["start_beat"])<float(second["end_beat"])-.00001 and \
+        float(second["start_beat"])<float(first["end_beat"])-.00001
+
+
+func _remember_preparation() -> void:
+    if practice_preparation.is_empty():
+        return
+    var owner: float = float(practice_preparation["pass_start_beat"])
+    # A new recovery may cross its source-copy boundary. The latest full
+    # preparation replaces any earlier intersecting preparation as a whole.
+    for previous in preparation_history.keys():
+        if float(previous)!=owner and _practice_intervals_overlap(
+                preparation_history[previous]["measure"],practice_preparation["measure"]):
+            preparation_history.erase(previous)
+    preparation_history[owner] = practice_preparation.duplicate(true)
+
+
+func _practice_context_before(at: float, stride: float) -> Dictionary:
+    if at<=.00001:
+        return {}
+    var pass_start: float = maxf(0.0,floorf(at/stride))*stride
+    var local: float = at-pass_start
+    var previous: Dictionary = {}
+    for measure in timeline.measures:
+        # A header exactly at silence start is replaced too. Compare with
+        # its predecessor so the necessary change is engraved on the rest.
+        if float(measure["start_beat"])<local-.00001:
+            previous = measure
+    if previous.is_empty() and pass_start>0.0:
+        # At a copy boundary the preceding intact ordinary gap has already
+        # restored the opening context. Intersecting gaps are handled below.
+        previous = timeline.measures[0]
+    if previous.is_empty():
+        return {}
+    var result: Dictionary = previous.duplicate(true)
+    result["start_beat"] = float(result["start_beat"])+pass_start
+    result["end_beat"] = float(result["end_beat"])+pass_start
+    return result
+
+
+func _practice_barline(x: float, mark: Dictionary, gap: float) -> void:
+    _paint_barline({"x":x,"style":mark.get("style","regular"),"repeat":mark.get("repeat",""),
+        "segments":[{"top":_staff_center("right")-gap*2.0,"bottom":_staff_center("left")+gap*2.0}]},gap)
+
+
+func _paint_preparation_measure(measure: Dictionary, previous: Dictionary,
+        gap: float, playhead_x: float, opening: bool = false) -> void:
+    var first: float = float(measure["start_beat"])
+    var last: float = float(measure["end_beat"])
+    var x0: float = playhead_x+(first-visual_scroll_beat)*timeline.pixels_per_beat
+    var x1: float = playhead_x+(last-visual_scroll_beat)*timeline.pixels_per_beat
+    if x1<-gap*16.0 or x0>size.x+gap*16.0:
+        return
+    _paint_context(measure,previous,x0,gap,opening)
+    # The clock anchors attacks, not the edges of their glyphs. Reuse the
+    # native terminal/incoming clearances so a barline cannot cut through
+    # the next notehead. Center the rest between the actual engraved rules.
+    var left_rule: float = x0-gap*.45
+    var right_rule: float = x1-gap*1.35
+    _practice_barline(left_rule,measure.get("left_barline",{}),gap)
+    _practice_barline(right_rule,measure.get("right_barline",{}),gap)
+    for event in measure["events"]:
+        # Semantic full-measure silence uses the authentic hanging rest,
+        # irrespective of its meter-dependent duration. It is not a note.
+        var staff: String = str(event["staff"])
+        _paint_rest((left_rule+right_rule)*.5,_staff_center(staff)+Geometry.rest_staff_offset("whole")*gap,
+            "whole",0,_ink(staff),gap)
 
 
 # Paint at most the source passages intersecting the viewport. There are
 # no cloned notes or IDs in the semantic model, MIDI evaluator or glyph atlas.
 # Offsetting the camera instead of the music preserves exact source timing,
 # beam/tie geometry and existing per-viewport binary search.
-func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float) -> void:
+func _paint_context(measure: Dictionary, previous_measure: Dictionary, x: float,
+        gap: float, opening: bool) -> bool:
+    var header_scale: float = gap/17.0
+    var header_shift: float = 76.0*header_scale if opening else 0.0
+    var crowded_meter: bool = _meter_is_crowded(measure,previous_measure,gap)
+    for staff in ["right","left"]:
+        var center: float = _staff_center(staff)
+        var clef: Dictionary = _clef_for(staff,measure)
+        var signatures: Dictionary = measure.get("keys",{})
+        var signature: int = int(signatures.get(staff,0))
+        var previous_keys: Dictionary = previous_measure.get("keys",{})
+        var key_changed: bool = signature != int(previous_keys.get(staff,999))
+        var change_marks: Array = []
+        if key_changed:
+            # Cancelling an old signature requires visible naturals,
+            # even when the new signature is C major (zero accidentals).
+            var previous_fifths: int = int(previous_keys.get(staff,0))
+            var cancelled: Array = ([] if opening else
+                Geometry.key_cancellation_steps(clef,previous_fifths,signature))
+            var incoming: Array = Geometry.signature_steps(clef,signature)
+            for step in cancelled:
+                change_marks.append({"step":step,"accidental":"natural"})
+            for step in incoming:
+                change_marks.append({"step":step,"accidental":
+                    "sharp" if signature > 0 else "flat"})
+        if opening or _clef_for(staff,previous_measure) != clef:
+            # Cancellation naturals occupy the same signature block as the
+            # incoming accidentals. Reserve the complete block before placing
+            # a clef, including when the destination signature is empty.
+            var key_columns: int = maxi(absi(signature),change_marks.size())
+            _paint_clef(x-(86.0+float(key_columns)*14.0)*header_scale-header_shift,
+                center,clef,gap,_ink(staff))
+        if key_changed:
+            for i in range(change_marks.size()):
+                var mark: Dictionary = change_marks[i]
+                var glyph_x: float = x-(39.0+float(change_marks.size()-i)*14.0)*header_scale-header_shift
+                var glyph_y: float = Geometry.note_y(int(mark["step"]),
+                    center+2.0*gap,gap)
+                _paint_accidental(glyph_x,glyph_y,
+                    str(mark["accidental"]),_ink(staff),gap)
+        if (opening or previous_measure.get("meter",[]) !=
+                measure.get("meter",[])) and not crowded_meter:
+            var meter: Array = measure.get("meter",[4,4])
+            if meter.size() >= 2:
+                _paint_meter_number(int(meter[0]), x-gap*1.6-header_shift,
+                    center-gap*.95, _ink(staff), gap)
+                _paint_meter_number(int(meter[1]), x-gap*1.6-header_shift,
+                    center+gap*.8, _ink(staff), gap)
+    if crowded_meter:
+        _paint_meter_above_staff(measure,x,gap)
+    return crowded_meter
+
+
+func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
+        pass_index: int = 0, pass_start: float = 0.0) -> void:
+    paint_pass_index = pass_index
+    paint_pass_start = pass_start
+    pass_noteheads.clear()
+    current_preparation = preparation_history.get(pass_start,{}) if score_loop_enabled else {}
     var font: Font = ThemeDB.fallback_font
-    var current: float = timeline.musical_beat(camera_clock, play_from_beat)
-    var left: float = current - playhead_x/timeline.pixels_per_beat
-    var right: float = left + size.x/timeline.pixels_per_beat
-    var previous_measure: Dictionary = {}
+    var current: float = timeline.musical_beat(camera_clock,play_from_beat)
+    var left: float = current-playhead_x/timeline.pixels_per_beat
+    var right: float = left+size.x/timeline.pixels_per_beat
+    var previous_measure: Dictionary = timeline.measures[0] if pass_index>0 else {}
     for measure in timeline.measures:
         var at: float = float(measure.get("start_beat",0.0))
-        if at < left-.7 or at > right+.7:
+        var first: bool = measure == timeline.measures[0]
+        var target_boundary := false
+        if not current_preparation.is_empty():
+            var silence: Dictionary = current_preparation["measure"]
+            target_boundary = absf(at-float(current_preparation["source_from_beat"]))<.00001
+            if target_boundary:
+                previous_measure = silence
+        if not target_boundary and not _practice_event_visible(measure):
+            continue
+        if at<left-.7 or at>right+.7:
             previous_measure = measure
             continue
-        var x: float = timeline.screen_x(at,camera_clock,
-            playhead_x,play_from_beat)
-         # Opening Verovio glyphs occupy PRE-ROLL space. Moving those
-        # ornaments left leaves note beat 0 exactly on the time grid.
-        var opening: bool = not timeline.measures.is_empty() and \
-            int(measure.get("number", -1)) == \
-            int(timeline.measures[0].get("number", -2))
-        # Increase the pre-roll header-to-first-attack breathing room.
-        # Move only the ornament group, never any note beat coordinate.
-        var header_scale: float = gap / 17.0
-        var header_shift: float = 76.0*header_scale if opening else 0.0
-        var crowded_meter: bool = _meter_is_crowded(
-            measure, previous_measure, gap)
-        var barline: Dictionary = _barline_geometry(measure,
-            camera_clock, playhead_x, gap)
-        if not barline.is_empty() and float(barline["x"]) >= -gap*2.0 and \
-                float(barline["x"]) <= size.x+gap*2.0:
-            _paint_barline(barline,gap)
-        for staff in ["right","left"]:
-            var center: float = _staff_center(staff)
-            var clef: Dictionary = _clef_for(staff,measure)
-            var signatures: Dictionary = measure.get("keys",{})
-            var signature: int = int(signatures.get(staff,0))
-            var previous_keys: Dictionary = previous_measure.get("keys",{})
-            var key_changed: bool = signature != int(previous_keys.get(staff,999))
-            if opening or _clef_for(staff,previous_measure) != clef:
-                _paint_clef(x-(86.0+float(absi(signature))*14.0)*header_scale-header_shift,
-                    center,clef,gap,_ink(staff))
-            if key_changed:
-                # Cancelling an old signature requires visible naturals,
-                # even when the new signature is C major (zero accidentals).
-                var previous_fifths: int = int(previous_keys.get(staff,0))
-                var cancelled: Array = ([] if opening else
-                    Geometry.key_cancellation_steps(clef,previous_fifths,signature))
-                var incoming: Array = Geometry.signature_steps(clef,signature)
-                var change_marks: Array = []
-                for step in cancelled:
-                    change_marks.append({"step":step,"accidental":"natural"})
-                for step in incoming:
-                    change_marks.append({"step":step,"accidental":
-                        "sharp" if signature > 0 else "flat"})
-                for i in range(change_marks.size()):
-                    var mark: Dictionary = change_marks[i]
-                    var glyph_x: float = x-(39.0+float(change_marks.size()-i)*14.0)*header_scale-header_shift
-                    var glyph_y: float = Geometry.note_y(int(mark["step"]),
-                        center+2.0*gap,gap)
-                    _paint_accidental(glyph_x,glyph_y,
-                        str(mark["accidental"]),_ink(staff),gap)
-            if (opening or previous_measure.get("meter",[]) !=
-                    measure.get("meter",[])) and not crowded_meter:
-                var meter: Array = measure.get("meter",[4,4])
-                if meter.size() >= 2:
-                    _paint_meter_number(int(meter[0]), x-gap*1.6-header_shift,
-                        center-gap*.95, _ink(staff), gap)
-                    _paint_meter_number(int(meter[1]), x-gap*1.6-header_shift,
-                        center+gap*.8, _ink(staff), gap)
-        if crowded_meter:
-            _paint_meter_above_staff(measure,x,gap)
-        # Bar numbers are small annotations, never part of the notehead
-        # stream. No redundant opening number or number beside a floated
-        # meter change (both collide with ledger notes in Chopin).
-        if not opening and not crowded_meter and x >= 0.0 and x <= size.x:
-            draw_string(font,Vector2(x+gap*.4,
-                _staff_center("right")-gap*4.3),
-                str(int(measure.get("number", 0))),
-                HORIZONTAL_ALIGNMENT_LEFT,-1,11,DIM_INK)
+        var x: float = timeline.screen_x(at,camera_clock,playhead_x,play_from_beat)
+        var opening: bool = first and pass_index==0 and current_preparation.is_empty()
+        if not target_boundary and not (first and pass_index>0):
+            var barline: Dictionary = _barline_geometry(measure,camera_clock,playhead_x,gap)
+            if not barline.is_empty() and float(barline["x"])>=-gap*2.0 and float(barline["x"])<=size.x+gap*2.0:
+                _paint_barline(barline,gap)
+        var crowded_meter: bool = _paint_context(measure,previous_measure,x,gap,opening)
+        if not first and not crowded_meter and x>=0.0 and x<=size.x:
+            draw_string(font,Vector2(x+gap*.4,_staff_center("right")-gap*4.3),
+                str(int(measure.get("number",0))),HORIZONTAL_ALIGNMENT_LEFT,-1,11,DIM_INK)
         previous_measure = measure
     # The actual ending of the last measure has its own terminal barline.
     # It must not disappear simply because no following measure exists.
     var terminal: Dictionary = _terminal_barline_geometry(
         camera_clock,playhead_x,gap)
-    if not terminal.is_empty() and float(terminal["x"]) >= -gap*2.0 and \
+    if not score_loop_enabled and not terminal.is_empty() and float(terminal["x"]) >= -gap*2.0 and \
             float(terminal["x"]) <= size.x+gap*2.0:
         _paint_barline(terminal,gap)
     _paint_volta_endings(left,right,camera_clock,playhead_x,gap)
     # All symbols carry their original source onset; NO separate horizontal
     # layout pass or per-note acceleration, including chord tones and rests.
-    visible_symbols = 0
-    drawn_noteheads.clear()
     if cached_offsets_gap < 0.0 or absf(cached_offsets_gap-gap) > .001:
         cached_head_offsets = _engraved_head_offsets(gap)
         cached_accidental_offsets = Geometry.accidental_offsets(
@@ -2443,9 +2597,13 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float) -> v
     _paint_expressions(left,right,camera_clock,playhead_x,gap)
     _paint_hairpins(left,right,camera_clock,playhead_x,gap)
     _paint_grace_notes(gap)
-    fingering_pass_clocks.append(camera_clock)
+    fingering_pass_clocks.append({"clock":camera_clock,"pass_index":pass_index,"pass_start":pass_start})
 
 func _draw() -> void:
+    drawn_noteheads.clear()
+    drawn_note_instances.clear()
+    pass_noteheads.clear()
+    visible_symbols = 0
     drawn_fingerings.clear()
     fingering_pass_clocks.clear()
     if size.x < 100.0 or size.y < 100.0:
@@ -2482,36 +2640,72 @@ func _draw() -> void:
     # The count-in runs on the same clock, but its leading boundary is
     # intentionally NOT a printed barline: it sits before the clef/header
     # and used to look like an orphaned vertical rule in the score.
-    # Continuous sheet: the same immutable source engraving is reused for
-    # successive passes. Between them one *empty source measure* is left on
-    # the horizontal axis, with unbroken grand-staff rules underneath.
+    # One semantic practice timeline owns both source-copy placement and
+    # preparation silence. No independently inferred final-bar duration.
     if score_loop_enabled and not timeline.measures.is_empty():
-        var final_measure: Dictionary = timeline.measures[-1]
-        var empty_bar_beats: float = maxf(.25,
-            float(final_measure.get("end_beat", timeline.duration_beats)) -
-            float(final_measure.get("start_beat", timeline.duration_beats-4.0)))
-        var stride: float = timeline.duration_beats + empty_bar_beats
-        var virtual_left: float = visual_scroll_beat - playhead_x / timeline.pixels_per_beat
-        var virtual_right: float = virtual_left + size.x / timeline.pixels_per_beat
-        var first_pass: int = maxi(0, floori(virtual_left / stride) - 1)
-        var last_pass: int = maxi(first_pass, ceili(virtual_right / stride) + 1)
-        for pass_index in range(first_pass, last_pass + 1):
-            var pass_start: float = pass_index * stride
-            if pass_start > virtual_right+.7 or \
-                    pass_start+timeline.duration_beats < virtual_left-.7:
+        if not practice_contract_error.is_empty():
+            draw_string(font,Vector2(20,size.y*.5),practice_contract_error,
+                HORIZONTAL_ALIGNMENT_LEFT,-1,15,NOTE_INK)
+            return
+        _remember_preparation()
+        var stride: float = float(practice_timeline["stride_beats"])
+        var virtual_left: float = visual_scroll_beat-playhead_x/timeline.pixels_per_beat
+        var virtual_right: float = virtual_left+size.x/timeline.pixels_per_beat
+        var first_pass: int = maxi(0,floori(virtual_left/stride)-1)
+        var last_pass: int = maxi(first_pass,ceili(virtual_right/stride)+1)
+        var preparations: Dictionary = {}
+        for pass_index in range(first_pass,last_pass+1):
+            var pass_start: float = pass_index*stride
+            if pass_start>virtual_right+.7 or pass_start+stride<virtual_left-.7:
                 continue
             _paint_source_pass(visual_scroll_beat-pass_start-play_from_beat,
-                playhead_x, gap)
+                playhead_x,gap,pass_index,pass_start)
+            var silence: Dictionary = practice_timeline["gap"].duplicate(true)
+            silence["start_beat"] = pass_start+float(silence["start_beat"])
+            silence["end_beat"] = pass_start+float(silence["end_beat"])
+            var replaced := false
+            for preparation in preparation_history.values():
+                if _practice_intervals_overlap(silence,preparation["measure"]):
+                    replaced = true
+                    break
+            if replaced:
+                continue
+            silence["left_barline"] = timeline.measures[-1].get("right_barline",{})
+            var incoming: Variant = timeline.measures[0].get("left_barline")
+            if incoming is Dictionary:
+                silence["right_barline"] = incoming
+            var previous: Dictionary = timeline.measures[-1].duplicate(true)
+            previous["start_beat"] = pass_start+float(previous["start_beat"])
+            previous["end_beat"] = pass_start+float(previous["end_beat"])
+            preparations[float(silence["start_beat"])] = {"measure":silence,"previous":previous,"opening":false}
+        # Rewind preparation replaces only its declared practice interval.
+        # Remember completed rests while that pass remains on screen; a later
+        # source copy cannot make its past preparation disappear or flicker.
+        for pass_start in preparation_history.keys():
+            if float(pass_start)+stride<virtual_left-stride:
+                preparation_history.erase(pass_start)
+                continue
+            var item: Dictionary = preparation_history[pass_start]
+            var silence: Dictionary = item["measure"]
+            var previous: Dictionary = _practice_context_before(float(silence["start_beat"]),stride)
+            preparations[float(silence["start_beat"])] = {"measure":silence,"previous":previous,
+                "opening":previous.is_empty()}
+        var preparation_starts: Array = preparations.keys()
+        preparation_starts.sort()
+        for start in preparation_starts:
+            var item: Dictionary = preparations[start]
+            _paint_preparation_measure(item["measure"],item["previous"],gap,playhead_x,item["opening"])
     else:
-        _paint_source_pass(camera_clock, playhead_x, gap)
+        _paint_source_pass(camera_clock,playhead_x,gap)
     if transport_overlay_enabled:
         draw_line(Vector2(playhead_x,_staff_center("right")-gap*3.8),
             Vector2(playhead_x,_staff_center("left")+gap*3.7),
             PREVIEW_LIGHT,2.0,true)
     # Instructional ink has its own compositor phase. It cannot change
     # canonical music or be erased by the transport cursor during scrolling.
-    for annotation_clock in fingering_pass_clocks:
-        _paint_fingerings(float(annotation_clock),playhead_x,gap)
+    for annotation_pass in fingering_pass_clocks:
+        _paint_fingerings(float(annotation_pass["clock"]),playhead_x,gap,
+            int(annotation_pass["pass_index"]),float(annotation_pass["pass_start"]))
     # A genuine font brace joins the two continuous staves at the screen's
     # edge. Stretch only this authentic brace, never the timed music stream.
     var staff_top: float = _staff_center("right")-2.0*gap

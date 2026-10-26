@@ -35,6 +35,13 @@ quick_checks() {
     tests/test_fingering_obstacle_geometry.py \
     tests/test_fingering_placement_metadata.py \
     tests/test_canonical_fingering_isolation.py \
+    tests/test_practice_timeline.py \
+    tests/test_continuous_practice_loop.py \
+    tests/test_continuous_repeat_pixels.py \
+    tests/test_repeat_transport_pixels.py \
+    tests/test_repeat_recovery_context_pixels.py \
+    tests/test_visible_playback.py::test_visible_playback_rejects_native_fallback_warning \
+    tests/test_visible_playback.py::test_native_sampling_tracks_one_occurrence_when_next_repeat_is_visible \
     tests/test_native_notation_library.py \
     tests/test_connector_pixels.py \
     tests/test_phase3_scroll_pixels.py \

@@ -17,6 +17,7 @@ from xml.etree import ElementTree as ET
 
 from .lesson import DIVISIONS, LessonScore
 from .expressions import native_expressions
+from .practice_timeline import practice_timeline_descriptor
 from ..measure_grid import phrase_grid
 from ..music import Phrase, source_note_id
 
@@ -399,6 +400,10 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
         "beat_unit": "quarter",
         "active_hand": hand,
         "staff_order": list(HANDS),
+        # Practice-only rest measures must never enter canonical source
+        # notation, attack identity, grading, or the source audit.
+        "practice_timeline": practice_timeline_descriptor(
+            measures, round(phrase.end - phrase.start, 8), HANDS),
         # Return genuine JSON value types, not Python tuples that change
         # shape when the HTTP layer serializes the payload.
         "measures": [{**asdict(m), "meter": list(m.meter)} for m in measures],
