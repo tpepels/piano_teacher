@@ -28,11 +28,11 @@ CASES = [('ala30', ALA, 30, 30, 'left'), ('ala32', ALA, 32, 32, 'both'),
          ('context', 'tests/fixtures/continuous_repetition_context.musicxml', 1, 2, 'both')]
 
 
-def build_repeat_fixture(case, *, piece=None, plan=None):
+def build_repeat_fixture(case, *, piece=None, plan=None, phrase=None):
     """Use real production engraving and one reusable whole-piece fingering plan."""
     from piano_teacher.fingering import project_model
     from scripts.check_native_verovio_overlay import fixture
-    data, _ = fixture(case, piece=piece)
+    data, _ = fixture(case, piece=piece, phrase=phrase)
     data['hand'] = case.hand
     if plan is not None:
         data['model'] = project_model(data['model'], plan, source_musicxml=piece.source_musicxml)

@@ -21,11 +21,20 @@ PLAYHEAD = .42
 
 
 def repeat_expectations(data):
-    """Read nominal opening meter independently; never use the terminal bar."""
+    """Read source duration and the immediately upcoming full meter from XML."""
     written = read_written_score(data['xml'])
     numerator, denominator = next(meter for index, meter in written.meter if index == 0)
     duration = float(written.bars[-1])
     gap = numerator * 4.0 / denominator
+    # A genuine short opening retains its source length. Only a full meter
+    # on the immediately following measure can define its preparation; two
+    # ordinary 1/8 bars must not be scanned across to a later 4/4 change.
+    if gap < 1.0 and len(written.bars) > 2 and written.bars[1] <= 1.0:
+        following = next((meter for index, meter in written.meter if index == 1), None)
+        if following is not None:
+            full = following[0] * 4.0 / following[1]
+            if full >= 1.0:
+                gap = full
     return written, duration, gap
 
 
@@ -76,8 +85,8 @@ def _boundaries(image, duration, gap, clock):
 def verify_gap_boundaries(folder, data, frame):
     """Recover complete strokes in the conventional pre-onset clearance band.
 
-    The source onsets keep exact beat X. A barline precedes the incoming
-    notehead, so engraved measure width is not the semantic pause duration.
+    Both boundaries use the same engraving clearance, so their photographed
+    separation must equal the full semantic duration at the fixed density.
     """
     _, duration, gap = repeat_expectations(data)
     image = _load(folder, frame)
@@ -105,6 +114,9 @@ def verify_gap_boundaries(folder, data, frame):
     incoming_x = _boundaries(image, duration, gap, frame['clock'])[1]
     assert incoming_x - observed[1] >= .7 * staves['left'].gap, 'End boundary crosses incoming notehead'
     assert observed[0] < observed[1], 'Preparation barlines are reversed'
+    assert abs(observed[1] - observed[0] - gap * DENSITY) <= 1.5, (
+        f"{frame['name']}: preparation width {observed[1] - observed[0]:.2f}px "
+        f"differs from {gap} beats * {DENSITY}px/beat")
     return observed
 
 
@@ -159,8 +171,7 @@ def verify_repeat_motion(folder, data, report):
 def verify_next_source_arrival(folder, data, report):
     """Derive the first real attack q from XML and register it at D+G+q.
 
-    This is the timing proof. Barline-to-barline engraving width is allowed
-    conventional notehead clearance and cannot authorize a different stride.
+    This is the timing proof, independent of the separate barline-width proof.
     """
     written, duration, gap = repeat_expectations(data)
     hand = data.get('hand', 'both')

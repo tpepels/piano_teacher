@@ -102,8 +102,22 @@ func run() -> void:
         1150.0*.42+250.0), "Prototype pre-roll uses the same timeline")
     check(prototype.timeline.model["schema"] == scores["schema"],
         "No SVG/PNG import in timeline preview")
+    check(not prototype.set_density(120.0),
+        "An active attempt cannot change its horizontal musical scale")
+    check(near(prototype.timeline.pixels_per_beat, 100.0),
+        "Rejecting an active scale change preserves exact coordinates")
+    prototype.present({"running":false,"paused":true}, .5)
+    var previous_env := OS.get_environment("PIANO_TEACHER_PIXELS_PER_BEAT")
+    OS.set_environment("PIANO_TEACHER_PIXELS_PER_BEAT", "150")
+    check(not prototype.set_density_from_env() and near(prototype.timeline.pixels_per_beat,100.0),
+        "Pause cannot unlock density changes through the environment path")
+    OS.set_environment("PIANO_TEACHER_PIXELS_PER_BEAT", previous_env)
+    prototype.present({"running":false,"paused":false}, 0.0)
+    check(not prototype.set_density(140.0),
+        "A repeat or stopped attempt retains the exercise engraving scale")
     prototype.clear_score()
     check(not prototype.timeline.has_score(), "Score change clears stale note markers")
+    check(prototype.set_density(120.0), "A cleared exercise may choose its next fixed scale")
     var invalid: Dictionary = scores.duplicate(true)
     invalid["notes"][1]["id"] = "a"
     check(not timeline.load_model(invalid), "Reject duplicated source attack")

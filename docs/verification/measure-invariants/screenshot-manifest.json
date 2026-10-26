@@ -1,0 +1,42 @@
+{
+  "ala30-before-rest.png": {
+    "origin": "/tmp/piano-measure-invariants/before/ala30/rest-canonical.png",
+    "sha256": "b4c3b78cbed977d3fb1c5d6b223602d01de9f4e998c882c8ed1ee15bffc84cec"
+  },
+  "ala30-before.musicxml": {
+    "origin": "/tmp/piano-measure-invariants/before/ala30/score.musicxml",
+    "sha256": "dc48c34718f839a18c3911ddf5bfecd2799e91afb994882233b76ac29797c208"
+  },
+  "ala30-after-rest.png": {
+    "origin": "/tmp/piano-measure-repeat-after/continuous-repeat-captures0/ala30/rest-canonical.png",
+    "sha256": "c740ed84cf34af394298cd5cfc1c15911d0c13802a9b51419f802e8359d7d48e"
+  },
+  "source-rests-before-rest.png": {
+    "origin": "/tmp/piano-measure-invariants/before/source-rests/rest-canonical.png",
+    "sha256": "ad3d38b257da038cfa593c17ad96a93b08bc60805caf67019f914a826cd857af"
+  },
+  "source-rests-before.musicxml": {
+    "origin": "/tmp/piano-measure-invariants/before/source-rests/score.musicxml",
+    "sha256": "42bf6aedf153c5a5dc768580b9b07537434b74435413233bf1f7b9c184bad418"
+  },
+  "source-rests-after-rest.png": {
+    "origin": "/tmp/piano-measure-repeat-after/continuous-repeat-captures0/source-rests/rest-canonical.png",
+    "sha256": "e07fd114cb4e6f3271d80b0f8fc1fd1110b0e6750983664a6e544582e42c25b6"
+  },
+  "peace-before-rest.png": {
+    "origin": "/tmp/piano-measure-invariants/before/peace/rest-canonical.png",
+    "sha256": "b8a91d9bbe80f92dfb2f0b66e08761054cec8166d3ab0065c6bdf886d588993d"
+  },
+  "peace-before.musicxml": {
+    "origin": "/tmp/piano-measure-invariants/before/peace/score.musicxml",
+    "sha256": "4dbd46b66f85606313a6039ef58945cfa361b87ff2c1cb2d68ba2e295f22eed8"
+  },
+  "peace-after-rest.png": {
+    "origin": "/tmp/piano-measure-invariants/after/peace/rest-canonical.png",
+    "sha256": "65cccd2ca2818d459bb5465247ce444725938ac67d32e296b4a7c77f4b228e37"
+  },
+  "source-rests-app-after.png": {
+    "origin": "/tmp/piano-measure-positive-captures/measure-source-rests0/1220x780-80-rest-0-app.png",
+    "sha256": "5b4f8d4c931d87d335bb8ebf83c3456529736e3c9a3bbf8c8c93a97f33c66aab"
+  }
+}

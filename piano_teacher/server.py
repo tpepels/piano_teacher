@@ -1308,6 +1308,7 @@ class PracticeEngine:
         target = self.visual_offset_beats + length
         if self.running:
             position += (now - self.run_at) * self.plan.bpm / 60
+            speed = self.plan.bpm / 60
         elif self._preparation_pending and now >= self._preparation_at:
             measure = self.practice_preparation["measure"]
             target = measure["end_beat"]
@@ -1325,7 +1326,7 @@ class PracticeEngine:
             position = min(target, self.visual_offset_beats + max(length,
                 self.play_from_beat + (now-self.run_at)*self.plan.bpm/60))
             speed = self.plan.bpm/60 if position < target else 0.0
-        return position, speed, target
+        return position, 0.0 if self.paused else speed, target
 
     def control(self, action: str, **kwargs) -> None:
         with self.lock:

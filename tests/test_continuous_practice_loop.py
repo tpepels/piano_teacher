@@ -976,3 +976,177 @@ def test_real_peace_manual_retry_uses_same_preparation_meter_as_repeat(
     repeated = app.state()
     assert repeated["running"] and repeated["count_in_beats"] == 0
     assert repeated["visual_scroll_beat"] == pytest.approx(.01*56/60)
+
+
+def motion_sample(app, now, at):
+    now[0] = at
+    return app.state()
+
+
+def assert_motion_rate(first, second, rate):
+    seconds = (second["clock_sampled_at_ms"]-first["clock_sampled_at_ms"])/1000
+    assert seconds > 0
+    assert second["visual_scroll_beat"]-first["visual_scroll_beat"] == pytest.approx(rate*seconds)
+    assert first["visual_scroll_speed"] == pytest.approx(rate)
+    assert second["visual_scroll_speed"] == pytest.approx(rate)
+
+
+@pytest.mark.parametrize("bpm", (40, 80, 120))
+@pytest.mark.parametrize("grid,meters,length,stride", [
+    ((0, .5, 4.5), ((0, 1, 8), (.5, 4, 4)), 4.5, 8.5),
+    ((0, 3, 6), ((0, 3, 4),), 6, 9),
+    ((0, 3, 7), ((0, 3, 4), (3, 4, 4)), 7, 10),
+])
+def test_forward_derivative_through_source_gap_and_repeat(
+        clocked_engine, bpm, grid, meters, length, stride):
+    app, now = clocked_engine(grid=grid, meters=meters, bpm=120)
+    before = app.semantic_score()
+    cached = app._source_model()
+    source_notes = app.plan.active_phrase.notes
+    app.control("tempo", bpm=bpm)
+    app.start()
+    run_at, rate = app.run_at, bpm/60
+    samples = []
+    for beat in (.25, .5, length-.125, length+.125, length+.5,
+                 stride-.125, stride, stride+.125):
+        sample = motion_sample(app, now, run_at+beat/rate)
+        assert sample["visual_scroll_beat"] == pytest.approx(beat)
+        samples.append(sample)
+    for first, second in zip(samples, samples[1:]):
+        assert_motion_rate(first, second, rate)
+    assert samples[4]["phase"] == "preview_gap"
+    assert samples[-1]["visual_offset_beats"] == stride
+    assert app.run_at == pytest.approx(run_at+stride/rate)
+    assert app._source_model() is cached
+    assert app.semantic_score() == before
+    assert app.plan.active_phrase.notes == source_notes
+
+
+@pytest.mark.parametrize("bpm", (40, 80, 120))
+@pytest.mark.parametrize("phase", (
+    "count_in", "playing", "preview_gap", "clean_gap", "reverse", "preparing"))
+def test_paused_derivative_is_zero_and_resume_preserves_motion(
+        clocked_engine, monkeypatch, bpm, phase):
+    app, now = clocked_engine(bpm=bpm, connected=phase == "clean_gap")
+
+    def no_engraving():
+        raise ValueError("Transport timing test omits engraving feedback")
+
+    monkeypatch.setattr(app, "engraving", no_engraving)
+    app.start()
+    rate = bpm/60
+    if phase == "clean_gap":
+        record_clean(app)
+    if phase in ("reverse", "preparing"):
+        app.visual_offset_beats = 12
+        now[0] = app.run_at+1/rate
+        app.control("restart")
+        if phase == "reverse":
+            now[0] += app._visual_rewind_seconds/4
+            rate = -5/app._visual_rewind_seconds  # Absolute beat 13 back to 8.
+        else:
+            now[0] = app._preparation_at+1/rate
+    else:
+        beat = -.25 if phase == "count_in" else (9 if "gap" in phase else 1)
+        now[0] = app.run_at+beat/rate
+    before = app.state()
+    deadline = app.next_at
+    app.control("pause")
+    first = motion_sample(app, now, now[0]+10)
+    second = motion_sample(app, now, now[0]+10)
+    assert first["visual_scroll_beat"] == pytest.approx(before["visual_scroll_beat"])
+    assert_motion_rate(first, second, 0)
+    app.control("resume")
+    resumed = app.state()
+    assert resumed["visual_scroll_beat"] == pytest.approx(before["visual_scroll_beat"])
+    assert resumed["visual_scroll_speed"] == pytest.approx(rate)
+    if deadline:
+        assert app.next_at == pytest.approx(deadline+20)
+    following = motion_sample(app, now, now[0]+.05)
+    assert_motion_rate(resumed, following, rate)
+
+
+@pytest.mark.parametrize("bpm", (40, 80, 120))
+def test_failed_recovery_derivative_preserves_same_copy_and_source_model(
+        clocked_engine, monkeypatch, bpm):
+    app, now = clocked_engine(bpm=bpm, connected=True)
+
+    def no_engraving():
+        raise ValueError("Transport timing test omits engraving feedback")
+
+    monkeypatch.setattr(app, "engraving", no_engraving)
+    before = app.semantic_score()
+    cached = app._source_model()
+    source_notes = app.plan.active_phrase.notes
+    app.start()
+    app.visual_offset_beats = 12
+    rate = bpm/60
+    failed = motion_sample(app, now, app.run_at+8/rate+.21)
+    assert failed["take_result"]["clean"] is False
+    measure = failed["practice_preparation"]["measure"]
+    assert (measure["start_beat"], measure["end_beat"], measure["duration_beats"]) == (8, 12, 4)
+    start, seconds = app._visual_rewind_at, app._visual_rewind_seconds
+    first = motion_sample(app, now, start+seconds/4)
+    second = motion_sample(app, now, start+seconds/2)
+    reverse_rate = (8-(20+.21*rate))/seconds
+    assert_motion_rate(first, second, reverse_rate)
+    assert first["visual_scroll_beat"] == pytest.approx(20+.21*rate+reverse_rate*seconds/4)
+    first = motion_sample(app, now, app._preparation_at)
+    second = motion_sample(app, now, app._preparation_at+1/rate)
+    assert first["visual_scroll_beat"] == pytest.approx(8)
+    assert second["visual_scroll_beat"] == pytest.approx(9)
+    assert_motion_rate(first, second, rate)
+    deadline = app.next_at
+    assert deadline == pytest.approx(app._preparation_at+4/rate)
+    first = motion_sample(app, now, deadline-.01)
+    second = motion_sample(app, now, deadline+.01)
+    assert_motion_rate(first, second, rate)
+    assert second["visual_scroll_beat"] == pytest.approx(12+.01*rate)
+    assert second["visual_offset_beats"] == 12
+    assert app.run_at == pytest.approx(deadline)
+    assert app._source_model() is cached
+    assert app.semantic_score() == before
+    assert app.plan.active_phrase.notes == source_notes
+
+
+@pytest.mark.parametrize("bpm", (40, 80, 120))
+@pytest.mark.parametrize("adapt", (False, True))
+def test_clean_handoff_derivative_preserves_deadline_and_source_model(
+        clocked_engine, monkeypatch, bpm, adapt):
+    app, now = clocked_engine(bpm=240 if adapt else bpm, connected=True)
+    app.plan.bpm = bpm
+
+    def no_engraving():
+        raise ValueError("Transport timing test omits engraving feedback")
+
+    monkeypatch.setattr(app, "engraving", no_engraving)
+    before = app.semantic_score()
+    cached = app._source_model()
+    source_notes = app.plan.active_phrase.notes
+    app.start()
+    record_clean(app)
+    recorder = app.recorder
+    presses = list(recorder.presses)
+    run_at, rate = app.run_at, bpm/60
+    first = motion_sample(app, now, run_at+8/rate+.21)
+    second = motion_sample(app, now, now[0]+.05)
+    assert first["take_result"] == {"clean": True, "correct": 2, "total": 2}
+    assert_motion_rate(first, second, rate)
+    deadline = app.next_at
+    assert deadline == pytest.approx(run_at+12/rate)
+    last_gap = motion_sample(app, now, deadline-.01)
+    opening = motion_sample(app, now, deadline)
+    next_rate = opening["bpm"]/60
+    assert (next_rate > rate) is adapt
+    assert opening["visual_scroll_beat"] == pytest.approx(12)
+    assert opening["visual_scroll_speed"] == pytest.approx(next_rate)
+    assert last_gap["visual_scroll_beat"] == pytest.approx(12-.01*rate)
+    following = motion_sample(app, now, deadline+.01)
+    assert_motion_rate(opening, following, next_rate)
+    assert following["visual_scroll_beat"] == pytest.approx(12+.01*next_rate)
+    assert app.run_at == pytest.approx(deadline)
+    assert app._source_model() is cached
+    assert app.semantic_score() == before
+    assert app.plan.active_phrase.notes == source_notes
+    assert recorder.presses == presses  # Original attack/release seconds stay untouched.
+    assert app.recorder is not recorder and not app.recorder.presses

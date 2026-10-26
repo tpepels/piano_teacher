@@ -2543,6 +2543,15 @@ func _practice_barline(x: float, mark: Dictionary, gap: float) -> void:
         "segments":[{"top":_staff_center("right")-gap*2.0,"bottom":_staff_center("left")+gap*2.0}]},gap)
 
 
+func _barline_left_limit(x: float, mark: Dictionary, gap: float) -> float:
+    var limit := INF
+    for stroke in _barline_strokes(str(mark.get("style","regular")),gap):
+        limit = minf(limit,x+float(stroke["offset"])-float(stroke["width"])*.5)
+    if str(mark.get("repeat","")) in ["backward","both"] and is_finite(limit):
+        limit = minf(limit,x-gap*.92-float(glyphs.bounds["repeat_dot"][2])*gap/500.0)
+    return limit
+
+
 func _paint_preparation_measure(measure: Dictionary, previous: Dictionary,
         gap: float, playhead_x: float, opening: bool = false) -> void:
     var first: float = float(measure["start_beat"])
@@ -2551,12 +2560,12 @@ func _paint_preparation_measure(measure: Dictionary, previous: Dictionary,
     var x1: float = playhead_x+(last-visual_scroll_beat)*timeline.pixels_per_beat
     if x1<-gap*16.0 or x0>size.x+gap*16.0:
         return
-    _paint_context(measure,previous,x0,gap,opening)
-    # The clock anchors attacks, not the edges of their glyphs. Reuse the
-    # native terminal/incoming clearances so a barline cannot cut through
-    # the next notehead. Center the rest between the actual engraved rules.
-    var left_rule: float = x0-gap*.45
-    var right_rule: float = x1-gap*1.35
+    # Source and practice measures share exactly the same boundary transform.
+    # Move context glyphs for clearance; never shorten the silent measure.
+    var left_rule: float = BarlineLayout.project(first,timeline,visual_scroll_beat,playhead_x,0.0,gap)
+    var right_rule: float = BarlineLayout.project(last,timeline,visual_scroll_beat,playhead_x,0.0,gap)
+    _paint_context(measure,previous,x0,gap,opening,
+        _barline_left_limit(left_rule,measure.get("left_barline",{}),gap))
     _practice_barline(left_rule,measure.get("left_barline",{}),gap)
     _practice_barline(right_rule,measure.get("right_barline",{}),gap)
     for event in measure["events"]:
@@ -2681,10 +2690,8 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
         if target_boundary or (first and pass_index>0):
             var incoming: Variant = current_preparation["measure"].get("right_barline") if target_boundary else measure.get("left_barline")
             var mark: Dictionary = incoming if incoming is Dictionary else {"style":"regular","repeat":""}
-            for stroke in _barline_strokes(str(mark.get("style","regular")),gap):
-                meter_right_limit = minf(meter_right_limit,x-gap*1.35+float(stroke["offset"])-float(stroke["width"])*.5)
-            if str(mark.get("repeat","")) in ["backward","both"] and is_finite(meter_right_limit):
-                meter_right_limit = minf(meter_right_limit,x-gap*(1.35+.92)-float(glyphs.bounds["repeat_dot"][2])*gap/500.0)
+            meter_right_limit = _barline_left_limit(
+                BarlineLayout.project(at,timeline,camera_clock,playhead_x,play_from_beat,gap),mark,gap)
         var crowded_meter: bool = _paint_context(measure,previous_measure,x,gap,opening,meter_right_limit)
         if not first and not crowded_meter and x>=0.0 and x<=size.x:
             draw_string(font,Vector2(x+gap*.4,_staff_center("right")-gap*4.3),

@@ -25,6 +25,7 @@ var bpm := 60.0
 var transport_id := -1
 var running := false
 var paused := false
+var density_locked := false
 var notice := "Waiting for /score/model"
 var visible_onsets := 0
 
@@ -34,6 +35,7 @@ func _init() -> void:
     set_process(false)
 
 func clear_score() -> void:
+    density_locked = false
     var density: float = timeline.pixels_per_beat
     timeline = Timeline.new()
     timeline.set_density(density)
@@ -50,6 +52,7 @@ func load_score(candidate: Dictionary) -> bool:
         queue_redraw()
         return false
     practice_timeline = candidate.get("practice_timeline",{}).duplicate(true)
+    density_locked = false
     practice_preparation.clear()
     practice_contract_error = ""
     notice = ""
@@ -57,6 +60,9 @@ func load_score(candidate: Dictionary) -> bool:
     return true
 
 func set_density(value: float) -> bool:
+    if density_locked and absf(value-timeline.pixels_per_beat) > .000001:
+        notice = "The exercise horizontal scale is fixed until its score changes"
+        return false
     if not timeline.set_density(value):
         notice = timeline.last_error
         queue_redraw()
@@ -65,11 +71,14 @@ func set_density(value: float) -> bool:
     return true
 
 func set_density_from_env() -> bool:
-    if not timeline.set_density_from_env():
-        notice = timeline.last_error
+    var raw: String = OS.get_environment("PIANO_TEACHER_PIXELS_PER_BEAT")
+    if raw.is_empty():
+        return true
+    if not raw.is_valid_float():
+        notice = "PIANO_TEACHER_PIXELS_PER_BEAT is not numeric"
         queue_redraw()
         return false
-    return true
+    return set_density(raw.to_float())
 
 func _practice_timeline_error() -> String:
     if practice_timeline.get("schema","") != "piano-teacher-practice-timeline-v1" or \
@@ -120,6 +129,8 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
     var next_transport: int = int(state.get("transport_id", -1))
     var next_running: bool = bool(state.get("running", false))
     var next_paused: bool = bool(state.get("paused", false))
+    if next_running or next_paused or absf(float(state.get("visual_scroll_speed",0.0))) > .000001:
+        density_locked = true
     if (absf(clock_beat-next_clock) > .00001 or
         absf(visual_scroll_beat-next_visual) > .00001 or score_loop_enabled != next_loop or
         practice_preparation != next_preparation or practice_contract_error != contract_error or

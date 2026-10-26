@@ -67,7 +67,8 @@ def test_upcoming_full_meter_defines_gap_despite_pickup_and_short_ending(
 
 def test_descriptor_owns_context_and_does_not_mutate_source():
     from piano_teacher.notation.practice_timeline import practice_timeline_descriptor
-    measures = [{"meter": [3, 4], "keys": {"right": 1, "left": 1},
+    measures = [{"start_beat": 0, "end_beat": 1,
+                 "meter": [3, 4], "keys": {"right": 1, "left": 1},
                  "clefs": {"right": {"sign": "G", "line": 2, "octave_change": 0}}}]
     before = deepcopy(measures)
     result = practice_timeline_descriptor(measures, 1, staff_order=("left", "right"))
@@ -76,6 +77,80 @@ def test_descriptor_owns_context_and_does_not_mutate_source():
     result["gap"]["clefs"]["right"]["line"] = 4
     result["gap"]["meter"][0] = 9
     assert measures == before
+
+
+@pytest.mark.parametrize("spans,duration", [
+    pytest.param([(1, 2)], 2, id="nonzero-origin"),
+    pytest.param([(-1, 1)], 1, id="negative-origin"),
+    pytest.param([(0, 0)], 1, id="zero-length"),
+    pytest.param([(0, 2), (2, 1)], 1, id="reversed-measure"),
+    pytest.param([(0, 1), (2, 3)], 3, id="gap"),
+    pytest.param([(0, 2), (1, 3)], 3, id="overlap"),
+    pytest.param([(0, 1), (0, 1)], 1, id="duplicate"),
+    pytest.param([(0, 2)], 1, id="source-longer-than-duration"),
+    pytest.param([(0, 1)], 2, id="source-shorter-than-duration"),
+    pytest.param([(0, 1), (1.00000001, 2)], 2, id="small-gap"),
+    pytest.param([(0, float("nan"))], 1, id="nan-end"),
+    pytest.param([(0, float("inf"))], 1, id="infinite-end"),
+    pytest.param([(float("nan"), 1)], 1, id="nan-start"),
+    pytest.param([(float("-inf"), 1)], 1, id="infinite-start"),
+    pytest.param([(0, 1), (float("nan"), 2)], 2, id="nan-interior-start"),
+])
+def test_timeline_rejects_invalid_source_grid_without_rewriting_it(spans, duration):
+    from piano_teacher.notation.practice_timeline import practice_timeline_descriptor
+    measures = [{"start_beat": start, "end_beat": end,
+                 "meter": [4, 4], "keys": {}, "clefs": {}}
+                for start, end in spans]
+    before = deepcopy(measures)
+    with pytest.raises(ValueError):
+        practice_timeline_descriptor(measures, duration)
+    assert measures == before
+
+
+@pytest.mark.parametrize("missing", ("start_beat", "end_beat"))
+def test_timeline_requires_explicit_source_boundaries(missing):
+    from piano_teacher.notation.practice_timeline import practice_timeline_descriptor
+    measure = {"start_beat": 0, "end_beat": 1,
+               "meter": [4, 4], "keys": {}, "clefs": {}}
+    del measure[missing]
+    with pytest.raises(ValueError):
+        practice_timeline_descriptor([measure], 1)
+
+
+@pytest.mark.parametrize("duration", (0, -1, float("nan"), float("inf")))
+def test_timeline_rejects_nonpositive_or_nonfinite_source_duration(duration):
+    from piano_teacher.notation.practice_timeline import practice_timeline_descriptor
+    measure = {"start_beat": 0, "end_beat": 1,
+               "meter": [4, 4], "keys": {}, "clefs": {}}
+    with pytest.raises(ValueError):
+        practice_timeline_descriptor([measure], duration)
+
+
+@pytest.mark.parametrize("meter", [
+    (0, 4), (-1, 4), (4, 0), (4, -1),
+    (float("nan"), 4), (4, float("nan")),
+    (float("inf"), 4), (4, float("inf")),
+    (1e308, 1), (5e-324, 1e308),
+])
+@pytest.mark.parametrize("following", (False, True))
+def test_preparation_rejects_invalid_meter_or_duration(meter, following):
+    from piano_teacher.notation.practice_timeline import preparation_measure_descriptor
+    context = {"start_beat": 0, "end_beat": .5,
+               "meter": [1, 8] if following else meter, "keys": {}, "clefs": {}}
+    upcoming = {"start_beat": .5, "end_beat": 4.5, "meter": meter}
+    with pytest.raises(ValueError):
+        preparation_measure_descriptor(
+            context, 0, following_measure=upcoming if following else None)
+
+
+@pytest.mark.parametrize("start,meter", [
+    (float("nan"), [4, 4]), (float("inf"), [4, 4]),
+    (1e308, [3e307, 1]), (1e20, [4, 4]),
+])
+def test_preparation_requires_finite_positive_span(start, meter):
+    from piano_teacher.notation.practice_timeline import preparation_measure_descriptor
+    with pytest.raises(ValueError):
+        preparation_measure_descriptor({"meter": meter, "keys": {}, "clefs": {}}, start)
 
 
 @pytest.mark.parametrize("hand", ("right", "left"))

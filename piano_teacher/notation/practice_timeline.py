@@ -22,14 +22,25 @@ from ..lesson_timing import preparation_meter
 SCHEMA = "piano-teacher-practice-timeline-v1"
 
 
+def _preparation_duration(meter) -> float:
+    numerator, denominator = meter
+    if any(not math.isfinite(value) or value <= 0 for value in meter):
+        raise ValueError("Practice preparation needs a finite positive meter")
+    duration = numerator * 4.0 / denominator
+    if not math.isfinite(duration) or duration <= 0:
+        raise ValueError("Practice preparation needs a finite positive duration")
+    return duration
+
+
 def preparation_measure_descriptor(measure, start_beat: float,
                                    staff_order=("right", "left"), *,
                                    following_measure=None) -> dict:
     """One full silent measure inheriting the upcoming source context."""
     context = asdict(measure) if is_dataclass(measure) else measure
     numerator, denominator = context["meter"]
-    if numerator <= 0 or denominator <= 0 or not math.isfinite(start_beat):
-        raise ValueError("Practice preparation needs a positive meter and finite position")
+    duration = _preparation_duration((numerator, denominator))
+    if not math.isfinite(start_beat):
+        raise ValueError("Practice preparation needs a finite position")
     source_meter = [numerator, denominator]
     if following_measure is not None:
         following = (asdict(following_measure) if is_dataclass(following_measure)
@@ -37,14 +48,18 @@ def preparation_measure_descriptor(measure, start_beat: float,
         # Only the adjacent source measure can establish a pickup's normal
         # meter. Do not scan across real 1/8 bars to a later meter change.
         if abs(following["start_beat"] - context["end_beat"]) <= 1e-7:
+            _preparation_duration(following["meter"])
             numerator, denominator = preparation_meter(
                 (numerator, denominator),
                 ((following["start_beat"], *following["meter"]),),
                 context["start_beat"])
-    duration = numerator * 4.0 / denominator
+            duration = _preparation_duration((numerator, denominator))
+    end_beat = start_beat + duration
+    if not math.isfinite(end_beat) or end_beat <= start_beat:
+        raise ValueError("Practice preparation needs a finite positive span")
     return {
         "kind": "measure_rest", "origin": "practice",
-        "start_beat": start_beat, "end_beat": start_beat + duration,
+        "start_beat": start_beat, "end_beat": end_beat,
         "duration_beats": duration,
         "meter": [numerator, denominator], "source_meter": source_meter,
         "keys": deepcopy(context["keys"]), "clefs": deepcopy(context["clefs"]),
@@ -62,9 +77,23 @@ def preparation_measure_descriptor(measure, start_beat: float,
 
 def practice_timeline_descriptor(measures, duration_beats: float,
                                  staff_order=("right", "left")) -> dict:
-    """Describe a source pass followed by preparation for its FIRST measure."""
+    """Append preparation to a contiguous source grid spanning 0..duration."""
     if not measures or not math.isfinite(duration_beats) or duration_beats <= 0:
         raise ValueError("Practice timeline needs source measures and positive duration")
+    previous_end = 0.0
+    for measure in measures:
+        context = asdict(measure) if is_dataclass(measure) else measure
+        try:
+            start, end = context["start_beat"], context["end_beat"]
+            valid = (math.isfinite(start) and math.isfinite(end)
+                     and start == previous_end and end > start)
+        except (KeyError, TypeError) as exc:
+            raise ValueError("Source measures need explicit finite beat boundaries") from exc
+        if not valid:
+            raise ValueError("Source measures must form a positive contiguous grid starting at zero")
+        previous_end = end
+    if previous_end != duration_beats:
+        raise ValueError("Source grid must end at the source duration")
     gap = preparation_measure_descriptor(
         measures[0], duration_beats, staff_order,
         following_measure=measures[1] if len(measures) > 1 else None)

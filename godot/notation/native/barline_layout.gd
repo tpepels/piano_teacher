@@ -1,6 +1,14 @@
 extends RefCounted
 # Native barline layout, separate from paint and GPU glyph management.
 # Semantic quarter-beat positions and staff bounds are supplied explicitly.
+const LEAD_STAFF_SPACES := 1.35
+
+static func project(beat: float, timeline, clock: float, playhead_x: float,
+        play_from_beat: float, gap: float) -> float:
+    # One constant engraving lead clears incoming noteheads without changing
+    # any measure's duration or width. Start/end ownership cannot alter it.
+    return timeline.screen_x(beat,clock,playhead_x,play_from_beat)-gap*LEAD_STAFF_SPACES
+
 static func boundary(measures: Array, measure: Dictionary, timeline,
         clock: float, playhead_x: float, play_from_beat: float,
         gap: float, top: float, bottom: float) -> Dictionary:
@@ -22,8 +30,8 @@ static func boundary(measures: Array, measure: Dictionary, timeline,
             mark = {"style":"heavy-heavy","repeat":"both"}
     if not mark is Dictionary:
         mark = {"style":"regular","repeat":""}
-    var x: float = timeline.screen_x(float(measure.get("start_beat", 0.0)),
-        clock, playhead_x, play_from_beat) - gap*1.35
+    var x: float = project(float(measure.get("start_beat", 0.0)), timeline,
+        clock, playhead_x, play_from_beat, gap)
     return {"x":x, "top":top,
         "bottom":bottom,
         "style":str(mark.get("style","regular")),
@@ -39,8 +47,8 @@ static func terminal(measures: Array, timeline,
     var mark: Variant = last.get("right_barline")
     if not mark is Dictionary:
         mark = {"style":"regular","repeat":""}
-    var x: float = timeline.screen_x(float(last.get("end_beat",0.0)),
-        clock,playhead_x,play_from_beat)-gap*.45
+    var x: float = project(float(last.get("end_beat",0.0)), timeline,
+        clock,playhead_x,play_from_beat,gap)
     return {"x":x, "top":top,
         "bottom":bottom,
         "style":str(mark.get("style","regular")),
