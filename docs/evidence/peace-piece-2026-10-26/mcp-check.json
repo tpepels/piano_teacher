@@ -1,0 +1,25 @@
+{
+  "project": "/home/tom/Projects/piano_teacher/godot",
+  "project_name": "Piano Teacher",
+  "runtime_port": 6570,
+  "runtime_ready": true,
+  "scene": "main",
+  "runtime_observation": {
+    "lesson_step": 7,
+    "hand": "both",
+    "practice_contract_error": "",
+    "native_ready": true
+  },
+  "paused_gap_observation": {
+    "phase": "paused",
+    "pause_context": "preview_gap",
+    "visual_scroll_beat": 6.10292087000562,
+    "practice_contract_error": ""
+  },
+  "screenshots": [
+    "after-app-right-outline.png",
+    "after-app-both-hands.png",
+    "after-app-full-rest.png"
+  ],
+  "playtest_stopped_after_capture": true
+}

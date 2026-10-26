@@ -36,6 +36,10 @@ quick_checks() {
     tests/test_fingering_placement_metadata.py \
     tests/test_canonical_fingering_isolation.py \
     tests/test_practice_timeline.py \
+    tests/test_preprocessing_cache.py \
+    tests/test_piano_register_engraving.py \
+    tests/test_native_display_hand.py \
+    tests/test_peace_piece_pixels.py \
     tests/test_continuous_practice_loop.py \
     tests/test_continuous_repeat_pixels.py \
     tests/test_repeat_transport_pixels.py \

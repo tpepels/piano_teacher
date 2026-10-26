@@ -428,7 +428,7 @@ def test_midi_fingering_preserves_existing_base_engraving_cache_key(engine, musi
     p, phrase = engine.plan, engine.display_phrase()
     compact = phrase.last_bar - phrase.first_bar + 1 <= 12 and phrase.end - phrase.start <= 48
     expected = engine.preprocessing.key(
-        "engraving", "readable-midi-engraving-v2", engine.fingerprint, p.identity,
+        "engraving", "readable-midi-engraving-v3", engine.fingerprint, p.identity,
         phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
         p.hand, p.piece.bpm, compact,
         tuple((n.source_id, n.start, n.end, n.pitch, n.hand) for n in phrase.notes))

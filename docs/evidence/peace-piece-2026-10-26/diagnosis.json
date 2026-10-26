@@ -1,0 +1,137 @@
+{
+  "source_meters": [
+    [
+      0.0,
+      1,
+      8
+    ],
+    [
+      0.5,
+      4,
+      4
+    ]
+  ],
+  "source_grid": [
+    0.0,
+    0.5,
+    4.5,
+    8.5,
+    12.5
+  ],
+  "source_right_attacks": [
+    {
+      "start": 0.5,
+      "end": 2.5,
+      "pitch": 36,
+      "track": 0,
+      "channel": 1,
+      "hand": "right",
+      "source_id": "midi-t0-e29",
+      "voice": "midi-t0-c1",
+      "spelling": null,
+      "velocity": 49
+    },
+    {
+      "start": 0.5,
+      "end": 2.5,
+      "pitch": 60,
+      "track": 0,
+      "channel": 1,
+      "hand": "right",
+      "source_id": "midi-t0-e30",
+      "voice": "midi-t0-c1",
+      "spelling": null,
+      "velocity": 49
+    },
+    {
+      "start": 0.5,
+      "end": 2.5,
+      "pitch": 64,
+      "track": 0,
+      "channel": 1,
+      "hand": "right",
+      "source_id": "midi-t0-e31",
+      "voice": "midi-t0-c1",
+      "spelling": null,
+      "velocity": 49
+    },
+    {
+      "start": 0.5,
+      "end": 2.5,
+      "pitch": 67,
+      "track": 0,
+      "channel": 1,
+      "hand": "right",
+      "source_id": "midi-t0-e32",
+      "voice": "midi-t0-c1",
+      "spelling": null,
+      "velocity": 49
+    },
+    {
+      "start": 2.5,
+      "end": 4.5,
+      "pitch": 43,
+      "track": 0,
+      "channel": 1,
+      "hand": "right",
+      "source_id": "midi-t0-e37",
+      "voice": "midi-t0-c1",
+      "spelling": null,
+      "velocity": 49
+    },
+    {
+      "start": 2.5,
+      "end": 4.5,
+      "pitch": 60,
+      "track": 0,
+      "channel": 1,
+      "hand": "right",
+      "source_id": "midi-t0-e38",
+      "voice": "midi-t0-c1",
+      "spelling": null,
+      "velocity": 49
+    },
+    {
+      "start": 2.5,
+      "end": 4.5,
+      "pitch": 62,
+      "track": 0,
+      "channel": 1,
+      "hand": "right",
+      "source_id": "midi-t0-e39",
+      "voice": "midi-t0-c1",
+      "spelling": null,
+      "velocity": 49
+    },
+    {
+      "start": 2.5,
+      "end": 4.5,
+      "pitch": 65,
+      "track": 0,
+      "channel": 1,
+      "hand": "right",
+      "source_id": "midi-t0-e40",
+      "voice": "midi-t0-c1",
+      "spelling": null,
+      "velocity": 49
+    },
+    {
+      "start": 2.5,
+      "end": 4.5,
+      "pitch": 67,
+      "track": 0,
+      "channel": 1,
+      "hand": "right",
+      "source_id": "midi-t0-e41",
+      "voice": "midi-t0-c1",
+      "spelling": null,
+      "velocity": 49
+    }
+  ],
+  "normalized_chord_svg_classes": {
+    "ledgerLines": 0,
+    "stem": 1,
+    "notehead": 4
+  },
+  "cause": "Generated same-duration MIDI chord combines remote register with treble cluster; full Verovio reproduces long stem. Original atlas does not contain foreign ledger lines."
+}

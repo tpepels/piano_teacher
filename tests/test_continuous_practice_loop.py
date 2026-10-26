@@ -867,3 +867,112 @@ def test_unpolled_source_does_not_advance_excluded_transport(
     app._receive(midi_note(60, is_on=False))
     assert app.run_at == run_at and app.transport_id == transport
     assert app.recorder is recorder and app.next_at == 0
+
+
+@pytest.fixture
+def peace_timing_engine(tmp_path, monkeypatch):
+    """Real opening lesson, without loading a provider or launching a renderer."""
+    from piano_teacher import server
+    from piano_teacher.importing.pieces import import_piece
+    path = Path(__file__).resolve().parents[1] / "midi/Peace_Piece_-_Bill_Evans_(Piano_Solo).midi"
+    piece, _ = import_piece(path)
+    now = [100.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: now[0])
+    engines = []
+
+    def create(hand, bpm=56, *, connected=False):
+        app = PracticeEngine(tmp_path / str(len(engines)), enable_midi=False)
+        engines.append(app)
+        app.plan = LearningPlan(piece)
+        app.plan.set_hand(hand)
+        app.plan.set_bpm(bpm)
+        if connected:
+            app._piano_connected = lambda: True
+        return app, now
+
+    yield create
+    for app in engines:
+        app.db.close()
+
+
+@pytest.mark.parametrize("hand", ("right", "left"))
+@pytest.mark.parametrize("bpm", (30, 40, 56, 120))
+def test_real_peace_preview_rest_is_four_beats_through_pause_and_next_copy(
+        peace_timing_engine, hand, bpm):
+    app, now = peace_timing_engine(hand, bpm)
+    before = app.semantic_score()
+    app.start()
+    assert app.count_in_meter == [4, 4] and app.count_in_bar_beats == 4
+    assert app.visual_gap_beats == 4
+    source_end = app.run_at + 4.5*60/bpm
+    now[0] = source_end + .21
+    gap = app.state()
+    assert gap["phase"] == "preview_gap"
+    assert gap["practice_timeline"]["gap"]["meter"] == [4, 4]
+    assert gap["practice_timeline"]["gap"]["source_meter"] == [1, 8]
+    assert app.next_at == pytest.approx(source_end + 4*60/bpm)
+    deadline = app.next_at
+    now[0] = source_end + 2*60/bpm
+    midpoint = app.state()
+    assert midpoint["visual_scroll_beat"] == pytest.approx(6.5)
+    app.control("pause")
+    now[0] += 23
+    assert app.state()["visual_scroll_beat"] == pytest.approx(6.5)
+    app.control("resume")
+    assert app.state()["visual_scroll_beat"] == pytest.approx(6.5)
+    assert app.next_at == pytest.approx(deadline + 23)
+    now[0] = deadline + 23 + .031
+    repeated = app.state()
+    assert repeated["running"] and repeated["count_in_beats"] == 0
+    assert repeated["play_from_beat"] == 0
+    assert repeated["visual_offset_beats"] == 8.5
+    assert repeated["visual_scroll_beat"] == pytest.approx(8.5 + .031*bpm/60)
+    assert repeated["revision"] == before["revision"]
+    after = app.semantic_score()
+    assert after["notes"] == before["notes"]
+    assert after["notation_events"] == before["notation_events"]
+    assert after["measures"] == before["measures"]
+    assert after["measures"][0]["meter"] == [1, 8]
+    assert app.plan.streak == 0 and not app.plan.mastered
+
+
+@pytest.mark.parametrize("hand", ("right", "left"))
+def test_real_peace_clean_repeat_uses_same_four_beat_rest_and_preserves_grading(
+        peace_timing_engine, hand):
+    app, now = peace_timing_engine(hand, connected=True)
+    app.start()
+    record_clean(app)
+    source_end = app.run_at + 4.5*60/56
+    now[0] = source_end + .21
+    feedback = app.state()
+    assert feedback["take_result"]["clean"]
+    assert app.next_at == pytest.approx(source_end + 4*60/56)
+    now[0] = app.next_at + .01
+    repeated = app.state()
+    assert repeated["running"] and repeated["count_in_beats"] == 0
+    assert repeated["visual_scroll_beat"] == pytest.approx(8.5 + .01*56/60)
+    assert repeated["streak"] == 1 and not app.plan.mastered
+    assert repeated["revision"] == feedback["revision"]
+
+
+@pytest.mark.parametrize("hand", ("right", "left"))
+def test_real_peace_manual_retry_uses_same_preparation_meter_as_repeat(
+        peace_timing_engine, hand):
+    app, now = peace_timing_engine(hand)
+    app.start()
+    now[0] = app.run_at + 1
+    app.control("restart")
+    reversing = app.state()
+    measure = reversing["practice_preparation"]["measure"]
+    assert measure["duration_beats"] == 4
+    assert measure["meter"] == [4, 4] and measure["source_meter"] == [1, 8]
+    assert (measure["start_beat"], measure["end_beat"]) == (-4, 0)
+    assert app.next_at == pytest.approx(app._preparation_at + 4*60/56)
+    now[0] = app._preparation_at + 2*60/56
+    preparing = app.state()
+    assert preparing["practice_preparation"]["phase"] == "preparing"
+    assert preparing["visual_scroll_beat"] == pytest.approx(-2)
+    now[0] = app.next_at + .01
+    repeated = app.state()
+    assert repeated["running"] and repeated["count_in_beats"] == 0
+    assert repeated["visual_scroll_beat"] == pytest.approx(.01*56/60)

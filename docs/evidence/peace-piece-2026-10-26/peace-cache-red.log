@@ -1,0 +1,78 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__ test_peace_register_layout_replaces_legacy_cache_and_reuses_new_warm_cache __
+
+tmp_path = PosixPath('/tmp/pytest-of-tom/pytest-234/test_peace_register_layout_rep0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7fe3699b43e0>
+
+    def test_peace_register_layout_replaces_legacy_cache_and_reuses_new_warm_cache(
+            tmp_path, monkeypatch):
+        """An existing installation must receive the correction without cache deletion."""
+        import hashlib
+        from xml.etree import ElementTree as ET
+        from piano_teacher import server
+        from piano_teacher.importing.pieces import import_piece
+        from piano_teacher.learning import LearningPlan
+        from piano_teacher.notation import lesson
+
+        path = Path(__file__).resolve().parents[1] / "midi/Peace_Piece_-_Bill_Evans_(Piano_Solo).midi"
+        piece, _ = import_piece(path)
+        engines = []
+
+        def create():
+            app = PracticeEngine(tmp_path / "state", enable_midi=False)
+            engines.append(app)
+            app.plan = LearningPlan(piece)
+            app.plan.select_step(3)
+            app.fingerprint = hashlib.sha256(path.read_bytes()).hexdigest()
+            return app
+
+        def staff_index(engraving, identifier):
+            found = []
+            for page in engraving.pages:
+                root = ET.fromstring(page)
+                for measure in root.iter():
+                    if measure.get("class") != "measure":
+                        continue
+                    staves = [node for node in measure if node.get("class") == "staff"]
+                    found.extend(index for index, staff in enumerate(staves)
+                                 if any(node.get("id") == identifier for node in staff.iter()))
+            assert len(found) == 1
+            return found[0]
+
+        try:
+            app = create()
+            p, phrase = app.plan, app.display_phrase()
+            # Reproduce the previous generator: source hands also selected the
+            # engraved staff, leaving the real C2 inside the wide RH chord.
+            with monkeypatch.context() as previous:
+                previous.setattr(lesson, "distribute_piano_registers", lambda lanes, clefs: lanes)
+                old_score = lesson.build_lesson_score(
+                    phrase, boundaries=piece.bar_boundaries,
+                    time_signatures=piece.time_signatures,
+                    default_clefs=lesson.infer_piece_clefs(piece.notes))
+            low_id = next(identifier for identifier, binding in old_score.note_bindings.items()
+                          if binding["source_id"] == "midi-t0-e29")
+            legacy = server.render_layout(old_score, phrase.first_bar, phrase.last_bar,
+                p.hand, total_beats=phrase.end-phrase.start, bpm=piece.bpm, continuous=True)
+            assert staff_index(legacy, low_id) == 0
+            legacy_key = app.preprocessing.key(
+                "engraving", "readable-midi-engraving-v2", app.fingerprint, p.identity,
+                phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
+                p.hand, piece.bpm, True,
+                tuple((n.source_id, n.start, n.end, n.pitch, n.hand) for n in phrase.notes))
+            app.preprocessing.write_json("engraving", legacy_key,
+                                        {"pages": list(legacy.pages), "layout": legacy.layout})
+
+            corrected = app.engraving()
+>           assert staff_index(corrected, low_id) == 1, "Existing cache retained the huge treble-staff chord"
+E           AssertionError: Existing cache retained the huge treble-staff chord
+E           assert 0 == 1
+E            +  where 0 = <function test_peace_register_layout_replaces_legacy_cache_and_reuses_new_warm_cache.<locals>.staff_index at 0x7fe369f99590>(EngravedScore(pages=('<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ...clefs': {'right': {'sign': 'G', 'line': 2, 'octave_change': 0}, 'left': {'sign': 'F', 'line': 4, 'octave_change': 0}}}), 'pt644b35800798b2a83695981579e7c144s0')
+
+tests/test_preprocessing_cache.py:150: AssertionError
+----------------------------- Captured stdout call -----------------------------
+PREPROCESS_ENGRAVING_CACHE_HIT: 1 2 40
+=========================== short test summary info ============================
+FAILED tests/test_preprocessing_cache.py::test_peace_register_layout_replaces_legacy_cache_and_reuses_new_warm_cache
+1 failed in 0.36s

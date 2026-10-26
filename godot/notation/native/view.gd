@@ -468,7 +468,7 @@ func _fingering_obstacles(gap: float, bins: Dictionary, cell: float) -> void:
             var width: float = float(box[2])*unit if kind == "number" or events.size() == 1 else x1-x0+(float(box[2])-float(info["span"]))*unit
             _fingering_block(Rect2(left,y+float(box[1])*unit,width,float(box[3])*unit),bins,cell)
     for mark in source_expressions:
-        var hand: String = str(mark.get("hand","right"))
+        var hand: String = _display_staff(mark)
         var kind: String = str(mark.get("kind",""))
         var value: String = str(mark.get("value",""))
         var x: float = float(mark.get("beat",0.0))*density
@@ -528,7 +528,7 @@ func _fingering_obstacles(gap: float, bins: Dictionary, cell: float) -> void:
         var target: Dictionary = expression_note_index.get(str(grace.get("before_note_id","")),{})
         if target.is_empty():
             continue
-        var hand: String = str(grace.get("hand","right"))
+        var hand: String = _display_staff(grace)
         var step: int = Geometry.staff_step(grace.get("spelling",{}),_clef_for(hand,_measure_for(grace)))
         var y: float = Geometry.note_y(step,_staff_center(hand)+gap*2.0,gap)
         var kind: String = str(grace.get("note_type","eighth"))
@@ -542,7 +542,7 @@ func _fingering_obstacles(gap: float, bins: Dictionary, cell: float) -> void:
     for mark in source_expressions:
         if str(mark.get("kind","")) != "hairpin":
             continue
-        var hand: String = str(mark.get("hand","right"))
+        var hand: String = _display_staff(mark)
         var key: String = hand+"|"+str(mark.get("number","1"))
         if str(mark.get("value","")) in ["crescendo","diminuendo"]:
             pending[key] = mark
@@ -795,7 +795,7 @@ func _paint_fingerings(clock: float, playhead_x: float, gap: float,
 
 func _fill_fingering_menu(menu: PopupMenu, event: Dictionary) -> void:
     var assignment: Dictionary = _fingering_assignment(event)
-    menu.add_item(str(event.get("staff","right")).capitalize()+" hand · fingering", 100)
+    menu.add_item(_performing_hand(event).capitalize()+" hand · fingering", 100)
     menu.set_item_disabled(0,true)
     for finger in range(1,6):
         menu.add_radio_check_item(str(finger),finger)
@@ -846,7 +846,7 @@ func _open_fingering_editor(point: Vector2) -> bool:
             _fill_fingering_menu(submenu,event)
             var pitch: Dictionary = event.get("spelling",{})
             fingering_popup.add_submenu_item("%s · voice %s · %s%s" % [
-                str(event.get("staff","right")).capitalize(),str(event.get("voice","1")),
+                _performing_hand(event).capitalize(),str(event.get("voice","1")),
                 str(pitch.get("step","")),str(pitch.get("octave",""))],submenu.name)
     var screen: Vector2 = get_screen_transform()*point
     fingering_popup.popup(Rect2i(Vector2i(screen),Vector2i.ZERO))
@@ -932,14 +932,25 @@ func _gap() -> float:
     var gap: float = clampf(size.y * .042, 8.5, staff_gap_limit)
     if timeline.model.is_empty():
         return gap
+    var onset_ink: Dictionary = {}
     for event in ordered_events:
+        var staff: String = str(event.get("staff", "right"))
+        var center: float = _staff_center(staff)
+        var accidentals: Dictionary = {}
+        if str(event.get("accidental","")) in Geometry.ACCIDENTAL_GLYPHS:
+            accidentals[str(event["id"])] = 0.0
+        var unit_ink: Rect2 = _event_ink_rect(event,1.0,{},accidentals)
+        var at: float = float(event["beat"])
+        if not onset_ink.has(at):
+            onset_ink[at] = {}
+        var hull: Vector2 = onset_ink[at].get(staff,Vector2(INF,-INF))
+        onset_ink[at][staff] = Vector2(minf(hull.x,unit_ink.position.y-center),
+            maxf(hull.y,unit_ink.end.y-center))
         if str(event.get("kind", "")) != "note":
             continue
-        var staff: String = str(event.get("staff", "right"))
         var clef: Dictionary = _clef_for(staff, _measure_for(event))
         var step: int = Geometry.staff_step(event.get("spelling", {}), clef)
         var factor: float = 2.0 - float(step)*.5
-        var center: float = _staff_center(staff)
         var assignment: Dictionary = _fingering_assignment(event)
         var above: float = 45.0 if not assignment.is_empty() and assignment["hand"] == "right" else 32.0
         var below: float = 45.0 if not assignment.is_empty() and assignment["hand"] == "left" else 32.0
@@ -947,11 +958,58 @@ func _gap() -> float:
             gap = minf(gap, (center-above) / -factor)
         elif factor > .001:
             gap = minf(gap, (size.y-below-center) / factor)
+        # Ink coordinates at unit staff spacing scale linearly around the
+        # display staff's fixed centre. Empty horizontal-offset maps avoid
+        # invoking the offset/density layout while this gap is being fitted.
+        # The complete authentic sprite includes its shaft/flag and cap;
+        # a fixed notehead margin alone cannot contain a low down-stem note.
+        gap = _fit_vertical_ink_gap(gap,staff,unit_ink)
+    # Beamed shafts can be stretched beyond an isolated note template.
+    # Reserve the same source fragment and endpoint extents as the painter.
+    for group in beam_groups:
+        var ids := PackedStringArray()
+        for event in group:
+            ids.append(str(event["id"]))
+        var info: Dictionary = glyphs.beam_metadata.get("|".join(ids),{})
+        if info.is_empty():
+            continue
+        var first: Dictionary = group[0]
+        var box: Array = info["bounds"]
+        gap = _fit_vertical_ink_gap(gap,str(first["staff"]),Rect2(0.0,
+            _event_y(first,1.0)+float(box[1])/250.0,1.0,float(box[3])/250.0))
+        var tips: Array = info["tip_offsets"]
+        for index in range(group.size()):
+            var event: Dictionary = group[index]
+            var extents: Dictionary = _chord_extents(event,1.0)
+            var head: float = float(extents["bottom_y" if info["stem_up"] else "top_y"])
+            var tip: float = head+float(tips[index])/250.0
+            gap = _fit_vertical_ink_gap(gap,str(event["staff"]),Rect2(0.0,minf(head,tip),1.0,absf(head-tip)))
+    # Simultaneous ink must also fit BETWEEN the fixed staff centres. Source
+    # shafts/chord sprites stay authentic; scale the entire score uniformly.
+    var staff_distance: float = _staff_center("left")-_staff_center("right")
+    for lanes in onset_ink.values():
+        if not lanes.has("right") or not lanes.has("left"):
+            continue
+        var difference: float = lanes["right"].y-lanes["left"].x
+        if difference>0.0:
+            gap = minf(gap,(staff_distance-3.0)/difference)
     # A note that truly cannot fit is still drawn deterministically; the
     # score is not cropped, and no horizontal position can change.
     cached_staff_gap = maxf(5.0, gap)
     cached_gap_height = size.y
     return cached_staff_gap
+
+
+func _fit_vertical_ink_gap(limit: float, staff: String, unit_ink: Rect2) -> float:
+    var center: float = _staff_center(staff)
+    var top: float = unit_ink.position.y-center
+    var bottom: float = unit_ink.end.y-center
+    if top<-.001:
+        limit = minf(limit,(center-3.0)/-top)
+    if bottom>.001:
+        limit = minf(limit,(size.y-3.0-center)/bottom)
+    return limit
+
 
 func _clef_for(staff: String, measure: Dictionary) -> Dictionary:
     var clefs: Dictionary = measure.get("clefs", {})
@@ -971,8 +1029,27 @@ func _event_y(event: Dictionary, gap: float) -> float:
     var bottom: float = _staff_center(staff) + 2.0 * gap
     return Geometry.note_y(step, bottom, gap)
 
-func _ink(staff: String) -> Color:
-    var selected: bool = active_hand == "both" or active_hand == staff
+func _performing_hand(event: Dictionary) -> String:
+    # The source performer is independent of the staff chosen for engraving.
+    # Note-linked marks inherit that performer, including older expression
+    # payloads whose `hand` field described only their display lane.
+    var linked: String = str(event.get("note_id",event.get("before_note_id","")))
+    var owner: Dictionary = expression_note_index.get(linked,event)
+    return str(owner.get("hand",owner.get("staff","right")))
+
+
+func _display_staff(event: Dictionary) -> String:
+    var linked: String = str(event.get("note_id",event.get("before_note_id","")))
+    var owner: Dictionary = expression_note_index.get(linked,event)
+    return str(owner.get("staff",owner.get("hand","right")))
+
+
+func _event_ink(event: Dictionary) -> Color:
+    return _ink(_performing_hand(event))
+
+
+func _ink(hand: String) -> Color:
+    var selected: bool = active_hand == "both" or active_hand == hand
     return NOTE_INK if selected else Color(DIM_INK, .46)
 
 
@@ -1185,7 +1262,7 @@ func _paint_tuplet_brackets(clock: float, playhead_x: float,
             continue
         glyphs.paint_tuplet(self,"|".join(ids),x0,x1,
             _rest_y(first,gap) if str(first.get("kind","")) == "rest" else _event_y(first,gap),gap,
-            _ink(str(group.get("staff","right"))))
+            _event_ink(first))
 
 
 func _tuplet_hidden(group: Dictionary) -> bool:
@@ -1973,6 +2050,7 @@ func _beam_layout(gap: float, clock: float, playhead_x: float,
                 "x":float(member["x"])}
         drawn_groups.append({"members":members,
             "staff":str(group[0].get("staff", "right")),
+            "hand":_performing_hand(group[0]),
             "up":up, "art_key":art_key,
             "source_stem_offsets":source_stems,
             # Beam bounds are exported relative to the first source ID,
@@ -1999,7 +2077,7 @@ func _paint_beams(data: Dictionary, gap: float) -> void:
             anchors.append(float(member["x"]))
         glyphs.paint_beam(self,str(group["art_key"]),anchors,
             float(group["anchor_y"]),gap,
-            _ink(str(group.get("staff","right"))),group["source_stem_offsets"])
+            _event_ink(group),group["source_stem_offsets"])
 
 
 # Only the original Verovio-rendered tie contours are permitted.
@@ -2124,7 +2202,7 @@ func _paint_tie_contour(first: Dictionary, last: Dictionary,
     draw_texture_rect(texture,Rect2(left,
         float(place["y"])+float(box[1])*unit,
         right-left,float(box[3])*unit),false,
-        _ink(str(last.get("staff","right"))))
+        _event_ink(last))
 
 
 # Binary-search into pre-sorted MusicXML events. Work is proportional
@@ -2147,7 +2225,7 @@ func _paint_slurs(playhead_x: float,clock: float,gap: float) -> void:
             continue
         glyphs.paint_slur(self,str(pair["key"]),x0,_event_y(first,gap),
             x1,_event_y(last,gap),gap,
-            _ink(str(first.get("staff","right"))))
+            _event_ink(first))
 
 
 func _paint_expressions(left: float, right: float, clock: float,
@@ -2159,8 +2237,8 @@ func _paint_expressions(left: float, right: float, clock: float,
         var at: float = float(mark.get("beat", -1.0))
         if not _practice_event_visible(mark):
             continue
-        var hand: String = str(mark.get("hand", "right"))
-        var ink: Color = _ink(hand)
+        var hand: String = _display_staff(mark)
+        var ink: Color = _event_ink(mark)
         var kind: String = str(mark.get("kind", ""))
         var value: String = str(mark.get("value", ""))
         var x: float = timeline.screen_x(at, clock, playhead_x, play_from_beat)
@@ -2215,7 +2293,7 @@ func _paint_hairpins(left: float, right: float, clock: float,
     for mark in source_expressions:
         if str(mark.get("kind", "")) != "hairpin":
             continue
-        var hand: String = str(mark.get("hand", "right"))
+        var hand: String = _display_staff(mark)
         var key: String = hand+"|"+str(mark.get("number", "1"))
         var kind: String = str(mark.get("value", ""))
         if kind in ["crescendo", "diminuendo"]:
@@ -2248,7 +2326,7 @@ func _paint_hairpins(left: float, right: float, clock: float,
         var half0: float = lerpf(open_start,open_end,t0)*.5
         var half1: float = lerpf(open_start,open_end,t1)*.5
         var y: float = _staff_center(hand)+gap*3.55
-        var ink: Color = _ink(hand)
+        var ink: Color = _event_ink(start)
         draw_line(Vector2(x0,y-half0),Vector2(x1,y-half1),ink,1.3,true)
         draw_line(Vector2(x0,y+half0),Vector2(x1,y+half1),ink,1.3,true)
 
@@ -2321,7 +2399,7 @@ func _paint_grace_notes(gap: float) -> void:
         var target: String = str(grace.get("before_note_id", ""))
         if not pass_noteheads.has(target):
             continue
-        var hand: String = str(grace.get("hand", "right"))
+        var hand: String = _display_staff(grace)
         var spelling: Dictionary = grace.get("spelling", {})
         var clef: Dictionary = _clef_for(hand, _measure_for(grace))
         var step: int = Geometry.staff_step(spelling, clef)
@@ -2329,7 +2407,7 @@ func _paint_grace_notes(gap: float) -> void:
         var head: Vector2 = pass_noteheads[target]
         var kind: String = str(grace.get("note_type", "eighth"))
         glyphs.paint_note(self, kind, step < 4,
-            head.x-gap*1.4, y, gap*.66, _ink(hand))
+            head.x-gap*1.4, y, gap*.66, _event_ink(grace))
 
 
 func _visible_events(left: float, right: float) -> Array:
@@ -2414,8 +2492,12 @@ func _practice_context_before(at: float, stride: float) -> Dictionary:
             previous = measure
     if previous.is_empty() and pass_start>0.0:
         # At a copy boundary the preceding intact ordinary gap has already
-        # restored the opening context. Intersecting gaps are handled below.
-        previous = timeline.measures[0]
+        # established its actual context. A pickup preparation can use 4/4
+        # while the canonical source still opens in 1/8.
+        var incoming: Dictionary = practice_timeline["gap"].duplicate(true)
+        incoming["start_beat"] = pass_start-float(incoming["duration_beats"])
+        incoming["end_beat"] = pass_start
+        return incoming
     if previous.is_empty():
         return {}
     var result: Dictionary = previous.duplicate(true)
@@ -2457,8 +2539,23 @@ func _paint_preparation_measure(measure: Dictionary, previous: Dictionary,
 # no cloned notes or IDs in the semantic model, MIDI evaluator or glyph atlas.
 # Offsetting the camera instead of the music preserves exact source timing,
 # beam/tie geometry and existing per-viewport binary search.
+func _context_meter_x(measure: Dictionary, x: float, gap: float,
+        opening: bool, right_limit: float = INF) -> float:
+    var center: float = x-gap*1.6-(76.0*gap/17.0 if opening else 0.0)
+    if not is_finite(right_limit):
+        return center
+    var half_width := 0.0
+    for value in measure.get("meter",[4,4]):
+        var text: String = str(int(value))
+        var widest := 0.0
+        for digit in text:
+            widest = maxf(widest,float(glyphs.bounds["time_"+digit][2])*gap/500.0)
+        half_width = maxf(half_width,float(text.length()-1)*gap*1.10*.5+widest)
+    return minf(center,right_limit-half_width-3.0)
+
+
 func _paint_context(measure: Dictionary, previous_measure: Dictionary, x: float,
-        gap: float, opening: bool) -> bool:
+        gap: float, opening: bool, meter_right_limit: float = INF) -> bool:
     var header_scale: float = gap/17.0
     var header_shift: float = 76.0*header_scale if opening else 0.0
     var crowded_meter: bool = _meter_is_crowded(measure,previous_measure,gap)
@@ -2501,9 +2598,10 @@ func _paint_context(measure: Dictionary, previous_measure: Dictionary, x: float,
                 measure.get("meter",[])) and not crowded_meter:
             var meter: Array = measure.get("meter",[4,4])
             if meter.size() >= 2:
-                _paint_meter_number(int(meter[0]), x-gap*1.6-header_shift,
+                var meter_x: float = _context_meter_x(measure,x,gap,opening,meter_right_limit)
+                _paint_meter_number(int(meter[0]), meter_x,
                     center-gap*.95, _ink(staff), gap)
-                _paint_meter_number(int(meter[1]), x-gap*1.6-header_shift,
+                _paint_meter_number(int(meter[1]), meter_x,
                     center+gap*.8, _ink(staff), gap)
     if crowded_meter:
         _paint_meter_above_staff(measure,x,gap)
@@ -2520,7 +2618,11 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
     var current: float = timeline.musical_beat(camera_clock,play_from_beat)
     var left: float = current-playhead_x/timeline.pixels_per_beat
     var right: float = left+size.x/timeline.pixels_per_beat
-    var previous_measure: Dictionary = timeline.measures[0] if pass_index>0 else {}
+    var previous_measure: Dictionary = {}
+    if pass_index>0:
+        previous_measure = _practice_context_before(pass_start,float(practice_timeline["stride_beats"]))
+        previous_measure["start_beat"] = float(previous_measure["start_beat"])-pass_start
+        previous_measure["end_beat"] = float(previous_measure["end_beat"])-pass_start
     for measure in timeline.measures:
         var at: float = float(measure.get("start_beat",0.0))
         var first: bool = measure == timeline.measures[0]
@@ -2529,7 +2631,9 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
             var silence: Dictionary = current_preparation["measure"]
             target_boundary = absf(at-float(current_preparation["source_from_beat"]))<.00001
             if target_boundary:
-                previous_measure = silence
+                previous_measure = silence.duplicate(true)
+                previous_measure["start_beat"] = float(silence["start_beat"])-pass_start
+                previous_measure["end_beat"] = float(silence["end_beat"])-pass_start
         if not target_boundary and not _practice_event_visible(measure):
             continue
         if at<left-.7 or at>right+.7:
@@ -2541,7 +2645,15 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
             var barline: Dictionary = _barline_geometry(measure,camera_clock,playhead_x,gap)
             if not barline.is_empty() and float(barline["x"])>=-gap*2.0 and float(barline["x"])<=size.x+gap*2.0:
                 _paint_barline(barline,gap)
-        var crowded_meter: bool = _paint_context(measure,previous_measure,x,gap,opening)
+        var meter_right_limit := INF
+        if target_boundary or (first and pass_index>0):
+            var incoming: Variant = current_preparation["measure"].get("right_barline") if target_boundary else measure.get("left_barline")
+            var mark: Dictionary = incoming if incoming is Dictionary else {"style":"regular","repeat":""}
+            for stroke in _barline_strokes(str(mark.get("style","regular")),gap):
+                meter_right_limit = minf(meter_right_limit,x-gap*1.35+float(stroke["offset"])-float(stroke["width"])*.5)
+            if str(mark.get("repeat","")) in ["backward","both"] and is_finite(meter_right_limit):
+                meter_right_limit = minf(meter_right_limit,x-gap*(1.35+.92)-float(glyphs.bounds["repeat_dot"][2])*gap/500.0)
+        var crowded_meter: bool = _paint_context(measure,previous_measure,x,gap,opening,meter_right_limit)
         if not first and not crowded_meter and x>=0.0 and x<=size.x:
             draw_string(font,Vector2(x+gap*.4,_staff_center("right")-gap*4.3),
                 str(int(measure.get("number",0))),HORIZONTAL_ALIGNMENT_LEFT,-1,11,DIM_INK)
@@ -2573,7 +2685,7 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
         var x: float = timeline.screen_x(at,camera_clock,
             playhead_x,play_from_beat)
         var staff: String = str(event.get("staff","right"))
-        var ink: Color = _ink(staff)
+        var ink: Color = _event_ink(event)
         if str(event.get("kind","")) == "note":
             var members: Array = _paint_engraved_chord(event,x,gap,ink,
                 beam_stems.get(str(event.get("id","")), {}))

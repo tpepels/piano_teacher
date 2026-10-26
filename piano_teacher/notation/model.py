@@ -88,6 +88,8 @@ class ScoreSymbol:
     tied_marks: tuple[tuple[tuple[str, str], ...], ...] | None = None
     tuplet_extras: tuple[tuple[tuple[str, str], ...], ...] | None = None
     stem: str | None = None
+    # Performance ownership survives a different engraved piano staff.
+    hand: str | None = None
 
 
 def _int(element: ET.Element, name: str, default: int | None = None) -> int:
@@ -235,8 +237,9 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                     if semitone is None:
                         raise ValueError("Invalid pitch step")
                     pitch = (octave + 1) * 12 + semitone + alter
-                    if pitch != binding["pitch"] or binding["hand"] != hand:
-                        raise ValueError("Engraved note pitch/hand diverges from source")
+                    if (pitch != binding["pitch"] or binding["hand"] not in HANDS
+                            or binding.get("notation_staff",binding["hand"]) != hand):
+                        raise ValueError("Engraved note pitch/hand/staff diverges from source")
                     if abs(at_beat - binding["display_beat"]) > _TOLERANCE:
                         raise ValueError("Engraved display timing diverges from binding")
                     spelling = {"step": step, "alter": alter, "octave": octave}
@@ -278,7 +281,7 @@ def _parse_notation(score: LessonScore, grid: tuple[float, ...]
                     "start" in tie_types, "stop" in tie_types,
                     is_attack, child.findtext("accidental"), time_modification,
                     tuplet_marks, beams, tied_marks, tuplet_extras,
-                    child.findtext("stem")))
+                    child.findtext("stem"),binding["hand"] if binding is not None else hand))
             if current_meter is None:
                 raise ValueError("No meter for a source measure")
             if cursor != ticks_in_bar:
@@ -369,6 +372,8 @@ def build_score_model(score: LessonScore, *, boundaries: tuple[float, ...] = (),
             continue
         if event.source_id not in sources:
             raise ValueError("Printed note refers to an unknown source attack")
+        if event.hand != sources[event.source_id].hand:
+            raise ValueError("Printed note performing hand differs from its source")
         if event.is_attack:
             if event.source_id in attacks:
                 raise ValueError("One source attack has multiple printed attacks")

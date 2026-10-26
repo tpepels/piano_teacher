@@ -58,7 +58,9 @@ def _authored_source(folder, kind):
                 technical = ET.SubElement(ET.SubElement(note, 'notations'), 'technical')
                 hint = {'default-x': '19', 'default-y': '-49'} if dotted and bar == onset == tone == 0 else {}
                 if kind == 'repeat-dots' and bar == 1 and onset == 0 and tone == 2:
-                    hint = {'default-x': '-7.9', 'default-y': '-28'}
+                    # Aim at the forward-dot lane while clearing the main
+                    # barline even when uniform ink fitting reduces staff size.
+                    hint = {'default-x': '-6.5', 'default-y': '-28'}
                 ET.SubElement(technical, 'fingering', hint).text = str(tone + 2)
         if kind == 'double-barline' and bar == 0:
             ET.SubElement(ET.SubElement(measure, 'barline', location='right'), 'bar-style').text = 'light-light'

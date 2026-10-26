@@ -1275,9 +1275,13 @@ class PracticeEngine:
                               from_visual: float, reverse_seconds: float):
         """Reverse on this pass, then traverse one semantic rest into target."""
         model = self._source_model()
-        context = next(measure for measure in reversed(model["measures"])
-                       if measure["start_beat"] <= target + 1e-7)
-        measure = preparation_measure_descriptor(context, 0.0, model["staff_order"])
+        context_index = max(index for index,measure in enumerate(model["measures"])
+                            if measure["start_beat"] <= target + 1e-7)
+        context = model["measures"][context_index]
+        following = (model["measures"][context_index+1]
+                     if context_index+1 < len(model["measures"]) else None)
+        measure = preparation_measure_descriptor(context,0.0,model["staff_order"],
+                                                 following_measure=following)
         measure["end_beat"] = self.visual_offset_beats + target
         measure["start_beat"] = measure["end_beat"] - measure["duration_beats"]
         self.practice_preparation = {
@@ -2256,7 +2260,7 @@ class PracticeEngine:
                     (("fingering_sources", tuple(sorted(fingering_sources))),)
                     if fingering_sources else ())
                 self._layout_cache_key = self.preprocessing.key(
-                    "engraving", "readable-midi-engraving-v2", self.fingerprint, p.identity,
+                    "engraving", "readable-midi-engraving-v3", self.fingerprint, p.identity,
                     phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
                     p.hand, p.piece.bpm, compact_exercise,
                     tuple((n.source_id, n.start, n.end, n.pitch, n.hand)

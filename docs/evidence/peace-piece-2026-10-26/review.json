@@ -1,0 +1,21 @@
+{
+  "reviewer": "Bohr (independent agent)",
+  "production_scope": "source/notation ownership, mixed-staff reference shading, bounded native ink fitting, preparation context, engraving v3 migration",
+  "blocking_findings": [],
+  "independent_pixel_replay": {
+    "baseline": "passed",
+    "corruptions_rejected": [
+      "erased-head",
+      "truncated-stem",
+      "spanning-stem",
+      "ledger-ladder",
+      "shortened-rest",
+      "lengthened-rest",
+      "shifted-incoming-copy"
+    ],
+    "truncated_stem_px": 48.75,
+    "required_stem_px": 72.92,
+    "threshold_weakening_found": false
+  },
+  "repeat_dot_fixture_delta_reviewed": true
+}

@@ -1,0 +1,260 @@
+{
+  "clock_sampled_at_ms": 131607262.797932,
+  "learner": {
+    "resume_unit": null,
+    "completed_units": [],
+    "trouble_units": [],
+    "skip_status": "active",
+    "skip_reason": "",
+    "course_guided": false,
+    "prepared_units": 0,
+    "total_units": 1,
+    "current_unit": null,
+    "next_unit": {
+      "first_bar": 1,
+      "last_bar": 2,
+      "start_beat": 0.0,
+      "end_beat": 4.5,
+      "source_indices": [
+        1,
+        5,
+        8,
+        16
+      ],
+      "required_notes": 4
+    },
+    "unit_number": 0
+  },
+  "placement_available": true,
+  "skip_available": true,
+  "seek_available": true,
+  "seek_range": {
+    "first_bar": 1,
+    "last_bar": 2
+  },
+  "next_action": "Connect your MIDI piano to earn clean runs.",
+  "transition_in_seconds": null,
+  "retry_range": null,
+  "recovery_notice": null,
+  "guided_recovery": false,
+  "pause_context": "preview_gap",
+  "demo": null,
+  "performance_summary": null,
+  "review_range": null,
+  "midi_input_count": 0,
+  "midi_input_note": null,
+  "midi_input_age": null,
+  "metronome": true,
+  "hints_enabled": false,
+  "fingering": {
+    "status": "partial",
+    "provider": {
+      "name": "lumikey",
+      "version": "0.3.0",
+      "model_version": {
+        "left": "246f2fed013c27ca8c32ce9d070002afcc49da4f1dfb0c43e09a4a3f9f2fb86e",
+        "right": "f931288302b87f5eec1c8af29a570ee0213a272a13eeb590991a285e1f1b67eb"
+      },
+      "runtime": "onnxruntime-node@1.30.0/cpu",
+      "adapter_version": 3
+    },
+    "source_fingerprint": "56cb46d35d29febe7361fa7b907eec07f44fea12ca3c2bbcb09a8cb60da7a33a",
+    "assigned": 1640,
+    "unknown": 350,
+    "manual": 0,
+    "review": 0,
+    "issues": [
+      "No physically available finger for these overlapping keys/constraints"
+    ],
+    "error": ""
+  },
+  "midi_held_pitches": [],
+  "midi_visual_events": [],
+  "midi_next_pitches": [],
+  "mode": "practice",
+  "teaching": null,
+  "loaded": true,
+  "title": "Peace_Piece_-_Bill_Evans_(Piano_Solo)",
+  "kind": "learn",
+  "first_bar": 1,
+  "last_bar": 2,
+  "current_bar": 1,
+  "exercise": 1,
+  "exercise_count": 74,
+  "lesson_level": "outline",
+  "lesson_level_number": 2,
+  "lesson_level_count": 3,
+  "required_notes": 4,
+  "warmup": false,
+  "piece_last_bar": 78,
+  "selected_start_bar": 1,
+  "hand_stages": [
+    {
+      "hand": "right",
+      "active": true,
+      "complete": false,
+      "locked": false,
+      "available": true
+    },
+    {
+      "hand": "left",
+      "active": false,
+      "complete": false,
+      "locked": false,
+      "available": true
+    },
+    {
+      "hand": "both",
+      "active": false,
+      "complete": false,
+      "locked": false,
+      "available": true
+    }
+  ],
+  "measure_boundaries": [
+    0.0,
+    0.5,
+    4.5
+  ],
+  "import_warnings": [
+    "Ignored 33 unmatched MIDI note-off event(s).",
+    "Ignored implausible time signature(s): 131/4 at beat 184.5."
+  ],
+  "lesson_step": 2,
+  "lesson_steps": 592,
+  "lesson_steps_mastered": 0,
+  "hand": "right",
+  "hands": [
+    "right",
+    "left",
+    "both"
+  ],
+  "bpm": 40,
+  "original_bpm": 56,
+  "target_bpm": 40,
+  "streak": 0,
+  "clean_runs_required": 3,
+  "manual_tempo_step_bpm": 5,
+  "start_bpm": 40,
+  "automatic_tempo_steps": 12,
+  "tempo_rungs": [
+    40
+  ],
+  "can_decrease_tempo": true,
+  "piece_fingerprint": "56cb46d35d29febe7361fa7b907eec07f44fea12ca3c2bbcb09a8cb60da7a33a",
+  "minimum_bpm": 12,
+  "maximum_bpm": 300,
+  "can_increase_tempo": false,
+  "mastered": 0,
+  "phase": "paused",
+  "auto": false,
+  "take_result": null,
+  "countdown": 0,
+  "lead_in_bars": 1,
+  "play_from_beat": 0.0,
+  "recovery_beat": null,
+  "clock_beat": 0.0,
+  "visual_offset_beats": 0.0,
+  "visual_scroll_beat": 6.102920870005619,
+  "visual_target_beat": 8.5,
+  "visual_scroll_speed": 0.6666666666666666,
+  "visual_gap_beats": 4.0,
+  "practice_timeline": {
+    "schema": "piano-teacher-practice-timeline-v1",
+    "source_duration_beats": 4.5,
+    "stride_beats": 8.5,
+    "gap": {
+      "kind": "measure_rest",
+      "origin": "practice",
+      "start_beat": 4.5,
+      "end_beat": 8.5,
+      "duration_beats": 4.0,
+      "meter": [
+        4,
+        4
+      ],
+      "source_meter": [
+        1,
+        8
+      ],
+      "keys": {
+        "right": 0,
+        "left": 0
+      },
+      "clefs": {
+        "right": {
+          "sign": "G",
+          "line": 2,
+          "octave_change": 0
+        },
+        "left": {
+          "sign": "F",
+          "line": 4,
+          "octave_change": 0
+        }
+      },
+      "staves": [
+        "right",
+        "left"
+      ],
+      "full_measure": true,
+      "note_type": "whole",
+      "dots": 0,
+      "left_barline": {
+        "style": "regular",
+        "repeat": ""
+      },
+      "right_barline": {
+        "style": "regular",
+        "repeat": ""
+      },
+      "events": [
+        {
+          "id": "practice:gap:right",
+          "source_id": null,
+          "kind": "rest",
+          "staff": "right",
+          "duration_beats": 4.0,
+          "full_measure": true,
+          "is_attack": false,
+          "graded": false
+        },
+        {
+          "id": "practice:gap:left",
+          "source_id": null,
+          "kind": "rest",
+          "staff": "left",
+          "duration_beats": 4.0,
+          "full_measure": true,
+          "is_attack": false,
+          "graded": false
+        }
+      ]
+    }
+  },
+  "practice_preparation": null,
+  "score_loop_enabled": true,
+  "paused": true,
+  "transport_id": 1,
+  "awaiting_score_revision": null,
+  "count_in_beats": 0,
+  "count_in_bar_beats": 4.0,
+  "count_in_meter": [
+    4,
+    4
+  ],
+  "midi_notes": 0,
+  "preview_only": true,
+  "progress": 0.0,
+  "duration": 6.75,
+  "beat": 0.0,
+  "duration_beats": 4.5,
+  "running": false,
+  "device": "",
+  "feedback": "Paused",
+  "revision": 3,
+  "feedback_marks": [],
+  "live_note_feedback": null,
+  "scoring_available": false,
+  "feedback_unmapped": 0
+}

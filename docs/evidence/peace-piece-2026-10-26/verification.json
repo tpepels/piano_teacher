@@ -1,0 +1,27 @@
+{
+  "fast_ci": {
+    "command": "./scripts/verify-notation.sh --ci",
+    "passed": 559,
+    "skipped": 6,
+    "failed": 0,
+    "seconds": 284.59,
+    "godot_parse_check": "passed",
+    "fresh_framebuffers": true
+  },
+  "focused": {
+    "peace_pixel_tests": 17,
+    "register_unit_tests": 21,
+    "cache_and_fingering_backend_tests": 35,
+    "repeat_dot_fixture_passed": 8,
+    "repeat_dot_fixture_skipped": 4
+  },
+  "source_records_identical": 18,
+  "production_overrides_unchanged": true,
+  "production_override_files": 0,
+  "editor_cache_preserved": "/home/tom/Projects/piano_teacher-preserved-2026-10-26/peace-piece-editor-cache",
+  "archive_bundle": {
+    "path": "/home/tom/Projects/piano_teacher-preserved-2026-10-25/all-local-branches.bundle",
+    "bytes": 18665033,
+    "sha256": "f40ba100e7b358929800070f7fdf56c46f6cad6c426e8bb80451138d0b9b827b"
+  }
+}

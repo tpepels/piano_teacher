@@ -85,3 +85,79 @@ def test_source_bytes_change_forces_reimport(tmp_path):
     # Different content must never hit the original cache key.
     assert cache.key("source", "different-sha", music.name) != \
            cache.key("source", fingerprint, music.name)
+
+
+def test_peace_register_layout_replaces_legacy_cache_and_reuses_new_warm_cache(
+        tmp_path, monkeypatch):
+    """An existing installation must receive the correction without cache deletion."""
+    import hashlib
+    from xml.etree import ElementTree as ET
+    from piano_teacher import server
+    from piano_teacher.importing.pieces import import_piece
+    from piano_teacher.learning import LearningPlan
+    from piano_teacher.notation import lesson
+
+    path = Path(__file__).resolve().parents[1] / "midi/Peace_Piece_-_Bill_Evans_(Piano_Solo).midi"
+    piece, _ = import_piece(path)
+    engines = []
+
+    def create():
+        app = PracticeEngine(tmp_path / "state", enable_midi=False)
+        engines.append(app)
+        app.plan = LearningPlan(piece)
+        app.plan.select_step(3)
+        app.fingerprint = hashlib.sha256(path.read_bytes()).hexdigest()
+        return app
+
+    def staff_index(engraving, identifier):
+        found = []
+        for page in engraving.pages:
+            root = ET.fromstring(page)
+            for measure in root.iter():
+                if measure.get("class") != "measure":
+                    continue
+                staves = [node for node in measure if node.get("class") == "staff"]
+                found.extend(index for index, staff in enumerate(staves)
+                             if any(node.get("id") == identifier for node in staff.iter()))
+        assert len(found) == 1
+        return found[0]
+
+    try:
+        app = create()
+        p, phrase = app.plan, app.display_phrase()
+        # Reproduce the previous generator: source hands also selected the
+        # engraved staff, leaving the real C2 inside the wide RH chord.
+        with monkeypatch.context() as previous:
+            previous.setattr(lesson, "distribute_piano_registers", lambda lanes, clefs: lanes)
+            old_score = lesson.build_lesson_score(
+                phrase, boundaries=piece.bar_boundaries,
+                time_signatures=piece.time_signatures,
+                default_clefs=lesson.infer_piece_clefs(piece.notes))
+        low_id = next(identifier for identifier, binding in old_score.note_bindings.items()
+                      if binding["source_id"] == "midi-t0-e29")
+        legacy = server.render_layout(old_score, phrase.first_bar, phrase.last_bar,
+            p.hand, total_beats=phrase.end-phrase.start, bpm=piece.bpm, continuous=True)
+        assert staff_index(legacy, low_id) == 0
+        legacy_key = app.preprocessing.key(
+            "engraving", "readable-midi-engraving-v2", app.fingerprint, p.identity,
+            phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
+            p.hand, piece.bpm, True,
+            tuple((n.source_id, n.start, n.end, n.pitch, n.hand) for n in phrase.notes))
+        app.preprocessing.write_json("engraving", legacy_key,
+                                    {"pages": list(legacy.pages), "layout": legacy.layout})
+
+        corrected = app.engraving()
+        assert staff_index(corrected, low_id) == 1, "Existing cache retained the huge treble-staff chord"
+        assert app._layout_cache_key != legacy_key
+        assert app.preprocessing.read_json("engraving", legacy_key) is not None
+
+        def unexpected(*args, **kwargs):
+            raise AssertionError("Corrected warm cache unexpectedly re-engraved the lesson")
+
+        monkeypatch.setattr(server, "render_layout", unexpected)
+        reopened = create()
+        assert reopened.engraving() == corrected
+        assert reopened._layout_cache_key == app._layout_cache_key
+    finally:
+        for app in engines:
+            app.db.close()

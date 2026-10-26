@@ -5,6 +5,7 @@ import copy
 from dataclasses import replace
 import json
 import math
+import re
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -13,7 +14,7 @@ from ...notation.assets.svg_geometry import parse_svg_geometry
 from ...notation.lesson import LessonScore
 from .spacing import space_for_reading, space_for_continuous_reading
 
-from ...music import Note, Piece, _bar_boundaries, _phrases, load_midi
+from ...music import Note, Piece, _bar_boundaries, _phrases, load_midi, source_note_id
 
 
 # Explicit compatibility imports for existing public source import callers.
@@ -50,7 +51,7 @@ from ...notation.assets.runtime import (
 )
 
 
-def _fade_inactive_staff(svg: str, hand: str) -> str:
+def _fade_inactive_staff(svg: str, hand: str, *, note_bindings: dict | None = None) -> str:
     """De-emphasize every inactive staff element: beams, ledger lines and notes.
 
     Verovio emits both staves separately in every measure, ordered from upper
@@ -72,8 +73,63 @@ def _fade_inactive_staff(svg: str, hand: str) -> str:
                       if "staff" in item.get("class", "").split()]
             if len(staves) != 2:
                 continue
-            inactive = staves[1] if hand == "right" else staves[0]
-            inactive.set("opacity", "0.48")
+            for staff,owner in zip(staves,("right","left")):
+                bindings=note_bindings or {}
+                moved=any(bindings.get(node.get('id'),{}).get('hand',owner)!=owner
+                          for node in staff.iter())
+                if not moved:
+                    if owner!=hand:
+                        staff.set("opacity","0.48")
+                    continue
+                # Verovio emits ledger paths beside layers, without note IDs.
+                # Associate each path with the heads it supports in this
+                # staff's local coordinates. A shared rule is active when any
+                # contributing performer is active, just like a shared head.
+                from ...notation.assets.svg_geometry import (
+                    IDENTITY, NUMBERS, _mul, _transform, _apply, _element_position)
+                matrices={}
+                def locate(node,parent):
+                    matrices[node]=_mul(parent,_transform(node.get('transform','')))
+                    for child in node:
+                        locate(child,matrices[node])
+                locate(staff,IDENTITY)
+                heads=[]
+                for node in staff.iter():
+                    if 'note' not in node.get('class','').split() or node.get('id') not in bindings:
+                        continue
+                    position=_element_position(node,matrices)
+                    if position is not None:
+                        heads.append((*position,bindings[node.get('id')]['hand']))
+                def shade_ledgers(group):
+                    below='below' in group.get('class','').split()
+                    for path in group:
+                        match=re.fullmatch(r'\s*M\s*(%s)[,\s]+(%s)\s*L\s*(%s)[,\s]+(%s)\s*'
+                                           % ((NUMBERS.pattern,)*4),path.get('d',''))
+                        owners=set()
+                        if match:
+                            x0,y0,x1,y1=map(float,match.groups())
+                            x0,y0=_apply(matrices[path],x0,y0)
+                            x1,y1=_apply(matrices[path],x1,y1)
+                            owners={performer for x,y,performer in heads
+                                    if min(x0,x1)-1e-5<=x<=max(x0,x1)+1e-5
+                                    and (y>=max(y0,y1)-1e-5 if below else y<=min(y0,y1)+1e-5)}
+                        if hand not in (owners or {owner}):
+                            path.set('opacity','0.48')
+                def shade(node):
+                    if 'ledgerLines' in node.get('class','').split():
+                        shade_ledgers(node)
+                        return
+                    owners={bindings[item.get('id')]['hand'] for item in node.iter()
+                            if item.get('id') in bindings}
+                    if len(owners)<=1:
+                        performing=next(iter(owners),owner)
+                        if performing!=hand:
+                            node.set('opacity','0.48')
+                    else:
+                        for child in node:
+                            shade(child)
+                for child in staff:
+                    shade(child)
             changed = True
     if not changed:
         return svg
@@ -104,6 +160,11 @@ def render_layout(notation: object, first: int, last: int, hand: str = "both",
     except ImportError as exc:
         raise RuntimeError("Engraving requires verovio and music21: pip install -e '.[godot]'") from exc
     if isinstance(notation, LessonScore):
+        source_hands={source_note_id(note,index):note.hand
+                      for index,note in enumerate(notation.phrase.notes)}
+        if any(source_hands.get(binding['source_id'])!=binding['hand']
+               for binding in notation.note_bindings.values()):
+            raise ValueError('Engraved performing hand differs from source hand')
         return _engrave_xml(notation.musicxml, hand, total_beats, bpm=bpm,
                             note_bindings=notation.note_bindings, staff_clefs=notation.staff_clefs,
                             continuous=continuous)
@@ -242,7 +303,8 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
                     continue
                 identifier = note.get('id')
                 binding = note_bindings.get(identifier)
-                if binding is None or binding['hand'] != {'RH':'right','LH':'left'}.get(part.get('id')):
+                if (binding is None or binding['hand'] not in ('right','left')
+                        or binding.get('notation_staff',binding['hand']) != {'RH':'right','LH':'left'}.get(part.get('id'))):
                     raise ValueError('Source-note identity/hand mapping does not match emitted notation')
                 identities.append(identifier)
         if len(set(identities)) != len(identities) or set(identities) != set(note_bindings):
@@ -305,7 +367,7 @@ def _engrave_xml(xml: str, hand: str, total_beats: float,
                 raise ValueError("This passage requires an unsupported engraving width")
             toolkit.redoLayout()
             pages = _svg_pages(toolkit)
-    pages = tuple(_fade_inactive_staff(page, hand) for page in pages)
+    pages = tuple(_fade_inactive_staff(page,hand,note_bindings=note_bindings) for page in pages)
     try:
         # Verovio's grace layout occasionally advances its quarter-note
         # timemap at the anchored principal note. Keep the original SVG ink,

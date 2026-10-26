@@ -15,6 +15,7 @@ from xml.etree import ElementTree as ET
 from ..music import Note, Phrase, _assign_hands, _named_hand, source_note_id
 from ..measure_grid import phrase_grid
 from .source_annotations import project_annotations
+from .piano_registers import distribute_piano_registers
 
 DIVISIONS = 10080
 
@@ -217,6 +218,8 @@ def _append_event(measure: ET.Element, tones: list, duration: int,
                 if identifier in bindings:
                     raise ValueError('Duplicate emitted source-note identity')
                 bindings[identifier] = {key: tone[key] for key in ('source_id','source_beat','pitch','hand','notation_timing')}
+                if 'notation_staff' in tone:
+                    bindings[identifier]['notation_staff'] = tone['notation_staff']
                 bindings[identifier].update(is_attack=segment == 0, segment_index=segment,
                                              display_beat=position/DIVISIONS)
                 counts[source] = segment+1
@@ -712,12 +715,16 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
         ET.SubElement(scorepart, "part-abbreviation").text = " "
     ET.SubElement(partlist, "part-group", type="stop", number="1")
     bindings, counts, staff_clefs = {}, {}, {}
+    lanes_by_staff = {hand:_phrase_lanes(phrase,hand,grid,
+        from_source_musicxml=bool(source_musicxml)) for hand in ('right','left')}
+    if not source_musicxml and not clef_changes:
+        display_clefs = default_clefs or infer_piece_clefs(phrase.notes)
+        lanes_by_staff = distribute_piano_registers(lanes_by_staff,display_clefs)
     for hand, ident in (("right", "RH"), ("left", "LH")):
         part = ET.SubElement(root, "part", id=ident)
         last_meter = None
         last_key = last_clef = None
-        lanes = _phrase_lanes(phrase, hand, grid,
-                              from_source_musicxml=bool(source_musicxml))
+        lanes = lanes_by_staff[hand]
         keys = sorted((key for key in key_signatures if key.hand in (hand,'both')),key=lambda item:item.beat)
         clefs = sorted((clef for clef in clef_changes if clef.hand in (hand,'both')),key=lambda item:item.beat)
         for lane in lanes:
