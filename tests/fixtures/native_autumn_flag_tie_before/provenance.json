@@ -1,0 +1,10 @@
+{
+  "producer_commit": "c69da06ab1b6dd5de3738d2ec80d972f5c1c78b3",
+  "purpose": "Known incorrect flag/tie collisions; negative pixel control, not a current-renderer audit result",
+  "source": "midi/Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi",
+  "measures": [
+    37,
+    40
+  ],
+  "source_xml_sha256": "88fee902f465866b219df6b71eb4533d3e84390468a17c7e22669135f705f826"
+}

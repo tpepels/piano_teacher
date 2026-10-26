@@ -1,0 +1,1449 @@
+{
+  "complete": true,
+  "passed": true,
+  "coverage": {
+    "expected": 8,
+    "verified": 8,
+    "unverified": 0,
+    "mismatch": 0
+  },
+  "observations": [
+    {
+      "source_ids": [
+        "pte1c795323d7136826753f357a7e54256s0",
+        "pte1c795323d7136826753f357a7e54256s1"
+      ],
+      "oracle_source_ids": [
+        "xml-p1-m0-e5",
+        "xml-p1-m1-e0"
+      ],
+      "construct": "tie",
+      "number": "1",
+      "status": "verified",
+      "evidence": {
+        "frame": "native-3.60.png",
+        "heads": [
+          {
+            "source_id": "pte1c795323d7136826753f357a7e54256s0",
+            "x": 510.0,
+            "y": 305.02,
+            "bbox": [
+              497,
+              294,
+              523,
+              316
+            ],
+            "gap": 19.0,
+            "contour_score": 0.9298780487790703
+          },
+          {
+            "source_id": "pte1c795323d7136826753f357a7e54256s1",
+            "x": 625.0,
+            "y": 304.4,
+            "bbox": [
+              612,
+              293,
+              638,
+              315
+            ],
+            "gap": 19.0,
+            "contour_score": 0.8747252747233523
+          }
+        ],
+        "correspondence": [
+          {
+            "onset_frame": "native-3.60.png",
+            "shift": 0,
+            "contour_agreement": 1.0
+          },
+          {
+            "onset_frame": "native-4.00.png",
+            "shift": 114,
+            "contour_agreement": 0.9271
+          }
+        ],
+        "reason": "Unique connected thin curve attached to both source endpoints",
+        "component_bbox": [
+          527,
+          309,
+          608,
+          322
+        ],
+        "connected_pixels": 298,
+        "curvature_spaces": 0.5263,
+        "endpoint_distances_spaces": [
+          0.2105,
+          0.2632
+        ],
+        "max_thickness_spaces": 0.2632,
+        "pixel_runs": [
+          [
+            309,
+            527,
+            529
+          ],
+          [
+            309,
+            606,
+            608
+          ],
+          [
+            310,
+            529,
+            531
+          ],
+          [
+            310,
+            604,
+            607
+          ],
+          [
+            311,
+            530,
+            533
+          ],
+          [
+            311,
+            602,
+            605
+          ],
+          [
+            312,
+            531,
+            536
+          ],
+          [
+            312,
+            598,
+            604
+          ],
+          [
+            313,
+            533,
+            540
+          ],
+          [
+            313,
+            595,
+            603
+          ],
+          [
+            314,
+            535,
+            544
+          ],
+          [
+            314,
+            592,
+            601
+          ],
+          [
+            315,
+            537,
+            548
+          ],
+          [
+            315,
+            587,
+            599
+          ],
+          [
+            316,
+            539,
+            555
+          ],
+          [
+            316,
+            580,
+            596
+          ],
+          [
+            317,
+            541,
+            594
+          ],
+          [
+            318,
+            545,
+            591
+          ],
+          [
+            319,
+            548,
+            587
+          ],
+          [
+            320,
+            552,
+            583
+          ],
+          [
+            321,
+            560,
+            575
+          ]
+        ]
+      }
+    },
+    {
+      "source_ids": [
+        "pt2b4d4df909a48c89298b712f7d7a459fs0",
+        "pt2b4d4df909a48c89298b712f7d7a459fs1"
+      ],
+      "oracle_source_ids": [
+        "xml-p1-m0-e6",
+        "xml-p1-m1-e1"
+      ],
+      "construct": "tie",
+      "number": "1",
+      "status": "verified",
+      "evidence": {
+        "frame": "native-3.60.png",
+        "heads": [
+          {
+            "source_id": "pt2b4d4df909a48c89298b712f7d7a459fs0",
+            "x": 511.0,
+            "y": 266.02,
+            "bbox": [
+              498,
+              255,
+              524,
+              277
+            ],
+            "gap": 19.0,
+            "contour_score": 0.9649681528647055
+          },
+          {
+            "source_id": "pt2b4d4df909a48c89298b712f7d7a459fs1",
+            "x": 625.0,
+            "y": 266.4,
+            "bbox": [
+              612,
+              255,
+              638,
+              277
+            ],
+            "gap": 19.0,
+            "contour_score": 0.9184149184127776
+          }
+        ],
+        "correspondence": [
+          {
+            "onset_frame": "native-3.60.png",
+            "shift": 0,
+            "contour_agreement": 1.0
+          },
+          {
+            "onset_frame": "native-4.00.png",
+            "shift": 114,
+            "contour_agreement": 0.9271
+          }
+        ],
+        "reason": "Unique connected thin curve attached to both source endpoints",
+        "component_bbox": [
+          527,
+          249,
+          608,
+          262
+        ],
+        "connected_pixels": 290,
+        "curvature_spaces": 0.5526,
+        "endpoint_distances_spaces": [
+          0.1579,
+          0.2632
+        ],
+        "max_thickness_spaces": 0.2632,
+        "pixel_runs": [
+          [
+            249,
+            557,
+            578
+          ],
+          [
+            250,
+            551,
+            585
+          ],
+          [
+            251,
+            546,
+            589
+          ],
+          [
+            252,
+            543,
+            592
+          ],
+          [
+            253,
+            540,
+            564
+          ],
+          [
+            253,
+            571,
+            595
+          ],
+          [
+            254,
+            538,
+            551
+          ],
+          [
+            254,
+            584,
+            597
+          ],
+          [
+            255,
+            536,
+            546
+          ],
+          [
+            255,
+            590,
+            600
+          ],
+          [
+            256,
+            534,
+            542
+          ],
+          [
+            256,
+            594,
+            601
+          ],
+          [
+            257,
+            532,
+            538
+          ],
+          [
+            257,
+            597,
+            603
+          ],
+          [
+            258,
+            531,
+            535
+          ],
+          [
+            258,
+            600,
+            605
+          ],
+          [
+            259,
+            529,
+            533
+          ],
+          [
+            259,
+            603,
+            606
+          ],
+          [
+            260,
+            528,
+            530
+          ],
+          [
+            260,
+            605,
+            607
+          ],
+          [
+            261,
+            527,
+            528
+          ],
+          [
+            261,
+            607,
+            608
+          ]
+        ]
+      }
+    },
+    {
+      "source_ids": [
+        "pt5006a150dd3accd87af661055edfee86s0",
+        "pt5006a150dd3accd87af661055edfee86s1"
+      ],
+      "oracle_source_ids": [
+        "xml-p0-m0-e8",
+        "xml-p0-m1-e11"
+      ],
+      "construct": "tie",
+      "number": "1",
+      "status": "verified",
+      "evidence": {
+        "frame": "native-3.60.png",
+        "heads": [
+          {
+            "source_id": "pt5006a150dd3accd87af661055edfee86s0",
+            "x": 511.0,
+            "y": 211.0925,
+            "bbox": [
+              498,
+              200,
+              524,
+              222
+            ],
+            "gap": 19.125,
+            "contour_score": 0.9573459715624687
+          },
+          {
+            "source_id": "pt5006a150dd3accd87af661055edfee86s1",
+            "x": 625.0,
+            "y": 211.475,
+            "bbox": [
+              612,
+              200,
+              638,
+              222
+            ],
+            "gap": 19.125,
+            "contour_score": 0.9095127610187714
+          }
+        ],
+        "correspondence": [
+          {
+            "onset_frame": "native-3.60.png",
+            "shift": 0,
+            "contour_agreement": 1.0
+          },
+          {
+            "onset_frame": "native-4.00.png",
+            "shift": 114,
+            "contour_agreement": 0.9271
+          }
+        ],
+        "reason": "Unique connected thin curve attached to both source endpoints",
+        "component_bbox": [
+          527,
+          216,
+          608,
+          229
+        ],
+        "connected_pixels": 294,
+        "curvature_spaces": 0.5229,
+        "endpoint_distances_spaces": [
+          0.1569,
+          0.2614
+        ],
+        "max_thickness_spaces": 0.2614,
+        "pixel_runs": [
+          [
+            216,
+            527,
+            529
+          ],
+          [
+            216,
+            607,
+            608
+          ],
+          [
+            217,
+            528,
+            531
+          ],
+          [
+            217,
+            605,
+            607
+          ],
+          [
+            218,
+            530,
+            533
+          ],
+          [
+            218,
+            602,
+            606
+          ],
+          [
+            219,
+            531,
+            536
+          ],
+          [
+            219,
+            599,
+            604
+          ],
+          [
+            220,
+            533,
+            539
+          ],
+          [
+            220,
+            597,
+            603
+          ],
+          [
+            221,
+            534,
+            543
+          ],
+          [
+            221,
+            593,
+            601
+          ],
+          [
+            222,
+            537,
+            547
+          ],
+          [
+            222,
+            588,
+            599
+          ],
+          [
+            223,
+            539,
+            553
+          ],
+          [
+            223,
+            582,
+            597
+          ],
+          [
+            224,
+            541,
+            594
+          ],
+          [
+            225,
+            544,
+            591
+          ],
+          [
+            226,
+            547,
+            588
+          ],
+          [
+            227,
+            552,
+            584
+          ],
+          [
+            228,
+            559,
+            576
+          ]
+        ]
+      }
+    },
+    {
+      "source_ids": [
+        "pt5493b2bbe792941e6a48290d0b403145s0",
+        "pt5493b2bbe792941e6a48290d0b403145s1"
+      ],
+      "oracle_source_ids": [
+        "xml-p0-m0-e9",
+        "xml-p0-m1-e12"
+      ],
+      "construct": "tie",
+      "number": "1",
+      "status": "verified",
+      "evidence": {
+        "frame": "native-3.60.png",
+        "heads": [
+          {
+            "source_id": "pt5493b2bbe792941e6a48290d0b403145s0",
+            "x": 511.0,
+            "y": 183.0925,
+            "bbox": [
+              498,
+              172,
+              524,
+              194
+            ],
+            "gap": 19.125,
+            "contour_score": 0.9462365591383315
+          },
+          {
+            "source_id": "pt5493b2bbe792941e6a48290d0b403145s1",
+            "x": 625.0,
+            "y": 183.475,
+            "bbox": [
+              612,
+              172,
+              638,
+              194
+            ],
+            "gap": 19.125,
+            "contour_score": 0.850220264315308
+          }
+        ],
+        "correspondence": [
+          {
+            "onset_frame": "native-3.60.png",
+            "shift": 0,
+            "contour_agreement": 1.0
+          },
+          {
+            "onset_frame": "native-4.00.png",
+            "shift": 114,
+            "contour_agreement": 0.9271
+          }
+        ],
+        "reason": "Unique connected thin curve attached to both source endpoints",
+        "component_bbox": [
+          538,
+          166,
+          607,
+          178
+        ],
+        "connected_pixels": 269,
+        "curvature_spaces": 0.4967,
+        "endpoint_distances_spaces": [
+          0.732,
+          0.3137
+        ],
+        "max_thickness_spaces": 0.2614,
+        "pixel_runs": [
+          [
+            166,
+            561,
+            584
+          ],
+          [
+            167,
+            556,
+            589
+          ],
+          [
+            168,
+            553,
+            592
+          ],
+          [
+            169,
+            550,
+            595
+          ],
+          [
+            170,
+            548,
+            564
+          ],
+          [
+            170,
+            581,
+            597
+          ],
+          [
+            171,
+            546,
+            558
+          ],
+          [
+            171,
+            587,
+            600
+          ],
+          [
+            172,
+            544,
+            554
+          ],
+          [
+            172,
+            591,
+            601
+          ],
+          [
+            173,
+            542,
+            550
+          ],
+          [
+            173,
+            595,
+            603
+          ],
+          [
+            174,
+            541,
+            547
+          ],
+          [
+            174,
+            598,
+            604
+          ],
+          [
+            175,
+            540,
+            545
+          ],
+          [
+            175,
+            600,
+            605
+          ],
+          [
+            176,
+            539,
+            543
+          ],
+          [
+            176,
+            602,
+            606
+          ],
+          [
+            177,
+            538,
+            541
+          ],
+          [
+            177,
+            604,
+            607
+          ]
+        ]
+      }
+    },
+    {
+      "source_ids": [
+        "pte36033ba3e62168824c42cf20f204f19s0",
+        "pte36033ba3e62168824c42cf20f204f19s1"
+      ],
+      "oracle_source_ids": [
+        "xml-p0-m2-e5",
+        "xml-p0-m3-e0"
+      ],
+      "construct": "tie",
+      "number": "1",
+      "status": "verified",
+      "evidence": {
+        "frame": "native-12.00.png",
+        "heads": [
+          {
+            "source_id": "pte36033ba3e62168824c42cf20f204f19s0",
+            "x": 397.0,
+            "y": 221.0925,
+            "bbox": [
+              384,
+              210,
+              410,
+              232
+            ],
+            "gap": 19.125,
+            "contour_score": 0.9680851063816914
+          },
+          {
+            "source_id": "pte36033ba3e62168824c42cf20f204f19s1",
+            "x": 511.0,
+            "y": 221.475,
+            "bbox": [
+              498,
+              210,
+              524,
+              232
+            ],
+            "gap": 19.125,
+            "contour_score": 0.9149560117275222
+          }
+        ],
+        "correspondence": [
+          {
+            "onset_frame": "native-11.60.png",
+            "shift": -114,
+            "contour_agreement": 0.918
+          },
+          {
+            "onset_frame": "native-12.00.png",
+            "shift": 0,
+            "contour_agreement": 1.0
+          }
+        ],
+        "reason": "Unique connected thin curve attached to both source endpoints",
+        "component_bbox": [
+          413,
+          225,
+          494,
+          239
+        ],
+        "connected_pixels": 290,
+        "curvature_spaces": 0.5631,
+        "endpoint_distances_spaces": [
+          0.1569,
+          0.2614
+        ],
+        "max_thickness_spaces": 0.2614,
+        "pixel_runs": [
+          [
+            225,
+            413,
+            414
+          ],
+          [
+            225,
+            493,
+            494
+          ],
+          [
+            226,
+            414,
+            415
+          ],
+          [
+            226,
+            492,
+            494
+          ],
+          [
+            227,
+            415,
+            418
+          ],
+          [
+            227,
+            490,
+            493
+          ],
+          [
+            228,
+            416,
+            420
+          ],
+          [
+            228,
+            487,
+            491
+          ],
+          [
+            229,
+            418,
+            423
+          ],
+          [
+            229,
+            484,
+            490
+          ],
+          [
+            230,
+            419,
+            426
+          ],
+          [
+            230,
+            481,
+            488
+          ],
+          [
+            231,
+            421,
+            431
+          ],
+          [
+            231,
+            477,
+            486
+          ],
+          [
+            232,
+            423,
+            435
+          ],
+          [
+            232,
+            472,
+            484
+          ],
+          [
+            233,
+            426,
+            444
+          ],
+          [
+            233,
+            463,
+            482
+          ],
+          [
+            234,
+            428,
+            479
+          ],
+          [
+            235,
+            431,
+            476
+          ],
+          [
+            236,
+            435,
+            472
+          ],
+          [
+            237,
+            441,
+            467
+          ],
+          [
+            238,
+            450,
+            457
+          ]
+        ]
+      }
+    },
+    {
+      "source_ids": [
+        "pteee8bdaa9ef7ad19b581a043a6846a02s0",
+        "pteee8bdaa9ef7ad19b581a043a6846a02s1"
+      ],
+      "oracle_source_ids": [
+        "xml-p1-m2-e7",
+        "xml-p1-m3-e0"
+      ],
+      "construct": "tie",
+      "number": "1",
+      "status": "verified",
+      "evidence": {
+        "frame": "native-12.00.png",
+        "heads": [
+          {
+            "source_id": "pteee8bdaa9ef7ad19b581a043a6846a02s0",
+            "x": 396.0,
+            "y": 314.02,
+            "bbox": [
+              383,
+              303,
+              409,
+              325
+            ],
+            "gap": 19.0,
+            "contour_score": 0.9464052287569328
+          },
+          {
+            "source_id": "pteee8bdaa9ef7ad19b581a043a6846a02s1",
+            "x": 511.0,
+            "y": 314.4,
+            "bbox": [
+              498,
+              303,
+              524,
+              325
+            ],
+            "gap": 19.0,
+            "contour_score": 0.8362720403001606
+          }
+        ],
+        "correspondence": [
+          {
+            "onset_frame": "native-11.60.png",
+            "shift": -114,
+            "contour_agreement": 0.918
+          },
+          {
+            "onset_frame": "native-12.00.png",
+            "shift": 0,
+            "contour_agreement": 1.0
+          }
+        ],
+        "reason": "Unique connected thin curve attached to both source endpoints",
+        "component_bbox": [
+          413,
+          318,
+          494,
+          331
+        ],
+        "connected_pixels": 283,
+        "curvature_spaces": 0.5526,
+        "endpoint_distances_spaces": [
+          0.2105,
+          0.2632
+        ],
+        "max_thickness_spaces": 0.2632,
+        "pixel_runs": [
+          [
+            318,
+            413,
+            414
+          ],
+          [
+            318,
+            493,
+            494
+          ],
+          [
+            319,
+            414,
+            416
+          ],
+          [
+            319,
+            491,
+            493
+          ],
+          [
+            320,
+            415,
+            418
+          ],
+          [
+            320,
+            489,
+            492
+          ],
+          [
+            321,
+            417,
+            421
+          ],
+          [
+            321,
+            487,
+            491
+          ],
+          [
+            322,
+            418,
+            424
+          ],
+          [
+            322,
+            483,
+            489
+          ],
+          [
+            323,
+            420,
+            427
+          ],
+          [
+            323,
+            480,
+            488
+          ],
+          [
+            324,
+            422,
+            431
+          ],
+          [
+            324,
+            476,
+            486
+          ],
+          [
+            325,
+            424,
+            437
+          ],
+          [
+            325,
+            470,
+            483
+          ],
+          [
+            326,
+            426,
+            445
+          ],
+          [
+            326,
+            462,
+            481
+          ],
+          [
+            327,
+            429,
+            479
+          ],
+          [
+            328,
+            432,
+            475
+          ],
+          [
+            329,
+            436,
+            471
+          ],
+          [
+            330,
+            441,
+            466
+          ]
+        ]
+      }
+    },
+    {
+      "source_ids": [
+        "pt47d099f4d86542ab6538e88326caf578s0",
+        "pt47d099f4d86542ab6538e88326caf578s1"
+      ],
+      "oracle_source_ids": [
+        "xml-p0-m2-e6",
+        "xml-p0-m3-e1"
+      ],
+      "construct": "tie",
+      "number": "1",
+      "status": "verified",
+      "evidence": {
+        "frame": "native-12.00.png",
+        "heads": [
+          {
+            "source_id": "pt47d099f4d86542ab6538e88326caf578s0",
+            "x": 397.0,
+            "y": 192.0925,
+            "bbox": [
+              384,
+              181,
+              410,
+              203
+            ],
+            "gap": 19.125,
+            "contour_score": 0.9405684754509812
+          },
+          {
+            "source_id": "pt47d099f4d86542ab6538e88326caf578s1",
+            "x": 511.0,
+            "y": 192.475,
+            "bbox": [
+              498,
+              181,
+              524,
+              203
+            ],
+            "gap": 19.125,
+            "contour_score": 0.8671679197973254
+          }
+        ],
+        "correspondence": [
+          {
+            "onset_frame": "native-11.60.png",
+            "shift": -114,
+            "contour_agreement": 0.918
+          },
+          {
+            "onset_frame": "native-12.00.png",
+            "shift": 0,
+            "contour_agreement": 1.0
+          }
+        ],
+        "reason": "Unique connected thin curve attached to both source endpoints",
+        "component_bbox": [
+          424,
+          175,
+          493,
+          188
+        ],
+        "connected_pixels": 284,
+        "curvature_spaces": 0.5125,
+        "endpoint_distances_spaces": [
+          0.732,
+          0.3137
+        ],
+        "max_thickness_spaces": 0.2614,
+        "pixel_runs": [
+          [
+            175,
+            451,
+            466
+          ],
+          [
+            176,
+            445,
+            472
+          ],
+          [
+            177,
+            441,
+            476
+          ],
+          [
+            178,
+            437,
+            480
+          ],
+          [
+            179,
+            435,
+            482
+          ],
+          [
+            180,
+            433,
+            447
+          ],
+          [
+            180,
+            470,
+            485
+          ],
+          [
+            181,
+            431,
+            442
+          ],
+          [
+            181,
+            475,
+            486
+          ],
+          [
+            182,
+            429,
+            439
+          ],
+          [
+            182,
+            478,
+            488
+          ],
+          [
+            183,
+            428,
+            435
+          ],
+          [
+            183,
+            482,
+            489
+          ],
+          [
+            184,
+            427,
+            432
+          ],
+          [
+            184,
+            484,
+            490
+          ],
+          [
+            185,
+            425,
+            430
+          ],
+          [
+            185,
+            487,
+            492
+          ],
+          [
+            186,
+            425,
+            428
+          ],
+          [
+            186,
+            489,
+            493
+          ],
+          [
+            187,
+            424,
+            426
+          ],
+          [
+            187,
+            491,
+            493
+          ]
+        ]
+      }
+    },
+    {
+      "source_ids": [
+        "pt1f661e94d92a1dcf6a1ec38ac6c144dbs0",
+        "pt1f661e94d92a1dcf6a1ec38ac6c144dbs1"
+      ],
+      "oracle_source_ids": [
+        "xml-p1-m2-e8",
+        "xml-p1-m3-e1"
+      ],
+      "construct": "tie",
+      "number": "1",
+      "status": "verified",
+      "evidence": {
+        "frame": "native-12.00.png",
+        "heads": [
+          {
+            "source_id": "pt1f661e94d92a1dcf6a1ec38ac6c144dbs0",
+            "x": 397.0,
+            "y": 285.02,
+            "bbox": [
+              384,
+              274,
+              410,
+              296
+            ],
+            "gap": 19.0,
+            "contour_score": 0.9650537634395631
+          },
+          {
+            "source_id": "pt1f661e94d92a1dcf6a1ec38ac6c144dbs1",
+            "x": 511.0,
+            "y": 285.4,
+            "bbox": [
+              498,
+              274,
+              524,
+              296
+            ],
+            "gap": 19.0,
+            "contour_score": 0.9115281501316045
+          }
+        ],
+        "correspondence": [
+          {
+            "onset_frame": "native-11.60.png",
+            "shift": -114,
+            "contour_agreement": 0.918
+          },
+          {
+            "onset_frame": "native-12.00.png",
+            "shift": 0,
+            "contour_agreement": 1.0
+          }
+        ],
+        "reason": "Unique connected thin curve attached to both source endpoints",
+        "component_bbox": [
+          413,
+          268,
+          494,
+          281
+        ],
+        "connected_pixels": 293,
+        "curvature_spaces": 0.5526,
+        "endpoint_distances_spaces": [
+          0.1579,
+          0.2632
+        ],
+        "max_thickness_spaces": 0.2632,
+        "pixel_runs": [
+          [
+            268,
+            444,
+            464
+          ],
+          [
+            269,
+            437,
+            470
+          ],
+          [
+            270,
+            433,
+            474
+          ],
+          [
+            271,
+            430,
+            478
+          ],
+          [
+            272,
+            427,
+            453
+          ],
+          [
+            272,
+            455,
+            481
+          ],
+          [
+            273,
+            424,
+            438
+          ],
+          [
+            273,
+            469,
+            483
+          ],
+          [
+            274,
+            422,
+            433
+          ],
+          [
+            274,
+            475,
+            485
+          ],
+          [
+            275,
+            420,
+            428
+          ],
+          [
+            275,
+            479,
+            487
+          ],
+          [
+            276,
+            418,
+            424
+          ],
+          [
+            276,
+            483,
+            489
+          ],
+          [
+            277,
+            417,
+            421
+          ],
+          [
+            277,
+            485,
+            490
+          ],
+          [
+            278,
+            415,
+            419
+          ],
+          [
+            278,
+            489,
+            492
+          ],
+          [
+            279,
+            414,
+            416
+          ],
+          [
+            279,
+            491,
+            493
+          ],
+          [
+            280,
+            413,
+            414
+          ],
+          [
+            280,
+            493,
+            494
+          ]
+        ]
+      }
+    }
+  ],
+  "scope": "Independent written source pairs and current-PNG endpoint/connected-curve evidence"
+}

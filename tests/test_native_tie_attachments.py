@@ -107,12 +107,11 @@ def test_native_tie_clearance_does_not_stretch_with_beat_distance(
     proof = verify_connector_pixels(xml, tmp_path, hand="right", constructs=("tie",))
     (tmp_path/"connector-proof.json").write_text(json.dumps(proof, indent=2))
     assert proof["coverage"]["expected"] == 1
+    assert proof["complete"], proof
     evidence = proof["observations"][0]["evidence"]
     left, right = evidence["heads"]
-    # This regression measures endpoint clearances, including wide whole
-    # heads. The general connector oracle also has a minimum overall span
-    # rule, which can reject an otherwise correctly attached whole-note tie.
-    # Do not change that rule to authorize the renderer under test.
+    # Both actual head-edge clearances and independent source ownership must
+    # hold, including for whole heads wider than ordinary filled/half heads.
     from piano_teacher.notation.symbol_pixel_proof import bright, _connector_components
     picture = Image.open(tmp_path/evidence["frame"]).convert("RGB")
     x0, x1 = left["bbox"][2], right["bbox"][0]

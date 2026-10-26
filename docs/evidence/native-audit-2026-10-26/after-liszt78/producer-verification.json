@@ -1,0 +1,479 @@
+{
+  "case": "learn-0077-left-original",
+  "directory": "/tmp/notation-ledger-final-liszt78/00-Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt/learn-0077-left-original",
+  "ledger_complete": true,
+  "ledger_coverage": {
+    "expected": 2,
+    "verified": 2,
+    "unverified": 0,
+    "ambiguous": 0,
+    "unsupported": 0,
+    "mismatch": 0
+  },
+  "whole_case_passed": false,
+  "whole_case_errors": [
+    "measure 78 left voice 1 pt089fba1ff62917b7c12fba5f961e0869s1 dot: ambiguous Feature contour is connected to neighboring ink outside its own box",
+    "measure 78 both voice None p1/m1/attributes1/time3 meter: unverified Independent numerator and denominator glyphs on the actual staff",
+    "measure 78 left voice None p2/m1/attributes1/key2 key: unsupported Opening key requires independently identified adjacent clef and meter",
+    "measure 78 both voice None p2/m1/attributes1/time3 meter: unverified Independent numerator and denominator glyphs on the actual staff",
+    "measure 78 left voice 1 pt089fba1ff62917b7c12fba5f961e0869s0 note_rhythm: unsupported A notehead alone does not certify written rhythm",
+    "measure 78 left voice 1 pt089fba1ff62917b7c12fba5f961e0869s1 note_rhythm: unverified Every required independent rhythm contribution must verify",
+    "measure 78 left voice 1 pt089fba1ff62917b7c12fba5f961e0869s1 dot: ambiguous Feature contour is connected to neighboring ink outside its own box",
+    "measure 78 left voice 1 pt089fba1ff62917b7c12fba5f961e0869s1 dot: ambiguous Feature contour is connected to neighboring ink outside its own box"
+  ],
+  "nonverified_symbols": {
+    "meter:unverified": 2,
+    "key:unsupported": 1,
+    "note_rhythm:unsupported": 1,
+    "note_rhythm:unverified": 1,
+    "dot:ambiguous": 2
+  },
+  "manifest_integrity": true,
+  "manifest": {
+    "capture_config": {
+      "version": 1,
+      "score_ink": "canonical",
+      "fingering_annotations": false,
+      "transport_overlay": true
+    },
+    "capture_protocol_sha256": "6384bca0bbf2fc89507dbd8ebbe20e3b89cd43e40bcd46c32db386cc61405286",
+    "renderer_dependencies_sha256": "712371ae496eb7d6e621351aa789fd3fd6148b28abf7b51ceda833b758b38853",
+    "python": "3.14.8",
+    "verovio": "5.7.0-7135340",
+    "godot": "4.7.2.stable.arch_linux.ed1daf0bf",
+    "screenshots": [
+      {
+        "file": "native-0.00000.png",
+        "sha256": "81e8cff30c8bce34fee4ad393757adc50cae801127da78cdf41614b02e75a770"
+      },
+      {
+        "file": "native-0.06250.png",
+        "sha256": "3adb8d94bacea75ef29af94d833c19bbaedc4dea2805f219e28f93eb4551f100"
+      },
+      {
+        "file": "native-0.12500.png",
+        "sha256": "06fe6503b6d17b5f4c6ac290abeda14ba7a665f0ea032a22b375e161559e639f"
+      },
+      {
+        "file": "native-0.15000.png",
+        "sha256": "9d663680d886f648d5fd4c2a6da18794327c31c32b2ac0641bae676ffd6b597f"
+      },
+      {
+        "file": "native-0.30000.png",
+        "sha256": "5a68c75ad6fb4092be7e218422bcf55ec1ab143387bdfbe5448637f13d5866aa"
+      },
+      {
+        "file": "native-0.45000.png",
+        "sha256": "f82f5e0fd9b990991922bf6aaad5451dc74975b3a147bc73e74753c79523b5e7"
+      },
+      {
+        "file": "native-0.60000.png",
+        "sha256": "8f32fd9e1792906f187ebd5d045f7241a91813b17f42790fb1c52ecb2011dfcc"
+      },
+      {
+        "file": "native-0.75000.png",
+        "sha256": "ef9d81c38af6c70b71f044c9d39711cdaec49a74ba05735a5c1110d66e0ba341"
+      },
+      {
+        "file": "native-0.90000.png",
+        "sha256": "4be2b0632edc82530a55ca39a677eefdea7b2e0fdade8576babf69ec6c78665e"
+      },
+      {
+        "file": "native-1.05000.png",
+        "sha256": "c2130710e1e4bdab48cf5c5b28ac3cded76ed38e3a48a28e8cad87c067ad8b6d"
+      },
+      {
+        "file": "native-1.20000.png",
+        "sha256": "4a26310eb209a4afa84d8126c43a5fd8b08f0c868ecd87734f0447cce98c22f9"
+      },
+      {
+        "file": "native-1.35000.png",
+        "sha256": "b3694fa8379e5bc52eb6bf8057c68fa515a23d6853e8512c8d0ff04102d6cb25"
+      },
+      {
+        "file": "native-1.50000.png",
+        "sha256": "e7ada4fae5171d7535ae4d820ca999cfd156b2e516c726556474f7ffd7195015"
+      },
+      {
+        "file": "native-1.65000.png",
+        "sha256": "cdcaf12ad31a033632c208de92f5f1000d41dfc83742196d1c6864936fd89b23"
+      },
+      {
+        "file": "native-1.80000.png",
+        "sha256": "c43e88e43fe48448affa6fe31d0d81d2cc6fde2458f8b1f8e6e199114e5e464d"
+      },
+      {
+        "file": "native-1.95000.png",
+        "sha256": "a67845c1585146e7076718ffdbe4989767fc33b47bb4b6775dffd0111aaa0cb3"
+      },
+      {
+        "file": "native-2.10000.png",
+        "sha256": "5f14345b1c9b74425d6ae406e9e565fb6ed9dc5bd514c426fecfab4944a2dafc"
+      },
+      {
+        "file": "native-2.25000.png",
+        "sha256": "0d7513c6a229236b6bdf98fe50a62f8588944af2ffb0baa758641ce40904d6a8"
+      },
+      {
+        "file": "native-2.40000.png",
+        "sha256": "4daebebadd52471f9118c614826c9a66e305c725eb28440f9b35cead0f9607da"
+      },
+      {
+        "file": "native-2.55000.png",
+        "sha256": "043f53b9730b63406524891f6a37df0300abb163e6fe447e80fcc46e81aefb96"
+      },
+      {
+        "file": "native-2.70000.png",
+        "sha256": "054a2d93ddb4627177a0f3179660aeed05b315fc37e34d36ed0a231ea53b6743"
+      },
+      {
+        "file": "native-2.85000.png",
+        "sha256": "c59f1c93e709d61b685ea4f0f4b6bce3c0d517f02cc5046027b187d16dda3915"
+      },
+      {
+        "file": "native-3.00000.png",
+        "sha256": "deacf40d4375c2d2bfbd97896115d76fb83828204fb1fbf1519939c5a9424ffd"
+      },
+      {
+        "file": "native-3.15000.png",
+        "sha256": "227c87d895e3d3d99cf6d17199c36835f566a8dd4914e56395f74422f9dfbf19"
+      },
+      {
+        "file": "native-3.30000.png",
+        "sha256": "63c5baca63e19e08cfc720fc6c1e1de672930f1a9b607c85e44b9a609c229298"
+      },
+      {
+        "file": "native-3.45000.png",
+        "sha256": "705108350246947a270439d001090efbba087052614e168accd5d0157197959f"
+      },
+      {
+        "file": "native-3.60000.png",
+        "sha256": "8b083c69e199be1e9c7c3fe78f82bbbec1fb3c863424b78368a39217c86ad169"
+      },
+      {
+        "file": "native-3.75000.png",
+        "sha256": "d14491a605f8bd09abaf4ec8089ede43c962e9eb55a17aa20c36223c81dc05b3"
+      },
+      {
+        "file": "native-3.90000.png",
+        "sha256": "6b2fdbc60bca66133fff1b7aad6d092051caa64d80c3a303db09b227b6fe6fca"
+      },
+      {
+        "file": "native-4.00000.png",
+        "sha256": "3f6981ac129fc8ad6574aad7809f541bc845b27c8b2fb016860d0c73abfbcbd3"
+      },
+      {
+        "file": "native-4.05000.png",
+        "sha256": "5e8fbf0e908d5c493db4ec15f36b006b8bfcc4a225b96f146a16ef40016e91b1"
+      },
+      {
+        "file": "native-4.20000.png",
+        "sha256": "5e5c4a6cbe0445fd27e783d9eccae92586dbd0b55614cbd5ef65eabcbfb43acb"
+      },
+      {
+        "file": "native-4.35000.png",
+        "sha256": "7dc1e9d2d07874ab74008593975a0073a9ed140eef8ae5937f07c778b11ec6bd"
+      },
+      {
+        "file": "native-4.50000.png",
+        "sha256": "6705423466bd61baa17cfcf1c158ae2cb3425612653882b68b8f137fde71aef8"
+      },
+      {
+        "file": "native-4.65000.png",
+        "sha256": "f1acacabeb42dbe6ed0aafbdc5d9b9301328992cc815b322e8ca176810849633"
+      },
+      {
+        "file": "native-4.80000.png",
+        "sha256": "7bfb4679fdc1242a9f25c3b66e8f03298bb135a1c543ed2beb51affb4eb20730"
+      },
+      {
+        "file": "native-4.95000.png",
+        "sha256": "dd48ba65a7f6257bf5dbcfe1cb85efe1b3d8c7116398b4e68745a617e71b0974"
+      },
+      {
+        "file": "native-5.10000.png",
+        "sha256": "1417128d5e083016d04990088c1a07ed50ae24987af2ef1660b5871ac0562654"
+      },
+      {
+        "file": "native-5.25000.png",
+        "sha256": "96d0243024a4f02d6e2983669b1a5acbc664147fd7a1c12601fadab7c36b3720"
+      },
+      {
+        "file": "native-5.40000.png",
+        "sha256": "69610b72253d602aea69215be0a92179912c07dce18d7908e0b5337ae06b4600"
+      },
+      {
+        "file": "native-5.55000.png",
+        "sha256": "656a83659702b73bce1c811f998b7e6daaf1a9a3621058a54610ca92a3c39a5d"
+      },
+      {
+        "file": "native-5.70000.png",
+        "sha256": "bfa5080657400c3c8c5dbdd336a94c03620c1cd7d74ae1cd1c301fb3514e0433"
+      },
+      {
+        "file": "native-5.75000.png",
+        "sha256": "b4b688bad3767d0faa6d24bfe6fef9f8105fe103f1399d19883da2118cbb2846"
+      },
+      {
+        "file": "native-5.85000.png",
+        "sha256": "f952040284341c609803be788285fd9db423864eb4ba16fc0c8c561a09d98e4c"
+      },
+      {
+        "file": "native-6.00000.png",
+        "sha256": "4a8d579bf39952f87123e77321f9d0df023beccb1787d5d02fc9be02d3136e27"
+      },
+      {
+        "file": "rest-without-0-0.00000.png",
+        "sha256": "28a719f09e705d839bf474cf04fe436fa066b2514ade908cfc773159892c5542"
+      },
+      {
+        "file": "rest-without-0-5.75000.png",
+        "sha256": "f8b2295d2a8061bf1ef67d5c35dbea70ed2f50eba389846ff892096ba49edfc5"
+      },
+      {
+        "file": "repeat-0.00000.png",
+        "sha256": "81e8cff30c8bce34fee4ad393757adc50cae801127da78cdf41614b02e75a770"
+      },
+      {
+        "file": "repeat-5.75000.png",
+        "sha256": "b4b688bad3767d0faa6d24bfe6fef9f8105fe103f1399d19883da2118cbb2846"
+      },
+      {
+        "file": "restored-0.00000.png",
+        "sha256": "81e8cff30c8bce34fee4ad393757adc50cae801127da78cdf41614b02e75a770"
+      },
+      {
+        "file": "restored-5.75000.png",
+        "sha256": "b4b688bad3767d0faa6d24bfe6fef9f8105fe103f1399d19883da2118cbb2846"
+      }
+    ]
+  },
+  "source_xml_unchanged": true,
+  "png_comparisons": [
+    {
+      "file": "native-0.00000.png",
+      "sha256": "81e8cff30c8bce34fee4ad393757adc50cae801127da78cdf41614b02e75a770",
+      "old_sha256": "81e8cff30c8bce34fee4ad393757adc50cae801127da78cdf41614b02e75a770"
+    },
+    {
+      "file": "native-0.06250.png",
+      "sha256": "3adb8d94bacea75ef29af94d833c19bbaedc4dea2805f219e28f93eb4551f100",
+      "old_sha256": "3adb8d94bacea75ef29af94d833c19bbaedc4dea2805f219e28f93eb4551f100"
+    },
+    {
+      "file": "native-0.12500.png",
+      "sha256": "06fe6503b6d17b5f4c6ac290abeda14ba7a665f0ea032a22b375e161559e639f",
+      "old_sha256": "06fe6503b6d17b5f4c6ac290abeda14ba7a665f0ea032a22b375e161559e639f"
+    },
+    {
+      "file": "native-0.15000.png",
+      "sha256": "9d663680d886f648d5fd4c2a6da18794327c31c32b2ac0641bae676ffd6b597f",
+      "old_sha256": "9d663680d886f648d5fd4c2a6da18794327c31c32b2ac0641bae676ffd6b597f"
+    },
+    {
+      "file": "native-0.30000.png",
+      "sha256": "5a68c75ad6fb4092be7e218422bcf55ec1ab143387bdfbe5448637f13d5866aa",
+      "old_sha256": "5a68c75ad6fb4092be7e218422bcf55ec1ab143387bdfbe5448637f13d5866aa"
+    },
+    {
+      "file": "native-0.45000.png",
+      "sha256": "f82f5e0fd9b990991922bf6aaad5451dc74975b3a147bc73e74753c79523b5e7",
+      "old_sha256": "f82f5e0fd9b990991922bf6aaad5451dc74975b3a147bc73e74753c79523b5e7"
+    },
+    {
+      "file": "native-0.60000.png",
+      "sha256": "8f32fd9e1792906f187ebd5d045f7241a91813b17f42790fb1c52ecb2011dfcc",
+      "old_sha256": "8f32fd9e1792906f187ebd5d045f7241a91813b17f42790fb1c52ecb2011dfcc"
+    },
+    {
+      "file": "native-0.75000.png",
+      "sha256": "ef9d81c38af6c70b71f044c9d39711cdaec49a74ba05735a5c1110d66e0ba341",
+      "old_sha256": "ef9d81c38af6c70b71f044c9d39711cdaec49a74ba05735a5c1110d66e0ba341"
+    },
+    {
+      "file": "native-0.90000.png",
+      "sha256": "4be2b0632edc82530a55ca39a677eefdea7b2e0fdade8576babf69ec6c78665e",
+      "old_sha256": "4be2b0632edc82530a55ca39a677eefdea7b2e0fdade8576babf69ec6c78665e"
+    },
+    {
+      "file": "native-1.05000.png",
+      "sha256": "c2130710e1e4bdab48cf5c5b28ac3cded76ed38e3a48a28e8cad87c067ad8b6d",
+      "old_sha256": "c2130710e1e4bdab48cf5c5b28ac3cded76ed38e3a48a28e8cad87c067ad8b6d"
+    },
+    {
+      "file": "native-1.20000.png",
+      "sha256": "4a26310eb209a4afa84d8126c43a5fd8b08f0c868ecd87734f0447cce98c22f9",
+      "old_sha256": "4a26310eb209a4afa84d8126c43a5fd8b08f0c868ecd87734f0447cce98c22f9"
+    },
+    {
+      "file": "native-1.35000.png",
+      "sha256": "b3694fa8379e5bc52eb6bf8057c68fa515a23d6853e8512c8d0ff04102d6cb25",
+      "old_sha256": "b3694fa8379e5bc52eb6bf8057c68fa515a23d6853e8512c8d0ff04102d6cb25"
+    },
+    {
+      "file": "native-1.50000.png",
+      "sha256": "e7ada4fae5171d7535ae4d820ca999cfd156b2e516c726556474f7ffd7195015",
+      "old_sha256": "e7ada4fae5171d7535ae4d820ca999cfd156b2e516c726556474f7ffd7195015"
+    },
+    {
+      "file": "native-1.65000.png",
+      "sha256": "cdcaf12ad31a033632c208de92f5f1000d41dfc83742196d1c6864936fd89b23",
+      "old_sha256": "cdcaf12ad31a033632c208de92f5f1000d41dfc83742196d1c6864936fd89b23"
+    },
+    {
+      "file": "native-1.80000.png",
+      "sha256": "c43e88e43fe48448affa6fe31d0d81d2cc6fde2458f8b1f8e6e199114e5e464d",
+      "old_sha256": "c43e88e43fe48448affa6fe31d0d81d2cc6fde2458f8b1f8e6e199114e5e464d"
+    },
+    {
+      "file": "native-1.95000.png",
+      "sha256": "a67845c1585146e7076718ffdbe4989767fc33b47bb4b6775dffd0111aaa0cb3",
+      "old_sha256": "a67845c1585146e7076718ffdbe4989767fc33b47bb4b6775dffd0111aaa0cb3"
+    },
+    {
+      "file": "native-2.10000.png",
+      "sha256": "5f14345b1c9b74425d6ae406e9e565fb6ed9dc5bd514c426fecfab4944a2dafc",
+      "old_sha256": "5f14345b1c9b74425d6ae406e9e565fb6ed9dc5bd514c426fecfab4944a2dafc"
+    },
+    {
+      "file": "native-2.25000.png",
+      "sha256": "0d7513c6a229236b6bdf98fe50a62f8588944af2ffb0baa758641ce40904d6a8",
+      "old_sha256": "0d7513c6a229236b6bdf98fe50a62f8588944af2ffb0baa758641ce40904d6a8"
+    },
+    {
+      "file": "native-2.40000.png",
+      "sha256": "4daebebadd52471f9118c614826c9a66e305c725eb28440f9b35cead0f9607da",
+      "old_sha256": "4daebebadd52471f9118c614826c9a66e305c725eb28440f9b35cead0f9607da"
+    },
+    {
+      "file": "native-2.55000.png",
+      "sha256": "043f53b9730b63406524891f6a37df0300abb163e6fe447e80fcc46e81aefb96",
+      "old_sha256": "043f53b9730b63406524891f6a37df0300abb163e6fe447e80fcc46e81aefb96"
+    },
+    {
+      "file": "native-2.70000.png",
+      "sha256": "054a2d93ddb4627177a0f3179660aeed05b315fc37e34d36ed0a231ea53b6743",
+      "old_sha256": "054a2d93ddb4627177a0f3179660aeed05b315fc37e34d36ed0a231ea53b6743"
+    },
+    {
+      "file": "native-2.85000.png",
+      "sha256": "c59f1c93e709d61b685ea4f0f4b6bce3c0d517f02cc5046027b187d16dda3915",
+      "old_sha256": "c59f1c93e709d61b685ea4f0f4b6bce3c0d517f02cc5046027b187d16dda3915"
+    },
+    {
+      "file": "native-3.00000.png",
+      "sha256": "deacf40d4375c2d2bfbd97896115d76fb83828204fb1fbf1519939c5a9424ffd",
+      "old_sha256": "deacf40d4375c2d2bfbd97896115d76fb83828204fb1fbf1519939c5a9424ffd"
+    },
+    {
+      "file": "native-3.15000.png",
+      "sha256": "227c87d895e3d3d99cf6d17199c36835f566a8dd4914e56395f74422f9dfbf19",
+      "old_sha256": "227c87d895e3d3d99cf6d17199c36835f566a8dd4914e56395f74422f9dfbf19"
+    },
+    {
+      "file": "native-3.30000.png",
+      "sha256": "63c5baca63e19e08cfc720fc6c1e1de672930f1a9b607c85e44b9a609c229298",
+      "old_sha256": "63c5baca63e19e08cfc720fc6c1e1de672930f1a9b607c85e44b9a609c229298"
+    },
+    {
+      "file": "native-3.45000.png",
+      "sha256": "705108350246947a270439d001090efbba087052614e168accd5d0157197959f",
+      "old_sha256": "705108350246947a270439d001090efbba087052614e168accd5d0157197959f"
+    },
+    {
+      "file": "native-3.60000.png",
+      "sha256": "8b083c69e199be1e9c7c3fe78f82bbbec1fb3c863424b78368a39217c86ad169",
+      "old_sha256": "8b083c69e199be1e9c7c3fe78f82bbbec1fb3c863424b78368a39217c86ad169"
+    },
+    {
+      "file": "native-3.75000.png",
+      "sha256": "d14491a605f8bd09abaf4ec8089ede43c962e9eb55a17aa20c36223c81dc05b3",
+      "old_sha256": "d14491a605f8bd09abaf4ec8089ede43c962e9eb55a17aa20c36223c81dc05b3"
+    },
+    {
+      "file": "native-3.90000.png",
+      "sha256": "6b2fdbc60bca66133fff1b7aad6d092051caa64d80c3a303db09b227b6fe6fca",
+      "old_sha256": "6b2fdbc60bca66133fff1b7aad6d092051caa64d80c3a303db09b227b6fe6fca"
+    },
+    {
+      "file": "native-4.00000.png",
+      "sha256": "3f6981ac129fc8ad6574aad7809f541bc845b27c8b2fb016860d0c73abfbcbd3",
+      "old_sha256": "3f6981ac129fc8ad6574aad7809f541bc845b27c8b2fb016860d0c73abfbcbd3"
+    },
+    {
+      "file": "native-4.05000.png",
+      "sha256": "5e8fbf0e908d5c493db4ec15f36b006b8bfcc4a225b96f146a16ef40016e91b1",
+      "old_sha256": "5e8fbf0e908d5c493db4ec15f36b006b8bfcc4a225b96f146a16ef40016e91b1"
+    },
+    {
+      "file": "native-4.20000.png",
+      "sha256": "5e5c4a6cbe0445fd27e783d9eccae92586dbd0b55614cbd5ef65eabcbfb43acb",
+      "old_sha256": "5e5c4a6cbe0445fd27e783d9eccae92586dbd0b55614cbd5ef65eabcbfb43acb"
+    },
+    {
+      "file": "native-4.35000.png",
+      "sha256": "7dc1e9d2d07874ab74008593975a0073a9ed140eef8ae5937f07c778b11ec6bd",
+      "old_sha256": "7dc1e9d2d07874ab74008593975a0073a9ed140eef8ae5937f07c778b11ec6bd"
+    },
+    {
+      "file": "native-4.50000.png",
+      "sha256": "6705423466bd61baa17cfcf1c158ae2cb3425612653882b68b8f137fde71aef8",
+      "old_sha256": "6705423466bd61baa17cfcf1c158ae2cb3425612653882b68b8f137fde71aef8"
+    },
+    {
+      "file": "native-4.65000.png",
+      "sha256": "f1acacabeb42dbe6ed0aafbdc5d9b9301328992cc815b322e8ca176810849633",
+      "old_sha256": "f1acacabeb42dbe6ed0aafbdc5d9b9301328992cc815b322e8ca176810849633"
+    },
+    {
+      "file": "native-4.80000.png",
+      "sha256": "7bfb4679fdc1242a9f25c3b66e8f03298bb135a1c543ed2beb51affb4eb20730",
+      "old_sha256": "7bfb4679fdc1242a9f25c3b66e8f03298bb135a1c543ed2beb51affb4eb20730"
+    },
+    {
+      "file": "native-4.95000.png",
+      "sha256": "dd48ba65a7f6257bf5dbcfe1cb85efe1b3d8c7116398b4e68745a617e71b0974",
+      "old_sha256": "dd48ba65a7f6257bf5dbcfe1cb85efe1b3d8c7116398b4e68745a617e71b0974"
+    },
+    {
+      "file": "native-5.10000.png",
+      "sha256": "1417128d5e083016d04990088c1a07ed50ae24987af2ef1660b5871ac0562654",
+      "old_sha256": "1417128d5e083016d04990088c1a07ed50ae24987af2ef1660b5871ac0562654"
+    },
+    {
+      "file": "native-5.25000.png",
+      "sha256": "96d0243024a4f02d6e2983669b1a5acbc664147fd7a1c12601fadab7c36b3720",
+      "old_sha256": "96d0243024a4f02d6e2983669b1a5acbc664147fd7a1c12601fadab7c36b3720"
+    },
+    {
+      "file": "native-5.40000.png",
+      "sha256": "69610b72253d602aea69215be0a92179912c07dce18d7908e0b5337ae06b4600",
+      "old_sha256": "69610b72253d602aea69215be0a92179912c07dce18d7908e0b5337ae06b4600"
+    },
+    {
+      "file": "native-5.55000.png",
+      "sha256": "656a83659702b73bce1c811f998b7e6daaf1a9a3621058a54610ca92a3c39a5d",
+      "old_sha256": "656a83659702b73bce1c811f998b7e6daaf1a9a3621058a54610ca92a3c39a5d"
+    },
+    {
+      "file": "native-5.70000.png",
+      "sha256": "bfa5080657400c3c8c5dbdd336a94c03620c1cd7d74ae1cd1c301fb3514e0433",
+      "old_sha256": "bfa5080657400c3c8c5dbdd336a94c03620c1cd7d74ae1cd1c301fb3514e0433"
+    },
+    {
+      "file": "native-5.75000.png",
+      "sha256": "b4b688bad3767d0faa6d24bfe6fef9f8105fe103f1399d19883da2118cbb2846",
+      "old_sha256": "b4b688bad3767d0faa6d24bfe6fef9f8105fe103f1399d19883da2118cbb2846"
+    },
+    {
+      "file": "native-5.85000.png",
+      "sha256": "f952040284341c609803be788285fd9db423864eb4ba16fc0c8c561a09d98e4c",
+      "old_sha256": "f952040284341c609803be788285fd9db423864eb4ba16fc0c8c561a09d98e4c"
+    },
+    {
+      "file": "native-6.00000.png",
+      "sha256": "4a8d579bf39952f87123e77321f9d0df023beccb1787d5d02fc9be02d3136e27",
+      "old_sha256": "4a8d579bf39952f87123e77321f9d0df023beccb1787d5d02fc9be02d3136e27"
+    }
+  ]
+}

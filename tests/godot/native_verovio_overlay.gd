@@ -59,12 +59,13 @@ func _audit() -> void:
     var folder: String = args[1]
     DirAccess.make_dir_recursive_absolute(folder)
     var view := SubViewport.new()
-    view.size = Vector2i(1536, 520)
+    var dimensions: Array = fixture.get("viewport_size",[1536,520])
+    view.size = Vector2i(int(dimensions[0]),int(dimensions[1]))
     view.transparent_bg = false
     view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
     root.add_child(view)
     var renderer = load("res://notation/native/view.gd").new()
-    renderer.size = Vector2(1536, 520)
+    renderer.size = Vector2(view.size)
     view.add_child(renderer)
     renderer.set_fingering_annotations_enabled(false)
     renderer.set_transport_overlay_enabled(true)

@@ -1,0 +1,195 @@
+{
+  "source": "/home/tom/Projects/piano_teacher/midi/Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt.midi, measures 78-78, left",
+  "case": "learn-0077-left-original",
+  "density": 96.0,
+  "density_witness": {
+    "available_lookahead_beats": 9.28,
+    "reason": "configured-density",
+    "required_density": 96.0,
+    "selected_density": 96.0,
+    "staff_gap": 22.0
+  },
+  "native_notehead_samples": 135,
+  "reference_source_note_count": 3,
+  "distinct_native_noteheads": 3,
+  "active_notehead_pixel_samples": 135,
+  "registered_noteheads": 3,
+  "tiny_rests": 0,
+  "maximum_dots": 2,
+  "rest_overlap_count": 0,
+  "errors": [
+    "measure 78 left voice 1 pt089fba1ff62917b7c12fba5f961e0869s1 dot: ambiguous Feature contour is connected to neighboring ink outside its own box",
+    "measure 78 both voice None p1/m1/attributes1/time3 meter: unverified Independent numerator and denominator glyphs on the actual staff",
+    "measure 78 left voice None p2/m1/attributes1/key2 key: unsupported Opening key requires independently identified adjacent clef and meter",
+    "measure 78 both voice None p2/m1/attributes1/time3 meter: unverified Independent numerator and denominator glyphs on the actual staff",
+    "measure 78 left voice 1 pt089fba1ff62917b7c12fba5f961e0869s0 note_rhythm: unsupported A notehead alone does not certify written rhythm",
+    "measure 78 left voice 1 pt089fba1ff62917b7c12fba5f961e0869s1 note_rhythm: unverified Every required independent rhythm contribution must verify",
+    "measure 78 left voice 1 pt089fba1ff62917b7c12fba5f961e0869s1 dot: ambiguous Feature contour is connected to neighboring ink outside its own box",
+    "measure 78 left voice 1 pt089fba1ff62917b7c12fba5f961e0869s1 dot: ambiguous Feature contour is connected to neighboring ink outside its own box"
+  ],
+  "passed": false,
+  "legacy_renderer_diagnostics": [],
+  "whole_window_coverage": {
+    "measure_count": 1,
+    "sampled_measures": 1,
+    "source_noteheads": 3,
+    "unique_rendered_noteheads": 3,
+    "source_rests": 2,
+    "unique_rendered_rests": 2,
+    "screenshot_count": 45,
+    "missing_notes": [],
+    "missing_rests": [],
+    "missing_measure_starts": [],
+    "unexpected_notes": [],
+    "unexpected_rests": [],
+    "witness_type": "Godot identity + per-note/rest ink proximity; not yet independent whole-piece symbol-classification",
+    "independent_motion": {
+      "passed": true,
+      "measured": [
+        {
+          "clock": 0.0625,
+          "passed": true,
+          "status": "verified",
+          "pixel_steps": [
+            6,
+            6
+          ],
+          "contour_agreement": [
+            0.9979,
+            0.9961
+          ],
+          "competing_shifts": [
+            [],
+            []
+          ],
+          "reason": "Equal musical steps preserve forward score translation"
+        }
+      ],
+      "scope": "Actual framebuffer translation at equal musical steps; fixed layout scale is unrestricted"
+    },
+    "independent_image_rests": {
+      "passed": true,
+      "complete": true,
+      "written_active_rests": 1,
+      "image_rest_glyphs_verified": 1,
+      "intrinsically_indistinguishable_half_whole": 0,
+      "coverage": {
+        "expected": 1,
+        "verified": 1,
+        "ambiguous": 0,
+        "unsupported": 0,
+        "unverified": 0,
+        "mismatch": 0
+      },
+      "failures": [],
+      "placement_coverage": {
+        "expected": 1,
+        "verified": 1,
+        "ambiguous": 0,
+        "unsupported": 0,
+        "unverified": 0,
+        "mismatch": 0
+      },
+      "placement_complete": true,
+      "scope": "visible isolated contour against external Verovio font; full-frame repeat and restore invariance",
+      "limitation": "Glyph and placement coverage are separate; placement proves only a bounded readable staff-grid lane and local bright-ink clearance, not the intended voice lane or global extra-symbol absence; touching/occluded dots and more than three dots remain nonverified"
+    },
+    "independent_image_pitch": {
+      "passed": true,
+      "written_active_noteheads": 3,
+      "image_pitch_verified": 3,
+      "unique_onset_frames": 3,
+      "tolerance_staff_steps": 0.42,
+      "failures": [],
+      "complete": true,
+      "coverage": {
+        "expected": 3,
+        "verified": 3,
+        "ambiguous": 0,
+        "unsupported": 0,
+        "unverified": 0,
+        "mismatch": 0
+      },
+      "scope": "Source-directed notehead silhouette search at written pitch relative to actual screenshot staff rails; no native geometry",
+      "not_verified": [
+        "extra symbols elsewhere in the image",
+        "one-to-one assignment of inseparable dense silhouettes",
+        "stems, flags, augmentation dots and accidentals",
+        "individual beam/tie/slur masks in complex overlaps"
+      ]
+    },
+    "independent_connectors": {
+      "expected": 1,
+      "verified": 1,
+      "unverified": 0,
+      "mismatch": 0
+    },
+    "independent_beams": {
+      "expected": 0,
+      "verified": 0,
+      "unverified": 0,
+      "ambiguous": 0,
+      "unsupported": 0,
+      "mismatch": 0
+    },
+    "independent_tuplets": {
+      "expected": 0,
+      "verified": 0,
+      "unverified": 0,
+      "ambiguous": 0,
+      "unsupported": 0,
+      "mismatch": 0
+    },
+    "independent_ledgers": {
+      "expected": 2,
+      "verified": 2,
+      "unverified": 0,
+      "ambiguous": 0,
+      "unsupported": 0,
+      "mismatch": 0
+    },
+    "independent_note_features": {
+      "expected": 5,
+      "verified": 4,
+      "unverified": 0,
+      "ambiguous": 1,
+      "unsupported": 0,
+      "mismatch": 0
+    },
+    "symbols": {
+      "expected": 26,
+      "verified": 19,
+      "ambiguous": 2,
+      "unsupported": 2,
+      "unverified": 3,
+      "mismatch": 0
+    },
+    "unexpected_symbols": {
+      "frames": 45,
+      "expected_heads": 3,
+      "expected_rests": 2,
+      "measured_frames": 45,
+      "bound_heads": 3,
+      "bound_rests": 2,
+      "initial_viewport": true,
+      "terminal_viewport": true,
+      "motion_status": "verified",
+      "clock_gaps": [],
+      "motion_errors": [],
+      "missing_source_clocks": [],
+      "binding_errors": [],
+      "unowned_pixels": 556395,
+      "source_supported": true,
+      "certified_tiles": 1713,
+      "decoded_frame_cache_limit": 2,
+      "full_absence_status": "unverified"
+    }
+  },
+  "nonverified_symbols": {
+    "meter:unverified": 2,
+    "key:unsupported": 1,
+    "note_rhythm:unsupported": 1,
+    "note_rhythm:unverified": 1,
+    "dot:ambiguous": 2
+  }
+}

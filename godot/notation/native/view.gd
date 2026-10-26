@@ -430,11 +430,7 @@ func _fingering_obstacles(gap: float, bins: Dictionary, cell: float) -> void:
             float(last["beat"])*density,gap)
         if place.is_empty():
             continue
-        var info: Dictionary = glyphs.tie_metadata["up" if place["down"] else "down"]
-        var box: Array = info["bounds"]
-        var scale: float = (float(place["x1"])-float(place["x0"]))/float(info["span"])
-        _fingering_block(Rect2(float(place["x0"])+float(box[0])*scale,
-            float(place["y"])+float(box[1])*unit,float(box[2])*scale,float(box[3])*unit),bins,cell)
+        _fingering_block(_tie_contour_rect(first,last,place,gap),bins,cell)
     for pair in slur_pairs:
         var first: Dictionary = pair["first"]
         var last: Dictionary = pair["last"]
@@ -912,6 +908,12 @@ func _missing_source_engraving() -> String:
         if not glyphs.slur_metadata.has(key) or \
                 glyphs.slur_note_ids(key) != pair:
             return "Missing original Verovio slur: "+key
+    for pair in tie_pairs:
+        var first: Dictionary = pair["first"]
+        var last: Dictionary = pair["last"]
+        var key: String = _tie_template_key(first,last,{"down":_tie_bow_down(first,last,1.0)},1.0)
+        if not glyphs.tie_metadata.has(key):
+            return "Missing authentic flag-aware tie contour: "+key
     return ""
 
 
@@ -2095,6 +2097,32 @@ func _tie_placement(first: Dictionary, last: Dictionary,
         "down":_tie_bow_down(first,last,gap)}
 
 
+func _tie_chord_leader(event: Dictionary) -> Dictionary:
+    if bool(event.get("chord",false)):
+        # Locate only simultaneous events, including a child's real leader.
+        # Do not scan the full performance's chord dictionary per frame.
+        var beat: float = float(event.get("beat",0.0))
+        var begin := 0
+        var end := ordered_events.size()
+        while begin < end:
+            var middle: int = (begin+end) >> 1
+            if float(ordered_events[middle].get("beat",0.0)) < beat-.000001:
+                begin = middle+1
+            else:
+                end = middle
+        for index in range(begin,ordered_events.size()):
+            var candidate: Dictionary = ordered_events[index]
+            if float(candidate.get("beat",0.0)) > beat+.000001:
+                break
+            if not bool(candidate.get("chord",false)) and \
+                    str(candidate.get("kind","")) == "note" and \
+                    candidate.get("staff") == event.get("staff") and \
+                    candidate.get("voice") == event.get("voice") and \
+                    candidate.get("measure") == event.get("measure"):
+                return candidate
+    return event
+
+
 func _tie_bow_down(first: Dictionary, last: Dictionary, gap: float) -> bool:
     for i in range(2):
         var event: Dictionary = first if i == 0 else last
@@ -2110,30 +2138,7 @@ func _tie_bow_down(first: Dictionary, last: Dictionary, gap: float) -> bool:
             if kind == ("start" if i == 0 else "stop") and \
                     placement in ["above","below"]:
                 return placement == "below"
-    var leader: Dictionary = first
-    if bool(first.get("chord",false)):
-        # Locate only simultaneous events, including a child's real leader.
-        # Do not scan the full performance's chord dictionary per frame.
-        var beat: float = float(first.get("beat",0.0))
-        var begin := 0
-        var end := ordered_events.size()
-        while begin < end:
-            var middle: int = (begin+end) >> 1
-            if float(ordered_events[middle].get("beat",0.0)) < beat-.000001:
-                begin = middle+1
-            else:
-                end = middle
-        for index in range(begin,ordered_events.size()):
-            var candidate: Dictionary = ordered_events[index]
-            if float(candidate.get("beat",0.0)) > beat+.000001:
-                break
-            if not bool(candidate.get("chord",false)) and \
-                    str(candidate.get("kind","")) == "note" and \
-                    candidate.get("staff") == first.get("staff") and \
-                    candidate.get("voice") == first.get("voice") and \
-                    candidate.get("measure") == first.get("measure"):
-                leader = candidate
-                break
+    var leader: Dictionary = _tie_chord_leader(first)
     var extents: Dictionary = _chord_extents(leader,gap)
     var y: float = _event_y(first,gap)
     var middle_y: float = (float(extents["top_y"])+float(extents["bottom_y"]))* .5
@@ -2141,7 +2146,25 @@ func _tie_bow_down(first: Dictionary, last: Dictionary, gap: float) -> bool:
     # of the shared stem. The middle note of an odd chord keeps its stem rule.
     if absf(y-middle_y) > .001:
         return y > middle_y
-    return bool(beam_stem_up_by_note.get(str(first.get("id","")),extents["up"]))
+    return bool(beam_stem_up_by_note.get(str(leader.get("id","")),extents["up"]))
+
+
+func _tie_template_key(first: Dictionary, last: Dictionary, place: Dictionary, gap: float) -> String:
+    var down: bool = bool(place["down"])
+    var ordinary: String = "up" if down else "down"
+    var endpoint: Dictionary = last if down else first
+    var leader: Dictionary = _tie_chord_leader(endpoint)
+    var kind: String = str(leader.get("note_type","quarter"))
+    if kind not in ["eighth","16th","32nd","64th","128th"]:
+        return ordinary
+    var id: String = str(leader.get("id",""))
+    # Written beams own the shaft: a short duration does not imply a flag.
+    if beamed_note_ids.has(id) or beam_stem_up_by_note.has(id):
+        return ordinary
+    var up: bool = bool(_chord_extents(leader,gap)["up"])
+    if up==down:
+        return ordinary
+    return ("end_"+kind+"_below") if down else ("start_"+kind+"_above")
 
 
 func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
@@ -2163,29 +2186,39 @@ func _paint_ties(playhead_x: float, clock: float, gap: float) -> void:
 
 func _paint_tie_contour(first: Dictionary, last: Dictionary,
         place: Dictionary, gap: float) -> void:
-    var direction: String = "up" if bool(place["down"]) else "down"
+    var direction: String = _tie_template_key(first,last,place,gap)
     var texture: Texture2D = glyphs.tie_textures.get(direction)
     if texture == null:
         return
+    var rect: Rect2 = _tie_contour_rect(first,last,place,gap)
+    if rect.has_area():
+        draw_texture_rect(texture,rect,false,_event_ink(last))
+
+
+func _tie_contour_rect(first: Dictionary, last: Dictionary,
+        place: Dictionary, gap: float) -> Rect2:
+    var direction: String = _tie_template_key(first,last,place,gap)
     var data: Dictionary = glyphs.tie_metadata[direction]
     var box: Array = data["bounds"]
     var source_head: Array = glyphs.bounds["head_half"]
     var source_center: float = float(source_head[0])+float(source_head[2])*.5
+    var source_centers: Array = data.get("head_centers",[source_center,source_center])
+    var source_widths: Array = data.get("head_widths",[source_head[2],source_head[2]])
     var widths: Array[float] = []
     for event in [first,last]:
         var kind: String = str(event.get("note_type","quarter"))
         var name: String = "head_"+(kind if kind in ["whole","half"] else "black")
         widths.append(float(glyphs.bounds[name][2]))
     var unit: float = gap/250.0
-    # The original template was engraved between HALF-note font origins;
-    # native musical X is the centre of each actual head. Keep Verovio's
+    # Each template records its actual endpoint head families; native
+    # musical X is the centre of each displayed head. Keep Verovio's
     # head-edge clearances in staff units, including a wider whole head.
     # Stretch the contour itself, never the empty endpoint margins.
-    var left_inset: float = (float(box[0])-source_center+
-        (widths[0]-float(source_head[2]))*.5)*unit
+    var left_inset: float = (float(box[0])-float(source_centers[0])+
+        (widths[0]-float(source_widths[0]))*.5)*unit
     var right_inset: float = (float(box[0])+float(box[2])-
-        float(data["span"])-source_center-
-        (widths[1]-float(source_head[2]))*.5)*unit
+        float(data["span"])-float(source_centers[1])-
+        (widths[1]-float(source_widths[1]))*.5)*unit
     var span: float = float(place["x1"])-float(place["x0"])
     if span-(left_inset-right_inset) < float(box[3])*unit:
         # Do not compress the ink to less than its original bow height:
@@ -2198,11 +2231,10 @@ func _paint_tie_contour(first: Dictionary, last: Dictionary,
     var left: float = float(place["x0"])+left_inset
     var right: float = float(place["x1"])+right_inset
     if right <= left:
-        return
-    draw_texture_rect(texture,Rect2(left,
+        return Rect2()
+    return Rect2(left,
         float(place["y"])+float(box[1])*unit,
-        right-left,float(box[3])*unit),false,
-        _event_ink(last))
+        right-left,float(box[3])*unit)
 
 
 # Binary-search into pre-sorted MusicXML events. Work is proportional

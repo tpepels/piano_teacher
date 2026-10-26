@@ -1,0 +1,66 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+__ test_native_tie_clearance_does_not_stretch_with_beat_distance[4-G-4-None] ___
+
+tmp_path = PosixPath('/tmp/pytest-of-tom/pytest-245/test_native_tie_clearance_does0')
+reference_clearances = (0.1875, 0.21875), span = 4, pitch = 'G', octave = '4'
+placement = None
+
+    @pytest.mark.parametrize("span,pitch,octave,placement", [
+        (2, "G", "4", None), (4, "G", "4", None),
+        (2, "C", "5", None), (4, "C", "5", None), (2, "C", "5", "below"),
+    ])
+    def test_native_tie_clearance_does_not_stretch_with_beat_distance(
+            tmp_path, reference_clearances, span, pitch, octave, placement):
+        """Catch origin/centre confusion and scaling of the endpoint margins."""
+        binary = shutil.which("godot") or shutil.which("godot4")
+        if not binary or not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+            pytest.skip("Actual native framebuffer needs Godot and a desktop")
+        from scripts.check_native_verovio_overlay import AuditCase, fixture
+
+        tree = ET.parse(ROOT/"tests/fixtures/native_pixel_tie_probe.musicxml")
+        first = tree.find("part[@id='RH']/measure/note")
+        if span == 2:
+            first.find("duration").text = "16"
+            first.find("type").text = "half"
+            opening = ET.fromstring("<note><rest/><duration>16</duration>"
+                                    "<voice>1</voice><type>half</type></note>")
+            tree.find("part[@id='RH']/measure").insert(1, opening)
+        for note in tree.findall("part[@id='RH']/measure/note[pitch]"):
+            note.find("pitch/step").text = pitch
+            note.find("pitch/octave").text = octave
+            if placement:
+                note.find('notations/tied').set('placement', placement)
+        xml = ET.tostring(tree.getroot(), encoding="unicode")
+        source = tmp_path/"source.musicxml"
+        source.write_text(xml)
+        data, _ = fixture(AuditCase("tie-attachment", str(source), 1, 2, "right"))
+        if placement:
+            # The general import/lesson fixture currently regenerates tied marks
+            # without placement. Keep this controlled VIEW fixture faithful to
+            # the authored XML, without changing importer behavior in this task.
+            for event in data['model']['notation_events']:
+                if event['staff'] == 'right':
+                    for attributes in event.get('tied_marks', []):
+                        attributes.append(['placement', placement])
+        data["sample_beats"] = [4-span, 4]
+        payload = tmp_path/"fixture.json"
+        payload.write_text(json.dumps(data))
+        result = subprocess.run([binary, "--path", str(ROOT/"godot"), "--audio-driver", "Dummy",
+            "--rendering-method", "gl_compatibility", "--script",
+            str(ROOT/"tests/godot/native_verovio_overlay.gd"), "--", str(payload), str(tmp_path)],
+            capture_output=True, text=True, timeout=120)
+        (tmp_path/"godot.log").write_text(result.stdout+result.stderr)
+        assert result.returncode == 0, (result.stdout+result.stderr)[-4000:]
+        assert "NATIVE_VEROVIO_OVERLAY_FAILURES:0" in result.stdout
+        proof = verify_connector_pixels(xml, tmp_path, hand="right", constructs=("tie",))
+        (tmp_path/"connector-proof.json").write_text(json.dumps(proof, indent=2))
+        assert proof["coverage"]["expected"] == 1
+>       assert proof["complete"], proof
+E       AssertionError: {'complete': False, 'passed': False, 'coverage': {'expected': 1, 'verified': 0, 'unverified': 0, 'mismatch': 1}, 'obse... 'xml-p0-m1-e0'], 'oracle_source_ids': ['xml-p0-m0-e1', 'xml-p0-m1-e0'], 'construct': 'tie', 'number': '1', ...}], ...}
+E       assert False
+
+tests/test_native_tie_attachments.py:110: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_native_tie_attachments.py::test_native_tie_clearance_does_not_stretch_with_beat_distance[4-G-4-None]
+1 failed in 3.47s

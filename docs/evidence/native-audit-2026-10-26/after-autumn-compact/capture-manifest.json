@@ -1,0 +1,31 @@
+{
+  "capture_config": {
+    "version": 1,
+    "score_ink": "canonical",
+    "fingering_annotations": false,
+    "transport_overlay": true
+  },
+  "capture_protocol_sha256": "6384bca0bbf2fc89507dbd8ebbe20e3b89cd43e40bcd46c32db386cc61405286",
+  "renderer_dependencies_sha256": "712371ae496eb7d6e621351aa789fd3fd6148b28abf7b51ceda833b758b38853",
+  "python": "3.14.8",
+  "verovio": "5.7.0-7135340",
+  "godot": "4.7.2.stable.arch_linux.ed1daf0bf",
+  "screenshots": [
+    {
+      "file": "native-11.60.png",
+      "sha256": "f3d7632437deaae83af9f7e6671f42d19de8401eeddd7e352647462ac174bbee"
+    },
+    {
+      "file": "native-12.00.png",
+      "sha256": "b779020ce9832fc86abb506d1466a8e4fab5dc124d9f7f8f9b6b273880d12521"
+    },
+    {
+      "file": "native-3.60.png",
+      "sha256": "e08ef8340f43ae5e478843269f60d3a6b0610505eb9a8c44af66a32d93b0bb24"
+    },
+    {
+      "file": "native-4.00.png",
+      "sha256": "d36b6b2c2484011c1b19af0e2b117efb66ce3d88c8d8d7de76eda4f24fb4a187"
+    }
+  ]
+}

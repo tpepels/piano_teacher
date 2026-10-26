@@ -1,0 +1,13 @@
+{
+  "scope": "Four source-onset/ledger witnesses excerpted from the complete fresh capture. Full manifest records 51 screenshots; not all are copied here.",
+  "full_capture_directory": "/tmp/notation-ledger-final-liszt78/00-Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt/learn-0077-left-original",
+  "copied_pngs": [
+    "native-0.00000.png",
+    "native-0.30000.png",
+    "native-4.00000.png",
+    "native-4.20000.png"
+  ],
+  "full_manifest_verified": true,
+  "native_pngs_identical_before_after": 45,
+  "whole_case_passed": false
+}

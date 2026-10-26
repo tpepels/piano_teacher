@@ -1,0 +1,12 @@
+{
+  "root_triage_restored_sha256": "d3e1246265dd977f40289b42b2b71bce5fd4bdd0a4601c69bcae3da8e9696924",
+  "matches_original_baseline_byte_for_byte": true,
+  "members": 163,
+  "crc_verified": true,
+  "recovery": "All member bytes reconstructed from untouched shard0 evidence; original generated-entry DOS timestamps restored. Full original archive SHA256 matched.",
+  "observed_replacement_preserved": "/home/tom/Projects/piano_teacher-preserved-2026-10-26/native-audit-diagnostic-packages/triage-observed-2026-10-26-144304.zip",
+  "observed_replacement_sha256": "f43ee5c9289db93149259ef6a34b60e7a740717f978e7a822b695d27a76382a6",
+  "exact_original_copy": "/home/tom/Projects/piano_teacher-preserved-2026-10-26/native-audit-diagnostic-packages/triage-original-byte-exact.zip",
+  "no_capture_or_case_data_discarded": true,
+  "replacement_caller": "not established"
+}

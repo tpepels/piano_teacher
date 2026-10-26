@@ -60,6 +60,11 @@ quick_checks() {
     tests/test_polyphonic_stem_pixels.py \
     tests/test_native_voice_collisions.py \
     tests/test_moonlight_tuplet_pixels.py \
+    tests/test_native_audit_ties.py \
+    tests/test_native_flag_tie_endpoints.py \
+    tests/test_native_tie_attachments.py \
+    tests/test_source_connector_pixels.py \
+    tests/test_phase3_ledger_pixels.py \
     tests/test_extra_symbol_pixels.py::test_real_playhead_overlap_is_ambiguous_without_exempting_detached_heads || return $?
   "$GODOT" --headless --path godot --check-only --script res://main.gd
 }

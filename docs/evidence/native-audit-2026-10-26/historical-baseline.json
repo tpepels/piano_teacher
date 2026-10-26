@@ -1,0 +1,1535 @@
+{
+  "schema": "notation-audit-baseline-inventory-v1",
+  "recorded_at_utc": "2026-10-26T14:19:37.103563+00:00",
+  "repository": "/home/tom/Projects/piano_teacher",
+  "base_revision": "c69da06ab1b6dd5de3738d2ec80d972f5c1c78b3",
+  "scope": {
+    "read_only_repository": true,
+    "godot_launched": false,
+    "captures_started": false,
+    "tests_run": false,
+    "full_audit_run": false,
+    "pixel_images_decoded": false,
+    "representative_notation_regenerations": 7
+  },
+  "current_provenance": {
+    "revision": "c69da06ab1b6dd5de3738d2ec80d972f5c1c78b3",
+    "working_tree_status": "",
+    "canonical_capture_config": {
+      "version": 1,
+      "score_ink": "canonical",
+      "fingering_annotations": false,
+      "transport_overlay": true
+    },
+    "renderer_dependencies_sha256": "64f803fde7e70d3b204015319a79311f6de8fa86efb2ee9c702b35267b6b7d42",
+    "renderer_dependency_files": 174,
+    "capture_protocol_sha256": "80089b63d468f69ea2217848c39cca1c8b3cb94b321e936ecb9bac736fe3740a",
+    "verification_inputs_sha256": "9f978874d8ba88fb94e5074816dc2988aba287d6d96dc8f5263df80aab2965e0",
+    "verification_sources": 43,
+    "godot_runtime": "not_queried_no_Godot_constraint",
+    "python": "3.14.8 (main, Oct  2 2026, 10:23:31) [GCC 16.2.1 20260810]",
+    "renderer_hash_stable_during_inventory": true
+  },
+  "retained_summary": {
+    "passed": false,
+    "sources_expected": 21,
+    "sources_discovered": 43,
+    "shard_index": 0,
+    "shard_count": 24,
+    "inputs_sha256": "bb80bbd328129296972f453436143bda73c12c91081f40a2cd0669df722c705d",
+    "state": "failed",
+    "runtime": {
+      "godot": "4.7.2.stable.arch_linux.ed1daf0bf",
+      "python": "3.14.8 (main, Oct  2 2026, 10:23:31) [GCC 16.2.1 20260810]",
+      "numpy": "2.5.4",
+      "pillow": "12.3.0",
+      "verovio": "5.7.0-7135340"
+    },
+    "cases_attempted": 632,
+    "cases_resumed": 0,
+    "denominators_complete": true,
+    "requested_workers": 2,
+    "workers": 2,
+    "worker_memory_limit_mib": 3072,
+    "case_timeout_seconds": 600.0,
+    "started_at": 1792950553.3462143,
+    "coordinator_pid": 1391083,
+    "sources_checked": 19,
+    "cases_expected": 632,
+    "cases_checked": 630,
+    "measures_expected": 270,
+    "measures_checked": 270,
+    "updated_at": 1792957859.9811695,
+    "cases_pending": 2,
+    "worker_peak_rss_kib": 700324,
+    "renderer_peak_rss_kib": 700324,
+    "finished_at": 1792957859.9811656
+  },
+  "actual_case_inventory": {
+    "case_directories": 632,
+    "state_counts": {
+      "completed": 630,
+      "error": 2
+    },
+    "completed_comparisons": 630,
+    "completed_pass": 332,
+    "completed_fail": 298,
+    "capture_errors": 2,
+    "summary_failure_entries": 301,
+    "summary_runwide_errors": [
+      "Source inputs or verification code changed during this audit; rerun the complete check"
+    ],
+    "audit_json_pass_counts": {
+      "False": 300,
+      "True": 332
+    },
+    "older_audits_in_noncompleted_cases": [
+      {
+        "case": "07-Le_Pianiste_virtuose_-_Premi\u00e8re_partie_(1-20)_-_C_L_Hanon/learn-0879-right-skeleton",
+        "errors": [
+          "AssertionError: Renderer dependencies changed during actual capture; rerun the passage"
+        ],
+        "older_audit_passed": false
+      },
+      {
+        "case": "08-Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt/learn-0001-both-skeleton",
+        "errors": [
+          "AssertionError: Renderer dependencies changed during actual capture; rerun the passage"
+        ],
+        "older_audit_passed": false
+      }
+    ],
+    "stale_audit_by_mtime": [],
+    "case_source_directories": 21,
+    "per_source": {
+      "00-Ala_\u2013_Joep_Beving": {
+        "fail": 4,
+        "pass": 10
+      },
+      "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz": {
+        "pass": 1,
+        "fail": 8
+      },
+      "02-Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major)": {
+        "fail": 19
+      },
+      "03-Clair_de_Lune_\u2013_Debussy": {
+        "pass": 4,
+        "fail": 16
+      },
+      "04-Danny_Boy(Bill_Evans_Ver_)": {
+        "fail": 4,
+        "pass": 2
+      },
+      "05-Gymnop\u00e9die_No_1_\u2013_Satie": {
+        "fail": 8,
+        "pass": 2
+      },
+      "06-J_S_Bach_-_Invention_No_1_(BWV_772)": {
+        "fail": 4,
+        "pass": 5
+      },
+      "07-Le_Pianiste_virtuose_-_Premi\u00e8re_partie_(1-20)_-_C_L_Hanon": {
+        "pass": 206,
+        "fail": 74,
+        "capture_error": 1
+      },
+      "08-Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt": {
+        "capture_error": 1,
+        "fail": 38
+      },
+      "09-Merry-Go-Round-of-Life": {
+        "pass": 14,
+        "fail": 26
+      },
+      "10-Moonlight_Sonata_I": {
+        "fail": 18,
+        "pass": 2
+      },
+      "11-Mozart_-_Piano_Sonata_No_16_in_C_Major,_K_545,_1st_Movement": {
+        "pass": 25,
+        "fail": 22
+      },
+      "12-Peace_Piece_-_Bill_Evans_(Piano_Solo)": {
+        "fail": 20
+      },
+      "13-Prelude_I_in_C_major,_BWV_846_-_Well_Tempered_Clavier_[First_Book]": {
+        "pass": 10,
+        "fail": 2
+      },
+      "14-Prelude_in_C-sharp_Minor,_Opus_3_No_2_\u2013_Sergei_Rachmaninoff": {
+        "fail": 15,
+        "pass": 2
+      },
+      "15-The_Entertainer_-_Scott_Joplin": {
+        "pass": 38,
+        "fail": 12
+      },
+      "16-Waltz_for_Debby": {
+        "fail": 4,
+        "pass": 6
+      },
+      "19-midi_six_eight": {
+        "pass": 2
+      },
+      "21-midi_repeated_attacks": {
+        "pass": 2
+      },
+      "22-midi_chords": {
+        "fail": 1
+      },
+      "42-xml_long_multipage": {
+        "fail": 3,
+        "pass": 1
+      }
+    },
+    "root_fixtures": 632,
+    "nested_fixtures_including_failed_replacements": 634,
+    "root_source_notes": 8746,
+    "root_notation_events": 10427,
+    "nested_notation_events_including_failed_replacements": 10442,
+    "root_projected_fingerings": 0,
+    "root_xml_fingerings": 0
+  },
+  "historical_artifact_integrity": {
+    "counts": {
+      "result_witnesses_checked": 2528,
+      "result_witnesses_matching": 2528,
+      "screenshots_checked": 29710,
+      "screenshot_bytes_read": 1007876152,
+      "screenshots_matching": 29710,
+      "historical_cases_checksum_valid": 632
+    },
+    "issues": [],
+    "meaning": "Checksums bind files to their retained historical manifests; this does not certify their musical ink or authorize current-code reuse."
+  },
+  "current_capture_reuse": {
+    "compatible_cases": 0,
+    "incompatible_cases": 632,
+    "checks": {
+      "fixture_canonical_config_match": 0,
+      "manifest_canonical_config_match": 0,
+      "renderer_hash_match": 0,
+      "protocol_hash_match": 0,
+      "fixture_manifest_protocol_agree": 632
+    },
+    "renderer_hashes": {
+      "65419e0a95b85b1f15dd6eaf8b659a6e9100da676ebcbd2062d8cd1511c9d58a": 310,
+      "fe5af2dacb8cd4a2ffa9ad038966f04cbdb3a0ee4887271c74f5378a2332c164": 2,
+      "fe664a324ff435d4f17ff796d79d3427d970e148f0e2027c969e293d9674276b": 19,
+      "d14df5c5381458f0883844d7debe3b6af988e1180429f26ea741c652550587e6": 41,
+      "d160c024eb4707f07bf07f55e73c75522e6cf4c6f0b7db8e29e33dd49a8e0f0b": 2,
+      "17f0bed3900de303075ca65a59ab5f52c81e22cea92b5668f34500ca301aa0db": 22,
+      "3feee168c66ccc679b8b650e42bf0bd6771ee4a8dddcd49abdfa0ada9aa2c6fd": 16,
+      "5f3ef69ad4d057682b19a4ac09ab051c5ded836dd0fff58734506bcfbb359f58": 160,
+      "c297b9ec348953f2c93c4ac00eb87b60f2c0f4c4d2a46ce197c61f09ec42b786": 5,
+      "12c6a6727e8750f010fdbf0f2f46c7bad4b818560d960f81e892994dc29d3862": 21,
+      "db2f518dd2c8692e2a6dfc59c7e322aa17e01979c90b4a243d6f9da997ebd237": 12,
+      "c8763c39c5f772a67a62e000261925c9905e072dc49888380c1a594af867bbec": 4,
+      "246d4811ad9198af0dbc4f5f3b640240279122a7a171b42dc7744b24f8b7e16d": 18
+    },
+    "protocol_hashes": {
+      "0e88836776d04e653f1ced76196583e723b8e2102c3bc2097d7125fbeef110e7": 310,
+      "fcdbd64544dcd6ab742b78ced72e9cb8c4bb9c374e7b85af935fe81507092577": 2,
+      "5a735e4cf6a114d4774e3545b5ad8a206cf7761e05fc6f6c1839e918f988bcbb": 19,
+      "76ce588f0d22b9d47844340901d219364baf8f08f6316449b4593ce3cff608e3": 79,
+      "190cbb2a941c4fa1d221bc82487f940777852e563fe32fd0b8dd2d3c751ff503": 2,
+      "810957dbe7574a1e51182c3a5083b252cc1985338acfb9f3ee1a773131fe5a19": 220
+    },
+    "blocking_reasons": [
+      "All retained fixture/manifest pairs lack the explicit canonical capture_config required today.",
+      "All retained renderer/protocol digests differ from current code.",
+      "Current fixture and generated XML must also compare exactly; a source-only match is insufficient.",
+      "Two capture attempts failed because renderer dependencies changed during capture; their older artifacts survived."
+    ],
+    "runtime_comparison": "Godot version deliberately not queried; compatibility already fails mandatory configuration and code identity."
+  },
+  "historical_families": {
+    "counting_rules": "Completed-case audit errors only; family raw_message counts may duplicate symbol observations and overlap across families. Symbol statuses come from completed result records; families are not rendering root causes.",
+    "raw_message_counts": {
+      "flag-absence": 219,
+      "other": 4440,
+      "source-tracking": 136,
+      "dot": 144,
+      "boundary": 192,
+      "articulation": 198,
+      "tie": 186,
+      "unowned-symbol": 17,
+      "rest": 14,
+      "ledger": 150,
+      "note-pixels": 49
+    },
+    "affected_case_counts": {
+      "other": 285,
+      "source-tracking": 136,
+      "flag-absence": 62,
+      "dot": 35,
+      "boundary": 75,
+      "articulation": 51,
+      "tie": 21,
+      "unowned-symbol": 15,
+      "rest": 10,
+      "ledger": 28,
+      "note-pixels": 16
+    },
+    "symbol_status_counts": {
+      "note_rhythm:unverified": 951,
+      "flag:unverified": 339,
+      "measure:unverified": 192,
+      "barline:unverified": 192,
+      "rest_rhythm:unverified": 64,
+      "dot:ambiguous": 78,
+      "tuplet:unsupported": 166,
+      "tuplet:unverified": 169,
+      "accidental:ambiguous": 99,
+      "tie:unverified": 86,
+      "note_rhythm:unsupported": 45,
+      "tie:mismatch": 124,
+      "rest_placement:mismatch": 14,
+      "key:unsupported": 90,
+      "meter:unverified": 135,
+      "stem:unverified": 381,
+      "ledger:mismatch": 75,
+      "key:unverified": 1,
+      "pitch:unverified": 60,
+      "stem:ambiguous": 34,
+      "flag:ambiguous": 39,
+      "dot:unverified": 135,
+      "pitch:ambiguous": 37,
+      "ledger:unverified": 95,
+      "accidental:unverified": 25,
+      "rest:unverified": 7,
+      "rest_rhythm:unsupported": 7,
+      "rest_placement:unsupported": 7,
+      "dot:unsupported": 20,
+      "accidental:mismatch": 1,
+      "flag:mismatch": 5
+    },
+    "symbol_status_affected_cases": {
+      "note_rhythm:unverified": 118,
+      "flag:unverified": 55,
+      "measure:unverified": 75,
+      "barline:unverified": 75,
+      "rest_rhythm:unverified": 37,
+      "dot:ambiguous": 35,
+      "tuplet:unsupported": 17,
+      "tuplet:unverified": 19,
+      "accidental:ambiguous": 51,
+      "tie:unverified": 18,
+      "note_rhythm:unsupported": 20,
+      "tie:mismatch": 21,
+      "rest_placement:mismatch": 10,
+      "key:unsupported": 65,
+      "meter:unverified": 66,
+      "stem:unverified": 34,
+      "ledger:mismatch": 28,
+      "key:unverified": 1,
+      "pitch:unverified": 16,
+      "stem:ambiguous": 5,
+      "flag:ambiguous": 9,
+      "dot:unverified": 13,
+      "pitch:ambiguous": 13,
+      "ledger:unverified": 19,
+      "accidental:unverified": 13,
+      "rest:unverified": 4,
+      "rest_rhythm:unsupported": 4,
+      "rest_placement:unsupported": 4,
+      "dot:unsupported": 3,
+      "accidental:mismatch": 1,
+      "flag:mismatch": 1
+    },
+    "top_reason_messages": [
+      {
+        "reason": "note_rhythm:unverified: Every required independent rhythm contribution must verify",
+        "count": 529
+      },
+      {
+        "reason": "stem:unverified: No continuous stem attached to every registered head with reference-supported extension",
+        "count": 528
+      },
+      {
+        "reason": "flag:unverified: Insufficient authentic glyph contour at the bound feature position",
+        "count": 380
+      },
+      {
+        "reason": "flag:unverified: A flag requires its own independently attached stem endpoint",
+        "count": 260
+      },
+      {
+        "reason": "note_rhythm:unverified: Quarter rhythm requires bound independent absent-flag evidence",
+        "count": 214
+      },
+      {
+        "reason": "note_rhythm:unverified: Rhythm requires a complete source group, bound ratio semantics and every actual graphic",
+        "count": 208
+      },
+      {
+        "reason": "accidental:ambiguous: Feature contour is connected to neighboring ink outside its own box",
+        "count": 196
+      },
+      {
+        "reason": "stem:unverified: Every source chord head must first register in the current image",
+        "count": 186
+      },
+      {
+        "reason": "tuplet:unverified: No unique bound graphical connector group",
+        "count": 169
+      },
+      {
+        "reason": "tuplet:unsupported: No independent pixel detector for tuplet",
+        "count": 166
+      },
+      {
+        "reason": "ledger:mismatch: At least one required physical ledger is missing or unresolved",
+        "count": 150
+      },
+      {
+        "reason": "measure:unverified: Boundary needs an independently registered source onset and coherent frame translation",
+        "count": 146
+      },
+      {
+        "reason": "barline:unverified: Boundary needs an independently registered source onset and coherent frame translation",
+        "count": 146
+      },
+      {
+        "reason": "dot:ambiguous: Feature contour is connected to neighboring ink outside its own box",
+        "count": 144
+      },
+      {
+        "reason": "Incomplete source clock or glyph tracking evidence",
+        "count": 136
+      },
+      {
+        "reason": "ledger:unverified: Current-image notehead lacks a unique bounded .79 contour assignment",
+        "count": 136
+      },
+      {
+        "reason": "tie:mismatch: No connected curved ink attaches to both source endpoint heads",
+        "count": 132
+      },
+      {
+        "reason": "meter:unverified: Independent numerator and denominator glyphs on the actual staff",
+        "count": 129
+      },
+      {
+        "reason": "Incomplete independent rests ownership",
+        "count": 119
+      },
+      {
+        "reason": "dot:unverified: Every chord dot needs distinct isolated ink at its source staff space",
+        "count": 119
+      },
+      {
+        "reason": "flag_absence:unverified: Flag absence requires the independently registered head and stem",
+        "count": 108
+      },
+      {
+        "reason": "flag_absence:unverified: Ink beside the quarter stem prevents independent flag absence",
+        "count": 103
+      },
+      {
+        "reason": "key:unsupported: Opening key requires independently identified adjacent clef and meter",
+        "count": 88
+      },
+      {
+        "reason": "stem:ambiguous: Source groups do not have a unique assignment to separate physical stem shafts",
+        "count": 68
+      }
+    ],
+    "primary_mismatch_totals": {
+      "tie": {
+        "cases": 21,
+        "symbol_entries": 124
+      },
+      "ledger": {
+        "cases": 28,
+        "symbol_entries": 75
+      },
+      "rest_placement": {
+        "cases": 10,
+        "symbol_entries": 14
+      }
+    },
+    "label_caveats": {
+      "articulation": "Packager MARKERS actually classifies accidental: ambiguous, not articulation marks.",
+      "other": "Residual message bin, not a root-cause family.",
+      "tie_and_ledger_raw": "Raw messages may duplicate required-symbol and feature evidence; use primary_mismatch_totals for symbol entries."
+    }
+  },
+  "earlier_interruption_snapshot": {
+    "path": "notation-check-results/interruption-2026-10-25/before-stop-summary.json",
+    "sha256": "98be71a33b8ea00b949dc4f989b93c6d272bbd0e46d5b38d2b3d0d47caa48ec4",
+    "cases_checked": 631,
+    "cases_expected": 632,
+    "failure_entries": 360,
+    "sources_checked": 20,
+    "inputs_sha256": "e3fd15202f821f6fe56cc3918df79c2facaed5914cfacaf5edbebd0553dfdfac"
+  },
+  "archives": [
+    {
+      "path": "notation-check-results/triage.zip",
+      "sha256": "d3e1246265dd977f40289b42b2b71bce5fd4bdd0a4601c69bcae3da8e9696924",
+      "members": 163,
+      "png_members": 19,
+      "crc_read_all_ok": true,
+      "comparison_to_current_retained_directory": {
+        "same_bytes": 161,
+        "different_bytes": 0,
+        "not_present": 1
+      },
+      "summary": {
+        "state": "failed",
+        "passed": false,
+        "cases_expected": 632,
+        "cases_checked": 630,
+        "sources_checked": 19,
+        "measures_checked": 270
+      },
+      "failure_entries": 301,
+      "triage": {
+        "audit_files": 632,
+        "error_counts": {
+          "interrupted": 2,
+          "flag-absence": 219,
+          "other": 4440,
+          "source-tracking": 136,
+          "dot": 144,
+          "boundary": 192,
+          "articulation": 198,
+          "tie": 186,
+          "unowned-symbol": 17,
+          "rest": 14,
+          "ledger": 150,
+          "note-pixels": 49
+        },
+        "interrupted_cases": [
+          "07-Le_Pianiste_virtuose_-_Premi\u00e8re_partie_(1-20)_-_C_L_Hanon/learn-0879-right-skeleton",
+          "08-Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt/learn-0001-both-skeleton"
+        ],
+        "selected_examples": {
+          "interrupted": "07-Le_Pianiste_virtuose_-_Premi\u00e8re_partie_(1-20)_-_C_L_Hanon/learn-0879-right-skeleton/audit.json",
+          "flag-absence": "00-Ala_\u2013_Joep_Beving/learn-0002-left-original/audit.json",
+          "source-tracking": "00-Ala_\u2013_Joep_Beving/learn-0002-left-original/audit.json",
+          "dot": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/learn-0007-left-skeleton/audit.json",
+          "boundary": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/learn-0007-left-skeleton/audit.json",
+          "articulation": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/learn-0015-both-original/audit.json",
+          "tie": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/original-0009-0012-both/audit.json",
+          "unowned-symbol": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/original-0021-0024-right/audit.json",
+          "rest": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/original-0037-0040-both/audit.json",
+          "ledger": "02-Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major)/learn-0031-both-outline/audit.json",
+          "note-pixels": "03-Clair_de_Lune_\u2013_Debussy/learn-0015-left-outline/audit.json"
+        }
+      }
+    },
+    {
+      "path": "notation-check-results/interruption-2026-10-25/triage.zip",
+      "sha256": "b428dff85c0d1d8d39005551f6ff9466332b5d5ab79b9547d9aa5af0dd2818d4",
+      "members": 107,
+      "png_members": 17,
+      "crc_read_all_ok": true,
+      "comparison_to_current_retained_directory": {
+        "same_bytes": 58,
+        "different_bytes": 46,
+        "not_present": 2
+      },
+      "summary": {
+        "passed": false,
+        "cases_expected": 632,
+        "cases_checked": 632,
+        "sources_checked": 21,
+        "measures_checked": 270
+      },
+      "failure_entries": 361,
+      "triage": {
+        "audit_files": 632,
+        "error_counts": {
+          "interrupted": 1,
+          "flag-absence": 220,
+          "other": 4839,
+          "unowned-symbol": 1155,
+          "source-tracking": 154,
+          "dot": 142,
+          "boundary": 194,
+          "articulation": 192,
+          "tie": 186,
+          "reference-group": 34,
+          "rest": 14,
+          "ledger": 150,
+          "note-pixels": 48
+        },
+        "interrupted_cases": [
+          "08-Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt/learn-0065-both-original"
+        ],
+        "selected_examples": {
+          "interrupted": "08-Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt/learn-0065-both-original/audit.json",
+          "flag-absence": "00-Ala_\u2013_Joep_Beving/learn-0002-left-original/audit.json",
+          "unowned-symbol": "00-Ala_\u2013_Joep_Beving/learn-0002-left-original/audit.json",
+          "source-tracking": "00-Ala_\u2013_Joep_Beving/learn-0002-left-original/audit.json",
+          "dot": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/learn-0007-left-skeleton/audit.json",
+          "boundary": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/learn-0007-left-skeleton/audit.json",
+          "articulation": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/learn-0015-both-original/audit.json",
+          "tie": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/original-0009-0012-both/audit.json",
+          "reference-group": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/original-0009-0012-both/audit.json",
+          "rest": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/original-0037-0040-both/audit.json",
+          "ledger": "02-Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major)/learn-0031-both-outline/audit.json",
+          "note-pixels": "03-Clair_de_Lune_\u2013_Debussy/learn-0015-left-outline/audit.json"
+        }
+      }
+    }
+  ],
+  "retained_representatives": [
+    {
+      "primary_family": "tie",
+      "case_id": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/original-0009-0012-both",
+      "path": "notation-check-results/shard-0-of-24/01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/original-0009-0012-both",
+      "audit_source": "/home/tom/Projects/piano_teacher/midi/Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi, measures 8-12, both",
+      "historical_status": "completed",
+      "nonverified_symbols": {
+        "measure:unverified": 4,
+        "barline:unverified": 4,
+        "note_rhythm:unsupported": 3,
+        "note_rhythm:unverified": 25,
+        "tuplet:unsupported": 25,
+        "tuplet:unverified": 20,
+        "tie:unverified": 4,
+        "rest_rhythm:unverified": 5,
+        "flag:unverified": 3,
+        "tie:mismatch": 2
+      },
+      "error_examples": [
+        "measure 8 left voice 1 ptbd62760a8f05aea4fec0c302713fa8fes0|ptbd62760a8f05aea4fec0c302713fa8fes1 tie: mismatch No connected curved ink attaches to both source endpoint heads",
+        "measure 8 right voice 2 pta43e6d9676e6d5c7649c5a35d0d94cb9s0|pta43e6d9676e6d5c7649c5a35d0d94cb9s1 tie: unverified Overlapping, competing or thick foreground prevents exclusive thin-curve ownership",
+        "measure 10 left voice 1 pt414a592655cfa0c0036bc0c01fc5ab75s0|pt414a592655cfa0c0036bc0c01fc5ab75s1 tie: unverified Overlapping, competing or thick foreground prevents exclusive thin-curve ownership"
+      ],
+      "observations": [
+        {
+          "construct": "tie",
+          "source_ids": [
+            "ptbd62760a8f05aea4fec0c302713fa8fes0",
+            "ptbd62760a8f05aea4fec0c302713fa8fes1"
+          ],
+          "oracle_source_ids": [
+            "xml-p1-m0-e9",
+            "xml-p1-m1-e1"
+          ],
+          "status": "mismatch",
+          "frame": "native-4.00000.png",
+          "reason": "No connected curved ink attaches to both source endpoint heads",
+          "heads": [
+            {
+              "source_id": "ptbd62760a8f05aea4fec0c302713fa8fes0",
+              "x": 584.0,
+              "y": 358.6875,
+              "bbox": [
+                569,
+                346,
+                599,
+                371
+              ],
+              "gap": 21.875,
+              "contour_score": 0.9555555555545904
+            },
+            {
+              "source_id": "ptbd62760a8f05aea4fec0c302713fa8fes1",
+              "x": 645.0,
+              "y": 359.125,
+              "bbox": [
+                630,
+                346,
+                660,
+                372
+              ],
+              "gap": 21.875,
+              "contour_score": 0.8587360594779577
+            }
+          ],
+          "candidate_failures": null
+        },
+        {
+          "construct": "tie",
+          "source_ids": [
+            "pta43e6d9676e6d5c7649c5a35d0d94cb9s0",
+            "pta43e6d9676e6d5c7649c5a35d0d94cb9s1"
+          ],
+          "oracle_source_ids": [
+            "xml-p0-m0-e11",
+            "xml-p0-m1-e8"
+          ],
+          "status": "unverified",
+          "frame": "native-4.00000.png",
+          "reason": "Overlapping, competing or thick foreground prevents exclusive thin-curve ownership",
+          "heads": [
+            {
+              "source_id": "pta43e6d9676e6d5c7649c5a35d0d94cb9s0",
+              "x": 584.0,
+              "y": 241.6875,
+              "bbox": [
+                569,
+                229,
+                599,
+                254
+              ],
+              "gap": 21.875,
+              "contour_score": 0.9223300970864832
+            },
+            {
+              "source_id": "pta43e6d9676e6d5c7649c5a35d0d94cb9s1",
+              "x": 645.0,
+              "y": 241.6875,
+              "bbox": [
+                630,
+                229,
+                660,
+                254
+              ],
+              "gap": 21.875,
+              "contour_score": 0.9040178571418482
+            }
+          ],
+          "candidate_failures": null
+        },
+        {
+          "construct": "tie",
+          "source_ids": [
+            "pt414a592655cfa0c0036bc0c01fc5ab75s0",
+            "pt414a592655cfa0c0036bc0c01fc5ab75s1"
+          ],
+          "oracle_source_ids": [
+            "xml-p1-m2-e6",
+            "xml-p1-m3-e1"
+          ],
+          "status": "unverified",
+          "frame": "native-12.00000.png",
+          "reason": "Overlapping, competing or thick foreground prevents exclusive thin-curve ownership",
+          "heads": [
+            {
+              "source_id": "pt414a592655cfa0c0036bc0c01fc5ab75s0",
+              "x": 583.0,
+              "y": 315.6875,
+              "bbox": [
+                568,
+                303,
+                598,
+                328
+              ],
+              "gap": 21.875,
+              "contour_score": 0.9274509803912476
+            },
+            {
+              "source_id": "pt414a592655cfa0c0036bc0c01fc5ab75s1",
+              "x": 645.0,
+              "y": 314.6875,
+              "bbox": [
+                630,
+                302,
+                660,
+                327
+              ],
+              "gap": 21.875,
+              "contour_score": 0.9300699300688461
+            }
+          ],
+          "candidate_failures": null
+        }
+      ],
+      "diagnostic_file": "independent-connectors.json",
+      "frames": [
+        "native-12.00000.png",
+        "native-4.00000.png"
+      ],
+      "source_xml_sha256": "28679c32044279c4063f3a538ac9e863d6d80632ca6b47f714a65e5ff35e8059",
+      "fixture_sha256": "488103e89000636f3bf4533e24a7dad480045171cb0fa4fb45f6e072f258def8",
+      "historical_capture_integrity": "checksum_valid",
+      "current_capture_compatible": false,
+      "current_source_xml_comparison": "identical_bytes",
+      "current_source_xml_sha256": "28679c32044279c4063f3a538ac9e863d6d80632ca6b47f714a65e5ff35e8059"
+    },
+    {
+      "primary_family": "tie",
+      "case_id": "12-Peace_Piece_-_Bill_Evans_(Piano_Solo)/learn-0062-both-skeleton",
+      "path": "notation-check-results/shard-0-of-24/12-Peace_Piece_-_Bill_Evans_(Piano_Solo)/learn-0062-both-skeleton",
+      "audit_source": "/home/tom/Projects/piano_teacher/midi/Peace_Piece_-_Bill_Evans_(Piano_Solo).midi, measures 66-66, both",
+      "historical_status": "completed",
+      "nonverified_symbols": {
+        "measure:unverified": 2,
+        "barline:unverified": 2,
+        "note_rhythm:unverified": 23,
+        "stem:unverified": 18,
+        "pitch:unverified": 2,
+        "ledger:unverified": 3,
+        "pitch:ambiguous": 4,
+        "dot:unverified": 27,
+        "tie:mismatch": 20,
+        "ledger:mismatch": 9,
+        "flag:unverified": 11,
+        "dot:ambiguous": 2,
+        "tie:unverified": 4
+      },
+      "error_examples": [
+        "measure 66 left voice 1 pt977bc91183069f346cde2441c4625686s0|pt977bc91183069f346cde2441c4625686s1 tie: mismatch No connected curved ink attaches to both source endpoint heads",
+        "measure 66 left voice 1 pt007f31b441eed552970874475c1515d4s0|pt007f31b441eed552970874475c1515d4s1 tie: mismatch No connected curved ink attaches to both source endpoint heads",
+        "measure 66 left voice 1 ptae43d0e9e49940b198dc0c490628a32as0|ptae43d0e9e49940b198dc0c490628a32as1 tie: mismatch No connected curved ink attaches to both source endpoint heads"
+      ],
+      "observations": [
+        {
+          "construct": "tie",
+          "source_ids": [
+            "pt977bc91183069f346cde2441c4625686s0",
+            "pt977bc91183069f346cde2441c4625686s1"
+          ],
+          "oracle_source_ids": [
+            "xml-p1-m0-e2",
+            "xml-p1-m0-e3"
+          ],
+          "status": "mismatch",
+          "frame": "native-0.96875.png",
+          "reason": "No connected curved ink attaches to both source endpoint heads",
+          "heads": [
+            {
+              "source_id": "pt977bc91183069f346cde2441c4625686s0",
+              "x": 230.5,
+              "y": 426.86,
+              "bbox": [
+                219,
+                417,
+                242,
+                437
+              ],
+              "gap": 17.0,
+              "contour_score": 0.964941569280526
+            },
+            {
+              "source_id": "pt977bc91183069f346cde2441c4625686s1",
+              "x": 645.5,
+              "y": 426.86,
+              "bbox": [
+                634,
+                417,
+                657,
+                437
+              ],
+              "gap": 17.0,
+              "contour_score": 0.9595782073796845
+            }
+          ],
+          "candidate_failures": null
+        },
+        {
+          "construct": "tie",
+          "source_ids": [
+            "pt007f31b441eed552970874475c1515d4s0",
+            "pt007f31b441eed552970874475c1515d4s1"
+          ],
+          "oracle_source_ids": [
+            "xml-p1-m0-e5",
+            "xml-p1-m0-e8"
+          ],
+          "status": "mismatch",
+          "frame": "native-1.96875.png",
+          "reason": "No connected curved ink attaches to both source endpoint heads",
+          "heads": [
+            {
+              "source_id": "pt007f31b441eed552970874475c1515d4s0",
+              "x": 230.5,
+              "y": 315.86,
+              "bbox": [
+                219,
+                306,
+                242,
+                326
+              ],
+              "gap": 17.0,
+              "contour_score": 0.9316375198713329
+            },
+            {
+              "source_id": "pt007f31b441eed552970874475c1515d4s1",
+              "x": 645.5,
+              "y": 315.86,
+              "bbox": [
+                634,
+                306,
+                657,
+                326
+              ],
+              "gap": 17.0,
+              "contour_score": 0.9166666666649306
+            }
+          ],
+          "candidate_failures": null
+        },
+        {
+          "construct": "tie",
+          "source_ids": [
+            "ptae43d0e9e49940b198dc0c490628a32as0",
+            "ptae43d0e9e49940b198dc0c490628a32as1"
+          ],
+          "oracle_source_ids": [
+            "xml-p1-m0-e6",
+            "xml-p1-m0-e9"
+          ],
+          "status": "mismatch",
+          "frame": "native-1.96875.png",
+          "reason": "No connected curved ink attaches to both source endpoint heads",
+          "heads": [
+            {
+              "source_id": "ptae43d0e9e49940b198dc0c490628a32as0",
+              "x": 249.5,
+              "y": 307.86,
+              "bbox": [
+                238,
+                298,
+                261,
+                318
+              ],
+              "gap": 17.0,
+              "contour_score": 0.9127725856683602
+            },
+            {
+              "source_id": "ptae43d0e9e49940b198dc0c490628a32as1",
+              "x": 664.5,
+              "y": 307.86,
+              "bbox": [
+                653,
+                298,
+                676,
+                318
+              ],
+              "gap": 17.0,
+              "contour_score": 0.9144634525646742
+            }
+          ],
+          "candidate_failures": null
+        }
+      ],
+      "diagnostic_file": "independent-connectors.json",
+      "frames": [
+        "native-0.96875.png",
+        "native-1.96875.png",
+        "native-2.96875.png",
+        "native-3.96875.png"
+      ],
+      "source_xml_sha256": "bc1af9ffcc03a254d9ae1fbdad39eff2fb341505657c53a83b2b081d07dfc6dd",
+      "fixture_sha256": "62dd087007f5d7618704038d28d8c861d01625cf8930d39a53ee0c07a7d96a3c",
+      "historical_capture_integrity": "checksum_valid",
+      "current_capture_compatible": false,
+      "current_source_xml_comparison": "changed_bytes",
+      "current_source_xml_sha256": "f5914065a2478f9f99044e94699fc79c481b14481c02adc40dd9d217f4f61c3d"
+    },
+    {
+      "primary_family": "ledger",
+      "case_id": "02-Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major)/learn-0031-both-outline",
+      "path": "notation-check-results/shard-0-of-24/02-Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major)/learn-0031-both-outline",
+      "audit_source": "/home/tom/Projects/piano_teacher/midi/Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi, measures 32-32, both",
+      "historical_status": "completed",
+      "nonverified_symbols": {
+        "key:unsupported": 2,
+        "meter:unverified": 2,
+        "accidental:ambiguous": 2,
+        "ledger:mismatch": 2
+      },
+      "error_examples": [
+        "measure 32 left voice 1 pt36e92c586b8db9dc7df6d51de83332b9s0 ledger: mismatch At least one required physical ledger is missing or unresolved",
+        "measure 32 left voice 1 pt8a78bca86d249c2992f9c1e2d39b09a5s0 ledger: mismatch At least one required physical ledger is missing or unresolved"
+      ],
+      "observations": [
+        {
+          "source_id": "pt36e92c586b8db9dc7df6d51de83332b9s0",
+          "measure": 32,
+          "staff": "left",
+          "voice": "1",
+          "status": "mismatch",
+          "reason": "At least one required physical ledger is missing or unresolved",
+          "frame": "native-5.50000.png",
+          "evidence_status": "mismatch",
+          "segments": [
+            {
+              "status": "verified",
+              "reason": "Actual thin continuous ledger extends beyond both head edges",
+              "step": 10,
+              "expected_y": 295.75,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                607,
+                264,
+                635,
+                288
+              ],
+              "bbox": [
+                601,
+                296,
+                644,
+                297
+              ],
+              "y": 296.0,
+              "thickness_spaces": 0.04819277108433735,
+              "continuous": true,
+              "left_extension_spaces": 0.2891566265060241,
+              "right_extension_spaces": 0.43373493975903615
+            },
+            {
+              "status": "mismatch",
+              "reason": "No unique thin continuous ledger spans both registered head edges",
+              "step": 12,
+              "expected_y": 275.0,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                607,
+                264,
+                635,
+                288
+              ]
+            }
+          ]
+        },
+        {
+          "source_id": "pt8a78bca86d249c2992f9c1e2d39b09a5s0",
+          "measure": 32,
+          "staff": "left",
+          "voice": "1",
+          "status": "mismatch",
+          "reason": "At least one required physical ledger is missing or unresolved",
+          "frame": "native-5.70000.png",
+          "evidence_status": "mismatch",
+          "segments": [
+            {
+              "status": "verified",
+              "reason": "Actual thin continuous ledger extends beyond both head edges",
+              "step": 10,
+              "expected_y": 295.75,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                602,
+                254,
+                630,
+                278
+              ],
+              "bbox": [
+                596,
+                296,
+                637,
+                298
+              ],
+              "y": 296.5,
+              "thickness_spaces": 0.0963855421686747,
+              "continuous": true,
+              "left_extension_spaces": 0.2891566265060241,
+              "right_extension_spaces": 0.3373493975903614
+            },
+            {
+              "status": "mismatch",
+              "reason": "No unique thin continuous ledger spans both registered head edges",
+              "step": 12,
+              "expected_y": 275.0,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                602,
+                254,
+                630,
+                278
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostic_file": "independent-ledgers.json",
+      "frames": [
+        "native-5.50000.png",
+        "native-5.70000.png"
+      ],
+      "source_xml_sha256": "e986d7884b7482d952999dfaaa492ae004ac59d4f0d9e049e848de7b17c1cb3a",
+      "fixture_sha256": "d7a18ad78299160529af4069e26a5878d88402ca7b0d82f6acc569e67e0d5732",
+      "historical_capture_integrity": "checksum_valid",
+      "current_capture_compatible": false,
+      "current_source_xml_comparison": "identical_bytes",
+      "current_source_xml_sha256": "e986d7884b7482d952999dfaaa492ae004ac59d4f0d9e049e848de7b17c1cb3a"
+    },
+    {
+      "primary_family": "ledger",
+      "case_id": "03-Clair_de_Lune_\u2013_Debussy/learn-0017-left-original",
+      "path": "notation-check-results/shard-0-of-24/03-Clair_de_Lune_\u2013_Debussy/learn-0017-left-original",
+      "audit_source": "/home/tom/Projects/piano_teacher/midi/Clair_de_Lune_\u2013_Debussy.midi, measures 19-19, left",
+      "historical_status": "completed",
+      "nonverified_symbols": {
+        "note_rhythm:unverified": 11,
+        "tuplet:unsupported": 2,
+        "tuplet:unverified": 4,
+        "rest_rhythm:unverified": 1,
+        "rest_placement:mismatch": 1,
+        "ledger:mismatch": 6,
+        "stem:ambiguous": 6,
+        "flag:ambiguous": 4,
+        "dot:ambiguous": 8,
+        "flag:unverified": 2
+      },
+      "error_examples": [
+        "measure 19 left voice 1 ptb57f81e8a554364d79b83b27378e7a52s0 ledger: mismatch At least one required physical ledger is missing or unresolved",
+        "measure 19 left voice 1 pt57200049b359fcf6a9cc2121830392e4s0 ledger: mismatch At least one required physical ledger is missing or unresolved",
+        "measure 19 left voice 2 ptd7e3f628576039767d571696de397f3bs0 ledger: mismatch At least one required physical ledger is missing or unresolved"
+      ],
+      "observations": [
+        {
+          "source_id": "ptb57f81e8a554364d79b83b27378e7a52s0",
+          "measure": 19,
+          "staff": "left",
+          "voice": "1",
+          "status": "mismatch",
+          "reason": "At least one required physical ledger is missing or unresolved",
+          "frame": "native-2.85000.png",
+          "evidence_status": "mismatch",
+          "segments": [
+            {
+              "status": "mismatch",
+              "reason": "No unique thin continuous ledger spans both registered head edges",
+              "step": -2,
+              "expected_y": 393.25,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                652,
+                392,
+                668,
+                406
+              ]
+            }
+          ]
+        },
+        {
+          "source_id": "pt57200049b359fcf6a9cc2121830392e4s0",
+          "measure": 19,
+          "staff": "left",
+          "voice": "1",
+          "status": "mismatch",
+          "reason": "At least one required physical ledger is missing or unresolved",
+          "frame": "native-3.60000.png",
+          "evidence_status": "mismatch",
+          "segments": [
+            {
+              "status": "verified",
+              "reason": "Actual thin continuous ledger extends beyond both head edges",
+              "step": -2,
+              "expected_y": 393.25,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                652,
+                404,
+                668,
+                418
+              ],
+              "bbox": [
+                646,
+                393,
+                678,
+                395
+              ],
+              "y": 393.5,
+              "thickness_spaces": 0.1702127659574468,
+              "continuous": true,
+              "left_extension_spaces": 0.5106382978723404,
+              "right_extension_spaces": 0.851063829787234
+            },
+            {
+              "status": "mismatch",
+              "reason": "No unique thin continuous ledger spans both registered head edges",
+              "step": -4,
+              "expected_y": 405.0,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                652,
+                404,
+                668,
+                418
+              ]
+            }
+          ]
+        },
+        {
+          "source_id": "ptd7e3f628576039767d571696de397f3bs0",
+          "measure": 19,
+          "staff": "left",
+          "voice": "2",
+          "status": "mismatch",
+          "reason": "At least one required physical ledger is missing or unresolved",
+          "frame": "native-0.60000.png",
+          "evidence_status": "mismatch",
+          "segments": [
+            {
+              "status": "verified",
+              "reason": "Actual thin continuous ledger extends beyond both head edges",
+              "step": -2,
+              "expected_y": 393.25,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                652,
+                404,
+                668,
+                418
+              ],
+              "bbox": [
+                646,
+                393,
+                678,
+                395
+              ],
+              "y": 393.5,
+              "thickness_spaces": 0.1702127659574468,
+              "continuous": true,
+              "left_extension_spaces": 0.5106382978723404,
+              "right_extension_spaces": 0.851063829787234
+            },
+            {
+              "status": "mismatch",
+              "reason": "No unique thin continuous ledger spans both registered head edges",
+              "step": -4,
+              "expected_y": 405.0,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                652,
+                404,
+                668,
+                418
+              ]
+            }
+          ]
+        }
+      ],
+      "diagnostic_file": "independent-ledgers.json",
+      "frames": [
+        "native-0.60000.png",
+        "native-1.35000.png",
+        "native-2.10000.png",
+        "native-2.85000.png",
+        "native-3.60000.png"
+      ],
+      "source_xml_sha256": "018f266f7fa5da0ab5ee484063e7df8c7fae5fc5bf4f56a1248b43af0b5d27fd",
+      "fixture_sha256": "b71fae47e475985fd49f264809eaa5455d9f8a539e98ee4810ea7add35fcbc4d",
+      "historical_capture_integrity": "checksum_valid",
+      "current_capture_compatible": false,
+      "current_source_xml_comparison": "identical_bytes",
+      "current_source_xml_sha256": "018f266f7fa5da0ab5ee484063e7df8c7fae5fc5bf4f56a1248b43af0b5d27fd"
+    },
+    {
+      "primary_family": "rest",
+      "case_id": "01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/original-0037-0040-both",
+      "path": "notation-check-results/shard-0-of-24/01-Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz/original-0037-0040-both",
+      "audit_source": "/home/tom/Projects/piano_teacher/midi/Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi, measures 37-40, both",
+      "historical_status": "completed",
+      "nonverified_symbols": {
+        "note_rhythm:unsupported": 1,
+        "note_rhythm:unverified": 12,
+        "tuplet:unsupported": 12,
+        "tuplet:unverified": 12,
+        "tie:mismatch": 4,
+        "rest_placement:mismatch": 1,
+        "rest_rhythm:unverified": 1
+      },
+      "error_examples": [
+        "measure 38 right voice 1 p1/m2/n1 rest_placement: mismatch Rest/dot silhouette lies outside its readable staff corridor"
+      ],
+      "observations": [
+        {
+          "source_id": "measure-38-voice-1-rest-0",
+          "measure": 38,
+          "beat": 4.0,
+          "staff": "right",
+          "voice": "1",
+          "required_rest": "quarter",
+          "glyph_status": "verified",
+          "shape_match": 0.9397,
+          "placement_status": "mismatch",
+          "placement_reason": "Rest/dot silhouette lies outside its readable staff corridor",
+          "placement_bbox": [
+            632,
+            78,
+            673,
+            144
+          ],
+          "corridor_y": [
+            88.3125,
+            269.875
+          ],
+          "min_clearance_spaces": 0.4571,
+          "frame": "native-4.00000.png",
+          "suppression_frame": "rest-without-0-4.00000.png"
+        }
+      ],
+      "diagnostic_file": "independent-rests.json",
+      "frames": [
+        "native-4.00000.png"
+      ],
+      "source_xml_sha256": "88fee902f465866b219df6b71eb4533d3e84390468a17c7e22669135f705f826",
+      "fixture_sha256": "549b2c22bedc095e261b88d65b733104958cb52e85368bbd4c076774cf513e1c",
+      "historical_capture_integrity": "checksum_valid",
+      "current_capture_compatible": false,
+      "current_source_xml_comparison": "identical_bytes",
+      "current_source_xml_sha256": "88fee902f465866b219df6b71eb4533d3e84390468a17c7e22669135f705f826"
+    },
+    {
+      "primary_family": "rest",
+      "case_id": "05-Gymnop\u00e9die_No_1_\u2013_Satie/connect-0030-both-original",
+      "path": "notation-check-results/shard-0-of-24/05-Gymnop\u00e9die_No_1_\u2013_Satie/connect-0030-both-original",
+      "audit_source": "/home/tom/Projects/piano_teacher/midi/Gymnop\u00e9die_No_1_\u2013_Satie.midi, measures 47-50, both",
+      "historical_status": "completed",
+      "nonverified_symbols": {
+        "rest_placement:mismatch": 3,
+        "note_rhythm:unverified": 4,
+        "dot:ambiguous": 2
+      },
+      "error_examples": [
+        "measure 48 right voice 1 p1/m2/n2 rest_placement: mismatch Other bright framebuffer ink touches, overlaps or crowds the rest/dot silhouette",
+        "measure 49 right voice 1 p1/m3/n1 rest_placement: mismatch Other bright framebuffer ink touches, overlaps or crowds the rest/dot silhouette",
+        "measure 50 right voice 1 p1/m4/n1 rest_placement: mismatch Other bright framebuffer ink touches, overlaps or crowds the rest/dot silhouette"
+      ],
+      "observations": [
+        {
+          "source_id": "measure-48-voice-1-rest-0",
+          "measure": 48,
+          "beat": 4.0,
+          "staff": "right",
+          "voice": "1",
+          "required_rest": "half",
+          "glyph_status": "verified",
+          "shape_match": 0.9804,
+          "placement_status": "mismatch",
+          "placement_reason": "Other bright framebuffer ink touches, overlaps or crowds the rest/dot silhouette",
+          "placement_bbox": [
+            632,
+            176,
+            657,
+            186
+          ],
+          "corridor_y": [
+            88.3125,
+            269.875
+          ],
+          "min_clearance_spaces": 0.0457,
+          "frame": "native-4.00000.png",
+          "suppression_frame": "rest-without-0-4.00000.png"
+        },
+        {
+          "source_id": "measure-49-voice-1-rest-1",
+          "measure": 49,
+          "beat": 6.0,
+          "staff": "right",
+          "voice": "1",
+          "required_rest": "half",
+          "glyph_status": "verified",
+          "shape_match": 0.9804,
+          "placement_status": "mismatch",
+          "placement_reason": "Other bright framebuffer ink touches, overlaps or crowds the rest/dot silhouette",
+          "placement_bbox": [
+            632,
+            176,
+            673,
+            187
+          ],
+          "corridor_y": [
+            88.3125,
+            269.875
+          ],
+          "min_clearance_spaces": 0.0457,
+          "frame": "native-6.00000.png",
+          "suppression_frame": "rest-without-0-6.00000.png"
+        },
+        {
+          "source_id": "measure-50-voice-1-rest-2",
+          "measure": 50,
+          "beat": 9.0,
+          "staff": "right",
+          "voice": "1",
+          "required_rest": "half",
+          "glyph_status": "verified",
+          "shape_match": 0.9804,
+          "placement_status": "mismatch",
+          "placement_reason": "Other bright framebuffer ink touches, overlaps or crowds the rest/dot silhouette",
+          "placement_bbox": [
+            632,
+            176,
+            673,
+            187
+          ],
+          "corridor_y": [
+            88.3125,
+            269.875
+          ],
+          "min_clearance_spaces": 0.0457,
+          "frame": "native-9.00000.png",
+          "suppression_frame": "rest-without-0-9.00000.png"
+        }
+      ],
+      "diagnostic_file": "independent-rests.json",
+      "frames": [
+        "native-4.00000.png",
+        "native-6.00000.png",
+        "native-9.00000.png"
+      ],
+      "source_xml_sha256": "bdfe504f73ecd718a42029e5d1d18d2d166a23aababb48cbd165206d3c8a33e2",
+      "fixture_sha256": "dd28e483448f64ed89462916cd8b3da74dc58b891336f930fa3eac9f3d23693f",
+      "historical_capture_integrity": "checksum_valid",
+      "current_capture_compatible": false,
+      "current_source_xml_comparison": "identical_bytes",
+      "current_source_xml_sha256": "bdfe504f73ecd718a42029e5d1d18d2d166a23aababb48cbd165206d3c8a33e2"
+    },
+    {
+      "primary_family": "rest",
+      "case_id": "14-Prelude_in_C-sharp_Minor,_Opus_3_No_2_\u2013_Sergei_Rachmaninoff/original-0005-0008-left",
+      "path": "notation-check-results/shard-0-of-24/14-Prelude_in_C-sharp_Minor,_Opus_3_No_2_\u2013_Sergei_Rachmaninoff/original-0005-0008-left",
+      "audit_source": "/home/tom/Projects/piano_teacher/midi/Prelude_in_C-sharp_Minor,_Opus_3_No_2_\u2013_Sergei_Rachmaninoff.midi, measures 5-8, left",
+      "historical_status": "completed",
+      "nonverified_symbols": {
+        "rest_rhythm:unverified": 1,
+        "rest_placement:mismatch": 3,
+        "note_rhythm:unverified": 16,
+        "stem:unverified": 4,
+        "tuplet:unsupported": 2,
+        "tuplet:unverified": 4,
+        "accidental:ambiguous": 1,
+        "flag:unverified": 11,
+        "tie:mismatch": 6,
+        "note_rhythm:unsupported": 2
+      },
+      "error_examples": [
+        "measure 5 left voice 1 p2/m1/n2 rest_placement: mismatch Rest/dot silhouette lies outside its readable staff corridor",
+        "measure 5 left voice 1 p2/m1/n4 rest_placement: mismatch Rest/dot silhouette lies outside its readable staff corridor",
+        "measure 7 left voice 1 p2/m3/n3 rest_placement: mismatch Rest/dot silhouette lies outside its readable staff corridor"
+      ],
+      "observations": [
+        {
+          "source_id": "measure-5-voice-1-rest-0",
+          "measure": 5,
+          "beat": 1.59791667,
+          "staff": "left",
+          "voice": "1",
+          "required_rest": "quarter",
+          "glyph_status": "verified",
+          "shape_match": 0.9052,
+          "placement_status": "mismatch",
+          "placement_reason": "Rest/dot silhouette lies outside its readable staff corridor",
+          "placement_bbox": [
+            635,
+            256,
+            655,
+            306
+          ],
+          "corridor_y": [
+            280.375,
+            435.625
+          ],
+          "min_clearance_spaces": 0.5217,
+          "frame": "native-1.59792.png",
+          "suppression_frame": "rest-without-0-1.59792.png"
+        },
+        {
+          "source_id": "measure-5-voice-1-rest-1",
+          "measure": 5,
+          "beat": 3.5,
+          "staff": "left",
+          "voice": "1",
+          "required_rest": "eighth",
+          "glyph_status": "verified",
+          "shape_match": 0.8522,
+          "placement_status": "mismatch",
+          "placement_reason": "Rest/dot silhouette lies outside its readable staff corridor",
+          "placement_bbox": [
+            636,
+            277,
+            653,
+            306
+          ],
+          "corridor_y": [
+            280.375,
+            435.625
+          ],
+          "min_clearance_spaces": 0.4638,
+          "frame": "native-3.50000.png",
+          "suppression_frame": "rest-without-0-3.50000.png"
+        },
+        {
+          "source_id": "measure-7-voice-1-rest-4",
+          "measure": 7,
+          "beat": 10.5,
+          "staff": "left",
+          "voice": "1",
+          "required_rest": "quarter",
+          "glyph_status": "verified",
+          "shape_match": 0.9153,
+          "placement_status": "mismatch",
+          "placement_reason": "Rest/dot silhouette lies outside its readable staff corridor",
+          "placement_bbox": [
+            635,
+            393,
+            667,
+            445
+          ],
+          "corridor_y": [
+            280.375,
+            435.625
+          ],
+          "min_clearance_spaces": 0.1739,
+          "frame": "native-10.50000.png",
+          "suppression_frame": "rest-without-0-10.50000.png"
+        }
+      ],
+      "diagnostic_file": "independent-rests.json",
+      "frames": [
+        "native-1.59792.png",
+        "native-10.50000.png",
+        "native-3.50000.png"
+      ],
+      "source_xml_sha256": "8ec75f15886b1b60c140ab947e2b0999c6e0248581d47359ce9f22db5155047e",
+      "fixture_sha256": "f83441cb5af1b66375e90e2f6eb4a3256d8c569f908e7ef582b1e0c44e434d02",
+      "historical_capture_integrity": "checksum_valid",
+      "current_capture_compatible": false,
+      "current_source_xml_comparison": "identical_bytes",
+      "current_source_xml_sha256": "8ec75f15886b1b60c140ab947e2b0999c6e0248581d47359ce9f22db5155047e"
+    }
+  ],
+  "interpretation": {
+    "confirmed_current_rendering_defects": [],
+    "confirmed_current_source_generation_defects": [],
+    "confirmed_current_matching_or_pixel_defects": [],
+    "confirmed_evidence_and_reporting_issues": [
+      "Latest failed summary is a mixed-input run, not a current clean-code baseline.",
+      "301 summary entries are 298 completed comparison failures + 2 capture errors + 1 run-wide input/code drift error.",
+      "632 audit records include two older audit reports preserved beneath failed replacement captures.",
+      "13 renderer digests and six protocol digests occur across retained captures.",
+      "Package label articulation is triggered by accidental: ambiguous; it is not an articulation-specific root-cause count.",
+      "Raw diagnostic messages are not unique symbol counts: e.g. 186 tie and 150 ledger messages versus 124 tie and 75 ledger mismatch symbol entries."
+    ],
+    "sound_historical_observations": [
+      "Checksummed connector endpoint/curve observations and rest/ledger evidence remain useful reproduction leads at their recorded source IDs and frames.",
+      "No projected or authored fingering occurs in retained root fixtures, so those old failures cannot be attributed to instructional numbers.",
+      "A missing endpoint registration, occluded playhead row, unresolved stem or ambiguous contour cannot establish a native rendering defect.",
+      "Peace Piece register-allocation changes require fresh current source/staff evidence before reusing ledger/tie conclusions."
+    ],
+    "priority_hypotheses": [
+      {
+        "family": "ties",
+        "candidate_cause": "Missing exclusive curve/endpoint ownership, including unresolved heads and possible actual attachment defects; separate hypotheses using current PNGs.",
+        "status": "historical_mismatch_or_unverified_not_current_rendering_proof"
+      },
+      {
+        "family": "ledgers",
+        "candidate_cause": "Staff/clef mapping and current-image head registration/occlusion are prerequisites; missing-or-unresolved messages conflate physical absence with insufficient observation.",
+        "status": "needs_current_source_staff_and_head_binding"
+      },
+      {
+        "family": "rests_and_dots",
+        "candidate_cause": "Readable corridor and bright-ink clearance failures versus ambiguous/connected dot contours; authentic source rests differ from hidden voice padding and derived practice rests.",
+        "status": "historical_placement_or_evidence_observations"
+      },
+      {
+        "family": "tracking_boundaries_flags_rhythm",
+        "candidate_cause": "Head/stem/clock registration failure cascades into flag absence, rhythm, boundary and meter nonverification.",
+        "status": "evidence_dependency_cascade_not_independent_rendering_bugs"
+      }
+    ]
+  },
+  "historical_execution_cause": {
+    "finding": "Historical live CPU-bound worker in raster_matching.claim/assign/search; no observed OOM kill",
+    "case": "08-Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt/learn-0065-both-original",
+    "evidence_paths": [
+      "notation-check-results/interruption-2026-10-25/investigation.json",
+      "notation-check-results/interruption-2026-10-25/piano-shard-stall-repro.log"
+    ],
+    "qualification": "Already addressed by bounded subset-capacity/flow ownership checks per recovery docs; not a current rendering defect."
+  }
+}

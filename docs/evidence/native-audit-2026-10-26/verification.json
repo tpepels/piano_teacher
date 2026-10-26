@@ -1,0 +1,49 @@
+{
+  "base_commit": "c69da06ab1b6dd5de3738d2ec80d972f5c1c78b3",
+  "fast_ci": {
+    "passed": 658,
+    "skipped": 6,
+    "failed": 0,
+    "seconds": 348.86,
+    "exit_code": 0,
+    "godot_parse_check": "passed"
+  },
+  "focused": {
+    "passed": 199,
+    "seconds": 65.69
+  },
+  "independent_review": {
+    "critical": 0,
+    "important": 0,
+    "verdict": "approved"
+  },
+  "autumn": {
+    "source_notes_unchanged": 34,
+    "notation_events_unchanged": 48,
+    "ties_verified_per_viewport": 8,
+    "viewports": [
+      [
+        1536,
+        520
+      ],
+      [
+        1216,
+        455
+      ]
+    ],
+    "original_obstructed_ties_still_mismatch": 2,
+    "whole_library_result": false
+  },
+  "liszt78": {
+    "ledgers_verified": 2,
+    "ledgers_expected": 2,
+    "native_png_hashes_unchanged": 45,
+    "whole_case_passed": false
+  },
+  "next_bounded_autumn_cases": 9,
+  "production_overrides_unchanged": true,
+  "override_files": 0,
+  "archive_bundle_sha256": "f40ba100e7b358929800070f7fdf56c46f6cad6c426e8bb80451138d0b9b827b",
+  "generated_caches_preserved": [],
+  "diagnostic_archive_original_restored_byte_exact": true
+}

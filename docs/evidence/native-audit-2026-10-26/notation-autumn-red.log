@@ -1,0 +1,18 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________ test_real_autumn_chord_ties_attach_without_borrowing_the_flag _________
+
+autumn_ties = (PosixPath('/tmp/pytest-of-tom/pytest-237/autumn-audit-ties0'), '<score-partwise version="4.0"><work><work-title> </wo...846a02s1'], 'oracle_source_ids': ['xml-p1-m2-e7', 'xml-p1-m3-e0'], 'construct': 'tie', 'number': '1', ...}, ...], ...})
+
+    def test_real_autumn_chord_ties_attach_without_borrowing_the_flag(autumn_ties):
+        _, _, result = autumn_ties
+        assert result['coverage']['expected'] == 8
+>       assert result['complete'], [(row['source_ids'], row['status'], row['evidence'].get('reason'))
+                                    for row in result['observations']]
+E       AssertionError: [(['pte1c795323d7136826753f357a7e54256s0', 'pte1c795323d7136826753f357a7e54256s1'], 'verified', 'Unique connected thin...ee8bdaa9ef7ad19b581a043a6846a02s1'], 'verified', 'Unique connected thin curve attached to both source endpoints'), ...]
+E       assert False
+
+tests/test_native_audit_ties.py:39: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_native_audit_ties.py::test_real_autumn_chord_ties_attach_without_borrowing_the_flag
+1 failed in 5.36s

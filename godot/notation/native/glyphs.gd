@@ -170,15 +170,18 @@ func load_note_templates(items: Dictionary) -> bool:
 
 
 func ties_ready() -> bool:
-    return tie_textures.size() == 2
+    return tie_textures.has("up") and tie_textures.has("down")
 
 
 func load_tie_templates(items: Dictionary) -> bool:
-    if ties_ready():
+    if ties_ready() and tie_textures.size()==items.size():
         return true
+    if not items.has("up") or not items.has("down"):
+        error = "Missing genuine Verovio tie contours"
+        return false
     var atlas := {}
     var metrics := {}
-    for direction in ["up","down"]:
+    for direction in items:
         var item: Dictionary = items.get(direction,{})
         var dimensions: Array = item.get("bounds",[])
         if str(item.get("source","")) != "verovio-engraved-tie" or \
@@ -194,6 +197,18 @@ func load_tie_templates(items: Dictionary) -> bool:
         atlas[direction] = ImageTexture.create_from_image(img)
         metrics[direction] = {"bounds":dimensions.duplicate(),
             "span":float(item["span"])}
+        for field in ["head_centers","head_widths"]:
+            if item.has(field):
+                var values: Variant = item[field]
+                if not values is Array or values.size()!=2:
+                    error = "Invalid source tie head metrics: "+str(direction)
+                    return false
+                for value in values:
+                    if typeof(value) not in [TYPE_INT,TYPE_FLOAT] or not is_finite(float(value)) or \
+                            (field=="head_widths" and float(value)<=0.0):
+                        error = "Invalid source tie head metrics: "+str(direction)
+                        return false
+                metrics[direction][field] = values.duplicate()
     tie_textures = atlas
     tie_metadata = metrics
     return true

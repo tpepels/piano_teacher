@@ -1,0 +1,58 @@
+[
+  {
+    "frame": "native-11.60.png",
+    "changed_pixels": 448,
+    "target_tie_corridors_from_independently_measured_heads": [
+      [
+        659,
+        193,
+        745,
+        247
+      ]
+    ],
+    "all_registered_endpoint_head_pixels_identical": true,
+    "all_pixels_outside_target_tie_corridors_identical": true
+  },
+  {
+    "frame": "native-12.00.png",
+    "changed_pixels": 447,
+    "target_tie_corridors_from_independently_measured_heads": [
+      [
+        545,
+        193,
+        631,
+        247
+      ]
+    ],
+    "all_registered_endpoint_head_pixels_identical": true,
+    "all_pixels_outside_target_tie_corridors_identical": true
+  },
+  {
+    "frame": "native-3.60.png",
+    "changed_pixels": 456,
+    "target_tie_corridors_from_independently_measured_heads": [
+      [
+        659,
+        182,
+        745,
+        236
+      ]
+    ],
+    "all_registered_endpoint_head_pixels_identical": true,
+    "all_pixels_outside_target_tie_corridors_identical": true
+  },
+  {
+    "frame": "native-4.00.png",
+    "changed_pixels": 455,
+    "target_tie_corridors_from_independently_measured_heads": [
+      [
+        545,
+        182,
+        631,
+        236
+      ]
+    ],
+    "all_registered_endpoint_head_pixels_identical": true,
+    "all_pixels_outside_target_tie_corridors_identical": true
+  }
+]

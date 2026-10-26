@@ -15,11 +15,20 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-TIE_ATLAS_VERSION = 1
+TIE_ATLAS_VERSION = 2
 DIVISIONS = 10080
+FLAGGED_KINDS = ("eighth", "16th", "32nd", "64th", "128th")
+_DURATIONS = {"half": DIVISIONS * 2,
+              **{kind: DIVISIONS // (2 ** (index + 1))
+                 for index, kind in enumerate(FLAGGED_KINDS)}}
 
 
-def _score_xml(stem: str) -> str:
+def _score_xml(stem: str, *, first_kind="half", last_kind="half",
+               placement: str | None = None) -> str:
+    first_duration, last_duration = _DURATIONS[first_kind], _DURATIONS[last_kind]
+    remaining = DIVISIONS * 4 - first_duration - last_duration
+    rest = (f"<note><rest/><duration>{remaining}</duration></note>" if remaining else "")
+    position = f' placement="{placement}"' if placement else ""
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <score-partwise version="4.0"><work><work-title> </work-title></work>
 <movement-title> </movement-title><part-list><score-part id="P1">
@@ -29,11 +38,11 @@ def _score_xml(stem: str) -> str:
 <beat-type>4</beat-type></time><clef><sign>G</sign>
 <line>2</line></clef></attributes>
 <note id="tie-first"><pitch><step>B</step><octave>4</octave></pitch>
-<duration>{DIVISIONS*2}</duration><type>half</type><stem>{stem}</stem>
-<tie type="start"/><notations><tied type="start"/></notations></note>
+<duration>{first_duration}</duration><type>{first_kind}</type><stem>{stem}</stem>
+<tie type="start"/><notations><tied type="start"{position}/></notations></note>
 <note id="tie-last"><pitch><step>B</step><octave>4</octave></pitch>
-<duration>{DIVISIONS*2}</duration><type>half</type><stem>{stem}</stem>
-<tie type="stop"/><notations><tied type="stop"/></notations></note>
+<duration>{last_duration}</duration><type>{last_kind}</type><stem>{stem}</stem>
+<tie type="stop"/><notations><tied type="stop"{position}/></notations></note>{rest}
 </measure></part></score-partwise>"""
 
 
@@ -68,10 +77,12 @@ def _extract_tie(svg: str) -> str:
     return ET.tostring(root, encoding="unicode")
 
 
-def _render(toolkit, direction: str) -> dict:
+def _render(toolkit, direction: str, *, first_kind="half", last_kind="half",
+            placement: str | None = None) -> dict:
     import cairosvg
     from .svg_geometry import parse_svg_geometry
-    if not toolkit.loadData(_score_xml(direction)):
+    if not toolkit.loadData(_score_xml(direction, first_kind=first_kind,
+                                      last_kind=last_kind, placement=placement)):
         raise RuntimeError("Verovio refused tied-note MusicXML")
     svg = toolkit.renderToSVG(1)
     geometry = parse_svg_geometry(svg)
@@ -105,8 +116,15 @@ def _render(toolkit, direction: str) -> dict:
     span = (x1-x0)*image.width*250/staff_px
     if not all(math.isfinite(v) for v in box+[span]) or span <= 0:
         raise RuntimeError("Non-finite genuine tie bounds")
+    from .glyphs import native_glyphs
+    families = [kind if kind in ("half", "whole") else "black"
+                for kind in (first_kind, last_kind)]
+    heads = [native_glyphs()["head_" + family]["bounds"] for family in families]
     return {"source":"verovio-engraved-tie",
             "units_per_space":250, "bounds":box,"span":span,
+            "head_families": families,
+            "head_centers": [head[0] + head[2] * .5 for head in heads],
+            "head_widths": [head[2] for head in heads],
             "png_base64":base64.b64encode(encoded.getvalue()).decode("ascii")}
 
 
@@ -120,7 +138,13 @@ def _generate(font: str) -> dict:
             "svgViewBox":True,"svgBoundingBoxes":True,
             "svgContentBoundingBoxes":True}):
         raise RuntimeError("Verovio rejected genuine tie template options")
-    return {direction:_render(toolkit,direction) for direction in ("up","down")}
+    result = {direction:_render(toolkit,direction) for direction in ("up","down")}
+    for kind in FLAGGED_KINDS:
+        result[f"start_{kind}_above"] = _render(
+            toolkit, "up", first_kind=kind, placement="above")
+        result[f"end_{kind}_below"] = _render(
+            toolkit, "down", last_kind=kind, placement="below")
+    return result
 
 
 def tie_templates(cache=None) -> dict:
@@ -131,10 +155,14 @@ def tie_templates(cache=None) -> dict:
     key = cache.key("verovio-ties",TIE_ATLAS_VERSION,font,version) if cache else None
     if key:
         saved = cache.read_json("verovio-ties",key)
-        if (isinstance(saved,dict) and set(saved)=={"up","down"}
+        required = {"up", "down"} | {f"{endpoint}_{kind}_{side}"
+            for kind in FLAGGED_KINDS for endpoint, side in (("start", "above"), ("end", "below"))}
+        if (isinstance(saved,dict) and set(saved)==required
                 and all(isinstance(x,dict) and
                         x.get("source")=="verovio-engraved-tie" and
-                        x.get("span",0)>0 for x in saved.values())):
+                        x.get("span",0)>0 and
+                        len(x.get("head_centers", ())) == 2 and
+                        len(x.get("head_widths", ())) == 2 for x in saved.values())):
             return saved
     result = _generate(font)
     if key:

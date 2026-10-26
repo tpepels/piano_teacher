@@ -1,0 +1,1793 @@
+{
+  "measured": [
+    {
+      "source_id": "pt089fba1ff62917b7c12fba5f961e0869s0",
+      "measure": 78,
+      "staff": "left",
+      "voice": "1",
+      "beat": 0.0,
+      "spelling": [
+        "E",
+        -1,
+        2
+      ],
+      "features": {
+        "ledger": {
+          "status": "verified",
+          "reason": "Every source ledger step has actual ink",
+          "expected_steps": [
+            -2
+          ],
+          "matched_segments": [
+            {
+              "status": "verified",
+              "reason": "Actual thin continuous ledger extends beyond both head edges",
+              "step": -2,
+              "expected_y": 423.875,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                598,
+                413,
+                634,
+                436
+              ],
+              "registration_bbox": [
+                597,
+                412,
+                635,
+                437
+              ],
+              "bbox": [
+                595,
+                424,
+                637,
+                425
+              ],
+              "y": 424.0,
+              "thickness_spaces": 0.045714285714285714,
+              "continuous": true,
+              "left_extension_spaces": 0.13714285714285715,
+              "right_extension_spaces": 0.13714285714285715
+            }
+          ],
+          "evidence": {
+            "frame": "native-0.30000.png",
+            "status": "verified",
+            "segments": [
+              {
+                "status": "verified",
+                "reason": "Actual thin continuous ledger extends beyond both head edges",
+                "step": -2,
+                "expected_y": 423.875,
+                "required_extension_spaces": 0.12,
+                "head_bbox": [
+                  598,
+                  413,
+                  634,
+                  436
+                ],
+                "registration_bbox": [
+                  597,
+                  412,
+                  635,
+                  437
+                ],
+                "bbox": [
+                  595,
+                  424,
+                  637,
+                  425
+                ],
+                "y": 424.0,
+                "thickness_spaces": 0.045714285714285714,
+                "continuous": true,
+                "left_extension_spaces": 0.13714285714285715,
+                "right_extension_spaces": 0.13714285714285715
+              }
+            ],
+            "head_bbox": [
+              598,
+              413,
+              634,
+              436
+            ],
+            "registration_bbox": [
+              597,
+              412,
+              635,
+              437
+            ],
+            "head_match": 0.9595092024528105,
+            "staff_gap": 21.875,
+            "staff_lines": [
+              314.5,
+              336.5,
+              358.5,
+              380.5,
+              402.0
+            ],
+            "registration": {
+              "pixels": -29,
+              "agreement": 0.9608,
+              "margin": 0.3364
+            },
+            "witnesses": [
+              {
+                "frame": "native-0.00000.png",
+                "status": "unverified",
+                "segments": [
+                  {
+                    "status": "unverified",
+                    "reason": "Observed playhead covers required ledger ink",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      627,
+                      413,
+                      663,
+                      436
+                    ],
+                    "registration_bbox": [
+                      626,
+                      412,
+                      664,
+                      437
+                    ]
+                  }
+                ],
+                "head_bbox": [
+                  627,
+                  413,
+                  663,
+                  436
+                ],
+                "registration_bbox": [
+                  626,
+                  412,
+                  664,
+                  437
+                ],
+                "head_match": 0.9604938271593081,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": 0,
+                  "agreement": 1.0,
+                  "margin": 1.0
+                }
+              },
+              {
+                "frame": "native-0.06250.png",
+                "status": "unverified",
+                "segments": [
+                  {
+                    "status": "unverified",
+                    "reason": "Observed playhead covers required ledger ink",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      621,
+                      413,
+                      657,
+                      436
+                    ],
+                    "registration_bbox": [
+                      620,
+                      412,
+                      658,
+                      437
+                    ]
+                  }
+                ],
+                "head_bbox": [
+                  621,
+                  413,
+                  657,
+                  436
+                ],
+                "registration_bbox": [
+                  620,
+                  412,
+                  658,
+                  437
+                ],
+                "head_match": 0.9499999999988125,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -6,
+                  "agreement": 0.9979,
+                  "margin": 0.3801
+                }
+              },
+              {
+                "frame": "native-0.12500.png",
+                "status": "unverified",
+                "segments": [
+                  {
+                    "status": "unverified",
+                    "reason": "Observed playhead covers required ledger ink",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      615,
+                      413,
+                      651,
+                      436
+                    ],
+                    "registration_bbox": [
+                      614,
+                      412,
+                      652,
+                      437
+                    ]
+                  }
+                ],
+                "head_bbox": [
+                  615,
+                  413,
+                  651,
+                  436
+                ],
+                "registration_bbox": [
+                  614,
+                  412,
+                  652,
+                  437
+                ],
+                "head_match": 0.9299363057312995,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -12,
+                  "agreement": 0.9968,
+                  "margin": 0.3804
+                }
+              },
+              {
+                "frame": "native-0.15000.png",
+                "status": "unverified",
+                "segments": [
+                  {
+                    "status": "unverified",
+                    "reason": "Observed playhead covers required ledger ink",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      613,
+                      413,
+                      649,
+                      436
+                    ],
+                    "registration_bbox": [
+                      612,
+                      412,
+                      650,
+                      437
+                    ]
+                  }
+                ],
+                "head_bbox": [
+                  613,
+                  413,
+                  649,
+                  436
+                ],
+                "registration_bbox": [
+                  612,
+                  412,
+                  650,
+                  437
+                ],
+                "head_match": 0.9318181818170053,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -15,
+                  "agreement": 0.9228,
+                  "margin": 0.2783
+                }
+              },
+              {
+                "frame": "native-0.30000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      598,
+                      413,
+                      634,
+                      436
+                    ],
+                    "registration_bbox": [
+                      597,
+                      412,
+                      635,
+                      437
+                    ],
+                    "bbox": [
+                      595,
+                      424,
+                      637,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.13714285714285715,
+                    "right_extension_spaces": 0.13714285714285715
+                  }
+                ],
+                "head_bbox": [
+                  598,
+                  413,
+                  634,
+                  436
+                ],
+                "registration_bbox": [
+                  597,
+                  412,
+                  635,
+                  437
+                ],
+                "head_match": 0.9595092024528105,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -29,
+                  "agreement": 0.9608,
+                  "margin": 0.3364
+                }
+              },
+              {
+                "frame": "native-0.45000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      584,
+                      413,
+                      620,
+                      436
+                    ],
+                    "registration_bbox": [
+                      583,
+                      412,
+                      621,
+                      437
+                    ],
+                    "bbox": [
+                      581,
+                      424,
+                      623,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.13714285714285715,
+                    "right_extension_spaces": 0.13714285714285715
+                  }
+                ],
+                "head_bbox": [
+                  584,
+                  413,
+                  620,
+                  436
+                ],
+                "registration_bbox": [
+                  583,
+                  412,
+                  621,
+                  437
+                ],
+                "head_match": 0.9681372549007744,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -43,
+                  "agreement": 0.9624,
+                  "margin": 0.3469
+                }
+              },
+              {
+                "frame": "native-0.60000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      570,
+                      413,
+                      606,
+                      436
+                    ],
+                    "registration_bbox": [
+                      569,
+                      412,
+                      607,
+                      437
+                    ],
+                    "bbox": [
+                      566,
+                      424,
+                      609,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.18285714285714286,
+                    "right_extension_spaces": 0.13714285714285715
+                  }
+                ],
+                "head_bbox": [
+                  570,
+                  413,
+                  606,
+                  436
+                ],
+                "registration_bbox": [
+                  569,
+                  412,
+                  607,
+                  437
+                ],
+                "head_match": 0.9524969549318484,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -58,
+                  "agreement": 0.9422,
+                  "margin": 0.3131
+                }
+              },
+              {
+                "frame": "native-0.75000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      555,
+                      413,
+                      591,
+                      436
+                    ],
+                    "registration_bbox": [
+                      554,
+                      412,
+                      592,
+                      437
+                    ],
+                    "bbox": [
+                      552,
+                      424,
+                      594,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.13714285714285715,
+                    "right_extension_spaces": 0.13714285714285715
+                  }
+                ],
+                "head_bbox": [
+                  555,
+                  413,
+                  591,
+                  436
+                ],
+                "registration_bbox": [
+                  554,
+                  412,
+                  592,
+                  437
+                ],
+                "head_match": 0.9706601466980799,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -72,
+                  "agreement": 0.9985,
+                  "margin": 0.3887
+                }
+              },
+              {
+                "frame": "native-0.90000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      541,
+                      413,
+                      577,
+                      436
+                    ],
+                    "registration_bbox": [
+                      540,
+                      412,
+                      578,
+                      437
+                    ],
+                    "bbox": [
+                      538,
+                      424,
+                      580,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.13714285714285715,
+                    "right_extension_spaces": 0.13714285714285715
+                  }
+                ],
+                "head_bbox": [
+                  541,
+                  413,
+                  577,
+                  436
+                ],
+                "registration_bbox": [
+                  540,
+                  412,
+                  578,
+                  437
+                ],
+                "head_match": 0.9657701711479636,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -86,
+                  "agreement": 0.942,
+                  "margin": 0.3111
+                }
+              },
+              {
+                "frame": "native-1.05000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      526,
+                      413,
+                      562,
+                      436
+                    ],
+                    "registration_bbox": [
+                      525,
+                      412,
+                      563,
+                      437
+                    ],
+                    "bbox": [
+                      523,
+                      424,
+                      565,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.13714285714285715,
+                    "right_extension_spaces": 0.13714285714285715
+                  }
+                ],
+                "head_bbox": [
+                  526,
+                  413,
+                  562,
+                  436
+                ],
+                "registration_bbox": [
+                  525,
+                  412,
+                  563,
+                  437
+                ],
+                "head_match": 0.9595092024528105,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -101,
+                  "agreement": 0.959,
+                  "margin": 0.3318
+                }
+              },
+              {
+                "frame": "native-1.20000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      512,
+                      413,
+                      548,
+                      436
+                    ],
+                    "registration_bbox": [
+                      511,
+                      412,
+                      549,
+                      437
+                    ],
+                    "bbox": [
+                      509,
+                      424,
+                      551,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.13714285714285715,
+                    "right_extension_spaces": 0.13714285714285715
+                  }
+                ],
+                "head_bbox": [
+                  512,
+                  413,
+                  548,
+                  436
+                ],
+                "registration_bbox": [
+                  511,
+                  412,
+                  549,
+                  437
+                ],
+                "head_match": 0.9681372549007744,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -115,
+                  "agreement": 0.9666,
+                  "margin": 0.3258
+                }
+              },
+              {
+                "frame": "native-1.35000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      498,
+                      413,
+                      534,
+                      436
+                    ],
+                    "registration_bbox": [
+                      497,
+                      412,
+                      535,
+                      437
+                    ],
+                    "bbox": [
+                      494,
+                      424,
+                      537,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.18285714285714286,
+                    "right_extension_spaces": 0.13714285714285715
+                  }
+                ],
+                "head_bbox": [
+                  498,
+                  413,
+                  534,
+                  436
+                ],
+                "registration_bbox": [
+                  497,
+                  412,
+                  535,
+                  437
+                ],
+                "head_match": 0.9524969549318484,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -130,
+                  "agreement": 0.9531,
+                  "margin": 0.2842
+                }
+              },
+              {
+                "frame": "native-1.50000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      483,
+                      413,
+                      519,
+                      436
+                    ],
+                    "registration_bbox": [
+                      482,
+                      412,
+                      520,
+                      437
+                    ],
+                    "bbox": [
+                      480,
+                      424,
+                      522,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.13714285714285715,
+                    "right_extension_spaces": 0.13714285714285715
+                  }
+                ],
+                "head_bbox": [
+                  483,
+                  413,
+                  519,
+                  436
+                ],
+                "registration_bbox": [
+                  482,
+                  412,
+                  520,
+                  437
+                ],
+                "head_match": 0.9706601466980799,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -144,
+                  "agreement": 0.9986,
+                  "margin": 0.3344
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "source_id": "pt089fba1ff62917b7c12fba5f961e0869s1",
+      "measure": 78,
+      "staff": "left",
+      "voice": "1",
+      "beat": 4.0,
+      "spelling": [
+        "E",
+        -1,
+        2
+      ],
+      "features": {
+        "ledger": {
+          "status": "verified",
+          "reason": "Every source ledger step has actual ink",
+          "expected_steps": [
+            -2
+          ],
+          "matched_segments": [
+            {
+              "status": "verified",
+              "reason": "Actual thin continuous ledger extends beyond both head edges",
+              "step": -2,
+              "expected_y": 423.875,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                612,
+                413,
+                640,
+                436
+              ],
+              "registration_bbox": [
+                611,
+                412,
+                641,
+                437
+              ],
+              "bbox": [
+                605,
+                424,
+                644,
+                425
+              ],
+              "y": 424.0,
+              "thickness_spaces": 0.045714285714285714,
+              "continuous": true,
+              "left_extension_spaces": 0.32,
+              "right_extension_spaces": 0.18285714285714286
+            }
+          ],
+          "evidence": {
+            "frame": "native-4.20000.png",
+            "status": "verified",
+            "segments": [
+              {
+                "status": "verified",
+                "reason": "Actual thin continuous ledger extends beyond both head edges",
+                "step": -2,
+                "expected_y": 423.875,
+                "required_extension_spaces": 0.12,
+                "head_bbox": [
+                  612,
+                  413,
+                  640,
+                  436
+                ],
+                "registration_bbox": [
+                  611,
+                  412,
+                  641,
+                  437
+                ],
+                "bbox": [
+                  605,
+                  424,
+                  644,
+                  425
+                ],
+                "y": 424.0,
+                "thickness_spaces": 0.045714285714285714,
+                "continuous": true,
+                "left_extension_spaces": 0.32,
+                "right_extension_spaces": 0.18285714285714286
+              }
+            ],
+            "head_bbox": [
+              612,
+              413,
+              640,
+              436
+            ],
+            "registration_bbox": [
+              611,
+              412,
+              641,
+              437
+            ],
+            "head_match": 0.9724208375883836,
+            "staff_gap": 21.875,
+            "staff_lines": [
+              314.5,
+              336.5,
+              358.5,
+              380.5,
+              402.0
+            ],
+            "registration": {
+              "pixels": -19,
+              "agreement": 0.9657,
+              "margin": 0.282
+            },
+            "witnesses": [
+              {
+                "frame": "native-4.00000.png",
+                "status": "unverified",
+                "segments": [
+                  {
+                    "status": "unverified",
+                    "reason": "Observed playhead covers required ledger ink",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      631,
+                      413,
+                      659,
+                      436
+                    ],
+                    "registration_bbox": [
+                      630,
+                      412,
+                      660,
+                      437
+                    ]
+                  }
+                ],
+                "head_bbox": [
+                  631,
+                  413,
+                  659,
+                  436
+                ],
+                "registration_bbox": [
+                  630,
+                  412,
+                  660,
+                  437
+                ],
+                "head_match": 0.9267241379300358,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": 0,
+                  "agreement": 1.0,
+                  "margin": 1.0
+                }
+              },
+              {
+                "frame": "native-4.05000.png",
+                "status": "unverified",
+                "segments": [
+                  {
+                    "status": "unverified",
+                    "reason": "Observed playhead covers required ledger ink",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      626,
+                      413,
+                      654,
+                      436
+                    ],
+                    "registration_bbox": [
+                      625,
+                      412,
+                      655,
+                      437
+                    ]
+                  }
+                ],
+                "head_bbox": [
+                  626,
+                  413,
+                  654,
+                  436
+                ],
+                "registration_bbox": [
+                  625,
+                  412,
+                  655,
+                  437
+                ],
+                "head_match": 0.9280343716423974,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -5,
+                  "agreement": 0.959,
+                  "margin": 0.2909
+                }
+              },
+              {
+                "frame": "native-3.90000.png",
+                "status": "unverified",
+                "segments": [
+                  {
+                    "status": "unverified",
+                    "reason": "Observed playhead covers required ledger ink",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      641,
+                      413,
+                      669,
+                      436
+                    ],
+                    "registration_bbox": [
+                      640,
+                      412,
+                      670,
+                      437
+                    ]
+                  }
+                ],
+                "head_bbox": [
+                  641,
+                  413,
+                  669,
+                  436
+                ],
+                "registration_bbox": [
+                  640,
+                  412,
+                  670,
+                  437
+                ],
+                "head_match": 0.929250263990571,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": 10,
+                  "agreement": 0.9433,
+                  "margin": 0.2589
+                }
+              },
+              {
+                "frame": "native-4.20000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      612,
+                      413,
+                      640,
+                      436
+                    ],
+                    "registration_bbox": [
+                      611,
+                      412,
+                      641,
+                      437
+                    ],
+                    "bbox": [
+                      605,
+                      424,
+                      644,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.32,
+                    "right_extension_spaces": 0.18285714285714286
+                  }
+                ],
+                "head_bbox": [
+                  612,
+                  413,
+                  640,
+                  436
+                ],
+                "registration_bbox": [
+                  611,
+                  412,
+                  641,
+                  437
+                ],
+                "head_match": 0.9724208375883836,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -19,
+                  "agreement": 0.9657,
+                  "margin": 0.282
+                }
+              },
+              {
+                "frame": "native-3.75000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      655,
+                      413,
+                      683,
+                      436
+                    ],
+                    "registration_bbox": [
+                      654,
+                      412,
+                      684,
+                      437
+                    ],
+                    "bbox": [
+                      648,
+                      424,
+                      694,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.32,
+                    "right_extension_spaces": 0.5028571428571429
+                  }
+                ],
+                "head_bbox": [
+                  655,
+                  413,
+                  683,
+                  436
+                ],
+                "registration_bbox": [
+                  654,
+                  412,
+                  684,
+                  437
+                ],
+                "head_match": 0.9753086419743052,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": 24,
+                  "agreement": 0.9921,
+                  "margin": 0.3024
+                }
+              },
+              {
+                "frame": "native-4.35000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      597,
+                      413,
+                      625,
+                      436
+                    ],
+                    "registration_bbox": [
+                      596,
+                      412,
+                      626,
+                      437
+                    ],
+                    "bbox": [
+                      590,
+                      424,
+                      636,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.32,
+                    "right_extension_spaces": 0.5028571428571429
+                  }
+                ],
+                "head_bbox": [
+                  597,
+                  413,
+                  625,
+                  436
+                ],
+                "registration_bbox": [
+                  596,
+                  412,
+                  626,
+                  437
+                ],
+                "head_match": 0.9660144181246488,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -34,
+                  "agreement": 0.9499,
+                  "margin": 0.2543
+                }
+              },
+              {
+                "frame": "native-3.60000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      669,
+                      413,
+                      697,
+                      436
+                    ],
+                    "registration_bbox": [
+                      668,
+                      412,
+                      698,
+                      437
+                    ],
+                    "bbox": [
+                      662,
+                      424,
+                      708,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.32,
+                    "right_extension_spaces": 0.5028571428571429
+                  }
+                ],
+                "head_bbox": [
+                  669,
+                  413,
+                  697,
+                  436
+                ],
+                "registration_bbox": [
+                  668,
+                  412,
+                  698,
+                  437
+                ],
+                "head_match": 0.9660144181246488,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": 38,
+                  "agreement": 0.9536,
+                  "margin": 0.2559
+                }
+              },
+              {
+                "frame": "native-4.50000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      583,
+                      413,
+                      611,
+                      436
+                    ],
+                    "registration_bbox": [
+                      582,
+                      412,
+                      612,
+                      437
+                    ],
+                    "bbox": [
+                      576,
+                      424,
+                      622,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.32,
+                    "right_extension_spaces": 0.5028571428571429
+                  }
+                ],
+                "head_bbox": [
+                  583,
+                  413,
+                  611,
+                  436
+                ],
+                "registration_bbox": [
+                  582,
+                  412,
+                  612,
+                  437
+                ],
+                "head_match": 0.9753086419743052,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -48,
+                  "agreement": 0.9922,
+                  "margin": 0.3124
+                }
+              },
+              {
+                "frame": "native-3.45000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      684,
+                      413,
+                      712,
+                      436
+                    ],
+                    "registration_bbox": [
+                      683,
+                      412,
+                      713,
+                      437
+                    ],
+                    "bbox": [
+                      677,
+                      424,
+                      722,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.32,
+                    "right_extension_spaces": 0.45714285714285713
+                  }
+                ],
+                "head_bbox": [
+                  684,
+                  413,
+                  712,
+                  436
+                ],
+                "registration_bbox": [
+                  683,
+                  412,
+                  713,
+                  437
+                ],
+                "head_match": 0.97341513292334,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": 53,
+                  "agreement": 0.9675,
+                  "margin": 0.2768
+                }
+              },
+              {
+                "frame": "native-4.65000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      569,
+                      413,
+                      597,
+                      436
+                    ],
+                    "registration_bbox": [
+                      568,
+                      412,
+                      598,
+                      437
+                    ],
+                    "bbox": [
+                      562,
+                      424,
+                      607,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.32,
+                    "right_extension_spaces": 0.45714285714285713
+                  }
+                ],
+                "head_bbox": [
+                  569,
+                  413,
+                  597,
+                  436
+                ],
+                "registration_bbox": [
+                  568,
+                  412,
+                  598,
+                  437
+                ],
+                "head_match": 0.9632653061214661,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -62,
+                  "agreement": 0.9452,
+                  "margin": 0.2714
+                }
+              },
+              {
+                "frame": "native-3.30000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      698,
+                      413,
+                      726,
+                      436
+                    ],
+                    "registration_bbox": [
+                      697,
+                      412,
+                      727,
+                      437
+                    ],
+                    "bbox": [
+                      691,
+                      424,
+                      733,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.32,
+                    "right_extension_spaces": 0.32
+                  }
+                ],
+                "head_bbox": [
+                  698,
+                  413,
+                  726,
+                  436
+                ],
+                "registration_bbox": [
+                  697,
+                  412,
+                  727,
+                  437
+                ],
+                "head_match": 0.9732510288055831,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": 67,
+                  "agreement": 0.9642,
+                  "margin": 0.2742
+                }
+              },
+              {
+                "frame": "native-4.80000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      554,
+                      413,
+                      582,
+                      436
+                    ],
+                    "registration_bbox": [
+                      553,
+                      412,
+                      583,
+                      437
+                    ],
+                    "bbox": [
+                      547,
+                      424,
+                      589,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.32,
+                    "right_extension_spaces": 0.32
+                  }
+                ],
+                "head_bbox": [
+                  554,
+                  413,
+                  582,
+                  436
+                ],
+                "registration_bbox": [
+                  553,
+                  412,
+                  583,
+                  437
+                ],
+                "head_match": 0.9732510288055831,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": -77,
+                  "agreement": 0.9625,
+                  "margin": 0.2929
+                }
+              },
+              {
+                "frame": "native-3.15000.png",
+                "status": "verified",
+                "segments": [
+                  {
+                    "status": "verified",
+                    "reason": "Actual thin continuous ledger extends beyond both head edges",
+                    "step": -2,
+                    "expected_y": 423.875,
+                    "required_extension_spaces": 0.12,
+                    "head_bbox": [
+                      713,
+                      413,
+                      741,
+                      436
+                    ],
+                    "registration_bbox": [
+                      712,
+                      412,
+                      742,
+                      437
+                    ],
+                    "bbox": [
+                      706,
+                      424,
+                      751,
+                      425
+                    ],
+                    "y": 424.0,
+                    "thickness_spaces": 0.045714285714285714,
+                    "continuous": true,
+                    "left_extension_spaces": 0.32,
+                    "right_extension_spaces": 0.45714285714285713
+                  }
+                ],
+                "head_bbox": [
+                  713,
+                  413,
+                  741,
+                  436
+                ],
+                "registration_bbox": [
+                  712,
+                  412,
+                  742,
+                  437
+                ],
+                "head_match": 0.9632653061214661,
+                "staff_gap": 21.875,
+                "staff_lines": [
+                  314.5,
+                  336.5,
+                  358.5,
+                  380.5,
+                  402.0
+                ],
+                "registration": {
+                  "pixels": 82,
+                  "agreement": 0.9465,
+                  "margin": 0.2567
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "coverage": {
+    "expected": 2,
+    "verified": 2,
+    "unverified": 0,
+    "ambiguous": 0,
+    "unsupported": 0,
+    "mismatch": 0
+  },
+  "by_construct": {
+    "ledger": {
+      "expected": 2,
+      "verified": 2,
+      "unverified": 0,
+      "ambiguous": 0,
+      "unsupported": 0,
+      "mismatch": 0
+    }
+  },
+  "complete": true,
+  "scope": "Source-required physical ledger lines; current PNG heads and staff rails; no extra-line absence proof"
+}

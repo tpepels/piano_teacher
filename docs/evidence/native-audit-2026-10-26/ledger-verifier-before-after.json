@@ -1,0 +1,346 @@
+{
+  "scope": "Verifier-only RED/GREEN on immutable producer PNGs; later renderer builds need their own provenance",
+  "producer_case": "learn-0077-left-original",
+  "producer_capture_manifest": {
+    "capture_config": {
+      "version": 1,
+      "score_ink": "canonical",
+      "fingering_annotations": false,
+      "transport_overlay": true
+    },
+    "capture_protocol_sha256": "80089b63d468f69ea2217848c39cca1c8b3cb94b321e936ecb9bac736fe3740a",
+    "renderer_dependencies_sha256": "64f803fde7e70d3b204015319a79311f6de8fa86efb2ee9c702b35267b6b7d42",
+    "python": "3.14.8",
+    "verovio": "5.7.0-7135340",
+    "godot": "4.7.2.stable.arch_linux.ed1daf0bf"
+  },
+  "source_id": "midi-t1-e1565",
+  "notation_id": "pt089fba1ff62917b7c12fba5f961e0869s0",
+  "clocks": [
+    0.0,
+    0.3,
+    4.0,
+    4.2
+  ],
+  "files": {
+    "score.musicxml": "0bf8db1ad7294c782d245ee712e9978a0c51b0701099ad24df8454bb129e81f2",
+    "verovio-0.svg": "86aad78cb7569a742551593944d4fc3f79bc506d2accb2ef79bf69ac4868ce54",
+    "native-0.00000.png": "81e8cff30c8bce34fee4ad393757adc50cae801127da78cdf41614b02e75a770",
+    "native-0.30000.png": "5a68c75ad6fb4092be7e218422bcf55ec1ab143387bdfbe5448637f13d5866aa",
+    "native-4.00000.png": "3f6981ac129fc8ad6574aad7809f541bc845b27c8b2fb016860d0c73abfbcbd3",
+    "native-4.20000.png": "5e5c4a6cbe0445fd27e783d9eccae92586dbd0b55614cbd5ef65eabcbfb43acb"
+  },
+  "before_verifier_sha256": "3ff251cac05d22ba144c1637a93be0c21d4e34bcb04a4cdf0e509d1dca556e57",
+  "after_verifier_sha256": "69d6b48b5e048652d5de30ef8cb83474f54a84620279fb24b91868a5bff91410",
+  "before": {
+    "complete": false,
+    "coverage": {
+      "expected": 2,
+      "verified": 1,
+      "unverified": 0,
+      "ambiguous": 0,
+      "unsupported": 0,
+      "mismatch": 1
+    },
+    "notes": [
+      {
+        "source_id": "pt089fba1ff62917b7c12fba5f961e0869s0",
+        "measure": 78,
+        "staff": "left",
+        "voice": "1",
+        "beat": 0.0,
+        "spelling": [
+          "E",
+          -1,
+          2
+        ],
+        "status": "mismatch",
+        "expected_steps": [
+          -2
+        ],
+        "evidence": {
+          "frame": "native-0.30000.png",
+          "status": "mismatch",
+          "segments": [
+            {
+              "status": "mismatch",
+              "reason": "No unique thin continuous ledger spans both registered head edges",
+              "step": -2,
+              "expected_y": 423.875,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                597,
+                412,
+                635,
+                437
+              ]
+            }
+          ],
+          "head_bbox": [
+            597,
+            412,
+            635,
+            437
+          ],
+          "head_match": 0.9595092024528105,
+          "staff_gap": 21.875,
+          "staff_lines": [
+            314.5,
+            336.5,
+            358.5,
+            380.5,
+            402.0
+          ],
+          "registration": {
+            "pixels": -29,
+            "agreement": 0.9608,
+            "margin": 0.3364
+          }
+        }
+      },
+      {
+        "source_id": "pt089fba1ff62917b7c12fba5f961e0869s1",
+        "measure": 78,
+        "staff": "left",
+        "voice": "1",
+        "beat": 4.0,
+        "spelling": [
+          "E",
+          -1,
+          2
+        ],
+        "status": "verified",
+        "expected_steps": [
+          -2
+        ],
+        "evidence": {
+          "frame": "native-4.20000.png",
+          "status": "verified",
+          "segments": [
+            {
+              "status": "verified",
+              "reason": "Actual thin continuous ledger extends beyond both head edges",
+              "step": -2,
+              "expected_y": 423.875,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                611,
+                412,
+                641,
+                437
+              ],
+              "bbox": [
+                605,
+                424,
+                644,
+                425
+              ],
+              "y": 424.0,
+              "thickness_spaces": 0.045714285714285714,
+              "continuous": true,
+              "left_extension_spaces": 0.2742857142857143,
+              "right_extension_spaces": 0.13714285714285715
+            }
+          ],
+          "head_bbox": [
+            611,
+            412,
+            641,
+            437
+          ],
+          "head_match": 0.9724208375883836,
+          "staff_gap": 21.875,
+          "staff_lines": [
+            314.5,
+            336.5,
+            358.5,
+            380.5,
+            402.0
+          ],
+          "registration": {
+            "pixels": -19,
+            "agreement": 0.9657,
+            "margin": 0.282
+          }
+        }
+      }
+    ]
+  },
+  "after": {
+    "complete": true,
+    "coverage": {
+      "expected": 2,
+      "verified": 2,
+      "unverified": 0,
+      "ambiguous": 0,
+      "unsupported": 0,
+      "mismatch": 0
+    },
+    "notes": [
+      {
+        "source_id": "pt089fba1ff62917b7c12fba5f961e0869s0",
+        "measure": 78,
+        "staff": "left",
+        "voice": "1",
+        "beat": 0.0,
+        "spelling": [
+          "E",
+          -1,
+          2
+        ],
+        "status": "verified",
+        "expected_steps": [
+          -2
+        ],
+        "evidence": {
+          "frame": "native-0.30000.png",
+          "status": "verified",
+          "segments": [
+            {
+              "status": "verified",
+              "reason": "Actual thin continuous ledger extends beyond both head edges",
+              "step": -2,
+              "expected_y": 423.875,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                598,
+                413,
+                634,
+                436
+              ],
+              "registration_bbox": [
+                597,
+                412,
+                635,
+                437
+              ],
+              "bbox": [
+                595,
+                424,
+                637,
+                425
+              ],
+              "y": 424.0,
+              "thickness_spaces": 0.045714285714285714,
+              "continuous": true,
+              "left_extension_spaces": 0.13714285714285715,
+              "right_extension_spaces": 0.13714285714285715
+            }
+          ],
+          "head_bbox": [
+            598,
+            413,
+            634,
+            436
+          ],
+          "registration_bbox": [
+            597,
+            412,
+            635,
+            437
+          ],
+          "head_match": 0.9595092024528105,
+          "staff_gap": 21.875,
+          "staff_lines": [
+            314.5,
+            336.5,
+            358.5,
+            380.5,
+            402.0
+          ],
+          "registration": {
+            "pixels": -29,
+            "agreement": 0.9608,
+            "margin": 0.3364
+          }
+        }
+      },
+      {
+        "source_id": "pt089fba1ff62917b7c12fba5f961e0869s1",
+        "measure": 78,
+        "staff": "left",
+        "voice": "1",
+        "beat": 4.0,
+        "spelling": [
+          "E",
+          -1,
+          2
+        ],
+        "status": "verified",
+        "expected_steps": [
+          -2
+        ],
+        "evidence": {
+          "frame": "native-4.20000.png",
+          "status": "verified",
+          "segments": [
+            {
+              "status": "verified",
+              "reason": "Actual thin continuous ledger extends beyond both head edges",
+              "step": -2,
+              "expected_y": 423.875,
+              "required_extension_spaces": 0.12,
+              "head_bbox": [
+                612,
+                413,
+                640,
+                436
+              ],
+              "registration_bbox": [
+                611,
+                412,
+                641,
+                437
+              ],
+              "bbox": [
+                605,
+                424,
+                644,
+                425
+              ],
+              "y": 424.0,
+              "thickness_spaces": 0.045714285714285714,
+              "continuous": true,
+              "left_extension_spaces": 0.32,
+              "right_extension_spaces": 0.18285714285714286
+            }
+          ],
+          "head_bbox": [
+            612,
+            413,
+            640,
+            436
+          ],
+          "registration_bbox": [
+            611,
+            412,
+            641,
+            437
+          ],
+          "head_match": 0.9724208375883836,
+          "staff_gap": 21.875,
+          "staff_lines": [
+            314.5,
+            336.5,
+            358.5,
+            380.5,
+            402.0
+          ],
+          "registration": {
+            "pixels": -19,
+            "agreement": 0.9657,
+            "margin": 0.282
+          }
+        }
+      }
+    ]
+  },
+  "unchanged_thresholds": {
+    "head_dice": 0.79,
+    "wing_staff_spaces": 0.12,
+    "y_tolerance_staff_spaces": 0.13,
+    "maximum_thickness_staff_spaces": 0.14
+  },
+  "final_capture_job": "/tmp/notation-ledger-liszt78-job.json",
+  "final_capture_recipe": "rtk proxy timeout --signal=TERM --kill-after=5s 120s .venv/bin/python -u scripts/check_native_verovio_overlay.py --only Liebestraum --shard-count 1000003 --shard-index 771261 --workers 2 --case-timeout 90 --worker-memory-mib 3072 --no-package-diagnostics --out /tmp/notation-ledger-final-liszt78"
+}

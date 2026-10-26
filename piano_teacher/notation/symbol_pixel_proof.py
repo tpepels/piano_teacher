@@ -593,6 +593,7 @@ def _connector_curve(picture, heads, construct, placement=None):
     """
     a, b = heads
     gap = min(a['gap'], b['gap'])
+    endpoint_limit = .9
     if b['x']-a['x'] < 1.5*gap:
         return dict(status='unverified', reason='Endpoint silhouettes overlap or leave insufficient separable curve ink')
     pixels = bright(picture).copy()
@@ -620,12 +621,20 @@ def _connector_curve(picture, heads, construct, placement=None):
     left, right = max(0, round(a['x']-gap)), min(picture.width, round(b['x']+gap))
     top = max(0, round(min(a['y'], b['y'])-5*gap))
     bottom = min(picture.height, round(max(a['y'], b['y'])+5*gap))
+    minimum_span = b['x']-a['x']-2*gap
+    if construct == 'tie':
+        # An endpoint attaches to the visible head rectangle, not its centre.
+        # A flagged or wide-head tie can have authentic edge clearances yet
+        # fail the centre-based shortcut. This is the admissible horizontal
+        # bound implied by the SAME endpoint-distance test below; passing it
+        # does not authorize any curve. Slurs can also attach to stem tips.
+        minimum_span = b['bbox'][0]-a['bbox'][2]-2*endpoint_limit*gap
     overlap, accepted, rejected, neighbors = False, [], [], None
     for component in _connector_components(pixels[top:bottom, left:right]):
         xy = np.asarray([(x+left, y+top) for y, x in component])
         xs, ys = xy[:, 0], xy[:, 1]
         x0, x1 = int(xs.min()), int(xs.max())
-        if x1-x0 < b['x']-a['x']-2*gap:
+        if x1-x0 < minimum_span:
             continue
         centers, thickness = [], []
         for x in range(x0, x1+1):
@@ -644,7 +653,7 @@ def _connector_curve(picture, heads, construct, placement=None):
             if construct == 'slur':
                 options += [float(np.hypot(tx-x, ty-y)) for tx, ty in tips]
             distances.append(min(options)/gap)
-        if max(distances) > .9:
+        if max(distances) > endpoint_limit:
             rejected.append(dict(component_bbox=[x0, int(ys.min()), x1+1, int(ys.max())+1],
                                  endpoint_distances_spaces=[round(d, 4) for d in distances]))
             continue
@@ -672,7 +681,7 @@ def _connector_curve(picture, heads, construct, placement=None):
             for other in neighbors:
                 l, t, r, d = other['bbox']
                 distance = float(np.hypot(max(l-x, 0, x-r), max(t-y, 0, y-d)))/gap
-                if distance <= own_distance+.1 and distance < .9:
+                if distance <= own_distance+.1 and distance < endpoint_limit:
                     competing.append(other)
         if competing:
             overlap = True

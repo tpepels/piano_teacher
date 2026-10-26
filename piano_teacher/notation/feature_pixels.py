@@ -1299,6 +1299,23 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
                               'global engraving correctness'])
 
 
+def _ledger_visible_head(head, glyph):
+    """Use the registered external silhouette's ink edges for ledger wings.
+
+    Registration rectangles include the reference font's transparent padding.
+    Keep that rectangle as ownership evidence, but do not require a physical
+    ledger to extend beyond invisible pixels. Never derive the head edge from
+    the observed union of head, ledger, stem or other neighboring ink.
+    """
+    left, top, right, bottom = head['bbox']
+    rows, columns = np.nonzero(_outline(glyph['svg'], right-left, bottom-top))
+    if not len(columns):
+        raise ValueError('Registered external head has no visible outline')
+    return dict(head, registration_bbox=list(head['bbox']),
+                bbox=[left+int(columns.min()), top+int(rows.min()),
+                      left+int(columns.max())+1, top+int(rows.max())+1])
+
+
 def _ledger_segment(pixels, rail, head, step, context, occluded_columns):
     """Validate a physical rule; context rows alone never authorize ink."""
     gap = rail.gap
@@ -1306,7 +1323,8 @@ def _ledger_segment(pixels, rail, head, step, context, occluded_columns):
     left_head, _top, right_head, _bottom = head['bbox']
     extension = math.ceil(.12*gap)
     evidence = dict(step=step, expected_y=expected,
-                    required_extension_spaces=.12, head_bbox=list(head['bbox']))
+                    required_extension_spaces=.12, head_bbox=list(head['bbox']),
+                    registration_bbox=list(head.get('registration_bbox', head['bbox'])))
     if any(left_head-extension <= x < right_head+extension for x in occluded_columns):
         return dict(status='unverified', reason='Observed playhead covers required ledger ink', **evidence)
     left, right = max(0, left_head-round(2*gap)), min(pixels.shape[1], right_head+round(2*gap))
@@ -1426,7 +1444,10 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                         witnesses[sid].append(dict(frame=frame['name'], status='unverified',
                             reason=source_errors.get(sid, errors.get(sid, 'Current-image head is unregistered'))))
                         continue
-                    head, rail = heads[sid], frame['staves'][note['staff']]
+                    name = ('head_whole' if note['note_type'] == 'whole' else
+                            'head_half' if note['note_type'] == 'half' else 'head_black')
+                    head = _ledger_visible_head(heads[sid], glyphs[name])
+                    rail = frame['staves'][note['staff']]
                     segments = [_ledger_segment(aligned, rail, head, step, contexts[note['staff']],
                                 frame['occluded_columns']-shift)
                                 for step in row['features']['ledger']['expected_steps']]
@@ -1436,9 +1457,13 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                             segment['bbox'][2] += shift
                         segment['head_bbox'][0] += shift
                         segment['head_bbox'][2] += shift
+                        segment['registration_bbox'][0] += shift
+                        segment['registration_bbox'][2] += shift
                     status = next((s['status'] for s in segments if s['status'] != 'verified'), 'verified')
                     witnesses[sid].append(dict(frame=frame['name'], status=status, segments=segments,
                         head_bbox=[head['bbox'][0]+shift, head['bbox'][1], head['bbox'][2]+shift, head['bbox'][3]],
+                        registration_bbox=[head['registration_bbox'][0]+shift, head['registration_bbox'][1],
+                                           head['registration_bbox'][2]+shift, head['registration_bbox'][3]],
                         head_match=head['score'], staff_gap=rail.gap, staff_lines=list(rail.lines), registration=registration))
             except (OSError, ValueError, KeyError, AssertionError) as exc:
                 for note, _row in required:

@@ -1,0 +1,289 @@
+{
+  "description": "Immutable real native producer capture for verifier regression; not a claim about later renderer builds",
+  "producer_case": "learn-0077-left-original",
+  "producer_directory": "/tmp/notation-ledger-current-liszt78/00-Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt/learn-0077-left-original",
+  "case": {
+    "name": "learn-0077-left-original",
+    "filename": "/home/tom/Projects/piano_teacher/midi/Liebestraum_S_541_No_3_in_A\u266d_Major_\u2013_Liszt.midi",
+    "first_bar": 78,
+    "last_bar": 78,
+    "hand": "left",
+    "max_density": 640.0,
+    "max_tiny_rests": 8,
+    "max_dots": 2,
+    "features": [],
+    "min_lookahead_beats": 0.0
+  },
+  "source_phrase": {
+    "number": 78,
+    "first_bar": 78,
+    "last_bar": 78,
+    "start": 523.0,
+    "end": 529.0,
+    "notes": [
+      {
+        "start": 523.0,
+        "end": 528.6979166666666,
+        "pitch": 39,
+        "track": 1,
+        "channel": 0,
+        "hand": "left",
+        "source_id": "midi-t1-e1565",
+        "voice": "midi-t1-c0",
+        "spelling": null,
+        "velocity": 49
+      },
+      {
+        "start": 523.0,
+        "end": 524.9979166666667,
+        "pitch": 72,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2171",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 58
+      },
+      {
+        "start": 523.5,
+        "end": 523.9979166666667,
+        "pitch": 61,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2172",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 49
+      },
+      {
+        "start": 524.0,
+        "end": 524.4979166666667,
+        "pitch": 64,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2174",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 49
+      },
+      {
+        "start": 524.5,
+        "end": 524.9979166666667,
+        "pitch": 67,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2176",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 49
+      },
+      {
+        "start": 525.0,
+        "end": 525.4729166666667,
+        "pitch": 64,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2180",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 49
+      },
+      {
+        "start": 525.0,
+        "end": 525.9979166666667,
+        "pitch": 70,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2179",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 58
+      },
+      {
+        "start": 525.5,
+        "end": 525.9729166666667,
+        "pitch": 61,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2182",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 49
+      },
+      {
+        "start": 526.0,
+        "end": 528.8479166666667,
+        "pitch": 55,
+        "track": 1,
+        "channel": 0,
+        "hand": "left",
+        "source_id": "midi-t1-e1568",
+        "voice": "midi-t1-c0",
+        "spelling": null,
+        "velocity": 49
+      },
+      {
+        "start": 526.0,
+        "end": 527.9979166666667,
+        "pitch": 72,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2185",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 58
+      },
+      {
+        "start": 526.5,
+        "end": 526.9979166666667,
+        "pitch": 61,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2186",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 49
+      },
+      {
+        "start": 527.0,
+        "end": 527.4979166666667,
+        "pitch": 63,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2188",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 48
+      },
+      {
+        "start": 527.5,
+        "end": 527.9979166666667,
+        "pitch": 67,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2190",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 48
+      },
+      {
+        "start": 528.0,
+        "end": 528.4729166666667,
+        "pitch": 63,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2194",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 48
+      },
+      {
+        "start": 528.0,
+        "end": 528.9979166666667,
+        "pitch": 70,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2193",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 57
+      },
+      {
+        "start": 528.5,
+        "end": 528.9729166666667,
+        "pitch": 61,
+        "track": 0,
+        "channel": 0,
+        "hand": "right",
+        "source_id": "midi-t0-e2196",
+        "voice": "midi-t0-c0",
+        "spelling": null,
+        "velocity": 48
+      }
+    ]
+  },
+  "variant": {
+    "level": "original",
+    "phrase": {
+      "number": 78,
+      "first_bar": 78,
+      "last_bar": 78,
+      "start": 523.0,
+      "end": 529.0,
+      "notes": [
+        {
+          "start": 523.0,
+          "end": 528.6979166666666,
+          "pitch": 39,
+          "track": 1,
+          "channel": 0,
+          "hand": "left",
+          "source_id": "midi-t1-e1565",
+          "voice": "midi-t1-c0",
+          "spelling": null,
+          "velocity": 49
+        },
+        {
+          "start": 526.0,
+          "end": 528.8479166666667,
+          "pitch": 55,
+          "track": 1,
+          "channel": 0,
+          "hand": "left",
+          "source_id": "midi-t1-e1568",
+          "voice": "midi-t1-c0",
+          "spelling": null,
+          "velocity": 49
+        }
+      ]
+    },
+    "source_indices": [
+      0,
+      8
+    ]
+  },
+  "recipe": "rtk proxy timeout --signal=TERM --kill-after=5s 120s .venv/bin/python -u scripts/check_native_verovio_overlay.py --only Liebestraum --shard-count 1000003 --shard-index 771261 --workers 2 --case-timeout 90 --worker-memory-mib 3072 --no-package-diagnostics --out /tmp/notation-ledger-final-liszt78",
+  "midi_sha256": "3602c717d100258c7aed271b37cfe337096e34ec4632b59a774eb0b8cda08020",
+  "capture_manifest": {
+    "capture_config": {
+      "version": 1,
+      "score_ink": "canonical",
+      "fingering_annotations": false,
+      "transport_overlay": true
+    },
+    "capture_protocol_sha256": "80089b63d468f69ea2217848c39cca1c8b3cb94b321e936ecb9bac736fe3740a",
+    "renderer_dependencies_sha256": "64f803fde7e70d3b204015319a79311f6de8fa86efb2ee9c702b35267b6b7d42",
+    "python": "3.14.8",
+    "verovio": "5.7.0-7135340",
+    "godot": "4.7.2.stable.arch_linux.ed1daf0bf"
+  },
+  "files": {
+    "score.musicxml": "0bf8db1ad7294c782d245ee712e9978a0c51b0701099ad24df8454bb129e81f2",
+    "verovio-0.svg": "86aad78cb7569a742551593944d4fc3f79bc506d2accb2ef79bf69ac4868ce54",
+    "native-0.00000.png": "81e8cff30c8bce34fee4ad393757adc50cae801127da78cdf41614b02e75a770",
+    "native-0.30000.png": "5a68c75ad6fb4092be7e218422bcf55ec1ab143387bdfbe5448637f13d5866aa",
+    "native-4.00000.png": "3f6981ac129fc8ad6574aad7809f541bc845b27c8b2fb016860d0c73abfbcbd3",
+    "native-4.20000.png": "5e5c4a6cbe0445fd27e783d9eccae92586dbd0b55614cbd5ef65eabcbfb43acb"
+  },
+  "clocks": [
+    0.0,
+    0.3,
+    4.0,
+    4.2
+  ],
+  "source_id": "midi-t1-e1565",
+  "notation_id": "pt089fba1ff62917b7c12fba5f961e0869s0"
+}
