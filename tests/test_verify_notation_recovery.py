@@ -63,7 +63,10 @@ def local_driver(tmp_path):
         ('godot','#!/bin/sh\nexit "${TEST_DRIVER_ENGINE_STATUS:-0}"\n'),
         ('xvfb-run','#!/bin/sh\nshift\nshift\nshift\nexec "$@"\n')):
         path=binary/name;path.write_text(body);path.chmod(0o755)
-    return tmp_path,dict(os.environ,PATH=str(binary)+os.pathsep+os.environ['PATH'],DISPLAY=':test')
+    # Outer sweep preferences must not change tests of the driver's defaults.
+    # Tests that exercise overrides opt in explicitly on this private copy.
+    env={key:value for key,value in os.environ.items() if not key.startswith('PIANO_VERIFY_')}
+    return tmp_path,dict(env,PATH=str(binary)+os.pathsep+os.environ['PATH'],DISPLAY=':test')
 
 
 def test_failed_batch_is_packaged_and_uses_resumable_bounded_defaults(local_driver):
@@ -75,6 +78,8 @@ def test_failed_batch_is_packaged_and_uses_resumable_bounded_defaults(local_driv
     assert not (output/'shard-1-of-24').exists()
     args=json.loads((output/'shard-0-of-24/started.json').read_text())['args']
     assert args[args.index('--workers')+1]=='2'
+    assert args[args.index('--case-timeout')+1]=='600'
+    assert args[args.index('--worker-memory-mib')+1]=='3072'
     assert '--resume' in args and '--reuse-captures' in args
     with ZipFile(output/'triage.zip') as archive:
         assert 'piece/partial/native-0.00000.png' in archive.namelist()
@@ -118,6 +123,21 @@ def test_continue_mode_packages_a_failed_batch_even_if_last_batch_passes(local_d
                           capture_output=True,text=True,timeout=15)
     assert result.returncode==1,result.stdout+result.stderr
     output=folder/'notation-check-results'
+    assert len(list(output.glob('shard-*/started.json')))==24
     assert json.loads((output/'shard-23-of-24/summary.json').read_text())['passed']
     with ZipFile(output/'triage.zip') as archive:
         assert json.loads(archive.read('summary.json'))['state']=='failed'
+
+
+def test_runner_checks_ignore_settings_inherited_from_the_enclosing_sweep(tmp_path):
+    """Exercise both real driver fixtures under deliberate outer-run settings."""
+    env=dict(os.environ, PIANO_VERIFY_CONTINUE_ON_FAILURE='1', PIANO_VERIFY_WORKERS='7',
+             PIANO_VERIFY_RESUME='0', PIANO_VERIFY_REUSE='0',
+             PIANO_VERIFY_CASE_TIMEOUT='17', PIANO_VERIFY_MEMORY_MIB='768')
+    result=subprocess.run([sys.executable,'-m','pytest','-q',
+        '--basetemp',str(tmp_path/'nested-driver-checks'),
+        'tests/test_verify_notation_recovery.py::test_failed_batch_is_packaged_and_uses_resumable_bounded_defaults',
+        'tests/test_verify_notation_recovery.py::test_continue_mode_packages_a_failed_batch_even_if_last_batch_passes',
+        'tests/test_verification_runner_failures.py::test_actual_outer_bash_and_real_direct_coordinator_package_once'],
+        cwd=ROOT,env=env,capture_output=True,text=True,timeout=45)
+    assert result.returncode==0,result.stdout+result.stderr

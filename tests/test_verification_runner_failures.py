@@ -34,7 +34,9 @@ def isolated_audit(tmp_path):
     godot.write_text('#!/bin/sh\nif [ "$1" = --version ]; then\n'
                      '  echo test-engine\n  exit "${TEST_ENGINE_STATUS:-0}"\nfi\nexit 99\n')
     godot.chmod(0o755)
-    env = dict(os.environ, PATH=str(binary) + os.pathsep + os.environ['PATH'])
+    # Keep nested driver defaults independent of the enclosing audit settings.
+    env = {key:value for key,value in os.environ.items() if not key.startswith('PIANO_VERIFY_')}
+    env['PATH'] = str(binary) + os.pathsep + os.environ['PATH']
     env.pop('PYTHONPATH', None)
     return tmp_path, env
 
