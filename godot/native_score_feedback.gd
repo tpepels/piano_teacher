@@ -16,7 +16,10 @@ func _init() -> void:
     set_process(false)
 
 func bind_score(renderer: Control, revision: int) -> void:
+    if is_instance_valid(score) and score.draw.is_connected(_score_repainted):
+        score.draw.disconnect(_score_repainted)
     score = renderer
+    score.draw.connect(_score_repainted)
     score_revision = revision
     source_to_id.clear()
     markers.clear()
@@ -26,17 +29,27 @@ func bind_score(renderer: Control, revision: int) -> void:
             source_to_id[str(event.source_id)] = str(event.id)
     queue_redraw()
 
+func _score_repainted() -> void:
+    # A paused seek or resize can move noteheads without changing assessed
+    # markers. Follow actual compositor redraws rather than idle HTTP polls.
+    if not markers.is_empty() or not pulses.is_empty():
+        queue_redraw()
+
 func present(state: Dictionary) -> void:
     var ungraded: bool = bool(state.get("preview_only", false)) or \
         str(state.get("mode", "")) == "listen"
-    markers.clear()
+    var previous_markers: Dictionary = markers
+    var previous_moving: bool = moving
+    var had_pulses: bool = not pulses.is_empty()
+    markers = {}
     if ungraded or int(state.get("revision", -2)) != score_revision:
         for event in state.get("midi_visual_events", []):
             last_sequence = maxi(last_sequence, int(event.get("sequence", 0)))
         pulses.clear()
         moving = false
         set_process(false)
-        queue_redraw()
+        if not previous_markers.is_empty() or had_pulses:
+            queue_redraw()
         return
     for mark in state.get("feedback_marks", []):
         var id: String = str(mark.get("note_id", mark.get("id", "")))
@@ -46,6 +59,7 @@ func present(state: Dictionary) -> void:
             markers[id] = str(mark.get("status", ""))
     moving = bool(state.get("running", false)) and not bool(state.get("paused", false))
     var now: int = Time.get_ticks_msec()
+    var fresh_pulse := false
     for event in state.get("midi_visual_events", []):
         var sequence: int = int(event.get("sequence", 0))
         if sequence <= last_sequence:
@@ -64,10 +78,14 @@ func present(state: Dictionary) -> void:
         if id.is_empty():
             continue
         pulses.append({"id":id, "status":status, "until":now+maxi(1,320-int(age*1000))})
+        fresh_pulse = true
         if pulses.size() > MAX_PULSES:
             pulses.pop_front()
     set_process((moving and not markers.is_empty()) or not pulses.is_empty())
-    queue_redraw()
+    # HTTP timestamps and consumed MIDI sequences keep changing while idle;
+    # only changed ink or a moving score needs another feedback repaint.
+    if markers != previous_markers or moving != previous_moving or fresh_pulse:
+        queue_redraw()
 
 func note_position(id: String) -> Vector2:
     if not is_instance_valid(score):

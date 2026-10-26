@@ -19,6 +19,7 @@ var _last_status := ""
 var _last_age := 999.0
 var _registers: Array[Dictionary] = []
 var _keys: Dictionary = {}
+var _presentation: Dictionary = {}
 var ui_scale := 1.0
 
 func _init() -> void:
@@ -60,6 +61,13 @@ func _update_compact_height() -> void:
     _layout_keys()
 
 func update_state(teaching: Dictionary) -> void:
+    var presentation := {"live":false, "expected":teaching.get("expected_notes", []),
+        "heard":teaching.get("heard_pitches", []), "visible":teaching.get("hint_visible", false),
+        "completed":teaching.get("completed", false), "phase":teaching.get("phase", ""),
+        "reason":teaching.get("hint_reason", "")}
+    if presentation == _presentation:
+        return
+    _presentation = presentation.duplicate(true)
     _live_mode = false
     _pressed.clear()
     _expected.clear()
@@ -108,6 +116,19 @@ func update_state(teaching: Dictionary) -> void:
 func update_live(expected_pitches: Array, held_pitches: Array, events: Array, connected: bool) -> void:
     # Physical keyboard display is active during timed practice, independently
     # of the Learn-mode hint keyboard. No preview marker awards score credit.
+    var recent: Array = []
+    for event in events:
+        if event is Dictionary and float(event.get("age", 999.0)) < .8:
+            recent.append([event.get("pitch", -1), event.get("status", "heard")])
+    var last: Dictionary = events[-1] if not events.is_empty() else {}
+    var presentation := {"live":true, "expected":expected_pitches, "held":held_pitches,
+        "recent":recent, "last":[last.get("pitch", -1), last.get("status", "heard"),
+            float(last.get("age", 999.0)) < .8], "connected":connected}
+    # Ages change on every poll, but the key colors/caption change only when
+    # a note arrives, is released, or crosses the existing .8s expiry boundary.
+    if presentation == _presentation:
+        return
+    _presentation = presentation.duplicate(true)
     _live_mode = true
     _expected.clear()
     _heard.clear()
@@ -132,7 +153,6 @@ func update_live(expected_pitches: Array, held_pitches: Array, events: Array, co
             var played_pitch: int = int(event.get("pitch", -1))
             if played_pitch >= 21 and played_pitch <= 108:
                 _pressed[played_pitch] = str(event.get("status", "heard"))
-        var last: Dictionary = events[events.size() - 1]
         _last_pitch = int(last.get("pitch", -1))
         _last_status = str(last.get("status", "heard"))
         _last_age = float(last.get("age", 999.0))

@@ -979,6 +979,13 @@ double ripple, instead of sixteen equally bright radar-like spokes; the
 original notehead and accidental remain unobscured. Frame interval
 statistics can be enabled with `--frame-diagnostics`.
 
+Unchanged HTTP state polls leave idle and paused views asleep, including the
+native feedback layer, status captions and connected MIDI keyboard. Display
+updates still respond to new assessments, key releases and the existing MIDI
+color expiry; polling cadence, musical timing and grading remain unchanged.
+`tests/test_idle_rendering.py` checks actual framebuffer redraws and verifies
+that changed feedback and active playback still render.
+
 ## HiDPI score readability
 
 The notation now scales with the *available score-stage height* instead of
