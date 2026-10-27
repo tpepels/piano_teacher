@@ -47,7 +47,9 @@ may use pure geometry/layout helpers but never import verifier internals.
   handler into a pure, separately tested learning-navigation helper.
 - [ ] Isolate backend command handling and recovery transitions behind
   focused functions, keeping locking and timestamps at the application edge.
-- [ ] Split Godot's Home/Library/Settings/Practice screen construction into
+- [x] Split the giant _build_interface method into separate Home, Library and
+  Practice builders, preserving construction order and event wiring.
+- [ ] Move Home/Library/Settings/Practice screen construction into
   independently testable UI components with signals and explicit state inputs.
 - [ ] Extract the native view's fingering layout and semantic barline policies
   into stateless collaborators where real duplication exists.

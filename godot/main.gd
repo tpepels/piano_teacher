@@ -779,6 +779,12 @@ func _build_interface() -> void:
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(background)
 
+    _build_home_screen()
+    _build_library_screen()
+    _build_practice_screen()
+
+
+func _build_home_screen() -> void:
     # Home: a title, one recent piece and two decisions, with ample whitespace.
     var home := _screen("Home")
     screens["home"] = home
@@ -830,6 +836,8 @@ func _build_interface() -> void:
     recent_inner.add_child(home_resume_button)
     home_layout.add_child(_label("Connect your USB MIDI keyboard and select your music. Progress stays on this computer.", 14, MUTED))
 
+
+func _build_library_screen() -> void:
     # Library: automatic indexing without manually opening each MIDI file.
     var library_page := _screen("Library")
     screens["library"] = library_page
@@ -902,6 +910,8 @@ func _build_interface() -> void:
     scroll.add_child(library_rows)
     _build_settings_screen()
 
+
+func _build_practice_screen() -> void:
     # Practice: standard engraving remains the central and dominant element.
     var practice_page := _screen("Practice")
     screens["practice"] = practice_page
@@ -1357,6 +1367,7 @@ func _build_interface() -> void:
                       "first_bar": first_bar, "last_bar": last_bar}))
     _navigate("practice")
     _refresh_score_status()
+
 
 func _caption_slot(caption: Label, lines: int) -> Control:
     # Containers must reserve this space even when the phase hides its text.
