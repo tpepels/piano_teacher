@@ -49,6 +49,9 @@ may use pure geometry/layout helpers but never import verifier internals.
   handler into a pure, separately tested learning-navigation helper.
 - [x] Extract read-only continuous beat/velocity projection into a pure
   transport module with explicit phase snapshot and deterministic tests.
+- [x] Extract immutable recovery/HUD metadata from `_update` to a pure
+  source-bar projection; keep decision detection, tempo adaptation, saving
+  and scheduling under the application lock.
 - [ ] Isolate backend command handling and recovery transitions behind
   focused functions, keeping locking and timestamps at the application edge.
 - [x] Split the giant _build_interface method into separate Home, Library and

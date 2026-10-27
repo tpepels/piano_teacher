@@ -31,6 +31,7 @@ from .library_health import LibraryHealth
 from .warmups import is_warmup
 from .raster import rasterize_score
 from .recovery import check_rolling_two_bar_window, check_two_bar_window
+from .recovery_projection import recovery_display
 from .music import Phrase, source_note_id, note_name
 from .notation.lesson import build_lesson_score, infer_piece_clefs
 from .notation.model import build_score_model
@@ -1756,29 +1757,18 @@ class PracticeEngine:
                 self._schedule_preparation(decision.restart_beat, now=now,
                     from_visual=self.visual_offset_beats + score_beat,
                     reverse_seconds=self.feedback_seconds)
-                self.recovery_notice = {
-                    "kind": "slowdown", "errors": decision.errors,
-                    "missed": decision.missed, "wrong": decision.wrong,
-                    "from_bpm": before, "to_bpm": self.plan.bpm,
-                    "first_bar": bar_number_at(grid, decision.restart_beat, phrase.first_bar),
-                    "last_bar": bar_number_at(grid, max(decision.restart_beat, decision.end_beat-1e-6), phrase.first_bar),
-                    "expires_at": now + 9.0,
-                }
                 key = (self.plan.identity, decision.restart_beat, decision.end_beat)
                 self._trouble_count = self._trouble_count + 1 if key == self._trouble_key else 1
                 self._trouble_key = key
                 self._guided_recovery_pending = self._trouble_count >= SETTINGS.guided_recovery_after_failures
-                self.retry_range = {
-                    "first_bar": bar_number_at(grid, decision.restart_beat, phrase.first_bar),
-                    "last_bar": phrase.first_bar + next(i for i, beat in enumerate(grid)
-                        if abs(beat-decision.end_beat) < 1e-6)-1,
-                    "start_beat": decision.restart_beat, "end_beat": decision.end_beat}
-                self.feedback=(f"{decision.errors} wrong or missed notes - retrying from "
-                               f"measure {bar_number_at(grid,decision.restart_beat,phrase.first_bar)} "
-                               f"at {self.plan.bpm} BPM")
-                bars = f"{self.retry_range['first_bar']}-{self.retry_range['last_bar']}"
-                self.next_action = (f"Learn bars {bars} slowly, then retry the rhythm." if self._guided_recovery_pending
-                    else f"Retry bars {bars} at {self.plan.bpm} BPM.")
+                recovery = recovery_display(
+                    decision, grid=grid, first_bar=phrase.first_bar,
+                    before_bpm=before, after_bpm=self.plan.bpm,
+                    now=now, guided=self._guided_recovery_pending)
+                self.recovery_notice = recovery.notice
+                self.retry_range = recovery.retry_range
+                self.feedback = recovery.feedback
+                self.next_action = recovery.next_action
                 return
             previous_boundary=self.next_boundary_beat
             self.next_boundary_beat=next_chunk_end(grid,previous_boundary)
