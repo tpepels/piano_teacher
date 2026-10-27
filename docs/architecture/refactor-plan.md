@@ -43,6 +43,8 @@ may use pure geometry/layout helpers but never import verifier internals.
   diagnostic witness. Preserve exact existing spacing semantics.
 - [ ] Split backend state/HTTP projections from practice-engine transitions
   using explicit snapshot data, not a wrapper importing `PracticeEngine`.
+- [x] Extract source-bar to course-section selection from the backend command
+  handler into a pure, separately tested learning-navigation helper.
 - [ ] Isolate backend command handling and recovery transitions behind
   focused functions, keeping locking and timestamps at the application edge.
 - [ ] Split Godot's Home/Library/Settings/Practice screen construction into

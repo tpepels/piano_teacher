@@ -38,6 +38,7 @@ from .notation.practice_timeline import preparation_measure_descriptor
 from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats, preparation_meter
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
+from .course_navigation import locate_course_section
 from .live_feedback import settled_assessment, expired_attack_misses
 from .live_input_view import LiveInputView
 from .hardware_probe import HardwareProbe
@@ -1430,33 +1431,11 @@ class PracticeEngine:
                 if requested_mode not in ("learn", "practice"):
                     raise ValueError("Choose Learn Notes or Practice Rhythm")
                 plan = self.plan
-                # A requested measure can be silent even inside a consolidated
-                # course section. Start at the next source measure with a real
-                # attack, rather than opening an empty teaching fragment.
-                next_attacks = [note.start for note in plan.piece.notes
-                                if note.start >= plan.piece.bar_boundaries[bar-1]-1e-7]
-                if not next_attacks:
-                    raise ValueError("No playable notes at or after that measure")
-                playable_bar = bar_number_at(plan.piece.bar_boundaries,
-                                             min(next_attacks), 1)
-                bar = max(bar, playable_bar)
-                # Find the smallest course 'learn' section containing that
-                # measure; the original source grid controls all positions.
-                candidates = [(i, ex) for i, ex in enumerate(plan.exercises)
-                              if ex.kind == "learn" and ex.phrase.first_bar <= bar <= ex.phrase.last_bar]
-                if not candidates:
-                    candidates = [(i, ex) for i, ex in enumerate(plan.exercises)
-                                  if ex.kind == "learn" and ex.phrase.first_bar > bar]
-                if not candidates:
-                    raise ValueError("No playable notes at or after that measure")
-                index, section = min(candidates, key=lambda item:
-                    (item[1].phrase.first_bar if item[1].phrase.first_bar > bar else bar,
-                     item[1].phrase.last_bar-item[1].phrase.first_bar))
+                index, section, selected_bar = locate_course_section(plan, bar)
                 self._stop()
                 self._reset_trouble()
                 plan.select(index)
                 self.course_guided = requested_mode == "learn"
-                selected_bar = max(bar, section.phrase.first_bar)
                 beat = plan.piece.bar_boundaries[selected_bar-1] - plan.active_phrase.start
                 if not 0 <= beat < plan.active_phrase.end - plan.active_phrase.start:
                     raise ValueError("Selected measure falls outside the playable passage")
