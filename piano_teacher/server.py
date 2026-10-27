@@ -40,6 +40,7 @@ from .lesson_timing import lead_in_beats, preparation_meter
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
 from .course_navigation import locate_course_section
 from .state_projection import hand_stage_rows, guided_learning_fields
+from .transport_projection import VisualMotionSnapshot, project_visual_motion
 from .live_feedback import settled_assessment, expired_attack_misses
 from .live_input_view import LiveInputView
 from .hardware_probe import HardwareProbe
@@ -1303,32 +1304,30 @@ class PracticeEngine:
         self.count_in_beats = 0.0
 
     def _visual_motion(self, now: float) -> tuple[float, float, float]:
-        """One visual projection for snapshots and interruption by Retry."""
-        length = self.plan.active_phrase.end - self.plan.active_phrase.start
-        position = self.visual_offset_beats + self.play_from_beat
-        speed = 0.0
-        target = self.visual_offset_beats + length
-        if self.running:
-            position += (now - self.run_at) * self.plan.bpm / 60
-            speed = self.plan.bpm / 60
-        elif self._preparation_pending and now >= self._preparation_at:
-            measure = self.practice_preparation["measure"]
-            target = measure["end_beat"]
-            position = min(target, measure["start_beat"]
-                           + (now-self._preparation_at)*self.plan.bpm/60)
-            speed = self.plan.bpm/60 if position < target else 0.0
-        elif self._visual_rewind_from is not None:
-            target = self._visual_rewind_to
-            seconds = max(.05, self._visual_rewind_seconds)
-            progress = min(1.0, max(0.0, (now-self._visual_rewind_at)/seconds))
-            position = self._visual_rewind_from + (target-self._visual_rewind_from)*progress
-            speed = (target-self._visual_rewind_from)/seconds if progress < 1 else 0.0
-        elif ((self.pending_result is not None and self.auto) or self._preview_loop_pending):
-            target += self.visual_gap_beats
-            position = min(target, self.visual_offset_beats + max(length,
-                self.play_from_beat + (now-self.run_at)*self.plan.bpm/60))
-            speed = self.plan.bpm/60 if position < target else 0.0
-        return position, 0.0 if self.paused else speed, target
+        """Project the current transport snapshot without changing any clocks."""
+        phrase = self.plan.active_phrase
+        measure = (self.practice_preparation["measure"]
+                   if self.practice_preparation is not None else None)
+        return project_visual_motion(VisualMotionSnapshot(
+            phrase_length=phrase.end-phrase.start,
+            visual_offset=self.visual_offset_beats,
+            play_from_beat=self.play_from_beat,
+            bpm=self.plan.bpm,
+            run_at=self.run_at,
+            running=self.running,
+            preparation_pending=self._preparation_pending,
+            preparation_at=self._preparation_at,
+            preparation_measure=measure,
+            rewind_from=self._visual_rewind_from,
+            rewind_to=self._visual_rewind_to,
+            rewind_at=self._visual_rewind_at,
+            rewind_seconds=self._visual_rewind_seconds,
+            pending_auto_result=(self.pending_result is not None and self.auto),
+            preview_loop_pending=self._preview_loop_pending,
+            gap_beats=self.visual_gap_beats,
+            paused=self.paused,
+        ), now)
+
 
     def control(self, action: str, **kwargs) -> None:
         with self.lock:

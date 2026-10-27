@@ -47,6 +47,8 @@ may use pure geometry/layout helpers but never import verifier internals.
   with an explicit immutable snapshot boundary.
 - [x] Extract source-bar to course-section selection from the backend command
   handler into a pure, separately tested learning-navigation helper.
+- [x] Extract read-only continuous beat/velocity projection into a pure
+  transport module with explicit phase snapshot and deterministic tests.
 - [ ] Isolate backend command handling and recovery transitions behind
   focused functions, keeping locking and timestamps at the application edge.
 - [x] Split the giant _build_interface method into separate Home, Library and
