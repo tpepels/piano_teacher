@@ -1,0 +1,58 @@
+# Architecture cleanup: phased, behavior-preserving
+
+## Audit (first-party production code, 2026-10-27)
+
+The largest responsibilities are concentrated in three files:
+- `godot/main.gd` (~3,500 lines): screen construction, navigation, backend
+  polling/state interpretation, interaction effects, and layout. In particular,
+  `_build_interface` and `_on_state` are oversized.
+- `godot/notation/native/view.gd` (~2,950 lines): renderer, collision density,
+  symbol geometry, annotation positioning, and continuous loop display.
+- `piano_teacher/server.py` (~2,420 lines): MIDI lifetime, application commands,
+  practice and recovery state machines, cached engraving and HTTP state payloads.
+  `control`, `_update`, and `state` are especially long.
+
+Audit/infrastructure code (`visual_coverage.py`, `feature_pixels.py`,
+`check_native_verovio_overlay.py`) is also large; it must stay independent of
+production engraving and should not be made to share its recognition algorithms.
+
+## Stable boundaries
+
+1. **Learning/domain** owns source notes, lesson stages, grading and recovery
+   decisions. No UI or networking dependencies.
+2. **Backend application** orchestrates the above under its existing lock;
+   separate MIDI device management, practice transport, commands and read-only
+   HTTP state projections. Preserve the existing `PracticeEngine` API.
+3. **Notation** owns immutable source timing and semantic positions. The native
+   view owns drawing; pure collaborators handle collision spacing, layout
+   calculations and independent annotation policy. Preserve one beat-to-pixel
+   projection and note identity.
+4. **Godot UI** splits screens and UI-only presentation into separate components,
+   while `main.gd` owns navigation and API coordination. Avoid circular
+   screen-to-service references.
+5. **Verification** remains independent of renderer internals. Keep actual
+   framebuffer tests and negative controls; do not weaken evidence thresholds.
+
+Dependency direction: domain <- application <- adapters/UI; native engraving
+may use pure geometry/layout helpers but never import verifier internals.
+
+## Incremental refactor sequence
+
+- [x] Extract native ink-collision density into a stateless layout collaborator.
+  Its inputs are actual ink rectangles; its only outputs are density and a
+  diagnostic witness. Preserve exact existing spacing semantics.
+- [ ] Split backend state/HTTP projections from practice-engine transitions
+  using explicit snapshot data, not a wrapper importing `PracticeEngine`.
+- [ ] Isolate backend command handling and recovery transitions behind
+  focused functions, keeping locking and timestamps at the application edge.
+- [ ] Split Godot's Home/Library/Settings/Practice screen construction into
+  independently testable UI components with signals and explicit state inputs.
+- [ ] Extract the native view's fingering layout and semantic barline policies
+  into stateless collaborators where real duplication exists.
+- [ ] Modularize the audit coordinator separately from source-driven proofs;
+  preserve its fail-closed behavior and resumability.
+
+For each slice: measure duplication/coupling first, preserve public contracts,
+add focused positive/negative tests, run quick CI, and commit separately.
+Do not move code merely to make files shorter. No simultaneous architecture
+rewrites or behavior changes while notation quality is being investigated.

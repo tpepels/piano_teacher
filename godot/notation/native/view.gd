@@ -7,6 +7,7 @@ extends "res://notation/shared/view_base.gd"
 # Incomplete notation is rejected; production reports a preparation error.
 const Geometry := preload("res://notation/native/geometry.gd")
 const ScoreIndex := preload("res://notation/native/score_index.gd")
+const InkSpacing := preload("res://notation/native/ink_spacing.gd")
 const BarlineLayout := preload("res://notation/native/barline_layout.gd")
 const VerovioGlyphs := preload("res://notation/native/glyphs.gd")
 const Design := preload("res://practice_theme.gd")
@@ -1783,73 +1784,21 @@ func _with_single_tuplet_ink(event: Dictionary, rect: Rect2, gap: float) -> Rect
 
 
 func _required_ink_density(preferred: float, gap: float = MAX_STAFF_GAP) -> float:
+    # The view owns glyph geometry; the shared calculation owns spacing math.
     var heads: Dictionary = _engraved_head_offsets(gap)
     var accidentals: Dictionary = Geometry.accidental_offsets(
         ordered_events,gap,heads,glyphs.bounds)
-    var staves: Dictionary = {"right":{},"left":{}}
-    var minimum_left := INF
-    var maximum_right := -INF
+    var positioned_ink: Array = []
     for event in ordered_events:
-        var staff: String = str(event.get("staff","right"))
-        var beat: float = float(event.get("beat",0.0))
-        var ink: Rect2 = _event_ink_rect(event,gap,heads,accidentals)
-        if not staves[staff].has(beat):
-            staves[staff][beat] = []
-        staves[staff][beat].append({"ink":ink, "event":event})
-        minimum_left = minf(minimum_left,ink.position.x)
-        maximum_right = maxf(maximum_right,ink.end.x)
-    var density: float = preferred
-    var witness: Dictionary = {"reason":"configured-density",
-        "required_density":preferred,"staff_gap":gap}
-    var reach: float = (maximum_right-minimum_left+gap*.2)/preferred
-    for staff in staves:
-        var onsets: Array = staves[staff].keys()
-        onsets.sort()
-        for i in range(1,onsets.size()):
-            for j in range(i-1,-1,-1):
-                var distance: float = float(onsets[i])-float(onsets[j])
-                if distance > reach:
-                    break
-                for previous_item in staves[staff][onsets[j]]:
-                    for current_item in staves[staff][onsets[i]]:
-                        var previous: Rect2 = previous_item["ink"]
-                        var current: Rect2 = current_item["ink"]
-                        # Close clocks alone do not imply touching ink:
-                        # separate voices/ledger registers may be clear in Y.
-                        if current.position.y >= previous.end.y+gap*.1 or \
-                                previous.position.y >= current.end.y+gap*.1:
-                            continue
-                        var necessary: float = (previous.end.x-current.position.x+
-                            gap*.2)/distance
-                        if necessary > density:
-                            density = necessary
-                            var prev_event: Dictionary = previous_item["event"]
-                            var next_event: Dictionary = current_item["event"]
-                            witness = {
-                                "reason":"horizontal-ink-clearance",
-                                "required_density":necessary,
-                                "staff_gap":gap,
-                                "previous_id":str(prev_event.get("id","")),
-                                "next_id":str(next_event.get("id","")),
-                                "previous_kind":str(prev_event.get("kind","")),
-                                "next_kind":str(next_event.get("kind","")),
-                                "previous_type":str(prev_event.get("note_type","")),
-                                "next_type":str(next_event.get("note_type","")),
-                                "previous_voice":str(prev_event.get("voice","")),
-                                "next_voice":str(next_event.get("voice","")),
-                                "previous_pitch":str(prev_event.get("spelling",{})),
-                                "next_pitch":str(next_event.get("spelling",{})),
-                                "previous_beat":float(onsets[j]),
-                                "next_beat":float(onsets[i]),
-                                "beat_separation":distance,
-                                "previous_rect":[previous.position.x,
-                                    previous.position.y,previous.size.x,previous.size.y],
-                                "next_rect":[current.position.x,
-                                    current.position.y,current.size.x,current.size.y]
-                            }
-    ink_density_witness = witness
-    return density
-
+        positioned_ink.append({
+            "staff":str(event.get("staff","right")),
+            "beat":float(event.get("beat",0.0)),
+            "ink":_event_ink_rect(event,gap,heads,accidentals),
+            "event":event,
+        })
+    var result: Dictionary = InkSpacing.minimum_density(positioned_ink,preferred,gap)
+    ink_density_witness = result["witness"]
+    return float(result["density"])
 
 func _paint_engraved_chord(event: Dictionary, x: float,
         gap: float, ink: Color, beam_stem: Dictionary = {}) -> Array:
