@@ -41,8 +41,10 @@ may use pure geometry/layout helpers but never import verifier internals.
 - [x] Extract native ink-collision density into a stateless layout collaborator.
   Its inputs are actual ink rectangles; its only outputs are density and a
   diagnostic witness. Preserve exact existing spacing semantics.
-- [ ] Split backend state/HTTP projections from practice-engine transitions
-  using explicit snapshot data, not a wrapper importing `PracticeEngine`.
+- [x] Separate hand-stage and guided-learning state projections from the
+  engine using captured facts and pure functions; preserve API field names.
+- [ ] Continue isolating remaining state/HTTP fields from engine transitions,
+  with an explicit immutable snapshot boundary.
 - [x] Extract source-bar to course-section selection from the backend command
   handler into a pure, separately tested learning-navigation helper.
 - [ ] Isolate backend command handling and recovery transitions behind

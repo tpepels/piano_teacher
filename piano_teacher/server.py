@@ -39,6 +39,7 @@ from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats, preparation_meter
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
 from .course_navigation import locate_course_section
+from .state_projection import hand_stage_rows, guided_learning_fields
 from .live_feedback import settled_assessment, expired_attack_misses
 from .live_input_view import LiveInputView
 from .hardware_probe import HardwareProbe
@@ -2013,20 +2014,12 @@ class PracticeEngine:
             self.visual_gap_beats = practice_timeline["gap"]["duration_beats"]
             ex=p.exercise
             variant=p.active_variant
-            hand_stages = []
-            if ex.kind in ("learn", "warmup"):
-                for hand in ("right", "left", "both"):
-                    steps = [step for step in p.lesson_steps
-                             if step.exercise_index == p.index and step.hand == hand]
-                    if not steps:
-                        continue
-                    finished = all(step.key in p.mastered for step in steps)
-                    available = hand in p.hands
-                    locked = (self.is_builtin_warmup and hand != "right"
-                              and not all(previous["complete"] for previous in hand_stages))
-                    hand_stages.append({"hand": hand, "active": hand == p.hand,
-                                        "complete": finished, "locked": locked,
-                                        "available": available})
+            hand_stages = hand_stage_rows(
+                kind=ex.kind, exercise_index=p.index, current_hand=p.hand,
+                available_hands=p.hands, mastered=p.mastered,
+                lesson_steps=((step.exercise_index, step.hand, step.key)
+                              for step in p.lesson_steps),
+                builtin_warmup=self.is_builtin_warmup)
             sampled_at = time.monotonic()
             now=self.paused_at if self.paused else sampled_at
             total_beats = ex.phrase.end-ex.phrase.start
@@ -2127,41 +2120,19 @@ class PracticeEngine:
             if self.mode == "learn" and self.teaching is not None:
                 teaching = self.teaching.snapshot(now=time.monotonic())
                 phrase = self.display_phrase()
-                teaching["fragment"] = {"first_bar": phrase.first_bar, "last_bar": phrase.last_bar,
-                    "start_beat": self.guided_range[0], "end_beat": self.guided_range[1]}
-                teaching["session_id"] = self.transport_id
-                teaching["has_more_units"] = (result["learner"]["next_unit"] is not None
-                                               and self._guided_return is None)
                 phase = self._phase(now)
-                feedback = str(teaching.get("feedback", "Find the highlighted notes at your own pace."))
-                if phase == "loading":
-                    feedback = "Preparing a short idea to learn"
-                elif phase == "disconnected":
-                    feedback = "No piano connected — timed preview only. Connect your piano in Settings to learn notes."
-                    result["next_action"] = "Connect your piano in Settings to learn notes."
-                elif phase == "guided_complete":
-                    feedback = "You found every note. Ready to add rhythm?"
-                    result["next_action"] = "Retry rhythm from these bars." if self._guided_return else "Ready to add rhythm? Choose Practice."
-                    if teaching["has_more_units"]:
-                        feedback = "You found this idea. Continue with the next short idea."
-                        result["next_action"] = "Choose Next idea to learn the next part of the passage."
-                elif phase == "paused":
-                    feedback = "Paused — resume when you are ready."
-                elif phase == "guided_wait":
-                    labels = list(dict.fromkeys(n["label"] for n in teaching.get("expected_notes", [])))
-                    keys = " + ".join(labels)
-                    together = " together" if len(labels) > 1 else ""
-                    feedback = f"Play {keys}{together}. Take your time."
-                    if teaching.get("hint_reason") == "wrong_note":
-                        feedback = f"Find {keys} on the keyboard below, then try again."
-                    elif teaching.get("target_index", 0) > 0:
-                        feedback = "Good. Next: " + keys + together + "."
-                result.update(teaching=teaching, phase=phase, running=False,
-                    paused=phase == "paused", clock_beat=0.0, countdown=0.0,
-                    first_bar=phrase.first_bar, last_bar=phrase.last_bar,
-                    required_notes=len(phrase.notes), duration_beats=phrase.end-phrase.start,
-                    progress=teaching.get("target_index", 0)/max(1, teaching.get("target_count", 0)),
-                    feedback=feedback, feedback_marks=self._guided_marks(teaching), feedback_unmapped=0)
+                updates = guided_learning_fields(
+                    teaching=teaching,
+                    fragment={"first_bar":phrase.first_bar, "last_bar":phrase.last_bar,
+                              "start_beat":self.guided_range[0], "end_beat":self.guided_range[1]},
+                    session_id=self.transport_id,
+                    has_more_units=(result["learner"]["next_unit"] is not None
+                                    and self._guided_return is None),
+                    returning=bool(self._guided_return), phase=phase,
+                    required_notes=len(phrase.notes),
+                    duration_beats=phrase.end-phrase.start)
+                updates["feedback_marks"] = self._guided_marks(updates["teaching"])
+                result.update(updates)
             return result
 
     def _source_model(self) -> dict:
