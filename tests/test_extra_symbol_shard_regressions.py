@@ -109,6 +109,31 @@ def test_actual_hanon_freeze_reverse_and_jump_remain_rejected():
         assert not verify_translation_sequence(*sequence)['passed']
 
 
+def test_structural_motion_uses_full_hanon_contours_outside_the_column_shortlist():
+    from piano_teacher.notation.feature_pixels import _frame_shift
+    frames = hanon_frames()
+    for first, second in zip(frames, frames[1:]):
+        measured = _frame_shift(first, second)
+        assert measured is not None
+        assert measured['shift'] == 15
+        assert measured['contour_agreement'] > .90
+        backward = _frame_shift(second, first)
+        assert backward is not None and backward['shift'] == -15
+
+
+def test_structural_motion_rejects_equal_competing_full_contours_and_missing_ink():
+    from piano_teacher.notation.feature_pixels import _frame_shift
+    background = (16, 41, 35)
+    periodic = Image.new('RGB', (800, 200), background)
+    pen = ImageDraw.Draw(periodic)
+    for x in (100, 300, 500, 700):
+        pen.rectangle((x, 40, x+10, 90), fill=(245, 245, 245))
+    assert _frame_shift(periodic, periodic) is None
+    blank = Image.new('RGB', periodic.size, background)
+    assert _frame_shift(periodic, blank) is None
+    assert _frame_shift(periodic, blank.crop((0, 0, 600, 200))) is None
+
+
 def test_all_horizontal_dice_scores_equal_direct_pixel_intersections():
     from piano_teacher.notation import phase3_pixels
     assert callable(getattr(phase3_pixels, '_horizontal_dice', None))

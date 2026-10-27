@@ -17,7 +17,8 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 5
+VERSION = 6
+MAX_RASTER_PIXELS = 8_000_000
 
 
 def classes(node: ET.Element) -> set[str]:
@@ -74,7 +75,22 @@ from .svg import isolate
 def crop_art(svg: str, staff_space: float,
              origin: tuple[float,float], source: str) -> dict | None:
     import cairosvg
-    png=cairosvg.svg2png(bytestring=svg.encode(),output_width=1600)
+    viewport = [float(v) for v in ET.fromstring(svg).get('viewBox', '').replace(',', ' ').split()]
+    if (len(viewport) != 4 or not all(math.isfinite(v) for v in viewport)
+            or min(viewport[2:]) <= 0 or not math.isfinite(staff_space)
+            or staff_space <= 0):
+        return None
+    width = 1600
+    height = width*viewport[3]/viewport[2]
+    if staff_space*round(height) <= 4:
+        # A long continuous score can make genuine tuplet ink subpixel at
+        # the ordinary page width. Raise source resolution, retaining its
+        # vector aspect ratio and the original physical staff-space units.
+        width = math.ceil(width*8/(staff_space*height))
+        height = width*viewport[3]/viewport[2]
+    if width*math.ceil(height) > MAX_RASTER_PIXELS:
+        return None
+    png=cairosvg.svg2png(bytestring=svg.encode(),output_width=width)
     with Image.open(BytesIO(png)) as img:
         image=img.convert("RGBA")
     pixels=staff_space*image.height

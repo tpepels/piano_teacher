@@ -82,6 +82,7 @@ var attached_grace_notes: Array = []
 var source_expressions: Array = []
 var expression_note_index: Dictionary = {}
 var tie_pairs: Array = []
+var tie_flag_clearances: Dictionary = {}
 var slur_pairs: Array = []
 var expected_slur_pairs: Array = []
 var slur_extraction_complete := true
@@ -167,6 +168,7 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         required_slurs: Array = [], slurs_complete: bool = true,
         required_beams: Array = [], beams_complete: bool = true) -> bool:
     fingering_sprite_envelopes.clear()
+    tie_flag_clearances.clear()
     if not glyphs.load_font(items):
         failure_reason = glyphs.error
         return false
@@ -197,6 +199,7 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
 
 
 func load_score(candidate: Dictionary) -> bool:
+    tie_flag_clearances.clear()
     _reset_fingering()
     preparation_history.clear()
     current_preparation.clear()
@@ -2230,11 +2233,81 @@ func _tie_contour_rect(first: Dictionary, last: Dictionary,
         right_inset *= compression
     var left: float = float(place["x0"])+left_inset
     var right: float = float(place["x1"])+right_inset
+    # A chord's authentic flag can sit lower than the single-note flag
+    # used to engrave the tie atlas. Preserve that curve, but clear the
+    # actual endpoint sprite, including its displaced chord head origin.
+    if direction.begins_with("start_"):
+        left = _tie_clear_flag(first,direction,left,right,
+            Vector2(float(place["x0"]),float(place["y"])),gap)
+    elif direction.begins_with("end_"):
+        right = _tie_clear_flag(last,direction,left,right,
+            Vector2(float(place["x1"]),float(place["y"])),gap)
     if right <= left:
         return Rect2()
     return Rect2(left,
         float(place["y"])+float(box[1])*unit,
         right-left,float(box[3])*unit)
+
+
+func _tie_clear_flag(event: Dictionary, direction: String, left: float,
+        right: float, origin: Vector2, gap: float) -> float:
+    var start: bool = direction.begins_with("start_")
+    var unit: float = gap/250.0
+    var lo: float = (left-origin.x)/unit
+    var hi: float = (right-origin.x)/unit
+    var leader: Dictionary = _tie_chord_leader(event)
+    var chord: String = _chord_template_key(leader)
+    # Single-note flags already have matching endpoint-specific tie artwork.
+    # Only compound sprites introduce the different stem length at issue.
+    if chord.is_empty():
+        return left if start else right
+    var texture: Texture2D = glyphs.chord_textures[chord]
+    var bounds: Array = glyphs.chord_metadata[chord]["bounds"]
+    var shift := Vector2((float(cached_head_offsets.get(str(leader.get("id","")),0.0))-
+        float(cached_head_offsets.get(str(event.get("id","")),0.0)))/unit,
+        (_event_y(leader,gap)-origin.y)/unit)
+    var key: String = "%s|%s|%.4f|%.4f|%.4f|%.4f" % [direction,chord,lo,hi,shift.x,shift.y]
+    if tie_flag_clearances.has(key):
+        return origin.x+float(tie_flag_clearances[key])*unit
+    var flag: Image = texture.get_image()
+    var curve: Image = glyphs.tie_textures[direction].get_image()
+    var box: Array = glyphs.tie_metadata[direction]["bounds"]
+    var cell := Vector2(float(bounds[2])/flag.get_width(),float(bounds[3])/flag.get_height())
+    var edge: float = lo if start else hi
+    # Solve each authentic curve row against the endpoint's photographed
+    # flag silhouette. A whole enclosing flag rectangle would needlessly
+    # detach the tip from its head. Keep a small ink-to-ink staff-space gap.
+    var clearance := 20.0  # .08 staff spaces, independent of screen scale.
+    var head_half: float = float(glyphs.bounds["head_black"][2])*.5
+    for row in range(curve.get_height()):
+        var column := 0 if start else curve.get_width()-1
+        var advance := 1 if start else -1
+        while column >= 0 and column < curve.get_width() and curve.get_pixel(column,row).a == 0.0:
+            column += advance
+        if column < 0 or column >= curve.get_width():
+            continue
+        var fraction: float = float(column if start else column+1)/curve.get_width()
+        var top: float = float(box[1])+float(row)*float(box[3])/curve.get_height()
+        var bottom: float = top+float(box[3])/curve.get_height()
+        var first_row: int = maxi(0,floori((top-clearance-shift.y-float(bounds[1]))/cell.y))
+        var last_row: int = mini(flag.get_height()-1,floori((bottom+clearance-shift.y-float(bounds[1]))/cell.y))
+        for y in range(first_row,last_row+1):
+            for x in range(flag.get_width()):
+                if flag.get_pixel(x,y).a == 0.0:
+                    continue
+                var ink_x: float = float(bounds[0])+shift.x+float(x+(1 if start else 0))*cell.x
+                if (start and ink_x <= head_half) or (not start and ink_x >= -head_half):
+                    continue  # The head and shaft have their own attachment.
+                if start and fraction < 1.0:
+                    edge = maxf(edge,(ink_x+clearance-fraction*hi)/(1.0-fraction))
+                elif not start and fraction > 0.0:
+                    edge = minf(edge,(ink_x-clearance-(1.0-fraction)*lo)/fraction)
+    # In an impossibly tight interval keep visible ink and its original
+    # bow height; never omit the tie to conceal a remaining collision.
+    var minimum: float = minf(hi-lo,float(box[3]))
+    edge = minf(edge,hi-minimum) if start else maxf(edge,lo+minimum)
+    tie_flag_clearances[key] = edge
+    return origin.x+edge*unit
 
 
 # Binary-search into pre-sorted MusicXML events. Work is proportional

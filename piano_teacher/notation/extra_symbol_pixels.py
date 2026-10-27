@@ -107,7 +107,10 @@ def _scores(pixels, template, transforms=None, integral=None, kernel_key=None):
     H, W = pixels.shape
     if h > H or w > W:
         return np.empty((0, 0))
-    shape = (1 << (H+h-2).bit_length(), 1 << (W+w-2).bit_length())
+    # Only valid translations [h-1:H, w-1:W] are read. With FFT extents
+    # >= (H, W), circular wraparound lands strictly before those slices;
+    # padding for the unused full convolution needlessly enlarges the FFTs.
+    shape = (1 << (H-1).bit_length(), 1 << (W-1).bit_length())
     transforms = {} if transforms is None else transforms
     if shape not in transforms:
         transforms[shape] = np.fft.rfft2(pixels.astype(np.float32), s=shape)

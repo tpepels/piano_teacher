@@ -1,0 +1,118 @@
+{
+  "notation_events": [
+    {
+      "id": "pt500a7ec7e70ef20510ff0884d3d50f6bs0",
+      "source_id": "midi-t0-e1586",
+      "staff": "right",
+      "voice": "2",
+      "measure": 48,
+      "beat": 5.5,
+      "duration_beats": 0.08333333,
+      "kind": "note",
+      "midi_pitch": 99,
+      "spelling": {
+        "step": "D",
+        "alter": 1,
+        "octave": 7
+      },
+      "note_type": "32nd",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": "sharp",
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [
+        {
+          "type": "start",
+          "number": "1",
+          "bracket": "yes",
+          "show_number": "actual"
+        }
+      ],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [
+        []
+      ],
+      "stem": null
+    },
+    {
+      "id": "pt46cb6918639b16b306bb100f4a212b9as0",
+      "source_id": "midi-t0-e1588",
+      "staff": "right",
+      "voice": "2",
+      "measure": 48,
+      "beat": 5.58333333,
+      "duration_beats": 0.08333333,
+      "kind": "note",
+      "midi_pitch": 95,
+      "spelling": {
+        "step": "B",
+        "alter": 0,
+        "octave": 6
+      },
+      "note_type": "32nd",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [],
+      "stem": null
+    },
+    {
+      "id": "pt122455ceb8297d2b3a4eeb4cfdbd593bs0",
+      "source_id": "midi-t0-e1590",
+      "staff": "right",
+      "voice": "2",
+      "measure": 48,
+      "beat": 5.66666667,
+      "duration_beats": 0.08333333,
+      "kind": "note",
+      "midi_pitch": 101,
+      "spelling": {
+        "step": "F",
+        "alter": 0,
+        "octave": 7
+      },
+      "note_type": "32nd",
+      "dots": 0,
+      "chord": false,
+      "tie_start": false,
+      "tie_stop": false,
+      "is_attack": true,
+      "accidental": null,
+      "time_modification": {
+        "actual": 3,
+        "normal": 2
+      },
+      "tuplet_marks": [
+        {
+          "type": "stop",
+          "number": "1",
+          "bracket": "yes",
+          "show_number": "actual"
+        }
+      ],
+      "beams": [],
+      "tied_marks": [],
+      "tuplet_extras": [
+        []
+      ],
+      "stem": null
+    }
+  ]
+}

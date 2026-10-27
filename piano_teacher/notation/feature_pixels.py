@@ -857,6 +857,8 @@ def _frame_shift(first, second):
     """Measure actual score translation without consulting native geometry.
 
     Retain the motion oracle's .80 full-contour agreement and minimum ink.
+    Every permitted translation uses actual two-dimensional contour evidence;
+    repeated stems cannot exclude the true shift through a column shortlist.
     The wider search permits retained frames several beats apart. Competing
     translations with the same evidence do not establish a source clock.
     """
@@ -865,20 +867,8 @@ def _frame_shift(first, second):
     a, b = bright(first), bright(second)
     if min(int(a.sum()), int(b.sum())) < 24:
         return None
-    left, right = a.sum(axis=0).astype(float), b.sum(axis=0).astype(float)
-    candidates = []
-    for shift in range(-round(first.width*.75), round(first.width*.75)+1):
-        aa, bb = (left[shift:], right[:-shift]) if shift > 0 else (
-            (left[:shift], right[-shift:]) if shift < 0 else (left, right))
-        norm = float(np.linalg.norm(aa)*np.linalg.norm(bb))
-        candidates.append((float(aa.dot(bb))/norm if norm else 0, shift))
-    measured = []
-    for _, shift in sorted(candidates, reverse=True)[:8]:
-        aa, bb = (a[:, shift:], b[:, :-shift]) if shift > 0 else (
-            (a[:, :shift], b[:, -shift:]) if shift < 0 else (a, b))
-        total = int(aa.sum())+int(bb.sum())
-        dice = 2*int((aa & bb).sum())/total if total else 0.
-        measured.append((dice, shift))
+    from .phase3_pixels import _horizontal_dice
+    measured = _horizontal_dice(a, b, round(first.width*.75))
     score, shift = max(measured, key=lambda p: (p[0], -abs(p[1])))
     if score < .80 or any(s >= score-.02 and abs(x-shift) > 2 for s, x in measured):
         return None
