@@ -130,3 +130,81 @@ reusable/manual workflow. It retains the original broad `--ci` suite and
 exact-revision output; normal pushes do not trigger it. A passing automatic
 smoke check is **not** grounds to publish a release or declare the full
 notation corpus verified.
+
+## Completion program (2026-10-28, baseline `a093c5c`)
+
+The current checkout is newer than the original handoff. Baseline automatic
+smoke: 50 tests passed and Godot main parse succeeded. The latest broad release
+regression immediately before this program was 976 passed / six skipped. That
+is baseline evidence, not final verification of the upcoming extractions.
+
+### Target and decisions
+
+Use composition with explicit owned data, rather than mixins, renderer/view
+back-references, or moving engine methods into helpers that accept the whole
+engine. Keeping the monoliths and adding forwarding wrappers would preserve
+coupling; a rewrite of progression/engraving would risk behavior unnecessarily.
+The chosen approach is incremental extraction of complete responsibilities.
+The user's request authorizes design/implementation decisions and direct main
+commits; no approval menu, worktree, feature branch or per-phase pause is needed.
+
+- Backend: application session owns transitions under one lock. MIDI lifetime,
+  score preparation, grading, persistence, transport and immutable read models
+  have distinct owners. HTTP consumes snapshots and commands, never engine
+  internals. Preserve existing public command/state payloads and device timing.
+- Godot UI: main is the composition/navigation boundary. Screens own controls,
+  responsive layout and presentation state; signals carry user intent. Backend
+  requests/state polling and score transport are explicit services/presenters.
+  No screen accepts the main node or reaches into its private widgets.
+- Native notation: the shared view owns transport; a score layout owns the
+  source index and geometry caches; connector geometry owns endpoint/flag
+  clearance; engraving passes consume layout and an explicit canvas; fingering
+  owns annotation layout/editing. Collaborators never call back into main/view.
+  One beat axis and density, source identities and authentic glyphs are fixed.
+- Verification: independent source expectations, photographed evidence,
+  recognition/registration primitives, coverage accounting, batch execution and
+  diagnostic publication have separate owners. Shared pixel primitives break
+  lazy import cycles without borrowing production geometry or thresholds.
+- Domain/importing/rendering adapters remain separated. Retain public import
+  paths only where they are real API contracts; eliminate test-only aliases and
+  duplicated mutable storage once callers are migrated.
+
+### Execution checklist
+
+- [ ] Complete whole-repository inventory, dependency/cycle audit and ownership map.
+- [ ] Extract backend session services/read models and reduce PracticeEngine to orchestration.
+- [ ] Extract Home/Library/Practice screens and API/state coordination; reduce main.gd.
+- [ ] Give native score geometry/index/cache lifecycle an independent owner.
+- [ ] Separate connector geometry, engraving passes and fingering annotation lifecycle.
+- [ ] Separate verification source expectations, pixel registration and feature proofs; break cycles.
+- [ ] Separate corpus case planning/execution/checkpoint/publication from audit CLI composition.
+- [ ] Remove obsolete internal aliases/scaffolding; audit all remaining production files for cohesion.
+- [ ] Add contract/behavior regressions for each component; preserve real pixel positives/corruptions.
+- [ ] Keep automatic CI bounded; run focused tests at each extraction and broad final regression separately.
+- [ ] Fresh independent reviews for significant changes, fix failures, coherent main commits.
+- [ ] Final size/dependency inventory, architecture documentation, clean main checkout.
+
+### Validation and review constraints
+
+Each extraction first pins its independently callable contract and existing
+behavior; then focused tests, Python compilation and/or Godot checks run before
+its commit. Native layout changes additionally use real-framebuffer proof and
+corruption controls. No threshold, source clock, onset, hand assignment, grading,
+loop duration, recovery offset or UI interaction may change to simplify a split.
+Automatic CI remains the bounded smoke gate; release/corpus checks run separately
+when needed. Avoid a full 24-shard audit during architectural work.
+
+The 1,000-line diagnostic is not a mechanical limit: the final inventory records
+concrete reasons for cohesive exceptions. Giant context objects, component
+cycles, view/engine callbacks and duplicated state fail the review even if files
+are small. Third-party addons, generated assets, fixtures and lockfiles are not
+first-party architectural monoliths.
+
+### Progress ledger
+
+- Baseline `a093c5c`: clean main; smoke 50 passed, Godot parse exit 0.
+- Initial inventory: server.py 2165, main.gd 3258, native/view.gd 2904,
+  visual_coverage.py 1632, feature_pixels.py 1482, audit CLI 1755 lines.
+- Static Python scan: 93 modules; verification lazy cycles involve
+  raster_matching/phase3_pixels/symbol_pixel_proof and connector_pixels/feature_pixels.
+  music/fingering.types requires distinguishing typing-only from runtime coupling.
