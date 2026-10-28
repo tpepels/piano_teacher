@@ -52,8 +52,11 @@ may use pure geometry/layout helpers but never import verifier internals.
 - [x] Extract immutable recovery/HUD metadata from `_update` to a pure
   source-bar projection; keep decision detection, tempo adaptation, saving
   and scheduling under the application lock.
-- [ ] Isolate backend command handling and recovery transitions behind
-  focused functions, keeping locking and timestamps at the application edge.
+- [x] Separate the command dispatch path from focused engine-owned handlers
+  for source navigation, restart, pause/resume and stage selection. The public
+  control method still owns the re-entrant lock and its prior error semantics.
+- [ ] Move recovery *transitions* into coherent handlers after characterizing
+  feedback settlement and repeated-failure edge cases.
 - [x] Split the giant _build_interface method into separate Home, Library and
   Practice builders, preserving construction order and event wiring.
 - [ ] Move Home/Library/Settings/Practice screen construction into

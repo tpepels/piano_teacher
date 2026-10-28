@@ -1417,40 +1417,7 @@ class PracticeEngine:
                                   recovery=self._guided_return is not None and action == "learn_retry")
                 return
             if action == "open_at":
-                # Select a source measure across the entire imported piece,
-                # then enter the existing learning or timed-practice flow.
-                # No score is awarded simply by changing the starting point.
-                if self.plan is None:
-                    raise ValueError("Open a piece first")
-                if self.is_builtin_warmup:
-                    raise ValueError("Warm-ups use their own hand progression")
-                bar = kwargs.get("bar")
-                last_bar = len(self.plan.piece.bar_boundaries) - 1
-                if type(bar) is not int or not 1 <= bar <= last_bar:
-                    raise ValueError(f"Choose a whole measure between 1 and {last_bar}")
-                requested_mode = kwargs.get("mode", "learn")
-                if requested_mode not in ("learn", "practice"):
-                    raise ValueError("Choose Learn Notes or Practice Rhythm")
-                plan = self.plan
-                index, section, selected_bar = locate_course_section(plan, bar)
-                self._stop()
-                self._reset_trouble()
-                plan.select(index)
-                self.course_guided = requested_mode == "learn"
-                beat = plan.piece.bar_boundaries[selected_bar-1] - plan.active_phrase.start
-                if not 0 <= beat < plan.active_phrase.end - plan.active_phrase.start:
-                    raise ValueError("Selected measure falls outside the playable passage")
-                self.open_from_beat = beat
-                if requested_mode == "learn":
-                    self._begin_learn(from_beat=beat)
-                else:
-                    self._prepare_practice()
-                    # This opening is user-initiated. Wait for Start after
-                    # engraving rather than auto-running on score_ready.
-                    self.awaiting_score_revision = None
-                    self.feedback = f"Ready to practise from measure {selected_bar}"
-                    self.next_action = "Press Start to play from the selected measure."
-                return
+                return self._open_selected_measure(kwargs)
             if action == "practice":
                 self._prepare_practice()
                 if kwargs.get("wait_for_player", False):
@@ -1472,153 +1439,206 @@ class PracticeEngine:
                 self.next_action="Start when you are ready."
                 return
             if action in ("start", "restart"):
-                if self.mode == "listen":
-                    self._prepare_listen()
-                    return
-                if self.mode == "learn":
-                    self.control("practice")
-                    return
-                if (self.plan is not None and self._layout_cache is not None
-                        and self._layout_bpm != self.plan.piece.bpm):
-                    # Only a genuinely different source engraving needs a
-                    # new model. Tempo changes reuse the exact same score
-                    # with a different transport speed.
-                    self._stop()
-                    self.score_revision += 1
-                    self.awaiting_score_revision = self.score_revision
-                    self.feedback = "Preparing sheet music"
-                    return
-                if (action == "restart" and self.plan is not None
-                        and self.mode == "practice" and self.plan.exercise.kind != "perform"):
-                    sampled = time.monotonic()
-                    visual_now = self.paused_at if self.paused else sampled
-                    position, _, _ = self._visual_motion(visual_now)
-                    target = (self.pending_rewind if self.pending_rewind is not None
-                              else self.play_from_beat)
-                    self.paused = False
-                    self.paused_at = 0.0
-                    self.pause_context = None
-                    self._deferred_score_ack = None
-                    self.awaiting_score_revision = None
-                    self.pending_result = None
-                    self._retry_previous_pass = False
-                    self._guided_recovery_pending = False
-                    self._schedule_preparation(target, now=sampled, from_visual=position,
-                                               reverse_seconds=self.feedback_seconds)
-                    self.feedback = "Get ready to retry"
-                    return
-                self.start(mode="perform" if self.mode == "perform" else "practice")
-                return
+                return self._start_or_restart(action)
             if action == "pause":
-                if self.paused:
-                    raise ValueError("Cannot pause an exercise that is already paused")
-                context = self._phase(time.monotonic())
-                if context not in ("playing", "count_in", "feedback", "recovering", "loading", "guided_wait", "preview_gap"):
-                    raise ValueError("Cannot pause unless an exercise is playing or preparing")
-                self.pause_context = context
-                self.paused_at = time.monotonic()
-                if self.mode == "learn" and self.teaching is not None:
-                    self.teaching.pause(now=time.monotonic())
-                    self.paused = True
-                    return
-                self.paused = True
-                return
+                return self._pause_current_session()
             if action == "resume":
-                if not self.paused:
-                    raise ValueError("Cannot resume unless an exercise is paused")
-                duration = time.monotonic() - self.paused_at
-                if self.mode == "learn" and self.teaching is not None:
-                    self.teaching.resume(now=time.monotonic())
-                    self.paused = False
-                elif (self.running or self._preview_loop_pending
-                      or (self.pending_result is not None and self.auto)):
-                    # Keep all forward-moving views on the same paused clock:
-                    # count-in/playing, the empty preview bar, and the
-                    # successful-take gap before the next repetition.
-                    self.run_at += duration
-                if self.next_at:
-                    self.next_at += duration
-                # Paused state freezes the frame at paused_at. Move the
-                # independent rewind clock by the same amount so resuming
-                # does not skip the remaining backward travel.
-                if self._visual_rewind_from is not None:
-                    self._visual_rewind_at += duration
-                if self._preparation_pending:
-                    self._preparation_at += duration
-                self.paused_at = 0.0
-                self.paused = False
-                self.pause_context = None
-                if self.running:
-                    self.feedback = "Count in" if time.monotonic() < self.run_at else "Playing"
-                if self._deferred_score_ack is not None:
-                    revision = self._deferred_score_ack
-                    self._deferred_score_ack = None
-                    self.control("score_ready", revision=revision)
-                self._start_listen_if_ready()
-                return
-            p=self.plan
-            if not p:
-                raise ValueError("Open a piece first")
-            if action == "select_step":
-                number = kwargs.get("number")
-                # Retain integer strings/whole floats, without truncating a step.
-                if (isinstance(number, bool) or not isinstance(number, (int, float, str))
-                        or (isinstance(number, float) and not number.is_integer())):
-                    raise ValueError("Choose a whole lesson step number")
-                try:
-                    number = int(number)
-                except ValueError:
-                    raise ValueError("Choose a whole lesson step number") from None
-                if not 1 <= number <= len(p.lesson_steps):
-                    raise ValueError("Lesson step out of bounds")
-            was_guided = self.mode == "learn"
-            guided_start = self.guided_range[0] if self.guided_range is not None else 0.0
-            guided_return = self._guided_return
-            guided_retry_range = self.retry_range
+                return self._resume_current_session()
+            return self._change_stage(action, kwargs)
+
+    def _open_selected_measure(self, kwargs: dict):
+        """Handle  open selected measure; called with the practice lock held."""
+        # Select a source measure across the entire imported piece,
+        # then enter the existing learning or timed-practice flow.
+        # No score is awarded simply by changing the starting point.
+        if self.plan is None:
+            raise ValueError("Open a piece first")
+        if self.is_builtin_warmup:
+            raise ValueError("Warm-ups use their own hand progression")
+        bar = kwargs.get("bar")
+        last_bar = len(self.plan.piece.bar_boundaries) - 1
+        if type(bar) is not int or not 1 <= bar <= last_bar:
+            raise ValueError(f"Choose a whole measure between 1 and {last_bar}")
+        requested_mode = kwargs.get("mode", "learn")
+        if requested_mode not in ("learn", "practice"):
+            raise ValueError("Choose Learn Notes or Practice Rhythm")
+        plan = self.plan
+        index, section, selected_bar = locate_course_section(plan, bar)
+        self._stop()
+        self._reset_trouble()
+        plan.select(index)
+        self.course_guided = requested_mode == "learn"
+        beat = plan.piece.bar_boundaries[selected_bar-1] - plan.active_phrase.start
+        if not 0 <= beat < plan.active_phrase.end - plan.active_phrase.start:
+            raise ValueError("Selected measure falls outside the playable passage")
+        self.open_from_beat = beat
+        if requested_mode == "learn":
+            self._begin_learn(from_beat=beat)
+        else:
+            self._prepare_practice()
+            # This opening is user-initiated. Wait for Start after
+            # engraving rather than auto-running on score_ready.
+            self.awaiting_score_revision = None
+            self.feedback = f"Ready to practise from measure {selected_bar}"
+            self.next_action = "Press Start to play from the selected measure."
+        return
+
+    def _start_or_restart(self, action: str):
+        """Handle  start or restart; called with the practice lock held."""
+        if self.mode == "listen":
+            self._prepare_listen()
+            return
+        if self.mode == "learn":
+            self.control("practice")
+            return
+        if (self.plan is not None and self._layout_cache is not None
+                and self._layout_bpm != self.plan.piece.bpm):
+            # Only a genuinely different source engraving needs a
+            # new model. Tempo changes reuse the exact same score
+            # with a different transport speed.
             self._stop()
-            self._reset_trouble()
-            if action == "select_step":
-                self.open_from_beat = 0.0
-                p.select_step(number)
-            elif action == "next":
-                self.open_from_beat = 0.0
-                p.jump(1)
-            elif action == "previous":
-                self.open_from_beat = 0.0
-                p.jump(-1)
-            elif action == "hand":
-                requested = str(kwargs.get("hand", "both"))
-                if self.is_builtin_warmup and requested in p.hands and p.hands.index(requested) > p.hand_index:
-                    previous_step = p.lesson_steps[p.hands.index(requested) - 1]
-                    if previous_step.key not in p.mastered:
-                        raise ValueError("Complete three clean passes to unlock the next hand")
-                p.set_hand(requested)
-                self.open_from_beat = 0.0
-            elif action == "tempo":
-                p.set_bpm(int(kwargs["bpm"]))
-            elif action == "tempo_up":
-                p.increase_tempo()
-            elif action == "tempo_down":
-                p.decrease_tempo()
+            self.score_revision += 1
+            self.awaiting_score_revision = self.score_revision
+            self.feedback = "Preparing sheet music"
+            return
+        if (action == "restart" and self.plan is not None
+                and self.mode == "practice" and self.plan.exercise.kind != "perform"):
+            sampled = time.monotonic()
+            visual_now = self.paused_at if self.paused else sampled
+            position, _, _ = self._visual_motion(visual_now)
+            target = (self.pending_rewind if self.pending_rewind is not None
+                      else self.play_from_beat)
+            self.paused = False
+            self.paused_at = 0.0
+            self.pause_context = None
+            self._deferred_score_ack = None
+            self.awaiting_score_revision = None
+            self.pending_result = None
+            self._retry_previous_pass = False
+            self._guided_recovery_pending = False
+            self._schedule_preparation(target, now=sampled, from_visual=position,
+                                       reverse_seconds=self.feedback_seconds)
+            self.feedback = "Get ready to retry"
+            return
+        self.start(mode="perform" if self.mode == "perform" else "practice")
+        return
+
+    def _pause_current_session(self):
+        """Handle  pause current session; called with the practice lock held."""
+        if self.paused:
+            raise ValueError("Cannot pause an exercise that is already paused")
+        context = self._phase(time.monotonic())
+        if context not in ("playing", "count_in", "feedback", "recovering", "loading", "guided_wait", "preview_gap"):
+            raise ValueError("Cannot pause unless an exercise is playing or preparing")
+        self.pause_context = context
+        self.paused_at = time.monotonic()
+        if self.mode == "learn" and self.teaching is not None:
+            self.teaching.pause(now=time.monotonic())
+            self.paused = True
+            return
+        self.paused = True
+        return
+
+    def _resume_current_session(self):
+        """Handle  resume current session; called with the practice lock held."""
+        if not self.paused:
+            raise ValueError("Cannot resume unless an exercise is paused")
+        duration = time.monotonic() - self.paused_at
+        if self.mode == "learn" and self.teaching is not None:
+            self.teaching.resume(now=time.monotonic())
+            self.paused = False
+        elif (self.running or self._preview_loop_pending
+              or (self.pending_result is not None and self.auto)):
+            # Keep all forward-moving views on the same paused clock:
+            # count-in/playing, the empty preview bar, and the
+            # successful-take gap before the next repetition.
+            self.run_at += duration
+        if self.next_at:
+            self.next_at += duration
+        # Paused state freezes the frame at paused_at. Move the
+        # independent rewind clock by the same amount so resuming
+        # does not skip the remaining backward travel.
+        if self._visual_rewind_from is not None:
+            self._visual_rewind_at += duration
+        if self._preparation_pending:
+            self._preparation_at += duration
+        self.paused_at = 0.0
+        self.paused = False
+        self.pause_context = None
+        if self.running:
+            self.feedback = "Count in" if time.monotonic() < self.run_at else "Playing"
+        if self._deferred_score_ack is not None:
+            revision = self._deferred_score_ack
+            self._deferred_score_ack = None
+            self.control("score_ready", revision=revision)
+        self._start_listen_if_ready()
+        return
+
+    def _change_stage(self, action: str, kwargs: dict):
+        """Handle  change stage; called with the practice lock held."""
+        p=self.plan
+        if not p:
+            raise ValueError("Open a piece first")
+        if action == "select_step":
+            number = kwargs.get("number")
+            # Retain integer strings/whole floats, without truncating a step.
+            if (isinstance(number, bool) or not isinstance(number, (int, float, str))
+                    or (isinstance(number, float) and not number.is_integer())):
+                raise ValueError("Choose a whole lesson step number")
+            try:
+                number = int(number)
+            except ValueError:
+                raise ValueError("Choose a whole lesson step number") from None
+            if not 1 <= number <= len(p.lesson_steps):
+                raise ValueError("Lesson step out of bounds")
+        was_guided = self.mode == "learn"
+        guided_start = self.guided_range[0] if self.guided_range is not None else 0.0
+        guided_return = self._guided_return
+        guided_retry_range = self.retry_range
+        self._stop()
+        self._reset_trouble()
+        if action == "select_step":
+            self.open_from_beat = 0.0
+            p.select_step(number)
+        elif action == "next":
+            self.open_from_beat = 0.0
+            p.jump(1)
+        elif action == "previous":
+            self.open_from_beat = 0.0
+            p.jump(-1)
+        elif action == "hand":
+            requested = str(kwargs.get("hand", "both"))
+            if self.is_builtin_warmup and requested in p.hands and p.hands.index(requested) > p.hand_index:
+                previous_step = p.lesson_steps[p.hands.index(requested) - 1]
+                if previous_step.key not in p.mastered:
+                    raise ValueError("Complete three clean passes to unlock the next hand")
+            p.set_hand(requested)
+            self.open_from_beat = 0.0
+        elif action == "tempo":
+            p.set_bpm(int(kwargs["bpm"]))
+        elif action == "tempo_up":
+            p.increase_tempo()
+        elif action == "tempo_down":
+            p.decrease_tempo()
+        else:
+            raise ValueError(f"Unsupported action: {action}")
+        # Native notation is engraved in source coordinates: changing
+        # only playback BPM must not invalidate the score/reload Godot.
+        if action not in ("tempo", "tempo_up", "tempo_down"):
+            self.score_revision+=1
+        self.feedback="Ready"
+        self.next_action="Start when you are ready."
+        if was_guided:
+            if action in ("tempo", "tempo_up", "tempo_down"):
+                recovery = guided_return is not None and guided_return[0] == p.identity
+                if recovery:
+                    self.retry_range = guided_retry_range
+                self._begin_learn(from_beat=guided_start, bump_revision=False, recovery=recovery)
+            elif self.course_guided:
+                self._begin_course_stage(bump_revision=False, explicit_learn=action == "hand")
             else:
-                raise ValueError(f"Unsupported action: {action}")
-            # Native notation is engraved in source coordinates: changing
-            # only playback BPM must not invalidate the score/reload Godot.
-            if action not in ("tempo", "tempo_up", "tempo_down"):
-                self.score_revision+=1
-            self.feedback="Ready"
-            self.next_action="Start when you are ready."
-            if was_guided:
-                if action in ("tempo", "tempo_up", "tempo_down"):
-                    recovery = guided_return is not None and guided_return[0] == p.identity
-                    if recovery:
-                        self.retry_range = guided_retry_range
-                    self._begin_learn(from_beat=guided_start, bump_revision=False, recovery=recovery)
-                elif self.course_guided:
-                    self._begin_course_stage(bump_revision=False, explicit_learn=action == "hand")
-                else:
-                    self._begin_learn(bump_revision=False)
-            self._save()
+                self._begin_learn(bump_revision=False)
+        self._save()
 
     def _update(self):
         # State polling is frequent, so enumerate ALSA inputs only once per
