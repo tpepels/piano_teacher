@@ -300,3 +300,11 @@ first-party architectural monoliths.
   Parent standalone/app focus: 16 passed. Owner broader UI run: 57 passed and
   one existing caption-bounds failure reproduced with committed UI; this is
   tracked for correction in the Practice screen extraction.
+
+- Native painting split into data-only `RenderPass`, authentic symbol painting
+  and contextual staff/measure painting, with only transient canvas use.
+  Independent review compared all 27 moved painter/helper bodies and found
+  unchanged formulas and ownership. Parent integration: seven component
+  contracts and 44 real chord/flag/tie/beam/fragment/hand tests passed, including
+  corrupted tie-policy rejection. Compatibility forwarding removal follows
+  separately so production and test callers can migrate to their actual owners.

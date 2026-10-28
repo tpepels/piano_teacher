@@ -16,22 +16,27 @@ HARNESS = r'''extends SceneTree
 class FixedStaffLayout extends "res://notation/native/score_layout.gd":
     func staff_center(hand: String) -> float:
         return 110.0 if hand=="right" else 280.0
-class Probe extends "res://notation/native/view.gd":
-    var spec: Dictionary
-    func _init() -> void:
-        layout = FixedStaffLayout.new(timeline,glyphs)
-    func _tie_contour_rect(first: Dictionary,last: Dictionary,place: Dictionary,gap: float) -> Rect2:
-        if not spec.get("old",false):
-            return super._tie_contour_rect(first,last,place,gap)
+class LegacyTieGeometry extends "res://notation/native/connector_geometry.gd":
+    var old := false
+    func tie_contour_rect(first: Dictionary,last: Dictionary,place: Dictionary,gap: float) -> Rect2:
+        if not old:
+            return super.tie_contour_rect(first,last,place,gap)
         # Former placement: the single-note template's endpoint margins.
-        var data: Dictionary = glyphs.tie_metadata[_tie_template_key(first,last,place,gap)]
+        var data: Dictionary = score.glyphs.tie_metadata[tie_template_key(first,last,place,gap)]
         var box: Array = data["bounds"]
         var centers: Array = data["head_centers"]
         var unit: float = gap/250.0
         var left: float = float(place["x0"])+(float(box[0])-float(centers[0]))*unit
         var right: float = float(place["x1"])+(float(box[0])+float(box[2])-float(data["span"])-float(centers[1]))*unit
         return Rect2(left,float(place["y"])+float(box[1])*unit,right-left,float(box[3])*unit)
+
+class Probe extends "res://notation/native/view.gd":
+    var spec: Dictionary
+    func _init() -> void:
+        layout = FixedStaffLayout.new(timeline,glyphs)
+        symbols.connector_geometry = LegacyTieGeometry.new(layout)
     func _draw() -> void:
+        symbols.connector_geometry.old = bool(spec.get("old",false))
         var gap := 21.875
         draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
         for center in [110.0,280.0]:
