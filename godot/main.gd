@@ -89,7 +89,7 @@ var library_scroll: ScrollContainer
 var library_path_label: Label
 var library_rows: VBoxContainer
 var library_message: Label
-var open_picker: Control
+var open_picker: SourceMeasurePicker
 var practice_stage_bar: HFlowContainer
 var practice_stage_labels: Dictionary = {}
 var presented_hand_stages: Array = []

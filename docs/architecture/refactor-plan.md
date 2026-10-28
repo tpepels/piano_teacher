@@ -83,8 +83,12 @@ may use pure geometry/layout helpers but never import verifier internals.
   owns HTTP action dispatch and navigation via picker signals.
 - [ ] Move the remaining Home/Library/Settings/Practice screen construction
   into independently testable components with signals and explicit state inputs.
-- [ ] Extract the native view's fingering layout and semantic barline policies
-  into stateless collaborators where real duplication exists.
+- [x] Extract simultaneous-voice stem selection, column-collision spacing
+  and connected-component recentering into pure native voice_layout.gd.
+  The native view supplies source note Y positions, beam directions and
+  authentic glyph bounds. Rendering retains the original timing geometry.
+- [ ] Continue separating native fingering/layout and visible drawing passes
+  without coupling verification logic to production renderer internals.
 - [ ] Modularize the audit coordinator separately from source-driven proofs;
   preserve its fail-closed behavior and resumability.
 
