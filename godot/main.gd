@@ -26,6 +26,7 @@ const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const NativeNotation := preload("res://notation/native/view.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 const SourceMeasurePicker := preload("res://source_measure_picker.gd")
+const SettingsScreen := preload("res://settings_screen.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -36,6 +37,7 @@ var screen_navigation: Dictionary = {}
 var library_heading: BoxContainer
 var library_grids: Array[GridContainer] = []
 var settings_grid: GridContainer
+var settings_view: SettingsScreen
 var lesson_stage_labels: Dictionary = {}
 var lesson_piece_title: Label
 var path_reset_button: Button
@@ -1392,127 +1394,34 @@ func _update_responsive_layout() -> void:
 func _build_settings_screen() -> void:
     var page := _screen("Settings")
     screens["settings"] = page
-    var scroll := ScrollContainer.new()
-    scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    page.add_child(scroll)
-    var content := _stack(20)
-    content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    scroll.add_child(content)
-    content.add_child(_label("PIANO & PREFERENCES", 14, ACCENT, true))
-    content.add_child(_title("Your piano & practice", 32))
-
-    settings_grid = GridContainer.new()
-    settings_grid.columns = 2 if size.x >= 1100.0 else 1
-    settings_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    settings_grid.add_theme_constant_override("h_separation", 18)
-    settings_grid.add_theme_constant_override("v_separation", 18)
-    content.add_child(settings_grid)
-    var midi_panel := _card()
-    midi_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    settings_grid.add_child(midi_panel)
-    var midi := _section("MIDI input")
-    _card_body(midi_panel, 18).add_child(midi)
-    var device_row := HFlowContainer.new()
-    device_row.add_theme_constant_override("h_separation", 10)
-    midi.add_child(device_row)
-    device_button = _button("Choose USB MIDI piano", _show_devices, false, "settings")
-    device_row.add_child(device_button)
-    device_row.add_child(_button("Refresh devices", _request_devices, false, "utility"))
-    input_activity_label = _label("Connect your piano, then play a note to check input.", 14, MUTED)
-    midi.add_child(input_activity_label)
-
-    var music := _section("Music library")
-    var music_panel := _card()
-    music_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    settings_grid.add_child(music_panel)
-    _card_body(music_panel, 18).add_child(music)
-    # A fixed vertical arrangement prevents Browse/Save from crowding the
-    # folder path on narrower logical viewports and fullscreen displays.
-    folder_controls = VBoxContainer.new()
-    folder_controls.add_theme_constant_override("separation", 8)
-    music.add_child(folder_controls)
-    folder_edit = LineEdit.new()
-    folder_edit.custom_minimum_size = Vector2(0, 40)
-    folder_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    folder_edit.placeholder_text = "~/Music/Piano Teacher"
-    folder_edit.text_submitted.connect(func(_text: String): _save_folder())
-    folder_controls.add_child(folder_edit)
-    var folder_actions := HFlowContainer.new()
-    folder_actions.add_theme_constant_override("h_separation", 10)
-    folder_actions.add_theme_constant_override("v_separation", 6)
-    folder_controls.add_child(folder_actions)
-    folder_actions.add_child(_button("Choose folder…", _browse_folder, false, "navigation"))
-    folder_actions.add_child(_button("Save folder", _save_folder, false, "secondary"))
-    music.add_child(_label("MIDI and MusicXML files in this folder and its subfolders.", 13, MUTED))
-
-    var practice := _section("Practice tempo")
-    var practice_panel := _card()
-    practice_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    settings_grid.add_child(practice_panel)
-    _card_body(practice_panel, 18).add_child(practice)
-    var tempo_row := HBoxContainer.new()
-    tempo_row.add_theme_constant_override("separation", 12)
-    practice.add_child(tempo_row)
-    var tempo_caption := _label("Target tempo", 14, MUTED)
-    tempo_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
-    tempo_caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    tempo_caption.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-    tempo_caption.custom_minimum_size.x = 0
-    tempo_row.add_child(tempo_caption)
-    tempo_setting = SpinBox.new()
-    tempo_setting.min_value = 12
-    tempo_setting.max_value = 300
-    tempo_setting.step = 1
-    tempo_setting.suffix = " BPM"
-    tempo_setting.custom_minimum_size = Vector2(150, 40)
-    tempo_row.add_child(tempo_setting)
-    apply_tempo_button = _button("Apply tempo", func(): _send_action({"action": "tempo", "bpm": int(tempo_setting.value)}), false, "settings")
-    tempo_row.add_child(apply_tempo_button)
-    metronome_toggle = CheckButton.new()
-    metronome_toggle.text = "Metronome during practice"
-    metronome_toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-    metronome_toggle.tooltip_text = "Count-in is always audible, even when metronome is off"
-    metronome_toggle.toggled.connect(func(enabled: bool): _send_post("/settings", {"metronome": enabled}))
-    practice.add_child(metronome_toggle)
-
-    var audio := _section("Listen audio")
-    var audio_panel := _card()
-    audio_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    settings_grid.add_child(audio_panel)
-    _card_body(audio_panel, 18).add_child(audio)
-    var audio_row := HBoxContainer.new()
-    audio_row.add_theme_constant_override("separation", 12)
-    audio.add_child(audio_row)
-    var volume_caption := _label("Piano volume", 14, MUTED)
-    volume_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
-    volume_caption.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    volume_caption.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-    volume_caption.custom_minimum_size.x = 0
-    audio_row.add_child(volume_caption)
-    listen_volume_slider = HSlider.new()
-    listen_volume_slider.min_value = -12.0
-    listen_volume_slider.max_value = 12.0
-    listen_volume_slider.step = 1.0
-    listen_volume_slider.value = 6.0
-    listen_volume_slider.custom_minimum_size = Vector2(180, 36)
-    listen_volume_slider.tooltip_text = "Listen only. Saved locally; does not change MIDI or metronome."
-    audio_row.add_child(listen_volume_slider)
-    listen_volume_label = _label("+6 dB", 14, INK)
-    audio_row.add_child(listen_volume_label)
-    listen_volume_slider.value_changed.connect(_on_listen_volume_changed)
-    fullscreen_toggle = CheckButton.new()
-    fullscreen_toggle.text = "Fullscreen application  ·  F11"
-    fullscreen_toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-    fullscreen_toggle.button_pressed = true
-    fullscreen_toggle.toggled.connect(_on_fullscreen_toggle)
-    audio.add_child(fullscreen_toggle)
-    var exit_button := _button("Exit application", _exit_app, false, "utility")
-    exit_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-    content.add_child(exit_button)
-    settings_message = _label("", 14, MUTED)
-    content.add_child(settings_message)
+    settings_view = SettingsScreen.new()
+    settings_view.ui_scale = ui_scale
+    settings_view.default_font = theme.default_font
+    page.add_child(settings_view)
+    settings_view.choose_devices_requested.connect(_show_devices)
+    settings_view.refresh_devices_requested.connect(_request_devices)
+    settings_view.save_folder_requested.connect(_save_folder)
+    settings_view.browse_folder_requested.connect(_browse_folder)
+    settings_view.tempo_requested.connect(func(bpm: int):
+        _send_action({"action": "tempo", "bpm": bpm}))
+    settings_view.metronome_requested.connect(func(enabled: bool):
+        _send_post("/settings", {"metronome": enabled}))
+    settings_view.volume_changed.connect(_on_listen_volume_changed)
+    settings_view.fullscreen_requested.connect(_on_fullscreen_toggle)
+    settings_view.exit_requested.connect(_exit_app)
+    # Compatibility references for current state presentation and resizing.
+    settings_grid = settings_view.settings_grid
+    device_button = settings_view.device_button
+    input_activity_label = settings_view.input_activity_label
+    folder_controls = settings_view.folder_controls
+    folder_edit = settings_view.folder_edit
+    tempo_setting = settings_view.tempo_setting
+    apply_tempo_button = settings_view.apply_tempo_button
+    metronome_toggle = settings_view.metronome_toggle
+    listen_volume_slider = settings_view.listen_volume_slider
+    listen_volume_label = settings_view.listen_volume_label
+    fullscreen_toggle = settings_view.fullscreen_toggle
+    settings_message = settings_view.settings_message
 
 
 func _build_lesson_screen() -> void:

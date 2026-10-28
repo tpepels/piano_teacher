@@ -85,8 +85,11 @@ may use pure geometry/layout helpers but never import verifier internals.
 - [x] Extract the modal source-measure picker into its own Godot Control,
   with independent source-bar input, resize and selection behavior; main.gd
   owns HTTP action dispatch and navigation via picker signals.
-- [ ] Move the remaining Home/Library/Settings/Practice screen construction
-  into independently testable components with signals and explicit state inputs.
+- [x] Extract Settings screen construction into a standalone signal-driven
+  control. The application retains settings API operations and state updates;
+  the view owns its widgets and visual structure.
+- [ ] Move the remaining Home/Library/Practice screen construction into
+  independently testable components with signals and explicit state inputs.
 - [x] Extract simultaneous-voice stem selection, column-collision spacing
   and connected-component recentering into pure native voice_layout.gd.
   The native view supplies source note Y positions, beam directions and
