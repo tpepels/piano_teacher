@@ -191,8 +191,11 @@ func show_piece(state: Dictionary) -> void:
 func selected_bar() -> int:
     # Enter arrives before SpinBox commits its embedded LineEdit.
     if get_viewport().gui_get_focus_owner() == measure.get_line_edit():
-        measure.value = clampi(measure.get_line_edit().text.to_int(),
-            1, int(measure.max_value))
+        # SpinBox displays the suffix inside LineEdit. Parsing the whole
+        # "5 / 16" string can return the suffix (16), not the typed measure.
+        var entered: String = measure.get_line_edit().text.split("/")[0].strip_edges()
+        if entered.is_valid_int():
+            measure.value = clampi(entered.to_int(), 1, int(measure.max_value))
     return int(measure.value)
 
 func selected_mode() -> String:

@@ -22,27 +22,25 @@ func _check_picker(picker: Control) -> void:
         "selected_start_bar":5})
     var failures := 0
     var number: SpinBox = picker.get("measure")
-    print("PICKER_RAW size=", picker.size, " value=", number.value,
-        " edit_text=", number.get_line_edit().text,
-        " focus=", picker.get_viewport().gui_get_focus_owner() == number.get_line_edit())
-    print("PICKER_INITIAL visible=", picker.visible,
-        " bar=", picker.call("selected_bar"),
-        " mode=", picker.call("selected_mode"),
-        " popup=", picker.call("is_mode_popup_open"))
+    var number: SpinBox = picker.get("measure")
+    var failures := 0
     if not picker.visible:
         failures += 1
     if picker.call("selected_bar") != 5:
+        failures += 1
+    # Confirm while the user is still editing the LineEdit; suffix digits
+    # must never override the explicitly typed source measure.
+    number.get_line_edit().text = "7  / 16"
+    if picker.call("selected_bar") != 7:
         failures += 1
     if picker.call("selected_mode") != "learn":
         failures += 1
     if picker.call("is_mode_popup_open"):
         failures += 1
     var panel: PanelContainer = picker.get("panel")
-    print("PICKER_PANEL_INITIAL size=", panel.size if panel != null else Vector2(-1,-1))
     if panel == null or panel.size.x > 620 or panel.size.y > 570:
         failures += 1
     picker.call("resize_panel", Vector2(500, 400))
-    print("PICKER_PANEL_RESIZED size=", panel.size)
     if panel.size.x > 500 or panel.size.y > 400:
         failures += 1
     picker.hide()
