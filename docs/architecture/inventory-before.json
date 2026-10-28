@@ -1,0 +1,1109 @@
+{
+  "baseline": "a093c5c",
+  "scope": "First-party Python, GDScript, shell and ONNX bridge; third-party addons/import caches/model packages excluded",
+  "files": [
+    {
+      "path": "godot/main.gd",
+      "lines": 3258
+    },
+    {
+      "path": "godot/notation/native/view.gd",
+      "lines": 2904
+    },
+    {
+      "path": "piano_teacher/server.py",
+      "lines": 2165
+    },
+    {
+      "path": "scripts/check_native_verovio_overlay.py",
+      "lines": 1755
+    },
+    {
+      "path": "piano_teacher/notation/visual_coverage.py",
+      "lines": 1632
+    },
+    {
+      "path": "piano_teacher/notation/feature_pixels.py",
+      "lines": 1482
+    },
+    {
+      "path": "piano_teacher/notation/phase3_pixels.py",
+      "lines": 968
+    },
+    {
+      "path": "piano_teacher/notation/connector_pixels.py",
+      "lines": 925
+    },
+    {
+      "path": "piano_teacher/notation/extra_symbol_pixels.py",
+      "lines": 907
+    },
+    {
+      "path": "piano_teacher/notation/semantic_contract.py",
+      "lines": 880
+    },
+    {
+      "path": "piano_teacher/notation/symbol_pixel_proof.py",
+      "lines": 830
+    },
+    {
+      "path": "piano_teacher/notation/lesson.py",
+      "lines": 795
+    },
+    {
+      "path": "godot/notation/native/glyphs.gd",
+      "lines": 671
+    },
+    {
+      "path": "piano_teacher/learning.py",
+      "lines": 638
+    },
+    {
+      "path": "piano_teacher/notation/midi_transcription_rules.py",
+      "lines": 617
+    },
+    {
+      "path": "scripts/aggregate_phase3_corpus.py",
+      "lines": 543
+    },
+    {
+      "path": "godot/ui_layout_smoke.gd",
+      "lines": 534
+    },
+    {
+      "path": "piano_teacher/ui.py",
+      "lines": 486
+    },
+    {
+      "path": "godot/notation/native/geometry.gd",
+      "lines": 450
+    },
+    {
+      "path": "piano_teacher/notation/model.py",
+      "lines": 443
+    },
+    {
+      "path": "piano_teacher/notation/proof.py",
+      "lines": 440
+    },
+    {
+      "path": "piano_teacher/rendering/legacy/engraving.py",
+      "lines": 439
+    },
+    {
+      "path": "piano_teacher/notation/source_annotations.py",
+      "lines": 400
+    },
+    {
+      "path": "piano_teacher/notation/assets/tuplets.py",
+      "lines": 393
+    },
+    {
+      "path": "scripts/smoke_instructional_godot.py",
+      "lines": 377
+    },
+    {
+      "path": "piano_teacher/notation/pixel_proof.py",
+      "lines": 372
+    },
+    {
+      "path": "piano_teacher/notation/assets/chords.py",
+      "lines": 361
+    },
+    {
+      "path": "scripts/audit_phase3_whole_pieces.py",
+      "lines": 357
+    },
+    {
+      "path": "scripts/review_art_direction.py",
+      "lines": 352
+    },
+    {
+      "path": "piano_teacher/notation/raster_matching.py",
+      "lines": 322
+    },
+    {
+      "path": "godot/hint_keyboard.gd",
+      "lines": 317
+    },
+    {
+      "path": "piano_teacher/notation/assets/beams.py",
+      "lines": 301
+    },
+    {
+      "path": "scripts/smoke_godot.py",
+      "lines": 299
+    },
+    {
+      "path": "piano_teacher/notation/assets/svg_geometry.py",
+      "lines": 291
+    },
+    {
+      "path": "godot/score_overlay.gd",
+      "lines": 287
+    },
+    {
+      "path": "piano_teacher/music.py",
+      "lines": 284
+    },
+    {
+      "path": "scripts/summarize_hardware_acceptance.py",
+      "lines": 277
+    },
+    {
+      "path": "scripts/verify-notation.sh",
+      "lines": 270
+    },
+    {
+      "path": "scripts/verify_library_pipeline.py",
+      "lines": 267
+    },
+    {
+      "path": "godot/game_stage.gd",
+      "lines": 262
+    },
+    {
+      "path": "piano_teacher/demo.py",
+      "lines": 262
+    },
+    {
+      "path": "piano_teacher/notation/assets/notes.py",
+      "lines": 257
+    },
+    {
+      "path": "scripts/smoke_teaching_godot.py",
+      "lines": 255
+    },
+    {
+      "path": "scripts/smoke_modes_godot.py",
+      "lines": 253
+    },
+    {
+      "path": "piano_teacher/importing/musicxml.py",
+      "lines": 250
+    },
+    {
+      "path": "scripts/smoke_adaptive_godot.py",
+      "lines": 242
+    },
+    {
+      "path": "piano_teacher/notation/measure_pixels.py",
+      "lines": 241
+    },
+    {
+      "path": "scripts/audit_phase5_scores.py",
+      "lines": 229
+    },
+    {
+      "path": "scripts/package_notation_diagnostics.py",
+      "lines": 226
+    },
+    {
+      "path": "piano_teacher/learner_state.py",
+      "lines": 224
+    },
+    {
+      "path": "piano_teacher/warmups.py",
+      "lines": 224
+    },
+    {
+      "path": "piano_teacher/notation/release_diagnostics.py",
+      "lines": 217
+    },
+    {
+      "path": "piano_teacher/teaching.py",
+      "lines": 215
+    },
+    {
+      "path": "godot/settings_screen.gd",
+      "lines": 213
+    },
+    {
+      "path": "godot/source_measure_picker.gd",
+      "lines": 205
+    },
+    {
+      "path": "godot/tempo_strip.gd",
+      "lines": 205
+    },
+    {
+      "path": "piano_teacher/fingering/service.py",
+      "lines": 205
+    },
+    {
+      "path": "godot/pause_sheet.gd",
+      "lines": 201
+    },
+    {
+      "path": "scripts/check_grading_session.py",
+      "lines": 192
+    },
+    {
+      "path": "piano_teacher/practice.py",
+      "lines": 191
+    },
+    {
+      "path": "godot/practice_theme.gd",
+      "lines": 189
+    },
+    {
+      "path": "godot/game_transport_button.gd",
+      "lines": 184
+    },
+    {
+      "path": "piano_teacher/notation/support_policy.py",
+      "lines": 180
+    },
+    {
+      "path": "piano_teacher/preprocessing_cache.py",
+      "lines": 177
+    },
+    {
+      "path": "piano_teacher/notation/assets/slurs.py",
+      "lines": 174
+    },
+    {
+      "path": "scripts/audit_phase3_semantics.py",
+      "lines": 173
+    },
+    {
+      "path": "piano_teacher/notation/assets/ties.py",
+      "lines": 170
+    },
+    {
+      "path": "piano_teacher/sample_piano.py",
+      "lines": 161
+    },
+    {
+      "path": "piano_teacher/library.py",
+      "lines": 160
+    },
+    {
+      "path": "scripts/check_user_midi_desktop.py",
+      "lines": 156
+    },
+    {
+      "path": "godot/notation/shared/view_base.gd",
+      "lines": 155
+    },
+    {
+      "path": "piano_teacher/progress_repository.py",
+      "lines": 154
+    },
+    {
+      "path": "piano_teacher/rendering/legacy/spacing.py",
+      "lines": 152
+    },
+    {
+      "path": "godot/action_button.gd",
+      "lines": 150
+    },
+    {
+      "path": "godot/demo_player.gd",
+      "lines": 150
+    },
+    {
+      "path": "scripts/audit_scroll_velocity.py",
+      "lines": 150
+    },
+    {
+      "path": "scripts/check_visible_playback.py",
+      "lines": 150
+    },
+    {
+      "path": "piano_teacher/rendering/legacy/geometry.py",
+      "lines": 149
+    },
+    {
+      "path": "godot/game_phase_cue.gd",
+      "lines": 146
+    },
+    {
+      "path": "piano_teacher/transport/http.py",
+      "lines": 144
+    },
+    {
+      "path": "scripts/smoke_phase0.py",
+      "lines": 141
+    },
+    {
+      "path": "piano_teacher/hardware_probe.py",
+      "lines": 137
+    },
+    {
+      "path": "godot/native_score_feedback.gd",
+      "lines": 135
+    },
+    {
+      "path": "godot/tests/native_glyph_fixture.gd",
+      "lines": 134
+    },
+    {
+      "path": "piano_teacher/visual_transport.py",
+      "lines": 134
+    },
+    {
+      "path": "godot/library_row.gd",
+      "lines": 133
+    },
+    {
+      "path": "godot/review_sheet.gd",
+      "lines": 133
+    },
+    {
+      "path": "godot/game_impact_callout.gd",
+      "lines": 132
+    },
+    {
+      "path": "godot/notation/native/voice_layout.gd",
+      "lines": 131
+    },
+    {
+      "path": "scripts/smoke_learning_ui.py",
+      "lines": 131
+    },
+    {
+      "path": "piano_teacher/live_input_view.py",
+      "lines": 130
+    },
+    {
+      "path": "piano_teacher/assessment_service.py",
+      "lines": 125
+    },
+    {
+      "path": "godot/notation/shared/timeline.gd",
+      "lines": 123
+    },
+    {
+      "path": "piano_teacher/notation/audit_annotations.py",
+      "lines": 121
+    },
+    {
+      "path": "piano_teacher/notation/assets/glyphs.py",
+      "lines": 120
+    },
+    {
+      "path": "piano_teacher/recovery.py",
+      "lines": 120
+    },
+    {
+      "path": "godot/notation/native/score_index.gd",
+      "lines": 119
+    },
+    {
+      "path": "piano_teacher/library_health.py",
+      "lines": 118
+    },
+    {
+      "path": "godot/notation/native/ink_spacing.gd",
+      "lines": 117
+    },
+    {
+      "path": "piano_teacher/fingering/lumikey_runtime/bridge.cjs",
+      "lines": 117
+    },
+    {
+      "path": "godot/game_streak.gd",
+      "lines": 116
+    },
+    {
+      "path": "godot/living_score.gd",
+      "lines": 105
+    },
+    {
+      "path": "scripts/smoke_native_notation.py",
+      "lines": 104
+    },
+    {
+      "path": "piano_teacher/notation/practice_timeline.py",
+      "lines": 101
+    },
+    {
+      "path": "godot/note_reactions.gd",
+      "lines": 100
+    },
+    {
+      "path": "scripts/check_native_pixels.py",
+      "lines": 100
+    },
+    {
+      "path": "godot/challenge_flow.gd",
+      "lines": 98
+    },
+    {
+      "path": "piano_teacher/application/score_preparation.py",
+      "lines": 97
+    },
+    {
+      "path": "scripts/check_native_symbols.py",
+      "lines": 97
+    },
+    {
+      "path": "godot/game_input_indicator.gd",
+      "lines": 96
+    },
+    {
+      "path": "godot/notation/diagnostics/timeline_preview.gd",
+      "lines": 93
+    },
+    {
+      "path": "scripts/audit_notation_proof.py",
+      "lines": 92
+    },
+    {
+      "path": "scripts/check_user_midi_visual_regression.py",
+      "lines": 92
+    },
+    {
+      "path": "scripts/check_hardware_session.py",
+      "lines": 91
+    },
+    {
+      "path": "godot/notation/native/fingering_placement.gd",
+      "lines": 90
+    },
+    {
+      "path": "scripts/install_piano_soundfont.py",
+      "lines": 90
+    },
+    {
+      "path": "piano_teacher/notation/expressions.py",
+      "lines": 86
+    },
+    {
+      "path": "godot/notation/native/barline_layout.gd",
+      "lines": 85
+    },
+    {
+      "path": "piano_teacher/fingering/types.py",
+      "lines": 84
+    },
+    {
+      "path": "piano_teacher/notation/piano_registers.py",
+      "lines": 84
+    },
+    {
+      "path": "piano_teacher/live_feedback.py",
+      "lines": 81
+    },
+    {
+      "path": "godot/notation/native/fingering_spatial_layout.gd",
+      "lines": 80
+    },
+    {
+      "path": "piano_teacher/lesson_validation.py",
+      "lines": 80
+    },
+    {
+      "path": "piano_teacher/feedback.py",
+      "lines": 79
+    },
+    {
+      "path": "piano_teacher/lesson_settings.py",
+      "lines": 79
+    },
+    {
+      "path": "godot/visual_transport_clock.gd",
+      "lines": 73
+    },
+    {
+      "path": "piano_teacher/exercise_generator.py",
+      "lines": 71
+    },
+    {
+      "path": "piano_teacher/transport_projection.py",
+      "lines": 69
+    },
+    {
+      "path": "piano_teacher/state_projection.py",
+      "lines": 67
+    },
+    {
+      "path": "piano_teacher/fingering/lumikey.py",
+      "lines": 65
+    },
+    {
+      "path": "godot/game_countin.gd",
+      "lines": 64
+    },
+    {
+      "path": "scripts/check_generated_lesson.py",
+      "lines": 59
+    },
+    {
+      "path": "scripts/check_engraving.py",
+      "lines": 57
+    },
+    {
+      "path": "godot/listen_sync.gd",
+      "lines": 56
+    },
+    {
+      "path": "godot/staff_continuity.gd",
+      "lines": 54
+    },
+    {
+      "path": "piano_teacher/recovery_projection.py",
+      "lines": 52
+    },
+    {
+      "path": "godot/notation/native/rest_lane_layout.gd",
+      "lines": 51
+    },
+    {
+      "path": "piano_teacher/importing/pieces.py",
+      "lines": 50
+    },
+    {
+      "path": "godot/performance_review_strip.gd",
+      "lines": 49
+    },
+    {
+      "path": "scripts/check_musical_fidelity_corpus.py",
+      "lines": 48
+    },
+    {
+      "path": "piano_teacher/fingering/placement.py",
+      "lines": 46
+    },
+    {
+      "path": "piano_teacher/notation/assets/runtime.py",
+      "lines": 46
+    },
+    {
+      "path": "piano_teacher/notation/assets/svg.py",
+      "lines": 45
+    },
+    {
+      "path": "piano_teacher/rendering/legacy/raster.py",
+      "lines": 44
+    },
+    {
+      "path": "scripts/notation_release_provenance.py",
+      "lines": 43
+    },
+    {
+      "path": "piano_teacher/repeated_passages.py",
+      "lines": 42
+    },
+    {
+      "path": "godot/frame_meter.gd",
+      "lines": 40
+    },
+    {
+      "path": "piano_teacher/notation/musicxml.py",
+      "lines": 40
+    },
+    {
+      "path": "piano_teacher/measure_grid.py",
+      "lines": 39
+    },
+    {
+      "path": "piano_teacher/lesson_timing.py",
+      "lines": 37
+    },
+    {
+      "path": "piano_teacher/notation/reference_font.py",
+      "lines": 37
+    },
+    {
+      "path": "piano_teacher/course_navigation.py",
+      "lines": 36
+    },
+    {
+      "path": "piano_teacher/midi_input.py",
+      "lines": 33
+    },
+    {
+      "path": "godot/game_backdrop.gd",
+      "lines": 32
+    },
+    {
+      "path": "piano_teacher/instruction.py",
+      "lines": 32
+    },
+    {
+      "path": "scripts/check_native_notation.py",
+      "lines": 30
+    },
+    {
+      "path": "scripts/ci-smoke.sh",
+      "lines": 30
+    },
+    {
+      "path": "scripts/smoke_student_journey.py",
+      "lines": 29
+    },
+    {
+      "path": "piano_teacher/fingering/projection.py",
+      "lines": 28
+    },
+    {
+      "path": "scripts/check_desktop_ui.py",
+      "lines": 28
+    },
+    {
+      "path": "godot/notehead_ink.gd",
+      "lines": 23
+    },
+    {
+      "path": "godot/preview_motion.gd",
+      "lines": 23
+    },
+    {
+      "path": "piano_teacher/completion_route.py",
+      "lines": 22
+    },
+    {
+      "path": "scripts/check_godot.sh",
+      "lines": 20
+    },
+    {
+      "path": "piano_teacher/__main__.py",
+      "lines": 18
+    },
+    {
+      "path": "piano_teacher/score.py",
+      "lines": 15
+    },
+    {
+      "path": "scripts/check_phase2_ui.sh",
+      "lines": 15
+    },
+    {
+      "path": "scripts/setup-fingering.sh",
+      "lines": 14
+    },
+    {
+      "path": "piano_teacher/fingering/__init__.py",
+      "lines": 8
+    },
+    {
+      "path": "godot/score_effects.gd",
+      "lines": 7
+    },
+    {
+      "path": "piano_teacher/score_geometry.py",
+      "lines": 6
+    },
+    {
+      "path": "piano_teacher/raster.py",
+      "lines": 4
+    },
+    {
+      "path": "piano_teacher/__init__.py",
+      "lines": 3
+    },
+    {
+      "path": "piano_teacher/application/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/importing/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/notation/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/notation/assets/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/rendering/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/rendering/legacy/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/transport/__init__.py",
+      "lines": 1
+    }
+  ],
+  "python_import_graph_including_typing_and_lazy": {
+    "piano_teacher": [],
+    "piano_teacher.__main__": [],
+    "piano_teacher.midi_input": [],
+    "piano_teacher.ui": [
+      "piano_teacher.midi_input",
+      "piano_teacher.music",
+      "piano_teacher.practice"
+    ],
+    "piano_teacher.exercise_generator": [
+      "piano_teacher.music"
+    ],
+    "piano_teacher.recovery": [
+      "piano_teacher.measure_grid",
+      "piano_teacher.music",
+      "piano_teacher.practice"
+    ],
+    "piano_teacher.learner_state": [
+      "piano_teacher.exercise_generator",
+      "piano_teacher.measure_grid"
+    ],
+    "piano_teacher.feedback": [
+      "piano_teacher.lesson_validation",
+      "piano_teacher.music",
+      "piano_teacher.practice",
+      "piano_teacher.score_geometry"
+    ],
+    "piano_teacher.lesson_validation": [
+      "piano_teacher.music"
+    ],
+    "piano_teacher.library": [
+      "piano_teacher.warmups"
+    ],
+    "piano_teacher.teaching": [
+      "piano_teacher.exercise_generator",
+      "piano_teacher.music"
+    ],
+    "piano_teacher.warmups": [],
+    "piano_teacher.live_feedback": [
+      "piano_teacher.music",
+      "piano_teacher.practice"
+    ],
+    "piano_teacher.live_input_view": [
+      "piano_teacher.music"
+    ],
+    "piano_teacher.library_health": [
+      "piano_teacher.library",
+      "piano_teacher.score"
+    ],
+    "piano_teacher.hardware_probe": [],
+    "piano_teacher.demo": [
+      "piano_teacher.exercise_generator",
+      "piano_teacher.sample_piano"
+    ],
+    "piano_teacher.preprocessing_cache": [
+      "piano_teacher.music",
+      "piano_teacher.score"
+    ],
+    "piano_teacher.raster": [
+      "piano_teacher.rendering.legacy.raster"
+    ],
+    "piano_teacher.score": [
+      "piano_teacher.importing.pieces",
+      "piano_teacher.notation.assets.runtime",
+      "piano_teacher.rendering.legacy.engraving"
+    ],
+    "piano_teacher.score_geometry": [
+      "piano_teacher.notation.assets.svg_geometry",
+      "piano_teacher.rendering.legacy.geometry"
+    ],
+    "piano_teacher.lesson_timing": [
+      "piano_teacher.lesson_settings"
+    ],
+    "piano_teacher.measure_grid": [
+      "piano_teacher.lesson_settings",
+      "piano_teacher.music"
+    ],
+    "piano_teacher.practice": [
+      "piano_teacher.lesson_settings",
+      "piano_teacher.music"
+    ],
+    "piano_teacher.repeated_passages": [
+      "piano_teacher.music"
+    ],
+    "piano_teacher.instruction": [
+      "piano_teacher.lesson_settings"
+    ],
+    "piano_teacher.sample_piano": [],
+    "piano_teacher.music": [
+      "piano_teacher.fingering.types"
+    ],
+    "piano_teacher.lesson_settings": [],
+    "piano_teacher.learning": [
+      "piano_teacher.exercise_generator",
+      "piano_teacher.lesson_settings",
+      "piano_teacher.music",
+      "piano_teacher.repeated_passages"
+    ],
+    "piano_teacher.assessment_service": [
+      "piano_teacher.feedback",
+      "piano_teacher.live_feedback",
+      "piano_teacher.measure_grid",
+      "piano_teacher.music",
+      "piano_teacher.practice"
+    ],
+    "piano_teacher.completion_route": [],
+    "piano_teacher.course_navigation": [
+      "piano_teacher.measure_grid"
+    ],
+    "piano_teacher.progress_repository": [
+      "piano_teacher.exercise_generator",
+      "piano_teacher.learner_state",
+      "piano_teacher.learning",
+      "piano_teacher.lesson_settings"
+    ],
+    "piano_teacher.recovery_projection": [
+      "piano_teacher.measure_grid",
+      "piano_teacher.recovery"
+    ],
+    "piano_teacher.server": [
+      "piano_teacher.application.score_preparation",
+      "piano_teacher.assessment_service",
+      "piano_teacher.completion_route",
+      "piano_teacher.course_navigation",
+      "piano_teacher.demo",
+      "piano_teacher.feedback",
+      "piano_teacher.fingering",
+      "piano_teacher.hardware_probe",
+      "piano_teacher.importing.pieces",
+      "piano_teacher.instruction",
+      "piano_teacher.learner_state",
+      "piano_teacher.learning",
+      "piano_teacher.lesson_settings",
+      "piano_teacher.lesson_timing",
+      "piano_teacher.lesson_validation",
+      "piano_teacher.library",
+      "piano_teacher.library_health",
+      "piano_teacher.live_input_view",
+      "piano_teacher.measure_grid",
+      "piano_teacher.music",
+      "piano_teacher.notation.lesson",
+      "piano_teacher.notation.model",
+      "piano_teacher.notation.practice_timeline",
+      "piano_teacher.practice",
+      "piano_teacher.preprocessing_cache",
+      "piano_teacher.progress_repository",
+      "piano_teacher.raster",
+      "piano_teacher.recovery",
+      "piano_teacher.recovery_projection",
+      "piano_teacher.score",
+      "piano_teacher.state_projection",
+      "piano_teacher.teaching",
+      "piano_teacher.transport.http",
+      "piano_teacher.visual_transport",
+      "piano_teacher.warmups"
+    ],
+    "piano_teacher.state_projection": [],
+    "piano_teacher.transport_projection": [],
+    "piano_teacher.visual_transport": [
+      "piano_teacher.transport_projection"
+    ],
+    "piano_teacher.application": [],
+    "piano_teacher.application.score_preparation": [
+      "piano_teacher.notation.assets.beams",
+      "piano_teacher.notation.assets.chords",
+      "piano_teacher.notation.assets.glyphs",
+      "piano_teacher.notation.assets.notes",
+      "piano_teacher.notation.assets.slurs",
+      "piano_teacher.notation.assets.ties",
+      "piano_teacher.notation.assets.tuplets"
+    ],
+    "piano_teacher.importing": [],
+    "piano_teacher.importing.pieces": [
+      "piano_teacher.importing.musicxml",
+      "piano_teacher.music"
+    ],
+    "piano_teacher.importing.musicxml": [
+      "piano_teacher.music",
+      "piano_teacher.notation.musicxml"
+    ],
+    "piano_teacher.notation": [],
+    "piano_teacher.notation.expressions": [
+      "piano_teacher.notation.lesson",
+      "piano_teacher.notation.source_annotations"
+    ],
+    "piano_teacher.notation.musicxml": [],
+    "piano_teacher.notation.source_annotations": [],
+    "piano_teacher.notation.symbol_pixel_proof": [
+      "piano_teacher.notation.phase3_pixels",
+      "piano_teacher.notation.pixel_proof",
+      "piano_teacher.notation.proof",
+      "piano_teacher.notation.raster_matching",
+      "piano_teacher.notation.reference_font"
+    ],
+    "piano_teacher.notation.feature_pixels": [
+      "piano_teacher.notation",
+      "piano_teacher.notation.connector_pixels",
+      "piano_teacher.notation.phase3_pixels",
+      "piano_teacher.notation.pixel_proof",
+      "piano_teacher.notation.proof",
+      "piano_teacher.notation.raster_matching",
+      "piano_teacher.notation.reference_font",
+      "piano_teacher.notation.symbol_pixel_proof"
+    ],
+    "piano_teacher.notation.lesson": [
+      "piano_teacher.measure_grid",
+      "piano_teacher.music",
+      "piano_teacher.notation.piano_registers",
+      "piano_teacher.notation.source_annotations"
+    ],
+    "piano_teacher.notation.midi_transcription_rules": [],
+    "piano_teacher.notation.model": [
+      "piano_teacher.measure_grid",
+      "piano_teacher.music",
+      "piano_teacher.notation.expressions",
+      "piano_teacher.notation.lesson",
+      "piano_teacher.notation.musicxml",
+      "piano_teacher.notation.practice_timeline"
+    ],
+    "piano_teacher.notation.pixel_proof": [
+      "piano_teacher.notation.proof"
+    ],
+    "piano_teacher.notation.proof": [],
+    "piano_teacher.notation.raster_matching": [
+      "piano_teacher.notation.symbol_pixel_proof"
+    ],
+    "piano_teacher.notation.reference_font": [],
+    "piano_teacher.notation.release_diagnostics": [
+      "piano_teacher.notation.pixel_proof",
+      "piano_teacher.notation.proof",
+      "piano_teacher.notation.reference_font",
+      "piano_teacher.notation.symbol_pixel_proof"
+    ],
+    "piano_teacher.notation.semantic_contract": [
+      "piano_teacher.notation.midi_transcription_rules",
+      "piano_teacher.notation.proof"
+    ],
+    "piano_teacher.notation.support_policy": [
+      "piano_teacher.notation.midi_transcription_rules"
+    ],
+    "piano_teacher.notation.visual_coverage": [
+      "piano_teacher.notation.proof"
+    ],
+    "piano_teacher.notation.phase3_pixels": [
+      "piano_teacher.notation.pixel_proof",
+      "piano_teacher.notation.proof",
+      "piano_teacher.notation.raster_matching",
+      "piano_teacher.notation.reference_font",
+      "piano_teacher.notation.symbol_pixel_proof"
+    ],
+    "piano_teacher.notation.connector_pixels": [
+      "piano_teacher.notation.assets.svg",
+      "piano_teacher.notation.assets.svg_geometry",
+      "piano_teacher.notation.feature_pixels",
+      "piano_teacher.notation.phase3_pixels",
+      "piano_teacher.notation.pixel_proof",
+      "piano_teacher.notation.proof",
+      "piano_teacher.notation.raster_matching",
+      "piano_teacher.notation.reference_font",
+      "piano_teacher.notation.symbol_pixel_proof"
+    ],
+    "piano_teacher.notation.extra_symbol_pixels": [
+      "piano_teacher.notation.connector_pixels",
+      "piano_teacher.notation.feature_pixels",
+      "piano_teacher.notation.phase3_pixels",
+      "piano_teacher.notation.pixel_proof",
+      "piano_teacher.notation.proof",
+      "piano_teacher.notation.symbol_pixel_proof"
+    ],
+    "piano_teacher.notation.audit_annotations": [
+      "piano_teacher.music"
+    ],
+    "piano_teacher.notation.practice_timeline": [
+      "piano_teacher.lesson_timing"
+    ],
+    "piano_teacher.notation.piano_registers": [],
+    "piano_teacher.notation.measure_pixels": [
+      "piano_teacher.notation.pixel_proof"
+    ],
+    "piano_teacher.rendering": [],
+    "piano_teacher.transport": [],
+    "piano_teacher.transport.http": [],
+    "piano_teacher.fingering.types": [
+      "piano_teacher.music"
+    ],
+    "piano_teacher.fingering.projection": [
+      "piano_teacher.fingering.placement",
+      "piano_teacher.fingering.types"
+    ],
+    "piano_teacher.fingering.lumikey": [
+      "piano_teacher.fingering.types",
+      "piano_teacher.music"
+    ],
+    "piano_teacher.fingering.service": [
+      "piano_teacher.fingering.lumikey",
+      "piano_teacher.fingering.types",
+      "piano_teacher.music"
+    ],
+    "piano_teacher.fingering": [
+      "piano_teacher.fingering.lumikey",
+      "piano_teacher.fingering.projection",
+      "piano_teacher.fingering.service",
+      "piano_teacher.fingering.types"
+    ],
+    "piano_teacher.fingering.placement": [],
+    "piano_teacher.rendering.legacy": [],
+    "piano_teacher.rendering.legacy.raster": [],
+    "piano_teacher.rendering.legacy.spacing": [],
+    "piano_teacher.rendering.legacy.engraving": [
+      "piano_teacher.importing.pieces",
+      "piano_teacher.music",
+      "piano_teacher.notation.assets.runtime",
+      "piano_teacher.notation.assets.svg_geometry",
+      "piano_teacher.notation.lesson",
+      "piano_teacher.rendering.legacy.geometry",
+      "piano_teacher.rendering.legacy.spacing"
+    ],
+    "piano_teacher.rendering.legacy.geometry": [
+      "piano_teacher.notation.assets.svg_geometry"
+    ],
+    "piano_teacher.notation.assets": [],
+    "piano_teacher.notation.assets.beams": [
+      "piano_teacher.notation.assets.svg_geometry"
+    ],
+    "piano_teacher.notation.assets.runtime": [],
+    "piano_teacher.notation.assets.slurs": [
+      "piano_teacher.notation.assets.svg",
+      "piano_teacher.notation.assets.svg_geometry"
+    ],
+    "piano_teacher.notation.assets.svg": [],
+    "piano_teacher.notation.assets.svg_geometry": [],
+    "piano_teacher.notation.assets.ties": [
+      "piano_teacher.notation.assets.glyphs",
+      "piano_teacher.notation.assets.runtime",
+      "piano_teacher.notation.assets.svg_geometry"
+    ],
+    "piano_teacher.notation.assets.tuplets": [
+      "piano_teacher.notation.assets.svg",
+      "piano_teacher.notation.assets.svg_geometry"
+    ],
+    "piano_teacher.notation.assets.chords": [
+      "piano_teacher.notation.assets.glyphs",
+      "piano_teacher.notation.assets.runtime",
+      "piano_teacher.notation.assets.svg_geometry"
+    ],
+    "piano_teacher.notation.assets.glyphs": [
+      "piano_teacher.notation.assets.runtime"
+    ],
+    "piano_teacher.notation.assets.notes": [
+      "piano_teacher.notation.assets.glyphs",
+      "piano_teacher.notation.assets.runtime",
+      "piano_teacher.notation.assets.svg_geometry"
+    ]
+  },
+  "review_findings": {
+    "backend": [
+      "Mixed session transitions, snapshot projection, score artifacts, MIDI lifecycle and Listen jobs in PracticeEngine",
+      "music/fingering.types edge is typing-only; do not mislabel it a runtime cycle",
+      "Renderer-oriented import facade used unnecessarily by library_health and preprocessing_cache",
+      "Unreachable rewind-layout branch and unused engine.score; distinguish active source/db/HTTP API contracts"
+    ],
+    "ui": [
+      "main.gd construction/polling/navigation/presentation/transport/resource lifetimes mixed",
+      "Screens own mutable controls through main aliases; Library construction also constructed Settings",
+      "Picker route/poll suppression mismatch and missing MIDI-start guard",
+      "Failed lesson request identity can suppress retry",
+      "Old UI harness aliases have drifted from current owners"
+    ],
+    "native": [
+      "Source index/geometry/cache, density fitting, note/context drawing and annotation editing mixed",
+      "Component borrowers require explicit timeline and viewport rebinding at lifetime boundaries",
+      "Source visibility must be shared between music and instructional layers without callbacks"
+    ],
+    "verification": [
+      "Runtime lazy cycles among raster_matching/phase3_pixels/symbol_pixel_proof and feature_pixels/connector_pixels",
+      "Feature measurement families and source coverage acceptance mixed",
+      "Audit capture, process identity, checkpoint, case/proof execution and publication in one CLI",
+      "Extracted worker modules must participate in verification input hashing"
+    ],
+    "provider_adapter": [
+      "117-line first-party Node bridge owns one inference request and fixed physical constraints; CPU threads bounded and ONNX sessions released in finally; cohesive adapter, no refactor needed"
+    ]
+  }
+}

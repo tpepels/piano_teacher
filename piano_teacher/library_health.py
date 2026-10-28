@@ -10,7 +10,7 @@ from pathlib import Path
 from threading import Lock, Thread
 
 from .library import ScoreLibrary
-from .score import import_piece
+from .importing.pieces import import_piece
 
 
 class LibraryHealth:

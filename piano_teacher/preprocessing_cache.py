@@ -143,7 +143,7 @@ class PreprocessingCache:
         Lesson notation is rebuilt from the canonical Piece in both paths.
         """
         if importer is None:
-            from .score import import_piece
+            from .importing.pieces import import_piece
             importer = import_piece
 
         key = self.key("source", fingerprint, source.name)

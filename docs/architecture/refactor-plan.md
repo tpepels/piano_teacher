@@ -171,10 +171,10 @@ commits; no approval menu, worktree, feature branch or per-phase pause is needed
 
 ### Execution checklist
 
-- [ ] Complete whole-repository inventory, dependency/cycle audit and ownership map.
+- [x] Complete whole-repository inventory, dependency/cycle audit and ownership map.
 - [ ] Extract backend session services/read models and reduce PracticeEngine to orchestration.
 - [ ] Extract Home/Library/Practice screens and API/state coordination; reduce main.gd.
-- [ ] Give native score geometry/index/cache lifecycle an independent owner.
+- [x] Give native score geometry/index/cache lifecycle an independent owner.
 - [ ] Separate connector geometry, engraving passes and fingering annotation lifecycle.
 - [ ] Separate verification source expectations, pixel registration and feature proofs; break cycles.
 - [ ] Separate corpus case planning/execution/checkpoint/publication from audit CLI composition.
@@ -256,3 +256,12 @@ first-party architectural monoliths.
   cache now records its explicit height/limit inputs. Independent review found
   unchanged equations and witness selection. Four headless contracts and 58
   real register, boundary, measure-width/velocity and layout tests passed.
+
+- Whole-repository baseline inventory and cross-domain audit findings saved in `docs/architecture/inventory-before.json` (including static import edges with typing/lazy distinctions).
+
+- Source-only dependency cleanup: library health and preprocessing import
+  directly from the canonical importer, without initializing the page-rendering
+  facade. Two fresh-process contracts failed before the change, then the
+  import/cache/health/generator suite passed 17 tests. Generator documentation
+  now reflects actual variant consumption. Baseline inventory includes all
+  180 first-party Python/GDScript/shell/Node-bridge files.

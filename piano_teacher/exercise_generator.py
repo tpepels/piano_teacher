@@ -1,7 +1,7 @@
 """Generate progressively simplified, source-traceable MIDI exercises.
 
-Only the generator is implemented here. The UI and grader must subsequently
-consume the same variant before generated exercises are enabled for students.
+Variants retain original source indices. LearningPlan selects a variant so
+notation, grading and progress all describe that same source-backed stage.
 """
 from __future__ import annotations
 from collections import defaultdict
