@@ -40,7 +40,7 @@ from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_n
 from .course_navigation import locate_course_section
 from .state_projection import hand_stage_rows, guided_learning_fields
 from .assessment_service import AssessmentService
-from .transport_projection import VisualMotionSnapshot, project_visual_motion
+from .visual_transport import VisualTransport, TransportField
 from .live_input_view import LiveInputView
 from .hardware_probe import HardwareProbe
 from .instruction import next_full_attempt
@@ -50,6 +50,25 @@ from .lesson_settings import SETTINGS
 
 
 class PracticeEngine:
+    # Existing public attributes delegate to one actual transport-state owner.
+    run_at = TransportField("run_at")
+    play_from_beat = TransportField("play_from_beat")
+    pending_rewind = TransportField("pending_rewind")
+    paused = TransportField("paused")
+    paused_at = TransportField("paused_at")
+    next_at = TransportField("next_at")
+    visual_offset_beats = TransportField("visual_offset_beats")
+    _preview_loop_pending = TransportField("_preview_loop_pending")
+    _visual_rewind_from = TransportField("_visual_rewind_from")
+    _visual_rewind_to = TransportField("_visual_rewind_to")
+    _visual_rewind_at = TransportField("_visual_rewind_at")
+    _visual_rewind_seconds = TransportField("_visual_rewind_seconds")
+    _retry_previous_pass = TransportField("_retry_previous_pass")
+    practice_preparation = TransportField("practice_preparation")
+    _preparation_pending = TransportField("_preparation_pending")
+    _preparation_at = TransportField("_preparation_at")
+    visual_gap_beats = TransportField("visual_gap_beats")
+
     def __init__(self, data_dir: Path | None = None, enable_midi: bool = True):
         self.lock = threading.RLock()
         # Whole-source inference must never block MIDI or state polling.
@@ -62,16 +81,13 @@ class PracticeEngine:
         self.is_builtin_warmup = False
         self.fingerprint = ""
         self.recorder: Recorder | None = None
-        self.run_at = 0.0
-        self.play_from_beat = 0.0
+        self.visual_transport = VisualTransport(
+            _visual_rewind_seconds=SETTINGS.feedback_seconds)
         self.open_from_beat = 0.0  # Explicit opening measure; never an inferred clock
         self.next_boundary_beat = 0.0
-        self.pending_rewind: float | None = None
         self._rewind_requires_layout = False
         self.feedback_seconds = SETTINGS.feedback_seconds
         self.recovery_notice: dict | None = None
-        self.paused = False
-        self.paused_at = 0.0
         self.pause_context: str | None = None
         self._deferred_score_ack: int | None = None
         self.next_action = "Open a MIDI or MusicXML file."
@@ -95,18 +111,6 @@ class PracticeEngine:
         self.course_guided = False
         self._guided_prepared = False
         self.transport_id = 0
-        # Presentation alone uses an unrolled timeline. MIDI grading always
-        # stays on the original source phrase and original beat coordinates.
-        self.visual_offset_beats = 0.0
-        self._preview_loop_pending = False
-        self._visual_rewind_from: float | None = None
-        self._visual_rewind_to: float | None = None
-        self._visual_rewind_at = 0.0
-        self._visual_rewind_seconds = SETTINGS.feedback_seconds
-        self._retry_previous_pass = False
-        self.practice_preparation: dict | None = None
-        self._preparation_pending = False
-        self._preparation_at = 0.0
         self._semantic_cache_key = None
         self._semantic_cache: dict | None = None
         self.mode = "practice"
@@ -118,7 +122,6 @@ class PracticeEngine:
         self.preview_only = False
         self.count_in_beats = 0
         self.count_in_bar_beats = 4.0
-        self.visual_gap_beats = 4.0
         self.count_in_meter = [4, 4]
         self.feedback = "Open a MIDI or MusicXML file"
         self.score_revision = 0
@@ -127,7 +130,6 @@ class PracticeEngine:
         self._layout_bpm: float | None = None
         self._layout_cache_key: str | None = None
         self._page_png: dict[tuple[int, int], bytes] = {}
-        self.next_at = 0.0
         self.awaiting_score_revision: int | None = None
         self.pending_result = None
         self.feedback_marks: list[dict] = []
@@ -503,29 +505,16 @@ class PracticeEngine:
     def _stop(self):
         if self.teaching is not None:
             self.teaching.stop()
-        self.paused=False
-        self.paused_at=0.0
+        self.visual_transport.reset_for_stop(
+            rewind_seconds=SETTINGS.feedback_seconds)
         self.pause_context=None
         self._deferred_score_ack=None
         self.running=False
         self.auto=False
         self.preview_only=False
-        self.visual_offset_beats = 0.0
-        self._preview_loop_pending = False
-        self._visual_rewind_from = None
-        self._visual_rewind_to = None
-        self._visual_rewind_at = 0.0
-        self._visual_rewind_seconds = SETTINGS.feedback_seconds
-        self._retry_previous_pass = False
-        self.practice_preparation = None
-        self._preparation_pending = False
-        self._preparation_at = 0.0
         self.count_in_beats=0
-        self.next_at=0
         self.awaiting_score_revision=None
-        self.pending_rewind=None
         self._rewind_requires_layout=False
-        self.play_from_beat=0.0
         self.recorder=None
         self.pending_result=None
         self.feedback_marks=[]
@@ -1053,25 +1042,13 @@ class PracticeEngine:
             phrase=self.plan.active_phrase
             position = self.open_from_beat if from_beat is None else from_beat
             self.play_from_beat=max(0.0,min(float(position),phrase.end-phrase.start-1e-6))
-            self.paused=False
-            self.paused_at=0.0
+            self.visual_transport.begin_take(loop_continuation=loop_continuation)
             self.transport_id+=1
             self.live_input.reset_attempt()
             self.running=True
-            self._preview_loop_pending = False
-            self._visual_rewind_from = None
-            self._visual_rewind_to = None
-            self._retry_previous_pass = False
-            self._preparation_pending = False
-            if loop_continuation and self.practice_preparation is not None:
-                self.practice_preparation["phase"] = "complete"
-            else:
-                self.practice_preparation = None
             self.auto=mode == "practice" and not self.preview_only
-            self.next_at=0
             self.awaiting_score_revision=None
             self.pending_result=None
-            self.pending_rewind=None
             self._rewind_requires_layout=False
             self.feedback_marks=[]
             self.feedback_unmapped=0
@@ -1117,48 +1094,20 @@ class PracticeEngine:
                      if context_index+1 < len(model["measures"]) else None)
         measure = preparation_measure_descriptor(context,0.0,model["staff_order"],
                                                  following_measure=following)
-        measure["end_beat"] = self.visual_offset_beats + target
-        measure["start_beat"] = measure["end_beat"] - measure["duration_beats"]
-        self.practice_preparation = {
-            "pass_start_beat": self.visual_offset_beats,
-            "source_from_beat": target, "measure": measure, "phase": "reverse"}
-        self._preparation_pending = True
-        self.pending_rewind = target
-        self._visual_rewind_from = from_visual
-        self._visual_rewind_to = measure["start_beat"]
-        self._visual_rewind_at = now
-        self._visual_rewind_seconds = max(.05, reverse_seconds)
-        self._preparation_at = now + self._visual_rewind_seconds
-        self.next_at = self._preparation_at + measure["duration_beats"] * 60 / self.plan.bpm
+        self.visual_transport.schedule_preparation(
+            measure, source_from_beat=target, from_visual=from_visual,
+            now=now, reverse_seconds=reverse_seconds, bpm=self.plan.bpm)
         self.running = False
         self.recorder = None
-        self._preview_loop_pending = False
         self.count_in_beats = 0.0
 
     def _visual_motion(self, now: float) -> tuple[float, float, float]:
         """Project the current transport snapshot without changing any clocks."""
         phrase = self.plan.active_phrase
-        measure = (self.practice_preparation["measure"]
-                   if self.practice_preparation is not None else None)
-        return project_visual_motion(VisualMotionSnapshot(
-            phrase_length=phrase.end-phrase.start,
-            visual_offset=self.visual_offset_beats,
-            play_from_beat=self.play_from_beat,
-            bpm=self.plan.bpm,
-            run_at=self.run_at,
+        return self.visual_transport.position(
+            now, phrase_length=phrase.end-phrase.start, bpm=self.plan.bpm,
             running=self.running,
-            preparation_pending=self._preparation_pending,
-            preparation_at=self._preparation_at,
-            preparation_measure=measure,
-            rewind_from=self._visual_rewind_from,
-            rewind_to=self._visual_rewind_to,
-            rewind_at=self._visual_rewind_at,
-            rewind_seconds=self._visual_rewind_seconds,
-            pending_auto_result=(self.pending_result is not None and self.auto),
-            preview_loop_pending=self._preview_loop_pending,
-            gap_beats=self.visual_gap_beats,
-            paused=self.paused,
-        ), now)
+            pending_auto_result=(self.pending_result is not None and self.auto))
 
 
     def control(self, action: str, **kwargs) -> None:

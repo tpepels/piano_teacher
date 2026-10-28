@@ -51,6 +51,7 @@ quick_checks() {
     tests/test_engine_update_refactor.py \
     tests/test_progress_repository.py \
     tests/test_assessment_service.py \
+    tests/test_visual_transport.py \
     tests/test_idle_rendering.py \
     tests/test_peace_piece_pixels.py \
     tests/test_continuous_practice_loop.py \

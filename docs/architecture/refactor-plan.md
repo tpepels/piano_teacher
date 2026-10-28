@@ -66,6 +66,10 @@ may use pure geometry/layout helpers but never import verifier internals.
 - [x] Create an independent AssessmentService that owns bounded source-note
   grading, per-source-bar performance reviews and live feedback mapping.
   The engine retains recorder, renderer, tempo and mastery transitions.
+- [x] Give mutable visual transport state and preparation scheduling to
+  `VisualTransport`. Engine command/clock callers retain compatibility aliases
+  with no duplicated storage; the transport component owns reset, take
+  continuation, rewind clocks and absolute visual beat projection.
 - [ ] Continue separating the remainder of post-performance transitions
   from application orchestration with explicit result-state contracts.
 - [x] Split the giant _build_interface method into separate Home, Library and
