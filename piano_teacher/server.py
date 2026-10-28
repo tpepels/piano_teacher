@@ -39,6 +39,7 @@ from .lesson_timing import lead_in_beats, preparation_meter
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
 from .course_navigation import locate_course_section
 from .state_projection import hand_stage_rows, guided_learning_fields
+from .assessment_service import AssessmentService
 from .transport_projection import VisualMotionSnapshot, project_visual_motion
 from .live_feedback import settled_assessment, expired_attack_misses
 from .live_input_view import LiveInputView
@@ -142,6 +143,7 @@ class PracticeEngine:
         self.midi_input_note = None
         self.midi_input_at = None
         self.live_input = LiveInputView()
+        self.assessment = AssessmentService()
         self.hardware_probe = HardwareProbe()
         self.enable_midi = enable_midi
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
@@ -933,64 +935,10 @@ class PracticeEngine:
         self.next_action = "Keep playing through the passage. Review comes at the end."
 
     def _performance_review(self, phrase: Phrase, result) -> dict:
-        """Review real scored attacks by source measure, including chord pitches.
-
-        Every recommended retry corresponds to an existing two-bar source
-        interval. No independent note judgement or synthetic timing is used.
-        """
-        grid = phrase_grid(phrase, self.plan.piece.bar_boundaries)
-        weaknesses = []
-        sections = []
-        for start, end in two_bar_chunks(grid):
-            issues = []
-            counts = {status: 0 for status in
-                      ("missed", "wrong", "early", "late", "short", "long", "extra")}
-            for entry in result.notes:
-                local = entry.note.start - phrase.start
-                if entry.status == "correct" or not start-1e-7 <= local < end-1e-7:
-                    continue
-                counts[entry.status] += 1
-                issue = {"bar": bar_number_at(grid, local, phrase.first_bar),
-                         "status": entry.status,
-                         "pitch": entry.note.pitch,
-                         "name": note_name(entry.note.pitch),
-                         "hand": entry.note.hand,
-                         "source_id": entry.note.source_id}
-                if entry.played_pitch is not None:
-                    issue["played_pitch"] = entry.played_pitch
-                    issue["played_name"] = note_name(entry.played_pitch)
-                issues.append(issue)
-            for note in result.unmatched_played:
-                local = self.play_from_beat + note.onset * self.plan.bpm / 60
-                if start-1e-7 <= local < end-1e-7:
-                    counts["extra"] += 1
-                    issues.append({"bar": bar_number_at(grid, local, phrase.first_bar),
-                                   "status": "extra", "pitch": note.pitch,
-                                   "name": note_name(note.pitch), "hand": "unknown"})
-            errors = sum(counts.values())
-            if not errors:
-                continue
-            first = next(i for i, beat in enumerate(grid) if abs(beat-start) < 1e-6)
-            last = next(i for i, beat in enumerate(grid) if abs(beat-end) < 1e-6)
-            section = {"first_bar": phrase.first_bar+first, "last_bar": phrase.first_bar+last-1,
-                       "start_beat": start, "end_beat": end, "errors": errors,
-                       "counts": counts,
-                       "issues": sorted(issues, key=lambda issue:
-                           (issue["bar"], issue["pitch"], issue["status"]))}
-            weaknesses.append({key: section[key] for key in
-                               ("first_bar", "last_bar", "start_beat", "end_beat", "errors")})
-            sections.append(section)
-        ordering = lambda entry: (-entry["errors"], entry["first_bar"])
-        timing = {status: sum(entry.status == status for entry in result.notes)
-                  for status in ("early", "late", "short", "long")}
-        return {"accuracy_percent": round(100*result.correct/max(1, len(result.notes)), 1),
-                "correct": result.correct, "total": len(result.notes), **timing, "timing": timing,
-                "missed_pitches": sorted({entry.note.pitch for entry in result.notes if entry.status == "missed"}),
-                "missed": sum(entry.status == "missed" for entry in result.notes),
-                "wrong": sum(entry.status == "wrong" for entry in result.notes),
-                "extra_notes": result.extra_notes,
-                "sections": sorted(sections, key=ordering),
-                "weakest_bars": sorted(weaknesses, key=ordering)}
+        """Retained engine API; assessment service owns report construction."""
+        return self.assessment.review(
+            phrase, result, bar_boundaries=self.plan.piece.bar_boundaries,
+            played_from_beat=self.play_from_beat, bpm=self.plan.bpm)
 
     def _review_retry(self, first_bar, last_bar):
         """Select only a scored, real source interval from the current review."""
@@ -1714,11 +1662,11 @@ class PracticeEngine:
             if now >= self.next_at:
                 self._update()
             return
-        active_phrase=Phrase(phrase.number,phrase.first_bar,phrase.last_bar,
-            phrase.start+self.play_from_beat,phrase.start+ending,
-            tuple(n for n in phrase.notes
-                  if phrase.start+self.play_from_beat-1e-7 <= n.start < phrase.start+ending-1e-7))
-        result=evaluate(active_phrase,self.plan.hand,self.plan.bpm,self.recorder.presses if self.recorder else [])
+        result = self.assessment.assess_take(
+            phrase, hand=self.plan.hand, bpm=self.plan.bpm,
+            played=self.recorder.presses if self.recorder else [],
+            from_beat=self.play_from_beat, end_beat=ending,
+            evaluator=evaluate)
         # Keep the just-played score visible for feedback. Curriculum changes
         # are applied only after the display interval, never mid-feedback.
         try:
@@ -1822,50 +1770,17 @@ class PracticeEngine:
                 else "recovering" if self.pending_rewind is not None else "ready")
 
     def _live_feedback(self, elapsed_seconds: float) -> list[dict]:
-        """Live notehead marks: each missing chord pitch is handled separately.
-
-        Slow held notes do not delay missing-pitch feedback until their
-        release, and notes inside the allowable late-onset window are never
-        prematurely marked wrong. Assessment and playback clocks are unchanged.
-        """
-        p=self.plan
+        """Only publish source-bound live marks with a current engraved map."""
+        p = self.plan
         if (p is None or self.preview_only or not self.running
                 or self._layout_revision != self.score_revision or self._layout_cache is None):
             return []
-        phrase=p.active_phrase
-        total=phrase.end-phrase.start
-        if total<=0 or elapsed_seconds<0:
-            return []
-        per_bar=total/max(1,phrase.last_bar-phrase.first_bar+1)
-        now_beat=self.play_from_beat+elapsed_seconds*p.bpm/60
-        played=self.recorder.presses if self.recorder else []
-        settled=settled_assessment(phrase,p.hand,p.bpm,played,
-                                  from_beat=self.play_from_beat,
-                                  until_beat=now_beat,beats_per_bar=per_bar)
-        grid=phrase_grid(phrase,p.piece.bar_boundaries)
-        active_bar=max(index for index, bar_beat in enumerate(grid)
-                       if bar_beat <= now_beat + 1e-7)
-        window_start=grid[max(0, active_bar-2)]
-        missed=expired_attack_misses(phrase,p.hand,p.bpm,played,
-                                     from_beat=self.play_from_beat,
-                                     until_beat=now_beat,
-                                     window_start_beat=window_start)
-        if settled is None and missed is None:
-            return []
-        try:
-            layout=self._layout_cache.layout
-            marks=[]
-            if settled is not None:
-                marks=project_assessment(settled,phrase,p.bpm,layout,
-                                         played_from_beat=self.play_from_beat)["marks"]
-            if missed is not None:
-                existing={m.get("note_id") for m in marks}
-                new=project_assessment(missed,phrase,p.bpm,layout,
-                                       played_from_beat=self.play_from_beat)["marks"]
-                marks.extend(m for m in new if m.get("note_id") not in existing)
-            return marks
-        except (ValueError, RuntimeError, KeyError):
-            return []
+        return self.assessment.live_marks(
+            phrase=p.active_phrase, hand=p.hand, bpm=p.bpm,
+            played=self.recorder.presses if self.recorder else [],
+            played_from_beat=self.play_from_beat, elapsed_seconds=elapsed_seconds,
+            bar_boundaries=p.piece.bar_boundaries,
+            layout=self._layout_cache.layout, projector=project_assessment)
 
     def state(self) -> dict:
         with self.lock:

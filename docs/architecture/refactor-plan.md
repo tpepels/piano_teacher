@@ -63,8 +63,11 @@ may use pure geometry/layout helpers but never import verifier internals.
   `ProgressRepository`, independent of the engine. Keep a documented legacy
   `db` alias for existing tests. The repository initializes LearnerStateStore
   and its schema as part of owning the local progress database.
-- [ ] Continue decomposing the post-performance assessment branch of
-  `_update` behind stable phase/result interfaces.
+- [x] Create an independent AssessmentService that owns bounded source-note
+  grading, per-source-bar performance reviews and live feedback mapping.
+  The engine retains recorder, renderer, tempo and mastery transitions.
+- [ ] Continue separating the remainder of post-performance transitions
+  from application orchestration with explicit result-state contracts.
 - [x] Split the giant _build_interface method into separate Home, Library and
   Practice builders, preserving construction order and event wiring.
 - [ ] Move Home/Library/Settings/Practice screen construction into
