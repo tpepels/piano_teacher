@@ -20,6 +20,10 @@ func _check_picker(picker: Control) -> void:
     picker.call("show_piece", {"title":"Test_Piece", "piece_last_bar":16,
         "selected_start_bar":5})
     var failures := 0
+    print("PICKER_INITIAL visible=", picker.visible,
+        " bar=", picker.call("selected_bar"),
+        " mode=", picker.call("selected_mode"),
+        " popup=", picker.call("is_mode_popup_open"))
     if not picker.visible:
         failures += 1
     if picker.call("selected_bar") != 5:
@@ -29,9 +33,11 @@ func _check_picker(picker: Control) -> void:
     if picker.call("is_mode_popup_open"):
         failures += 1
     var panel: PanelContainer = picker.get("panel")
+    print("PICKER_PANEL_INITIAL size=", panel.size if panel != null else Vector2(-1,-1))
     if panel == null or panel.size.x > 620 or panel.size.y > 570:
         failures += 1
     picker.call("resize_panel", Vector2(500, 400))
+    print("PICKER_PANEL_RESIZED size=", panel.size)
     if panel.size.x > 500 or panel.size.y > 400:
         failures += 1
     picker.hide()
