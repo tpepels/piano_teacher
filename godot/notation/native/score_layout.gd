@@ -506,3 +506,94 @@ func barline_segments(style: String, gap: float) -> Array:
 
 func barline_strokes(style: String, gap: float) -> Array:
     return BarlineLayout.strokes(style, gap)
+
+const FingeringPlacement := preload("res://notation/native/fingering_placement.gd")
+var cached_gap_limit := -1.0
+
+func staff_gap(staff_gap_limit: float) -> float:
+    if cached_staff_gap > 0.0 and absf(cached_gap_height - size.y) < .001 and absf(cached_gap_limit-staff_gap_limit)<.001:
+        return cached_staff_gap
+    # Reserve actual room for ledger notes ABOVE and BELOW both staves.
+    # The former raster crop clipped high notes because it only knew staff
+    # rails, not the extreme noteheads. Fit the full semantic pitch range
+    # once per frame/viewport, uniformly for both hands.
+    var gap: float = clampf(size.y * .042, 8.5, staff_gap_limit)
+    if timeline.model.is_empty():
+        return gap
+    var onset_ink: Dictionary = {}
+    for event in ordered_events:
+        var staff: String = str(event.get("staff", "right"))
+        var center: float = staff_center(staff)
+        var accidentals: Dictionary = {}
+        if str(event.get("accidental","")) in Geometry.ACCIDENTAL_GLYPHS:
+            accidentals[str(event["id"])] = 0.0
+        var unit_ink: Rect2 = event_ink_rect(event,1.0,{},accidentals)
+        var at: float = float(event["beat"])
+        if not onset_ink.has(at):
+            onset_ink[at] = {}
+        var hull: Vector2 = onset_ink[at].get(staff,Vector2(INF,-INF))
+        onset_ink[at][staff] = Vector2(minf(hull.x,unit_ink.position.y-center),
+            maxf(hull.y,unit_ink.end.y-center))
+        if str(event.get("kind", "")) != "note":
+            continue
+        var clef: Dictionary = clef_for(staff, measure_for(event))
+        var step: int = Geometry.staff_step(event.get("spelling", {}), clef)
+        var factor: float = 2.0 - float(step)*.5
+        var assignment: Dictionary = FingeringPlacement.assignment(event)
+        var above: float = 45.0 if not assignment.is_empty() and assignment["hand"] == "right" else 32.0
+        var below: float = 45.0 if not assignment.is_empty() and assignment["hand"] == "left" else 32.0
+        if factor < -.001:
+            gap = minf(gap, (center-above) / -factor)
+        elif factor > .001:
+            gap = minf(gap, (size.y-below-center) / factor)
+        # Ink coordinates at unit staff spacing scale linearly around the
+        # display staff's fixed centre. Empty horizontal-offset maps avoid
+        # invoking the offset/density layout while this gap is being fitted.
+        # The complete authentic sprite includes its shaft/flag and cap;
+        # a fixed notehead margin alone cannot contain a low down-stem note.
+        gap = fit_vertical_ink_gap(gap,staff,unit_ink)
+    # Beamed shafts can be stretched beyond an isolated note template.
+    # Reserve the same source fragment and endpoint extents as the painter.
+    for group in beam_groups:
+        var ids := PackedStringArray()
+        for event in group:
+            ids.append(str(event["id"]))
+        var info: Dictionary = glyphs.beam_metadata.get("|".join(ids),{})
+        if info.is_empty():
+            continue
+        var first: Dictionary = group[0]
+        var box: Array = info["bounds"]
+        gap = fit_vertical_ink_gap(gap,str(first["staff"]),Rect2(0.0,
+            event_y(first,1.0)+float(box[1])/250.0,1.0,float(box[3])/250.0))
+        var tips: Array = info["tip_offsets"]
+        for index in range(group.size()):
+            var event: Dictionary = group[index]
+            var extents: Dictionary = chord_extents(event,1.0)
+            var head: float = float(extents["bottom_y" if info["stem_up"] else "top_y"])
+            var tip: float = head+float(tips[index])/250.0
+            gap = fit_vertical_ink_gap(gap,str(event["staff"]),Rect2(0.0,minf(head,tip),1.0,absf(head-tip)))
+    # Simultaneous ink must also fit BETWEEN the fixed staff centres. Source
+    # shafts/chord sprites stay authentic; scale the entire score uniformly.
+    var staff_distance: float = staff_center("left")-staff_center("right")
+    for lanes in onset_ink.values():
+        if not lanes.has("right") or not lanes.has("left"):
+            continue
+        var difference: float = lanes["right"].y-lanes["left"].x
+        if difference>0.0:
+            gap = minf(gap,(staff_distance-3.0)/difference)
+    # A note that truly cannot fit is still drawn deterministically; the
+    # score is not cropped, and no horizontal position can change.
+    cached_staff_gap = maxf(5.0, gap)
+    cached_gap_height = size.y
+    cached_gap_limit = staff_gap_limit
+    return cached_staff_gap
+
+func fit_vertical_ink_gap(limit: float, staff: String, unit_ink: Rect2) -> float:
+    var center: float = staff_center(staff)
+    var top: float = unit_ink.position.y-center
+    var bottom: float = unit_ink.end.y-center
+    if top<-.001:
+        limit = minf(limit,(center-3.0)/-top)
+    if bottom>.001:
+        limit = minf(limit,(size.y-3.0-center)/bottom)
+    return limit

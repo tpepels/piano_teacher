@@ -249,3 +249,10 @@ first-party architectural monoliths.
   owner suites 61/35/41 passed and independent review ran 55 tests with three
   unrelated CI tests deselected, no blocking findings. No retained audit files
   or corpus were written. Worker stage ownership and CLI decomposition follow.
+
+- Native fitting extraction: `ViewportFit` chooses the existing ordered staff
+  candidates, two-pass rest lanes, global density and legible fallback without
+  owning the beat axis. Vertical geometry fitting/cache moved to `ScoreLayout`;
+  cache now records its explicit height/limit inputs. Independent review found
+  unchanged equations and witness selection. Four headless contracts and 58
+  real register, boundary, measure-width/velocity and layout tests passed.

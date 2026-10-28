@@ -16,15 +16,12 @@ const Design := preload("res://practice_theme.gd")
 const NOTE_INK := Design.SCORE_INK
 const DIM_INK := Design.STAFF_MUTED
 const PREVIEW_LIGHT := Design.MINT
-const MAX_STAFF_GAP := 22.0
+const ViewportFit := preload("res://notation/native/viewport_fit.gd")
+const MAX_STAFF_GAP := ViewportFit.MAX_STAFF_GAP
 # A piano learner needs upcoming notation in view. Preserve the largest
 # authentic staff that leaves at least this many beats to the right of the
 # fixed playhead. No temporal warping, font imitation or overlap is allowed.
-const MIN_LOOKAHEAD_BEATS := 1.75
-const MIN_READABLE_STAFF_GAP := 14.0
-const FINGERING_FONT_SIZE := 16
 const FingeringPlacement := preload("res://notation/native/fingering_placement.gd")
-const FingeringSpatialLayout := preload("res://notation/native/fingering_spatial_layout.gd")
 
 signal fingering_change_requested(source_id: String, finger: Variant)
 
@@ -311,62 +308,15 @@ func load_score(candidate: Dictionary) -> bool:
     # use the largest staff that preserves reading context. Crucially each
     # candidate recomputes true ink collision clearance; never just cap BPM
     # distance or hide/shift a source accidental.
-    var ink_density: float = density
-    var fits_density := false
-    # The hidden Practice canvas is sometimes loaded before Godot assigns
-    # its first Control width. A zero-width value must not force every
-    # passage through five extremely expensive candidate engravings.
-    # Use the standard desktop viewport for that brief pre-layout state.
-    var viewport_width: float = size.x if size.x >= 640.0 else 1536.0
-    var max_usable_density: float = (
-        viewport_width*(1.0-PLAYHEAD_FRACTION)/MIN_LOOKAHEAD_BEATS)
-    var fallbacks: Array = []
-    for candidate_gap in [MAX_STAFF_GAP,17.0,14.0,11.0,8.5]:
-        var tested_gap: float = float(candidate_gap)
-        _layout_rest_lanes(tested_gap,density)
-        var trial: float = _required_ink_density(density,tested_gap)
-        var first_witness: Dictionary = ink_density_witness.duplicate(true)
-        _layout_rest_lanes(tested_gap,trial)
-        var second_trial: float = _required_ink_density(trial,tested_gap)
-        var second_witness: Dictionary = ink_density_witness.duplicate(true)
-        var final_witness: Dictionary = second_witness if second_trial > trial else first_witness
-        trial = maxf(trial,second_trial)
-        if not is_finite(trial) or trial > timeline.MAX_SCORE_PIXELS_PER_BEAT:
-            continue
-        var fit_option: Dictionary = {
-            "gap":tested_gap, "density":trial, "witness":final_witness}
-        fallbacks.append(fit_option)
-        if tested_gap >= MIN_READABLE_STAFF_GAP and trial > max_usable_density:
-            continue
-        staff_gap_limit = tested_gap
-        ink_density = trial
-        selected_density_witness = final_witness.duplicate(true)
-        fits_density = true
-        break
-    if not fits_density and not fallbacks.is_empty():
-        # An exceptionally dense score may not permit the target lookahead
-        # at a legible staff size. Prefer the smallest scale still >=14px.
-        # Never select an arbitrary sub-legible size solely to pass a metric.
-        var alternate: Dictionary = fallbacks[-1]
-        for option in fallbacks:
-            if float(option["gap"]) >= MIN_READABLE_STAFF_GAP:
-                alternate = option
-        staff_gap_limit = float(alternate["gap"])
-        ink_density = float(alternate["density"])
-        selected_density_witness = alternate["witness"].duplicate(true)
-        fits_density = true
-    if fits_density:
-        selected_density_witness["staff_gap"] = staff_gap_limit
-        selected_density_witness["selected_density"] = ink_density
-        selected_density_witness["available_lookahead_beats"] = (
-            size.x*(1.0-PLAYHEAD_FRACTION)/ink_density)
-        # The accepted scale can be different from the last trial; use the
-        # corresponding rest lanes instead of stale rejected-candidate lanes.
-        _layout_rest_lanes(staff_gap_limit,ink_density)
-    if not fits_density:
-        failure_reason = "Source glyph ink cannot fit within the fixed musical timeline"
+    var fitted: Dictionary = ViewportFit.choose(layout,ink_geometry,density,PLAYHEAD_FRACTION)
+    if not fitted["ok"]:
+        failure_reason = fitted["error"]
         notice = failure_reason
         return false
+    var ink_density: float = fitted["density"]
+    staff_gap_limit = fitted["staff_gap"]
+    selected_density_witness = fitted["witness"]
+    ink_density_witness = fitted["last_witness"]
     if not timeline.set_score_density(ink_density):
         failure_reason = timeline.last_error
         notice = failure_reason
@@ -505,93 +455,10 @@ func _staff_center(hand: String) -> float:
 
 func _gap() -> float:
     layout.set_viewport(size)
-    if cached_staff_gap > 0.0 and absf(cached_gap_height - size.y) < .001:
-        return cached_staff_gap
-    # Reserve actual room for ledger notes ABOVE and BELOW both staves.
-    # The former raster crop clipped high notes because it only knew staff
-    # rails, not the extreme noteheads. Fit the full semantic pitch range
-    # once per frame/viewport, uniformly for both hands.
-    var gap: float = clampf(size.y * .042, 8.5, staff_gap_limit)
-    if timeline.model.is_empty():
-        return gap
-    var onset_ink: Dictionary = {}
-    for event in ordered_events:
-        var staff: String = str(event.get("staff", "right"))
-        var center: float = _staff_center(staff)
-        var accidentals: Dictionary = {}
-        if str(event.get("accidental","")) in Geometry.ACCIDENTAL_GLYPHS:
-            accidentals[str(event["id"])] = 0.0
-        var unit_ink: Rect2 = _event_ink_rect(event,1.0,{},accidentals)
-        var at: float = float(event["beat"])
-        if not onset_ink.has(at):
-            onset_ink[at] = {}
-        var hull: Vector2 = onset_ink[at].get(staff,Vector2(INF,-INF))
-        onset_ink[at][staff] = Vector2(minf(hull.x,unit_ink.position.y-center),
-            maxf(hull.y,unit_ink.end.y-center))
-        if str(event.get("kind", "")) != "note":
-            continue
-        var clef: Dictionary = _clef_for(staff, _measure_for(event))
-        var step: int = Geometry.staff_step(event.get("spelling", {}), clef)
-        var factor: float = 2.0 - float(step)*.5
-        var assignment: Dictionary = _fingering_assignment(event)
-        var above: float = 45.0 if not assignment.is_empty() and assignment["hand"] == "right" else 32.0
-        var below: float = 45.0 if not assignment.is_empty() and assignment["hand"] == "left" else 32.0
-        if factor < -.001:
-            gap = minf(gap, (center-above) / -factor)
-        elif factor > .001:
-            gap = minf(gap, (size.y-below-center) / factor)
-        # Ink coordinates at unit staff spacing scale linearly around the
-        # display staff's fixed centre. Empty horizontal-offset maps avoid
-        # invoking the offset/density layout while this gap is being fitted.
-        # The complete authentic sprite includes its shaft/flag and cap;
-        # a fixed notehead margin alone cannot contain a low down-stem note.
-        gap = _fit_vertical_ink_gap(gap,staff,unit_ink)
-    # Beamed shafts can be stretched beyond an isolated note template.
-    # Reserve the same source fragment and endpoint extents as the painter.
-    for group in beam_groups:
-        var ids := PackedStringArray()
-        for event in group:
-            ids.append(str(event["id"]))
-        var info: Dictionary = glyphs.beam_metadata.get("|".join(ids),{})
-        if info.is_empty():
-            continue
-        var first: Dictionary = group[0]
-        var box: Array = info["bounds"]
-        gap = _fit_vertical_ink_gap(gap,str(first["staff"]),Rect2(0.0,
-            _event_y(first,1.0)+float(box[1])/250.0,1.0,float(box[3])/250.0))
-        var tips: Array = info["tip_offsets"]
-        for index in range(group.size()):
-            var event: Dictionary = group[index]
-            var extents: Dictionary = _chord_extents(event,1.0)
-            var head: float = float(extents["bottom_y" if info["stem_up"] else "top_y"])
-            var tip: float = head+float(tips[index])/250.0
-            gap = _fit_vertical_ink_gap(gap,str(event["staff"]),Rect2(0.0,minf(head,tip),1.0,absf(head-tip)))
-    # Simultaneous ink must also fit BETWEEN the fixed staff centres. Source
-    # shafts/chord sprites stay authentic; scale the entire score uniformly.
-    var staff_distance: float = _staff_center("left")-_staff_center("right")
-    for lanes in onset_ink.values():
-        if not lanes.has("right") or not lanes.has("left"):
-            continue
-        var difference: float = lanes["right"].y-lanes["left"].x
-        if difference>0.0:
-            gap = minf(gap,(staff_distance-3.0)/difference)
-    # A note that truly cannot fit is still drawn deterministically; the
-    # score is not cropped, and no horizontal position can change.
-    cached_staff_gap = maxf(5.0, gap)
-    cached_gap_height = size.y
-    return cached_staff_gap
-
+    return layout.staff_gap(staff_gap_limit)
 
 func _fit_vertical_ink_gap(limit: float, staff: String, unit_ink: Rect2) -> float:
-    var center: float = _staff_center(staff)
-    var top: float = unit_ink.position.y-center
-    var bottom: float = unit_ink.end.y-center
-    if top<-.001:
-        limit = minf(limit,(center-3.0)/-top)
-    if bottom>.001:
-        limit = minf(limit,(size.y-3.0-center)/bottom)
-    return limit
-
+    return layout.fit_vertical_ink_gap(limit,staff,unit_ink)
 
 func _clef_for(staff: String, measure: Dictionary) -> Dictionary:
     return layout.clef_for(staff,measure)
