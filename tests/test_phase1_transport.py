@@ -85,18 +85,79 @@ def test_pause_preserves_recorded_midi_timing(harness):
     assert e.recorder.presses[0].release == pytest.approx(2.25)
 
 
-def test_restart_clears_attempt_but_not_mastery(harness):
+@pytest.mark.parametrize('mode', ('practice', 'perform'))
+def test_restart_clears_attempt_but_not_mastery(harness, mode):
     e, t = harness
-    e.start()
+    e.plan.mastered[e.plan.identity] = 100
+    mastery = dict(e.plan.mastered)
+    e.start(mode=mode)
+    initial = e.state()
+    assert initial['phase'] == 'count_in' and initial['count_in_beats'] == 2.5
+    assert initial['clock_beat'] == -2.5 and e.plan.bpm == 40
     t[0] = 105.25
     e._receive(SimpleNamespace(type='note_on', note=60, velocity=90))
+    assert len(e.recorder.presses) == 1
     ident = e.transport_id
+    revision = e.score_revision
+    restart_at = t[0]
     e.control('restart')
-    assert e.state()['phase'] == 'count_in'
-    assert e.state()['clock_beat'] == pytest.approx(-2.5)
-    assert e.transport_id == ident + 1
-    assert e.state()['midi_notes'] == 0
-    assert e.plan.index == 0 and not e.plan.mastered
+    restarted = e.state()
+    assert restarted['midi_notes'] == 0 and restarted['revision'] == revision
+    assert e.plan.index == 0 and e.plan.mastered == mastery
+    if mode == 'perform':
+        # An uninterrupted performance gets a fresh count-in; continuous
+        # practice's reverse/preparation lifecycle must not leak into it.
+        assert restarted['phase'] == 'count_in'
+        assert restarted['count_in_beats'] == 2.5 and restarted['clock_beat'] == -2.5
+        assert restarted['practice_preparation'] is None
+        assert e.transport_id == ident+1 and e.run_at == restart_at+3.75
+        t[0] = e.run_at-.01
+        assert e.state()['phase'] == 'count_in'
+        t[0] = e.run_at
+        playing = e.state()
+        assert playing['phase'] == 'playing' and playing['clock_beat'] == 0
+    else:
+        # The old attempt is discarded immediately. Reverse from source
+        # beat 1 to the preceding empty 4/4 measure at beat -4, then read
+        # that complete measure at 40 BPM before replaying source beat 0.
+        reverse_end = restart_at+e.feedback_seconds
+        deadline = reverse_end+4*60/40
+        assert restarted['phase'] == 'recovering' and not restarted['running']
+        assert restarted['count_in_beats'] == 0 and restarted['clock_beat'] == 0
+        assert restarted['practice_preparation']['phase'] == 'reverse'
+        measure = restarted['practice_preparation']['measure']
+        assert (measure['start_beat'], measure['end_beat'], measure['duration_beats']) == (-4, 0, 4)
+        assert restarted['visual_scroll_beat'] == 1
+        assert restarted['visual_target_beat'] == -4
+        assert restarted['visual_scroll_speed'] == -5/e.feedback_seconds
+        assert e.transport_id == ident and e.recorder is None
+        assert e.next_at == deadline
+        t[0] = restart_at+e.feedback_seconds/2
+        reversing = e.state()
+        assert reversing['practice_preparation']['phase'] == 'reverse'
+        assert reversing['visual_scroll_beat'] == -1.5
+        t[0] = reverse_end
+        preparing = e.state()
+        assert preparing['phase'] == 'recovering' and not preparing['running']
+        assert preparing['practice_preparation']['phase'] == 'preparing'
+        assert preparing['visual_scroll_beat'] == -4
+        assert preparing['visual_scroll_speed'] == 40/60
+        t[0] = reverse_end+3
+        assert e.state()['visual_scroll_beat'] == -2
+        t[0] = deadline-.01
+        waiting = e.state()
+        assert waiting['phase'] == 'recovering' and waiting['midi_notes'] == 0
+        assert e.transport_id == ident and e.recorder is None
+        assert e.next_at == deadline
+        t[0] = deadline
+        playing = e.state()
+        assert playing['phase'] == 'playing' and playing['clock_beat'] == 0
+        assert playing['count_in_beats'] == 0 and playing['visual_scroll_beat'] == 0
+        assert playing['practice_preparation']['phase'] == 'complete'
+        assert e.run_at == deadline and e.transport_id == ident+1
+    assert playing['midi_notes'] == 0 and playing['revision'] == revision
+    assert e.recorder is not None and not e.recorder.presses
+    assert e.plan.index == 0 and e.plan.mastered == mastery
 
 
 def test_invalid_pause_and_resume_rejected(harness):

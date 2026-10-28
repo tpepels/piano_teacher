@@ -288,3 +288,8 @@ first-party architectural monoliths.
   reports match byte-for-byte. Owner focuses 30/123/476/125 passed; independent
   review normalized 12 moved and 117 surviving bodies against baseline, checked
   40 catalogue glyphs, and ran 30 + 17 targeted tests without findings.
+
+- Existing transport tests corrected to the implemented documented lifecycle:
+  repeats retain exact deadline/poll overshoot, and restart explicitly verifies
+  reverse motion, the full preparation measure, recorder creation and mastery.
+  No production behavior changed; 41 focused progression/transport tests pass.

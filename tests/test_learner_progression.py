@@ -217,11 +217,15 @@ def test_three_real_clean_full_takes_advance_guided_course_to_next_variant_learn
         assert f'Clean pass {streak}/3' in feedback['next_action']
         assert first_stage not in e.plan.mastered
         if streak < 3:
+            deadline = e.next_at
             repeated = advance(e, now)
             # The empty measure between takes supplies preparation. A
-            # same-score repeat continues its clock without another count-in.
+            # same-score repeat retains its deadline, including the helper's
+            # 10 ms poll overshoot, without adding another count-in.
             assert repeated['phase'] == 'playing' and repeated['count_in_beats'] == 0
-            assert repeated['revision'] == revision and repeated['clock_beat'] == 0
+            assert repeated['revision'] == revision and repeated['bpm'] == 80
+            assert e.run_at == deadline and now[0] == deadline+.01
+            assert repeated['clock_beat'] == (deadline+.01-deadline)*80/60
             assert repeated['streak'] == streak and e.plan.identity == first_stage
             assert e.recorder is not None and not e.recorder.presses
     next_stage = advance(e, now)
@@ -441,10 +445,13 @@ def test_actual_237_bar_import_performs_every_original_event_and_no_input_cannot
         gap = e.state()
         assert gap['phase'] == 'preview_gap'
         assert gap['visual_scroll_beat'] > preview['visual_scroll_beat']
+        deadline, bpm = e.next_at, counted['bpm']
         repeated = advance(e, now)
         assert repeated['phase'] == 'playing' and repeated['preview_only']
         assert repeated['transport_id'] == transport+1 and repeated['revision'] == state['revision']
-        assert repeated['count_in_beats'] == 0 and repeated['clock_beat'] == 0
+        assert repeated['count_in_beats'] == 0 and repeated['bpm'] == bpm
+        assert e.run_at == deadline and now[0] == deadline+.01
+        assert repeated['clock_beat'] == (deadline+.01-deadline)*bpm/60
         assert repeated['visual_scroll_beat'] >= gap['visual_scroll_beat']
         assert repeated['performance_summary'] is None and repeated['take_result'] is None
         assert not repeated['scoring_available'] and repeated['midi_notes'] == 0
