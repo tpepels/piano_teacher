@@ -94,8 +94,11 @@ may use pure geometry/layout helpers but never import verifier internals.
   and connected-component recentering into pure native voice_layout.gd.
   The native view supplies source note Y positions, beam directions and
   authentic glyph bounds. Rendering retains the original timing geometry.
-- [ ] Continue separating native fingering/layout and visible drawing passes
-  without coupling verification logic to production renderer internals.
+- [x] Move fingering's candidate ordering, spatial bin collision checks
+  and placement packing into a pure layout collaborator, retaining real glyph
+  obstacles and source-note Y coordinates in the native view.
+- [ ] Continue separating native rendering passes and source ornament layout
+  without sharing production logic with the independent notation audit.
 - [ ] Modularize the audit coordinator separately from source-driven proofs;
   preserve its fail-closed behavior and resumability.
 

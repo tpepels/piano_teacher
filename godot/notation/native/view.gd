@@ -23,6 +23,7 @@ const MIN_LOOKAHEAD_BEATS := 1.75
 const MIN_READABLE_STAFF_GAP := 14.0
 const FINGERING_FONT_SIZE := 16
 const FingeringPlacement := preload("res://notation/native/fingering_placement.gd")
+const FingeringSpatialLayout := preload("res://notation/native/fingering_spatial_layout.gd")
 
 signal fingering_change_requested(source_id: String, finger: Variant)
 
@@ -370,23 +371,12 @@ func _fingering_source(event: Dictionary) -> String:
 
 
 func _fingering_block(rect: Rect2, bins: Dictionary, cell: float) -> void:
-    for column in range(floori(rect.position.x/cell), floori(rect.end.x/cell)+1):
-        if not bins.has(column):
-            bins[column] = []
-        bins[column].append(rect)
+    FingeringSpatialLayout.block(rect,bins,cell)
 
 
 func _fingering_clear(rect: Rect2, bins: Dictionary, cell: float) -> bool:
-    if rect.position.y < 4.0 or rect.end.y > size.y-4.0:
-        return false
-    for line in fingering_staff_lines:
-        if rect.grow(.5).intersects(line):
-            return false
-    for column in range(floori((rect.position.x-3.0)/cell), floori((rect.end.x+3.0)/cell)+1):
-        for other in bins.get(column, []):
-            if rect.grow(3.0).intersects(other):
-                return false
-    return true
+    return FingeringSpatialLayout.is_clear(
+        rect,bins,cell,fingering_staff_lines,size.y)
 
 
 func _fingering_obstacles(gap: float, bins: Dictionary, cell: float) -> void:
@@ -687,58 +677,26 @@ func _layout_fingerings(gap: float) -> void:
         if physical_keys.has(key):
             physical_keys[key]["event_ids"].append(str(event["id"]))
             continue
-        var item: Dictionary = {"event":event,"assignment":assignment,"event_ids":[str(event["id"])]}
-        physical_keys[key] = item
-        candidates.append(item)
-    candidates.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-        var ea: Dictionary = a["event"]
-        var eb: Dictionary = b["event"]
-        if absf(float(ea["beat"])-float(eb["beat"])) > .000001:
-            return float(ea["beat"]) < float(eb["beat"])
-        if a["assignment"]["hand"] != b["assignment"]["hand"]:
-            return a["assignment"]["hand"] < b["assignment"]["hand"]
-        var ya: float = _event_y(ea,gap)
-        var yb: float = _event_y(eb,gap)
-        if absf(ya-yb)<.001:
-            return str(ea.get("source_id",ea["id"]))<str(eb.get("source_id",eb["id"]))
-        return ya > yb if a["assignment"]["hand"] == "right" else ya < yb)
-    var font_size: int = clampi(roundi(gap*.75),11,FINGERING_FONT_SIZE)
-    var metrics: Dictionary = _fingering_metrics(font_size)
-    var extent: Vector2 = metrics["cell"]
-    var ink_offset: Vector2 = metrics["ink_offset"]
-    var ink_size: Vector2 = metrics["ink_size"]
-    for item in candidates:
-        var event: Dictionary = item["event"]
-        var assignment: Dictionary = item["assignment"]
-        var hand: String = assignment["hand"]
-        var head := Vector2(float(event["beat"])*timeline.pixels_per_beat+float(cached_head_offsets.get(str(event["id"]),0.0)),_event_y(event,gap))
-        var direction := -1.0 if hand == "right" else 1.0
         var id: String = str(event["id"])
         var up: bool = bool(_chord_extents(event,gap,cached_head_offsets)["up"])
+        var direction: float = -1.0 if assignment["hand"] == "right" else 1.0
         if voice_stem_up_by_note.has(id):
             direction = -1.0 if up else 1.0
-        var chord: bool = bool(event.get("chord",false)) or chord_members.has(id)
-        var hint: Dictionary = assignment.get("placement",{}) if assignment.get("placement") is Dictionary else {}
-        var placed := false
-        for local_search in [false,true]:
-            if placed:
-                break
-            var positions: Array = FingeringPlacement.fallback_candidates(head,ink_size,gap,direction,up) if local_search else \
-                FingeringPlacement.candidates(head,ink_size,gap,direction,chord,up,_staff_center(str(event["staff"])),hint)
-            for candidate in positions:
-                var ink_rect := Rect2(candidate["position"],ink_size)
-                var rect := Rect2(ink_rect.position-ink_offset,extent)
-                if rect.position.y < 0.0 or rect.end.y > size.y or not _fingering_clear(ink_rect,bins,cell):
-                    continue
-                fingering_layout.append({"rect":rect,"ink_rect":ink_rect,"head":head,"finger":int(assignment["finger"]),
-                    "hand":hand,"event_ids":item["event_ids"],"orientation":candidate["orientation"],
-                    "font_size":font_size,"text_offset_x":1.0})
-                _fingering_block(ink_rect,bins,cell)
-                placed = true
-                break
-        if not placed:
-            fingering_placement_issues.append({"source_id":str(assignment["source_id"]),
-                "event_ids":item["event_ids"],"reason":"No local fingering position clears the musical ink"})
+        var item: Dictionary = {
+            "event":event, "assignment":assignment, "event_ids":[id],
+            "head":Vector2(float(event["beat"])*timeline.pixels_per_beat
+                +float(cached_head_offsets.get(id,0.0)),_event_y(event,gap)),
+            "up":up, "direction":direction,
+            "chord":bool(event.get("chord",false)) or chord_members.has(id),
+            "staff_center":_staff_center(str(event["staff"]))}
+        physical_keys[key] = item
+        candidates.append(item)
+    var font_size: int = clampi(roundi(gap*.75),11,FINGERING_FONT_SIZE)
+    var metrics: Dictionary = _fingering_metrics(font_size)
+    var packed: Dictionary = FingeringSpatialLayout.pack(candidates, metrics,
+        gap, size.y, cell, bins, fingering_staff_lines, font_size)
+    fingering_layout = packed["layout"]
+    fingering_placement_issues = packed["issues"]
 
 
 func _fingering_metrics(font_size: int) -> Dictionary:
