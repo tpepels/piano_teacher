@@ -78,8 +78,11 @@ may use pure geometry/layout helpers but never import verifier internals.
   transition methods while retaining the same lock and transport clocks.
 - [x] Split the giant _build_interface method into separate Home, Library and
   Practice builders, preserving construction order and event wiring.
-- [ ] Move Home/Library/Settings/Practice screen construction into
-  independently testable UI components with signals and explicit state inputs.
+- [x] Extract the modal source-measure picker into its own Godot Control,
+  with independent source-bar input, resize and selection behavior; main.gd
+  owns HTTP action dispatch and navigation via picker signals.
+- [ ] Move the remaining Home/Library/Settings/Practice screen construction
+  into independently testable components with signals and explicit state inputs.
 - [ ] Extract the native view's fingering layout and semantic barline policies
   into stateless collaborators where real duplication exists.
 - [ ] Modularize the audit coordinator separately from source-driven proofs;

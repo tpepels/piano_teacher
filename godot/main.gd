@@ -25,6 +25,7 @@ const GameInputIndicator := preload("res://game_input_indicator.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const NativeNotation := preload("res://notation/native/view.gd")
 const FrameMeter := preload("res://frame_meter.gd")
+const SourceMeasurePicker := preload("res://source_measure_picker.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -42,7 +43,6 @@ var path_reset_confirmation: VBoxContainer
 var path_reset_fingerprint := ""
 var lesson_refresh_after_reset := false
 var drawer_intro: Tween
-var picker_intro: Tween
 var overlay_backdrop: ColorRect
 var score_browse_button: Button
 var screens: Dictionary = {}
@@ -90,11 +90,6 @@ var library_path_label: Label
 var library_rows: VBoxContainer
 var library_message: Label
 var open_picker: Control
-var open_panel: PanelContainer
-var open_measure: SpinBox
-var open_measure_slider: HSlider
-var open_mode: OptionButton
-var open_title: Label
 var practice_stage_bar: HFlowContainer
 var practice_stage_labels: Dictionary = {}
 var presented_hand_stages: Array = []
@@ -1241,112 +1236,10 @@ func _build_practice_screen() -> void:
         _save_folder()
     )
     add_child(folder_dialog)
-    # MIDI files can be long. Choose the exact source measure before opening
-    # a course stage, rather than forcing the user to skip through passages.
-    # Native/embedded ConfirmationDialog geometry was broken under a
-    # fullscreen Godot window: its contents were squeezed into a narrow,
-    # nearly full-height window, and the music drawer stayed visible behind
-    # it. Use one predictable in-stage modal with ordinary Control layout.
-    open_picker = Control.new()
-    open_picker.name = "StartingMeasureOverlay"
-    open_picker.z_index = 20
-    open_picker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    open_picker.mouse_filter = Control.MOUSE_FILTER_STOP
-    open_picker.visible = false
+    open_picker = SourceMeasurePicker.new()
+    open_picker.confirmed.connect(func(_bar: int, _mode: String): _confirm_open_picker())
+    open_picker.cancel_requested.connect(_cancel_open_picker)
     add_child(open_picker)
-    var start_scrim := ColorRect.new()
-    start_scrim.color = Color("#06110F", .81)
-    start_scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    start_scrim.mouse_filter = Control.MOUSE_FILTER_STOP
-    start_scrim.gui_input.connect(func(event: InputEvent):
-        if event is InputEventMouseButton and event.pressed:
-            _cancel_open_picker())
-    open_picker.add_child(start_scrim)
-    open_panel = PanelContainer.new()
-    open_panel.name = "StartingMeasurePanel"
-    open_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-    # CenterContainer otherwise expands its child to the full viewport:
-    # the old bug appeared as a 900px-high, unusable skinny panel.
-    open_panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-    open_panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    open_panel.add_theme_stylebox_override("panel", Design.modal_surface())
-    open_picker.add_child(open_panel)
-    var start_scroll := ScrollContainer.new()
-    start_scroll.name = "StartContentScroll"
-    start_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    start_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-    start_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    # Keep primary modal actions outside its scrolling content: in an
-    # 800x600 window learners must not scroll to discover Open music/Cancel.
-    var picker_column := _stack(10)
-    picker_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    picker_column.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    _card_body(open_panel, 18).add_child(picker_column)
-    picker_column.add_child(start_scroll)
-    var start_content := _stack(12)
-    start_scroll.add_child(start_content)
-    start_content.add_child(_label("CHOOSE A STARTING POINT", 14, ACCENT, true))
-    open_title = _label("", 24, INK, true)
-    open_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    start_content.add_child(open_title)
-    var start_hint := _label(
-        "Start at any measure of this piece.", 16, MUTED)
-    start_content.add_child(start_hint)
-    start_content.add_child(_label("SOURCE MEASURE", 14, ACCENT, true))
-    open_measure = SpinBox.new()
-    open_measure.min_value = 1
-    open_measure.max_value = 1
-    open_measure.step = 1
-    open_measure.custom_minimum_size = Vector2(0, 54)
-    open_measure.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    open_measure.add_theme_font_size_override("font_size", _ui_font(19))
-    start_content.add_child(open_measure)
-    open_measure_slider = HSlider.new()
-    open_measure_slider.min_value = 1
-    open_measure_slider.max_value = 1
-    open_measure_slider.step = 1
-    open_measure_slider.custom_minimum_size.y = 32
-    start_content.add_child(open_measure_slider)
-    open_measure.value_changed.connect(func(value: float):
-        open_measure_slider.set_value_no_signal(value))
-    open_measure_slider.value_changed.connect(func(value: float):
-        open_measure.set_value_no_signal(value))
-    var source_jumps := HBoxContainer.new()
-    source_jumps.name = "SourceMeasureQuickJumps"
-    source_jumps.add_theme_constant_override("separation", 10)
-    start_content.add_child(source_jumps)
-    for kind in ["Beginning", "Middle", "End"]:
-        var choice: String = kind
-        var jump := _button(kind, func():
-            var target := 1 if choice == "Beginning" else (
-                int(ceil(open_measure.max_value / 2.0)) if choice == "Middle"
-                else int(open_measure.max_value))
-            open_measure.value = target, false, "utility")
-        jump.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        jump.custom_minimum_size = Vector2(0, 40)
-        jump.add_theme_font_size_override("font_size", _ui_font(13))
-        source_jumps.add_child(jump)
-    start_content.add_child(_label("BEGIN WITH", 14, ACCENT, true))
-    open_mode = OptionButton.new()
-    open_mode.add_item("Learn notes (without timing)")
-    open_mode.add_item("Practice rhythm")
-    open_mode.custom_minimum_size.y = 54
-    open_mode.add_theme_font_size_override("font_size", _ui_font(16))
-    start_content.add_child(open_mode)
-    var start_note := _label(
-        "Learn starts with notes only. Practice uses the metronome and rhythm.", 14, MUTED)
-    start_content.add_child(start_note)
-    var start_actions := HBoxContainer.new()
-    start_actions.name = "StartPickerActions"
-    start_actions.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    start_actions.add_theme_constant_override("separation", 12)
-    picker_column.add_child(start_actions)
-    var cancel_picker := _button("Cancel", _cancel_open_picker, false, "navigation")
-    cancel_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    start_actions.add_child(cancel_picker)
-    var confirm_picker := _button("Open music", _confirm_open_picker, true)
-    confirm_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    start_actions.add_child(confirm_picker)
     _resize_open_picker()
     device_menu = PopupMenu.new()
     device_menu.id_pressed.connect(_choose_device)
@@ -2154,65 +2047,27 @@ func _populate_library() -> void:
         or not issue.is_empty() or visible == 0
 
 func _resize_open_picker() -> void:
-    if open_panel == null:
-        return
-    # Centered from the actual viewport. Never a 240px-wide, 900px-tall
-    # native subwindow, including fullscreen and high-density displays.
-    var width: float = minf(620.0, maxf(280.0, size.x - 36.0))
-    # The PanelContainer is positioned directly under the full-screen
-    # overlay, NOT under a CenterContainer that might expand it vertically.
-    # The scroll area handles short laptop windows without hiding Cancel.
-    var height: float = minf(570.0, size.y * .84)
-    open_panel.custom_minimum_size = Vector2(width, 0)
-    open_panel.size = Vector2(width, height)
-    open_panel.position = (size - open_panel.size) * .5
-
+    if open_picker != null:
+        (open_picker as SourceMeasurePicker).resize_panel(size)
 
 func _cancel_open_picker() -> void:
     open_picker.visible = false
     _navigate("library")
 
-
 func _confirm_open_picker() -> void:
-    if action_pending or not open_picker.visible:
+    if action_pending or open_picker == null or not open_picker.visible:
         return
-    # Godot sends _input() before a SpinBox's embedded LineEdit commits its
-    # pending digits. Honor the value the learner actually typed on Enter.
-    if get_viewport().gui_get_focus_owner() == open_measure.get_line_edit():
-        open_measure.value = clampi(
-            open_measure.get_line_edit().text.to_int(), 1,
-            int(open_measure.max_value))
+    var selected: SourceMeasurePicker = open_picker as SourceMeasurePicker
+    var bar: int = selected.selected_bar()
+    var mode: String = selected.selected_mode()
     open_picker.visible = false
     _navigate("practice")
-    _send_action({"action": "open_at", "bar": int(open_measure.value),
-        "mode": "practice" if open_mode.selected == 1 else "learn"})
-
+    _send_action({"action": "open_at", "bar": bar, "mode": mode})
 
 func _show_open_picker(state: Dictionary) -> void:
-    # Opening metadata is source-based and does not require Verovio rendering
-    # or a connected MIDI piano. Do not start the first guided lesson yet.
-    var last_bar: int = maxi(1, int(state.get("piece_last_bar", 1)))
-    open_title.text = str(state.get("title", "Untitled piece")).replace("_", " ")
-    open_measure.max_value = last_bar
-    open_measure.min_value = 1
-    open_measure.value = clampi(int(state.get("selected_start_bar", 1)), 1, last_bar)
-    open_measure.suffix = " / %d" % last_bar
-    open_measure_slider.max_value = last_bar
-    open_measure_slider.min_value = 1
-    open_measure_slider.set_value_no_signal(open_measure.value)
-    open_mode.select(0)
-    # Close the music drawer before presenting the modal. A picker over an
-    # open drawer had two active layers and unreadable, overlapping controls.
+    # Close the music drawer so the picker is the only active overlay.
     _navigate("practice")
-    _resize_open_picker()
-    open_picker.visible = true
-    if picker_intro != null and picker_intro.is_running():
-        picker_intro.kill()
-    open_panel.modulate.a = 0.0
-    picker_intro = create_tween()
-    picker_intro.tween_property(open_panel, "modulate:a", 1.0, .18) \
-        .set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-    open_measure.get_line_edit().grab_focus()
+    (open_picker as SourceMeasurePicker).show_piece(state)
 
 
 func _update_hand_stages(state: Dictionary) -> void:
@@ -3423,7 +3278,7 @@ func _input(event: InputEvent) -> void:
             get_viewport().set_input_as_handled()
             return
         if event.keycode == KEY_ENTER or event.keycode == KEY_KP_ENTER:
-            if open_mode.get_popup().visible:
+            if (open_picker as SourceMeasurePicker).is_mode_popup_open():
                 return
             _confirm_open_picker()
             get_viewport().set_input_as_handled()
