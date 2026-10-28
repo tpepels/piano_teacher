@@ -16,7 +16,7 @@ import pytest
 
 from piano_teacher.application.score_preparation import assemble_layout
 from piano_teacher.notation.connector_pixels import verify_tuplet_pixels
-from piano_teacher.notation.symbol_pixel_proof import bright
+from piano_teacher.notation.pixel_ink import bright
 
 
 ROOT = Path(__file__).resolve().parents[1]

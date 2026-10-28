@@ -130,7 +130,7 @@ def test_accidental_column_can_move_left_without_changing_its_pitch(tmp_path):
 
 def test_a_previous_heads_accidental_cannot_be_borrowed_for_the_current_note(tmp_path):
     from piano_teacher.notation.reference_font import reference_glyphs
-    from piano_teacher.notation.symbol_pixel_proof import _outline
+    from piano_teacher.notation.pixel_ink import rasterize_outline
     from piano_teacher.notation.pixel_proof import detect_staff_lines,expected_y
     import numpy as np
     folder=copied('accidentals',tmp_path)
@@ -146,7 +146,7 @@ def test_a_previous_heads_accidental_cannot_be_borrowed_for_the_current_note(tmp
     width,height=(round(b[i]*rail.gap/250) for i in (2,3))
     x=round(600-width/2);y=round(expected_y(rail,('C',0,4),('G',2,0))+b[1]*rail.gap/250)
     pixels=np.asarray(image).copy()
-    pixels[y:y+height,x:x+width][_outline(head['svg'],width,height)]=(229,242,234)
+    pixels[y:y+height,x:x+width][rasterize_outline(head['svg'],width,height)]=(229,242,234)
     Image.fromarray(pixels).save(path)
     assert feature(check('accidentals',folder),0.,'accidental')['status']!='verified'
 

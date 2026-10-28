@@ -6,7 +6,8 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
-from piano_teacher.notation.connector_pixels import _Frames, _classes, _inventory, _pages
+from piano_teacher.notation.captured_frames import CapturedFrames
+from piano_teacher.notation.connector_pixels import _classes, _inventory, _pages
 from piano_teacher.notation.proof import read_written_score
 from piano_teacher.notation.assets.tuplets import extract_tuplets
 
@@ -42,7 +43,7 @@ def test_hidden_padding_cannot_make_a_unique_actual_rest_anchor_ambiguous():
     xml, _ = documents()
     written = read_written_score(xml)
     rest = next(e for e in written.symbols if e['source']['id'] == 'xml-p0-m0-e1')
-    anchor = _Frames(FIXTURE, written).rest(rest)
+    anchor = CapturedFrames(FIXTURE, written).rest(rest)
     assert anchor['score'] >= .79
     assert 625 < anchor['x'] < 665
 
@@ -100,7 +101,7 @@ def test_genuinely_visible_simultaneous_rests_still_cannot_share_a_pixel_anchor(
     written = read_written_score(ET.tostring(root, encoding='unicode'))
     event = next(e for e in written.symbols if e['source']['id'] == 'xml-p0-m0-e1')
     with pytest.raises(ValueError, match='Simultaneous anonymous rest anchors'):
-        _Frames(FIXTURE, written).rest(event)
+        CapturedFrames(FIXTURE, written).rest(event)
 
 
 def test_hidden_source_rest_cannot_borrow_a_visible_rests_pixels():
@@ -112,7 +113,7 @@ def test_hidden_source_rest_cannot_borrow_a_visible_rests_pixels():
     # must never acquire its pixels after hidden events leave the candidate set.
     hidden['note_type'] = 'eighth'
     with pytest.raises(ValueError, match='Hidden source rest'):
-        _Frames(FIXTURE, written).rest(hidden)
+        CapturedFrames(FIXTURE, written).rest(hidden)
 
 
 def test_existing_native_asset_binding_agrees_without_borrowing_model_aliases():

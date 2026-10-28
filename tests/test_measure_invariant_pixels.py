@@ -176,7 +176,7 @@ CORRUPTIONS = ['compressed-rest', 'moved-boundary', 'duplicate-boundary', 'local
 
 def _source_head_is_present(folder, data, frame):
     from continuous_repeat_pixel_helpers import _context, notation_ink
-    from piano_teacher.notation.feature_pixels import _feature_glyphs
+    from piano_teacher.notation.reference_font import feature_glyphs
     from piano_teacher.notation.pixel_proof import detect_staff_lines, expected_y
     from piano_teacher.notation.symbol_pixel_proof import _match_glyph
     written = read_written_score(data['xml'])
@@ -188,7 +188,7 @@ def _source_head_is_present(folder, data, frame):
     measure = max(i for i, beat in enumerate(written.bars[:-1]) if beat <= frame['clock'])
     y = expected_y(staff,tuple(event['spelling']),_context(written,measure,'left')[2])
     glyph = 'head_'+(event['note_type'] if event['note_type'] in ('half','whole') else 'black')
-    score = _match_glyph(notation_ink(image),_feature_glyphs()[glyph],staff.gap,image.width*.42,y,
+    score = _match_glyph(notation_ink(image),feature_glyphs()[glyph],staff.gap,image.width*.42,y,
                          centered=True,dxs=range(-2,3),dys=range(-2,3))
     assert score >= .79, ('The independent source-head/timing control failed',score)
 

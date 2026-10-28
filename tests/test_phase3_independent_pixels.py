@@ -330,7 +330,7 @@ def test_retained_dense_chord_cannot_borrow_an_erased_heads_neighbors(tmp_path,s
     import numpy as np
     import shutil
     from piano_teacher.notation.pixel_proof import detect_staff_lines
-    from piano_teacher.notation.symbol_pixel_proof import bright
+    from piano_teacher.notation.pixel_ink import bright
 
     fixture=Path(__file__).parent/"fixtures"
     image=Image.open(fixture/"native_dense_whole_chord.png").convert("RGB")

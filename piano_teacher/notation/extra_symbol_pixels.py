@@ -25,12 +25,14 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 
-from .connector_pixels import _translation
-from .feature_pixels import _closed_component, _feature_glyphs, _register
-from .phase3_pixels import _clef_at, _rectangular_rest_orientation
-from .pixel_proof import RasterStaff, detect_staff_lines, expected_y
+from .pixel_motion import register_translation
+from .feature_pixels import _closed_component
+from .head_registration import register_noteheads
+from .reference_font import feature_glyphs
+from .pixel_context import rectangular_rest_orientation
+from .pixel_proof import RasterStaff, detect_staff_lines
 from .proof import read_written_score
-from .symbol_pixel_proof import _outline, bright
+from .pixel_ink import rasterize_outline, bright
 
 STRIPE_HALF_WIDTH = 64
 MAX_CLOCK_STEP = .15
@@ -50,9 +52,9 @@ def _family(name):
 
 @lru_cache(maxsize=128)
 def _template(name, gap):
-    glyph = _feature_glyphs()[name]
+    glyph = feature_glyphs()[name]
     bounds = glyph['bounds']
-    return _outline(glyph['svg'], max(1, round(bounds[2]*gap/250)),
+    return rasterize_outline(glyph['svg'], max(1, round(bounds[2]*gap/250)),
                     max(1, round(bounds[3]*gap/250)))
 
 
@@ -271,7 +273,7 @@ def _scan(photo, areas, controls=None):
     Areas choose computation only. Both complete endcaps are searched; other
     frames include the stripe and every novel-ink tile, wherever it occurs.
     """
-    names = [n for n in _feature_glyphs() if n.startswith(('head_', 'rest_', 'flag_'))
+    names = [n for n in feature_glyphs() if n.startswith(('head_', 'rest_', 'flag_'))
              or n == 'augmentation_dot' or (n.startswith(('clef_', 'time_'))
                                             and (controls is None or n in controls))]
     gap = round(min(s.gap for s in photo['staves'].values()), 3)
@@ -388,7 +390,7 @@ def _motion(previous, current, dt, source_objects=()):
     for label, top, bottom, left, right in bands:
         for level in (1, 0):
             try:
-                shift, evidence = _translation(previous['layers'][level][top:bottom, left:right],
+                shift, evidence = register_translation(previous['layers'][level][top:bottom, left:right],
                     current['layers'][level][top:bottom, left:right],
                     min(s.gap for s in current['staves'].values()))
                 witnesses.append((shift, evidence, level, label, top, bottom, left, right))
@@ -487,7 +489,7 @@ def _bind(written, events, photo, objects, owners, errors, *, next_track=None):
     # original strict joint/family/ledger/occlusion rules still apply.
     for layer in (photo['head_pixels'], *reversed(photo['layers'])):
         pixels = _shifted(layer, dx)
-        matched, failed = _register(pixels, photo['staves'], written, notes, _feature_glyphs(),
+        matched, failed = register_noteheads(pixels, photo['staves'], written, notes, feature_glyphs(),
             occlusion_columns=tuple(int(c+dx) for c in photo['occlusion_columns']))
         for sid, head in matched.items():
             heads.setdefault(sid, head)
@@ -508,7 +510,7 @@ def _bind(written, events, photo, objects, owners, errors, *, next_track=None):
             candidates = [o for o in objects if o['family'] == 'head'
                 and o['name'] == name
                 and abs((o['bbox'][0]+o['bbox'][2])/2-target_x) <= 3
-                and abs(o['bbox'][1]-(_feature_glyphs()[o['name']]['bounds'][1]*o['gap']/250)-target_y) <= 3]
+                and abs(o['bbox'][1]-(feature_glyphs()[o['name']]['bounds'][1]*o['gap']/250)-target_y) <= 3]
             if len(candidates) != 1:
                 # The source-directed oracle can prove a hollow head with
                 # measured ledger/playhead context that the generic family
@@ -534,7 +536,7 @@ def _bind(written, events, photo, objects, owners, errors, *, next_track=None):
                         return None
                     box = [x0+int(xs.min()), y0+int(ys.min()),
                            x0+int(xs.max())+1, y0+int(ys.max())+1]
-                    return _rectangular_rest_orientation(box, photo['staves'][event['staff']])['observed_rest']
+                    return rectangular_rest_orientation(box, photo['staves'][event['staff']])['observed_rest']
                 candidates = [o for o in objects if o['family'] == 'rest'
                     and o['name'] in ('rest_whole', 'rest_half')
                     and abs((o['bbox'][0]+o['bbox'][2])/2-camera) <= 4
@@ -668,7 +670,7 @@ def _isolated_rectangle(photo, obj):
     for staff in photo['staves'].values():
         center = (staff.lines[0]+staff.bottom)/2
         if abs((box[1]+box[3])/2-center) <= 4*staff.gap:
-            if _rectangular_rest_orientation(box, staff)['observed_rest'] in ('whole', 'half'):
+            if rectangular_rest_orientation(box, staff)['observed_rest'] in ('whole', 'half'):
                 return True
     return False
 

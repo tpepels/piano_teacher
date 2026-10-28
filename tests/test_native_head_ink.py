@@ -19,7 +19,7 @@ import pytest
 from piano_teacher.notation.pixel_proof import detect_staff_lines, expected_y
 from piano_teacher.notation.raster_matching import _joint_candidates
 from piano_teacher.notation.reference_font import reference_glyphs
-from piano_teacher.notation.symbol_pixel_proof import bright
+from piano_teacher.notation.pixel_ink import bright
 from piano_teacher.server import PracticeEngine
 
 ROOT = Path(__file__).resolve().parents[1]

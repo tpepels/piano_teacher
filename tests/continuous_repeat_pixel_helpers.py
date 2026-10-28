@@ -10,7 +10,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from piano_teacher.notation.feature_pixels import _feature_glyphs
+from piano_teacher.notation.reference_font import feature_glyphs
 from piano_teacher.notation.pixel_proof import detect_staff_lines, expected_y
 from piano_teacher.notation.proof import read_written_score
 from piano_teacher.notation.symbol_pixel_proof import _match_glyph
@@ -53,7 +53,7 @@ def verify_rest_frame(folder, data, frame):
     ink = notation_ink(image)
     left, right = verify_gap_boundaries(folder, data, frame)
     x = (left + right) / 2
-    glyphs = _feature_glyphs()
+    glyphs = feature_glyphs()
     measured = {}
     for hand, staff in staves.items():
         # Independent SMuFL restWhole outline has its origin at the rail it
@@ -128,7 +128,7 @@ def verify_clean_gap(folder, data, frame, report):
     left, right = round(left) + 4, round(right) - 3
     ink = notation_ink(image).copy()
     center = sum(verify_gap_boundaries(folder, data, frame)) / 2
-    rest = _feature_glyphs()['rest_whole']['bounds']
+    rest = feature_glyphs()['rest_whole']['bounds']
     for staff in staves.values():
         unit = staff.gap / 250
         x0 = round(center - rest[2] * unit / 2) - 3
@@ -186,7 +186,7 @@ def verify_next_source_arrival(folder, data, report):
     image = _load(folder, frame)
     staves = detect_staff_lines(image)
     ink = notation_ink(image)
-    glyphs = _feature_glyphs()
+    glyphs = feature_glyphs()
     heads = []
     for event in attacks:
         if float(event['beat']) != onset or event.get('chord'):
@@ -237,7 +237,7 @@ def verify_context_headers(folder, data, report):
     """Opening, source-internal changes and restoration before GAP START."""
     written, duration, gap = repeat_expectations(data)
     frames = {frame['name']: frame for frame in report['frames']}
-    glyphs = _feature_glyphs()
+    glyphs = feature_glyphs()
     obligations = [(0, 'opening', 0.0, True)]
     for index in range(1, len(written.bars) - 1):
         if any(_context(written, index - 1, hand) != _context(written, index, hand)

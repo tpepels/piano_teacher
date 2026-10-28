@@ -16,9 +16,9 @@ from continuous_repeat_pixel_helpers import (
     verify_rest_frame, verify_gap_boundaries, verify_clean_gap, verify_repeat_motion,
     verify_context_headers, verify_source_body, verify_next_source_arrival,
 )
-from piano_teacher.notation.feature_pixels import _feature_glyphs
+from piano_teacher.notation.reference_font import feature_glyphs
 from piano_teacher.notation.pixel_proof import detect_staff_lines
-from piano_teacher.notation.symbol_pixel_proof import _outline
+from piano_teacher.notation.pixel_ink import rasterize_outline
 
 ROOT = Path(__file__).resolve().parents[1]
 ALA = 'Ala_–_Joep_Beving.midi'
@@ -247,7 +247,7 @@ def _erase_keep_rails(image, box, sample_x):
 
 
 def _rest_box(image, staff, x):
-    bounds = _feature_glyphs()['rest_whole']['bounds']
+    bounds = feature_glyphs()['rest_whole']['bounds']
     unit = staff.gap / 250
     left = round(x - bounds[2] * unit / 2) - 3
     top = round(staff.lines[1] + bounds[1] * unit) - 3
@@ -273,10 +273,10 @@ def test_inserted_authentic_clef_inside_gap_fails(repeated_capture, tmp_path):
     path, image, frame = _rest_image(capture)
     verify_clean_gap(folder, data, frame, report)
     staff = detect_staff_lines(image)['right']
-    glyph = _feature_glyphs()['clef_g']
+    glyph = feature_glyphs()['clef_g']
     bounds = glyph['bounds']
     unit = staff.gap / 250
-    mask = _outline(glyph['svg'], round(bounds[2] * unit), round(bounds[3] * unit))
+    mask = rasterize_outline(glyph['svg'], round(bounds[2] * unit), round(bounds[3] * unit))
     left = round(image.width * PLAYHEAD + 2.5 * staff.gap - mask.shape[1] / 2)
     top = round(staff.lines[-2] + bounds[1] * unit)
     pixels = np.asarray(image).copy()

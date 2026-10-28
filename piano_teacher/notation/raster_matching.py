@@ -3,7 +3,7 @@ import math
 from collections import defaultdict, deque
 import numpy as np
 
-from .symbol_pixel_proof import _outline
+from .pixel_ink import rasterize_outline
 
 
 def photographed_playhead_columns(image):
@@ -61,7 +61,7 @@ def match_glyph(pixels, glyph, gap, origin_x, origin_y, *, centered, dxs, dys,
     bounds=glyph["bounds"]
     width=max(1,round(bounds[2]*gap/250))
     height=max(1,round(bounds[3]*gap/250))
-    template=_outline(glyph["svg"],width,height)
+    template=rasterize_outline(glyph["svg"],width,height)
     left=origin_x-(bounds[2]*gap/250/2 if centered else -bounds[0]*gap/250)
     top=origin_y+bounds[1]*gap/250
     xs=sorted({round(left+dx) for dx in dxs
@@ -111,7 +111,7 @@ def _joint_candidates(pixels, request, origin_x, dys, minimum):
     b=glyph["bounds"]
     width=max(1,round(b[2]*gap/250))
     height=max(1,round(b[3]*gap/250))
-    template=_outline(glyph["svg"],width,height)
+    template=rasterize_outline(glyph["svg"],width,height)
     left=origin_x-b[2]*gap/250/2
     top=request["origin_y"]+b[1]*gap/250
     xs=sorted({round(left+dx) for dx in request["dxs"]

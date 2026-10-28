@@ -57,7 +57,7 @@ def _assert_flag_clearance(image):
     Renderer rectangles/atlas positions cannot authorize a pass.
     """
     from piano_teacher.notation.measure_pixels import detect_barline_strokes
-    from piano_teacher.notation.symbol_pixel_proof import bright
+    from piano_teacher.notation.pixel_ink import bright
     found = detect_barline_strokes(image)
     assert found["passed"], found
     target = image.width * .42 - 1.35 * found["staff_gap"]
@@ -142,7 +142,8 @@ def test_density_is_global_and_source_model_is_unchanged(boundary_frames):
 
 def test_written_outgoing_heads_and_photographed_flags_are_preserved(boundary_frames):
     from piano_teacher.notation.proof import read_written_score
-    from piano_teacher.notation.symbol_pixel_proof import _connector_head, bright
+    from piano_teacher.notation.symbol_pixel_proof import _connector_head
+    from piano_teacher.notation.pixel_ink import bright
     folder, frames = boundary_frames
     written = read_written_score((FIXTURE/"score.musicxml").read_text())
     before = Image.open(FIXTURE/"before-terminal.png").convert("RGB")

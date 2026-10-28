@@ -9,7 +9,7 @@ from PIL import Image
 import pytest
 
 from continuous_repeat_pixel_helpers import notation_ink
-from piano_teacher.notation.feature_pixels import _feature_glyphs
+from piano_teacher.notation.reference_font import feature_glyphs
 from piano_teacher.notation.pixel_proof import detect_staff_lines
 from piano_teacher.notation.symbol_pixel_proof import _match_glyph
 from test_continuous_repeat_pixels import ALA, ROOT, build_repeat_fixture, repeat_originals
@@ -170,7 +170,7 @@ def test_backend_preparation_is_visibly_engraved_and_next_source_stays_attached(
             rules.append(float(np.mean(columns)))
         center=sum(rules)/2
         for staff in staves.values():
-            score=_match_glyph(ink,_feature_glyphs()['rest_whole'],staff.gap,center,staff.lines[1],
+            score=_match_glyph(ink,feature_glyphs()['rest_whole'],staff.gap,center,staff.lines[1],
                 centered=True,dxs=range(-2,3),dys=range(-2,3))
             assert score>=.80,'Backend preparation is not an authentic, centered whole-measure rest'
         assert frame['instances'],'Source instances disappeared during the real transport gap'

@@ -1,5 +1,6 @@
 """Retained shard-0 framebuffers: context, components and source-onset proof."""
 from pathlib import Path
+from piano_teacher.notation.reference_font import feature_glyphs
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -65,7 +66,7 @@ def test_foreign_head_is_still_detected_beside_a_context_padded_stripe(tmp_path)
     from io import BytesIO
     with Image.open(FIXTURES/'danny-stripe.png') as raw:
         image = raw.convert('RGB')
-    glyph = pixels._feature_glyphs()['head_black']
+    glyph = feature_glyphs()['head_black']
     bounds = glyph['bounds']
     png = cairosvg.svg2png(bytestring=glyph['svg'].encode(),
         output_width=round(bounds[2]*21.875/250),
@@ -110,36 +111,35 @@ def test_actual_hanon_freeze_reverse_and_jump_remain_rejected():
 
 
 def test_structural_motion_uses_full_hanon_contours_outside_the_column_shortlist():
-    from piano_teacher.notation.feature_pixels import _frame_shift
+    from piano_teacher.notation.pixel_motion import frame_shift
     frames = hanon_frames()
     for first, second in zip(frames, frames[1:]):
-        measured = _frame_shift(first, second)
+        measured = frame_shift(first, second)
         assert measured is not None
         assert measured['shift'] == 15
         assert measured['contour_agreement'] > .90
-        backward = _frame_shift(second, first)
+        backward = frame_shift(second, first)
         assert backward is not None and backward['shift'] == -15
 
 
 def test_structural_motion_rejects_equal_competing_full_contours_and_missing_ink():
-    from piano_teacher.notation.feature_pixels import _frame_shift
+    from piano_teacher.notation.pixel_motion import frame_shift
     background = (16, 41, 35)
     periodic = Image.new('RGB', (800, 200), background)
     pen = ImageDraw.Draw(periodic)
     for x in (100, 300, 500, 700):
         pen.rectangle((x, 40, x+10, 90), fill=(245, 245, 245))
-    assert _frame_shift(periodic, periodic) is None
+    assert frame_shift(periodic, periodic) is None
     blank = Image.new('RGB', periodic.size, background)
-    assert _frame_shift(periodic, blank) is None
-    assert _frame_shift(periodic, blank.crop((0, 0, 600, 200))) is None
+    assert frame_shift(periodic, blank) is None
+    assert frame_shift(periodic, blank.crop((0, 0, 600, 200))) is None
 
 
 def test_all_horizontal_dice_scores_equal_direct_pixel_intersections():
-    from piano_teacher.notation import phase3_pixels
-    assert callable(getattr(phase3_pixels, '_horizontal_dice', None))
     rng = np.random.default_rng(731)
     a, b = (rng.random((31, 97)) > .8 for _ in range(2))
-    for dice, shift in phase3_pixels._horizontal_dice(a, b, 30):
+    from piano_teacher.notation.pixel_motion import horizontal_dice
+    for dice, shift in horizontal_dice(a, b, 30):
         aa, bb = (a[:, shift:], b[:, :-shift]) if shift > 0 else (
             (a[:, :shift], b[:, -shift:]) if shift < 0 else (a, b))
         expected = 2*np.count_nonzero(aa & bb)/(np.count_nonzero(aa)+np.count_nonzero(bb))

@@ -127,7 +127,7 @@ def create_diagnostics(folder, output, *, hand="both", limit=3) -> dict:
             from .pixel_proof import detect_staff_lines, expected_y
             from .proof import read_written_score
             from .reference_font import reference_glyphs
-            from .symbol_pixel_proof import bright
+            from .pixel_ink import bright
 
             beat = float(row["beat"])
             native_name = f"native-{beat:.5f}.png"

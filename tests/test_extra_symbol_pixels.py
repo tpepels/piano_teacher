@@ -90,8 +90,8 @@ def test_real_chord_silent_rest_and_inactive_ink_are_inventoried(captured, monke
 
 
 def paste_glyph(folder, name, *, fixed=False, inactive=False, x=1190, y=65):
-    from piano_teacher.notation.feature_pixels import _feature_glyphs
-    glyph = _feature_glyphs()[name]
+    from piano_teacher.notation.reference_font import feature_glyphs
+    glyph = feature_glyphs()[name]
     b = glyph['bounds']
     svg = glyph['svg'].replace('fill="white"',
                               'fill="#596960"' if inactive else 'fill="#eaf4ed"')

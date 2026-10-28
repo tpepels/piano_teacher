@@ -10,7 +10,7 @@ from piano_teacher.notation.feature_pixels import verify_note_feature_pixels, ve
 from piano_teacher.notation.phase3_pixels import verify_all_notehead_pixels
 from piano_teacher.notation.pixel_proof import detect_staff_lines
 from piano_teacher.notation.visual_coverage import visual_elements
-from piano_teacher.notation.symbol_pixel_proof import bright, _outline
+from piano_teacher.notation.pixel_ink import bright, rasterize_outline
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -197,7 +197,7 @@ def test_frozen_frames_do_not_establish_a_boundary_clock(tmp_path):
 def meter_fixture(folder, numerator, denominator, *, painted=None):
     # Keep authentic staff pixels; render independent external-font digits in
     # a freely spaced header. Expectations below are the literal XML numbers.
-    from piano_teacher.notation.feature_pixels import _feature_glyphs
+    from piano_teacher.notation.reference_font import feature_glyphs
     source = FIXTURES/"native_structure"
     xml = (source/"score.musicxml").read_text().replace("<beats>4</beats>", f"<beats>{numerator}</beats>")
     xml = xml.replace("<beat-type>4</beat-type>", f"<beat-type>{denominator}</beat-type>")
@@ -209,7 +209,7 @@ def meter_fixture(folder, numerator, denominator, *, painted=None):
     erase[:, :450] = False
     erase[:, 600:] = False
     pixels[erase] = [16, 41, 35]
-    glyphs = _feature_glyphs()
+    glyphs = feature_glyphs()
     for staff in staves.values():
         for text, y in ((painted or numerator, sum(staff.lines)/5-staff.gap),
                         (denominator, sum(staff.lines)/5+.8*staff.gap)):
@@ -217,7 +217,7 @@ def meter_fixture(folder, numerator, denominator, *, painted=None):
                 glyph = glyphs["time_"+digit]
                 b, gap = glyph["bounds"], staff.gap
                 width, height = round(b[2]*gap/250), round(b[3]*gap/250)
-                mask = _outline(glyph["svg"], width, height)
+                mask = rasterize_outline(glyph["svg"], width, height)
                 x = 520+(i-(len(text)-1)/2)*42
                 left, top = round(x-b[2]*gap/500), round(y+b[1]*gap/250)
                 pixels[top:top+height, left:left+width][mask] = [229, 242, 234]

@@ -211,7 +211,7 @@ def test_reference_id_renaming_and_invalid_hand_fail_closed():
 
 def test_actual_missing_secondary_beam_cannot_pass_as_written_sixteenths(tmp_path):
     import numpy as np
-    from piano_teacher.notation.symbol_pixel_proof import bright
+    from piano_teacher.notation.pixel_ink import bright
 
     folder = copied('beam16', tmp_path)
     xml = (folder/'score.musicxml').read_text()
@@ -294,7 +294,7 @@ def test_no_usable_reference_frame_cannot_be_certified(monkeypatch):
             # because the test double forgot a method.
             raise OSError("No independently usable framebuffer")
         def frame(self, clock): raise OSError("No independently usable framebuffer")
-    monkeypatch.setattr(matcher, "_Frames", Frames)
+    monkeypatch.setattr(matcher, "CapturedFrames", Frames)
     report = matcher._verify(source, Path("/unused"), "right", [svg], "beam")
     assert report["coverage"]["expected"] > 0
     assert report["coverage"]["verified"] == 0

@@ -20,14 +20,14 @@ def test_vectorized_glyph_match_equals_original_scalar_pixel_comparison(glyph,x,
 
 def _head_pixels(heads, *, gap=20):
     """Place authentic outline ink at explicit test positions, without a renderer."""
-    from piano_teacher.notation.symbol_pixel_proof import _outline
+    from piano_teacher.notation.pixel_ink import rasterize_outline
 
     pixels=np.zeros((180,200),dtype=bool)
     for name,x,y in heads:
         spec=reference_glyphs()[name]
         b=spec["bounds"]
         w,h=round(b[2]*gap/250),round(b[3]*gap/250)
-        pixels[y:y+h,x:x+w] |= _outline(spec["svg"],w,h)
+        pixels[y:y+h,x:x+w] |= rasterize_outline(spec["svg"],w,h)
     return pixels
 
 

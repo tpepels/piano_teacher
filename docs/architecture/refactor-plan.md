@@ -280,3 +280,11 @@ first-party architectural monoliths.
   signals carry open/resume/refresh/check intent. Main owns only request/route
   consequences. Shared construction primitives are stateless. Fresh owner
   focus 19 passed and independent review 14 passed with no findings.
+
+- Verification foundation slice: photographed ink/context/motion, head
+  registration and captured-frame lifetime have explicit independent owners.
+  Both runtime cycles (including lazy imports) are removed. Existing algorithms,
+  sign conventions, source/unison ownership and budgets are unchanged; 11 saved
+  reports match byte-for-byte. Owner focuses 30/123/476/125 passed; independent
+  review normalized 12 moved and 117 surviving bodies against baseline, checked
+  40 catalogue glyphs, and ran 30 + 17 targeted tests without findings.

@@ -35,3 +35,34 @@ def reference_glyphs() -> dict:
         result[name] = {"svg":ET.tostring(svg,encoding="unicode"),
                         "bounds":bounds,"font":font,"code":code}
     return result
+
+
+@lru_cache(maxsize=1)
+def feature_glyphs():
+    """Extend the independent font catalogue with feature/header glyphs."""
+    import verovio
+
+    result = dict(reference_glyphs())
+    resources = Path(verovio.__file__).resolve().parent / 'data'
+    font = 'Leipzig'
+    metrics = ET.parse(resources / f'{font}.xml').getroot()
+    codes = {'augmentation_dot': 'E1E7', 'acc_flat': 'E260',
+             'acc_natural': 'E261', 'acc_sharp': 'E262',
+             'acc_double_sharp': 'E263', 'acc_double_flat': 'E264'}
+    codes.update(clef_g='E050', clef_f='E062', clef_c='E05C')
+    codes.update({f'time_{i}': f'{0xE080+i:04X}' for i in range(10)})
+    for count in range(1, 6):
+        for direction, offset in (('up', 0), ('down', 1)):
+            codes[f'flag_{direction}_{count}'] = f'{0xE240 + 2*(count-1) + offset:04X}'
+    for name, code in codes.items():
+        metric = metrics.find(f"g[@c='{code}']")
+        if metric is None or not (resources / font / f'{code}.xml').is_file():
+            continue  # the caller retains this requirement as unsupported
+        x, y, w, h = (float(metric.get(k)) for k in ('x', 'y', 'w', 'h'))
+        bounds = [x-12, -y-h-12, w+24, h+24]
+        svg = ET.Element('svg', xmlns='http://www.w3.org/2000/svg',
+                         viewBox=' '.join(map(str, bounds)), fill='white')
+        svg.append(ET.parse(resources / font / f'{code}.xml').getroot())
+        result[name] = dict(svg=ET.tostring(svg, encoding='unicode'),
+                            bounds=bounds, font=font, code=code)
+    return result

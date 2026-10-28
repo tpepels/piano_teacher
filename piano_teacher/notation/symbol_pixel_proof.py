@@ -9,17 +9,17 @@ A semantic preflight rejects symbols lost before rendering.
 from __future__ import annotations
 
 from collections import Counter, OrderedDict
-from functools import lru_cache
 from pathlib import Path
 from io import BytesIO
 import json
 
-import cairosvg
 import numpy as np
 from PIL import Image
 
 from .proof import read_written_score
-from .pixel_proof import detect_staff_lines, expected_y, RasterStaff
+from .pixel_context import clef_at, ledger_context_rows
+from .pixel_proof import detect_staff_lines, expected_y
+from .pixel_ink import bright, rasterize_outline
 
 PLAYHEAD = .42
 REST_TYPES = ("whole","half","quarter","eighth","16th","32nd","64th","128th")
@@ -28,27 +28,13 @@ ACCIDENTAL_GLYPH = {"flat":"acc_flat","natural":"acc_natural","sharp":"acc_sharp
                     "double-flat":"acc_double_flat","double-sharp":"acc_double_sharp"}
 
 
-def bright(image: Image.Image) -> np.ndarray:
-    rgb = np.asarray(image.convert("RGB"))
-    # Native score ink is pale; native staff rules are dim and the mint
-    # playhead has too little red. This does not consult Godot telemetry.
-    return ((rgb[:,:,0] > 155) & (rgb[:,:,1] > 160) & (rgb[:,:,2] > 150))
-
-
-@lru_cache(maxsize=256)
-def _outline(svg: str, width: int, height: int) -> np.ndarray:
-    png = cairosvg.svg2png(bytestring=svg.encode(),
-                          output_width=width, output_height=height)
-    return np.asarray(Image.open(BytesIO(png)).convert("RGBA"))[:,:,3] > 96
-
-
 def _match_glyph(pixels: np.ndarray, glyph: dict, gap: float,
                  origin_x: float, origin_y: float,
                  *, centered: bool, dxs, dys) -> float:
     bounds = glyph["bounds"]
     width = max(1,round(bounds[2]*gap/250))
     height = max(1,round(bounds[3]*gap/250))
-    template = _outline(glyph["svg"], width, height)
+    template = rasterize_outline(glyph["svg"], width, height)
     # Godot's font atlas uses source MusicXML font-space glyph bounds.
     # Its actual placement is unknown; search nearby for the best PNG fit.
     left = origin_x - (bounds[2]*gap/250/2 if centered else -bounds[0]*gap/250)
@@ -468,12 +454,11 @@ def _connector_head(picture, written, note, origin_x):
     """Current PNG contour registration; no atlas or supplied pitch report."""
     from .reference_font import reference_glyphs
     from .raster_matching import _joint_candidates, photographed_playhead_columns
-    from .phase3_pixels import _clef_at, _ledger_context_rows
     import math
 
     staves = detect_staff_lines(picture)
     rail = staves[note['staff']]
-    y = expected_y(rail, note['spelling'], _clef_at(written, note['index'], note['staff']))
+    y = expected_y(rail, note['spelling'], clef_at(written, note['index'], note['staff']))
     kind = ('head_whole' if note['note_type'] == 'whole' else
             'head_half' if note['note_type'] == 'half' else 'head_black')
     # An image cannot assign one unison silhouette to multiple written voices.
@@ -490,7 +475,7 @@ def _connector_head(picture, written, note, origin_x):
                    occlusion_columns=photographed_playhead_columns(picture),
                    alternatives=tuple((name,reference_glyphs()[name])
                        for name in ('head_black','head_half','head_whole') if name!=kind),
-                   background_rows=_ledger_context_rows(pixels, rail, written, [note])
+                   background_rows=ledger_context_rows(pixels, rail, written, [note])
                    if kind != 'head_black' else ())
     candidates = _joint_candidates(pixels, request, origin_x, request['dys'], .79)
     if not candidates:

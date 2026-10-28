@@ -9,7 +9,7 @@ import pytest
 from piano_teacher.notation.phase3_pixels import verify_all_notehead_pixels
 from piano_teacher.notation.pixel_proof import detect_staff_lines
 from piano_teacher.notation.reference_font import reference_glyphs
-from piano_teacher.notation.symbol_pixel_proof import _outline
+from piano_teacher.notation.pixel_ink import rasterize_outline
 from piano_teacher.notation.feature_pixels import verify_note_feature_pixels
 
 FIXTURE = Path(__file__).parent/"fixtures/native_ledger_chord"
@@ -35,7 +35,7 @@ def test_detached_ledger_mark_cannot_mask_a_filled_head_as_half_at_8_5_gap(tmp_p
     width, height = round(b[2]*8.5/250), round(b[3]*8.5/250)
     left, top = round(168-b[2]*8.5/500), round(108.5+b[1]*8.5/250)
     pixels = np.asarray(picture).copy()
-    pixels[top:top+height, left:left+width][_outline(glyph["svg"], width, height)] = (229, 242, 234)
+    pixels[top:top+height, left:left+width][rasterize_outline(glyph["svg"], width, height)] = (229, 242, 234)
     path = tmp_path/"native-0.00000.png"
     Image.fromarray(pixels).save(path)
     control = verify_all_notehead_pixels(xml, tmp_path, hand="right")
@@ -70,7 +70,7 @@ def test_spanning_ledger_cannot_mask_a_filled_head_as_half_at_8_5_gap(tmp_path):
     width, height = round(b[2]*8.5/250), round(b[3]*8.5/250)
     left, top = round(168-b[2]*8.5/500), round(108.5+b[1]*8.5/250)
     pixels = np.asarray(picture).copy()
-    pixels[top:top+height, left:left+width][_outline(glyph["svg"], width, height)] = (229, 242, 234)
+    pixels[top:top+height, left:left+width][rasterize_outline(glyph["svg"], width, height)] = (229, 242, 234)
     # A genuine thin C4 ledger spans the entire candidate head. Correct
     # ownership permits occlusion handling, but cannot change a filled head
     # into the source-required hollow family at this supported small scale.
@@ -122,7 +122,7 @@ def test_ledger_context_cannot_replace_or_misidentify_a_hollow_head(tmp_path, mu
         w,h = round(b[2]*rail.gap/250),round(b[3]*rail.gap/250)
         xx = round(x+width/2-w/2)
         yy = round(row["target_y"]+b[1]*rail.gap/250-(rail.gap/2 if mutation == "wrong-pitch" else 0))
-        pixels[yy:yy+h,xx:xx+w][_outline(glyph["svg"],w,h)] = (231,244,236)
+        pixels[yy:yy+h,xx:xx+w][rasterize_outline(glyph["svg"],w,h)] = (231,244,236)
     Image.fromarray(pixels).save(tmp_path/"native-2.00000.png")
     for clock in (0.,1.5):
         copyfile(FIXTURE/f"native-{clock:.5f}.png",tmp_path/f"native-{clock:.5f}.png")

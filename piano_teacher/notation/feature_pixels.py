@@ -20,62 +20,25 @@ from xml.etree import ElementTree as ET
 import numpy as np
 from PIL import Image
 
-from . import phase3_pixels
 from .pixel_proof import detect_staff_lines, expected_y
 from .proof import read_written_score
-from .raster_matching import (match_glyph, _joint_candidates,
-                              glyph_search_components, match_glyphs_joint,
-                              photographed_playhead_columns)
-from .symbol_pixel_proof import bright, _outline
+from .raster_matching import match_glyph, _joint_candidates, photographed_playhead_columns
+from .pixel_ink import bright, rasterize_outline
+from .pixel_context import clef_at, ledger_context_rows
+from .pixel_motion import frame_shift
+from .head_registration import (register_noteheads, source_chord_groups,
+                                HEAD_MINIMUM, PITCH_TOLERANCE_STEPS)
+from .captured_frames import CapturedFrames
+from .reference_font import feature_glyphs
 
 GLYPH_MINIMUM = .72
 FAMILY_MARGIN = .05
-HEAD_MINIMUM = .79
-PITCH_TOLERANCE_STEPS = .42
 STATUSES = ('verified', 'unverified', 'ambiguous', 'unsupported', 'mismatch')
 FLAG_COUNTS = {'eighth': 1, '16th': 2, '32nd': 3, '64th': 4, '128th': 5}
 ACCIDENTALS = {'flat': 'acc_flat', 'natural': 'acc_natural', 'sharp': 'acc_sharp',
                'double-flat': 'acc_double_flat', 'flat-flat': 'acc_double_flat',
                'double-sharp': 'acc_double_sharp'}
 ALTERATIONS = {-2: 'double-flat', -1: 'flat', 0: 'natural', 1: 'sharp', 2: 'double-sharp'}
-
-
-@lru_cache(maxsize=1)
-def _feature_glyphs():
-    """Extend the independent font reader, never the native atlas catalogue.
-
-    Older Phase 3 checkouts exported ``_external_glyphs() -> dict``. The
-    current checkout moved that API to reference_font.reference_glyphs.
-    Both return {name: {svg, bounds, ...}} in 250 units per staff space.
-    """
-    from .reference_font import reference_glyphs
-    import verovio
-
-    reader = getattr(phase3_pixels, '_external_glyphs', reference_glyphs)
-    result = dict(reader())
-    resources = Path(verovio.__file__).resolve().parent / 'data'
-    font = 'Leipzig'
-    metrics = ET.parse(resources / f'{font}.xml').getroot()
-    codes = {'augmentation_dot': 'E1E7', 'acc_flat': 'E260',
-             'acc_natural': 'E261', 'acc_sharp': 'E262',
-             'acc_double_sharp': 'E263', 'acc_double_flat': 'E264'}
-    codes.update(clef_g='E050', clef_f='E062', clef_c='E05C')
-    codes.update({f'time_{i}': f'{0xE080+i:04X}' for i in range(10)})
-    for count in range(1, 6):
-        for direction, offset in (('up', 0), ('down', 1)):
-            codes[f'flag_{direction}_{count}'] = f'{0xE240 + 2*(count-1) + offset:04X}'
-    for name, code in codes.items():
-        metric = metrics.find(f"g[@c='{code}']")
-        if metric is None or not (resources / font / f'{code}.xml').is_file():
-            continue  # the caller retains this requirement as unsupported
-        x, y, w, h = (float(metric.get(k)) for k in ('x', 'y', 'w', 'h'))
-        bounds = [x-12, -y-h-12, w+24, h+24]
-        svg = ET.Element('svg', xmlns='http://www.w3.org/2000/svg',
-                         viewBox=' '.join(map(str, bounds)), fill='white')
-        svg.append(ET.parse(resources / font / f'{code}.xml').getroot())
-        result[name] = dict(svg=ET.tostring(svg, encoding='unicode'),
-                            bounds=bounds, font=font, code=code)
-    return result
 
 
 def _result(status, reason, **evidence):
@@ -129,122 +92,6 @@ def _accidentals(written):
         result[note['source']['id']] = required
         state[step, octave] = alter
     return result
-
-
-def _groups(notes):
-    """Only actual source <chord/> declarations permit common feature ink."""
-    groups, previous = [], None
-    for note in notes:
-        key = (note['part_index'], note['index'], note['staff'], note['voice'], note['beat'])
-        if note['chord'] and previous == key:
-            groups[-1].append(note)
-        else:
-            groups.append([note])
-        previous = key
-    return groups
-
-
-def _shared_unison_directions(notes):
-    """Only compatible independent unison leaders may own one common head.
-
-    Explicit source stems remain authoritative; otherwise the first source
-    voice is conventionally up and the second down. No renderer metadata is
-    involved, and same-direction or differently written heads cannot share.
-    """
-    if len(notes)!=2 or any(n['chord'] for n in notes) or notes[0]['voice']==notes[1]['voice']:
-        return {}
-    fields=('part_index','index','staff','beat','spelling','note_type','dots','duration')
-    if any(notes[0][key]!=notes[1][key] for key in fields):
-        return {}
-    ordered=sorted(notes,key=lambda n:tuple(int(p) if p.isdigit() else p
-                   for p in re.split(r'(\d+)',n['voice'])))
-    if any(n.get('beams') and not n.get('stem') for n in ordered):
-        return {}
-    directions={n['source']['id']:n.get('stem') or ('up' if i==0 else 'down')
-                for i,n in enumerate(ordered)}
-    return directions if set(directions.values())=={'up','down'} else {}
-
-
-def _register(pixels, staves, written, notes, glyphs, *, occlusion_columns=()):
-    requests, heads, errors = [], {}, {}
-    displaced=set()
-    for group in _groups(notes):
-        if len(group)>1:
-            staff=staves[group[0]['staff']]
-            ys=[expected_y(staff,n['spelling'],phase3_pixels._clef_at(written,n['index'],n['staff'])) for n in group]
-            if any(0<abs(a-b)<=1.05*staff.gap for i,a in enumerate(ys) for b in ys[:i]):
-                displaced.update(n['source']['id'] for n in group)
-    for i,note in enumerate(notes):
-        staff=staves.get(note['staff'])
-        if staff is None:
-            continue
-        for other in notes[:i]:
-            if (note['part_index'],note['staff'],note['beat'])!=(other['part_index'],other['staff'],other['beat']) or note['voice']==other['voice']:
-                continue
-            clef=phase3_pixels._clef_at(written,note['index'],note['staff'])
-            if abs(expected_y(staff,note['spelling'],clef)-expected_y(staff,other['spelling'],clef))<=.51*staff.gap:
-                # Source polyphony bounds the search, while current-image
-                # family, pitch and exclusive pixel ownership still prove it.
-                for group in _groups(notes):
-                    if any(n is note or n is other for n in group):
-                        displaced.update(n['source']['id'] for n in group)
-    ledgers={staff:phase3_pixels._ledger_context_rows(pixels,rail,written,
-        [n for n in notes if n['staff']==staff]) for staff,rail in staves.items()}
-    for note in notes:
-        sid = note['source']['id']
-        try:
-            staff = staves[note['staff']]
-            y = expected_y(staff, note['spelling'],
-                          phase3_pixels._clef_at(written, note['index'], note['staff']))
-            name = ('head_whole' if note['note_type'] == 'whole' else
-                    'head_half' if note['note_type'] == 'half' else 'head_black')
-            r = math.floor(PITCH_TOLERANCE_STEPS * staff.gap / 2)
-            horizontal=math.ceil(1.5*staff.gap) if sid in displaced else 3
-            requests.append(dict(note=note, glyph=glyphs[name], gap=staff.gap,
-                                 origin_y=y, dxs=range(-horizontal,horizontal+1), dys=range(-r, r+1),
-                                 alternatives=tuple((kind,glyphs[kind]) for kind in ('head_black','head_half','head_whole') if kind!=name),
-                                 occlusion_columns=occlusion_columns,
-                                 background_rows=ledgers[note['staff']] if name!='head_black' else ()))
-        except (KeyError, ValueError, AssertionError, TypeError) as exc:
-            errors[sid] = str(exc)
-    origin = round(pixels.shape[1] * .42)
-    for indices in glyph_search_components(requests, dys=range(0, 1)):
-        group = [requests[i] for i in indices]
-        registration = {}
-        shared = {}
-        if len(group) == 1:
-            candidates = _joint_candidates(pixels, group[0], origin, range(0, 1), HEAD_MINIMUM)
-            assigned = candidates[:1] or None
-        else:
-            assigned = match_glyphs_joint(pixels, group, origin, dys=range(0, 1),
-                                         minimum=HEAD_MINIMUM, diagnostics=registration)
-            if assigned is None and not registration.get('exhausted'):
-                shared=_shared_unison_directions([r['note'] for r in group])
-                if shared:
-                    # A legitimate common head must itself register at the
-                    # source clock. An erased displaced head cannot borrow a
-                    # surviving off-centre contour through this fallback.
-                    common=dict(group[0],dxs=range(-3,4))
-                    candidates=_joint_candidates(pixels,common,origin,range(0,1),HEAD_MINIMUM)
-                    if candidates:
-                        assigned=[candidates[0]]*len(group)
-        for i, request in enumerate(group):
-            sid = request['note']['source']['id']
-            if assigned is None:
-                errors[sid] = ('Current-image notehead registration resource limit exhausted; no ownership verified'
-                    if registration.get('exhausted') else
-                    'Current-image notehead lacks a unique bounded .79 contour assignment')
-                continue
-            row = assigned[i]
-            b, gap = request['glyph']['bounds'], request['gap']
-            width, height = max(1, round(b[2]*gap/250)), max(1, round(b[3]*gap/250))
-            heads[sid] = dict(x=row['x'] + b[2]*gap/500,
-                              y=row['y'] - b[1]*gap/250,
-                              bbox=[row['x'], row['y'], row['x']+width, row['y']+height],
-                              score=row['score'], support=row['support'], gap=gap)
-            if shared:
-                heads[sid].update(shared_source_ids=sorted(shared),shared_stem_direction=shared[sid])
-    return heads, errors
 
 
 def _runs(values):
@@ -564,9 +411,9 @@ def _flag_origin_offset(name: str, gap: float) -> float:
     origin. The bottom of visible continuous ink is therefore not the flag
     attachment. Read that continuation from the independent external mask.
     """
-    glyph = _feature_glyphs()[name]
+    glyph = feature_glyphs()[name]
     b = glyph['bounds']
-    mask = _outline(glyph['svg'], max(1, round(b[2]*gap/250)), max(1, round(b[3]*gap/250)))
+    mask = rasterize_outline(glyph['svg'], max(1, round(b[2]*gap/250)), max(1, round(b[3]*gap/250)))
     origin_x = round(-b[0]*gap/250)
     ys = np.nonzero(mask[:, max(0, origin_x-1):min(mask.shape[1], origin_x+2)])[0]
     if not len(ys):
@@ -719,7 +566,7 @@ def _chord_dots(pixels, glyphs, group, heads, rail, written):
         return {n['source']['id']:_result('unverified','All source chord heads must register before dot ownership') for n in dotted}
     gap=rail.gap
     positions={n['source']['id']:round((rail.bottom-expected_y(rail,n['spelling'],
-        phase3_pixels._clef_at(written,n['index'],n['staff'])))*2/gap) for n in dotted}
+        clef_at(written,n['index'],n['staff'])))*2/gap) for n in dotted}
     reserved={s for s in positions.values() if s%2}
     rightmost=max(heads[n['source']['id']]['x'] for n in group)
     choices={}
@@ -844,35 +691,13 @@ def _disjoint_meter_ink(checks, pixels, glyphs, gap):
         unique = {pixel for pixel in support if counts[pixel] == 1}
         e = part['evidence']
         x0, y0, x1, y1 = e['bbox']
-        template = _outline(glyphs[e['observed']]['svg'], x1-x0, y1-y0)
+        template = rasterize_outline(glyphs[e['observed']]['svg'], x1-x0, y1-y0)
         denominator = int(template.sum())+int(pixels[y0:y1, x0:x1].sum())
         score = 2*len(unique)/denominator
         e.update(score=round(score, 4), margin=round(score-e['runner_up'], 4),
                  unique_ink_pixels=len(unique))
         if score < GLYPH_MINIMUM or score-e['runner_up'] < FAMILY_MARGIN:
             part.update(status='ambiguous', reason='Disjoint meter contour fails the unchanged Dice or family margin')
-
-
-def _frame_shift(first, second):
-    """Measure actual score translation without consulting native geometry.
-
-    Retain the motion oracle's .80 full-contour agreement and minimum ink.
-    Every permitted translation uses actual two-dimensional contour evidence;
-    repeated stems cannot exclude the true shift through a column shortlist.
-    The wider search permits retained frames several beats apart. Competing
-    translations with the same evidence do not establish a source clock.
-    """
-    if first.size != second.size:
-        return None
-    a, b = bright(first), bright(second)
-    if min(int(a.sum()), int(b.sum())) < 24:
-        return None
-    from .phase3_pixels import _horizontal_dice
-    measured = _horizontal_dice(a, b, round(first.width*.75))
-    score, shift = max(measured, key=lambda p: (p[0], -abs(p[1])))
-    if score < .80 or any(s >= score-.02 and abs(x-shift) > 2 for s, x in measured):
-        return None
-    return dict(shift=shift, contour_agreement=score)
 
 
 def _rule_tracks(picture, staves):
@@ -900,7 +725,7 @@ def verify_structure_pixels(xml: str, folder: Path, elements: list[dict], *,
     Specialized signatures/barlines remain unsupported, never inferred from
     notehead or renderer metadata.
     """
-    written, glyphs = read_written_score(xml), _feature_glyphs()
+    written, glyphs = read_written_score(xml), feature_glyphs()
     result, rules, keys = [], {}, []
     clocks = sorted(float(path.stem.removeprefix('native-'))
                     for path in Path(folder).glob('native-*.png')
@@ -926,10 +751,10 @@ def verify_structure_pixels(xml: str, folder: Path, elements: list[dict], *,
             if not notes:
                 continue
             other, other_staves = frame(other_clock)
-            motion = _frame_shift(other, picture)
+            motion = frame_shift(other, picture)
             if motion is None or motion['shift']*(clock-other_clock) <= 0:
                 continue
-            heads, _ = _register(bright(other), other_staves, written, notes, glyphs,
+            heads, _ = register_noteheads(bright(other), other_staves, written, notes, glyphs,
                                  occlusion_columns=photographed_playhead_columns(other))
             if len(heads) != len(notes):
                 continue
@@ -1017,7 +842,7 @@ def verify_structure_pixels(xml: str, folder: Path, elements: list[dict], *,
                     proof = _result('unsupported', 'Additive/symbolic meter requires its own independent glyph detector')
                 else:
                     pixels = bright(picture)
-                    sign, line, octave = phase3_pixels._clef_at(written, index, staff)
+                    sign, line, octave = clef_at(written, index, staff)
                     clef_name = {'G': 'clef_g', 'F': 'clef_f', 'C': 'clef_c'}.get(sign)
                     if not clef_name or octave:
                         raise ValueError('Meter ownership requires an independently identified ordinary clef')
@@ -1064,7 +889,7 @@ def verify_structure_pixels(xml: str, folder: Path, elements: list[dict], *,
             staff = source['staff']
             picture, staves = frame(float(written.bars[index]))
             rail = staves[staff]
-            clef = phase3_pixels._clef_at(written, index, staff)
+            clef = clef_at(written, index, staff)
             if clef not in (('G', 2, 0), ('F', 4, 0)):
                 raise ValueError('Key placement for this clef needs an independent pattern')
             mark = ET.fromstring(source['details']['xml'])
@@ -1136,7 +961,7 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
     if hand not in ('both', 'left', 'right'):
         raise ValueError('Invalid hand mode')
     folder = Path(folder)
-    written, marks, glyphs = read_written_score(xml), _marks(xml), _feature_glyphs()
+    written, marks, glyphs = read_written_score(xml), _marks(xml), feature_glyphs()
     accidentals = _accidentals(written)
     by_clock = defaultdict(list)
     for note in written.symbols:
@@ -1176,9 +1001,9 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
                 for construct in row['features']:
                     row['features'][construct] = _result('unverified', f'Missing PNG or actual five-line staff evidence: {exc}', frame=filename.name)
             continue
-        heads, errors = _register(pixels, staves, written, notes, glyphs,
+        heads, errors = register_noteheads(pixels, staves, written, notes, glyphs,
                                   occlusion_columns=photographed_playhead_columns(image))
-        groups = _groups(notes)
+        groups = source_chord_groups(notes)
         owned_stems = _stem_ownership(pixels, groups, heads, marks)
         for group, stem in zip(groups, owned_stems):
             active = [n for n in group if n['source']['id'] in rows]
@@ -1239,7 +1064,7 @@ def verify_note_feature_pixels(xml: str, folder: Path, *, hand='both', pitch_rep
                         else:
                             features[construct] = _accidental(pixels,glyphs,head,required,
                                 [heads[n['source']['id']] for n in group if n['source']['id'] in heads],
-                                phase3_pixels._ledger_context_rows(pixels,staves[note['staff']],written,group))
+                                ledger_context_rows(pixels,staves[note['staff']],written,group))
                 # Mid-measure changes have no time-resolved clef/key API in
                 # the existing pitch reader. Do not certify against a final
                 # bar-level attribute when its onset order is ambiguous.
@@ -1298,7 +1123,7 @@ def _ledger_visible_head(head, glyph):
     the observed union of head, ledger, stem or other neighboring ink.
     """
     left, top, right, bottom = head['bbox']
-    rows, columns = np.nonzero(_outline(glyph['svg'], right-left, bottom-top))
+    rows, columns = np.nonzero(rasterize_outline(glyph['svg'], right-left, bottom-top))
     if not len(columns):
         raise ValueError('Registered external head has no visible outline')
     return dict(head, registration_bbox=list(head['bbox']),
@@ -1362,20 +1187,19 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
     Nearby frames expose ink hidden by the onset playhead. Their translation
     and current head family/assignment must both be independently measured.
     """
-    from .connector_pixels import _Frames
     from .pixel_proof import RasterStaff
 
     if hand not in ('both', 'left', 'right'):
         raise ValueError('Invalid hand mode')
     written = read_written_score(xml)
-    frames = _Frames(folder, written)
+    frames = CapturedFrames(folder, written)
     unit_staff = RasterStaff('right', (0., 1., 2., 3., 4.), 1.)
     by_clock, measured = defaultdict(list), []
     for note in written.symbols:
         if note['kind'] != 'note' or not note['visible'] or (hand != 'both' and note['staff'] != hand):
             continue
         try:
-            clef = phase3_pixels._clef_at(written, note['index'], note['staff'])
+            clef = clef_at(written, note['index'], note['staff'])
             step = round((unit_staff.bottom-expected_y(unit_staff, note['spelling'], clef))*2)
             steps = list(range(-2, step-1, -2) if step < 0 else range(10, step+1, 2))
             error = None
@@ -1395,7 +1219,7 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
         measured.append(row)
         if error is None:
             by_clock[note['beat']].append((note, row))
-    glyphs = _feature_glyphs()
+    glyphs = feature_glyphs()
     for beat, required in by_clock.items():
         witnesses = defaultdict(list)
         # A dense sampling grid can put the four nearest frames inside the
@@ -1425,8 +1249,8 @@ def verify_ledger_pixels(xml: str, folder: Path, *, hand='both') -> dict:
                 else:
                     aligned = pixels
                 notes = frames.notes_by_beat[beat]
-                heads, errors = _register(aligned, frame['staves'], written, notes, glyphs)
-                contexts = {staff: phase3_pixels._ledger_context_rows(aligned, rail, written,
+                heads, errors = register_noteheads(aligned, frame['staves'], written, notes, glyphs)
+                contexts = {staff: ledger_context_rows(aligned, rail, written,
                     [n for n in notes if n['staff'] == staff]) for staff, rail in frame['staves'].items()}
                 for note, row in required:
                     sid = note['source']['id']

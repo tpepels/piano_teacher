@@ -8,7 +8,7 @@ import pytest
 
 from piano_teacher.notation.phase3_pixels import verify_all_notehead_pixels
 from piano_teacher.notation.reference_font import reference_glyphs
-from piano_teacher.notation.symbol_pixel_proof import _outline
+from piano_teacher.notation.pixel_ink import rasterize_outline
 
 FIXTURE = Path(__file__).parent/'fixtures/native_playhead_half'
 
@@ -66,7 +66,7 @@ def test_timing_line_never_supplies_missing_or_wrong_head_ink(tmp_path, mutation
             w, h = round(b[2]*gap/250), round(b[3]*gap/250)
             left = round(645-b[2]*gap/500)
             top = round(219.56+b[1]*gap/250+(gap/2 if mutation == 'wrong-pitch' else 0))
-            pixels[top:top+h,left:left+w][_outline(glyph['svg'],w,h)] = (229,242,234)
+            pixels[top:top+h,left:left+w][rasterize_outline(glyph['svg'],w,h)] = (229,242,234)
         pixels[104:440, 644:646] = (111, 218, 179)
     Image.fromarray(pixels).save(path)
     report = verify_all_notehead_pixels((folder/'score.musicxml').read_text(),folder,hand='right')

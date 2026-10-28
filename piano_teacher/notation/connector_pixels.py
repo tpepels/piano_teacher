@@ -6,8 +6,7 @@ describe bounded construct coverage, not a whole-score pass.
 """
 from __future__ import annotations
 
-from bisect import bisect_left
-from collections import Counter, OrderedDict, defaultdict
+from collections import Counter, defaultdict
 from functools import lru_cache
 from io import BytesIO
 import math
@@ -20,16 +19,12 @@ from PIL import Image
 
 from .assets.svg import isolate
 from .assets.svg_geometry import parse_svg_geometry
-from .phase3_pixels import _rectangular_rest_orientation
-from .pixel_proof import detect_staff_lines
 from .proof import read_written_score
-from .reference_font import reference_glyphs
-from .raster_matching import _joint_candidates, match_glyph
-from .symbol_pixel_proof import bright
+from .raster_matching import match_glyph
+from .captured_frames import CapturedFrames
 
 STATUSES = ('verified', 'unverified', 'ambiguous', 'unsupported', 'mismatch')
 TYPES = {'eighth': 1, '16th': 2, '32nd': 3, '64th': 4, '128th': 5}
-FRAME_CACHE_LIMIT = 16
 
 
 def _classes(node):
@@ -309,183 +304,6 @@ def _runs(values):
 def _reference_column(art, x):
     column = round(x)-art['bbox'][0]
     return _runs(art['mask'][:, column]) if 0 <= column < art['mask'].shape[1] else []
-
-
-def _translation(a, b, gap):
-    """Measure horizontal score translation; require a unique 2D ink match."""
-    if a.shape != b.shape:
-        raise ValueError('Framebuffer dimensions differ')
-    w = a.shape[1]
-    left, right = round(w*.20), round(w*.96)
-    a, b = a[:, left:right], b[:, left:right]
-    col_a, col_b = a.sum(axis=0).astype(float), b.sum(axis=0).astype(float)
-    n = a.shape[1]
-    correlation = np.correlate(col_b, col_a, 'full')
-    shifts = np.arange(1-n, n)
-    correlation[np.abs(shifts) > n*.60] = -1
-    candidates = []
-    # Nearby subpixel phases are one registration, not independent rivals.
-    for index in np.argsort(correlation)[::-1]:
-        shift = int(shifts[index])
-        if any(abs(shift-s) <= max(2, gap*.15) for _, s in candidates):
-            continue
-        lo, hi = max(0, -shift), min(n, n-shift)
-        aa, bb = a[:, lo:hi], b[:, lo+shift:hi+shift]
-        denominator = int(aa.sum()+bb.sum())
-        dice = float(2*np.count_nonzero(aa & bb)/denominator) if denominator >= 80 else 0.
-        candidates.append((dice, shift))
-        if len(candidates) == 12:
-            break
-    candidates.sort(reverse=True)
-    best, shift = candidates[0]
-    margin = best-candidates[1][0]
-    if best < .80 or margin < .04:
-        raise ValueError(f'Ambiguous image translation (agreement={best:.3f}, margin={margin:.3f})')
-    return shift, dict(pixels=shift, agreement=round(best, 4), margin=round(margin, 4))
-
-
-class _Frames:
-    def __init__(self, folder, written):
-        self.folder, self.written = Path(folder), written
-        self.frames, self.registrations, self.translations = OrderedDict(), {}, {}
-        self.notes_by_beat, self.rests_by_onset = defaultdict(list), defaultdict(list)
-        for event in written.symbols:
-            if not event['visible']:
-                continue
-            if event['kind'] == 'note':
-                self.notes_by_beat[event['beat']].append(event)
-            elif event['kind'] == 'rest':
-                self.rests_by_onset[event['staff'], event['beat']].append(event)
-        clocks = set()
-        for path in self.folder.glob('native-*.png'):
-            try:
-                clocks.add(float(path.stem.removeprefix('native-')))
-            except ValueError:
-                continue
-        self.clocks = tuple(sorted(clocks))
-
-    def nearby_clocks(self, targets, limit=4):
-        center = float(sum(targets)/len(targets)) if targets else 0.
-        excluded = {round(float(t), 5) for t in targets}
-        right = bisect_left(self.clocks, center)
-        left, selected = right-1, []
-        while len(selected) < limit and (left >= 0 or right < len(self.clocks)):
-            if right == len(self.clocks) or (left >= 0 and center-self.clocks[left] <= self.clocks[right]-center):
-                clock = self.clocks[left]
-                left -= 1
-            else:
-                clock = self.clocks[right]
-                right += 1
-            if clock not in excluded:
-                selected.append(clock)
-        return selected
-
-    def frame(self, beat):
-        beat = float(beat)
-        if beat not in self.frames:
-            name = f'native-{beat:.5f}.png'
-            with Image.open(self.folder/name) as raw:
-                image = raw.convert('RGB')
-            rgb = np.asarray(image).astype(int)
-            cyan = (rgb[:, :, 1]-rgb[:, :, 0] > 30) & (rgb[:, :, 2]-rgb[:, :, 0] > 15) & (rgb[:, :, 1] > 150)
-            occluded = np.flatnonzero(cyan.sum(axis=0) > image.height*.35)
-            self.frames[beat] = dict(name=name, pixels=bright(image), staves=detect_staff_lines(image),
-                                     occluded_columns=occluded)
-            if len(self.frames) > FRAME_CACHE_LIMIT:
-                self.frames.popitem(last=False)
-        self.frames.move_to_end(beat)
-        return self.frames[beat]
-
-    def head(self, event):
-        from .feature_pixels import _register
-        beat = event['beat']
-        if beat not in self.registrations:
-            frame = self.frame(beat)
-            heads, errors = _register(frame['pixels'], frame['staves'], self.written,
-                                     self.notes_by_beat[beat], reference_glyphs())
-            # Assignment support pixels are needed only during registration;
-            # keep scalar anchors, never an image-sized support set per note.
-            self.registrations[beat] = ({sid: {key: head[key] for key in ('x', 'y', 'bbox', 'score', 'gap')}
-                                         for sid, head in heads.items()}, errors)
-        heads, errors = self.registrations[beat]
-        sid = event['source']['id']
-        if sid not in heads:
-            raise ValueError(errors.get(sid, 'Source head is not independently registered'))
-        return heads[sid]
-
-    def rest(self, event):
-        if not event['visible']:
-            raise ValueError('Hidden source rest has no graphical anchor')
-        frame = self.frame(event['beat'])
-        staff = frame['staves'][event['staff']]
-        simultaneous = self.rests_by_onset[event['staff'], event['beat']]
-        if len(simultaneous) != 1:
-            raise ValueError('Simultaneous anonymous rest anchors are inseparable')
-        glyph = reference_glyphs().get('rest_'+str(event['note_type']))
-        if glyph is None:
-            raise ValueError('External font does not identify this rest anchor')
-        gap = staff.gap
-        center = (staff.lines[0]+staff.lines[-1])/2
-        request = dict(glyph=glyph, gap=gap, origin_y=center, dxs=range(-3, 4))
-        candidates = _joint_candidates(frame['pixels'], request,
-            round(frame['pixels'].shape[1]*.42), range(-round(4*gap), round(4*gap)+1), .79)
-        if not candidates:
-            raise ValueError('Actual rest contour lacks a bounded external-font match')
-        best = candidates[0]
-        if any(c['score'] >= best['score']-.05 and abs(c['y']-best['y']) > gap*.3 for c in candidates[1:]):
-            raise ValueError('Actual rest contour has multiple possible staff lanes')
-        b = glyph['bounds']
-        width, height = max(1, round(b[2]*gap/250)), max(1, round(b[3]*gap/250))
-        baseline = best['y']-b[1]*gap/250
-        family = {'whole', 'half'} if event['note_type'] in {'whole', 'half'} else {event['note_type']}
-        rivals = [match_glyph(frame['pixels'], other, gap,
-                    round(frame['pixels'].shape[1]*.42), baseline, centered=True,
-                    dxs=range(-3, 4), dys=range(-2, 3))
-                  for name, other in reference_glyphs().items()
-                  if name.startswith('rest_') and name.removeprefix('rest_') not in family]
-        if best['score']-max(rivals, default=0.) < .03:
-            raise ValueError('Actual rest anchor does not distinguish the expected external-font family')
-        step = 1. if event['note_type'] in {'whole', 'half'} else .5
-        offset = (baseline-center)/gap
-        if abs(offset-round(offset/step)*step) > .13:
-            raise ValueError('Actual rest anchor baseline is off the type-specific staff grid')
-        if event['note_type'] in {'whole', 'half'}:
-            block = frame['pixels'][best['y']:best['y']+height, best['x']:best['x']+width]
-            ys, xs = np.nonzero(block)
-            box = [best['x']+int(xs.min()), best['y']+int(ys.min()),
-                   best['x']+int(xs.max())+1, best['y']+int(ys.max())+1]
-            if _rectangular_rest_orientation(box, staff)['observed_rest'] != event['note_type']:
-                raise ValueError('Rectangular rest anchor orientation does not identify the source type')
-        return dict(x=best['x']+width/2, y=baseline,
-                    bbox=[best['x'], best['y'], best['x']+width, best['y']+height],
-                    score=best['score'], gap=gap)
-
-    def shift(self, own, target, staff):
-        if own == target:
-            return 0, dict(pixels=0, agreement=1., margin=1.)
-        key = own, target, staff
-        if key not in self.translations:
-            a, b = self.frame(own), self.frame(target)
-            sa, sb = a['staves'][staff], b['staves'][staff]
-            if max(abs(x-y) for x, y in zip(sa.lines, sb.lines)) > 1:
-                raise ValueError('Staff rails changed between endpoint witnesses')
-            top, bottom = max(0, round(sa.lines[0]-5*sa.gap)), min(a['pixels'].shape[0], round(sa.bottom+5*sa.gap))
-            self.translations[key] = _translation(a['pixels'][top:bottom], b['pixels'][top:bottom], sa.gap)
-        return self.translations[key]
-
-    def anchors(self, events, target):
-        result = []
-        frame = self.frame(target)
-        for event in events:
-            head = self.head(event) if event['kind'] == 'note' else self.rest(event)
-            shift, registration = self.shift(event['beat'], target, event['staff'])
-            x = head['x']+shift
-            if not head['gap'] < x < frame['pixels'].shape[1]-head['gap']:
-                raise ValueError('Source endpoint is offscreen in common witness')
-            result.append(dict(source_id=event['source']['id'], x=float(x), y=float(head['y']),
-                bbox=[head['bbox'][0]+shift, *head['bbox'][1:2], head['bbox'][2]+shift, head['bbox'][3]],
-                gap=float(head['gap']), head_match=round(head['score'], 4), registration=registration))
-        return result
 
 
 def _stem(pixels, anchors, up):
@@ -867,7 +685,7 @@ def _verify(xml, folder, hand, reference_svgs, kind):
     folder = Path(folder)
     strings = tuple(reference_svgs) if reference_svgs is not None else tuple(
         path.read_text() for path in sorted(folder.glob('verovio-*.svg')))
-    frames = _Frames(folder, written)
+    frames = CapturedFrames(folder, written)
     measured = []
     for row in _inventory(written, strings, kind, hand):
         events = row['events']

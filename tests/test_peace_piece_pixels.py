@@ -21,11 +21,13 @@ from PIL import Image, ImageDraw, ImageFilter
 import pytest
 
 from continuous_repeat_pixel_helpers import DENSITY, PLAYHEAD, _glyph_hits, notation_ink
-from piano_teacher.notation.feature_pixels import _feature_glyphs, _reference_stem_extension
+from piano_teacher.notation.reference_font import feature_glyphs
+from piano_teacher.notation.feature_pixels import _reference_stem_extension
 from piano_teacher.notation.phase3_pixels import verify_translation_sequence
 from piano_teacher.notation.pixel_proof import detect_staff_lines, expected_y
 from piano_teacher.notation.proof import read_written_score
-from piano_teacher.notation.symbol_pixel_proof import _match_glyph, _outline, bright
+from piano_teacher.notation.symbol_pixel_proof import _match_glyph
+from piano_teacher.notation.pixel_ink import rasterize_outline, bright
 from test_repeat_recovery_context_pixels import _boundaries
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -167,7 +169,7 @@ def measure_bass_half(image, pitch, x, *, tolerance=None):
     staff = detect_staff_lines(image)['left']
     y = expected_y(staff, ('C', 0, 2) if pitch == 36 else ('G', 0, 2), ('F', 4, 0))
     radius = round(1.8 * staff.gap) if tolerance is None else tolerance
-    pixels, glyphs = bright(image), _feature_glyphs()
+    pixels, glyphs = bright(image), feature_glyphs()
     score, actual_x = max((_match_glyph(pixels, glyphs['head_half'], staff.gap, col, y,
                                        centered=True, dxs=[0], dys=range(-2, 3)), col)
                           for col in range(round(x) - radius, round(x) + radius + 1))
@@ -245,7 +247,7 @@ def _complete_half_stem(image, head):
     """Measure the attached shaft and its visible endpoint, not atlas bounds."""
     ink = bright(image)
     gap, x, y = head['gap'], head['x'], head['y']
-    half_width = (_feature_glyphs()['head_half']['bounds'][2] - 24) * gap / 500
+    half_width = (feature_glyphs()['head_half']['bounds'][2] - 24) * gap / 500
     candidates = []
     for direction, sign, edge in [('up', -1, x + half_width), ('down', 1, x - half_width)]:
         rows = sorted((round(y + sign * gap * .4), round(y + sign * gap * 2)))
@@ -293,7 +295,7 @@ def verify_peace_register_pixels(folder, data, report):
                 rgb=np.asarray(controlled).astype(int)
                 dim=(rgb[:,:,0]>int(rgb[0,-1,0])+25)&(rgb[:,:,0]<120)
                 y=expected_y(staff,('G',0,3),('F',4,0))
-                score=_match_glyph(dim,_feature_glyphs()['head_black'],staff.gap,x,y,
+                score=_match_glyph(dim,feature_glyphs()['head_black'],staff.gap,x,y,
                     centered=True,dxs=range(-round(staff.gap*1.8),round(staff.gap*1.8)+1),dys=range(-2,3))
                 assert score>=.80,'Required LH chord disappeared in the hand-selection control'
     if 'selected-right' in frames:
@@ -303,7 +305,7 @@ def verify_peace_register_pixels(folder, data, report):
         staff = detect_staff_lines(image)['left']
         rgb = np.asarray(image).astype(int)
         dim = (rgb[:, :, 0] > int(rgb[0, -1, 0]) + 25) & (rgb[:, :, 0] < 120)
-        score = _match_glyph(dim, _feature_glyphs()['head_black'], staff.gap, x, remote['y'],
+        score = _match_glyph(dim, feature_glyphs()['head_black'], staff.gap, x, remote['y'],
                              centered=True, dxs=range(-round(staff.gap * 1.8), round(staff.gap * 1.8) + 1), dys=range(-2, 3))
         assert score >= .80, f'Resident LH quarter is not independently dim and filled ({score:.3f})'
     expected = data['peace_expected']
@@ -323,7 +325,7 @@ def verify_peace_register_pixels(folder, data, report):
 
 
 def _rest_box(staff, x):
-    bounds = _feature_glyphs()['rest_whole']['bounds']
+    bounds = feature_glyphs()['rest_whole']['bounds']
     scale = staff.gap / 250
     left, top = round(x - bounds[2] * scale / 2) - 3, round(staff.lines[1] + bounds[1] * scale) - 3
     return left, top, left + round(bounds[2] * scale) + 6, top + round(bounds[3] * scale) + 6
@@ -337,7 +339,7 @@ def _meter_mask(image, staff, meter, interval, origins, *, scale=1., dim=False):
     allowed = np.zeros(pixels.shape, dtype=np.uint8)
     columns = []
     for number, y in zip(meter, origins):
-        glyph = _feature_glyphs()[f'time_{number}']
+        glyph = feature_glyphs()[f'time_{number}']
         hits = _glyph_hits(pixels, glyph, rail, interval, y)
         assert hits, f'Missing authentic {meter[0]}/{meter[1]} source meter digit {number}'
         seed = max(hits, key=lambda hit: hit['score'])['x']
@@ -349,7 +351,7 @@ def _meter_mask(image, staff, meter, interval, origins, *, scale=1., dim=False):
         bounds = glyph['bounds']
         width, height = round(bounds[2] * rail.gap / 250), round(bounds[3] * rail.gap / 250)
         left, top = round(x - bounds[2] * rail.gap / 500), round(actual_y + bounds[1] * rail.gap / 250)
-        allowed[top:top + height, left:left + width] |= _outline(glyph['svg'], width, height).astype(np.uint8) * 255
+        allowed[top:top + height, left:left + width] |= rasterize_outline(glyph['svg'], width, height).astype(np.uint8) * 255
         columns.append(x)
     assert abs(columns[0] - columns[1]) <= 2, 'Meter digits do not share an authentic signature column'
     # One antialiasing pixel around a matched external contour is not a
@@ -395,7 +397,7 @@ def verify_peace_preparation_pixels(folder, data, report):
                                    (middle - staff.gap, middle + staff.gap),
                                    dim=data['hand'] == 'right' and hand == 'left')
                 ink[mask] = False
-            score = _match_glyph(ink, _feature_glyphs()['rest_whole'], staff.gap, center,
+            score = _match_glyph(ink, feature_glyphs()['rest_whole'], staff.gap, center,
                                  staff.lines[1], centered=True, dxs=range(-2, 3), dys=range(-2, 3))
             assert score >= .80, f'{hand}: missing centered four-beat whole rest ({score:.3f})'
             x0, y0, x1, y1 = _rest_box(staff, center)

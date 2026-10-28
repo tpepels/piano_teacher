@@ -227,11 +227,12 @@ def test_actual_parallel_unison_types_need_their_own_heads_and_shafts(tmp_path, 
     if not binary or not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
         pytest.skip('Actual native framebuffer needs Godot and a desktop')
     from scripts.check_native_verovio_overlay import AuditCase, fixture
-    from piano_teacher.notation.feature_pixels import _register, _feature_glyphs
+    from piano_teacher.notation.head_registration import register_noteheads
+    from piano_teacher.notation.reference_font import feature_glyphs
     from piano_teacher.notation.pixel_proof import detect_staff_lines
     from piano_teacher.notation.proof import read_written_score
     from piano_teacher.notation.raster_matching import photographed_playhead_columns
-    from piano_teacher.notation.symbol_pixel_proof import bright
+    from piano_teacher.notation.pixel_ink import bright
 
     path = ROOT/'tests/fixtures/musical_fidelity'/filename
     data, _ = fixture(AuditCase('parallel-source-unisons', str(path), 1, last_bar, 'right'))
@@ -261,8 +262,8 @@ def test_actual_parallel_unison_types_need_their_own_heads_and_shafts(tmp_path, 
     with Image.open(filename) as raw:
         intact = raw.convert('RGB')
     intact.save(tmp_path/'intact.png')
-    heads, _ = _register(bright(intact), detect_staff_lines(intact), written, notes,
-        _feature_glyphs(), occlusion_columns=photographed_playhead_columns(intact))
+    heads, _ = register_noteheads(bright(intact), detect_staff_lines(intact), written, notes,
+        feature_glyphs(), occlusion_columns=photographed_playhead_columns(intact))
     assert len(heads) == 2
     a, b = heads.values()
     assert a['support'].isdisjoint(b['support'])

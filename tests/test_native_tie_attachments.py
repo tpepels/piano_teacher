@@ -112,7 +112,8 @@ def test_native_tie_clearance_does_not_stretch_with_beat_distance(
     left, right = evidence["heads"]
     # Both actual head-edge clearances and independent source ownership must
     # hold, including for whole heads wider than ordinary filled/half heads.
-    from piano_teacher.notation.symbol_pixel_proof import bright, _connector_components
+    from piano_teacher.notation.pixel_ink import bright
+    from piano_teacher.notation.symbol_pixel_proof import _connector_components
     picture = Image.open(tmp_path/evidence["frame"]).convert("RGB")
     x0, x1 = left["bbox"][2], right["bbox"][0]
     y0 = round(min(left["y"], right["y"])-1.5*left["gap"])

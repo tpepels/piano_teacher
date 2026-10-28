@@ -6,10 +6,11 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytest
 
-from piano_teacher.notation.feature_pixels import _feature_glyphs, verify_note_feature_pixels
+from piano_teacher.notation.reference_font import feature_glyphs
+from piano_teacher.notation.feature_pixels import verify_note_feature_pixels
 from piano_teacher.notation.phase3_pixels import verify_all_notehead_pixels
 from piano_teacher.notation.reference_font import reference_glyphs
-from piano_teacher.notation.symbol_pixel_proof import _outline
+from piano_teacher.notation.pixel_ink import rasterize_outline
 from piano_teacher.notation.visual_coverage import visual_elements
 
 
@@ -33,7 +34,7 @@ def quarter(tmp_path, direction="down"):
     b = glyph["bounds"]
     width, height = round(b[2]*16/250), round(b[3]*16/250)
     left, top = round(168-b[2]*16/500), round(212+b[1]*16/250)
-    head = _outline(glyph["svg"], width, height)
+    head = rasterize_outline(glyph["svg"], width, height)
     pixels = np.array(picture)
     pixels[top:top+height, left:left+width][head] = INK
     xs = np.nonzero(head)[1]
@@ -47,10 +48,10 @@ def quarter(tmp_path, direction="down"):
 def flag_pixels(direction, count, x, origin_y):
     # Stamp the independent font at its SMuFL origin. Actual shaft recovery,
     # not the test, handles any continuation past that origin in short flags.
-    glyph = _feature_glyphs()[f"flag_{direction}_{count}"]
+    glyph = feature_glyphs()[f"flag_{direction}_{count}"]
     b = glyph["bounds"]
     width, height = round(b[2]*16/250), round(b[3]*16/250)
-    yy, xx = np.nonzero(_outline(glyph["svg"], width, height))
+    yy, xx = np.nonzero(rasterize_outline(glyph["svg"], width, height))
     return yy+round(origin_y+b[1]*16/250), xx+round(x+b[0]*16/250)
 
 

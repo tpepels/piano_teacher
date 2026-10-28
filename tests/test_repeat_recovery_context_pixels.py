@@ -17,9 +17,10 @@ from PIL import Image, ImageDraw
 import pytest
 
 from continuous_repeat_pixel_helpers import DENSITY, PLAYHEAD, _glyph_hits, notation_ink
-from piano_teacher.notation.feature_pixels import _feature_glyphs
+from piano_teacher.notation.reference_font import feature_glyphs
 from piano_teacher.notation.pixel_proof import detect_staff_lines
-from piano_teacher.notation.symbol_pixel_proof import _match_glyph, bright
+from piano_teacher.notation.symbol_pixel_proof import _match_glyph
+from piano_teacher.notation.pixel_ink import bright
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTEXT = ROOT / 'tests/fixtures/continuous_repetition_context.musicxml'
@@ -139,7 +140,7 @@ def _boundaries(image, expected, clock):
 
 
 def _rest_box(staff, x):
-    bounds = _feature_glyphs()['rest_whole']['bounds']
+    bounds = feature_glyphs()['rest_whole']['bounds']
     unit = staff.gap / 250
     left, top = round(x - bounds[2] * unit / 2) - 3, round(staff.lines[1] + bounds[1] * unit) - 3
     return left, top, left + round(bounds[2] * unit) + 6, top + round(bounds[3] * unit) + 6
@@ -154,13 +155,13 @@ def verify_recovery_pixels(folder, data, report, *, context_only=False):
         center = (left + right) / 2
         ink = notation_ink(image)
         for hand, staff in staves.items():
-            score = _match_glyph(ink, _feature_glyphs()['rest_whole'], staff.gap, center,
+            score = _match_glyph(ink, feature_glyphs()['rest_whole'], staff.gap, center,
                                  staff.lines[1], centered=True, dxs=range(-2, 3), dys=range(-2, 3))
             assert score >= .80, f'{hand}: missing authentic centered recovery rest ({score:.3f})'
         if expected['name'] == 'suppressed-context':
             # The actually preceding audible context is G/+1, not the F/-2
             # measure suppressed at the preparation's own start beat 3.
-            glyphs = _feature_glyphs()
+            glyphs = feature_glyphs()
             for hand, staff in staves.items():
                 def find(name, y):
                     half = glyphs[name]['bounds'][2] * staff.gap / 500
@@ -216,7 +217,7 @@ def test_removed_actual_recovery_context_glyph_fails(recovery_capture, tmp_path)
     frame = next(frame for frame in report['frames'] if frame['name'] == 'recovery')
     image = _picture(tmp_path, frame)
     staves, (left, right) = _boundaries(image, data['recovery_expected'], frame['clock'])
-    staff, glyph = staves['right'], _feature_glyphs()['clef_f']
+    staff, glyph = staves['right'], feature_glyphs()['clef_f']
     bounds = glyph['bounds']
     unit = staff.gap / 250
     hits = _glyph_hits(bright(image), glyph, staff,
