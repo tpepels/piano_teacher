@@ -242,7 +242,7 @@ def test_capture_components_do_not_import_coordinator():
 
 @pytest.mark.parametrize('change', ['edit', 'add', 'remove'])
 def test_verification_identity_includes_all_extracted_audit_modules(tmp_path, monkeypatch, change):
-    from scripts import check_native_verovio_overlay as audit
+    from scripts.audits import verification_inputs
     (tmp_path / 'scripts/audits/nested').mkdir(parents=True)
     (tmp_path / 'piano_teacher').mkdir()
     (tmp_path / 'tests/fixtures/musical_fidelity').mkdir(parents=True)
@@ -250,13 +250,12 @@ def test_verification_identity_includes_all_extracted_audit_modules(tmp_path, mo
     (tmp_path / 'tests/fixtures/musical_fidelity/manifest.json').write_text('{}')
     module = tmp_path / 'scripts/audits/nested/capture_store.py'
     module.write_text('# store version one\n')
-    monkeypatch.setattr(audit, 'ROOT', tmp_path)
-    monkeypatch.setattr(audit, 'capture_dependency_hash', lambda: 'renderer')
-    before = audit.verification_inputs_hash(())
+    monkeypatch.setattr(verification_inputs, 'capture_dependency_hash', lambda root: 'renderer')
+    before = verification_inputs.verification_inputs_hash((), root=tmp_path)
     if change == 'edit':
         module.write_text('# store version two\n')
     elif change == 'add':
         (module.parent / 'capture_runner.py').write_text('# runner\n')
     else:
         module.unlink()
-    assert audit.verification_inputs_hash(()) != before
+    assert verification_inputs.verification_inputs_hash((), root=tmp_path) != before

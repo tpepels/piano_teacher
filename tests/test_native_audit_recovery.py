@@ -12,7 +12,8 @@ import sys
 import pytest
 
 from scripts import check_native_verovio_overlay as audit
-from scripts.audits import job_executor, worker_ownership
+from scripts.audits import (job_executor, worker_ownership, batch_run, case_catalog,
+                          case_inputs, capture_store, verification_inputs)
 
 
 def process_running(pid):
@@ -56,12 +57,13 @@ def test_worker_cannot_begin_queued_case_after_coordinator_dies_during_initializ
     runner.write_text('''from pathlib import Path
 from functools import partial
 from scripts import check_native_verovio_overlay as audit
-from scripts.audits import job_executor, worker_ownership
+from scripts.audits import (job_executor, worker_ownership, batch_run, case_catalog,
+                          case_inputs, capture_store, verification_inputs)
 from test_native_audit_recovery import delayed_worker_limits,renderer_worker,jobs
 if __name__=='__main__':
-    audit.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=renderer_worker,
+    batch_run.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=renderer_worker,
                                     initializer=delayed_worker_limits)
-    list(audit.execute_case_jobs(jobs(Path(%r),['render']),workers=1,case_timeout=10,
+    list(batch_run.execute_case_jobs(jobs(Path(%r),['render']),workers=1,case_timeout=10,
          memory_limit_mib=3072,resume=False,godot_version='test-engine'))
 '''%str(tmp_path))
     process=subprocess.Popen([sys.executable,str(runner)],
@@ -90,14 +92,14 @@ if __name__=='__main__':
 
 
 def test_cancellation_stops_term_ignoring_renderer_after_its_worker_exits(tmp_path,monkeypatch):
-    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=renderer_worker))
+    monkeypatch.setattr(batch_run,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=renderer_worker))
     directory=tmp_path/'render'
     def cancel_when_capturing(_):
         if (directory/'ready').exists():
             raise KeyboardInterrupt()
     try:
         with pytest.raises(KeyboardInterrupt):
-            list(audit.execute_case_jobs(jobs(tmp_path,['render']),workers=1,case_timeout=10,
+            list(batch_run.execute_case_jobs(jobs(tmp_path,['render']),workers=1,case_timeout=10,
                 memory_limit_mib=3072,resume=False,godot_version='test-engine',
                 progress=cancel_when_capturing))
         renderer=int((directory/'renderer-pid').read_text())
@@ -122,24 +124,25 @@ def test_sigkill_restart_stops_prior_owned_processes_before_planning(tmp_path):
     runner.write_text('''from pathlib import Path
 from functools import partial
 from scripts import check_native_verovio_overlay as audit
-from scripts.audits import job_executor, worker_ownership
+from scripts.audits import (job_executor, worker_ownership, batch_run, case_catalog,
+                          case_inputs, capture_store, verification_inputs)
 from test_native_audit_recovery import renderer_worker,checkpoint_worker,process_running
 if __name__=='__main__':
     import os,sys,json
-    audit.library_sources=lambda **_: (Path(%r),)
-    audit.curriculum_cases=lambda *_: ()
-    audit.CASES=()
-    audit.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=renderer_worker)
+    case_catalog.library_sources=lambda **_: (Path(%r),)
+    case_catalog.curriculum_cases=lambda *_: ()
+    case_catalog.CASES=()
+    batch_run.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=renderer_worker)
     if os.environ.get('RESTART')=='1':
-        original=audit._library_piece
+        original=case_inputs.load_piece
         def checked_piece(path):
             pids=json.loads(Path(%r).read_text())
             stopped={kind:not process_running(pid) for kind,pid in pids.items()}
             Path(%r).write_text(json.dumps(stopped))
             assert all(stopped.values()),'Prior processes still running at source planning'
             return original(path)
-        audit._library_piece=checked_piece
-        audit.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=checkpoint_worker)
+        case_inputs.load_piece=checked_piece
+        batch_run.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=checkpoint_worker)
     sys.argv=['audit','--out',%r,'--only','source','--resume','--workers','1','--case-timeout','15']
     sys.exit(audit.main())
 '''%(str(source),str(tmp_path/'old-pids.json'),str(tmp_path/'planning-check.json'),str(out)))
@@ -252,8 +255,8 @@ def checkpoint_worker(job, *, record_stage):
     (directory/'score.musicxml').write_text('<score-partwise/>')
     (directory/'audit.json').write_text(json.dumps(dict(passed=True,errors=[])))
     (directory/'capture-manifest.json').write_text(json.dumps(dict(
-        capture_config=audit.CANONICAL_CAPTURE_CONFIG,
-        renderer_dependencies_sha256=audit.capture_dependency_hash(),godot='test-engine',
+        capture_config=capture_store.CANONICAL_CAPTURE_CONFIG,
+        renderer_dependencies_sha256=capture_store.capture_dependency_hash(),godot='test-engine',
         screenshots=[dict(file=frame.name,sha256=hashlib.sha256(frame.read_bytes()).hexdigest())])))
     return dict(errors=[],error_count=0,captured=True,nonverified_symbols={},symbols={})
 
@@ -262,20 +265,20 @@ def checkpoint_worker(job, *, record_stage):
 def test_missing_or_incompatible_capture_mode_cannot_be_reused(tmp_path, capture_config):
     frame=tmp_path/'native-0.00000.png'
     frame.write_bytes(b'actual frame')
-    manifest=dict(renderer_dependencies_sha256=audit.capture_dependency_hash(),godot='test-engine',
+    manifest=dict(renderer_dependencies_sha256=capture_store.capture_dependency_hash(),godot='test-engine',
                   screenshots=[dict(file=frame.name,sha256=hashlib.sha256(frame.read_bytes()).hexdigest())])
     if capture_config is not None:
         manifest['capture_config']=capture_config
     (tmp_path/'capture-manifest.json').write_text(json.dumps(manifest))
     with pytest.raises(AssertionError,match='capture configuration'):
-        audit.validate_capture_manifest(tmp_path,dependency_hash=audit.capture_dependency_hash(),
+        capture_store.validate_capture_manifest(tmp_path,dependency_hash=capture_store.capture_dependency_hash(),
                                         godot_version='test-engine')
 
 
 def test_capture_mode_is_part_of_verification_input_identity(monkeypatch):
-    before=audit.verification_inputs_hash(())
-    monkeypatch.setattr(audit,'CANONICAL_CAPTURE_CONFIG',{'mode':'incompatible-capture'})
-    assert audit.verification_inputs_hash(()) != before
+    before=verification_inputs.verification_inputs_hash(())
+    monkeypatch.setattr(verification_inputs,'CANONICAL_CAPTURE_CONFIG',{'mode':'incompatible-capture'})
+    assert verification_inputs.verification_inputs_hash(()) != before
 
 
 def test_legacy_interrupted_publication_is_preserved_but_cannot_be_reused(tmp_path):
@@ -287,11 +290,11 @@ def test_legacy_interrupted_publication_is_preserved_but_cannot_be_reused(tmp_pa
         screenshots=[dict(file=frame.name,sha256=hashlib.sha256(frame.read_bytes()).hexdigest())])
     (staging/'capture-manifest.json').write_text(json.dumps(manifest))
     (out/'capture-publish.json').write_text(json.dumps(dict(staging=str(staging))))
-    audit.recover_capture_publish(out)
+    capture_store.recover_capture_publish(out)
     assert (out/frame.name).read_bytes()==b'last completed historical capture'
     assert not (out/'capture-publish.json').exists() and not staging.exists()
     with pytest.raises(AssertionError,match='capture configuration'):
-        audit.validate_capture_manifest(out,dependency_hash='historical-deps',
+        capture_store.validate_capture_manifest(out,dependency_hash='historical-deps',
                                         godot_version='historical-engine')
 
 
@@ -312,28 +315,28 @@ def jobs(tmp_path, names):
 
 
 def test_resume_reuses_completed_cases_and_keeps_their_captures(tmp_path,monkeypatch):
-    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
+    monkeypatch.setattr(batch_run,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
     pending=jobs(tmp_path,['one','two'])
-    first=list(audit.execute_case_jobs(pending,workers=1,case_timeout=10,
+    first=list(batch_run.execute_case_jobs(pending,workers=1,case_timeout=10,
         memory_limit_mib=3072,resume=True,godot_version='test-engine'))
     assert len(first)==2 and all(row['state']=='completed' for _,row in first)
     assert not list(tmp_path.rglob('.audit-workers/*.json'))
     assert all((job['directory']/'native-0.00000.png').exists() for job in pending)
-    second=list(audit.execute_case_jobs(pending,workers=1,case_timeout=10,
+    second=list(batch_run.execute_case_jobs(pending,workers=1,case_timeout=10,
         memory_limit_mib=3072,resume=True,godot_version='test-engine'))
     assert all(row['resumed'] for _,row in second)
     assert [(job['directory']/'executions').read_text() for job in pending]==['x','x']
     pending[1]['key']='changed-verifier-inputs'
-    third=list(audit.execute_case_jobs(pending,workers=1,case_timeout=10,
+    third=list(batch_run.execute_case_jobs(pending,workers=1,case_timeout=10,
         memory_limit_mib=3072,resume=True,godot_version='test-engine'))
     assert [row['resumed'] for _,row in third]==[True,False]
     assert [(job['directory']/'executions').read_text() for job in pending]==['x','xx']
 
 
 def test_one_stuck_case_has_a_deadline_and_completed_work_survives(tmp_path,monkeypatch):
-    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
+    monkeypatch.setattr(batch_run,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
     start=time.monotonic()
-    result=list(audit.execute_case_jobs(jobs(tmp_path,['one','stuck','unstarted']),
+    result=list(batch_run.execute_case_jobs(jobs(tmp_path,['one','stuck','unstarted']),
         workers=1,case_timeout=1,memory_limit_mib=3072,resume=True,godot_version='test-engine'))
     assert time.monotonic()-start<10
     assert result[0][1]['state']=='completed'
@@ -345,8 +348,8 @@ def test_one_stuck_case_has_a_deadline_and_completed_work_survives(tmp_path,monk
 
 
 def test_worker_crash_is_explicit_and_does_not_hang_pool_shutdown(tmp_path,monkeypatch):
-    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
-    result=list(audit.execute_case_jobs(jobs(tmp_path,['crash','unstarted']),
+    monkeypatch.setattr(batch_run,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
+    result=list(batch_run.execute_case_jobs(jobs(tmp_path,['crash','unstarted']),
         workers=1,case_timeout=5,memory_limit_mib=3072,resume=True,godot_version='test-engine'))
     assert result[0][1]['state']=='interrupted'
     assert result[0][1]['result']['captured'] is False
@@ -357,21 +360,21 @@ def test_interrupted_checkpoint_write_keeps_last_valid_json(tmp_path,monkeypatch
     path=tmp_path/'summary.json'
     path.write_text('{"state":"running","cases_checked":3}')
     def failed_replace(*_):raise OSError('interrupted filesystem write')
-    monkeypatch.setattr(audit.os,'replace',failed_replace)
+    monkeypatch.setattr(capture_store.os,'replace',failed_replace)
     with pytest.raises(OSError,match='interrupted filesystem'):
-        audit.atomic_json(path,dict(state='passed',cases_checked=4))
+        capture_store.atomic_json(path,dict(state='passed',cases_checked=4))
     assert json.loads(path.read_text())==dict(state='running',cases_checked=3)
     assert sorted(p.name for p in tmp_path.iterdir())==['summary.json']
 
 
 @pytest.mark.parametrize('filename',['fixture.json','score.musicxml','native-0.00000.png'])
 def test_changed_capture_evidence_cannot_reuse_a_completed_verdict(tmp_path,monkeypatch,filename):
-    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
+    monkeypatch.setattr(batch_run,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
     pending=jobs(tmp_path,['one'])
     options=dict(workers=1,case_timeout=10,memory_limit_mib=3072,resume=True,godot_version='test-engine')
-    list(audit.execute_case_jobs(pending,**options))
+    list(batch_run.execute_case_jobs(pending,**options))
     (tmp_path/'one'/filename).write_bytes(b'changed evidence')
-    rechecked=list(audit.execute_case_jobs(pending,**options))
+    rechecked=list(batch_run.execute_case_jobs(pending,**options))
     assert not rechecked[0][1]['resumed']
     assert (tmp_path/'one'/'executions').read_text()=='xx'
 
@@ -383,13 +386,13 @@ def test_batch_timeout_summary_resumes_without_repeating_completed_cases(tmp_pat
     midi.tracks.append(mido.MidiTrack([mido.Message('note_on',note=60,velocity=80),
                                       mido.Message('note_off',note=60,time=1920)]))
     midi.save(source)
-    monkeypatch.setattr(audit,'library_sources',lambda **_:(source,))
-    monkeypatch.setattr(audit,'original_cases',lambda path,piece,**_:
+    monkeypatch.setattr(case_catalog,'library_sources',lambda **_:(source,))
+    monkeypatch.setattr(case_catalog,'original_cases',lambda path,piece,**_:
         (audit.AuditCase(name,str(path),1,1) for name in ('one','stuck')))
-    monkeypatch.setattr(audit,'curriculum_cases',lambda *_:())
-    monkeypatch.setattr(audit,'CASES',())
-    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
-    monkeypatch.setattr(audit.subprocess,'check_output',lambda *_,**__:'test-engine')
+    monkeypatch.setattr(case_catalog,'curriculum_cases',lambda *_:())
+    monkeypatch.setattr(case_catalog,'CASES',())
+    monkeypatch.setattr(batch_run,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
+    monkeypatch.setattr(batch_run.subprocess,'check_output',lambda *_,**__:'test-engine')
     out=tmp_path/'out'
     first=audit.audit_library(out,'godot',include_fixtures=False,workers=1,
                               case_timeout=1,resume=True)
@@ -417,7 +420,7 @@ def test_second_writer_cannot_overwrite_an_active_capture_directory(tmp_path):
 
 def test_unreadable_source_keeps_denominators_explicitly_incomplete(tmp_path,monkeypatch):
     source=tmp_path/'broken.mid';source.write_bytes(b'not MIDI')
-    monkeypatch.setattr(audit,'library_sources',lambda **_:(source,))
+    monkeypatch.setattr(case_catalog,'library_sources',lambda **_:(source,))
     report=audit.audit_library(tmp_path/'out','godot',include_fixtures=False,workers=1)
     assert not report['passed']
     assert not report['denominators_complete']
@@ -440,19 +443,20 @@ def test_sigterm_checkpoints_packages_and_reaps_the_active_worker(tmp_path,phase
     runner.write_text('''from pathlib import Path
 from functools import partial
 from scripts import check_native_verovio_overlay as audit
-from scripts.audits import job_executor, worker_ownership
+from scripts.audits import (job_executor, worker_ownership, batch_run, case_catalog,
+                          case_inputs, capture_store, verification_inputs)
 from test_native_audit_recovery import blocking_worker
 if __name__=='__main__':
     import os,sys,time
-    audit.library_sources=lambda **_: (Path(%r),)
-    audit.curriculum_cases=lambda *_: ()
-    audit.CASES=()
-    audit.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=blocking_worker)
+    case_catalog.library_sources=lambda **_: (Path(%r),)
+    case_catalog.curriculum_cases=lambda *_: ()
+    case_catalog.CASES=()
+    batch_run.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=blocking_worker)
     if os.environ.get('BLOCK_PLANNING')=='1':
         def blocked_piece(*_):
             Path(%r).touch()
             time.sleep(30)
-        audit._library_piece=blocked_piece
+        case_inputs.load_piece=blocked_piece
     sys.argv=['audit','--out',%r,'--only','source','--resume','--workers','1','--case-timeout','30']
     sys.exit(audit.main())
 ''' % (str(source),str(tmp_path/'planning-ready'),str(out)))

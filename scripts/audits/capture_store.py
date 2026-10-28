@@ -93,8 +93,9 @@ def copy_capture_file(source: Path, destination: Path) -> None:
 
 
 def recover_capture_publish(out: Path, *,
-                            copy_file: Callable[[Path, Path], None] = copy_capture_file) -> None:
+                            copy_file: Callable[[Path, Path], None] | None = None) -> None:
     """Finish an interrupted publication from its intact validated staging dir."""
+    copy_file = copy_file or copy_capture_file
     marker = out / 'capture-publish.json'
     if not marker.is_file():
         return

@@ -222,11 +222,14 @@ def test_cli_has_no_shared_case_recorder():
     from scripts import check_native_verovio_overlay as audit
     assert not hasattr(audit, '_CASE_STATE')
     assert not hasattr(audit, 'audit_stage')
+    for name in ('_run_case', '_library_job', '_library_piece', '_copy_capture_file'):
+        assert not hasattr(audit, name)
 
 
 def test_public_run_retains_contract_and_uses_standalone_recording(tmp_path, monkeypatch):
     from scripts import check_native_verovio_overlay as audit
-    assert hasattr(audit, '_run_case'), 'Public run needs an explicit internal execution path'
+    owner = component('case_execution')
+    assert audit.run is owner.run
     seen = []
 
     def execute(*args, **options):
@@ -234,7 +237,7 @@ def test_public_run_retains_contract_and_uses_standalone_recording(tmp_path, mon
         options['record_stage']('noteheads')
         return {'passed': True}
 
-    monkeypatch.setattr(audit, '_run_case', execute)
+    monkeypatch.setattr(owner, 'execute_case', execute)
     case = audit.AuditCase('case', 'source.mid', 1, 1)
     prepared = object()
     assert audit.run(tmp_path, 'godot', case, all_symbols=True, strict=False,
@@ -257,8 +260,8 @@ def test_execute_case_jobs_composes_executor_and_preserves_yielded_mappings(tmp_
 
     def execute(jobs, **received):
         assert jobs == [job]
-        assert received.pop('execute_case') is audit._library_job
-        assert received.pop('dependency_hash') is audit.capture_dependency_hash
+        assert received.pop('execute_case') is component('case_execution').execute_job
+        assert received.pop('dependency_hash') is component('capture_store').capture_dependency_hash
         assert received == options
         yield job, row
 
@@ -278,19 +281,21 @@ def test_recorded_case_passes_recorder_into_actual_capture_boundary(tmp_path, mo
         record_stage('capture')
         raise RuntimeError('capture boundary reached')
 
-    monkeypatch.setattr(audit.capture_runner, 'capture', capture)
+    owner = component('case_execution')
+    monkeypatch.setattr(component('capture_runner'), 'capture', capture)
     prepared = dict(model={}, xml='<score/>', sample_beats=[0.]), SimpleNamespace(pages=[])
     with pytest.raises(RuntimeError, match='capture boundary reached'):
-        audit._run_case(tmp_path, 'godot', audit.CASES[0], prepared=prepared,
+        owner.execute_case(tmp_path, 'godot', component('case_catalog').CASES[0], prepared=prepared,
                         record_stage=recorder)
     assert stages == ['capture']
 
 
 def test_library_job_passes_same_recorder_to_case_execution(tmp_path, monkeypatch):
     from scripts import check_native_verovio_overlay as audit
-    assert hasattr(audit, '_run_case'), 'Library jobs need explicit recorded execution'
-    monkeypatch.setattr(audit, '_library_piece', lambda *_: None)
-    monkeypatch.setattr(audit, 'fixture', lambda *_, **__: (None, None))
+    owner = component('case_execution')
+    inputs = component('case_inputs')
+    monkeypatch.setattr(inputs, 'load_piece', lambda *_: None)
+    monkeypatch.setattr(inputs, 'fixture', lambda *_, **__: (None, None))
     stages = []
     recorder = stages.append
 
@@ -300,16 +305,18 @@ def test_library_job_passes_same_recorder_to_case_execution(tmp_path, monkeypatc
         record_stage('noteheads')
         return dict(errors=[], nonverified_symbols={}, whole_window_coverage=None)
 
-    monkeypatch.setattr(audit, '_run_case', execute)
+    monkeypatch.setattr(owner, 'execute_case', execute)
     job, = make_jobs(tmp_path, 1)
-    result = audit._library_job(job, record_stage=recorder)
+    result = owner.execute_job(job, record_stage=recorder)
     assert result['captured'] and stages == ['prepare', 'capture', 'noteheads']
 
 
 @pytest.mark.parametrize('module', ['case_types', 'worker_ownership', 'case_checkpoint',
-                                   'worker_protocol', 'job_executor'])
+    'worker_protocol', 'job_executor', 'case_catalog', 'case_inputs', 'planning',
+    'batch_checkpoint', 'batch_run', 'frame_evidence', 'proof_execution',
+    'case_execution', 'verification_inputs'])
 def test_worker_protocol_sources_are_part_of_verification_identity(tmp_path, monkeypatch, module):
-    from scripts import check_native_verovio_overlay as audit
+    from scripts.audits import verification_inputs
     (tmp_path / 'scripts/audits').mkdir(parents=True)
     (tmp_path / 'piano_teacher').mkdir()
     (tmp_path / 'tests/fixtures/musical_fidelity').mkdir(parents=True)
@@ -317,8 +324,7 @@ def test_worker_protocol_sources_are_part_of_verification_identity(tmp_path, mon
     (tmp_path / 'tests/fixtures/musical_fidelity/manifest.json').write_text('{}')
     source = tmp_path / f'scripts/audits/{module}.py'
     source.write_text('# version one\n')
-    monkeypatch.setattr(audit, 'ROOT', tmp_path)
-    monkeypatch.setattr(audit, 'capture_dependency_hash', lambda: 'renderer')
-    before = audit.verification_inputs_hash(())
+    monkeypatch.setattr(verification_inputs, 'capture_dependency_hash', lambda root: 'renderer')
+    before = verification_inputs.verification_inputs_hash((), root=tmp_path)
     source.write_text('# version two\n')
-    assert audit.verification_inputs_hash(()) != before
+    assert verification_inputs.verification_inputs_hash((), root=tmp_path) != before

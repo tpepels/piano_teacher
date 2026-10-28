@@ -382,3 +382,13 @@ first-party architectural monoliths.
   exit codes and timeout status 124. Five new contracts failed before the gate
   existed, then passed; 45 real CLI/outer-driver regressions passed after their
   isolated fixtures copied the new parse dependency. Real main parse passed.
+
+- Audit CLI reduced 1247→196 lines. Catalog/planning, batch accounting, case
+  inputs, proof execution, frame diagnostics and code identity are separate
+  owners; temporary patch adapters removed. Five primary APIs and three real
+  fixture-client exports remain. Owner 189 tests and independent 92-test review
+  passed; 17 moved helpers/proof body and eight synthetic baseline artifact
+  comparisons matched. Review found alternate-root identity omitted its renderer
+  root: a new failing mutation test reproduced it, forwarding the root fixed it.
+  Updated hash doubles to the actual signature; fresh parent 74 component tests
+  pass. No retained captures or corpus were changed.

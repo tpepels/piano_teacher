@@ -1,10 +1,8 @@
 """The native-vs-Verovio audit must fail on the user's original defects."""
 from PIL import Image, ImageDraw
 
-from scripts.check_native_verovio_overlay import (
-    CASES, MAX_AUTUMN_DENSITY, feature_errors, readability_errors,
-    selected_cases, visible_ink,
-)
+from scripts.audits.case_catalog import CASES, MAX_AUTUMN_DENSITY, selected_cases
+from scripts.audits.frame_evidence import feature_errors, readability_errors, visible_ink
 
 
 def _model():
@@ -89,7 +87,7 @@ def test_native_rest_a_long_way_off_its_staff_is_detected():
                readability_errors(_model(),report))
 
 def test_focused_overlay_regressions_retain_hard_passages_and_notation_features():
-    from scripts.check_native_verovio_overlay import library_sources
+    from scripts.audits.case_catalog import library_sources
     expected_files = {path.name for path in library_sources()}
     assert {case.filename for case in CASES if "/" not in case.filename} <= expected_files
     assert len(CASES) >= 15
@@ -143,7 +141,7 @@ def test_challenging_corpus_does_not_pass_if_feature_disappears():
 
 
 def test_dense_chopin_requires_usable_forward_reading_context():
-    from scripts.check_native_verovio_overlay import CASES
+    from scripts.audits.case_catalog import CASES
     chopin = next(c for c in CASES if c.name == "chopin-5-6-both")
     assert chopin.min_lookahead_beats == 1.75
     # The previous "fix" merely raised the permitted density to 700. That
@@ -202,7 +200,7 @@ def _absence_report(*, status='unverified'):
 
 
 def test_indeterminate_background_ink_is_not_misreported_as_a_wrong_note():
-    from scripts.check_native_verovio_overlay import absence_evidence_errors
+    from scripts.audits.proof_execution import absence_evidence_errors
     # A valid source-anchored score can still have ink from headers or
     # antialiasing the absence detector cannot uniquely attribute.
     report = _absence_report()
@@ -211,7 +209,7 @@ def test_indeterminate_background_ink_is_not_misreported_as_a_wrong_note():
 
 
 def test_real_extra_glyphs_and_missing_capture_still_fail():
-    from scripts.check_native_verovio_overlay import absence_evidence_errors
+    from scripts.audits.proof_execution import absence_evidence_errors
     report = _absence_report(status='mismatch')
     assert any('Unexpected-symbol' in e for e in absence_evidence_errors(report))
     report = _absence_report()
