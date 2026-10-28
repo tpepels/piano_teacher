@@ -22,6 +22,7 @@ timeout 105s "$PYTHON" -m pytest -q \
   tests/test_ink_spacing.py \
   tests/test_source_measure_picker.py \
   tests/test_settings_screen.py \
+  tests/test_performance_review_strip.py \
   tests/test_native_voice_layout.py \
   tests/test_fingering_spatial_layout.py \
   tests/test_script_permissions.py

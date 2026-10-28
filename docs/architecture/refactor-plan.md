@@ -88,6 +88,8 @@ may use pure geometry/layout helpers but never import verifier internals.
 - [x] Extract Settings screen construction into a standalone signal-driven
   control. The application retains settings API operations and state updates;
   the view owns its widgets and visual structure.
+- [x] Extract the settled-performance review strip as a signal-driven Godot
+  component with isolated summary rendering and copy-on-present snapshot.
 - [ ] Move the remaining Home/Library/Practice screen construction into
   independently testable components with signals and explicit state inputs.
 - [x] Extract simultaneous-voice stem selection, column-collision spacing

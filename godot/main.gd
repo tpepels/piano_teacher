@@ -26,6 +26,7 @@ const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const NativeNotation := preload("res://notation/native/view.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 const SourceMeasurePicker := preload("res://source_measure_picker.gd")
+const PerformanceReviewStrip := preload("res://performance_review_strip.gd")
 const SettingsScreen := preload("res://settings_screen.gd")
 
 var current_screen := "practice"
@@ -200,9 +201,7 @@ var demo_player: Node
 var listen_button: Button
 var listen_volume_slider: HSlider
 var listen_volume_label: Label
-var performance_review: VBoxContainer
-var performance_text: Label
-var weak_button: Button
+var performance_review: PerformanceReviewStrip
 var review_sheet: AcceptDialog
 var pause_sheet: Control
 var advanced_pause_open := false
@@ -1195,15 +1194,12 @@ func _build_practice_screen() -> void:
     feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     information.add_child(_caption_slot(feedback_label, 1))
     information.add_child(_caption_slot(lesson_info_label, 1))
-    performance_review = VBoxContainer.new()
-    performance_review.visible = false
-    information.add_child(performance_review)
-    performance_text = _label("", 17, INK)
-    performance_review.add_child(performance_text)
-    weak_button = _button("Review notes and repeat a section", func():
+    performance_review = PerformanceReviewStrip.new()
+    performance_review.ui_scale = ui_scale
+    performance_review.review_requested.connect(func(summary: Dictionary):
         if review_sheet != null:
-            review_sheet.call("open_review", last_state.get("performance_summary", {})), false, "review")
-    performance_review.add_child(weak_button)
+            review_sheet.call("open_review", summary))
+    information.add_child(performance_review)
     # Flow containers wrap whole readable buttons instead of clipping labels
     # when the practice window is narrow or the user uses larger UI fonts.
     var controls := HFlowContainer.new()
@@ -2428,18 +2424,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     practice_retry_button.disabled = (not bool(parsed.get("loaded", false))
         or not _native_score_ready())
     var summary: Dictionary = parsed.get("performance_summary", {}) if parsed.get("performance_summary") is Dictionary else {}
-    performance_review.visible = not summary.is_empty()
-    if not summary.is_empty():
-        var weakest: Array = summary.get("weakest_bars", [])
-        performance_text.text = "%.0f%% correct · %d/%d notes · %d missed · %d wrong · %d timing/duration · %d extra" % [
-            float(summary.get("accuracy_percent", 0)), int(summary.get("correct", 0)),
-            int(summary.get("total", 0)), int(summary.get("missed", 0)),
-            int(summary.get("wrong", 0)),
-            int(summary.get("early", 0)) + int(summary.get("late", 0))
-                + int(summary.get("short", 0)) + int(summary.get("long", 0)),
-            int(summary.get("extra_notes", 0))]
-        weak_button.visible = not weakest.is_empty()
-        weak_button.disabled = weakest.is_empty()
+    performance_review.present(summary)
     var selected_retry: Variant = parsed.get("review_range")
     if selected_retry is Dictionary:
         passage_text = "Repeating measures %d–%d · %s" % [
