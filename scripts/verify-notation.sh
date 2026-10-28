@@ -67,6 +67,7 @@ quick_checks() {
     tests/test_progress_repository.py \
     tests/test_assessment_service.py \
     tests/test_visual_transport.py \
+    tests/test_godot_parse_gate.py \
     tests/test_script_permissions.py \
     tests/test_completion_route.py \
     tests/test_source_measure_picker.py \
@@ -109,7 +110,7 @@ quick_checks() {
     tests/test_source_connector_pixels.py \
     tests/test_phase3_ledger_pixels.py \
     tests/test_extra_symbol_pixels.py::test_real_playhead_overlap_is_ambiguous_without_exempting_detached_heads || return $?
-  "$GODOT" --headless --path godot --check-only --script res://main.gd
+  "$PYTHON" scripts/check_godot_parse.py --godot "$GODOT" --timeout 25
 }
 
 # GitHub Actions deliberately stops after fast fixture/parse checks.

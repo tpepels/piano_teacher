@@ -40,5 +40,6 @@ timeout 105s "$PYTHON" -m pytest -q \
   tests/test_feature_pixel_ownership.py::test_feature_family_dependencies_do_not_reach_the_coordinator_or_production \
   tests/test_audit_worker_components.py::test_stage_recorders_own_independent_case_state \
   tests/test_importing_boundaries.py \
+  tests/test_godot_parse_gate.py \
   tests/test_script_permissions.py
-timeout 25s "$GODOT" --headless --path godot --check-only --script res://main.gd
+"$PYTHON" scripts/check_godot_parse.py --godot "$GODOT" --timeout 25

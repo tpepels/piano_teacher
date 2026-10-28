@@ -43,8 +43,7 @@ may use pure geometry/layout helpers but never import verifier internals.
   diagnostic witness. Preserve exact existing spacing semantics.
 - [x] Separate hand-stage and guided-learning state projections from the
   engine using captured facts and pure functions; preserve API field names.
-- [ ] Continue isolating remaining state/HTTP fields from engine transitions,
-  with an explicit immutable snapshot boundary.
+- [x] Isolate HTTP state from engine transitions through immutable captured snapshots.
 - [x] Extract source-bar to course-section selection from the backend command
   handler into a pure, separately tested learning-navigation helper.
 - [x] Extract read-only continuous beat/velocity projection into a pure
@@ -78,8 +77,8 @@ may use pure geometry/layout helpers but never import verifier internals.
   for performance review, bounded review, partial recovery and full-passage
   progression; all remain under the existing engine lock. Add tests proving
   that partial paths cannot confer mastery or schedule unwanted auto-advance.
-- [ ] Continue reducing the engine state/HTTP payload assembly through
-  immutable projections, preserving source-note identities and poll clocks.
+- [x] Project the complete engine HTTP state from immutable facts, preserving
+  source-note identities and poll clock sampling order.
 - [x] Split the giant _build_interface method into separate Home, Library and
   Practice builders, preserving construction order and event wiring.
 - [x] Extract the modal source-measure picker into its own Godot Control,
@@ -101,8 +100,8 @@ may use pure geometry/layout helpers but never import verifier internals.
   obstacles and source-note Y coordinates in the native view.
 - [x] Separate polyphonic rest-lane selection and rectangle collision scoring
   into a pure layout policy; native view still supplies authentic glyph ink.
-- [ ] Continue separating native rendering passes and source ornament layout
-  without sharing production logic with the independent notation audit.
+- [x] Separate native rendering passes and source ornament layout without
+  sharing production logic with the independent notation audit.
 - [ ] Modularize the audit coordinator separately from source-driven proofs;
   preserve its fail-closed behavior and resumability.
 
@@ -175,7 +174,7 @@ commits; no approval menu, worktree, feature branch or per-phase pause is needed
 - [ ] Extract backend session services/read models and reduce PracticeEngine to orchestration.
 - [ ] Extract Home/Library/Practice screens and API/state coordination; reduce main.gd.
 - [x] Give native score geometry/index/cache lifecycle an independent owner.
-- [ ] Separate connector geometry, engraving passes and fingering annotation lifecycle.
+- [x] Separate connector geometry, engraving passes and fingering annotation lifecycle.
 - [ ] Separate verification source expectations, pixel registration and feature proofs; break cycles.
 - [ ] Separate corpus case planning/execution/checkpoint/publication from audit CLI composition.
 - [ ] Remove obsolete internal aliases/scaffolding; audit all remaining production files for cohesion.
@@ -377,3 +376,9 @@ first-party architectural monoliths.
   Independent review normalized 43 moved bodies without policy changes. Parent
   15 new contracts passed and replayed all 64 saved reports/inventories with
   byte-identical JSON; owner broader focuses passed 339 and 316 tests.
+
+- Confirmed CI gap: Godot can emit parse errors and still exit zero. Added a
+  bounded parse gate that checks both output and status, retaining exact driver
+  exit codes and timeout status 124. Five new contracts failed before the gate
+  existed, then passed; 45 real CLI/outer-driver regressions passed after their
+  isolated fixtures copied the new parse dependency. Real main parse passed.

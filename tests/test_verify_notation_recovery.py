@@ -18,7 +18,7 @@ ROOT=Path(__file__).resolve().parents[1]
 @pytest.fixture
 def local_driver(tmp_path):
     (tmp_path/'scripts').mkdir()
-    for name in ('verify-notation.sh','package_notation_diagnostics.py'):
+    for name in ('verify-notation.sh','package_notation_diagnostics.py','check_godot_parse.py'):
         shutil.copyfile(ROOT/'scripts'/name,tmp_path/'scripts'/name)
     binary=tmp_path/'.venv/bin';binary.mkdir(parents=True)
     python=binary/'python'
@@ -29,6 +29,8 @@ def local_driver(tmp_path):
         if args[:2]==['-m','pytest']:
             print('60 fast regressions passed',flush=True)
             raise SystemExit(int(os.environ.get('TEST_DRIVER_QUICK_STATUS','0')))
+        if args and args[0].endswith('check_godot_parse.py'):
+            os.execv(sys.executable,[sys.executable,*args])
         if args and args[0].endswith('package_notation_diagnostics.py'):
             if os.environ.get('TEST_DRIVER_PACKAGE_STATUS'):
                 raise SystemExit(int(os.environ['TEST_DRIVER_PACKAGE_STATUS']))

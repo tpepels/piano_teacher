@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def isolated_audit(tmp_path):
     scripts = tmp_path / 'scripts'
     scripts.mkdir()
-    for name in ('check_native_verovio_overlay.py', 'package_notation_diagnostics.py'):
+    for name in ('check_native_verovio_overlay.py', 'package_notation_diagnostics.py', 'check_godot_parse.py'):
         shutil.copyfile(ROOT / 'scripts' / name, scripts / name)
     shutil.copytree(ROOT / 'scripts/audits', scripts / 'audits',
                     ignore=shutil.ignore_patterns('__pycache__'))
