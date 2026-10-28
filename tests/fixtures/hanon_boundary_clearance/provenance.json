@@ -1,0 +1,19 @@
+{
+  "retained_case": "notation-check-results/shard-0-of-24/07-Le_Pianiste_virtuose_-_Premi\u00e8re_partie_(1-20)_-_C_L_Hanon/original-0197-0200-both",
+  "source_midi": "midi/Le_Pianiste_virtuose_-_Premi\u00e8re_partie_(1-20)_-_C_L_Hanon.midi",
+  "bars": [
+    197,
+    200
+  ],
+  "outgoing_beat": 7.75,
+  "terminal_beat": 8,
+  "source_ids": [
+    "pt4a2d2ea02bb20cac198b49d742375b6fs0",
+    "ptb7c2b2d269b8752e6bee848e64a07a2ds0"
+  ],
+  "sha256": {
+    "fixture.json": "1fe2f4cc59cb921b4407396cdf1b890b0eeb2acc26b4fd6b655cc90c6c9c49fc",
+    "score.musicxml": "6dd4b500cec387fb0db2545821c063f294fcba92e45c3f8c74ee7c66c34fe7a0",
+    "before-terminal.png": "08f7a80092b3dc26edf698646d521660c6bcf152a94938167e327f44fe984cea"
+  }
+}

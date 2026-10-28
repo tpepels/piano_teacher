@@ -1,0 +1,194 @@
+[
+  {
+    "case": "original-0061-0064-left",
+    "frames": 6097,
+    "nominal_bars": [
+      "0061",
+      "0064"
+    ],
+    "context_first_bar": 47,
+    "last_bar": 64,
+    "context_measures": 18,
+    "source_duration_beats": 72.0,
+    "source_model_notes": 532,
+    "density_pixels_per_beat": 7520.92456054517,
+    "density_witness": {
+      "available_lookahead_beats": 0.118453521615356,
+      "beat_separation": 0.00625000000000142,
+      "next_beat": 44.0,
+      "next_id": "pt0157bc79ee677f08f4c8561a94e69d1ds1",
+      "next_kind": "note",
+      "next_pitch": "{ \"step\": \"B\", \"alter\": 0.0, \"octave\": 3.0 }",
+      "next_rect": [
+        -26.5359992980957,
+        219.320007324219,
+        36.0,
+        43.1216659545898
+      ],
+      "next_type": "quarter",
+      "next_voice": "3",
+      "previous_beat": 43.99375,
+      "previous_id": "pt0157bc79ee677f08f4c8561a94e69d1ds0",
+      "previous_kind": "note",
+      "previous_pitch": "{ \"step\": \"B\", \"alter\": 0.0, \"octave\": 3.0 }",
+      "previous_rect": [
+        -18.0,
+        163.824996948242,
+        36.2697792053223,
+        68.254997253418
+      ],
+      "previous_type": "128th",
+      "previous_voice": "3",
+      "reason": "horizontal-ink-clearance",
+      "required_density": 7520.92456054517,
+      "selected_density": 7520.92456054517,
+      "staff_gap": 11.0
+    },
+    "schedule": {
+      "added": 5639,
+      "geometry_is_proof": false,
+      "interval": 0.012764388105103,
+      "maximum_scheduled_step_pixels": 96.0,
+      "original": 458,
+      "stripe_half_width": 64
+    },
+    "source_spacing_counts": [
+      [
+        0.01276,
+        2907
+      ],
+      [
+        0.01277,
+        2280
+      ],
+      [
+        0.00425,
+        4
+      ],
+      [
+        0.0119,
+        4
+      ],
+      [
+        0.01144,
+        3
+      ],
+      [
+        0.0031,
+        3
+      ],
+      [
+        0.01185,
+        3
+      ],
+      [
+        0.00475,
+        3
+      ],
+      [
+        0.00934,
+        3
+      ],
+      [
+        0.00752,
+        3
+      ]
+    ]
+  },
+  {
+    "case": "original-0069-0072-right",
+    "frames": 8832,
+    "nominal_bars": [
+      "0069",
+      "0072"
+    ],
+    "context_first_bar": 47,
+    "last_bar": 72,
+    "context_measures": 26,
+    "source_duration_beats": 104.0,
+    "source_model_notes": 758,
+    "density_pixels_per_beat": 7520.92456054517,
+    "density_witness": {
+      "available_lookahead_beats": 0.118453521615356,
+      "beat_separation": 0.00625000000000142,
+      "next_beat": 44.0,
+      "next_id": "pt0157bc79ee677f08f4c8561a94e69d1ds1",
+      "next_kind": "note",
+      "next_pitch": "{ \"step\": \"B\", \"alter\": 0.0, \"octave\": 3.0 }",
+      "next_rect": [
+        -26.5359992980957,
+        219.320007324219,
+        36.0,
+        43.1216659545898
+      ],
+      "next_type": "quarter",
+      "next_voice": "3",
+      "previous_beat": 43.99375,
+      "previous_id": "pt0157bc79ee677f08f4c8561a94e69d1ds0",
+      "previous_kind": "note",
+      "previous_pitch": "{ \"step\": \"B\", \"alter\": 0.0, \"octave\": 3.0 }",
+      "previous_rect": [
+        -18.0,
+        163.824996948242,
+        36.2697792053223,
+        68.254997253418
+      ],
+      "previous_type": "128th",
+      "previous_voice": "3",
+      "reason": "horizontal-ink-clearance",
+      "required_density": 7520.92456054517,
+      "selected_density": 7520.92456054517,
+      "staff_gap": 11.0
+    },
+    "schedule": {
+      "added": 8146,
+      "geometry_is_proof": false,
+      "interval": 0.012764388105103,
+      "maximum_scheduled_step_pixels": 96.0,
+      "original": 686,
+      "stripe_half_width": 64
+    },
+    "source_spacing_counts": [
+      [
+        0.01276,
+        4190
+      ],
+      [
+        0.01277,
+        3277
+      ],
+      [
+        0.0108,
+        6
+      ],
+      [
+        0.0119,
+        5
+      ],
+      [
+        0.00133,
+        5
+      ],
+      [
+        0.00571,
+        5
+      ],
+      [
+        0.00523,
+        5
+      ],
+      [
+        0.00753,
+        5
+      ],
+      [
+        0.00196,
+        5
+      ],
+      [
+        0.01143,
+        5
+      ]
+    ]
+  }
+]

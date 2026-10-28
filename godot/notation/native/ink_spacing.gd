@@ -3,7 +3,8 @@ extends RefCounted
 # ink from the engraving engine; no rendering, camera or tempo state enters here.
 # A single returned density applies to the ENTIRE loaded exercise.
 
-static func minimum_density(items: Array, preferred: float, gap: float) -> Dictionary:
+static func minimum_density(items: Array, preferred: float, gap: float,
+        boundaries: Array = []) -> Dictionary:
     var staves: Dictionary = {"right":{}, "left":{}}
     var minimum_left := INF
     var maximum_right := -INF
@@ -66,4 +67,51 @@ static func minimum_density(items: Array, preferred: float, gap: float) -> Dicti
                                 "next_rect":[current.position.x,
                                     current.position.y,current.size.x,current.size.y]
                             }
-    return {"density":density, "witness":witness}
+    var outgoing: Dictionary = outgoing_boundary_density(items,boundaries,density,gap)
+    return outgoing if float(outgoing["density"]) > density else {"density":density,"witness":witness}
+
+
+static func outgoing_boundary_density(items: Array, boundaries: Array,
+        preferred: float, gap: float) -> Dictionary:
+    # Boundary ink is positioned relative to its musical beat, including the
+    # common engraving lead and every stroke's actual width/offset. Glyph
+    # bands exclude connectors that may intentionally cross a barline.
+    var density: float = preferred
+    var witness: Dictionary = {}
+    var ordered: Array = items.duplicate()
+    ordered.sort_custom(func(a: Dictionary,b: Dictionary) -> bool: return float(a["beat"]) < float(b["beat"]))
+    var furthest := -INF
+    for item in ordered:
+        for band in item.get("boundary_ink",[item["ink"]]):
+            furthest = maxf(furthest,band.end.x)
+    for boundary in boundaries:
+        var beat: float = float(boundary["beat"])
+        var stroke: Rect2 = boundary["ink"]
+        var reach: float = (furthest-stroke.position.x+gap*.2)/preferred
+        var begin := 0
+        var end := ordered.size()
+        while begin < end:
+            var middle: int = (begin+end) >> 1
+            if float(ordered[middle]["beat"]) < beat:
+                begin = middle+1
+            else:
+                end = middle
+        for index in range(begin-1,-1,-1):
+            var item: Dictionary = ordered[index]
+            var distance: float = beat-float(item["beat"])
+            if distance > reach:
+                break
+            # Equality is deliberately excluded above: density cannot move
+            # a same-clock courtesy accidental relative to its boundary.
+            for band in item.get("boundary_ink",[item["ink"]]):
+                if band.position.y >= stroke.end.y or band.end.y <= stroke.position.y:
+                    continue
+                var required: float = (band.end.x-stroke.position.x+gap*.2)/distance
+                if required > density:
+                    density = required
+                    witness = {"reason":"outgoing-barline-clearance","required_density":required,
+                        "staff_gap":gap,"previous_id":str(item.get("event",{}).get("id","")),
+                        "previous_beat":float(item["beat"]),"boundary_beat":beat,
+                        "beat_separation":distance,"glyph_right":band.end.x,
+                        "stroke_left":stroke.position.x}
+    return {"density":density,"witness":witness}

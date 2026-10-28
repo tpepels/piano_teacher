@@ -1,0 +1,90 @@
+{
+  "classification": "genuine native chord flag/tie collision",
+  "source_midi": "midi/Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi",
+  "source_event": "track 1 event 57, note_on 46 at tick 22848 / beat 47.6; release event 59 at tick 23756 / beat 49.4916666667",
+  "written_source_ids": [
+    "ptce0e4e5158d5bbdcb3f3c153013c3d4ds0",
+    "ptce0e4e5158d5bbdcb3f3c153013c3d4ds1"
+  ],
+  "written_bars": [
+    12,
+    13
+  ],
+  "written_beats": [
+    3.6,
+    4.0
+  ],
+  "spelling": "B-flat 2",
+  "root": "The isolated eighth-note tie contour assumes the isolated note flag; the compound eighth|up|0,4 sprite has its flag about .52 staff spaces lower relative to the upper tied head. Native composition joins the flag and curve. Clear actual chord and curve alpha silhouettes while preserving the original curve artwork.",
+  "before": {
+    "expected": 4,
+    "verified": 3,
+    "unverified": 0,
+    "mismatch": 1
+  },
+  "after": {
+    "expected": 4,
+    "verified": 4,
+    "unverified": 0,
+    "mismatch": 0
+  },
+  "evidence_files": [
+    "bill-tie-native-crop.png",
+    "bill-verovio-crop.png",
+    "full.png",
+    "without-ties.png",
+    "without-chord.png",
+    "bill-tie-after-crop.png",
+    "bill-after/independent-connectors.json"
+  ],
+  "retained_witness_sha256": {
+    "fixture.json": "be095160a79e84176fa6fd18f8c4a00dc4ff7dc4de31d45c0ae4cf0bce9e613e",
+    "score.musicxml": "c84f3fcae17731935162f2cc069166ee2dd545bd424080de6837c02c81ef31a5",
+    "verovio-0.svg": "6b2673ca82fd7bd1e45f8b50db72a2cc2e86e110e22963393435e8635a2461fa",
+    "native-4.00000.png": "bf15b2f1f7c66f47693c23f9b28812693e756583df43bf9b2c7b22232d5b7f52",
+    "independent-connectors.json": "37c53dfd2dd6823cad1684baa04891b75283c1189450110c633e2b353c523445"
+  },
+  "both_hands_before": {
+    "expected": 8,
+    "verified": 6,
+    "mismatch": 2
+  },
+  "both_hands_after": {
+    "expected": 8,
+    "verified": 8,
+    "unverified": 0,
+    "mismatch": 0
+  },
+  "verification": [
+    {
+      "command": ".venv/bin/python -m pytest -q tests/test_native_chord_flag_ties.py tests/test_native_flag_tie_endpoints.py tests/test_native_tie_attachments.py tests/test_native_audit_ties.py tests/test_native_voice_collisions.py tests/test_native_chord_dots.py",
+      "result": "91 passed in 73.79s; before adding the reversed chord leader regression"
+    },
+    {
+      "command": ".venv/bin/python -m pytest -q tests/test_native_chord_flag_ties.py",
+      "result": "4 passed in 3.96s; final test file, including reversed chord leader"
+    },
+    {
+      "command": "godot --headless --path godot --check-only --script res://main.gd",
+      "result": "exit 0"
+    },
+    {
+      "command": "two retained-fixture captures, six sample beats each, _run_godot timeout=45, max RSS 1536 MiB",
+      "result": "NATIVE_VEROVIO_OVERLAY_FAILURES:0; independent source connector proof 4/4 left and 8/8 both"
+    }
+  ],
+  "changed_paths": [
+    "godot/notation/native/view.gd",
+    "tests/test_native_chord_flag_ties.py"
+  ],
+  "unresolved": [
+    "Hanon terminal boundary / flag collision confirmed separately; no barline changes in this one-defect pass.",
+    "Same-clock courtesy accidental clearance cannot be repaired by changing the global density alone; placement also needs a source-owned constraint.",
+    "Ala ledger/dot contact observed but left unchanged; no ledger repair attempted.",
+    "No full audit or full CI run performed by this agent; parent coordinates aggregate CI."
+  ],
+  "final_owned_files_sha256": {
+    "godot/notation/native/view.gd": "16ef08bfc3c85501ed2b5680a273ec4cb9e39ae89706d2a9cc839f1f38c9d2a0",
+    "tests/test_native_chord_flag_ties.py": "19d4653c1bdcce4a566790e579fb96d9d065f8a8ce7d3609431e60d140e2eb25"
+  }
+}

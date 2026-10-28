@@ -37,5 +37,36 @@ func _initialize() -> void:
     if absf(float(InkSpacing.minimum_density(same_onset,24.0,10.0)["density"])-24.0) > .0001:
         failures += 1
 
+    # Outgoing edge 20, boundary left -14, clearance 2, quarter-beat:
+    # .25 * P >= 20 + 14 + 2, so the one global density must be 144.
+    var outgoing: Array = [{"staff":"right","beat":1.75,
+        "ink":Rect2(-10,0,30,8),"event":{"id":"flag"}}]
+    var boundaries: Array = [{"beat":2.0,"ink":Rect2(-14,0,1,20)}]
+    var constrained: Dictionary = InkSpacing.minimum_density(outgoing,96.0,10.0,boundaries)
+    if absf(float(constrained["density"])-144.0) > .0001 or \
+            constrained["witness"].get("reason") != "outgoing-barline-clearance":
+        failures += 1
+    var paired: Array = boundaries.duplicate(true)
+    paired.append({"beat":2.0,"ink":Rect2(-18,0,2,20)})
+    if InkSpacing.minimum_density(outgoing,96.0,10.0,paired)["density"] != 160.0:
+        failures += 1
+    # A sufficiently early note stays at the ordinary fixed scale.
+    outgoing[0]["beat"] = 1.5
+    if InkSpacing.minimum_density(outgoing,96.0,10.0,boundaries)["density"] != 96.0:
+        failures += 1
+    # Exact incoming clocks are not a density-solvable collision. Do not
+    # divide by zero or reject a valid score for a same-clock accidental.
+    outgoing[0]["beat"] = 2.0
+    if InkSpacing.minimum_density(outgoing,96.0,10.0,boundaries)["density"] != 96.0:
+        failures += 1
+    # Finite actual contour bands, not a sprite's enclosing empty rectangle.
+    outgoing[0]["beat"] = 1.75
+    outgoing[0]["boundary_ink"] = [Rect2(-10,30,30,8)]
+    if InkSpacing.minimum_density(outgoing,96.0,10.0,boundaries)["density"] != 96.0:
+        failures += 1
+    outgoing[0]["boundary_ink"] = [] # Intentional connector ink supplies no glyph constraint.
+    if InkSpacing.minimum_density(outgoing,96.0,10.0,boundaries)["density"] != 96.0:
+        failures += 1
+
     print("INK_SPACING_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

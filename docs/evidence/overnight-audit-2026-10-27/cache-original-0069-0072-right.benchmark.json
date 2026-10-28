@@ -1,0 +1,615 @@
+{
+  "case": "original-0069-0072-right",
+  "results": [
+    {
+      "window": "begin",
+      "frames": [
+        "native-0.00000.png",
+        "native-0.01276.png",
+        "native-0.02553.png"
+      ],
+      "equal": true,
+      "samples": {
+        "disabled": [
+          {
+            "first_wall": 0.1526743030117359,
+            "first_cpu": 0.15218206099999998,
+            "second_wall": 0.15288282200344838,
+            "second_cpu": 0.15245599400000032,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.7878031220170669,
+            "cpu": 0.7849828850000002
+          },
+          {
+            "first_wall": 0.14962005999404937,
+            "first_cpu": 0.14931653899999997,
+            "second_wall": 0.15160376398125663,
+            "second_cpu": 0.1512547280000005,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.7816907090018503,
+            "cpu": 0.7793922790000001
+          },
+          {
+            "first_wall": 0.152473898982862,
+            "first_cpu": 0.15212983899999966,
+            "second_wall": 0.15335810297983699,
+            "second_cpu": 0.1529923119999994,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.7815630120167043,
+            "cpu": 0.7792511170000003
+          }
+        ],
+        "enabled": [
+          {
+            "first_wall": 0.15256755199516192,
+            "first_cpu": 0.1522340040000003,
+            "second_wall": 0.001900480012409389,
+            "second_cpu": 0.00189338899999969,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 26417,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 0.6276646750047803,
+            "cpu": 0.6255625839999999
+          },
+          {
+            "first_wall": 0.15260353099438362,
+            "first_cpu": 0.15226715400000002,
+            "second_wall": 0.0020045920100528747,
+            "second_cpu": 0.0019979670000007665,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 26417,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 0.6272641620016657,
+            "cpu": 0.625242203
+          },
+          {
+            "first_wall": 0.15664247298263945,
+            "first_cpu": 0.15624470100000032,
+            "second_wall": 0.0020275459974072874,
+            "second_cpu": 0.00201783500000019,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 26417,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 0.6440498720039614,
+            "cpu": 0.6417955190000004
+          }
+        ]
+      },
+      "median": {
+        "disabled": {
+          "first_wall": 0.152473898982862,
+          "first_cpu": 0.15212983899999966,
+          "second_wall": 0.15288282200344838,
+          "second_cpu": 0.15245599400000032,
+          "first_decodes": 3,
+          "second_decodes": 3,
+          "cache_peak_bytes": 0,
+          "cache_peak_entries": 0,
+          "available_hits": 0,
+          "wall": 0.7816907090018503,
+          "cpu": 0.7793922790000001
+        },
+        "enabled": {
+          "first_wall": 0.15260353099438362,
+          "first_cpu": 0.15226715400000002,
+          "second_wall": 0.0020045920100528747,
+          "second_cpu": 0.0019979670000007665,
+          "first_decodes": 3,
+          "second_decodes": 0,
+          "cache_peak_bytes": 26417,
+          "cache_peak_entries": 3,
+          "available_hits": 3,
+          "wall": 0.6276646750047803,
+          "cpu": 0.6255625839999999
+        }
+      }
+    },
+    {
+      "window": "middle",
+      "frames": [
+        "native-52.07870.png",
+        "native-52.09147.png",
+        "native-52.09375.png"
+      ],
+      "equal": true,
+      "samples": {
+        "disabled": [
+          {
+            "first_wall": 0.16076193496701308,
+            "first_cpu": 0.16045253400000092,
+            "second_wall": 0.15697894903132692,
+            "second_cpu": 0.15662747899999907,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 1.3932626449968666,
+            "cpu": 1.3880237709999985
+          },
+          {
+            "first_wall": 0.15308315202128142,
+            "first_cpu": 0.15278054399999874,
+            "second_wall": 0.15663942901301198,
+            "second_cpu": 0.15633784499999948,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 1.4192598560184706,
+            "cpu": 1.4142097820000004
+          },
+          {
+            "first_wall": 0.15905410301638767,
+            "first_cpu": 0.15864594900000206,
+            "second_wall": 0.1565695589815732,
+            "second_cpu": 0.15624561299999762,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 1.4179653610044625,
+            "cpu": 1.412018325
+          }
+        ],
+        "enabled": [
+          {
+            "first_wall": 0.1554222280101385,
+            "first_cpu": 0.1550762179999996,
+            "second_wall": 0.0020192010269965976,
+            "second_cpu": 0.0020142979999988597,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 27575,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 1.2430143490200862,
+            "cpu": 1.2380198189999998
+          },
+          {
+            "first_wall": 0.15503842502948828,
+            "first_cpu": 0.1547117420000017,
+            "second_wall": 0.001975128019694239,
+            "second_cpu": 0.001969695999999743,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 27575,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 1.2385271039966028,
+            "cpu": 1.2339189059999995
+          },
+          {
+            "first_wall": 0.15542963100597262,
+            "first_cpu": 0.15507665899999878,
+            "second_wall": 0.002077488985378295,
+            "second_cpu": 0.002072395000000782,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 27575,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 1.242902944009984,
+            "cpu": 1.238134682
+          }
+        ]
+      },
+      "median": {
+        "disabled": {
+          "first_wall": 0.15905410301638767,
+          "first_cpu": 0.15864594900000206,
+          "second_wall": 0.15663942901301198,
+          "second_cpu": 0.15633784499999948,
+          "first_decodes": 3,
+          "second_decodes": 3,
+          "cache_peak_bytes": 0,
+          "cache_peak_entries": 0,
+          "available_hits": 0,
+          "wall": 1.4179653610044625,
+          "cpu": 1.412018325
+        },
+        "enabled": {
+          "first_wall": 0.1554222280101385,
+          "first_cpu": 0.1550762179999996,
+          "second_wall": 0.0020192010269965976,
+          "second_cpu": 0.0020142979999988597,
+          "first_decodes": 3,
+          "second_decodes": 0,
+          "cache_peak_bytes": 27575,
+          "cache_peak_entries": 3,
+          "available_hits": 3,
+          "wall": 1.242902944009984,
+          "cpu": 1.2380198189999998
+        }
+      }
+    },
+    {
+      "window": "dense-onset",
+      "frames": [
+        "native-39.96530.png",
+        "native-39.96875.png",
+        "native-39.97806.png"
+      ],
+      "equal": true,
+      "samples": {
+        "disabled": [
+          {
+            "first_wall": 0.03311725502135232,
+            "first_cpu": 0.03305067200000167,
+            "second_wall": 0,
+            "second_cpu": 0,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.14451226199162193,
+            "cpu": 0.14426605299999906
+          },
+          {
+            "first_wall": 0.03306787402834743,
+            "first_cpu": 0.03299124400000153,
+            "second_wall": 0,
+            "second_cpu": 0,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.14494322298560292,
+            "cpu": 0.1447057679999979
+          },
+          {
+            "first_wall": 0.03363170102238655,
+            "first_cpu": 0.03353774800000053,
+            "second_wall": 0,
+            "second_cpu": 0,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.14527576000546105,
+            "cpu": 0.14499756800000085
+          }
+        ],
+        "enabled": [
+          {
+            "first_wall": 0.03326027002185583,
+            "first_cpu": 0.0331770700000007,
+            "second_wall": 0,
+            "second_cpu": 0,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.14459330201498233,
+            "cpu": 0.1443196539999967
+          },
+          {
+            "first_wall": 0.03307804197538644,
+            "first_cpu": 0.03298799099999883,
+            "second_wall": 0,
+            "second_cpu": 0,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.14480870199622586,
+            "cpu": 0.14453632900000102
+          },
+          {
+            "first_wall": 0.03295673700631596,
+            "first_cpu": 0.03287910599999577,
+            "second_wall": 0,
+            "second_cpu": 0,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.1427541459852364,
+            "cpu": 0.14242643299999713
+          }
+        ]
+      },
+      "median": {
+        "disabled": {
+          "first_wall": 0.03311725502135232,
+          "first_cpu": 0.03305067200000167,
+          "second_wall": 0,
+          "second_cpu": 0,
+          "first_decodes": 3,
+          "second_decodes": 0,
+          "cache_peak_bytes": 0,
+          "cache_peak_entries": 0,
+          "available_hits": 0,
+          "wall": 0.14494322298560292,
+          "cpu": 0.1447057679999979
+        },
+        "enabled": {
+          "first_wall": 0.03307804197538644,
+          "first_cpu": 0.03298799099999883,
+          "second_wall": 0,
+          "second_cpu": 0,
+          "first_decodes": 3,
+          "second_decodes": 0,
+          "cache_peak_bytes": 0,
+          "cache_peak_entries": 0,
+          "available_hits": 0,
+          "wall": 0.14459330201498233,
+          "cpu": 0.1443196539999967
+        }
+      }
+    },
+    {
+      "window": "dense-ink",
+      "frames": [
+        "native-78.01594.png",
+        "native-78.02870.png",
+        "native-78.04147.png"
+      ],
+      "equal": true,
+      "samples": {
+        "disabled": [
+          {
+            "first_wall": 0.15364426604355685,
+            "first_cpu": 0.1532907440000031,
+            "second_wall": 0.15770735198748298,
+            "second_cpu": 0.15740360099999862,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 2.1230887720012106,
+            "cpu": 2.11719901
+          },
+          {
+            "first_wall": 0.1557160629890859,
+            "first_cpu": 0.15537530299999958,
+            "second_wall": 0.1587549390096683,
+            "second_cpu": 0.15840453399999888,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 2.144274749007309,
+            "cpu": 2.1384822519999993
+          },
+          {
+            "first_wall": 0.1571842809789814,
+            "first_cpu": 0.15684725699999902,
+            "second_wall": 0.1585905239917338,
+            "second_cpu": 0.15821592499999682,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 2.151614624017384,
+            "cpu": 2.145255421999998
+          }
+        ],
+        "enabled": [
+          {
+            "first_wall": 0.15595540797221474,
+            "first_cpu": 0.15559675699999787,
+            "second_wall": 0.0021573479752987623,
+            "second_cpu": 0.0021519149999953413,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 25082,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 1.9826867670053616,
+            "cpu": 1.977032984000001
+          },
+          {
+            "first_wall": 0.15650948698748834,
+            "first_cpu": 0.15620181500000285,
+            "second_wall": 0.0021075260010547936,
+            "second_cpu": 0.002103874999999533,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 25082,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 1.9824517609959003,
+            "cpu": 1.9771944739999974
+          },
+          {
+            "first_wall": 0.15600776500650682,
+            "first_cpu": 0.15567363499999942,
+            "second_wall": 0.002087327011395246,
+            "second_cpu": 0.0020818150000003754,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 25082,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 1.9775175499962643,
+            "cpu": 1.9720281099999966
+          }
+        ]
+      },
+      "median": {
+        "disabled": {
+          "first_wall": 0.1557160629890859,
+          "first_cpu": 0.15537530299999958,
+          "second_wall": 0.1585905239917338,
+          "second_cpu": 0.15821592499999682,
+          "first_decodes": 3,
+          "second_decodes": 3,
+          "cache_peak_bytes": 0,
+          "cache_peak_entries": 0,
+          "available_hits": 0,
+          "wall": 2.144274749007309,
+          "cpu": 2.1384822519999993
+        },
+        "enabled": {
+          "first_wall": 0.15600776500650682,
+          "first_cpu": 0.15567363499999942,
+          "second_wall": 0.0021075260010547936,
+          "second_cpu": 0.002103874999999533,
+          "first_decodes": 3,
+          "second_decodes": 0,
+          "cache_peak_bytes": 25082,
+          "cache_peak_entries": 3,
+          "available_hits": 3,
+          "wall": 1.9824517609959003,
+          "cpu": 1.977032984000001
+        }
+      }
+    },
+    {
+      "window": "terminal",
+      "frames": [
+        "native-103.97871.png",
+        "native-103.99147.png",
+        "native-104.00000.png"
+      ],
+      "equal": true,
+      "samples": {
+        "disabled": [
+          {
+            "first_wall": 0.15435345299192704,
+            "first_cpu": 0.15398163899999417,
+            "second_wall": 0.15474236398586072,
+            "second_cpu": 0.1544180299999951,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.9283178860205226,
+            "cpu": 0.9256393560000049
+          },
+          {
+            "first_wall": 0.1542773410328664,
+            "first_cpu": 0.15396087399999914,
+            "second_wall": 0.1544917689752765,
+            "second_cpu": 0.1541937420000039,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.9293716640095226,
+            "cpu": 0.9267730050000011
+          },
+          {
+            "first_wall": 0.15707804297562689,
+            "first_cpu": 0.15670755700000427,
+            "second_wall": 0.1553723249817267,
+            "second_cpu": 0.15502125199999028,
+            "first_decodes": 3,
+            "second_decodes": 3,
+            "cache_peak_bytes": 0,
+            "cache_peak_entries": 0,
+            "available_hits": 0,
+            "wall": 0.9307029570045415,
+            "cpu": 0.9281394740000053
+          }
+        ],
+        "enabled": [
+          {
+            "first_wall": 0.1578502570046112,
+            "first_cpu": 0.15751064599999864,
+            "second_wall": 0.0020828680135309696,
+            "second_cpu": 0.002077386999992825,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 28736,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 0.7750182620075066,
+            "cpu": 0.7727420009999975
+          },
+          {
+            "first_wall": 0.15739665599539876,
+            "first_cpu": 0.1570327419999984,
+            "second_wall": 0.0021565550414379686,
+            "second_cpu": 0.0021517060000064703,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 28736,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 0.7904138090088964,
+            "cpu": 0.7881197389999954
+          },
+          {
+            "first_wall": 0.15694418601924554,
+            "first_cpu": 0.15663707699999918,
+            "second_wall": 0.002192442974774167,
+            "second_cpu": 0.0021902579999917293,
+            "first_decodes": 3,
+            "second_decodes": 0,
+            "cache_peak_bytes": 28736,
+            "cache_peak_entries": 3,
+            "available_hits": 3,
+            "wall": 0.781024158000946,
+            "cpu": 0.7788941539999996
+          }
+        ]
+      },
+      "median": {
+        "disabled": {
+          "first_wall": 0.15435345299192704,
+          "first_cpu": 0.15398163899999417,
+          "second_wall": 0.15474236398586072,
+          "second_cpu": 0.1544180299999951,
+          "first_decodes": 3,
+          "second_decodes": 3,
+          "cache_peak_bytes": 0,
+          "cache_peak_entries": 0,
+          "available_hits": 0,
+          "wall": 0.9293716640095226,
+          "cpu": 0.9267730050000011
+        },
+        "enabled": {
+          "first_wall": 0.15739665599539876,
+          "first_cpu": 0.1570327419999984,
+          "second_wall": 0.0021565550414379686,
+          "second_cpu": 0.0021517060000064703,
+          "first_decodes": 3,
+          "second_decodes": 0,
+          "cache_peak_bytes": 28736,
+          "cache_peak_entries": 3,
+          "available_hits": 3,
+          "wall": 0.781024158000946,
+          "cpu": 0.7788941539999996
+        }
+      }
+    }
+  ],
+  "maxrss_kib": 341108,
+  "byte_budget": 100663296,
+  "entry_limit": 10000,
+  "png_limit": 16777216,
+  "repeats": 3
+}

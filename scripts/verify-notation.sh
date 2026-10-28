@@ -76,6 +76,14 @@ quick_checks() {
     tests/test_joint_registration_resources.py \
     tests/test_connector_source_layers.py \
     tests/test_extra_symbol_shard_regressions.py \
+    tests/test_extra_symbol_valid_fft.py \
+    tests/test_photo_cache.py \
+    tests/test_phase3_structure_pixels.py \
+    tests/test_native_chord_flag_ties.py \
+    tests/test_native_boundary_clearance.py \
+    tests/test_verovio_wide_tuplet.py \
+    tests/test_tuplet_adaptive_raster_bounds.py \
+    tests/test_connector_bracket_sampling.py \
     tests/test_rest_dot_retained_pixels.py \
     tests/test_polyphonic_stem_pixels.py \
     tests/test_native_voice_collisions.py \

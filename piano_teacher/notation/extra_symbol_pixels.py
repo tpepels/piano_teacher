@@ -14,16 +14,21 @@ from __future__ import annotations
 
 from collections import Counter, OrderedDict, defaultdict
 from functools import lru_cache
+from io import BytesIO
+import hashlib
+import json
 import math
+import sys
+import zlib
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
 from .connector_pixels import _translation
 from .feature_pixels import _closed_component, _feature_glyphs, _register
 from .phase3_pixels import _clef_at, _rectangular_rest_orientation
-from .pixel_proof import detect_staff_lines, expected_y
+from .pixel_proof import RasterStaff, detect_staff_lines, expected_y
 from .proof import read_written_score
 from .symbol_pixel_proof import _outline, bright
 
@@ -33,6 +38,9 @@ MAX_POSITION_ERROR = 3.
 MAX_CANDIDATES = 256
 MAX_FRAME_PIXELS = 2_000_000
 TEMPLATE_FFT_CACHE_BYTES = 224*1024**2
+PHOTO_CACHE_BYTES = 96*1024**2
+PHOTO_CACHE_ENTRIES = 10_000
+PHOTO_CACHE_PNG_BYTES = 16*1024**2
 _SPECTRA = OrderedDict()
 
 
@@ -99,6 +107,97 @@ def _photo(path):
     return dict(ink=ink, layers=layers, head_pixels=bright(image), staves=staves, camera=camera,
                 occlusion=colored, occlusion_columns=columns,
                 occluded=int(colored.sum()), shape=ink.shape)
+
+
+class _PhotoCache:
+    """One verifier call's lossless, byte-bound first-to-second-pass handoff.
+
+    Only compressed masks/metadata and PNG digests survive a capture. Entries
+    are consumed on retrieval; misses and changed bytes use ordinary photo
+    analysis. No photo error is cached, and no mutable decoded arrays escape
+    into retained entries.
+    """
+    def __init__(self):
+        self.entries = OrderedDict()
+        self.bytes_used = 0
+
+    @staticmethod
+    def _png(path):
+        # Oversized PNGs still receive the original analysis, without caching.
+        with Path(path).open('rb') as stream:
+            data = stream.read(PHOTO_CACHE_PNG_BYTES+1)
+        return data if len(data) <= PHOTO_CACHE_PNG_BYTES else None
+
+    @staticmethod
+    def _decode(path, data):
+        try:
+            return _photo(BytesIO(data))
+        except UnidentifiedImageError:
+            # Preserve PIL's path-based failure evidence, rather than exposing
+            # the temporary byte stream's nondeterministic object address.
+            raise UnidentifiedImageError(f'cannot identify image file {str(path)!r}') from None
+
+    @staticmethod
+    def _pack(photo):
+        metadata = json.dumps((photo['shape'],
+            [(key, staff.hand, staff.lines, staff.gap) for key, staff in photo['staves'].items()],
+            photo['camera'], photo['occlusion_columns'].tolist(), photo['occluded'])).encode()
+        masks = (photo['ink'], *photo['layers'], photo['head_pixels'], photo['occlusion'])
+        packed = b''.join(np.packbits(mask).tobytes() for mask in masks)
+        return zlib.compress(len(metadata).to_bytes(4, 'big')+metadata+packed, level=1)
+
+    @staticmethod
+    def _unpack(blob):
+        raw = zlib.decompress(blob)
+        length = int.from_bytes(raw[:4], 'big')
+        shape, staves, camera, columns, occluded = json.loads(raw[4:4+length])
+        shape = tuple(shape)
+        count = shape[0]*shape[1]
+        size = (count+7)//8
+        masks = [np.unpackbits(np.frombuffer(raw, dtype=np.uint8, count=size,
+                    offset=4+length+i*size), count=count).view(np.bool_).reshape(shape)
+                 for i in range(5)]
+        return dict(ink=masks[0], layers=masks[1:3], head_pixels=masks[3],
+                    occlusion=masks[4], shape=shape, camera=camera,
+                    occlusion_columns=np.array(columns, dtype=np.intp), occluded=occluded,
+                    staves={key: RasterStaff(hand, tuple(lines), gap)
+                            for key, hand, lines, gap in staves})
+
+    def capture(self, path):
+        if PHOTO_CACHE_BYTES <= 0 or PHOTO_CACHE_ENTRIES <= 0:
+            return _photo(path)
+        key = str(path)
+        old = self.entries.pop(key, None)
+        if old is not None:
+            self.bytes_used -= old[2]
+        data = self._png(path)
+        if data is None:
+            return _photo(path)
+        photo = self._decode(path, data)
+        digest, blob = hashlib.sha256(data).digest(), self._pack(photo)
+        # Include the flat Python objects and conservative per-map-entry
+        # bookkeeping, not only the compressed payload's byte length.
+        charge = sum(sys.getsizeof(value) for value in (key, digest, blob, (digest, blob, 0)))+512
+        if charge <= PHOTO_CACHE_BYTES:
+            while self.entries and (self.bytes_used+charge > PHOTO_CACHE_BYTES
+                                    or len(self.entries) >= PHOTO_CACHE_ENTRIES):
+                self.bytes_used -= self.entries.popitem(last=False)[1][2]
+            self.entries[key] = digest, blob, charge
+            self.bytes_used += charge
+        return photo
+
+    def restore(self, path):
+        entry = self.entries.pop(str(path), None)
+        if entry is None:
+            return _photo(path)
+        digest, blob, charge = entry
+        self.bytes_used -= charge
+        data = self._png(path)
+        if data is None:
+            return _photo(path)
+        if hashlib.sha256(data).digest() != digest:
+            return self._decode(path, data)
+        return self._unpack(blob)
 
 
 def _scores(pixels, template, transforms=None, integral=None, kernel_key=None):
@@ -580,7 +679,8 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
     ``hand`` validates the request; ALL written hands are inventoried because
     inactive ink remains physically visible. Read only actual native-*.png
     and independent source XML/font resources. Supplied native reports are
-    neither necessary nor sufficient. At most two decoded frames are live.
+    neither necessary nor sufficient. At most two decoded frames are live;
+    a bounded lossless cache reuses first-pass photos after checking PNG bytes.
 
     This first bounded implementation proves source head/rest track ownership
     and detects unrequired detached dot/flag families. General adornment and
@@ -609,6 +709,7 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
     ending = float(written.bars[-1]) if written.bars else 0.
     gaps = [[a, b] for a, b in zip(clocks, clocks[1:]) if b-a > MAX_CLOCK_STEP+.000011]
     missing = [clock for clock in events if clock not in paths]
+    photo_cache = _PhotoCache()
     owners, binding_errors, tracks, snapshots, motions = {}, [], 0, [], []
     source_anchors = {}
     travel, travel_error = 0, 0.
@@ -616,7 +717,7 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
     motion_errors = []
     for index, clock in enumerate(clocks):
         try:
-            photo = _photo(paths[clock])
+            photo = photo_cache.capture(paths[clock])
             shift, motion = None, None
             if previous is not None:
                 try:
@@ -700,7 +801,7 @@ def verify_extra_symbol_pixels(xml, folder, *, hand='both'):
             measured.append(dict(frame=snapshot['frame'], clock=snapshot['clock'], region='viewport',
                                  status='unverified', reason=snapshot['error'], evidence={}))
             continue
-        photo = _photo(folder/snapshot['frame'])
+        photo = photo_cache.restore(folder/snapshot['frame'])
         claimed = np.zeros(photo['shape'], dtype=bool)
         unexpected, unresolved = [], []
         for obj in snapshot['objects']:

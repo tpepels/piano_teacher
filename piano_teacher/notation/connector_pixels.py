@@ -670,7 +670,28 @@ def _bracket_mask(art, source, actual, scale, yoffset):
     return mask, box
 
 
-def _fit_bracket(pixels, mask, box, numeral, number_box):
+def _bracket_topology(pixels, mask, x, y, number_box, gap):
+    """All required hooks and columns, at one fixed raster registration."""
+    h, w = mask.shape
+    block = pixels[y:y+h, x:x+w]
+    padded = np.pad(block, 1)
+    supported = np.logical_or.reduce([padded[dy:dy+h, dx:dx+w]
+                                      for dy in range(3) for dx in range(3)])
+    for part in (slice(0, max(2, round(gap*.3))), slice(max(0, w-round(gap*.3)), w)):
+        required = mask[:, part]
+        height = int(np.count_nonzero(required.any(axis=1)))
+        observed_height = int(np.count_nonzero(block[:, part].any(axis=1)))
+        if required.sum() and (np.count_nonzero(required & supported[:, part])/required.sum() < .90
+                               or observed_height < height-2):
+            return 'Tuplet bracket endpoint hook is missing or detached'
+    columns = np.arange(x, x+w)
+    corridor = (columns >= number_box[0]-gap) & (columns < number_box[2]+gap)
+    if np.any(mask.any(axis=0) & ~block.any(axis=0) & ~corridor):
+        return 'Tuplet bracket is interrupted between actual source endpoints'
+    return None
+
+
+def _fit_bracket(pixels, mask, box, numeral, number_box, gap=None):
     """A separately proven numeral is not unexplained bracket background ink.
 
     Do not subtract actual bright pixels indiscriminately: remove only the
@@ -695,6 +716,15 @@ def _fit_bracket(pixels, mask, box, numeral, number_box):
             candidates.append((score, -overlap, x, y))
     if not candidates:
         raise ValueError('Bracket search is offscreen')
+    if gap is not None:
+        # Register the complete graphic, not just its longest horizontal
+        # stroke. A one-pixel shift can improve aggregate Dice while cropping
+        # a genuine hook. Every gate and the original +/-1 corridor still
+        # apply to each candidate; an incomplete fit never authorizes a pass.
+        for score, overlap, x, y in sorted(candidates, reverse=True):
+            if (score >= .72 and -overlap <= max(2, mask.sum()*.02)
+                    and _bracket_topology(pixels, mask, x, y, number_box, gap) is None):
+                return score, x, y, -overlap
     score, overlap, x, y = max(candidates)
     return score, x, y, -overlap
 
@@ -810,7 +840,7 @@ def _tuplet(row, frames, target):
         if any(0 <= x-box[0]+dx < mask.shape[1] and expected_columns[x-box[0]+dx]
                for x in frame['occluded_columns'] for dx in (-1, 0, 1)):
             raise ValueError('Measured coloured playhead occludes the bracket witness')
-        fit, bx, by, overlapping_pixels = _fit_bracket(frame['pixels'], mask, box, template, number_box)
+        fit, bx, by, overlapping_pixels = _fit_bracket(frame['pixels'], mask, box, template, number_box, gap)
         if overlapping_pixels > max(2, mask.sum()*.02):
             return 'ambiguous', 'Bracket and independently matched numeral silhouettes overlap', dict(
                 **evidence, overlapping_pixels=overlapping_pixels, bracket_match=round(fit, 4))
@@ -820,27 +850,9 @@ def _tuplet(row, frames, target):
         # End hooks and every horizontal column must survive; a good global
         # Dice score alone could bless a missing short endpoint hook.
         h, w = mask.shape
-        block = frame['pixels'][by:by+h, bx:bx+w]
-        padded = np.pad(block, 1)
-        supported = np.logical_or.reduce([padded[dy:dy+h, dx:dx+w]
-                                          for dy in range(3) for dx in range(3)])
-        for part in (slice(0, max(2, round(gap*.3))), slice(max(0, w-round(gap*.3)), w)):
-            required = mask[:, part]
-            # One-pixel stroke phase can turn a reference two-column hook
-            # into a one-column raster hook. Require its full vertical
-            # extent, with at most one pixel of raster support tolerance.
-            height = int(np.count_nonzero(required.any(axis=1)))
-            observed_height = int(np.count_nonzero(block[:, part].any(axis=1)))
-            if required.sum() and (np.count_nonzero(required & supported[:, part])/required.sum() < .90
-                                   or observed_height < height-2):
-                return 'mismatch', 'Tuplet bracket endpoint hook is missing or detached', evidence
-        # Horizontal reflow can change the two halves' central whitespace;
-        # the numeral keeps its staff scale. Bound that opening to the
-        # actual numeral plus one space, rather than requiring page X ratios.
-        columns = np.arange(bx, bx+w)
-        numeral_corridor = (columns >= nx-gap) & (columns < number_box[2]+gap)
-        if np.any(expected_columns & ~block.any(axis=0) & ~numeral_corridor):
-            return 'mismatch', 'Tuplet bracket is interrupted between actual source endpoints', evidence
+        topology = _bracket_topology(frame['pixels'], mask, bx, by, number_box, gap)
+        if topology is not None:
+            return 'mismatch', topology, evidence
         bracket_box = [bx, by, bx+w, by+h]
         evidence.update(bracket_bbox=bracket_box, bracket_match=round(fit, 4),
             numeral_corridor_x=[round(nx-gap, 3), round(number_box[2]+gap, 3)],
