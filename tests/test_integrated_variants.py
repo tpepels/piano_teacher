@@ -1,5 +1,6 @@
 """Only the active generated stage is rendered and scored."""
 import pytest
+from piano_teacher.application import score_artifacts
 from piano_teacher import server
 from piano_teacher.learning import LearningPlan
 from piano_teacher.notation.lesson import LessonScore
@@ -60,7 +61,7 @@ def test_renderer_uses_only_required_variant_not_original(tmp_path,monkeypatch):
             return EngravedScore(("<svg/>",), {"pages":1,"anchors":[{"beat":0,"x":.5}],
                 "notes":[{"pitch":n.pitch,"beat":n.start-notation.phrase.start}
                          for n in notation.phrase.notes]})
-        monkeypatch.setattr(server,"render_layout",fake_renderer)
+        monkeypatch.setattr(score_artifacts,"render_layout",fake_renderer)
         assert e.engraving().pages==("<svg/>",)
         phrase=e.plan.active_phrase
         played=[PlayedNote(n.pitch,n.start*.6,n.end*.6) for n in phrase.notes]

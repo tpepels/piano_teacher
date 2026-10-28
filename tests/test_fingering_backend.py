@@ -12,6 +12,7 @@ from xml.etree import ElementTree as ET
 import mido
 import pytest
 
+from piano_teacher.application import score_artifacts
 from piano_teacher.notation.lesson import build_lesson_score, infer_piece_clefs
 from piano_teacher.notation.model import build_score_model
 from piano_teacher.practice import PlayedNote, evaluate
@@ -174,10 +175,10 @@ def test_correction_keeps_learning_notes_grading_and_transport(engine, music):
     piece = learning.piece
     phrase = learning.active_phrase
     source_id, original = next(iter(_fingers(engine.semantic_score()).items()))
-    engine._layout_cache = object()
-    engine._layout_revision = engine.score_revision
-    engine._layout_cache_key = "old-layout"
-    engine._page_png[(0, 2000)] = b"old-png"
+    engine.engraving()
+    engine.engraved_png()
+    assert engine.score_artifacts.cached_layout(engine._score_selection()) is not None
+    assert engine.score_artifacts.engraving_cache_key is not None
     engine.running = True
     engine.run_at = 123.5
     engine.transport_id = 42
@@ -194,8 +195,8 @@ def test_correction_keeps_learning_notes_grading_and_transport(engine, music):
     assert (engine.running, engine.run_at, engine.transport_id) == (True, 123.5, 42)
     assert (learning.bpm, learning.target_bpm) == (bpm, target)
     assert engine.score_revision == revision + 1
-    assert engine._layout_cache is None and engine._layout_revision == -1
-    assert engine._layout_cache_key is None and not engine._page_png
+    assert engine.score_artifacts.cached_layout(engine._score_selection()) is None
+    assert engine.score_artifacts.engraving_cache_key is None
 
 
 def test_native_geometry_receives_same_projected_model(engine, music, monkeypatch):
@@ -214,9 +215,9 @@ def test_native_geometry_receives_same_projected_model(engine, music, monkeypatc
     layout = engine.geometry()
     assert layout["revision"] == engine.score_revision
     assert _fingers(received[0]) == expected
-    cache_key, engraving = engine._layout_cache_key, engine._layout_cache
+    cache_key, engraving = engine.score_artifacts.engraving_cache_key, engine.engraving()
     assert engine.geometry()["revision"] == engine.score_revision
-    assert engine._layout_cache is engraving
+    assert engine.engraving() is engraving
     assert _fingers(received[1]) == expected
 
     def unexpected(*args, **kwargs):
@@ -224,9 +225,9 @@ def test_native_geometry_receives_same_projected_model(engine, music, monkeypatc
 
     source_id, original = next(iter(expected.items()))
     engine.correct_fingering(source_id, original["finger"])
-    monkeypatch.setattr(server, "render_layout", unexpected)
+    monkeypatch.setattr(score_artifacts, "render_layout", unexpected)
     warm = engine.geometry()
-    assert engine._layout_cache_key == cache_key
+    assert engine.score_artifacts.engraving_cache_key == cache_key
     assert warm["revision"] == engine.score_revision == layout["revision"] + 1
     assert _fingers(received[2]) == _fingers(engine.semantic_score())
     assert _fingers(received[2])[source_id]["origin"] == "manual"
@@ -333,7 +334,7 @@ def test_authored_fingering_is_owned_by_native_model_at_all_three_score_seams(
     engine.load(str(authored_music))
     piece = engine.plan.piece
     source_id = next(n.source_id for n in piece.notes if n.pitch == 72)
-    build, assemble = server.build_lesson_score, score_preparation.assemble_layout
+    build, assemble = score_artifacts.build_lesson_score, score_preparation.assemble_layout
     handled, native_models = [], []
 
     def recorded_build(*args, **kwargs):
@@ -344,7 +345,7 @@ def test_authored_fingering_is_owned_by_native_model_at_all_three_score_seams(
         native_models.append(kwargs["native_model"])
         return assemble(*args, **kwargs)
 
-    monkeypatch.setattr(server, "build_lesson_score", recorded_build)
+    monkeypatch.setattr(score_artifacts, "build_lesson_score", recorded_build)
     monkeypatch.setattr(score_preparation, "assemble_layout", recorded_assemble)
     model = engine.semantic_score()
     assert model["unrendered_expressions"] == []
@@ -354,7 +355,7 @@ def test_authored_fingering_is_owned_by_native_model_at_all_three_score_seams(
     assert engine.geometry()["revision"] == engine.score_revision
     assert native_models[0]["unrendered_expressions"] == []
     assert _fingers(native_models[0])[source_id]["finger"] == 2
-    assert handled == [frozenset({source_id})] * 3
+    assert handled == [frozenset({source_id})]  # All three seams reuse the selected compilation.
     assert engine.plan.piece.source_musicxml == piece.source_musicxml
 
 
@@ -388,7 +389,7 @@ def test_authored_cache_discards_old_number_ink_and_reuses_clean_base_after_corr
         key_signatures=piece.key_signatures, clef_changes=piece.clef_changes,
         default_clefs=infer_piece_clefs(piece.notes), barlines=piece.barlines,
         source_musicxml=piece.source_musicxml)
-    legacy = server.render_layout(legacy_notation, phrase.first_bar, phrase.last_bar,
+    legacy = score_artifacts.render_layout(legacy_notation, phrase.first_bar, phrase.last_bar,
                                  p.hand, total_beats=phrase.end - phrase.start,
                                  bpm=piece.bpm, continuous=True)
     assert _has_fingering_ink(legacy)
@@ -400,7 +401,7 @@ def test_authored_cache_discards_old_number_ink_and_reuses_clean_base_after_corr
     engine.preprocessing.write_json("engraving", legacy_key,
                                     {"pages": list(legacy.pages), "layout": legacy.layout})
     base = engine.engraving()
-    clean_key = engine._layout_cache_key
+    clean_key = engine.score_artifacts.engraving_cache_key
     assert clean_key != legacy_key and not _has_fingering_ink(base)
     assemble, native_models = score_preparation.assemble_layout, []
 
@@ -412,10 +413,10 @@ def test_authored_cache_discards_old_number_ink_and_reuses_clean_base_after_corr
         raise AssertionError("Changing a projected finger must reuse the clean base engraving")
 
     monkeypatch.setattr(score_preparation, "assemble_layout", recorded)
-    monkeypatch.setattr(server, "render_layout", unexpected)
+    monkeypatch.setattr(score_artifacts, "render_layout", unexpected)
     engine.correct_fingering(source_id, 4)
     engine.geometry()
-    assert engine._layout_cache_key == clean_key
+    assert engine.score_artifacts.engraving_cache_key == clean_key
     assert not _has_fingering_ink(engine.engraving())
     assert _fingers(native_models[0])[source_id] == {
         "source_id": source_id, "hand": "right", "finger": 4, "origin": "manual"}
@@ -433,7 +434,7 @@ def test_midi_fingering_preserves_existing_base_engraving_cache_key(engine, musi
         p.hand, p.piece.bpm, compact,
         tuple((n.source_id, n.start, n.end, n.pitch, n.hand) for n in phrase.notes))
     engine.engraving()
-    assert engine._layout_cache_key == expected
+    assert engine.score_artifacts.engraving_cache_key == expected
 
 
 def test_provider_runtime_failure_is_visible_without_fabricated_fingers(engine, music, monkeypatch):

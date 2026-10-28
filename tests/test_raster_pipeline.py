@@ -6,6 +6,8 @@ import pytest
 from PIL import Image
 
 from piano_teacher.raster import rasterize_score
+from piano_teacher.learning import LearningPlan
+from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.server import PracticeEngine
 from test_phase1_camera import native_camera_run
 
@@ -59,19 +61,20 @@ def test_engine_caches_png_per_requested_resolution(tmp_path, monkeypatch):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     class FakeScore:
         pages = (VEROVIO_GLYPH,)
-    monkeypatch.setattr(engine, "engraving", lambda: FakeScore())
+    note = Note(0, 1, 60, 0, 0, "right")
+    engine.plan = LearningPlan(Piece("Raster", 100, (note,), (Phrase(1, 1, 1, 0, 4, (note,)),)))
+    monkeypatch.setattr(engine.score_artifacts, "engraving", lambda selected: FakeScore())
     calls = []
     def fake_raster(svg, *, width=2000):
         calls.append(width)
         return f"png-{width}".encode()
-    monkeypatch.setattr("piano_teacher.server.rasterize_score", fake_raster)
+    monkeypatch.setattr("piano_teacher.application.score_artifacts.rasterize_score", fake_raster)
     try:
         assert engine.engraved_png(width=4200) == b"png-4200"
         assert engine.engraved_png(width=4200) == b"png-4200"
         assert engine.engraved_png(width=3000) == b"png-3000"
         assert engine.engraved_png(width=4200) == b"png-4200"
         assert calls == [4200, 3000, 4200]
-        assert len(engine._page_png) == 1
         with pytest.raises(ValueError, match="width"):
             engine.engraved_png(width=9000)
     finally:
@@ -85,11 +88,13 @@ def test_engine_caches_png_and_validates_page(tmp_path, monkeypatch):
         pages = (VEROVIO_GLYPH,)
 
     calls = []
-    monkeypatch.setattr(engine, "engraving", lambda: FakeScore())
+    note = Note(0, 1, 60, 0, 0, "right")
+    engine.plan = LearningPlan(Piece("Raster", 100, (note,), (Phrase(1, 1, 1, 0, 4, (note,)),)))
+    monkeypatch.setattr(engine.score_artifacts, "engraving", lambda selected: FakeScore())
     def fake_raster(svg):
         calls.append(svg)
         return b"png-data"
-    monkeypatch.setattr("piano_teacher.server.rasterize_score", fake_raster)
+    monkeypatch.setattr("piano_teacher.application.score_artifacts.rasterize_score", fake_raster)
     try:
         assert engine.engraved_png() == b"png-data"
         assert engine.engraved_png() == b"png-data"

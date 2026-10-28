@@ -5,7 +5,6 @@ Start: python -m piano_teacher.server. No Internet, account, or Qt required.
 from __future__ import annotations
 import argparse
 from dataclasses import asdict, replace
-from copy import deepcopy
 import hashlib
 import json
 import math
@@ -18,23 +17,20 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 from .learning import LearningPlan
+from .application.score_artifacts import ScoreArtifacts, ScoreSelection, validate_png_width
 from .practice import Recorder, evaluate
 from .importing.pieces import import_piece
-from .score import render_layout, EngravedScore
+from .rendering.legacy.engraving import EngravedScore
 from .feedback import project_assessment
-from .fingering import FingeringService, authored_projection_sources, project_model
+from .fingering import FingeringService
 from .library import ScoreLibrary
 from .preprocessing_cache import PreprocessingCache
 from .library_health import LibraryHealth
 from .warmups import is_warmup
-from .raster import rasterize_score
 from .recovery import check_rolling_two_bar_window, check_two_bar_window
 from .recovery_projection import recovery_display
 from .music import Phrase, source_note_id
-from .notation.lesson import build_lesson_score, infer_piece_clefs
-from .notation.model import build_score_model
 from .notation.practice_timeline import preparation_measure_descriptor
-from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats, preparation_meter
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at
 from .course_navigation import locate_course_section
@@ -90,7 +86,6 @@ class PracticeEngine:
             _visual_rewind_seconds=SETTINGS.feedback_seconds)
         self.open_from_beat = 0.0  # Explicit opening measure; never an inferred clock
         self.next_boundary_beat = 0.0
-        self._rewind_requires_layout = False
         self.feedback_seconds = SETTINGS.feedback_seconds
         self.recovery_notice: dict | None = None
         self.pause_context: str | None = None
@@ -116,8 +111,6 @@ class PracticeEngine:
         self.course_guided = False
         self._guided_prepared = False
         self.transport_id = 0
-        self._semantic_cache_key = None
-        self._semantic_cache: dict | None = None
         self.mode = "practice"
         self.teaching = None
         self.guided_range: tuple[float, float] | None = None
@@ -130,11 +123,6 @@ class PracticeEngine:
         self.count_in_meter = [4, 4]
         self.feedback = "Open a MIDI or MusicXML file"
         self.score_revision = 0
-        self._layout_cache: EngravedScore | None = None
-        self._layout_revision = -1
-        self._layout_bpm: float | None = None
-        self._layout_cache_key: str | None = None
-        self._page_png: dict[tuple[int, int], bytes] = {}
         self.awaiting_score_revision: int | None = None
         self.pending_result = None
         self.feedback_marks: list[dict] = []
@@ -159,6 +147,7 @@ class PracticeEngine:
         self._data_dir = data_dir
         self.fingering = FingeringService(data_dir / "fingering")
         self.preprocessing = PreprocessingCache(data_dir / "preprocessed")
+        self.score_artifacts = ScoreArtifacts(self.preprocessing)
         self.progress = ProgressRepository(data_dir / "progress.db")
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
@@ -404,10 +393,7 @@ class PracticeEngine:
                 self.open_from_beat = 0.0
                 self.fingerprint = fingerprint
                 self._piece_generation += 1
-                self._layout_cache = None
-                self._layout_revision = -1
-                self._layout_cache_key = None
-                self._page_png.clear()
+                self.score_artifacts.invalidate()
                 self.plan = LearningPlan(piece, warmup=warmup)
                 self.mode = "practice"
                 self.teaching = None
@@ -457,11 +443,7 @@ class PracticeEngine:
                         or self.plan.piece.notes is not piece.notes):
                     raise ValueError("The loaded piece changed; refresh the score before correcting fingering")
                 self.plan.piece = replace(self.plan.piece, fingering_plan=plan)
-                self._layout_cache = None
-                self._layout_revision = -1
-                self._layout_bpm = None
-                self._layout_cache_key = None
-                self._page_png.clear()
+                self.score_artifacts.invalidate()
                 self.score_revision += 1
                 if self.awaiting_score_revision is not None:
                     self.awaiting_score_revision = self.score_revision
@@ -497,10 +479,7 @@ class PracticeEngine:
         self.mode = "practice"
         self.teaching = None
         self.guided_range = None
-        self._layout_cache = None
-        self._layout_revision = -1
-        self._layout_cache_key = None
-        self._page_png.clear()
+        self.score_artifacts.invalidate()
         self.score_revision += 1
         self.awaiting_score_revision = None
         self.feedback = "Lesson path reset to its first step"
@@ -519,7 +498,6 @@ class PracticeEngine:
         self.preview_only=False
         self.count_in_beats=0
         self.awaiting_score_revision=None
-        self._rewind_requires_layout=False
         self.recorder=None
         self.pending_result=None
         self.feedback_marks=[]
@@ -757,13 +735,16 @@ class PracticeEngine:
         self._save()
 
     def _guided_marks(self, snapshot: dict) -> list[dict]:
-        if (self.plan is None or self._layout_revision != self.score_revision
-                or self._layout_cache is None):
+        if self.plan is None:
+            return []
+        selected = self._score_selection()
+        engraving = self.score_artifacts.cached_layout(selected)
+        if engraving is None:
             return []
         source = {f"{self.plan.identity}:{index}": note for index, note in
                   zip(self.plan.active_variant.source_indices, self.plan.active_variant.notes)}
-        phrase = self.display_phrase()
-        layout = self._layout_cache.layout
+        phrase = selected.phrase
+        layout = engraving.layout
         glyphs = {glyph["id"]: glyph for glyph in layout.get("notes", [])}
         local_indices = {id(note): index for index, note in enumerate(phrase.notes)}
         settled = {entry["id"]: entry for entry in snapshot.get("note_feedback", [])}
@@ -1054,7 +1035,6 @@ class PracticeEngine:
             self.auto=mode == "practice" and not self.preview_only
             self.awaiting_score_revision=None
             self.pending_result=None
-            self._rewind_requires_layout=False
             self.feedback_marks=[]
             self.feedback_unmapped=0
             self.recorder=Recorder()
@@ -1276,8 +1256,8 @@ class PracticeEngine:
         if self.mode == "learn":
             self.control("practice")
             return
-        if (self.plan is not None and self._layout_cache is not None
-                and self._layout_bpm != self.plan.piece.bpm):
+        if (self.plan is not None
+                and self.score_artifacts.source_bpm_changed(self.plan.piece.bpm)):
             # Only a genuinely different source engraving needs a
             # new model. Tempo changes reuse the exact same score
             # with a different transport speed.
@@ -1505,7 +1485,6 @@ class PracticeEngine:
         self.plan.failures+=1
         before=self.plan.bpm
         self.plan.bpm=max(SETTINGS.minimum_bpm,round(before*SETTINGS.recovery_tempo_multiplier))
-        self._rewind_requires_layout = False
         self._save()
         self._schedule_preparation(decision.restart_beat, now=now,
             from_visual=self.visual_offset_beats + score_beat,
@@ -1749,15 +1728,17 @@ class PracticeEngine:
     def _live_feedback(self, elapsed_seconds: float) -> list[dict]:
         """Only publish source-bound live marks with a current engraved map."""
         p = self.plan
-        if (p is None or self.preview_only or not self.running
-                or self._layout_revision != self.score_revision or self._layout_cache is None):
+        if p is None or self.preview_only or not self.running:
+            return []
+        engraving = self.score_artifacts.cached_layout(self._score_selection())
+        if engraving is None:
             return []
         return self.assessment.live_marks(
             phrase=p.active_phrase, hand=p.hand, bpm=p.bpm,
             played=self.recorder.presses if self.recorder else [],
             played_from_beat=self.play_from_beat, elapsed_seconds=elapsed_seconds,
             bar_boundaries=p.piece.bar_boundaries,
-            layout=self._layout_cache.layout, projector=project_assessment)
+            layout=engraving.layout, projector=project_assessment)
 
     def state(self) -> dict:
         with self.lock:
@@ -1889,188 +1870,40 @@ class PracticeEngine:
             transport_id=self.transport_id, phase=phase, activity=activity,
             lesson=lesson, timing=timing, guided=guided)
 
-    def _source_model(self) -> dict:
-        """Phase A: source-accurate notation contract, without Verovio/SVG.
+    def _score_selection(self) -> ScoreSelection:
+        """Capture the selected source under the application lock."""
+        if self.plan is None:
+            raise ValueError("No piece loaded")
+        p = self.plan
+        return ScoreSelection(piece=p.piece, phrase=self.display_phrase(),
+            hand=p.hand, stage_key=p.identity, revision=self.score_revision,
+            fingerprint=self.fingerprint)
 
-        Built from the same immutable active Phrase used for MIDI grading.
-        It does NOT depend on the legacy engraving cache or selected BPM.
-        """
+    def _source_model(self) -> dict:
         with self.lock:
-            if self.plan is None:
-                raise ValueError("No piece loaded")
-            p = self.plan
-            phrase = self.display_phrase()
-            key = (id(p.piece), p.identity, p.hand, self.score_revision,
-                   phrase.first_bar, phrase.last_bar, phrase.start, phrase.end)
-            if key == self._semantic_cache_key and self._semantic_cache is not None:
-                return self._semantic_cache
-            notation = build_lesson_score(
-                phrase, boundaries=p.piece.bar_boundaries,
-                time_signatures=p.piece.time_signatures,
-                key_signatures=p.piece.key_signatures,
-                clef_changes=p.piece.clef_changes,
-                default_clefs=infer_piece_clefs(p.piece.notes),
-                barlines=p.piece.barlines,
-                source_musicxml=p.piece.source_musicxml,
-                fingering_sources=authored_projection_sources(p.piece.fingering_plan))
-            model = build_score_model(
-                notation, boundaries=p.piece.bar_boundaries,
-                hand=p.hand, revision=self.score_revision)
-            self._semantic_cache_key = key
-            self._semantic_cache = model
-            return model
+            return self.score_artifacts.source_model(self._score_selection())
 
     def semantic_score(self) -> dict:
         with self.lock:
-            model = self._source_model()
-            return project_model(deepcopy(model), self.plan.piece.fingering_plan,
-                                 source_musicxml=self.plan.piece.source_musicxml)
+            return self.score_artifacts.semantic_score(self._score_selection())
 
     def engraving(self) -> EngravedScore:
         with self.lock:
-            if not self.plan:
-                raise ValueError("No piece loaded")
-            p=self.plan
-            # Keep every feedback mark on the exact score just performed.
-            # The retry revision is queued only once its reading time ends.
-            if (self.pending_rewind is not None and self._rewind_requires_layout
-                    and self._layout_revision == self.score_revision and self._layout_cache is not None):
-                return self._layout_cache
-            if (self._layout_revision != self.score_revision or self._layout_cache is None
-                    or self._layout_bpm != p.piece.bpm):
-                phrase=self.display_phrase()
-                fingering_sources = authored_projection_sources(p.piece.fingering_plan)
-                notation=build_lesson_score(phrase, boundaries=p.piece.bar_boundaries,
-                                            time_signatures=p.piece.time_signatures,
-                                            key_signatures=p.piece.key_signatures,
-                                            clef_changes=p.piece.clef_changes,
-                                            default_clefs=infer_piece_clefs(p.piece.notes),
-                                            barlines=p.piece.barlines,
-                                            source_musicxml=p.piece.source_musicxml,
-                                            fingering_sources=fingering_sources)
-                # Short lessons are freshly engraved as a continuous system.
-                # This avoids raster-copying printed Verovio lines together.
-                # Large works retain paginated rendering to bound GPU memory.
-                compact_exercise = (
-                    phrase.last_bar - phrase.first_bar + 1 <= 12
-                    and phrase.end - phrase.start <= 48
-                )
-                # Cache by immutable source bytes, curriculum stage, rendered
-                # phrase, hand, BPM and engraver version, not ephemeral revision.
-                # Never share one stage's PNG/geometry with another.
-                # Handled authored fingers belong only to the projected native
-                # model. Distinguish their clean base from historical SVGs
-                # containing original numbers, while preserving MIDI keys.
-                fingering_key = (
-                    (("fingering_sources", tuple(sorted(fingering_sources))),)
-                    if fingering_sources else ())
-                self._layout_cache_key = self.preprocessing.key(
-                    "engraving", "readable-midi-engraving-v3", self.fingerprint, p.identity,
-                    phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
-                    p.hand, p.piece.bpm, compact_exercise,
-                    tuple((n.source_id, n.start, n.end, n.pitch, n.hand)
-                          for n in phrase.notes), *fingering_key)
-                cached = self.preprocessing.read_json("engraving", self._layout_cache_key)
-                layout = None
-                if cached is not None:
-                    try:
-                        pages = cached["pages"]
-                        geometry = cached["layout"]
-                        if (not isinstance(pages, list) or not pages or
-                                not all(isinstance(page, str) for page in pages) or
-                                not isinstance(geometry, dict)):
-                            raise ValueError("Invalid preprocessed score")
-                        candidate = EngravedScore(tuple(pages), geometry)
-                        require_lesson_alignment(phrase, candidate.layout, p.hand)
-                        layout = candidate
-                        print("PREPROCESS_ENGRAVING_CACHE_HIT:",
-                              phrase.first_bar, phrase.last_bar, p.bpm)
-                    except (TypeError, ValueError, KeyError, AssertionError):
-                        layout = None
-                if layout is None:
-                    layout = render_layout(notation,phrase.first_bar,phrase.last_bar,p.hand,
-                                           total_beats=phrase.end - phrase.start, bpm=p.piece.bpm,
-                                           continuous=compact_exercise)
-                    require_lesson_alignment(phrase, layout.layout, p.hand)
-                    self.preprocessing.write_json("engraving", self._layout_cache_key,
-                                                  {"pages": list(layout.pages),
-                                                   "layout": layout.layout})
-                    self.preprocessing.prune()
-                self._layout_cache = layout
-                self._page_png.clear()
-                self._layout_revision=self.score_revision
-                self._layout_bpm=p.piece.bpm
-            return self._layout_cache
+            return self.score_artifacts.engraving(self._score_selection())
 
     def engraved(self, page: int = 0) -> str:
-        score=self.engraving()
-        if not 0 <= page < len(score.pages):
-            raise ValueError("Invalid score page")
-        return score.pages[page]
+        with self.lock:
+            return self.score_artifacts.engraved(self._score_selection(), page)
 
     def engraved_png(self, page: int = 0, *, width: int = 2000) -> bytes:
-        # Source SVG and note geometry stay resolution-independent.
-        # Godot requests an appropriately dense PNG for the actual staff
-        # size; the default preserves compatibility with existing clients.
-        if not 600 <= width <= 12000:
-            raise ValueError("Invalid engraving image width")
+        # Preserve invalid-width validation even when no piece is loaded.
+        validate_png_width(width)
         with self.lock:
-            score = self.engraving()
-            # Large PNGs are reserved for a single, freshly engraved
-            # practice system. Multi-page scores keep their old safe cap.
-            if width > 7200 and not bool(getattr(score, "layout", {}).get(
-                    "continuous_score", False)):
-                raise ValueError("Invalid engraving image width")
-            if not 0 <= page < len(score.pages):
-                raise ValueError("Invalid score page")
-            key = (page, width)
-            if key not in self._page_png:
-                # Keep only one resolution per page in process memory.
-                for cached in list(self._page_png):
-                    if cached[0] == page:
-                        del self._page_png[cached]
-                png_key = (self.preprocessing.key("png", self._layout_cache_key,
-                           page, width) if self._layout_cache_key else None)
-                png = self.preprocessing.read_png(png_key) if png_key else None
-                if png is None:
-                    png = (rasterize_score(score.pages[page]) if width == 2000
-                           else rasterize_score(score.pages[page], width=width))
-                    if png_key:
-                        self.preprocessing.write_png(png_key, png)
-                else:
-                    print("PREPROCESS_PNG_CACHE_HIT:", page, width)
-                self._page_png[key] = png
-            return self._page_png[key]
+            return self.score_artifacts.engraved_png(self._score_selection(), page, width=width)
 
     def geometry(self, *, native_notes: bool = True) -> dict:
-        """Prepare native assets; explicit False exposes reference-only layout."""
-        from .application.score_preparation import assemble_layout
         with self.lock:
-            source_score = self.engraving()
-            if not native_notes:
-                return assemble_layout(source_score, native_notes=False,
-                    revision=self.score_revision)
-            if self.plan is None:
-                raise ValueError("No piece loaded")
-            p = self.plan
-            phrase = self.display_phrase()
-            notation = build_lesson_score(
-                phrase, boundaries=p.piece.bar_boundaries,
-                time_signatures=p.piece.time_signatures,
-                key_signatures=p.piece.key_signatures,
-                clef_changes=p.piece.clef_changes,
-                default_clefs=infer_piece_clefs(p.piece.notes),
-                barlines=p.piece.barlines,
-                source_musicxml=p.piece.source_musicxml,
-                fingering_sources=authored_projection_sources(p.piece.fingering_plan))
-            native_model = build_score_model(notation,
-                boundaries=p.piece.bar_boundaries,
-                hand=p.hand, revision=self.score_revision)
-            native_model = project_model(native_model, p.piece.fingering_plan, source_musicxml=p.piece.source_musicxml)
-            return assemble_layout(source_score, native_notes=True,
-                native_model=native_model, notation_xml=notation.musicxml,
-                cache=self.preprocessing, cache_key=self._layout_cache_key or "",
-                revision=self.score_revision)
+            return self.score_artifacts.geometry(self._score_selection(), native_notes=native_notes)
 
     def lesson_overview(self) -> dict:
         """Full readable curriculum, with unique per-hand/per-level progress."""

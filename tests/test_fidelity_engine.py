@@ -2,6 +2,7 @@
 from dataclasses import replace
 import mido
 
+from piano_teacher.application import score_artifacts
 from piano_teacher import server
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase
@@ -67,11 +68,11 @@ def test_piece_key_and_clef_metadata_reach_active_lesson_compiler(tmp_path, monk
 <part id="P1"><measure number="1"><attributes><divisions>1</divisions><key><fifths>-5</fifths><mode>major</mode></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>
 <note><pitch><step>D</step><alter>-1</alter><octave>6</octave></pitch><duration>4</duration><type>whole</type></note></measure></part></score-partwise>''')
     captured = {}
-    original = server.build_lesson_score
+    original = score_artifacts.build_lesson_score
     def record(phrase, **kwargs):
         captured.update(kwargs)
         return original(phrase, **kwargs)
-    monkeypatch.setattr(server, 'build_lesson_score', record)
+    monkeypatch.setattr(score_artifacts, 'build_lesson_score', record)
     e = PracticeEngine(tmp_path/'metadata-data', enable_midi=False)
     try:
         e.load(str(path))

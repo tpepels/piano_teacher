@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from piano_teacher.application import score_artifacts
 from piano_teacher.preprocessing_cache import PreprocessingCache
 from piano_teacher.server import PracticeEngine
 
@@ -32,8 +33,8 @@ def test_reopening_source_and_engraving_skips_parsing_and_rasterization(
         raise AssertionError("Warm cache unexpectedly recomputed source or score")
 
     monkeypatch.setattr(server, "import_piece", unexpected)
-    monkeypatch.setattr(server, "render_layout", unexpected)
-    monkeypatch.setattr(server, "rasterize_score", unexpected)
+    monkeypatch.setattr(score_artifacts, "render_layout", unexpected)
+    monkeypatch.setattr(score_artifacts, "rasterize_score", unexpected)
     again = PracticeEngine(directory, enable_midi=False)
     try:
         again.load(str(music))
@@ -135,7 +136,7 @@ def test_peace_register_layout_replaces_legacy_cache_and_reuses_new_warm_cache(
                 default_clefs=lesson.infer_piece_clefs(piece.notes))
         low_id = next(identifier for identifier, binding in old_score.note_bindings.items()
                       if binding["source_id"] == "midi-t0-e29")
-        legacy = server.render_layout(old_score, phrase.first_bar, phrase.last_bar,
+        legacy = score_artifacts.render_layout(old_score, phrase.first_bar, phrase.last_bar,
             p.hand, total_beats=phrase.end-phrase.start, bpm=piece.bpm, continuous=True)
         assert staff_index(legacy, low_id) == 0
         legacy_key = app.preprocessing.key(
@@ -148,16 +149,16 @@ def test_peace_register_layout_replaces_legacy_cache_and_reuses_new_warm_cache(
 
         corrected = app.engraving()
         assert staff_index(corrected, low_id) == 1, "Existing cache retained the huge treble-staff chord"
-        assert app._layout_cache_key != legacy_key
+        assert app.score_artifacts.engraving_cache_key != legacy_key
         assert app.preprocessing.read_json("engraving", legacy_key) is not None
 
         def unexpected(*args, **kwargs):
             raise AssertionError("Corrected warm cache unexpectedly re-engraved the lesson")
 
-        monkeypatch.setattr(server, "render_layout", unexpected)
+        monkeypatch.setattr(score_artifacts, "render_layout", unexpected)
         reopened = create()
         assert reopened.engraving() == corrected
-        assert reopened._layout_cache_key == app._layout_cache_key
+        assert reopened.score_artifacts.engraving_cache_key == app.score_artifacts.engraving_cache_key
     finally:
         for app in engines:
             app.db.close()

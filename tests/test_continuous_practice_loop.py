@@ -152,9 +152,8 @@ def test_start_does_not_replace_source_engraving_at_slow_learning_bpm(tmp_path):
     app = engine(tmp_path)
     try:
         # Source engraving is immutable at 110 BPM while practice starts 40.
-        app._layout_cache = object()
-        app._layout_bpm = app.plan.piece.bpm
-        assert app.plan.bpm != app._layout_bpm
+        app.engraving()
+        assert app.plan.bpm != app.plan.piece.bpm
         before = app.score_revision
         app.control("start")
         assert app.running
@@ -168,15 +167,13 @@ def test_start_does_not_replace_source_engraving_at_slow_learning_bpm(tmp_path):
 def test_manual_tempo_changes_keep_native_notation_revision(tmp_path):
     app = engine(tmp_path)
     try:
-        # Simulate an already rendered native score at its source tempo.
-        native_layout = object()
-        app._layout_cache = native_layout
-        app._layout_bpm = app.plan.piece.bpm
+        # Prepare the actual source engraving before changing playback tempo.
+        native_layout = app.engraving()
         revision = app.score_revision
         app.control("tempo_down")
         assert app.plan.bpm == app.plan.start_bpm - 5
         assert app.score_revision == revision
-        assert app._layout_cache is native_layout
+        assert app.engraving() is native_layout
         app.control("tempo_up")
         assert app.plan.bpm == app.plan.start_bpm
         assert app.score_revision == revision
@@ -489,13 +486,13 @@ def test_clean_partial_take_prepares_whole_source_without_earning_mastery(clocke
 def test_tempo_changes_preserve_cached_gap_geometry(clocked_engine):
     app, _ = clocked_engine(grid=(0, 3, 4), meters=((0, 3, 4),))
     before = app.state()["practice_timeline"]
-    cached = app._semantic_cache
+    cached = app._source_model()
     revision = app.score_revision
     app.control("tempo", bpm=120)
     after = app.state()
     assert after["practice_timeline"] == before
     assert after["revision"] == revision
-    assert app._semantic_cache is cached
+    assert app._source_model() is cached
 
 
 def test_semantic_cache_distinguishes_guided_fragments_at_same_revision(clocked_engine):
@@ -538,7 +535,7 @@ def test_manual_tempo_cancels_preparation_without_reengraving(clocked_engine, ph
     if paused:
         app.control("pause")
         now[0] += 15
-    cached = app._semantic_cache
+    cached = app._source_model()
     app.control("tempo", bpm=120)
     ready = app.state()
     assert ready["phase"] == "ready" and ready["bpm"] == 120
@@ -547,7 +544,7 @@ def test_manual_tempo_cancels_preparation_without_reengraving(clocked_engine, ph
     assert app.next_at == 0 and not app._preparation_pending
     assert ready["revision"] == before["revision"]
     assert ready["practice_timeline"] == before["practice_timeline"]
-    assert app._semantic_cache is cached
+    assert app._source_model() is cached
     now[0] = deadline + 30
     assert app.state()["phase"] == "ready"
 

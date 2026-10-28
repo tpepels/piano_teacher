@@ -219,7 +219,7 @@ def test_engine_exposes_same_current_variant_without_touching_engraving(tmp_path
         assert model["revision"] == engine.score_revision
         assert model["duration_beats"] == 7
         assert model["active_hand"] == engine.plan.hand
-        assert engine._layout_cache is None
+        assert engine.score_artifacts.cached_layout(engine._score_selection()) is None
         assert len(model["notes"]) == len(engine.display_phrase().notes)
         assert len(model["active_note_ids"]) == sum(
             n.hand == engine.plan.hand for n in engine.display_phrase().notes)
@@ -248,7 +248,7 @@ def test_http_semantic_endpoint_is_json_and_does_not_trigger_png(tmp_path):
         assert len(payload["notes"]) == len(engine.display_phrase().notes)
         assert {n["id"] for n in payload["notes"]} == {
             n.source_id for n in engine.display_phrase().notes}
-        assert engine._layout_cache is None
+        assert engine.score_artifacts.cached_layout(engine._score_selection()) is None
     finally:
         httpd.shutdown()
         httpd.server_close()

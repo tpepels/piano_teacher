@@ -1,4 +1,5 @@
 from pathlib import Path
+from piano_teacher.application import score_artifacts
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.server import PracticeEngine
@@ -58,7 +59,7 @@ def test_layout_cached_until_score_revision_changes(tmp_path, monkeypatch):
                              {"pages":2,"anchors":[{"beat":0,"x":.1}],"beats":total_beats,
                               "notes":[{"pitch":n.pitch,"beat":n.start-score.phrase.start}
                                        for n in score.phrase.notes]})
-    monkeypatch.setattr(server,"render_layout",fake_render)
+    monkeypatch.setattr(score_artifacts,"render_layout",fake_render)
     assert engine.engraved(0) == "<svg>page 1</svg>"
     assert engine.engraved(1) == "<svg>page 2</svg>"
     assert engine.geometry(native_notes=False)["pages"] == 2

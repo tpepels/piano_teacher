@@ -326,3 +326,10 @@ first-party architectural monoliths.
   main composes intent signals. Fresh owner UI focus 38 passed, scene parse
   passed; parent review found no state coupling. Main annotation-status read
   also migrated to the actual annotation owner for NativeView alias removal.
+
+- `ScoreArtifacts` owns selected notation compilation and semantic/layout/PNG
+  caches from explicit frozen source selection; no engine callback. Engine
+  retains locks, transport and revision acknowledgement. Repeated notation
+  compilation unified, existing durable keys retained, dead rewind-layout flag
+  removed. Parent reviewed identities/clock boundaries; owner 11/198/123/54
+  focused tests passed. Independent follow-up review is also requested.

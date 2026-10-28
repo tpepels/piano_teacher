@@ -1,3 +1,4 @@
+from piano_teacher.application import score_artifacts
 from piano_teacher import server
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
@@ -21,7 +22,7 @@ def test_score_feedback_waits_until_displayed_before_curriculum_advance(tmp_path
     e.fingerprint='feedback-case'
     layout={'pages':1,'beats':2,'anchors':[{'beat':0,'x':.25,'top':.1,'bottom':.9,'page':0,'system':'s'}],
             'notes':[{'id':'n0','pitch':60,'beat':0,'page':0,'system':'s','x':.25,'y':.4}]}
-    monkeypatch.setattr(server,'render_layout',lambda *a,**k:EngravedScore(('<svg/>',),layout))
+    monkeypatch.setattr(score_artifacts,'render_layout',lambda *a,**k:EngravedScore(('<svg/>',),layout))
     e.score=object()
     # Only a connected MIDI piano can produce graded performance feedback.
     e.midi_port = object()
