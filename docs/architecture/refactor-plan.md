@@ -99,6 +99,8 @@ may use pure geometry/layout helpers but never import verifier internals.
 - [x] Move fingering's candidate ordering, spatial bin collision checks
   and placement packing into a pure layout collaborator, retaining real glyph
   obstacles and source-note Y coordinates in the native view.
+- [x] Separate polyphonic rest-lane selection and rectangle collision scoring
+  into a pure layout policy; native view still supplies authentic glyph ink.
 - [ ] Continue separating native rendering passes and source ornament layout
   without sharing production logic with the independent notation audit.
 - [ ] Modularize the audit coordinator separately from source-driven proofs;

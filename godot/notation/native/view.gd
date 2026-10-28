@@ -9,6 +9,7 @@ const Geometry := preload("res://notation/native/geometry.gd")
 const ScoreIndex := preload("res://notation/native/score_index.gd")
 const InkSpacing := preload("res://notation/native/ink_spacing.gd")
 const VoiceLayout := preload("res://notation/native/voice_layout.gd")
+const RestLaneLayout := preload("res://notation/native/rest_lane_layout.gd")
 const BarlineLayout := preload("res://notation/native/barline_layout.gd")
 const VerovioGlyphs := preload("res://notation/native/glyphs.gd")
 const Design := preload("res://practice_theme.gd")
@@ -1271,64 +1272,27 @@ func _layout_rest_lanes(gap: float, density: float) -> void:
         var ink: Rect2 = _event_ink_rect(event,gap,heads,accidentals)
         ink.position.x += float(event.get("beat",0.0))*density
         obstacles[lane_key].append({"voice":voice,"ink":ink})
-    # Placing rests after source note ink means their voice-lane choice
-    # is deterministic and cannot move MIDI attacks, beams or noteheads.
+    # Production geometry stays in the view. Placement policy is stateless.
+    # All rest glyph rectangles move linearly with their vertical staff lane.
     for event in ordered_events:
         if str(event.get("kind","")) != "rest":
             continue
         var lane_key: String = str(event.get("staff","right"))+"|"+str(
             event.get("measure",-1))
+        var id: String = str(event.get("id",""))
         var voice: String = str(event.get("voice","1"))
         var voices: Array = voices_by_measure[lane_key].keys()
         voices.sort()
-        var voice_index: int = voices.find(voice)
-        var preferred := 0.0
-        var direction := -1.0
-        if voices.size() > 1:
-            direction = -1.0 if voice_index % 2 == 0 else 1.0
-            preferred = direction*(1.0+floorf(float(voice_index)/2.0))
-        var candidates: Array = [preferred]
-        # Half/whole rectangles derive their value from sitting on or
-        # hanging below a staff line. A half-space displacement exchanges
-        # those two meanings even though the same texture is painted.
-        var lane_step: float = (1.0 if str(event.get("note_type","")) in
-            ["whole","half"] else .5)
-        for step in range(1,15):
-            candidates.append(preferred+direction*float(step)*lane_step)
-            candidates.append(preferred-direction*float(step)*lane_step)
-        var placed := false
-        var best_score := INF
-        var best_shift: float = preferred
-        var best_rect := Rect2()
-        for shift in candidates:
-            rest_lane_offsets[str(event.get("id",""))] = shift
-            var rect: Rect2 = _event_ink_rect(event,gap,heads,accidentals)
-            rect.position.x += float(event.get("beat",0.0))*density
-            var overlap_area := 0.0
-            for blocker in obstacles[lane_key]:
-                if str(blocker["voice"]) == voice:
-                    continue
-                var other: Rect2 = blocker["ink"]
-                if rect.intersects(other.grow(gap*.06)):
-                    var overlap: Rect2 = rect.intersection(other.grow(gap*.06))
-                    overlap_area += overlap.size.x*overlap.size.y
-            var score: float = overlap_area+absf(float(shift)-preferred)*gap*gap*.02
-            if score < best_score:
-                best_score = score
-                best_shift = float(shift)
-                best_rect = rect
-            if overlap_area <= .00001:
-                obstacles[lane_key].append({"voice":voice,"ink":rect})
-                placed = true
-                break
-        if not placed:
-            # A score can contain an unavoidable collision among polyphonic
-            # voices with huge ledger notes. Do not discard every source
-            # attack or fall back solely for a rest: use minimum overlap.
-            rest_lane_offsets[str(event.get("id",""))] = best_shift
-            obstacles[lane_key].append({"voice":voice,"ink":best_rect})
+        rest_lane_offsets[id] = 0.0
+        var source_rect: Rect2 = _event_ink_rect(event,gap,heads,accidentals)
+        source_rect.position.x += float(event.get("beat",0.0))*density
+        var placement: Dictionary = RestLaneLayout.place_rest(source_rect,
+            voice,voices,str(event.get("note_type","quarter")),gap,
+            obstacles[lane_key])
+        rest_lane_offsets[id] = placement["shift"]
+        obstacles[lane_key].append({"voice":voice,"ink":placement["ink"]})
+        if not bool(placement["placed"]):
             unavoidable_rest_overlaps += 1
-
 
 func _paint_clef(x: float, center: float, clef: Dictionary,
         gap: float, ink: Color) -> void:
