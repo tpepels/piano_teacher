@@ -74,8 +74,12 @@ may use pure geometry/layout helpers but never import verifier internals.
   recovery loop. CompletionRoute gives precedence to performance, explicit
   bounded section review, partial recovery and full-passage practice; no
   state updates before settlement and no curriculum advancement for partials.
-- [ ] Separate remaining completion side effects behind explicit result
-  transition methods while retaining the same lock and transport clocks.
+- [x] Extract the post-performance side effects into distinct engine handlers
+  for performance review, bounded review, partial recovery and full-passage
+  progression; all remain under the existing engine lock. Add tests proving
+  that partial paths cannot confer mastery or schedule unwanted auto-advance.
+- [ ] Continue reducing the engine state/HTTP payload assembly through
+  immutable projections, preserving source-note identities and poll clocks.
 - [x] Split the giant _build_interface method into separate Home, Library and
   Practice builders, preserving construction order and event wiring.
 - [x] Extract the modal source-measure picker into its own Godot Control,

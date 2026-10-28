@@ -56,6 +56,7 @@ quick_checks() {
     tests/test_completion_route.py \
     tests/test_source_measure_picker.py \
     tests/test_native_voice_layout.py \
+    tests/test_completion_handlers.py \
     tests/test_idle_rendering.py \
     tests/test_peace_piece_pixels.py \
     tests/test_continuous_practice_loop.py \

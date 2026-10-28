@@ -1563,43 +1563,57 @@ class PracticeEngine:
         self.review_stage_identity = self.plan.identity
         route = completion_route(self.mode, self.review_end_beat, self.play_from_beat)
         if route == "perform":
-            if self.fingerprint:
-                if result.clean:
-                    self.learner_store.resolve_trouble(self.fingerprint, self.plan.identity)
-                else:
-                    for unit in self.performance_summary["weakest_bars"]:
-                        self._record_saved_trouble(phrase, result, start=unit["start_beat"],
-                                                  end=unit["end_beat"], errors=unit["errors"])
-            self.next_action = ("Review your performance, then press Start to repeat this warm-up."
-                if self.is_builtin_warmup else
-                "Review your performance, then Practice the weakest section."
-                if self.performance_summary["weakest_bars"] else
-                "Clean performance. Choose Practice to build your clean-run streak.")
-            self.auto = False
-            return
-        if route == "section_review":
-            # Section reviews are deliberate, bounded practice. Stop at the
-            # selected boundary, preserve detailed feedback, and never
-            # auto-advance to a different passage.
-            self.auto = False
-            self.review_end_beat = None
-            self.review_session_complete = True
-            self.pending_rewind = None
-            self.retry_range = None
-            self.open_from_beat = 0.0
-            self.feedback = "Section review finished · " + result.summary
-            self.next_action = "Review the notes or press Start for the whole passage."
-            return
-        if route == "partial_recovery":
-            # A clean *partial* recovery cannot confer full passage mastery.
-            self._schedule_preparation(0.0, now=now,
-                from_visual=self.visual_offset_beats + self.play_from_beat
-                    + (now-self.run_at)*self.plan.bpm/60,
-                reverse_seconds=self.feedback_seconds)
-            self.feedback = "Selected section finished · " + result.summary
-            self.next_action = "Next: play the whole passage from its beginning to earn mastery."
-            self.retry_range = None
-            return
+            self._finish_performance_review(phrase, result)
+        elif route == "section_review":
+            self._finish_section_review(result)
+        elif route == "partial_recovery":
+            self._finish_partial_recovery(result, now)
+        else:
+            self._finish_full_passage(result, total_beats, duration, now)
+
+    def _finish_performance_review(self, phrase: Phrase, result):
+        """Complete finish performance review after a scored take."""
+        if self.fingerprint:
+            if result.clean:
+                self.learner_store.resolve_trouble(self.fingerprint, self.plan.identity)
+            else:
+                for unit in self.performance_summary["weakest_bars"]:
+                    self._record_saved_trouble(phrase, result, start=unit["start_beat"],
+                                              end=unit["end_beat"], errors=unit["errors"])
+        self.next_action = ("Review your performance, then press Start to repeat this warm-up."
+            if self.is_builtin_warmup else
+            "Review your performance, then Practice the weakest section."
+            if self.performance_summary["weakest_bars"] else
+            "Clean performance. Choose Practice to build your clean-run streak.")
+        self.auto = False
+
+    def _finish_section_review(self, result):
+        """Complete finish section review after a scored take."""
+        # Section reviews are deliberate, bounded practice. Stop at the
+        # selected boundary, preserve detailed feedback, and never
+        # auto-advance to a different passage.
+        self.auto = False
+        self.review_end_beat = None
+        self.review_session_complete = True
+        self.pending_rewind = None
+        self.retry_range = None
+        self.open_from_beat = 0.0
+        self.feedback = "Section review finished · " + result.summary
+        self.next_action = "Review the notes or press Start for the whole passage."
+
+    def _finish_partial_recovery(self, result, now: float):
+        """Complete finish partial recovery after a scored take."""
+        # A clean *partial* recovery cannot confer full passage mastery.
+        self._schedule_preparation(0.0, now=now,
+            from_visual=self.visual_offset_beats + self.play_from_beat
+                + (now-self.run_at)*self.plan.bpm/60,
+            reverse_seconds=self.feedback_seconds)
+        self.feedback = "Selected section finished · " + result.summary
+        self.next_action = "Next: play the whole passage from its beginning to earn mastery."
+        self.retry_range = None
+
+    def _finish_full_passage(self, result, total_beats: float, duration: float, now: float):
+        """Complete finish full passage after a scored take."""
         self.pending_result=result
         if not result.clean and self.auto:
             # Repeated wrong takes traverse backward over the visible source
