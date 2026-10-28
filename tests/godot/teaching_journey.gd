@@ -51,14 +51,14 @@ func note_position() -> Vector2:
     if renderer.drawn_noteheads.has(tracked_id):
         return renderer.get_global_transform_with_canvas() * renderer.drawn_noteheads[tracked_id]
     # Keep tracking an authentic source event after it leaves the drawn viewport.
-    for event in renderer.ordered_events:
+    for event in renderer.layout.ordered_events:
         if str(event.get("id", "")) == tracked_id:
             var clock: float = renderer.clock_beat if renderer.running or renderer.paused else 0.0
             var x: float = renderer.timeline.screen_x(float(event["beat"]),clock,
                 renderer.size.x * renderer.PLAYHEAD_FRACTION,renderer.play_from_beat)
-            x += float(renderer.cached_head_offsets.get(tracked_id,0.0))
+            x += float(renderer.layout.cached_head_offsets.get(tracked_id,0.0))
             return renderer.get_global_transform_with_canvas() * Vector2(x,
-                renderer._event_y(event,renderer._gap()))
+                renderer.layout.event_y(event,renderer.staff_gap()))
     check(false, "Tracked native source note missing")
     return Vector2.ZERO
 

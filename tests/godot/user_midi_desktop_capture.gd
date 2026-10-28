@@ -60,9 +60,9 @@ func _capture(label: String) -> void:
     var renderer = app.timeline_preview
     var rows: Array = []
     if _native_notation_ready():
-        var gap: float = renderer._gap()
+        var gap: float = renderer.staff_gap()
         for staff in ["right","left"]:
-            var middle: float = renderer._staff_center(staff)
+            var middle: float = renderer.layout.staff_center(staff)
             for line in range(-2,3):
                 rows.append(middle+float(line)*gap)
     var visible_heads := 0

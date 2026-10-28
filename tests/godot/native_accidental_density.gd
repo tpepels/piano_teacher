@@ -29,7 +29,7 @@ func run() -> void:
         renderer.queue_redraw()
         await process_frame
         await process_frame
-        var gap: float = renderer._gap()
+        var gap: float = renderer.staff_gap()
         var box: Array = renderer.glyphs.bounds["acc_sharp"]
         var first_right: float = (float(renderer.glyphs.note_bounds["quarter_up"][0])+ \
             float(renderer.glyphs.note_bounds["quarter_up"][2]))*gap/250.0
@@ -38,8 +38,8 @@ func run() -> void:
             if not str(event["id"]).begins_with("sharp_"):
                 continue
             var id: String = str(event["id"])
-            var left: float = density+float(renderer.cached_head_offsets.get(id,0.0))+ \
-                float(renderer.cached_accidental_offsets[id])-float(box[2])*gap/500.0
+            var left: float = density+float(renderer.layout.cached_head_offsets.get(id,0.0))+ \
+                float(renderer.layout.cached_accidental_offsets[id])-float(box[2])*gap/500.0
             next_left = minf(next_left,left)
         if next_left < first_right+gap*.2-.001:
             failures += 1

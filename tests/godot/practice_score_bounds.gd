@@ -42,26 +42,26 @@ func run() -> void:
             RenderingServer.force_draw()
             if baseline.size == Vector2.ZERO:
                 baseline = view.get_global_rect()
-                baseline_gap = view._gap()
-            check(view.get_global_rect() == baseline and is_equal_approx(view._gap(),baseline_gap),
+                baseline_gap = view.staff_gap()
+            check(view.get_global_rect() == baseline and is_equal_approx(view.staff_gap(),baseline_gap),
                 "%s %s: transport preserves actual notation scale" % [dimensions,phase])
             check(app.score_frame.get_global_rect().encloses(view.get_global_rect()),
                 "Native notation stays inside the music stage")
             check(view.size.y >= 135.0 and not view.drawn_noteheads.is_empty(),
                 "Compact stage contains real painted source notes")
             for point in view.drawn_noteheads.values():
-                check(point.y > view._gap() and point.y < view.size.y-view._gap(),
+                check(point.y > view.staff_gap() and point.y < view.size.y-view.staff_gap(),
                     "%s: complete notehead fits vertically" % dimensions)
             # Test the authentic source note/accidental bounds, not a raster
             # crop or a self-reported boolean that bypasses drawing.
-            var gap: float = view._gap()
-            var heads: Dictionary = view._engraved_head_offsets(gap)
+            var gap: float = view.staff_gap()
+            var heads: Dictionary = view.layout.engraved_head_offsets(gap)
             var offsets: Dictionary = view.Geometry.accidental_offsets(
-                view.ordered_events,gap,heads,view.glyphs.bounds)
-            for event in view.ordered_events:
+                view.layout.ordered_events,gap,heads,view.glyphs.bounds)
+            for event in view.layout.ordered_events:
                 if not view.drawn_noteheads.has(str(event.get("id",""))):
                     continue
-                var ink: Rect2 = view._event_ink_rect(event,gap,heads,offsets)
+                var ink: Rect2 = view.layout.event_ink_rect(event,gap,heads,offsets)
                 check(ink.position.y >= 0.0 and ink.end.y <= view.size.y,
                     "%s: authentic source glyph bounds fit without clipping" % dimensions)
             check(app._native_score_ready(), "Responsive layout keeps the production revision ready")

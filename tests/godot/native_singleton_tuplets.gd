@@ -24,7 +24,7 @@ func _check() -> void:
         quit(1)
         return
     var visible := 0
-    for group in renderer.notation_tuplets:
+    for group in renderer.layout.notation_tuplets:
         if str(group.get("show_number","actual")) == "none" and str(group.get("bracket","yes")) == "no":
             continue
         if group["events"].size() != 1:

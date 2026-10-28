@@ -94,19 +94,19 @@ func run() -> void:
         "a":["a","b","c"], "d":["d","e"], "f":["f","g"],
         "i":["i","j","k"], "l":["l","m","n"]}
     var by_first: Dictionary = {}
-    for group in renderer.beam_groups:
+    for group in renderer.layout.beam_groups:
         by_first[str(group[0]["id"])] = group.map(func(e):return e["id"])
-    check(renderer.beam_groups.size() == expected_groups.size()
+    check(renderer.layout.beam_groups.size() == expected_groups.size()
         and by_first == expected_groups,
         "Native renderer retains every source beam identity and boundary")
-    check(not renderer.beamed_note_ids.has("other_voice"),
+    check(not renderer.layout.beamed_note_ids.has("other_voice"),
         "Single independent voice remains flagged, not accidentally beamed")
-    check(renderer.beamed_note_ids.has("a") and renderer.beamed_note_ids.has("c")
-        and not renderer.beamed_note_ids.has("chord_c"),
+    check(renderer.layout.beamed_note_ids.has("a") and renderer.layout.beamed_note_ids.has("c")
+        and not renderer.layout.beamed_note_ids.has("chord_c"),
         "Chord tone shares source leader's beam without a duplicate stem")
     check(renderer.glyphs.has_beam("d|e",true),
         "Two-note Verovio beam fragment is loaded by original note identities")
-    var beam_ink: Dictionary = renderer._beam_layout(renderer._gap(),0.0,580.0)
+    var beam_ink: Dictionary = renderer.beam_plan(renderer.staff_gap(),0.0,580.0)
     var genuine: Dictionary = {}
     for compound_group in beam_ink["groups"]:
         if str(compound_group.get("art_key","")) == "d|e":
@@ -115,7 +115,7 @@ func run() -> void:
         "Native engine prefers actual Verovio beam ink over hand-built beams")
     if not genuine.is_empty():
         var pair: Array = genuine["members"]
-        var note_tip: float = float(pair[0]["head_y"])-860.0*renderer._gap()/250.0
+        var note_tip: float = float(pair[0]["head_y"])-860.0*renderer.staff_gap()/250.0
         check(absf(float(pair[0]["tip_y"])-note_tip) < .01,
             "Stem tip aligns to original Verovio beam contour measurement")
         check(absf(float(pair[1]["head_x"])-float(pair[0]["head_x"])-
@@ -126,10 +126,10 @@ func run() -> void:
         if str(item.get("id","")) == "chord_c":
             item["spelling"] = {"step":"C","octave":5}
     check(renderer.load_score(all_chord_heads),"Beamed chord notation is supported")
-    var beamed_gap: float = renderer._gap()
-    var compound: Dictionary = renderer._beam_layout(beamed_gap,.25,580.0)
+    var beamed_gap: float = renderer.staff_gap()
+    var compound: Dictionary = renderer.beam_plan(beamed_gap,.25,580.0)
     var beam_tip: float = float(compound["stems"]["c"]["tip_y"])
-    var lower_bound: float = renderer._event_y(
+    var lower_bound: float = renderer.layout.event_y(
         all_chord_heads["notation_events"][3],beamed_gap) - beamed_gap*3.25
     check(beam_tip <= lower_bound + .01,
         "Beam stems clear highest member of a chord, not only its leader")
@@ -140,23 +140,23 @@ func run() -> void:
             attack["spelling"]={"step":"B","octave":4}
     check(renderer.load_score(source_chord),
         "Native accepts a shared-beam Verovio chord interval signature")
-    var original_key: String = renderer._chord_template_key(
+    var original_key: String = renderer.layout.chord_template_key(
         source_chord["notation_events"][2])
     check(original_key=="eighth|up|0,2" and
         renderer.glyphs.has_chord_heads(original_key) and
         renderer.glyphs.has_chord_stem(original_key),
         "A beamed chord has separate authentic Verovio head and stem ink")
-    check(renderer._beam_layout(renderer._gap(),0.0,580.0)["stems"].has("c"),
+    check(renderer.beam_plan(renderer.staff_gap(),0.0,580.0)["stems"].has("c"),
         "Beamed Verovio chord keeps its single native musical attack")
     check(renderer.load_score(score),"Restore baseline after chord compound")
     check(renderer.set_density(112.0),"Density remains configurable")
     var clock := .75
     var offset := 0.0
-    var beam_before: Dictionary = renderer._beam_layout(renderer._gap(),clock,580.0)
+    var beam_before: Dictionary = renderer.beam_plan(renderer.staff_gap(),clock,580.0)
     renderer.present({"bpm":40,"running":true,"paused":false,
         "count_in_beats":4,"play_from_beat":offset,
         "transport_id":7,"hand":"right"},clock)
-    var beam_after: Dictionary = renderer._beam_layout(renderer._gap(),clock,580.0)
+    var beam_after: Dictionary = renderer.beam_plan(renderer.staff_gap(),clock,580.0)
     check(beam_before["stems"].size() == beam_after["stems"].size(),
         "All cached beam stems independent of BPM")
     for identifier in beam_before["stems"]:
@@ -170,8 +170,8 @@ func run() -> void:
         if str(event.get("id","")) == "a":
             event["spelling"] = {"step":"E","octave":4}
     check(renderer.load_score(contour),"Native loads source-engraved beam contours")
-    var gap: float = renderer._gap()
-    var tilted: Dictionary = renderer._beam_layout(gap,.25,580.0)
+    var gap: float = renderer.staff_gap()
+    var tilted: Dictionary = renderer.beam_plan(gap,.25,580.0)
     var first_beam: Dictionary = tilted["groups"][0]
     var members: Array = first_beam["members"]
     check(members.size() == 3,"Every source group retains its three beats")
@@ -181,7 +181,7 @@ func run() -> void:
         check(absf(float(member["tip_y"])-float(member["head_y"])-
             float(original_tips[i])*gap/250.0) < .01,
             "Source Verovio stem tip is preserved without custom beam slope")
-    var moved: Dictionary = renderer._beam_layout(gap,.75,580.0)
+    var moved: Dictionary = renderer.beam_plan(gap,.75,580.0)
     var shifted: Array = moved["groups"][0]["members"]
     for i in range(members.size()):
         check(absf(float(shifted[i]["tip_y"])-float(members[i]["tip_y"])) < .001,
@@ -193,15 +193,15 @@ func run() -> void:
     irregular["measures"][1]["meter"] = [7,8]
     check(renderer.load_score(irregular), "Load source beams in irregular meter")
     var irregular_groups: Dictionary = {}
-    for group in renderer.beam_groups:
+    for group in renderer.layout.beam_groups:
         irregular_groups[str(group[0]["id"])] = group.map(func(e):return e["id"])
-    check(renderer.beam_groups.size() == expected_groups.size()
+    check(renderer.layout.beam_groups.size() == expected_groups.size()
         and irregular_groups == expected_groups,
         "Source beam boundaries survive meter changes without new inference")
     var metadata: Dictionary = renderer.glyphs.beam_metadata.duplicate(true)
     renderer.glyphs.beam_metadata.clear()
     check(renderer.load_score(score), "Source without beam metadata remains flagged")
-    check(renderer.beam_groups.is_empty() and renderer.beamed_note_ids.is_empty(),
+    check(renderer.layout.beam_groups.is_empty() and renderer.layout.beamed_note_ids.is_empty(),
         "Adjacent short notes must not invent beams when source groups are absent")
     renderer.glyphs.beam_metadata = metadata
     # Regression: 32nd/64th events must remain native with their source beams.
@@ -225,7 +225,7 @@ func run() -> void:
         "Ordinary 32nd/64th notes no longer trigger native fallback")
     check(renderer.load_score(tiny), "Load 32nd and 64th lesson natively")
     var tiny_groups: Array = []
-    for group in renderer.beam_groups:
+    for group in renderer.layout.beam_groups:
         tiny_groups.append(group.map(func(e):return e["id"]))
     check(tiny_groups == [["s0","s1","s2","s3"],
         ["t0","t1","t2","t3","t4"]],
@@ -247,7 +247,7 @@ func run() -> void:
     check(not renderer.load_score(still_unsupported),
         "Truly unsupported rhythmic values still trigger fallback")
     renderer.clear_score()
-    check(renderer.beam_groups.is_empty() and renderer.beamed_note_ids.is_empty(),
+    check(renderer.layout.beam_groups.is_empty() and renderer.layout.beamed_note_ids.is_empty(),
         "Changing lessons discards previously cached beams")
     print("PHASE_C2_BEAM_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

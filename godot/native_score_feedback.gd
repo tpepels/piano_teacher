@@ -24,7 +24,7 @@ func bind_score(renderer: Control, revision: int) -> void:
     source_to_id.clear()
     markers.clear()
     pulses.clear()
-    for event in renderer.ordered_events:
+    for event in renderer.layout.ordered_events:
         if bool(event.get("is_attack", false)) and event.get("source_id") != null:
             source_to_id[str(event.source_id)] = str(event.id)
     queue_redraw()
@@ -109,7 +109,7 @@ func _tone(status: String) -> Color:
 func _draw() -> void:
     if not is_instance_valid(score) or not score.is_visible_in_tree():
         return
-    var gap: float = score._gap()
+    var gap: float = score.staff_gap()
     # Bound work to the compositor's visible window, even on long lessons.
     for id in score.drawn_noteheads:
         if not markers.has(id):

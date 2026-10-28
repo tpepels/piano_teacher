@@ -36,6 +36,7 @@ class Probe extends "res://notation/native/view.gd":
         layout = FixedStaffLayout.new(timeline,glyphs)
         symbols.connector_geometry = LegacyTieGeometry.new(layout)
     func _draw() -> void:
+        layout.set_viewport(size)
         symbols.connector_geometry.old = bool(spec.get("old",false))
         var gap := 21.875
         draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
@@ -44,15 +45,15 @@ class Probe extends "res://notation/native/view.gd":
                 draw_line(Vector2(0,center+rail*gap),Vector2(size.x,center+rail*gap),Color(NOTE_INK,.34),1.0)
         var events: Array = spec["events"]
         var measure: Dictionary = spec["measure"]
-        ordered_events = events
-        measure_by_number = {1:measure}
+        layout.ordered_events = events
+        layout.measure_by_number = {1:measure}
         timeline.measures = [measure]
-        chord_members = {"a0":[events[0],events[1]],"b0":[events[2],events[3]]}
+        layout.chord_members = {"a0":[events[0],events[1]],"b0":[events[2],events[3]]}
         var first: Dictionary = events[int(spec["tone"])]
         var last: Dictionary = events[2+int(spec["tone"])]
-        _paint_engraved_chord(events[0],100.0,gap,NOTE_INK)
-        _paint_engraved_chord(events[2],181.0,gap,NOTE_INK)
-        _paint_tie_contour(first,last,_tie_placement(first,last,100.0,181.0,gap),gap)
+        symbols.paint_engraved_chord(self,RenderPass.new(),events[0],100.0,gap,NOTE_INK)
+        symbols.paint_engraved_chord(self,RenderPass.new(),events[2],181.0,gap,NOTE_INK)
+        symbols.paint_tie_contour(self,RenderPass.new(),first,last,connector_geometry.tie_placement(first,last,100.0,181.0,gap),gap)
 func _initialize() -> void:
     call_deferred("run")
 func run() -> void:

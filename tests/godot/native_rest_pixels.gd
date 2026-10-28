@@ -89,12 +89,12 @@ func run() -> void:
     check(renderer.load_score(_model(events)),
         "Original whole through 64th rests stay on the native renderer")
     var with_rests: Image = await _image(view)
-    var gap: float = renderer._gap()
+    var gap: float = renderer.staff_gap()
     var density: float = renderer.timeline.pixels_per_beat
     for event in events:
         var kind: String = str(event["note_type"])
         var staff: String = str(event["staff"])
-        var center: float = renderer._staff_center(staff)
+        var center: float = renderer.layout.staff_center(staff)
         var expected_origin: float = center+Geometry.rest_staff_offset(kind)*gap
         var font_box: Array = renderer.glyphs.bounds["rest_"+kind]
         var x: int = roundi(renderer.size.x*.42+
@@ -129,7 +129,7 @@ func run() -> void:
     for event in dotted:
         var kind: String = str(event["note_type"])
         var staff: String = str(event["staff"])
-        var origin_y: float = renderer._staff_center(staff)+(
+        var origin_y: float = renderer.layout.staff_center(staff)+(
             Geometry.rest_staff_offset(kind)+Geometry.rest_dot_offset(kind))*gap
         var x: int = roundi(renderer.size.x*.42+
             float(event["beat"])*renderer.timeline.pixels_per_beat)
@@ -157,19 +157,19 @@ func run() -> void:
         "duration_beats":1.0,"midi_pitch":71,"hand":"right"}]
     check(renderer.load_score(poly),
         "Independent voices remain on native renderer without collisions")
-    check(renderer.unavoidable_rest_overlaps == 0,
+    check(renderer.layout.unavoidable_rest_overlaps == 0,
         "Ordinary polyphonic fixtures must not require compromised rest positions")
-    var heads: Dictionary = renderer._engraved_head_offsets(gap)
+    var heads: Dictionary = renderer.layout.engraved_head_offsets(gap)
     var accidentals: Dictionary = Geometry.accidental_offsets(
-        renderer.ordered_events,gap,heads,renderer.glyphs.bounds)
+        renderer.layout.ordered_events,gap,heads,renderer.glyphs.bounds)
     for i in range(voices.size()):
         for j in range(i+1,voices.size()):
             var first: Dictionary = voices[i]
             var second: Dictionary = voices[j]
             if first["staff"] != second["staff"] or first["voice"] == second["voice"]:
                 continue
-            var a: Rect2 = renderer._event_ink_rect(first,gap,heads,accidentals)
-            var b: Rect2 = renderer._event_ink_rect(second,gap,heads,accidentals)
+            var a: Rect2 = renderer.layout.event_ink_rect(first,gap,heads,accidentals)
+            var b: Rect2 = renderer.layout.event_ink_rect(second,gap,heads,accidentals)
             check(not a.intersects(b.grow(gap*.05)),
                 "Cross-voice glyph collision: "+str(first["id"])+" / "+str(second["id"]))
     var poly_image: Image = await _image(view)
@@ -187,8 +187,8 @@ func run() -> void:
         "duration_beats":1.0,"midi_pitch":84,"hand":"right"}]
     check(renderer.load_score(high),"High C6 native Verovio note supported")
     var ledger_image: Image = await _image(view)
-    var ledger_gap: float = renderer._gap()
-    var high_center: float = renderer._staff_center("right")
+    var ledger_gap: float = renderer.staff_gap()
+    var high_center: float = renderer.layout.staff_center("right")
     var c6_y: float = high_center-4.0*ledger_gap
     var note_x: int = roundi(renderer.size.x*.42+
         renderer.timeline.pixels_per_beat)

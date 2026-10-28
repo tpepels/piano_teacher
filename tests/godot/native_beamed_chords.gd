@@ -26,9 +26,9 @@ func run() -> void:
     var by_id: Dictionary = {}
     for event in data["model"]["notation_events"]:
         by_id[str(event["id"])] = event
-    check(renderer._chord_template_key(by_id["a"]) == "eighth|down|0,2",
+    check(renderer.layout.chord_template_key(by_id["a"]) == "eighth|down|0,2",
         "Low chord forced DOWN uses the original left-side stem and head displacement")
-    check(renderer._chord_template_key(by_id["c"]) == "eighth|up|0,2",
+    check(renderer.layout.chord_template_key(by_id["c"]) == "eighth|up|0,2",
         "High chord forced UP uses the original right-side stem and head displacement")
     var painted: Dictionary = {}
     var density: float = renderer.timeline.pixels_per_beat
@@ -39,9 +39,9 @@ func run() -> void:
         await process_frame
         for id in renderer.drawn_noteheads:
             painted[id] = true
-        var gap: float = renderer._gap()
-        var beams: Dictionary = renderer._beam_layout(gap,beat,1200.0*.42,
-            renderer.cached_head_offsets)
+        var gap: float = renderer.staff_gap()
+        var beams: Dictionary = renderer.beam_plan(gap,beat,1200.0*.42,
+            renderer.layout.cached_head_offsets)
         var id: String = "a" if beat == 0.0 else "c"
         var up: bool = beat != 0.0
         check(beams["stems"].has(id) and bool(beams["stems"][id]["up"]) == up,
@@ -70,8 +70,8 @@ func run() -> void:
     renderer.expected_beam_groups.clear()
     check(renderer.load_score(isolated) and renderer.native_ready,
         "A following isolated-chord score loads after source beam cache replacement")
-    check(renderer._chord_template_key(by_id["a"]) == "eighth|up|0,2" and
-        renderer._chord_template_key(by_id["c"]) == "eighth|down|0,2",
+    check(renderer.layout.chord_template_key(by_id["a"]) == "eighth|up|0,2" and
+        renderer.layout.chord_template_key(by_id["c"]) == "eighth|down|0,2",
         "Old beam directions never leak into the next lesson")
     print("NATIVE_BEAMED_CHORD_FAILURES:",failures.size())
     renderer.free()

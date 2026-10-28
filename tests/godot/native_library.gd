@@ -31,10 +31,10 @@ func run() -> void:
     if loaded:
         # Advance to each still-unseen onset. One viewport usually verifies
         # several attacks; sparse measure-start snapshots miss dense passages.
-        for event in renderer.ordered_events:
+        for event in renderer.layout.ordered_events:
             if str(event.get("kind","")) == "note":
                 expected_ids[str(event["id"])] = true
-        for event in renderer.ordered_events:
+        for event in renderer.layout.ordered_events:
             if str(event.get("kind","")) != "note" or drawn_ids.has(str(event["id"])):
                 continue
             var beat: float = float(event["beat"])

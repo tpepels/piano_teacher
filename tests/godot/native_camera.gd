@@ -55,7 +55,7 @@ func set_state(beat: float, running: bool, paused := false, play_from := 0.0) ->
 func capture(label: String) -> Dictionary:
     var view = app.timeline_preview
     var heads: Array = []
-    for event in view.ordered_events:
+    for event in view.layout.ordered_events:
         var id: String = str(event.get("id", ""))
         if not view.drawn_noteheads.has(id):
             continue
@@ -66,7 +66,7 @@ func capture(label: String) -> Dictionary:
         "height":view.size.y, "density":view.timeline.pixels_per_beat,
         "clock":view.clock_beat, "play_from":view.play_from_beat,
         "musical_beat":view.play_from_beat+projected_clock,
-        "staff_gap":view._gap(), "visible_count":app._visible_score_noteheads()}
+        "staff_gap":view.staff_gap(), "visible_count":app._visible_score_noteheads()}
     samples.append(sample)
     return sample
 
@@ -94,7 +94,7 @@ func run() -> void:
         return
     var view = app.timeline_preview
     var timeline = view.timeline
-    var events: Array = view.ordered_events
+    var events: Array = view.layout.ordered_events
     var textures: Dictionary = view.glyphs.textures.duplicate()
     set_state(0.0, false)
     await draw_frame()
@@ -154,10 +154,10 @@ func run() -> void:
         "resume_advanced":float(advanced.clock) > float(resumed.clock),
         "clock_matched":clock_matched, "clipped":app.score_frame.clip_contents,
         "same_timeline":view.timeline == timeline,
-        "same_index":is_same(view.ordered_events, events),
+        "same_index":is_same(view.layout.ordered_events, events),
         "same_atlas":view.glyphs.textures == textures,
         "indexed_beats":beats, "scanned_events":view.frame_scanned_events,
-        "total_events":view.ordered_events.size(),
+        "total_events":view.layout.ordered_events.size(),
         "high_click_bytes":app.click_high.data.size(),
         "low_click_bytes":app.click_low.data.size(),
         "click_stream_selected":app.click_player.stream != null}

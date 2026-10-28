@@ -46,13 +46,13 @@ func run() -> void:
         "Fixture pipeline loads the native fragment catalogues")
     check(renderer.load_score(model) and renderer.native_ready,
         "Source-matched fragment lesson is native with no fallback")
-    var gap: float = renderer._gap()
-    var beam: Dictionary = renderer._beam_layout(gap,0.0,500.0)
+    var gap: float = renderer.staff_gap()
+    var beam: Dictionary = renderer.beam_plan(gap,0.0,500.0)
     check(beam["groups"].size() == 1,"Original beam keeps every attack")
     if not beam["groups"].is_empty():
         var group: Dictionary = beam["groups"][0]
         var anchor_y: float = float(group.get("anchor_y",group["members"][0]["head_y"]))
-        check(absf(anchor_y-renderer._event_y(events[0],gap)) < .001,
+        check(absf(anchor_y-renderer.layout.event_y(events[0],gap)) < .001,
             "Beam texture origin uses source leader, not outer chord tone")
     # A second has asymmetric original Verovio head displacement. Estimated
     # +/- .75-space placement cannot be reused for ties, slurs or beams.
@@ -68,10 +68,10 @@ func run() -> void:
     renderer.queue_redraw()
     await process_frame
     await process_frame
-    check(absf(float(renderer.cached_head_offsets.get("lead",0.0))) < .001 and
-        absf(float(renderer.cached_head_offsets.get("second",0.0))-gap*1.2) < .001,
+    check(absf(float(renderer.layout.cached_head_offsets.get("lead",0.0))) < .001 and
+        absf(float(renderer.layout.cached_head_offsets.get("second",0.0))-gap*1.2) < .001,
         "Cached attachment anchors match engraved heads exactly")
-    var tied: Dictionary = renderer._tie_placement(
+    var tied: Dictionary = renderer.connector_geometry.tie_placement(
         seconds["notation_events"][1],seconds["notation_events"][1],100.0,250.0,gap)
     check(not tied.is_empty() and absf(float(tied["x0"])-(100.0+gap*1.2)) < .001,
         "Tie attaches to displaced source head without changing beat spacing")
@@ -84,16 +84,16 @@ func run() -> void:
         "Closely spaced chord accidentals remain native")
     await process_frame
     await process_frame
-    var accidental_offsets: Variant = renderer.get("cached_accidental_offsets")
+    var accidental_offsets: Variant = renderer.layout.cached_accidental_offsets
     var boxes: Array[Rect2] = []
     var sharp_box: Array = renderer.glyphs.bounds["acc_sharp"]
     for event in accidentals["notation_events"]:
         var id: String = str(event["id"])
-        var x: float = float(renderer.cached_head_offsets.get(id,0.0))-gap*1.15
+        var x: float = float(renderer.layout.cached_head_offsets.get(id,0.0))-gap*1.15
         if accidental_offsets is Dictionary:
-            x = float(renderer.cached_head_offsets.get(id,0.0))+float(
+            x = float(renderer.layout.cached_head_offsets.get(id,0.0))+float(
                 accidental_offsets.get(id,-gap*1.15))
-        var y: float = renderer._event_y(event,gap)
+        var y: float = renderer.layout.event_y(event,gap)
         boxes.append(Rect2(x-float(sharp_box[2])*gap/500.0,
             y+float(sharp_box[1])*gap/250.0,
             float(sharp_box[2])*gap/250.0,float(sharp_box[3])*gap/250.0))
@@ -104,19 +104,19 @@ func run() -> void:
         partial["measures"][0]["right_barline"] = {"style":style,"repeat":""}
         check(renderer.load_score(partial) and renderer.native_ready,
             "Legal %s barline must remain native without fallback" % style)
-        var info: Dictionary = renderer._terminal_barline_geometry(0.0,500.0,gap)
+        var info: Dictionary = renderer.layout.terminal_barline_geometry(0.0,500.0,gap)
         var segments: Array = info.get("segments",[])
         check(segments.size() == 2,
             "%s barline has one partial rule on each piano staff" % style)
         if segments.size() == 2:
             for i in range(2):
-                var center: float = renderer._staff_center("right" if i == 0 else "left")
+                var center: float = renderer.layout.staff_center("right" if i == 0 else "left")
                 var expected_top: float = center-gap*(2.5 if style == "tick" else 1.0)
                 var expected_bottom: float = center-gap*1.5 if style == "tick" else center+gap
                 check(absf(float(segments[i]["top"])-expected_top) < .001 and
                     absf(float(segments[i]["bottom"])-expected_bottom) < .001,
                     "%s keeps its source staff extent and leaves the interstaff gap clear" % style)
-        check(renderer._barline_strokes(style,gap).size() == 1,
+        check(renderer.layout.barline_strokes(style,gap).size() == 1,
             "%s uses a single authentic structural barline stroke" % style)
     # Peace Piece measures 57/58: a real ten-to-one 64th starts just
     # .00625 quarter beats before its tied continuation. Preserve both
@@ -151,20 +151,20 @@ func run() -> void:
         # the safety invariant is actual source-Verovio ink separation.
         check(tiny_density > 96.0 and tiny_density <= 8192.0,
             "Near-coincident source events require an explicit global scale")
-        var tiny_gap: float = renderer._gap()
-        var tiny_heads: Dictionary = renderer._engraved_head_offsets(tiny_gap)
+        var tiny_gap: float = renderer.staff_gap()
+        var tiny_heads: Dictionary = renderer.layout.engraved_head_offsets(tiny_gap)
         var tiny_accidentals: Dictionary = Geometry.accidental_offsets(
-            renderer.ordered_events,tiny_gap,tiny_heads,
+            renderer.layout.ordered_events,tiny_gap,tiny_heads,
             renderer.glyphs.bounds)
-        var left_ink: Rect2 = renderer._event_ink_rect(
+        var left_ink: Rect2 = renderer.layout.event_ink_rect(
             attack,tiny_gap,tiny_heads,tiny_accidentals)
-        var right_ink: Rect2 = renderer._event_ink_rect(
+        var right_ink: Rect2 = renderer.layout.event_ink_rect(
             continuation,tiny_gap,tiny_heads,tiny_accidentals)
         left_ink.position.x += 3.99375*tiny_density
         right_ink.position.x += 4.0*tiny_density
         check(not left_ink.intersects(right_ink.grow(tiny_gap*.06)),
             "Two close tied source notes retain genuine visible ink clearance")
-        check(renderer.tie_pairs.size() == 1 and renderer.ordered_events == [attack,continuation],
+        check(renderer.layout.tie_pairs.size() == 1 and renderer.layout.ordered_events == [attack,continuation],
             "Tiny attack, original source identity and tied continuation all survive")
         var x0: float = renderer.timeline.screen_x(3.99375,4.0,500.0)
         var x1: float = renderer.timeline.screen_x(4.0,4.0,500.0)

@@ -35,7 +35,7 @@ func _run() -> void:
         var tag: String = sample["name"]
         await _capture(viewport,renderer,tag+".png")
         var labels: Array = []
-        for item in renderer.drawn_fingerings:
+        for item in renderer.annotations.drawn_fingerings:
             var rect: Rect2 = item["rect"]
             var head: Vector2 = item["head"]
             labels.append({"rect":[rect.position.x,rect.position.y,rect.size.x,rect.size.y],
@@ -53,7 +53,7 @@ func _run() -> void:
         renderer.set_fingering_annotations_enabled(false)
         await _capture(viewport,renderer,tag+"-canonical.png")
         frames.append({"name":tag,"clock":clock,"file":tag+".png","base":tag+"-canonical.png",
-            "gap":renderer._gap(),"labels":labels,"instances":instances})
+            "gap":renderer.staff_gap(),"labels":labels,"instances":instances})
     renderer.set_fingering_annotations_enabled(true)
     await _capture(viewport,renderer,"interaction-ready.png")
     var interactions: Array = []
@@ -61,7 +61,7 @@ func _run() -> void:
         interactions.append({"source_id":source_id,"finger":finger}))
     var clicks: Array = []
     var groups: Dictionary = {}
-    for item in renderer.drawn_fingerings:
+    for item in renderer.annotations.drawn_fingerings:
         if item["hand"] != fixture.get("hand","both") and fixture.get("hand","both") != "both":
             continue
         var key: String = str(item["event_ids"])
@@ -72,13 +72,13 @@ func _run() -> void:
         if group.size()<2:
             continue
         for item in group.slice(0,2):
-            var expected: String = renderer._fingering_source(renderer.expression_note_index[item["event_ids"][0]])
+            var expected: String = renderer.FingeringPlacement.source(renderer.layout.expression_note_index[item["event_ids"][0]])
             var point: Vector2 = item["head"]
             var opened: bool = renderer._open_fingering_editor(point)
             clicks.append({"expected_source_id":expected,"pass_index":item.get("pass_index",-1),"opened":opened})
             if opened:
-                renderer.fingering_popup.id_pressed.emit(5)
-                renderer.fingering_popup.hide()
+                renderer.annotations.fingering_popup.id_pressed.emit(5)
+                renderer.annotations.fingering_popup.hide()
         break
     var evidence_state: Dictionary = fixture.get("state",{}).duplicate(true)
     evidence_state.merge({"running":true,"paused":true,"hand":fixture.get("hand","both"),

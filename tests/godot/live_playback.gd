@@ -69,13 +69,13 @@ func active_attempt(transport_id: int) -> bool:
 func note_position(note: Dictionary) -> Vector2:
     var renderer = app.timeline_preview
     var id: String = str(note["id"])
-    for event in renderer.ordered_events:
+    for event in renderer.layout.ordered_events:
         if str(event.get("id", "")) == id:
             var clock: float = renderer.clock_beat if renderer.running or renderer.paused else 0.0
             var x: float = renderer.timeline.screen_x(float(event["beat"]),clock,
                 renderer.size.x * renderer.PLAYHEAD_FRACTION,renderer.play_from_beat)
-            x += float(renderer.cached_head_offsets.get(id,0.0))
-            var point := Vector2(x, renderer._event_y(event,renderer._gap()))
+            x += float(renderer.layout.cached_head_offsets.get(id,0.0))
+            var point := Vector2(x, renderer.layout.event_y(event,renderer.staff_gap()))
             if renderer.drawn_noteheads.has(id):
                 point = renderer.drawn_noteheads[id]
                 if renderer.score_loop_enabled and not renderer.timeline.measures.is_empty():
@@ -240,7 +240,7 @@ func capture(bpm: int, label: String) -> Dictionary:
         "%d BPM %s: timing line stays fixed" % [bpm, label])
     check(app.timeline_preview.size.distance_to(baseline_size) < 0.5,
         "%d BPM %s: notation scale stays stable" % [bpm, label])
-    var staff_gap: Vector2 = Vector2.ONE * renderer._gap() * pixel_scale
+    var staff_gap: Vector2 = Vector2.ONE * renderer.staff_gap() * pixel_scale
     check(score_ready(), "%d BPM %s: current source revision remains visibly native" % [bpm,label])
     var ink := local_ink(frame, position, staff_gap)
     var paused_modal: bool = app.pause_sheet.is_visible_in_tree()

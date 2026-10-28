@@ -27,8 +27,8 @@ func _frame(view: SubViewport, renderer: Control, model: Dictionary, clock: floa
     for id in renderer.drawn_noteheads:
         var point: Vector2 = renderer.drawn_noteheads[id]
         noteheads[id] = [point.x,point.y]
-    if renderer.get("drawn_fingerings") is Array:
-        for item in renderer.drawn_fingerings:
+    if renderer.annotations.drawn_fingerings is Array:
+        for item in renderer.annotations.drawn_fingerings:
             var rect: Rect2 = item["rect"]
             var head: Vector2 = item["head"]
             labels.append({"rect":[rect.position.x,rect.position.y,rect.size.x,rect.size.y],
@@ -36,11 +36,11 @@ func _frame(view: SubViewport, renderer: Control, model: Dictionary, clock: floa
                 "font_size":item.get("font_size",16),"text_offset_x":item.get("text_offset_x",0.0),
                 "orientation":item.get("orientation","above" if item["hand"] == "right" else "below"),
                 "event_ids":item["event_ids"]})
-    var placement_issues: Array = renderer.fingering_placement_issues.duplicate(true)
+    var placement_issues: Array = renderer.annotations.fingering_placement_issues.duplicate(true)
     renderer.set_fingering_annotations_enabled(false)
     await _capture(view, renderer, name+"-base.png")
     renderer.set_fingering_annotations_enabled(true)
-    return {"file":name+".png", "base":name+"-base.png", "labels":labels,"gap":renderer._gap(),
+    return {"file":name+".png", "base":name+"-base.png", "labels":labels,"gap":renderer.staff_gap(),
         "placement_issues":placement_issues,"noteheads":noteheads,
         "capture_config":{"fingering_annotations":true,"transport_overlay":false}}
 
@@ -77,11 +77,11 @@ func _run() -> void:
         event.pressed = true
         event.position = click
         renderer._gui_input(event)
-        if renderer.fingering_popup == null or not renderer.fingering_popup.visible:
+        if renderer.annotations.fingering_popup == null or not renderer.annotations.fingering_popup.visible:
             checks.append("Right click must open the correction popup")
         else:
             var menus: Array = []
-            for child in renderer.fingering_popup.get_children():
+            for child in renderer.annotations.fingering_popup.get_children():
                 if child is PopupMenu:
                     menus.append(child)
             if menus.size() != 2:
@@ -89,15 +89,15 @@ func _run() -> void:
             else:
                 menus[0].id_pressed.emit(5)
                 menus[1].id_pressed.emit(0)
-        renderer.fingering_popup.hide()
+        renderer.annotations.fingering_popup.hide()
         var touch := InputEventScreenTouch.new()
         touch.pressed = true
         touch.position = click
         renderer._gui_input(touch)
-        if not renderer.fingering_popup.visible:
+        if not renderer.annotations.fingering_popup.visible:
             checks.append("Tap must open the correction popup")
         renderer.load_score(model)
-        if renderer.fingering_popup.visible:
+        if renderer.annotations.fingering_popup.visible:
             checks.append("A changed score must dismiss stale editor targets")
         var unknown: Dictionary = model.duplicate(true)
         for note in unknown["notation_events"]:
@@ -107,10 +107,10 @@ func _run() -> void:
         await _capture(view,renderer,"unknown.png")
         touch.position = renderer.drawn_noteheads[fixture["unknown_id"]]
         renderer._gui_input(touch)
-        if not renderer.fingering_popup.visible:
+        if not renderer.annotations.fingering_popup.visible:
             checks.append("Unknown attack heads must remain editable")
         else:
-            renderer.fingering_popup.id_pressed.emit(3)
+            renderer.annotations.fingering_popup.id_pressed.emit(3)
     else:
         checks.append("No fingering editor signal")
     var corrected: Dictionary = model.duplicate(true)
@@ -189,7 +189,7 @@ func _envelope_coverage(renderer: Control) -> Dictionary:
             "up":str(key).get_slice("|",1) == "up","texture":renderer.glyphs.chord_textures[key],
             "bounds":metadata["bounds"],"heads":metadata["head_positions"]})
     for template in templates:
-        var envelope: Rect2 = renderer._fingering_nonhead_envelope(template["kind"],template["up"],template["chord"])
+        var envelope: Rect2 = renderer.annotations.obstacles.nonhead_envelope(template["kind"],template["up"],template["chord"])
         var picture: Image = template["texture"].get_image()
         var box: Array = template["bounds"]
         var shape: Array = renderer.glyphs.bounds["head_"+(template["kind"] if template["kind"] in ["whole","half"] else "black")]
@@ -229,7 +229,7 @@ func _digit_references(frames: Array, renderer: Control) -> void:
             var width: int = ceili(float(rect[0])+float(rect[2]))-floori(float(rect[0]))
             var height: int = ceili(float(rect[1])+float(rect[3]))-floori(float(rect[1]))
             var phase := Vector2(float(rect[0])-floorf(float(rect[0])),float(rect[1])-floorf(float(rect[1])))
-            var color: Color = renderer._ink(label["hand"])
+            var color: Color = renderer.RenderPass.new({"active_hand":renderer.active_hand}).ink(label["hand"])
             if label["hand"] == "left":
                 color = color.lerp(renderer.Design.BLUE,.32)
             var reference := SubViewport.new()

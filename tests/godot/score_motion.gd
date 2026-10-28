@@ -53,7 +53,7 @@ func run() -> void:
     # Every source attack, including later systems, must be present when its
     # backend beat reaches the fixed line. Measure the painted head twice;
     # chord offsets are fixed source ink and cancel from the travel oracle.
-    for event in view.ordered_events:
+    for event in view.layout.ordered_events:
         if str(event.get("kind", "")) != "note":
             continue
         var id: String = str(event.id)
@@ -68,7 +68,7 @@ func run() -> void:
         check(absf((a.x-b.x)-density*.25) < .02,
             "Painted source head travels at constant density: " + id)
         check(absf(a.y-b.y) < .01, "Scrolling preserves source pitch: " + id)
-        check(absf((a.x+b.x)*.5-view.size.x*.42) < view._gap()*1.1,
+        check(absf((a.x+b.x)*.5-view.size.x*.42) < view.staff_gap()*1.1,
             "Authentic head crosses timing line on source beat: " + id)
         check(view.size == size_before and view.position == position_before,
             "The native viewport stays fixed while notation moves")

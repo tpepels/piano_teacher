@@ -40,7 +40,7 @@ func run() -> void:
     var atlas: Dictionary = atlas_ids(view)
     var source: Dictionary = view.timeline.model.duplicate(true)
     var child_count: int = app.find_children("*","",true,false).size()
-    check(view.ordered_events.size() >= 300, "Stress fixture contains a long source score")
+    check(view.layout.ordered_events.size() >= 300, "Stress fixture contains a long source score")
     check(not atlas.is_empty(), "Residency checks actual authentic texture resources")
     var duration: float = view.timeline.duration_beats
     for fraction in [0.0,.9,.1,.75,.4,.99,.2,.8,0.0,.99]:
@@ -54,7 +54,7 @@ func run() -> void:
         await process_frame
         RenderingServer.force_draw()
         check(not view.drawn_noteheads.is_empty(), "Rapid seek paints source notes immediately")
-        check(view.frame_scanned_events < view.ordered_events.size()/4,
+        check(view.frame_scanned_events < view.layout.ordered_events.size()/4,
             "Each frame visits a bounded visible event window, even near the end")
         check(atlas_ids(view) == atlas, "Seeks reuse the same authentic atlas resources")
         check(app.find_children("*","",true,false).size() == child_count,

@@ -20,10 +20,10 @@ func _check() -> void:
         return
     var failures := 0
     var checked := 0
-    for event in renderer.ordered_events:
+    for event in renderer.layout.ordered_events:
         if str(event.get("kind","")) == "rest" and str(event.get("note_type","")) in ["half","whole"]:
             checked += 1
-            var offset: float = float(renderer.rest_lane_offsets.get(str(event["id"]),0.0))
+            var offset: float = float(renderer.layout.rest_lane_offsets.get(str(event["id"]),0.0))
             if absf(offset-roundf(offset)) > .00001:
                 print("RECTANGULAR_REST_OFF_GRID:",event["id"]," shift=",offset)
                 failures += 1

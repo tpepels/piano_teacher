@@ -24,7 +24,7 @@ func _run() -> void:
     var renderer = load("res://notation/native/view.gd").new()
     renderer.size = Vector2(1536,520)
     viewport.add_child(renderer)
-    assert(renderer.fingering_annotations_enabled, "Ordinary application must show fingerings by default")
+    assert(renderer.annotations.fingering_annotations_enabled, "Ordinary application must show fingerings by default")
     var a: Dictionary = fixture["assets"]
     assert(renderer.set_verovio_glyphs(a["native_glyphs"], a["native_note_templates"],
         a["native_tie_templates"], a["native_chord_templates"], a["native_beam_fragments"],
@@ -56,7 +56,7 @@ func _run() -> void:
             await _capture(viewport,renderer,normal)
             if variant["name"] == "original":
                 frame["file"] = normal
-                for item in renderer.drawn_fingerings:
+                for item in renderer.annotations.drawn_fingerings:
                     var rect: Rect2 = item["rect"]
                     var head: Vector2 = item["head"]
                     var ink_rect: Rect2 = item.get("ink_rect",rect)
@@ -66,18 +66,18 @@ func _run() -> void:
                         "font_size":item.get("font_size",16),"text_offset_x":item.get("text_offset_x",0.0),
                         "orientation":item.get("orientation","above" if item["hand"] == "right" else "below"),
                         "event_ids":item["event_ids"]})
-                frame["gap"] = renderer._gap()
-                frame["placement_issues"] = renderer.fingering_placement_issues.duplicate(true)
+                frame["gap"] = renderer.staff_gap()
+                frame["placement_issues"] = renderer.annotations.fingering_placement_issues.duplicate(true)
             else:
                 frame["normal_"+variant["name"]] = normal
             renderer.set_fingering_annotations_enabled(false)
-            if not renderer.drawn_fingerings.is_empty():
+            if not renderer.annotations.drawn_fingerings.is_empty():
                 editor_checks.append("Disabling annotations must clear stale label targets immediately")
             if renderer._open_fingering_editor(renderer.drawn_noteheads.values()[0]):
                 editor_checks.append("Canonical mode must not edit hidden annotations")
             var canonical := "canonical-%d-%s.png" % [index,variant["name"]]
             await _capture(viewport,renderer,canonical)
-            assert(renderer.drawn_fingerings.is_empty())
+            assert(renderer.annotations.drawn_fingerings.is_empty())
             frame["canonical" if variant["name"] == "original" else "canonical_"+variant["name"]] = canonical
         frames.append(frame)
     # Hide a genuine written note only after load validation, leaving the
@@ -87,12 +87,12 @@ func _run() -> void:
         "transport_id":19,"count_in_beats":0.0,"play_from_beat":0.0},0.0)
     var kept: Array = []
     var missing_id := ""
-    for event in renderer.ordered_events:
+    for event in renderer.layout.ordered_events:
         if missing_id.is_empty() and event["kind"] == "note" and event["staff"] == "right":
             missing_id = str(event["id"])
         else:
             kept.append(event)
-    renderer.ordered_events = kept
+    renderer.layout.ordered_events = kept
     await _capture(viewport,renderer,"missing-musical-note.png")
     # Independent all-digit reference atlas for the existing strict OCR oracle.
     var font: Font = ThemeDB.fallback_font
@@ -105,7 +105,7 @@ func _run() -> void:
             var height := ceili(float(rect[1])+float(rect[3]))-floori(float(rect[1]))
             var phase := Vector2(float(rect[0])-floorf(float(rect[0]))+float(label["text_offset_x"]),
                 float(rect[1])-floorf(float(rect[1])))
-            var color: Color = renderer._ink(label["hand"])
+            var color: Color = renderer.RenderPass.new({"active_hand":renderer.active_hand}).ink(label["hand"])
             if label["hand"] == "left":
                 color = color.lerp(renderer.Design.BLUE,.32)
             var reference := SubViewport.new()

@@ -88,14 +88,14 @@ func _audit() -> void:
         "capture_config": config.duplicate(true),
         "density": renderer.timeline.pixels_per_beat,
         "density_witness": renderer.selected_density_witness.duplicate(true),
-        "staff_gap": renderer._gap(),
+        "staff_gap": renderer.staff_gap(),
         "width": renderer.size.x,
         "height": renderer.size.y,
         "staff_centers": {
-            "right": renderer._staff_center("right"),
-            "left": renderer._staff_center("left")
+            "right": renderer.layout.staff_center("right"),
+            "left": renderer.layout.staff_center("left")
         },
-        "unavoidable_rest_overlaps": renderer.unavoidable_rest_overlaps,
+        "unavoidable_rest_overlaps": renderer.layout.unavoidable_rest_overlaps,
         "frames": [],
         "rest_difference_controls": [],
         "rest_difference_protocol": 2,
@@ -118,7 +118,7 @@ func _audit() -> void:
         await process_frame
         await process_frame
         await RenderingServer.frame_post_draw
-        if not renderer.drawn_fingerings.is_empty():
+        if not renderer.annotations.drawn_fingerings.is_empty():
             failures.append("Canonical frame contains instructional fingering ink")
         var frame: Image = view.get_texture().get_image()
         # Quarter-note subdivisions can be closer than .01 beats. Use
@@ -138,7 +138,7 @@ func _audit() -> void:
         # never to supply expected glyph type, shape or screen geometry.
         var visible_rests: Array = []
         if bool(fixture.get("phase3_full",false)):
-            for candidate in renderer.ordered_events:
+            for candidate in renderer.layout.ordered_events:
                 if str(candidate.get("kind","")) == "rest" and \
                         absf(float(candidate.get("beat",0.0))-at) < .0000001:
                     visible_rests.append(candidate)
@@ -150,14 +150,14 @@ func _audit() -> void:
             await RenderingServer.frame_post_draw
             var repeat_file := "repeat-%.5f.png" % at
             view.get_texture().get_image().save_png(folder.path_join(repeat_file))
-            var original_events: Array = renderer.ordered_events.duplicate()
+            var original_events: Array = renderer.layout.ordered_events.duplicate()
             for rest_index in range(visible_rests.size()):
                 var suppressed: Dictionary = visible_rests[rest_index]
                 var reduced: Array = []
                 for candidate in original_events:
                     if str(candidate.get("id","")) != str(suppressed.get("id","")):
                         reduced.append(candidate)
-                renderer.ordered_events = reduced
+                renderer.layout.ordered_events = reduced
                 renderer.queue_redraw()
                 await process_frame
                 await process_frame
@@ -175,9 +175,9 @@ func _audit() -> void:
                     "clock":at,
                     "file":control_file
                 })
-                renderer.ordered_events = original_events
+                renderer.layout.ordered_events = original_events
                 renderer.queue_redraw()
-            renderer.ordered_events = original_events
+            renderer.layout.ordered_events = original_events
             renderer.queue_redraw()
             await process_frame
             await process_frame
@@ -193,14 +193,14 @@ func _audit() -> void:
         var rests: Array = []
         var camera_x: float = renderer.size.x*.42
         var expected_heads: Dictionary = {}
-        for event in renderer.ordered_events:
+        for event in renderer.layout.ordered_events:
             if str(event.get("kind", "")) != "note":
                 continue
             var expected_x: float = renderer.timeline.screen_x(
                 float(event.get("beat", 0.0)),at,camera_x)
             if expected_x > 20.0 and expected_x < renderer.size.x-20.0:
                 expected_heads[str(event.get("id", ""))] = expected_x
-        for event in renderer.ordered_events:
+        for event in renderer.layout.ordered_events:
             if str(event.get("kind","")) != "rest":
                 continue
             var x: float = renderer.timeline.screen_x(float(event["beat"]),at,camera_x)
@@ -208,7 +208,7 @@ func _audit() -> void:
                 continue
             rests.append({
                 "id": event["id"], "x": x,
-                "y": renderer._rest_y(event,renderer._gap()),
+                "y": renderer.layout.rest_y(event,renderer.staff_gap()),
                 "type": event["note_type"], "dots": event["dots"],
                 "hand": event["staff"],
             })

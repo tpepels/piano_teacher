@@ -2,10 +2,10 @@ extends SceneTree
 
 class Score extends Control:
     var drawn_noteheads := {"attack-a":Vector2(100,80), "attack-b":Vector2(170,80)}
-    var ordered_events := [
+    var layout := {"ordered_events":[
         {"id":"attack-a", "source_id":"source-a", "is_attack":true},
-        {"id":"attack-b", "source_id":"source-b", "is_attack":true}]
-    func _gap() -> float:
+        {"id":"attack-b", "source_id":"source-b", "is_attack":true}]}
+    func staff_gap() -> float:
         return 16.0
 
 var failures: Array[String] = []

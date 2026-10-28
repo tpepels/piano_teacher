@@ -57,7 +57,7 @@ func run() -> void:
         "Production binds native feedback to the loaded source revision")
     check(feedback.is_visible_in_tree(), "Native feedback is the visible presentation layer")
     var attacks: Array = []
-    for event in renderer.ordered_events:
+    for event in renderer.layout.ordered_events:
         if bool(event.get("is_attack",false)) and event.get("source_id") != null:
             attacks.append(event)
     check(attacks.size() >= 3, "Imported repeated chords contain real source attacks")

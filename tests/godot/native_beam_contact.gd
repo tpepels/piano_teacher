@@ -1,10 +1,11 @@
 extends SceneTree
 
 class BeamCanvas extends "res://notation/native/view.gd":
-    var beam_plan: Dictionary = {}
+    var beam_data: Dictionary = {}
     func _draw() -> void:
-        if not beam_plan.is_empty():
-            _paint_beams(beam_plan,17.0)
+        layout.set_viewport(size)
+        if not beam_data.is_empty():
+            symbols.paint_beams(self,RenderPass.new(),beam_data,17.0)
 
 func _initialize() -> void:
     call_deferred("run")
@@ -24,11 +25,11 @@ func run() -> void:
     var failures := 0
     var views: Array = []
     var samples: Array = []
-    var offsets: Dictionary = renderer._engraved_head_offsets(17.0)
+    var offsets: Dictionary = renderer.layout.engraved_head_offsets(17.0)
     for density in [96.0,156.0,320.0]:
         renderer.set_density(density)
         for beat in [0.0,4.0]:
-            var layout: Dictionary = renderer._beam_layout(17.0,beat,120.0,offsets)
+            var layout: Dictionary = renderer.beam_plan(17.0,beat,120.0,offsets)
             var key: String = "a|b" if beat == 0.0 else "c|d"
             var view := SubViewport.new()
             view.size = Vector2i(800,560)
@@ -38,7 +39,7 @@ func run() -> void:
             var canvas := BeamCanvas.new()
             canvas.size = Vector2(800,560)
             canvas.glyphs = renderer.glyphs
-            canvas.beam_plan = layout
+            canvas.beam_data = layout
             canvas.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
             view.add_child(canvas)
             views.append(view)

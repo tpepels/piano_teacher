@@ -48,7 +48,7 @@ func run() -> void:
                 var panel: Rect2 = app.score_frame.get_global_rect()
                 check(not app.practice_step_controls.get_global_rect().intersects(panel),
                     "Lesson navigation stays outside native notation")
-                var gap: float = view._gap()
+                var gap: float = view.staff_gap()
                 for index in range(10):
                     var staff: String = "right" if index < 5 else "left"
                     # Source staff placement is fixed at 36%/69% of the stage;
@@ -62,7 +62,7 @@ func run() -> void:
                         if absf(float(local_x)-view.size.x*.42) < 32.0:
                             continue
                         var near_glyph := false
-                        for event in view.ordered_events:
+                        for event in view.layout.ordered_events:
                             var event_x: float = view.timeline.screen_x(float(event.beat),beat,view.size.x*.42)
                             if absf(float(local_x)-event_x) < gap*2.5:
                                 near_glyph = true

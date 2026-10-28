@@ -41,7 +41,7 @@ func run() -> void:
             var name: String = "%d-%.2f-%s.png" % [width,beat,"loop" if looped else "source"]
             vp.get_texture().get_image().save_png(args[1].path_join(name))
             reports.append({"file":name,"width":width,"beat":beat,"loop":looped,
-                "density":v.timeline.pixels_per_beat,"gap":v._gap(),"witness":v.selected_density_witness,
+                "density":v.timeline.pixels_per_beat,"gap":v.staff_gap(),"witness":v.selected_density_witness,
                 "model":v.timeline.model})
         vp.queue_free()
         await process_frame

@@ -29,10 +29,11 @@ func _checks(request: Dictionary) -> Array:
         return ["Native source does not compile"]
     var renderer = script.new()
     renderer.size = Vector2(1000,620)
+    renderer.layout.set_viewport(renderer.size)
     var measure := {"number":1,"clefs":{"right":{"sign":"G","line":2,"octave_change":0},
         "left":{"sign":"F","line":4,"octave_change":0}}}
     renderer.timeline.measures = [measure]
-    renderer.measure_by_number = {1:measure}
+    renderer.layout.measure_by_number = {1:measure}
     var lower := {"id":"display-bass","source_id":"source-right-C2","measure":1,"beat":0.0,
         "kind":"note","staff":"left","hand":"right","voice":"register-bass","is_attack":true,
         "spelling":{"step":"C","alter":0,"octave":2},
@@ -41,27 +42,27 @@ func _checks(request: Dictionary) -> Array:
         "kind":"note","staff":"right","hand":"left","voice":"register-treble","is_attack":true,
         "spelling":{"step":"C","alter":0,"octave":5}}
     var legacy := {"id":"legacy","source_id":"legacy-right","kind":"note","staff":"right","is_attack":true}
-    renderer.expression_note_index = {"display-bass":lower,"display-treble":upper}
+    renderer.layout.expression_note_index = {"display-bass":lower,"display-treble":upper}
     var failures: Array = []
     # Actual menu text is a user-visible consumer, independent of colour.
     for event in [lower,upper,legacy]:
         var menu := PopupMenu.new()
-        renderer.fingering_popup = menu
-        renderer._fill_fingering_menu(menu,event)
+        renderer.annotations.fingering_popup = menu
+        renderer.annotations.fill_menu(menu,event)
         var expected: String = str(event.get("hand",event["staff"])).capitalize()+" hand"
         if not menu.get_item_text(0).begins_with(expected):
             failures.append("Editor reports display staff instead of performing hand: "+str(event["id"]))
         menu.free()
-        renderer.fingering_popup = null
+        renderer.annotations.fingering_popup = null
     # Literal musical positions: C2 is four staff spaces below bass centre;
     # C5 is half a space above treble centre. Hand must not enter geometry.
-    if absf(renderer._event_y(lower,20.0)-(620.0*.69+80.0))>.001:
+    if absf(renderer.layout.event_y(lower,20.0)-(620.0*.69+80.0))>.001:
         failures.append("RH C2 did not use its displayed bass clef/staff")
-    if absf(renderer._event_y(upper,20.0)-(620.0*.36-10.0))>.001:
+    if absf(renderer.layout.event_y(upper,20.0)-(620.0*.36-10.0))>.001:
         failures.append("LH C5 did not use its displayed treble clef/staff")
-    if renderer._fingering_source(lower)!="source-right-C2" or renderer._fingering_assignment(lower)["hand"]!="right":
+    if renderer.FingeringPlacement.source(lower)!="source-right-C2" or renderer.FingeringPlacement.assignment(lower)["hand"]!="right":
         failures.append("Fingering binding lost the original source/performing hand")
-    if not renderer.has_method("_event_ink") or not renderer.has_method("_performing_hand"):
+    if not renderer.RenderPass.new().has_method("event_ink") or not renderer.layout.has_method("performing_hand"):
         failures.append("Native event selection has no separate performing-hand policy")
     else:
         for selected in ["right","left","both"]:
@@ -69,15 +70,15 @@ func _checks(request: Dictionary) -> Array:
             for event in [lower,upper,legacy]:
                 var hand: String = str(event.get("hand",event["staff"]))
                 var wanted: Color = renderer.NOTE_INK if selected in [hand,"both"] else Color(renderer.DIM_INK,.46)
-                if renderer._event_ink(event)!=wanted:
+                if renderer.RenderPass.new({"active_hand":renderer.active_hand}).event_ink(renderer.layout,event)!=wanted:
                     failures.append("Event selection follows staff for "+str(event["id"])+" / "+selected)
         # Expressive models historically called their display lane 'hand'. A
         # note-linked mark must instead inherit its target's performer.
         for mark in [{"kind":"articulation","note_id":"display-bass","hand":"left"},
                 {"before_note_id":"display-bass","hand":"left"}]:
-            if renderer._performing_hand(mark)!="right":
+            if renderer.layout.performing_hand(mark)!="right":
                 failures.append("Attached decoration lost its target's performing hand")
-        if renderer._performing_hand(legacy)!="right":
+        if renderer.layout.performing_hand(legacy)!="right":
             failures.append("Legacy staff-only model changed hand selection")
     var opening: Dictionary = measure.duplicate(true)
     opening.merge({"start_beat":0.0,"end_beat":.5,"meter":[1,8],"keys":{"right":0,"left":0}},true)
@@ -91,17 +92,17 @@ func _checks(request: Dictionary) -> Array:
     var previous: Dictionary = renderer._practice_context_before(8.5,8.5)
     if previous.get("meter")!=[4,4] or previous.get("start_beat")!=4.5 or previous.get("end_beat")!=8.5:
         failures.append("Copy-boundary predecessor lost the actual 4/4 gap context")
-    if not renderer.has_method("_context_meter_x"):
+    if not renderer.context_painter.has_method("context_meter_x"):
         failures.append("Repeated pickup meter has no incoming-rule clearance")
     else:
         renderer.glyphs.bounds["time_1"] = [0.0,0.0,250.0,250.0]
         renderer.glyphs.bounds["time_8"] = [0.0,0.0,250.0,250.0]
-        var meter_x: float = renderer._context_meter_x(opening,200.0,20.0,false,172.0)
+        var meter_x: float = renderer.context_painter.context_meter_x(opening,200.0,20.0,false,172.0)
         if meter_x+10.0>170.0:
             failures.append("Authentic pickup meter ink crosses its incoming barline")
         var json_opening: Dictionary = opening.duplicate(true)
         json_opening["meter"] = JSON.parse_string("[1,8]")
-        if renderer._context_meter_x(json_opening,200.0,20.0,false,172.0)!=meter_x:
+        if renderer.context_painter.context_meter_x(json_opening,200.0,20.0,false,172.0)!=meter_x:
             failures.append("JSON float meter changed its engraved digit bounds")
     renderer.free()
     for path in request.get("fixtures",[]):
@@ -122,22 +123,22 @@ func _fixture_checks(script: GDScript, path: String) -> Array:
     if not loaded or not renderer.load_score(fixture["model"]):
         renderer.free()
         return ["Actual Peace Piece fixture failed native preparation"]
-    var gap: float = renderer._gap()
+    var gap: float = renderer.staff_gap()
     # Compare independently imported complete sprite bounds at simultaneous
     # anchors. A bass-staff shaft may not invade treble ink merely because
     # both individual sprites fit inside the outer viewport.
     var written_ink: Array = []
-    for event in renderer.ordered_events:
-        if event["kind"]!="note" or event["chord"] or renderer.beamed_note_ids.has(event["id"]):
+    for event in renderer.layout.ordered_events:
+        if event["kind"]!="note" or event["chord"] or renderer.layout.beamed_note_ids.has(event["id"]):
             continue
         var box: Array
-        if renderer.chord_members.has(event["id"]):
-            box = assets["native_chord_templates"][renderer._chord_template_key(event)]["bounds"]
+        if renderer.layout.chord_members.has(event["id"]):
+            box = assets["native_chord_templates"][renderer.layout.chord_template_key(event)]["bounds"]
         else:
-            var up: bool = renderer._chord_extents(event,gap)["up"]
+            var up: bool = renderer.layout.chord_extents(event,gap)["up"]
             var key: String = "whole" if event["note_type"]=="whole" else str(event["note_type"])+("_up" if up else "_down")
             box = assets["native_note_templates"][key]["bounds"]
-        var y: float = renderer._event_y(event,gap)
+        var y: float = renderer.layout.event_y(event,gap)
         written_ink.append({"staff":event["staff"],"beat":event["beat"],"id":event["id"],
             "top":y+float(box[1])*gap/250.0,"bottom":y+float(box[1]+box[3])*gap/250.0})
     var simultaneous := 0
@@ -151,54 +152,55 @@ func _fixture_checks(script: GDScript, path: String) -> Array:
                     " clearance="+str(float(lower["top"])-float(upper["bottom"])))
     if simultaneous==0:
         failures.append("Interstaff positive control lacks simultaneous source ink")
-    renderer.cached_head_offsets = renderer._engraved_head_offsets(gap)
-    renderer.cached_accidental_offsets = renderer.Geometry.accidental_offsets(
-        renderer.ordered_events,gap,renderer.cached_head_offsets,renderer.glyphs.bounds)
+    renderer.layout.cached_head_offsets = renderer.layout.engraved_head_offsets(gap)
+    renderer.layout.cached_accidental_offsets = renderer.Geometry.accidental_offsets(
+        renderer.layout.ordered_events,gap,renderer.layout.cached_head_offsets,renderer.glyphs.bounds)
     renderer.active_hand = "right"
     var bass := 0
     var unisons := 0
     var targets: Array = []
-    for event in renderer.ordered_events:
+    for event in renderer.layout.ordered_events:
         if event["kind"]!="note":
             continue
         var original_hand: String = event["hand"]
-        if renderer._event_ink(event)!=(renderer.NOTE_INK if original_hand=="right" else Color(renderer.DIM_INK,.46)):
+        if renderer.RenderPass.new({"active_hand":renderer.active_hand}).event_ink(renderer.layout,event)!=(renderer.NOTE_INK if original_hand=="right" else Color(renderer.DIM_INK,.46)):
             failures.append("Real source selection follows its display staff")
         if event["staff"]=="left" and original_hand=="right":
             bass += 1
-            var up: bool = renderer._chord_extents(event,gap,renderer.cached_head_offsets)["up"]
-            var stem: Array = renderer._source_stem_bounds(event,up)
+            var up: bool = renderer.layout.chord_extents(event,gap,renderer.layout.cached_head_offsets)["up"]
+            var stem: Array = renderer.layout.source_stem_bounds(event,up)
             if event["note_type"]=="half" and stem!=renderer.glyphs.note_stem_bounds["half_up" if up else "half_down"]:
                 failures.append("Remote half-note stem is not its authentic isolated template")
-            for other in renderer.ordered_events:
+            for other in renderer.layout.ordered_events:
                 if other["kind"]=="note" and other["staff"]=="left" and other["hand"]=="left" and \
                         other["beat"]==event["beat"] and other["midi_pitch"]==event["midi_pitch"] and \
                         other["note_type"]=="quarter" and event["note_type"]=="half":
                     unisons += 1
-                    var distance: float = absf(float(renderer.cached_head_offsets.get(event["id"],0.0))-
-                        float(renderer.cached_head_offsets.get(other["id"],0.0)))
+                    var distance: float = absf(float(renderer.layout.cached_head_offsets.get(event["id"],0.0))-
+                        float(renderer.layout.cached_head_offsets.get(other["id"],0.0)))
                     if distance<gap*.7:
                         failures.append("Hollow RH and filled LH unison heads share one column")
         if event["hand"]=="right" and event.get("fingering") is Dictionary and event["is_attack"]:
             if not targets.any(func(e: Dictionary) -> bool: return e["staff"]==event["staff"]):
                 targets.append(event)
-    renderer._layout_fingerings(gap)
+    renderer.layout.set_viewport(renderer.size)
+    renderer.annotations.layout_fingerings(gap,renderer.play_from_beat)
     for target in targets:
-        var matches: Array = renderer.fingering_layout.filter(func(item: Dictionary) -> bool:
+        var matches: Array = renderer.annotations.fingering_layout.filter(func(item: Dictionary) -> bool:
             return target["id"] in item["event_ids"])
-        if matches.size()!=1 or matches[0]["hand"]!="right" or absf(matches[0]["head"].y-renderer._event_y(target,gap))>.001:
+        if matches.size()!=1 or matches[0]["hand"]!="right" or absf(matches[0]["head"].y-renderer.layout.event_y(target,gap))>.001:
             failures.append("RH fingering lost its source or displayed notehead")
         var requests: Array = []
         var menu := PopupMenu.new()
-        renderer.fingering_popup = menu
-        renderer._fill_fingering_menu(menu,target)
+        renderer.annotations.fingering_popup = menu
+        renderer.annotations.fill_menu(menu,target)
         renderer.fingering_change_requested.connect(func(source_id: String, finger: Variant):
             requests.append({"source_id":source_id,"finger":finger}),CONNECT_ONE_SHOT)
         menu.id_pressed.emit(5)
         if requests!=[{"source_id":target["source_id"],"finger":5}]:
             failures.append("Real display-staff fingering edit targeted a different source")
         menu.free()
-        renderer.fingering_popup = null
+        renderer.annotations.fingering_popup = null
     if bass==0 or targets.size()!=2:
         failures.append("Real source positive control lacks RH notes/fingerings on both staves")
     if fixture["first_bar"]==3 and unisons==0:
@@ -208,10 +210,10 @@ func _fixture_checks(script: GDScript, path: String) -> Array:
     # unison and one step below, plus a high up-stem note. No source file or
     # grading model is changed; these are native vertical-fit contracts.
     var prototype: Dictionary = targets[0].duplicate(true)
-    renderer.chord_members.clear()
-    renderer.beam_groups.clear()
-    renderer.beamed_note_ids.clear()
-    renderer.notation_tuplets.clear()
+    renderer.layout.chord_members.clear()
+    renderer.layout.beam_groups.clear()
+    renderer.layout.beamed_note_ids.clear()
+    renderer.layout.notation_tuplets.clear()
     renderer.size = Vector2(1536,520)
     for probe in [{"staff":"left","spelling":{"step":"C","alter":0,"octave":2},"factor":4.0,"up":false},
             {"staff":"left","spelling":{"step":"B","alter":0,"octave":1},"factor":4.5,"up":false},
@@ -219,11 +221,11 @@ func _fixture_checks(script: GDScript, path: String) -> Array:
         var event: Dictionary = prototype.duplicate(true)
         event.merge({"id":"vertical-fit-probe","kind":"note","note_type":"half","chord":false,
             "staff":probe["staff"],"spelling":probe["spelling"],"accidental":null,"dots":0},true)
-        renderer.ordered_events = [event]
-        renderer.voice_stem_up_by_note = {"vertical-fit-probe":probe["up"]}
-        renderer.cached_staff_gap = -1.0
-        renderer.cached_gap_height = -1.0
-        var fitted: float = renderer._gap()
+        renderer.layout.ordered_events = [event]
+        renderer.layout.voice_stem_up_by_note = {"vertical-fit-probe":probe["up"]}
+        renderer.layout.cached_staff_gap = -1.0
+        renderer.layout.cached_gap_height = -1.0
+        var fitted: float = renderer.staff_gap()
         var box: Array = assets["native_note_templates"]["half_up" if probe["up"] else "half_down"]["bounds"]
         var center: float = 520.0*(.69 if probe["staff"]=="left" else .36)
         var top: float = center+(float(probe["factor"])+float(box[1])/250.0)*fitted

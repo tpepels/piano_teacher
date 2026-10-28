@@ -145,27 +145,28 @@ class TieView extends "res://notation/native/view.gd":
         child.merge({"id":"child","chord":true,"stem":"","spelling":{"step":"B","octave":4}},true)
         var last: Dictionary = child.duplicate(true)
         last.merge({"id":"stop","chord":false,"note_type":"half","beat":2.0},true)
-        ordered_events = [leader,child,last]
-        chord_members = {"leader":[leader,child]}
-        beamed_note_ids = {}
-        beam_stem_up_by_note = {}
-        var checks := {"chord_child":_tie_template_key(child,last,{"down":false},21.875)}
-        beamed_note_ids = {"leader":true}
-        checks["beamed_chord_child"] = _tie_template_key(child,last,{"down":false},21.875)
-        beamed_note_ids = {}
-        beam_stem_up_by_note = {"leader":true}
-        checks["beam_stem_owned_child"] = _tie_template_key(child,last,{"down":false},21.875)
+        layout.ordered_events = [leader,child,last]
+        layout.chord_members = {"leader":[leader,child]}
+        layout.beamed_note_ids = {}
+        layout.beam_stem_up_by_note = {}
+        var checks := {"chord_child":connector_geometry.tie_template_key(child,last,{"down":false},21.875)}
+        layout.beamed_note_ids = {"leader":true}
+        checks["beamed_chord_child"] = connector_geometry.tie_template_key(child,last,{"down":false},21.875)
+        layout.beamed_note_ids = {}
+        layout.beam_stem_up_by_note = {"leader":true}
+        checks["beam_stem_owned_child"] = connector_geometry.tie_template_key(child,last,{"down":false},21.875)
         # At the middle tone the actual leader's beam direction determines
         # the bow, even when the child has no individual map entry.
         leader["stem"] = ""
         leader["spelling"] = {"step":"G","octave":4}
         var top: Dictionary = child.duplicate(true)
         top.merge({"id":"top","spelling":{"step":"D","octave":5}},true)
-        chord_members = {"leader":[leader,child,top]}
-        ordered_events = [leader,child,top,last]
-        checks["middle_tone_bow_down"] = _tie_bow_down(child,last,21.875)
+        layout.chord_members = {"leader":[leader,child,top]}
+        layout.ordered_events = [leader,child,top,last]
+        checks["middle_tone_bow_down"] = connector_geometry.tie_bow_down(child,last,21.875)
         return checks
     func _draw() -> void:
+        layout.set_viewport(size)
         annotations.obstacles.old_reservation = bool(spec.get("old_reservation",false))
         var gap: float = float(spec["gap"])
         draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
@@ -183,46 +184,47 @@ class TieView extends "res://notation/native/view.gd":
         var measure := {"number":1,"start_beat":0.0,"end_beat":20.0,
             "clefs":{"right":{"sign":"G","line":2,"octave_change":0}}}
         timeline.measures = [measure]
-        measure_by_number = {1:measure}
-        ordered_events = [first,last]
+        layout.measure_by_number = {1:measure}
+        layout.ordered_events = [first,last]
         var up: bool = spec["stem"]=="up"
-        beamed_note_ids = {"first":true} if spec.get("beamed",false) else {}
-        beam_stem_up_by_note = {"first":up} if spec.get("beamed",false) else {}
+        layout.beamed_note_ids = {"first":true} if spec.get("beamed",false) else {}
+        layout.beam_stem_up_by_note = {"first":up} if spec.get("beamed",false) else {}
         if spec.get("beamed",false):
             glyphs.paint(self,"head_black",100.0,110.0,gap,NOTE_INK,true)
             glyphs.paint_note_stem(self,spec["first"],up,100.0,110.0,110.0-3.5*gap,gap,NOTE_INK)
         else:
             glyphs.paint_note(self,spec["first"],up,100.0,110.0,gap,NOTE_INK)
         glyphs.paint_note(self,spec["last"],up,280.0,110.0,gap,NOTE_INK)
-        var place: Dictionary = _tie_placement(first,last,100.0,280.0,gap)
-        selected = _tie_template_key(first,last,place,gap)
-        _paint_tie_contour(first,last,place,gap)
+        var place: Dictionary = connector_geometry.tie_placement(first,last,100.0,280.0,gap)
+        selected = connector_geometry.tie_template_key(first,last,place,gap)
+        symbols.paint_tie_contour(self,RenderPass.new(),first,last,place,gap)
         labels.clear()
         reservations.clear()
         if spec.get("fingering",false):
             first["is_attack"] = true
             first["fingering"] = {"source_id":"authored-first","hand":"right","finger":3,"origin":"authored",
                 "placement":{"default_x":float(spec.get("hint_x",20.0)),"default_y":-18.0}}
-            tie_pairs = [{"first":first,"last":last}]
-            expression_note_index = {"first":first,"last":last}
-            _layout_fingerings(gap)
+            layout.tie_pairs = [{"first":first,"last":last}]
+            layout.expression_note_index = {"first":first,"last":last}
+            layout.set_viewport(size)
+            annotations.layout_fingerings(gap,play_from_beat)
             var bins: Dictionary = {}
-            _fingering_obstacles(gap,bins,64.0)
+            annotations.obstacles.build(gap,bins,64.0,play_from_beat)
             for entries in bins.values():
                 for rect in entries:
                     reservations.append([rect.position.x,rect.position.y,rect.size.x,rect.size.y])
-            fingering_annotations_enabled = true
-            drawn_fingerings.clear()
+            annotations.fingering_annotations_enabled = true
+            annotations.drawn_fingerings.clear()
             if numbered:
-                _paint_fingerings(0.0,0.0,gap)
-            for item in drawn_fingerings:
+                annotations.paint(self,0.0,0.0,gap,0,0.0,{"active_hand":active_hand,"play_from_beat":play_from_beat,"score_loop_enabled":score_loop_enabled,"preparation_history":preparation_history})
+            for item in annotations.drawn_fingerings:
                 var rect: Rect2 = item["rect"]
                 var head: Vector2 = item["head"]
                 labels.append({"rect":[rect.position.x,rect.position.y,rect.size.x,rect.size.y],
                     "head":[head.x,head.y],"finger":item["finger"],"font_size":item["font_size"],
                     "orientation":item["orientation"],"event_ids":item["event_ids"]})
             var font_size: int = clampi(roundi(gap*.75),11,16)
-            var metrics: Dictionary = _fingering_metrics(font_size)
+            var metrics: Dictionary = annotations.metrics(font_size)
             reference = Rect2(Vector2(360,340),metrics["cell"])
             draw_string(ThemeDB.fallback_font,reference.position+Vector2(1,ThemeDB.fallback_font.get_ascent(font_size)),
                 "3",HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,NOTE_INK)
@@ -255,7 +257,7 @@ func run() -> void:
         if spec.get("fingering",false):
             row["labels"] = view.labels.duplicate(true)
             row["reservations"] = view.reservations.duplicate(true)
-            row["issues"] = view.fingering_placement_issues.duplicate(true)
+            row["issues"] = view.annotations.fingering_placement_issues.duplicate(true)
             row["reference"] = [view.reference.position.x,view.reference.position.y,view.reference.size.x,view.reference.size.y]
             view.numbered = false
             view.queue_redraw()

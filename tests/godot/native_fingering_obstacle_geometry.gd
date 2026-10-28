@@ -12,22 +12,22 @@ func _renderer(viewport: SubViewport, assets: Dictionary, script_path: String, d
 
 func _local_witnesses(renderer: Control) -> Array:
     var found: Array = []
-    var gap: float = renderer._gap()
+    var gap: float = renderer.staff_gap()
     var font_size: int = clampi(roundi(gap*.75),11,16)
-    var metrics: Dictionary = renderer._fingering_metrics(font_size)
+    var metrics: Dictionary = renderer.annotations.metrics(font_size)
     var ink: Vector2 = metrics["ink_size"]
     var cell: float = maxf(64.0,renderer.timeline.pixels_per_beat)
     var bins: Dictionary = {}
     var picture: Image = renderer.get_viewport().get_texture().get_image()
     var background: Color = picture.get_pixel(0,0)
     var translation := Vector2(renderer.timeline.screen_x(0.0,.125,renderer.size.x*.42,renderer.play_from_beat),0.0)
-    renderer._fingering_obstacles(gap,bins,cell)
-    for placed in renderer.fingering_layout:
-        renderer._fingering_block(placed["ink_rect"],bins,cell)
-    for issue in renderer.fingering_placement_issues:
-        var event: Dictionary = renderer.expression_note_index[issue["event_ids"][0]]
+    renderer.annotations.obstacles.build(gap,bins,cell,renderer.play_from_beat)
+    for placed in renderer.annotations.fingering_layout:
+        renderer.annotations.obstacles.block(placed["ink_rect"],bins,cell)
+    for issue in renderer.annotations.fingering_placement_issues:
+        var event: Dictionary = renderer.layout.expression_note_index[issue["event_ids"][0]]
         var head := Vector2(float(event["beat"])*renderer.timeline.pixels_per_beat+
-            float(renderer.cached_head_offsets.get(str(event["id"]),0.0)),renderer._event_y(event,gap))
+            float(renderer.layout.cached_head_offsets.get(str(event["id"]),0.0)),renderer.layout.event_y(event,gap))
         var witness: Dictionary = {}
         for dy in range(-24,25):
             for dx in range(-20,21):
@@ -38,7 +38,7 @@ func _local_witnesses(renderer: Control) -> Array:
                 var text_rect := Rect2(rect.position-metrics["ink_offset"],metrics["cell"])
                 if text_rect.position.y<0.0 or text_rect.end.y>renderer.size.y:
                     continue
-                if renderer._fingering_clear(rect,bins,cell) and _pixel_box_clear(rect,translation,picture,background):
+                if renderer.annotations.obstacles.is_clear(rect,bins,cell) and _pixel_box_clear(rect,translation,picture,background):
                     witness = {"source_id":issue["source_id"],"head":[head.x,head.y],
                         "ink_rect":[rect.position.x,rect.position.y,rect.size.x,rect.size.y],
                         "offset":[offset.x/gap,offset.y/gap]}

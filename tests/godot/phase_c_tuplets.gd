@@ -98,12 +98,12 @@ func run() -> void:
         "Unit test has Verovio-shaped placeholder textures")
     check(player.load_score(model),"Native renderer accepts 5:4, 3:2, double dots")
     var beams: Array = []
-    for group in player.beam_groups:
+    for group in player.layout.beam_groups:
         beams.append(group.map(func(e):return e["id"]))
     check(beams == [["five0","five1","five2","five3","five4"],
         ["three0","three1","three2"]],
         "Tuplet beams retain source membership across quarter-beat boundaries")
-    check(player.native_ready and player.notation_tuplets.size() == 2,
+    check(player.native_ready and player.layout.notation_tuplets.size() == 2,
         "Tuplets retain the original semantic source grouping")
     check(player.glyphs.has_tuplet("three0|three1|three2",true),
         "Actual original Verovio tuplet number and bracket sprites are loaded")
@@ -145,7 +145,7 @@ func run() -> void:
     check(player.load_score(model),
         "Source-engraved tuplets recover once real ink is available")
     player.clear_score()
-    check(player.notation_tuplets.is_empty(),
+    check(player.layout.notation_tuplets.is_empty(),
         "Changing lessons drops earlier tuplet brackets")
     print("PHASE_C3_TUPLET_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

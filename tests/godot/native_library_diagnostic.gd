@@ -50,7 +50,7 @@ func run() -> void:
         for note in view.timeline.notes:
             source_ids.append(str(note.id))
         var attack_sources: Dictionary = {}
-        for event in view.ordered_events:
+        for event in view.layout.ordered_events:
             if str(event.get("kind", "")) == "note" and bool(event.get("is_attack", false)):
                 attack_sources[str(event.source_id)] = str(event.id)
         check(attack_sources.size() == source_ids.size(),

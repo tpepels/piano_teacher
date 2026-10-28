@@ -85,7 +85,7 @@ func run() -> void:
     state.merge({"running":true, "paused":true, "phase":"paused"}, true)
     await unchanged_polls(app, state, "Paused")
     var attack: Dictionary = {}
-    for event in app.timeline_preview.ordered_events:
+    for event in app.timeline_preview.layout.ordered_events:
         if bool(event.get("is_attack", false)):
             attack = event
             break

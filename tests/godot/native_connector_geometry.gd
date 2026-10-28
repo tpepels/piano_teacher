@@ -44,7 +44,7 @@ func _initialize() -> void:
     replacement.measure_by_number = {1:measure}
     replacement.ordered_events = [first,last]
     view.layout = replacement
-    var replaced: Dictionary = view._tie_placement(first,last,100,200,20)
+    var replaced: Dictionary = view.connector_geometry.tie_placement(first,last,100,200,20)
     if replaced["y"]!=220.0 or replacement.size!=view.size:
         failures += 1
     view.free()

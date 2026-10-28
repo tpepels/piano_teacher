@@ -57,11 +57,11 @@ func run() -> void:
         prepared.save_png(folder.path_join("prepared-%.0f.png" % onset))
         var pixel_scale := Vector2(original.get_size()) / root.get_visible_rect().size
         var transform: Transform2D = view.get_global_transform_with_canvas()
-        var gap: float = view._gap()
+        var gap: float = view.staff_gap()
         var expected := 0
         var retained := 0
         var tested := 0
-        for event in view.ordered_events:
+        for event in view.layout.ordered_events:
             if str(event.get("kind","")) != "note" or absf(float(event.beat)-onset) > .00001:
                 continue
             var id: String = str(event.id)
@@ -81,7 +81,7 @@ func run() -> void:
                 var local_y: float = (float(y)/pixel_scale.y-view.global_position.y)
                 var on_rail := false
                 for line in range(5):
-                    if absf(local_y-(view._staff_center(staff)+(line-2)*gap)) < 2.0:
+                    if absf(local_y-(view.layout.staff_center(staff)+(line-2)*gap)) < 2.0:
                         on_rail = true
                 if on_rail:
                     continue
