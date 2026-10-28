@@ -15,7 +15,8 @@ def app(tmp_path):
              Note(0, 2, 48, 1, 0, "left"))
     phrase = Phrase(1, 1, 2, 0, 8, notes)
     engine = PracticeEngine(tmp_path, enable_midi=False)
-    engine.plan = LearningPlan(Piece("Dispatch", 100, notes, (phrase,)))
+    engine.plan = LearningPlan(Piece("Dispatch", 100, notes, (phrase,),
+                                     bar_boundaries=(0, 4, 8)))
     try:
         yield engine
     finally:
@@ -33,7 +34,7 @@ def test_pause_resume_and_restart_are_dispatched_without_changing_score(app):
         app.control("pause")
     app.control("resume")
     assert app.state()["phase"] == "count_in"
-    with pytest.raises(ValueError, match="not paused"):
+    with pytest.raises(ValueError, match="unless an exercise is paused"):
         app.control("resume")
     app.control("stop")
     assert app.state()["phase"] == "ready" and not app.running
