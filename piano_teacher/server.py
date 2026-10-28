@@ -40,6 +40,7 @@ from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_n
 from .course_navigation import locate_course_section
 from .state_projection import hand_stage_rows, guided_learning_fields
 from .assessment_service import AssessmentService
+from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
 from .live_input_view import LiveInputView
 from .hardware_probe import HardwareProbe
@@ -1519,6 +1520,117 @@ class PracticeEngine:
         self.next_action = recovery.next_action
         return
 
+    def _complete_attempt(self, phrase: Phrase, ending: float,
+                          total_beats: float, duration: float, now: float) -> None:
+        """Apply post-performance state after the score's settlement interval.
+
+        This method is called from the locked _update loop. Assessment and
+        grading are calculated only after a completed non-preview take.
+        """
+        if self.preview_only:
+            # A preview loops visually just like graded practice, but never
+            # invents notes, clean runs, mastery or a MIDI recording.
+            self.running = False
+            self._preview_loop_pending = True
+            gap_seconds = self.visual_gap_beats * 60 / self.plan.bpm
+            self.next_at = self.run_at + duration + gap_seconds
+            self.feedback = "Timing preview - repeating after one empty measure"
+            self.next_action = "Connect your MIDI piano to earn clean runs."
+            if now >= self.next_at:
+                self._update()
+            return
+        result = self.assessment.assess_take(
+            phrase, hand=self.plan.hand, bpm=self.plan.bpm,
+            played=self.recorder.presses if self.recorder else [],
+            from_beat=self.play_from_beat, end_beat=ending,
+            evaluator=evaluate)
+        # Keep the just-played score visible for feedback. Curriculum changes
+        # are applied only after the display interval, never mid-feedback.
+        try:
+            projection = project_assessment(result, phrase, self.plan.bpm,
+                                            self.engraving().layout, played_from_beat=self.play_from_beat)
+            self.feedback_marks = projection["marks"]
+            self.feedback_unmapped = projection["unmapped"]
+        except (ValueError, RuntimeError, KeyError) as exc:
+            self.feedback_marks = []
+            self.feedback_unmapped = len(result.notes)
+            self.feedback = f"Engraving feedback unavailable: {exc}"
+        else:
+            self.feedback = result.summary
+        self.running=False
+        self.recorder=None
+        self.performance_summary = self._performance_review(phrase, result)
+        self.review_stage_identity = self.plan.identity
+        route = completion_route(self.mode, self.review_end_beat, self.play_from_beat)
+        if route == "perform":
+            if self.fingerprint:
+                if result.clean:
+                    self.learner_store.resolve_trouble(self.fingerprint, self.plan.identity)
+                else:
+                    for unit in self.performance_summary["weakest_bars"]:
+                        self._record_saved_trouble(phrase, result, start=unit["start_beat"],
+                                                  end=unit["end_beat"], errors=unit["errors"])
+            self.next_action = ("Review your performance, then press Start to repeat this warm-up."
+                if self.is_builtin_warmup else
+                "Review your performance, then Practice the weakest section."
+                if self.performance_summary["weakest_bars"] else
+                "Clean performance. Choose Practice to build your clean-run streak.")
+            self.auto = False
+            return
+        if route == "section_review":
+            # Section reviews are deliberate, bounded practice. Stop at the
+            # selected boundary, preserve detailed feedback, and never
+            # auto-advance to a different passage.
+            self.auto = False
+            self.review_end_beat = None
+            self.review_session_complete = True
+            self.pending_rewind = None
+            self.retry_range = None
+            self.open_from_beat = 0.0
+            self.feedback = "Section review finished · " + result.summary
+            self.next_action = "Review the notes or press Start for the whole passage."
+            return
+        if route == "partial_recovery":
+            # A clean *partial* recovery cannot confer full passage mastery.
+            self._schedule_preparation(0.0, now=now,
+                from_visual=self.visual_offset_beats + self.play_from_beat
+                    + (now-self.run_at)*self.plan.bpm/60,
+                reverse_seconds=self.feedback_seconds)
+            self.feedback = "Selected section finished · " + result.summary
+            self.next_action = "Next: play the whole passage from its beginning to earn mastery."
+            self.retry_range = None
+            return
+        self.pending_result=result
+        if not result.clean and self.auto:
+            # Repeated wrong takes traverse backward over the visible source
+            # instead of teleporting to beat zero or appending failed copies.
+            self._retry_previous_pass = True
+            self._schedule_preparation(self.play_from_beat, now=now,
+                from_visual=self.visual_offset_beats + self.play_from_beat
+                    + (now-self.run_at)*self.plan.bpm/60,
+                reverse_seconds=max(self.feedback_seconds,
+                    min(4.0, total_beats * 60.0 / self.plan.bpm / 3.0)))
+        if not result.clean:
+            # Failure breaks consecutive clean takes immediately, even if
+            # Start/Restart/Stop discards this feedback before its commit.
+            # Success and mastery still wait until the feedback interval ends.
+            self.plan.streak = 0
+            self._save()
+            if self.is_builtin_warmup:
+                self.auto = False  # Keep the beginner-study review available.
+                self._preparation_pending = False
+                self.practice_preparation = None
+                self.pending_rewind = None
+                self._visual_rewind_from = None
+                self._visual_rewind_to = None
+        self.next_action=next_full_attempt(self.plan, result)
+        if not self.auto:
+            self.next_at = 0
+        elif not self._retry_previous_pass:
+            self.next_at = self.run_at + duration + self.visual_gap_beats*60/self.plan.bpm
+            if now >= self.next_at:
+                self._update()
+
     def _update(self):
         self._poll_midi_connection()
         if not self.plan:
@@ -1598,108 +1710,7 @@ class PracticeEngine:
             settlement = min(settlement, self.visual_gap_beats*60/self.plan.bpm)
         if now < self.run_at+duration+settlement:
             return
-        if self.preview_only:
-            # A preview loops visually just like graded practice, but never
-            # invents notes, clean runs, mastery or a MIDI recording.
-            self.running = False
-            self._preview_loop_pending = True
-            gap_seconds = self.visual_gap_beats * 60 / self.plan.bpm
-            self.next_at = self.run_at + duration + gap_seconds
-            self.feedback = "Timing preview - repeating after one empty measure"
-            self.next_action = "Connect your MIDI piano to earn clean runs."
-            if now >= self.next_at:
-                self._update()
-            return
-        result = self.assessment.assess_take(
-            phrase, hand=self.plan.hand, bpm=self.plan.bpm,
-            played=self.recorder.presses if self.recorder else [],
-            from_beat=self.play_from_beat, end_beat=ending,
-            evaluator=evaluate)
-        # Keep the just-played score visible for feedback. Curriculum changes
-        # are applied only after the display interval, never mid-feedback.
-        try:
-            projection = project_assessment(result, phrase, self.plan.bpm,
-                                            self.engraving().layout, played_from_beat=self.play_from_beat)
-            self.feedback_marks = projection["marks"]
-            self.feedback_unmapped = projection["unmapped"]
-        except (ValueError, RuntimeError, KeyError) as exc:
-            self.feedback_marks = []
-            self.feedback_unmapped = len(result.notes)
-            self.feedback = f"Engraving feedback unavailable: {exc}"
-        else:
-            self.feedback = result.summary
-        self.running=False
-        self.recorder=None
-        self.performance_summary = self._performance_review(phrase, result)
-        self.review_stage_identity = self.plan.identity
-        if self.mode == "perform":
-            if self.fingerprint:
-                if result.clean:
-                    self.learner_store.resolve_trouble(self.fingerprint, self.plan.identity)
-                else:
-                    for unit in self.performance_summary["weakest_bars"]:
-                        self._record_saved_trouble(phrase, result, start=unit["start_beat"],
-                                                  end=unit["end_beat"], errors=unit["errors"])
-            self.next_action = ("Review your performance, then press Start to repeat this warm-up."
-                if self.is_builtin_warmup else
-                "Review your performance, then Practice the weakest section."
-                if self.performance_summary["weakest_bars"] else
-                "Clean performance. Choose Practice to build your clean-run streak.")
-            self.auto = False
-            return
-        if self.review_end_beat is not None:
-            # Section reviews are deliberate, bounded practice. Stop at the
-            # selected boundary, preserve detailed feedback, and never
-            # auto-advance to a different passage.
-            self.auto = False
-            self.review_end_beat = None
-            self.review_session_complete = True
-            self.pending_rewind = None
-            self.retry_range = None
-            self.open_from_beat = 0.0
-            self.feedback = "Section review finished · " + result.summary
-            self.next_action = "Review the notes or press Start for the whole passage."
-            return
-        if self.play_from_beat>1e-6:
-            # A clean *partial* recovery cannot confer full passage mastery.
-            self._schedule_preparation(0.0, now=now,
-                from_visual=self.visual_offset_beats + self.play_from_beat
-                    + (now-self.run_at)*self.plan.bpm/60,
-                reverse_seconds=self.feedback_seconds)
-            self.feedback = "Selected section finished · " + result.summary
-            self.next_action = "Next: play the whole passage from its beginning to earn mastery."
-            self.retry_range = None
-            return
-        self.pending_result=result
-        if not result.clean and self.auto:
-            # Repeated wrong takes traverse backward over the visible source
-            # instead of teleporting to beat zero or appending failed copies.
-            self._retry_previous_pass = True
-            self._schedule_preparation(self.play_from_beat, now=now,
-                from_visual=self.visual_offset_beats + self.play_from_beat
-                    + (now-self.run_at)*self.plan.bpm/60,
-                reverse_seconds=max(self.feedback_seconds,
-                    min(4.0, total_beats * 60.0 / self.plan.bpm / 3.0)))
-        if not result.clean:
-            # Failure breaks consecutive clean takes immediately, even if
-            # Start/Restart/Stop discards this feedback before its commit.
-            # Success and mastery still wait until the feedback interval ends.
-            self.plan.streak = 0
-            self._save()
-            if self.is_builtin_warmup:
-                self.auto = False  # Keep the beginner-study review available.
-                self._preparation_pending = False
-                self.practice_preparation = None
-                self.pending_rewind = None
-                self._visual_rewind_from = None
-                self._visual_rewind_to = None
-        self.next_action=next_full_attempt(self.plan, result)
-        if not self.auto:
-            self.next_at = 0
-        elif not self._retry_previous_pass:
-            self.next_at = self.run_at + duration + self.visual_gap_beats*60/self.plan.bpm
-            if now >= self.next_at:
-                self._update()
+        self._complete_attempt(phrase, ending, total_beats, duration, now)
 
     def _phase(self, now: float) -> str:
         if self.paused:

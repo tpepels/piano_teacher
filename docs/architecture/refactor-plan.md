@@ -70,8 +70,12 @@ may use pure geometry/layout helpers but never import verifier internals.
   `VisualTransport`. Engine command/clock callers retain compatibility aliases
   with no duplicated storage; the transport component owns reset, take
   continuation, rewind clocks and absolute visual beat projection.
-- [ ] Continue separating the remainder of post-performance transitions
-  from application orchestration with explicit result-state contracts.
+- [x] Isolate the post-settlement completion path from the polling/rolling
+  recovery loop. CompletionRoute gives precedence to performance, explicit
+  bounded section review, partial recovery and full-passage practice; no
+  state updates before settlement and no curriculum advancement for partials.
+- [ ] Separate remaining completion side effects behind explicit result
+  transition methods while retaining the same lock and transport clocks.
 - [x] Split the giant _build_interface method into separate Home, Library and
   Practice builders, preserving construction order and event wiring.
 - [ ] Move Home/Library/Settings/Practice screen construction into
