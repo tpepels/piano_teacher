@@ -22,8 +22,6 @@ func _check_picker(picker: Control) -> void:
         "selected_start_bar":5})
     var failures := 0
     var number: SpinBox = picker.get("measure")
-    var number: SpinBox = picker.get("measure")
-    var failures := 0
     if not picker.visible:
         failures += 1
     if picker.call("selected_bar") != 5:
