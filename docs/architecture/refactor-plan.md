@@ -274,3 +274,9 @@ first-party architectural monoliths.
   bounded and not an established CPU defect. Three expanded-suite baseline
   expectations predate exact overshoot/restart preparation and will be updated
   with exact deadline and lifecycle assertions in a separate test correction.
+
+- Library UI slice: standalone screen owns widgets, search/debounce, catalog,
+  recent-row deduplication, error/health presentation and responsive layout;
+  signals carry open/resume/refresh/check intent. Main owns only request/route
+  consequences. Shared construction primitives are stateless. Fresh owner
+  focus 19 passed and independent review 14 passed with no findings.

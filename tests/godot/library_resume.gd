@@ -33,7 +33,7 @@ func check(ok: bool, message: String) -> void:
 
 func entries(app: FixtureApp) -> Array[Button]:
     var result: Array[Button] = []
-    for child in app.library_rows.find_children("*", "Button", true, false):
+    for child in app.library_view.find_children("*", "Button", true, false):
         if child.has_meta("library_title"):
             result.append(child)
     return result
@@ -75,9 +75,9 @@ func run() -> void:
         if detail != null and detail.text.begins_with("Continue"):
             recent = rows[0]
     check(recent != null, "Music must expose the actual last-opened piece as its first Continue action")
-    check(not app.library_search.placeholder_text.contains("composer"),
+    check(not app.library_view.library_search.placeholder_text.contains("composer"),
         "Search must describe supported catalog metadata")
-    check(app.library_scroll.size.y >= 130.0,
+    check(app.library_view.library_scroll.size.y >= 130.0,
         "Recent music must preserve a usable compact library viewport")
     if recent != null:
         check(recent.tooltip_text.contains(TITLE) and recent.tooltip_text.contains("Collection"),
@@ -119,8 +119,8 @@ func run() -> void:
             JSON.stringify({"error": "Pause rejected"}).to_utf8_buffer())
         check(app.pending_library_piece.is_empty() and not app.pending_library_resume,
             "Failed actions must discard queued library selection and resume intent")
-        check(app.library_message.text.contains("Pause rejected")
-            and not app.library_message.text.contains("Preparing"),
+        check(app.library_view.library_message.text.contains("Pause rejected")
+            and not app.library_view.library_message.text.contains("Preparing"),
             "A rejected Pause must explain why queued Continue did not open")
         app._open_library_piece("other.mid")
         var other := saved_state()
@@ -130,19 +130,20 @@ func run() -> void:
         await process_frame
         check(app.posts == [{"path": "/library/open", "payload": {"id": "other.mid"}}],
             "Opening B after a failed Pause cannot replay stale Continue A")
-        check(app.open_picker.visible and app.open_title.text == "Another piece",
+        check(app.open_picker.visible and app.open_picker.title_label.text == "Another piece",
             "The later ordinary selection retains its own starting-point chooser")
         app.open_picker.hide()
 
     # Ordinary title/folder searches remain complete and must not surface an
     # unrelated pinned recent entry, nor show the same music twice.
     for query in ["REAL LONG", "collection"]:
-        app.library_search.text = query
-        app._populate_library()
+        app.library_view.library_search.text = query
+        app.library_view.library_search.text_changed.emit(query)
+        await create_timer(.17).timeout
         rows = entries(app)
         check(rows.size() == 1 and str(rows[0].get_meta("library_title", "")) == TITLE,
             "Search still matches actual title/folder metadata: " + query)
-    app.library_search.text = ""
+    app.library_view.library_search.text = ""
     listing["last_piece"] = "deleted.mid"
     app._on_library(0, 200, PackedStringArray(), JSON.stringify(listing).to_utf8_buffer())
     app.posts.clear()

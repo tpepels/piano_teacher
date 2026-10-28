@@ -20,7 +20,8 @@ const GameCountIn := preload("res://game_countin.gd")
 const GamePhaseCue := preload("res://game_phase_cue.gd")
 const GameTransportButton := preload("res://game_transport_button.gd")
 const ActionButton := preload("res://action_button.gd")
-const LibraryRow := preload("res://library_row.gd")
+const UI := preload("res://ui_factory.gd")
+const LibraryScreen := preload("res://library_screen.gd")
 const GameInputIndicator := preload("res://game_input_indicator.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
 const NativeNotation := preload("res://notation/native/view.gd")
@@ -35,8 +36,6 @@ var overlay_root: Control
 var overlay_drawer: PanelContainer
 var navigation_rail: VBoxContainer
 var screen_navigation: Dictionary = {}
-var library_heading: BoxContainer
-var library_grids: Array[GridContainer] = []
 var settings_grid: GridContainer
 var settings_view: SettingsScreen
 var lesson_stage_labels: Dictionary = {}
@@ -52,13 +51,12 @@ var screens: Dictionary = {}
 var library_request: HTTPRequest
 var settings_request: HTTPRequest
 var library_pending := false
+var library_view: LibraryScreen
+var library_health_running := false
+var recent_library_piece := ""
 var library_health_request: HTTPRequest
 var library_health_pending := false
-var library_health_info: Dictionary = {}
-var library_health_button: Button
-var library_health_label: Label
 var settings_pending := false
-var library_info: Dictionary = {}
 var preferences: Dictionary = {}
 var home_count_label: Label
 var home_cards: BoxContainer
@@ -80,18 +78,11 @@ var fingering_status_label: Label
 var fingering_save_error := ""
 var native_score_piece_fingerprint := ""
 var score_error := ""
-var library_error := ""
 var pending_library_piece := ""
 var pending_library_resume := false
 var library_resume_requested := false
 var home_recent_label: Label
 var home_resume_button: Button
-var library_search: LineEdit
-var library_filter_timer: Timer
-var library_scroll: ScrollContainer
-var library_path_label: Label
-var library_rows: VBoxContainer
-var library_message: Label
 var open_picker: SourceMeasurePicker
 var practice_stage_bar: HFlowContainer
 var practice_stage_labels: Dictionary = {}
@@ -291,7 +282,7 @@ func _ready() -> void:
     health_timer.wait_time = 1.2
     health_timer.autostart = true
     health_timer.timeout.connect(func():
-        if current_screen == "library" and bool(library_health_info.get("running", false)):
+        if current_screen == "library" and library_health_running:
             _request_library_health())
     add_child(health_timer)
     set_process(true)
@@ -452,6 +443,8 @@ func _ui_font(base: int) -> int:
     return maxi(14, int(round(float(base) * ui_scale)))
 
 func _resize_ui_fonts(node: Node) -> void:
+    if node == library_view:
+        return # Library applies its own presentation scale through apply_viewport.
     if node is Control and node.has_meta("ui_font_base"):
         (node as Control).add_theme_font_size_override(
             "font_size", _ui_font(int(node.get_meta("ui_font_base"))))
@@ -460,25 +453,10 @@ func _resize_ui_fonts(node: Node) -> void:
     for child in node.get_children():
         _resize_ui_fonts(child)
 
-func _label(text: String, size: int, color: Color, bold := false) -> Label:
-    var label := Label.new()
-    label.text = text
-    label.add_theme_color_override("font_color", color)
-    label.set_meta("ui_font_base", size)
-    label.add_theme_font_size_override("font_size", _ui_font(size))
-    label.add_theme_font_override("font", Design.font(700 if bold else 400))
-    label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    return label
-
-func _title(text: String, size: int = 28) -> Label:
-    var label := _label(text, size, INK)
-    label.add_theme_font_override("font", Design.title_font())
-    return label
 
 func _section(text: String) -> VBoxContainer:
-    var section := _stack(12)
-    section.add_child(_label(text, 17, INK, true))
+    var section := UI.stack(12)
+    section.add_child(UI.label(text, 17, INK, true))
     return section
 
 func _divider() -> HSeparator:
@@ -491,16 +469,8 @@ func _divider() -> HSeparator:
 
 func _button(label: String, callback: Callable, primary := false,
         role: String = "") -> Button:
-    var button := ActionButton.new()
-    button.text = label
-    button.clip_text = false
-    button.set_meta("ui_font_base", 15)
-    button.add_theme_font_size_override("font_size", _ui_font(15))
-    button.configure(role if not role.is_empty() else "primary" if primary else "secondary")
-    var text_width: float = theme.default_font.get_string_size(
-        label, HORIZONTAL_ALIGNMENT_LEFT, -1, _ui_font(15)).x
-    button.custom_minimum_size = Vector2(
-        maxf(96.0, text_width + 48.0 * ui_scale), 38.0 * ui_scale)
+    var button := UI.button(label,
+        role if not role.is_empty() else "primary" if primary else "secondary", ui_scale)
     button.pressed.connect(callback)
     return button
 
@@ -592,10 +562,6 @@ func _screen(name: String) -> MarginContainer:
     page_margins.append(panel)
     return panel
 
-func _stack(separation: int = 12) -> VBoxContainer:
-    var stack := VBoxContainer.new()
-    stack.add_theme_constant_override("separation", separation)
-    return stack
 
 func _space() -> Control:
     var spacer := Control.new()
@@ -671,8 +637,7 @@ func _navigate(screen: String) -> void:
             or str(key) == "practice" and screen != "practice")
     if screen == "library":
         _request_library()
-        if library_search != null:
-            library_search.call_deferred("grab_focus")
+        library_view.call_deferred("focus_search")
     elif screen == "settings":
         tempo_setting.set_value_no_signal(float(last_state.get("target_bpm", 40)))
         _request_settings()
@@ -704,10 +669,10 @@ func _mount_overlays() -> void:
     var rail_panel := PanelContainer.new()
     rail_panel.add_theme_stylebox_override("panel", Design.surface(Color(Design.NIGHT, .52), 10))
     shell.add_child(rail_panel)
-    navigation_rail = _stack(8)
+    navigation_rail = UI.stack(8)
     navigation_rail.custom_minimum_size.x = 150
     rail_panel.add_child(navigation_rail)
-    var brand := _title("Piano\nTeacher", 23)
+    var brand := UI.title("Piano\nTeacher", 23)
     brand.custom_minimum_size.y = 100
     navigation_rail.add_child(brand)
     for item in [["library", "Library"], ["lesson", "Lesson path"], ["settings", "Settings"]]:
@@ -746,13 +711,8 @@ func _resize_overlay_drawer() -> void:
     overlay_drawer.offset_right = -inset
     overlay_drawer.offset_bottom = -inset
     navigation_rail.custom_minimum_size.x = 160.0 if size.x >= 1100.0 else 125.0
-    if library_heading != null:
-        library_heading.vertical = size.x < 1100.0
-        library_message.visible = size.x >= 1100.0 or not library_error.is_empty() \
-            or not str(library_info.get("error", "")).is_empty() \
-            or library_rows.get_child_count() == 0
-        library_path_label.visible = false
-        library_search.tooltip_text = library_path_label.text + "\nCtrl+F or / to search"
+    if library_view != null:
+        library_view.apply_viewport(size, ui_scale)
     if lesson_columns != null:
         lesson_columns.vertical = size.x < 1280.0
         # Compact learners can reach hand/mode choices without scrolling
@@ -760,9 +720,6 @@ func _resize_overlay_drawer() -> void:
         lesson_columns.move_child(lesson_options, 0 if lesson_columns.vertical else 1)
     if settings_grid != null:
         settings_grid.columns = 2 if size.x >= 1100.0 else 1
-    # Folder controls always stack; only their actions wrap horizontally.
-    for grid in library_grids:
-        grid.columns = 1
 
 
 func _go_back() -> void:
@@ -777,6 +734,7 @@ func _build_interface() -> void:
 
     _build_home_screen()
     _build_library_screen()
+    _build_settings_screen()
     _build_practice_screen()
 
 
@@ -789,19 +747,19 @@ func _build_home_screen() -> void:
     home_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     home_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     home.add_child(home_scroll)
-    var home_layout := _stack(26)
+    var home_layout := UI.stack(26)
     home_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     home_scroll.add_child(home_layout)
     var home_nav := HBoxContainer.new()
     home_layout.add_child(home_nav)
-    home_nav.add_child(_label("Piano Teacher", 24, INK, true))
+    home_nav.add_child(UI.label("Piano Teacher", 24, INK, true))
     home_nav.add_child(_space())
     home_nav.add_child(_button("Settings", func(): _navigate("settings"), false, "settings"))
     home_nav.add_child(_button("Quit", func(): get_tree().quit(), false, "danger"))
-    var header := _stack(12)
+    var header := UI.stack(12)
     home_layout.add_child(header)
-    header.add_child(_label("Your practice", 34, INK, true))
-    header.add_child(_label("Choose your music or continue your last lesson.", 18, MUTED))
+    header.add_child(UI.label("Your practice", 34, INK, true))
+    header.add_child(UI.label("Choose your music or continue your last lesson.", 18, MUTED))
     var home_row := BoxContainer.new()
     home_cards = home_row
     home_row.add_theme_constant_override("separation", 20)
@@ -809,109 +767,45 @@ func _build_home_screen() -> void:
     var library_card := _card()
     library_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     home_row.add_child(library_card)
-    var library_inner := _stack(17)
+    var library_inner := UI.stack(17)
     _card_body(library_card, 32).add_child(library_inner)
-    library_inner.add_child(_label("YOUR MUSIC", 13, MUTED, true))
-    home_count_label = _label("Discovering your music…", 25, INK, true)
+    library_inner.add_child(UI.label("YOUR MUSIC", 13, MUTED, true))
+    home_count_label = UI.label("Discovering your music…", 25, INK, true)
     library_inner.add_child(home_count_label)
-    library_inner.add_child(_label("MIDI and MusicXML from your selected folder", 15, MUTED))
+    library_inner.add_child(UI.label("MIDI and MusicXML from your selected folder", 15, MUTED))
     library_inner.add_child(_button("Browse library  →", func(): _navigate("library"), true))
     var recent_card := _card()
     recent_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     home_row.add_child(recent_card)
-    var recent_inner := _stack(17)
+    var recent_inner := UI.stack(17)
     _card_body(recent_card, 32).add_child(recent_inner)
-    recent_inner.add_child(_label("LAST OPENED", 13, MUTED, true))
-    home_recent_label = _label("No recent piece", 25, INK, true)
+    recent_inner.add_child(UI.label("LAST OPENED", 13, MUTED, true))
+    home_recent_label = UI.label("No recent piece", 25, INK, true)
     home_recent_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     home_recent_label.clip_text = true
     home_recent_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     recent_inner.add_child(home_recent_label)
-    recent_inner.add_child(_label("Pick up where you left off", 15, MUTED))
+    recent_inner.add_child(UI.label("Pick up where you left off", 15, MUTED))
     home_resume_button = _button("Continue  →", _resume_last, true)
     recent_inner.add_child(home_resume_button)
-    home_layout.add_child(_label("Connect your USB MIDI keyboard and select your music. Progress stays on this computer.", 14, MUTED))
+    home_layout.add_child(UI.label("Connect your USB MIDI keyboard and select your music. Progress stays on this computer.", 14, MUTED))
 
 
 func _build_library_screen() -> void:
-    # Library: automatic indexing without manually opening each MIDI file.
-    var library_page := _screen("Library")
-    screens["library"] = library_page
-    var library_layout := _stack(10)
-    library_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    library_page.add_child(library_layout)
-    library_heading = BoxContainer.new()
-    library_heading.add_theme_constant_override("separation", 20)
-    library_layout.add_child(library_heading)
-    var library_intro := _stack(4)
-    library_intro.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    library_heading.add_child(library_intro)
-    library_intro.add_child(_label("PIANO TEACHER", 14, ACCENT, true))
-    library_intro.add_child(_title("Your music", 32))
-    library_path_label = _label("Looking for scores…", 13, MUTED)
-    library_path_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-    library_path_label.clip_text = true
-    library_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-    library_layout.add_child(library_path_label)
-    library_search = LineEdit.new()
-    library_search.placeholder_text = "Search songs…"
-    library_search.clear_button_enabled = true
-    library_search.tooltip_text = "Ctrl+F or / to focus search · Esc closes the library"
-    library_search.custom_minimum_size = Vector2(220, 40)
-    library_search.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    # Avoid destroying and recreating every music-row button on every key.
-    # The visible search text changes immediately; results settle after the
-    # final keystroke without blocking the score renderer.
-    library_filter_timer = Timer.new()
-    library_filter_timer.one_shot = true
-    library_filter_timer.wait_time = .12
-    library_filter_timer.timeout.connect(_populate_library)
-    add_child(library_filter_timer)
-    library_search.text_changed.connect(func(_text: String):
-        if library_scroll != null:
-            library_scroll.scroll_vertical = 0
-        library_filter_timer.start())
-    library_heading.add_child(library_search)
-    # Shortcuts remain active and discoverable in the search tooltip.
-    # A permanent tiny instruction line made the library feel like a form.
-    var library_utilities := HBoxContainer.new()
-    library_utilities.add_theme_constant_override("separation", 10)
-    library_layout.add_child(library_utilities)
-    library_utilities.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    library_utilities.add_child(_button("Refresh", _request_library, false, "utility"))
-    library_health_button = _button("Check files", func(): _start_library_health(), false, "settings")
-    # Dynamic text also says "Checking…" or "Recheck files". Reserve room
-    # from the start so the button does not visibly resize or clip.
-    library_health_button.custom_minimum_size.x = maxf(
-        library_health_button.custom_minimum_size.x,
-        _ui_font(15) * 8.3 + 48.0 * ui_scale)
-    library_utilities.add_child(library_health_button)
-    # Import problems must appear next to the action, not at the very
-    # bottom of a full-screen library where they are easy to miss.
-    library_message = _label("", 13, MUTED)
-    library_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    library_message.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    library_utilities.add_child(library_message)
-    library_health_label = _label("", 16, MUTED)
-    library_health_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    library_health_label.visible = false
-    library_layout.add_child(library_health_label)
-    var scroll := ScrollContainer.new()
-    library_scroll = scroll
-    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    library_layout.add_child(scroll)
-    library_rows = _stack(18)
-    library_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    scroll.add_child(library_rows)
-    _build_settings_screen()
+    var page := _screen("Library")
+    screens["library"] = page
+    library_view = LibraryScreen.new()
+    page.add_child(library_view)
+    library_view.open_requested.connect(_open_library_piece)
+    library_view.refresh_requested.connect(_request_library)
+    library_view.health_check_requested.connect(_start_library_health)
 
 
 func _build_practice_screen() -> void:
     # Practice: standard engraving remains the central and dominant element.
     var practice_page := _screen("Practice")
     screens["practice"] = practice_page
-    var practice_layout := _stack(12)
+    var practice_layout := UI.stack(12)
     practice_layout_box = practice_layout
     practice_page.add_child(practice_layout)
     # One compact lesson header. Music occupies the expanding stage below;
@@ -919,21 +813,21 @@ func _build_practice_screen() -> void:
     practice_header = HBoxContainer.new()
     practice_header.add_theme_constant_override("separation", 20)
     practice_layout.add_child(practice_header)
-    var heading := _stack(5)
+    var heading := UI.stack(5)
     heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     heading.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     practice_header.add_child(heading)
-    title_label = _title("Choose your music", 26)
+    title_label = UI.title("Choose your music", 26)
     title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     title_label.clip_text = true
     title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     heading.add_child(title_label)
-    passage_label = _label("A little practice. A little progress.", 14, MUTED)
+    passage_label = UI.label("A little practice. A little progress.", 14, MUTED)
     passage_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     passage_label.clip_text = true
     passage_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
     heading.add_child(passage_label)
-    var context := _stack(6)
+    var context := UI.stack(6)
     context.custom_minimum_size.x = 435
     context.size_flags_horizontal = Control.SIZE_SHRINK_END
     practice_header.add_child(context)
@@ -941,7 +835,7 @@ func _build_practice_screen() -> void:
     practice_navigation.alignment = FlowContainer.ALIGNMENT_END
     practice_navigation.add_theme_constant_override("h_separation", 6)
     context.add_child(practice_navigation)
-    game_brand = _title("Piano Teacher", 18)
+    game_brand = UI.title("Piano Teacher", 18)
     game_brand.visible = false
     practice_navigation.add_child(game_brand)
     practice_music_button = _button("Music", func(): _navigate("library"), false, "library")
@@ -956,11 +850,11 @@ func _build_practice_screen() -> void:
     details.add_theme_constant_override("separation", 14)
     details.alignment = BoxContainer.ALIGNMENT_END
     context.add_child(details)
-    speed_label = _label("-- BPM", 14, INK)
+    speed_label = UI.label("-- BPM", 14, INK)
     speed_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     speed_label.size_flags_horizontal = Control.SIZE_SHRINK_END
     details.add_child(speed_label)
-    hand_label = _label("", 14, ACCENT)
+    hand_label = UI.label("", 14, ACCENT)
     hand_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     hand_label.size_flags_horizontal = Control.SIZE_SHRINK_END
     details.add_child(hand_label)
@@ -976,14 +870,14 @@ func _build_practice_screen() -> void:
     hints_toggle = CheckButton.new()
     hints_toggle.text = "Hints"
     hints_toggle.toggled.connect(func(enabled: bool): _send_action({"action": "hints", "enabled": enabled}))
-    lesson_info_label = _label("", 14, MUTED)
+    lesson_info_label = UI.label("", 14, MUTED)
     lesson_info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_stage_bar = HFlowContainer.new()
     practice_stage_bar.add_theme_constant_override("h_separation", 10)
     practice_stage_bar.add_theme_constant_override("v_separation", 6)
     practice_stage_bar.visible = false
     for hand in ["right", "left", "both"]:
-        var stage_label := _label("", 12, MUTED)
+        var stage_label := UI.label("", 12, MUTED)
         stage_label.custom_minimum_size = Vector2(140, 26)
         stage_label.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
         stage_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -992,7 +886,7 @@ func _build_practice_screen() -> void:
         stage_label.add_theme_stylebox_override("normal", stage_style)
         practice_stage_bar.add_child(stage_label)
         practice_stage_labels[hand] = stage_label
-    practice_playback_banner = _label("", 18, Design.AMBER, true)
+    practice_playback_banner = UI.label("", 18, Design.AMBER, true)
     practice_playback_banner.visible = false
     practice_playback_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_playback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1014,7 +908,7 @@ func _build_practice_screen() -> void:
     score_region.add_child(score_header)
     practice_stage_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     score_header.add_child(practice_stage_bar)
-    fingering_status_label = _label("",12,Design.SECONDARY_INK)
+    fingering_status_label = UI.label("",12,Design.SECONDARY_INK)
     fingering_status_label.visible = false
     fingering_status_label.clip_text = true
     fingering_status_label.custom_minimum_size.x = 180
@@ -1046,11 +940,11 @@ func _build_practice_screen() -> void:
     score_status_panel = CenterContainer.new()
     score_status_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     score_area.add_child(score_status_panel)
-    var status_content := _stack(12)
+    var status_content := UI.stack(12)
     status_content.custom_minimum_size = Vector2(280, 85)
     status_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     score_status_panel.add_child(status_content)
-    score_status_label = _label("Choose a piece from your library", 18, Design.SCORE_INK)
+    score_status_label = UI.label("Choose a piece from your library", 18, Design.SCORE_INK)
     score_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     score_status_label.clip_text = true
     status_content.add_child(score_status_label)
@@ -1110,7 +1004,7 @@ func _build_practice_screen() -> void:
     practice_note_feedback_panel.offset_bottom = 60.0
     practice_note_feedback_panel.visible = false
     score_frame.add_child(practice_note_feedback_panel)
-    practice_note_feedback_label = _label("", 20, Color("#FF827A"), true)
+    practice_note_feedback_label = UI.label("", 20, Color("#FF827A"), true)
     practice_note_feedback_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
     practice_note_feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     practice_note_feedback_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -1136,7 +1030,7 @@ func _build_practice_screen() -> void:
     var challenge_bar := HBoxContainer.new()
     challenge_bar.add_theme_constant_override("separation", 18)
     information.add_child(challenge_bar)
-    progress_label = _label("", 14, MUTED)
+    progress_label = UI.label("", 14, MUTED)
     progress_label.autowrap_mode = TextServer.AUTOWRAP_OFF
     progress_label.clip_text = true
     progress_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -1189,7 +1083,7 @@ func _build_practice_screen() -> void:
     practice_skip_button.visible = false
     practice_skip_button.size_flags_horizontal = Control.SIZE_SHRINK_END
     challenge_bar.add_child(practice_skip_button)
-    feedback_label = _label("Ready", 14, MUTED)
+    feedback_label = UI.label("Ready", 14, MUTED)
     feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     feedback_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     information.add_child(_caption_slot(feedback_label, 1))
@@ -1430,32 +1324,32 @@ func _build_lesson_screen() -> void:
     outer_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     outer_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
     page.add_child(outer_scroll)
-    var content := _stack(14)
+    var content := UI.stack(14)
     content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     outer_scroll.add_child(content)
-    content.add_child(_label("YOUR NEXT STEPS", 14, ACCENT, true))
-    content.add_child(_title("Lesson path", 32))
-    lesson_piece_title = _title("Choose music to begin", 25)
+    content.add_child(UI.label("YOUR NEXT STEPS", 14, ACCENT, true))
+    content.add_child(UI.title("Lesson path", 32))
+    lesson_piece_title = UI.title("Choose music to begin", 25)
     content.add_child(lesson_piece_title)
     var stages := HBoxContainer.new()
     stages.add_theme_constant_override("separation", 0)
     content.add_child(stages)
     for stage in ["skeleton", "outline", "original"]:
-        var label := _label("%d. %s" % [lesson_stage_labels.size() + 1, stage.capitalize()], 15, MUTED)
+        var label := UI.label("%d. %s" % [lesson_stage_labels.size() + 1, stage.capitalize()], 15, MUTED)
         label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
         label.tooltip_text = "The current simplification level; available stages depend on this passage."
         label.visible = false
         stages.add_child(label)
         lesson_stage_labels[stage] = label
-    lesson_summary = _label("Open a piece to see its lessons.", 15, MUTED)
+    lesson_summary = UI.label("Open a piece to see its lessons.", 15, MUTED)
     content.add_child(lesson_summary)
-    lesson_description = _label("", 14, MUTED)
+    lesson_description = UI.label("", 14, MUTED)
     content.add_child(lesson_description)
     lesson_columns = BoxContainer.new()
     lesson_columns.vertical = size.x < 1280.0
     lesson_columns.add_theme_constant_override("separation", 24)
     content.add_child(lesson_columns)
-    lesson_rows = _stack(10)
+    lesson_rows = UI.stack(10)
     lesson_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     lesson_rows.size_flags_stretch_ratio = 1.15
     lesson_columns.add_child(lesson_rows)
@@ -1464,9 +1358,9 @@ func _build_lesson_screen() -> void:
     options_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     options_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
     lesson_columns.add_child(options_panel)
-    var path_options := _stack(14)
+    var path_options := UI.stack(14)
     _card_body(options_panel, 18).add_child(path_options)
-    path_options.add_child(_label("Practice choices", 17, INK, true))
+    path_options.add_child(UI.label("Practice choices", 17, INK, true))
     # FlowContainer inside an expanding, vertically scrolling VBox can
     # calculate a near-zero width for its Label during a resize. The label
     # then wraps to one letter per line and forces the entire activity
@@ -1477,7 +1371,7 @@ func _build_lesson_screen() -> void:
     activity.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     activity.add_theme_constant_override("separation", 14)
     path_options.add_child(activity)
-    var activity_caption := _label("Activity", 17, MUTED)
+    var activity_caption := UI.label("Activity", 17, MUTED)
     activity_caption.name = "LessonActivityCaption"
     activity_caption.autowrap_mode = TextServer.AUTOWRAP_OFF
     activity_caption.custom_minimum_size.x = 90
@@ -1534,11 +1428,11 @@ func _build_lesson_screen() -> void:
     path_reset_button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
     path_reset_button.tooltip_text = "Erase saved mastery, tempo, skipped steps and trouble spots for this song only"
     path_options.add_child(path_reset_button)
-    path_reset_confirmation = _stack(8)
+    path_reset_confirmation = UI.stack(8)
     path_reset_confirmation.name = "ResetPathConfirmation"
     path_reset_confirmation.visible = false
     path_options.add_child(path_reset_confirmation)
-    var reset_warning := _label(
+    var reset_warning := UI.label(
         "Reset this song to step 1? All saved tempos, mastery, completed notes and skipped steps for this song will be erased. Other songs are unaffected.",
         15, INK)
     reset_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1674,7 +1568,7 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
         child.queue_free()
     var trouble: Array = parsed.get("trouble_spots", [])
     if not trouble.is_empty():
-        lesson_rows.add_child(_label("Your trouble spots", 18, INK, true))
+        lesson_rows.add_child(UI.label("Your trouble spots", 18, INK, true))
         for spot in trouble:
             var stage_key: String = str(spot.get("stage_key", ""))
             var from_beat: float = float(spot.get("start_beat", 0))
@@ -1704,15 +1598,15 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
         chapter_style.set_border_width(SIDE_LEFT, 3 if bool(group["current"]) else 1)
         chapter_style.border_color = ACCENT if bool(group["current"]) else Color(Design.SAGE,.3)
         chapter.add_theme_stylebox_override("panel", chapter_style)
-        var row := _stack(4)
+        var row := UI.stack(4)
         chapter.add_child(row)
         var status := "Completed" if bool(group["complete"]) else "Current passage" if bool(group["current"]) else str(group["kind"]).capitalize()
-        row.add_child(_label("%s · Measures %d–%d" % [status, int(group["first"]), int(group["last"])], 18,
+        row.add_child(UI.label("%s · Measures %d–%d" % [status, int(group["first"]), int(group["last"])], 18,
             ACCENT if bool(group["current"]) else INK, bool(group["current"])))
         var detail: String = " → ".join(group["labels"])
         row.tooltip_text = detail
         if bool(group["current"]):
-            row.add_child(_label(detail, 14, MUTED))
+            row.add_child(UI.label(detail, 14, MUTED))
         lesson_rows.add_child(chapter)
 
 func _refresh_score_status() -> void:
@@ -1776,17 +1670,15 @@ func _request_library() -> void:
 func _on_library(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     library_pending = false
     if code != 200:
-        library_message.text = _http_failure(code, body)
+        library_view.present_request_error(_http_failure(code, body))
         home_count_label.text = "Practice engine unavailable"
         home_resume_button.disabled = true
         return
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
-    library_info = parsed
+    library_view.present_catalog(parsed)
     home_count_label.text = "%d scores · %d built-in warm-ups" % [int(parsed.get("count", 0)), parsed.get("warmups", []).size()]
-    library_path_label.text = str(parsed.get("folder", ""))
-    _populate_library()
     _request_library_health()
     var recent: String = str(parsed.get("last_piece", ""))
     home_resume_button.disabled = recent.is_empty()
@@ -1795,6 +1687,7 @@ func _on_library(_result: int, code: int, _headers: PackedStringArray, body: Pac
         if str(entry.get("id", "")) == recent:
             exists_in_library = true
             break
+    recent_library_piece = recent if exists_in_library else ""
     home_resume_button.disabled = not exists_in_library
     var recent_title := recent.get_file().get_basename().replace("_", " ")
     for entry in parsed.get("warmups", []):
@@ -1812,144 +1705,23 @@ func _request_library_health() -> void:
 
 
 func _start_library_health() -> void:
-    if action_pending or bool(library_health_info.get("running", false)):
+    if action_pending or library_health_running:
         return
-    library_health_label.visible = true
-    library_health_label.text = "Starting music file check…"
+    library_view.present_health_message("Starting music file check…")
     _send_post("/library/health", {})
 
 
 func _on_library_health(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     library_health_pending = false
     if code != 200:
-        library_health_label.visible = true
-        library_health_label.text = "Cannot check music files: " + _http_failure(code, body)
+        library_view.present_health_message("Cannot check music files: " + _http_failure(code, body))
         return
     var parsed: Variant = _decode_json(body)
     if not parsed is Dictionary:
         return
-    var previous_started: bool = bool(library_health_info.get("started", false))
-    var previous_running: bool = bool(library_health_info.get("running", false))
-    library_health_info = parsed
-    var active: bool = bool(parsed.get("running", false))
-    var started: bool = bool(parsed.get("started", false))
-    library_health_button.disabled = active
-    library_health_button.text = "Checking…" if active else "Recheck files" if started else "Check files"
-    library_health_label.visible = started
-    if started:
-        library_health_label.text = (
-            "Checking %d of %d files · %d OK · %d repaired · %d errors" if active
-            else "File check complete: %d of %d · %d OK · %d repaired · %d errors"
-        ) % [int(parsed.get("checked", 0)), int(parsed.get("total", 0)),
-             int(parsed.get("ok", 0)), int(parsed.get("warning", 0)), int(parsed.get("error", 0))]
-        if not str(parsed.get("message", "")).is_empty():
-            library_health_label.text += "\n" + str(parsed["message"])
-    # A large music collection may scan hundreds of files. Rebuilding
-    # every clickable row at each file-progress tick caused visible drawer
-    # flicker, lost keyboard focus and expensive Godot allocations. Keep
-    # updating the small progress label; rebuild row statuses only at start
-    # and once when the scan finishes.
-    if previous_started != started or (previous_running and not active):
-        _populate_library()
+    library_health_running = bool(parsed.get("running", false))
+    library_view.present_health(parsed)
 
-
-func _last_library_entry() -> Dictionary:
-    var identifier: String = str(library_info.get("last_piece", ""))
-    if not identifier.is_empty():
-        for entry in library_info.get("warmups", []) + library_info.get("pieces", []):
-            if str(entry.get("id", "")) == identifier:
-                return entry
-    return {}
-
-
-func _populate_library() -> void:
-    if library_rows == null:
-        return
-    if library_filter_timer != null and not library_filter_timer.is_stopped():
-        library_filter_timer.stop()
-    for child in library_rows.get_children():
-        library_rows.remove_child(child)
-        child.queue_free()
-    library_grids.clear()
-    var pieces: Array = library_info.get("pieces", [])
-    var warmups: Array = library_info.get("warmups", [])
-    var query := library_search.text.strip_edges().to_lower()
-    var visible := 0
-    var recent: Dictionary = _last_library_entry()
-    var show_recent: bool = query.is_empty() and not recent.is_empty()
-    var sections: Array = []
-    if show_recent:
-        sections.append({"title": "LAST OPENED", "entries": [recent], "resume": true})
-    sections.append({"title": "YOUR MUSIC", "entries": pieces})
-    sections.append({"title": "BUILT-IN WARM-UPS", "entries": warmups})
-    for section in sections:
-        var section_added := false
-        var grid: GridContainer
-        for entry in section.entries:
-            var identifier: String = str(entry.get("id", ""))
-            var resume_saved: bool = bool(section.get("resume", false))
-            if show_recent and not resume_saved and identifier == str(recent.get("id", "")):
-                continue
-            var title: String = str(entry.get("title", "Untitled"))
-            var location: String = str(entry.get("folder", ""))
-            var focus: String = str(entry.get("focus", ""))
-            if not query.is_empty() and not (title + " " + location + " " + focus).to_lower().contains(query):
-                continue
-            if not section_added:
-                library_rows.add_child(_label(str(section.title).capitalize(), 15, MUTED, true))
-                grid = GridContainer.new()
-                grid.columns = 1
-                grid.add_theme_constant_override("h_separation", 12)
-                grid.add_theme_constant_override("v_separation", 12)
-                grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-                library_rows.add_child(grid)
-                library_grids.append(grid)
-                section_added = true
-            var format_name: String = str(entry.get("format", ""))
-            var hint: String = ("%d BPM · %s" % [int(entry.get("bpm", 0)), focus]
-                if not focus.is_empty() else
-                location if not location.is_empty() else "Music folder")
-            var diagnosis: Dictionary = library_health_info.get("items", {}).get(identifier, {})
-            var status: String = str(diagnosis.get("status", ""))
-            var detail: String = format_name + "  ·  " + hint
-            if status == "error":
-                detail = "Needs attention  ·  " + detail
-            elif status == "warning":
-                detail = "Repaired  ·  " + detail
-            if resume_saved:
-                detail = "Continue from saved place  ·  " + detail
-            var row := LibraryRow.new()
-            if resume_saved:
-                row.pressed.connect(_resume_last)
-            else:
-                row.pressed.connect(func(): _open_library_piece(identifier))
-            grid.add_child(row)
-            row.set_entry(title.replace("_", " "), detail, status)
-            row.set_text_scale(ui_scale)
-            if entry.has("description"):
-                row.tooltip_text += "\n" + str(entry["description"])
-            if not diagnosis.is_empty():
-                row.tooltip_text += "\nImport check: " + str(diagnosis.get("message", ""))
-                if status != "error":
-                    row.tooltip_text += " · %d notes · %d measures" % [
-                        int(diagnosis.get("notes", 0)), int(diagnosis.get("measures", 0))]
-            visible += 1
-    var issue: String = str(library_info.get("error", ""))
-    if not library_error.is_empty():
-        library_message.text = library_error
-        library_message.add_theme_color_override("font_color", Color("#FF8B82"))
-    elif not issue.is_empty():
-        library_message.text = issue
-    elif pieces.is_empty() and warmups.is_empty():
-        library_message.text = "No scores yet. Add .mid, .midi or MusicXML files to this folder."
-    elif visible == 0:
-        library_message.text = "No matches for “%s”. Try another title or clear the search." % library_search.text.strip_edges()
-    else:
-        library_message.text = "%d personal files  ·  %d built-in warm-ups  ·  %d shown" % [pieces.size(), warmups.size(), visible]
-    if library_error.is_empty():
-        library_message.add_theme_color_override("font_color", MUTED)
-    library_message.visible = size.x >= 1100.0 or not library_error.is_empty() \
-        or not issue.is_empty() or visible == 0
 
 func _resize_open_picker() -> void:
     if open_picker != null:
@@ -2038,18 +1810,16 @@ func _open_library_piece(identifier: String, resume_saved := false) -> void:
     if action_pending:
         pending_library_piece = identifier
         pending_library_resume = resume_saved
-        library_message.text = "Preparing your selected music…"
+        library_view.present_open_status("Preparing your selected music…")
         return
-    library_error = ""
-    library_message.text = "Opening score…"
-    library_message.add_theme_color_override("font_color", MUTED)
+    library_view.present_open_status("Opening score…")
     library_resume_requested = resume_saved
     _send_post("/library/open", {"id": identifier})
 
 func _resume_last() -> void:
-    var recent: Dictionary = _last_library_entry()
-    if not recent.is_empty():
-        _open_library_piece(str(recent["id"]), true)
+    if not recent_library_piece.is_empty():
+        _open_library_piece(recent_library_piece, true)
+
 
 func _request_settings() -> void:
     if settings_pending or settings_request == null:
@@ -2986,14 +2756,13 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         pending_library_piece = ""
         pending_library_resume = false
         if path == "/library/open":
-            library_error = "Cannot open score: " + message
-            library_message.add_theme_color_override("font_color", Color("#FF8B82"))
+            library_view.present_open_status("Cannot open score: " + message, true)
         elif queued_library_failed:
-            library_error = "Cannot open selected music: " + message
-            library_message.add_theme_color_override("font_color", Color("#FF8B82"))
+            library_view.present_open_status("Cannot open selected music: " + message, true)
         feedback_label.text = message
         settings_message.text = message
-        library_message.text = library_error if queued_library_failed else message
+        if path != "/library/open" and not queued_library_failed:
+            library_view.present_request_error(message)
         home_recent_label.text = message
         _flush_transport_action()
         return
@@ -3013,8 +2782,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     elif path == "/library/health":
         _request_library_health()
     elif path == "/library/open":
-        library_error = ""
-        _populate_library()
+        library_view.present_open_status("")
         score_error = ""
         var opened: Variant = _decode_json(body)
         if opened is Dictionary and (bool(opened.get("warmup", false)) or resume_saved):
@@ -3187,9 +2955,8 @@ func _input(event: InputEvent) -> void:
     # Once focused, / remains normal text input.
     if event.pressed and not event.echo and current_screen == "library" \
             and ((event.ctrl_pressed and event.keycode == KEY_F) or
-            (event.keycode == KEY_SLASH and get_viewport().gui_get_focus_owner() != library_search)):
-        library_search.grab_focus()
-        library_search.select_all()
+            (event.keycode == KEY_SLASH and not library_view.is_search_focused())):
+        library_view.focus_search(true)
         get_viewport().set_input_as_handled()
         return
     if pause_sheet != null and pause_sheet.visible and event.keycode in [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN, KEY_TAB]:
