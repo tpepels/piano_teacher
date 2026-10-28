@@ -469,3 +469,40 @@ func chord_dot_anchors(notes: Array, centers: Array, gap: float) -> Dictionary:
 
 func staff_center(hand: String) -> float:
     return size.y*(.36 if hand == "right" else .69)
+
+const BarlineLayout := preload("res://notation/native/barline_layout.gd")
+
+func barline_geometry(measure: Dictionary, clock: float,
+        playhead_x: float, gap: float, play_from_beat: float = 0.0) -> Dictionary:
+    var info: Dictionary = BarlineLayout.boundary(timeline.measures, measure, timeline,
+        clock, playhead_x, play_from_beat, gap,
+        staff_center("right")-2.0*gap,
+        staff_center("left")+2.0*gap)
+    if not info.is_empty():
+        info["segments"] = barline_segments(str(info.get("style","regular")),gap)
+    return info
+
+func terminal_barline_geometry(clock: float,
+        playhead_x: float, gap: float, play_from_beat: float = 0.0) -> Dictionary:
+    var info: Dictionary = BarlineLayout.terminal(timeline.measures, timeline,
+        clock, playhead_x, play_from_beat, gap,
+        staff_center("right")-2.0*gap,
+        staff_center("left")+2.0*gap)
+    if not info.is_empty():
+        info["segments"] = barline_segments(str(info.get("style","regular")),gap)
+    return info
+
+func barline_segments(style: String, gap: float) -> Array:
+    if style in ["tick","short"]:
+        var segments: Array = []
+        for staff in ["right","left"]:
+            var center: float = staff_center(staff)
+            segments.append({
+                "top":center-gap*(2.5 if style == "tick" else 1.0),
+                "bottom":center-gap*1.5 if style == "tick" else center+gap})
+        return segments
+    return [{"top":staff_center("right")-2.0*gap,
+        "bottom":staff_center("left")+2.0*gap}]
+
+func barline_strokes(style: String, gap: float) -> Array:
+    return BarlineLayout.strokes(style, gap)

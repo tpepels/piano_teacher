@@ -216,3 +216,9 @@ first-party architectural monoliths.
   overriding canvas geometry; expected pixels and corruption checks unchanged.
   Independent review found no issues. Remaining forwarding accessors are
   transitional callers and will be removed during native pass separation.
+
+- Native contour-spacing extraction: `InkGeometry` owns authentic alpha-row
+  cache and global density/witness calculation. Shared barline geometry now
+  belongs to score geometry and receives explicit source-offset parameters.
+  New headless contract RED→GREEN; 13 independent/pixel tests passed;
+  independent review found no math or ownership regressions.
