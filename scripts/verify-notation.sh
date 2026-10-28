@@ -45,6 +45,21 @@ quick_checks() {
     tests/test_ink_spacing.py \
     tests/test_course_navigation.py \
     tests/test_state_projection.py \
+    tests/test_score_artifacts.py \
+    tests/test_importing_boundaries.py \
+    tests/test_library_screen.py \
+    tests/test_settings_ownership.py \
+    tests/test_home_screen.py \
+    tests/test_native_score_layout.py \
+    tests/test_native_ink_geometry.py \
+    tests/test_native_connector_geometry.py \
+    tests/test_native_viewport_fit.py \
+    tests/test_native_fingering_components.py \
+    tests/test_native_paint_components.py \
+    tests/test_verification_pixel_ownership.py \
+    tests/test_feature_pixel_ownership.py \
+    tests/test_audit_capture_components.py \
+    tests/test_audit_worker_components.py \
     tests/test_transport_projection.py \
     tests/test_recovery_projection.py \
     tests/test_control_dispatch_refactor.py \

@@ -333,3 +333,23 @@ first-party architectural monoliths.
   compilation unified, existing durable keys retained, dead rewind-layout flag
   removed. Parent reviewed identities/clock boundaries; owner 11/198/123/54
   focused tests passed. Independent follow-up review is also requested.
+
+- Native forwarding cleanup: removed aliased geometry/index/annotation storage
+  and obsolete paint helpers; existing application/fixture callers now name
+  the real owner. RenderPass state is local to a source copy, and whole-frame
+  feedback aggregates nearest painted instances explicitly. Native view is
+  645 lines. Parent fresh suites: 132 passed / two inapplicable variants skipped
+  (repeats/recovery/connectors) and 23 passed / four inapplicable variants
+  skipped (actual annotations, application correction/reload, geometry/feedback).
+  Preparation corruption policy is migrated separately to ContextPainter.
+
+- Automatic architecture smoke expanded to the extracted component contracts;
+  fresh 130 tests passed in 19.76s plus main scene parse. Artifact-owner contracts
+  add 11 tests (~0.12s). Broad explicit --ci also includes all new proof, capture
+  and ownership contracts; corpus execution remains a separate explicit step.
+
+- Follow-up independent review: native owner integration passed eight focused
+  contracts, and ScoreArtifacts passed 19 component/engine checks; no concrete
+  lifecycle, source, cache-identity, tempo or revision regressions found.
+  Fresh expanded smoke with artifact contracts: 141 passed in 21.61s and
+  main parse passed, retaining the existing 105s/25s limits.

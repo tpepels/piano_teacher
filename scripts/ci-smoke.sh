@@ -17,6 +17,7 @@ timeout 105s "$PYTHON" -m pytest -q \
   tests/test_assessment_service.py \
   tests/test_visual_transport.py \
   tests/test_state_projection.py \
+  tests/test_score_artifacts.py \
   tests/test_transport_projection.py \
   tests/test_recovery_projection.py \
   tests/test_ink_spacing.py \
@@ -26,5 +27,18 @@ timeout 105s "$PYTHON" -m pytest -q \
   tests/test_native_voice_layout.py \
   tests/test_rest_lane_layout.py \
   tests/test_fingering_spatial_layout.py \
+  tests/test_library_screen.py \
+  tests/test_settings_ownership.py \
+  tests/test_home_screen.py \
+  tests/test_native_score_layout.py \
+  tests/test_native_ink_geometry.py \
+  tests/test_native_connector_geometry.py \
+  tests/test_native_viewport_fit.py \
+  tests/test_native_fingering_components.py \
+  tests/test_native_paint_components.py \
+  tests/test_verification_pixel_ownership.py \
+  tests/test_feature_pixel_ownership.py::test_feature_family_dependencies_do_not_reach_the_coordinator_or_production \
+  tests/test_audit_worker_components.py::test_stage_recorders_own_independent_case_state \
+  tests/test_importing_boundaries.py \
   tests/test_script_permissions.py
 timeout 25s "$GODOT" --headless --path godot --check-only --script res://main.gd
