@@ -112,7 +112,7 @@ func test_three_button_stage() -> void:
     check(exit_controls.any(func(node):
         return node.text == "Exit application" and node.focus_mode == Control.FOCUS_ALL),
         "Fullscreen application retains a keyboard-accessible Exit in Settings")
-    check(app.listen_volume_slider.max_value >= 12.0,
+    check(app.settings_view.listen_volume_slider.max_value >= 12.0,
         "Settings needs a separate Listen gain adjustment")
     check(app.game_phase_cue.get_parent() == app.score_frame,
         "Compact phase cue remains on the music stage")
@@ -325,11 +325,11 @@ func test_focused_shortcuts() -> void:
     await routed_key(KEY_ENTER)
     expect_command("restart", "Enter activates the focused Retry button")
     app._navigate("settings")
-    app.folder_edit.text = ""
-    app.folder_edit.grab_focus()
+    app.settings_view.folder_edit.text = ""
+    app.settings_view.folder_edit.grab_focus()
     await routed_key(KEY_R, 114)
     await routed_key(KEY_SPACE, 32)
-    check(app.folder_edit.text == "r ", "Settings fields retain normal text and Space input")
+    check(app.settings_view.folder_edit.text == "r ", "Settings fields retain normal text and Space input")
     check(app.commands.is_empty(), "Typing in Settings never invokes practice shortcuts")
 
 func test_practice_detours() -> void:
@@ -546,10 +546,10 @@ func test_modes() -> void:
     }
     app._on_state(0,200,PackedStringArray(),JSON.stringify(review).to_utf8_buffer())
     check(app.performance_review.visible, "Finished Perform shows a persistent review")
-    check(app.performance_text.text.contains("25") and app.performance_text.text.contains("missed"),
+    check(app.performance_review.summary_label.text.contains("25") and app.performance_review.summary_label.text.contains("missed"),
         "Review summarizes accuracy and specific error categories")
     app.commands.clear()
-    app.weak_button.pressed.emit()
+    app.performance_review.review_button.pressed.emit()
     check(app.review_sheet.visible, "Review opens a readable detailed dialog")
     check("Expected C4, played D4" in app.review_sheet.call("_issue_text",
         review["performance_summary"]["sections"][0]["issues"][1]),
@@ -592,7 +592,7 @@ func test_pause_choices() -> void:
     check(app.commands == [{"action":"seek", "bar":3}], "Bar selection sends a real source bar")
     app.commands.clear()
     check(not app.progress_label.text.contains("Stage"), "Foreground explains clean runs rather than numeric curriculum counts")
-    check(app.speed_label.text.contains("80 BPM") and app.tempo_setting.value == 80,
+    check(app.speed_label.text.contains("80 BPM") and app.settings_view.tempo_setting.value == 80,
         "Matching current and target tempo retains one clear BPM value")
     paused["bpm"] = 64
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(paused).to_utf8_buffer())
@@ -650,10 +650,10 @@ func test_focus_trap() -> void:
 func test_learner_progression() -> void:
     app.action_pending = true
     app._process(0.0)
-    check(app.apply_tempo_button.disabled, "Tempo waits visibly for an in-flight pause instead of dropping a click")
+    check(app.settings_view.apply_tempo_button.disabled, "Tempo waits visibly for an in-flight pause instead of dropping a click")
     app.action_pending = false
     app._process(0.0)
-    check(not app.apply_tempo_button.disabled, "Tempo becomes available after the acknowledgement")
+    check(not app.settings_view.apply_tempo_button.disabled, "Tempo becomes available after the acknowledgement")
     var learned := state("guided_complete")
     learned["mode"] = "learn"
     learned["teaching"] = {"completed":true,"has_more_units":true,"target_count":4,"target_index":4}

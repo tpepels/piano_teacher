@@ -94,16 +94,16 @@ func measure(app: Control, dimensions: Vector2i) -> Dictionary:
     result["sidebar_width"] = screen_rect(app.navigation_rail).size.x
     result["sidebar_button_height"] = screen_rect(library_button).size.y
     result["sidebar_font"] = screen_font(library_button)
-    result["search_height"] = screen_rect(app.library_search).size.y
-    result["search_font"] = screen_font(app.library_search)
+    result["search_height"] = screen_rect(app.library_view.library_search).size.y
+    result["search_font"] = screen_font(app.library_view.library_search)
     for button in app.screen_navigation.values():
         check(in_screen(button, dimensions), "%s: sidebar action fits: %s" % [dimensions, button.text])
-    check(in_screen(app.library_search, dimensions), "%s: library search fits" % dimensions)
+    check(in_screen(app.library_view.library_search, dimensions), "%s: library search fits" % dimensions)
     app._navigate("settings")
     await settle()
-    result["settings_button_height"] = screen_rect(app.device_button).size.y
-    result["settings_font"] = screen_font(app.device_button)
-    check(in_screen(app.device_button, dimensions), "%s: MIDI device control fits" % dimensions)
+    result["settings_button_height"] = screen_rect(app.settings_view.device_button).size.y
+    result["settings_font"] = screen_font(app.settings_view.device_button)
+    check(in_screen(app.settings_view.device_button, dimensions), "%s: MIDI device control fits" % dimensions)
 
     app.pause_sheet.present({"paused":true, "mode":"practice", "bpm":80,
         "hand":"right", "hands":["right", "left", "both"], "first_bar":1, "last_bar":4})
@@ -128,13 +128,11 @@ func measure(app: Control, dimensions: Vector2i) -> Dictionary:
     check(window_size(app.review_sheet).x <= dimensions.x + 2 \
         and window_size(app.review_sheet).y <= dimensions.y + 2, "%s: review dialog fits" % dimensions)
     app.review_sheet.hide()
-    app.device_menu.clear()
-    app.device_menu.add_item("Digital Piano (MIDI)")
-    app._show_devices()
+    app.settings_view.present_devices(["Digital Piano (MIDI)"], "", true)
     await settle()
-    result["device_menu_font"] = float(app.device_menu.get_theme_font_size("font_size")) * window_scale(app.device_menu)
-    result["device_menu_height"] = window_size(app.device_menu).y
-    app.device_menu.hide()
+    result["device_menu_font"] = float(app.settings_view.device_menu.get_theme_font_size("font_size")) * window_scale(app.settings_view.device_menu)
+    result["device_menu_height"] = window_size(app.settings_view.device_menu).y
+    app.settings_view.device_menu.hide()
     return result
 
 func run() -> void:

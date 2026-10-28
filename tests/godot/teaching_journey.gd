@@ -27,7 +27,7 @@ func wait_for(predicate: Callable, description: String, seconds: float = 20.0) -
     return true
 
 func imported_row() -> Button:
-    for row in app.library_rows.find_children("*", "Button", true, false):
+    for row in app.library_view.library_rows.find_children("*", "Button", true, false):
         if row is Button and str(row.get_meta("library_title", "")).begins_with("Imported"):
             return row
     return null
@@ -148,15 +148,15 @@ func run() -> void:
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,
         "normal Settings screen")
-    app.folder_edit.text = music
+    app.settings_view.folder_edit.text = music
     press("Save folder")
     await wait_for(func(): return not app.action_pending and str(app.preferences.get("music_dir", "")) == music,
         "user folder saved")
     press("Choose USB MIDI piano")
     await wait_for(func(): return not app.device_pending and app.device_names.has("Journey test piano"),
         "physical input adapter listed")
-    app.device_menu.id_pressed.emit(app.device_names.find("Journey test piano"))
-    app.device_menu.hide()
+    app.settings_view.device_menu.id_pressed.emit(app.device_names.find("Journey test piano"))
+    app.settings_view.device_menu.hide()
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device", "")) == "Journey test piano",
         "normal UI MIDI selection")
     press("Library")
@@ -167,7 +167,7 @@ func run() -> void:
         "User MIDI is the imported library piece")
     piece_button.pressed.emit()
     await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
-    app.open_mode.select(0)
+    app.open_picker.mode_choice.select(0)
     press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() \
         and str(app.last_state.get("phase", "")) == "guided_wait", "import automatically enters Learn")

@@ -6,6 +6,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = (ROOT / 'godot' / 'main.gd').read_text(encoding='utf-8')
+SETTINGS = (ROOT / 'godot' / 'settings_screen.gd').read_text(encoding='utf-8')
+LIBRARY = (ROOT / 'godot' / 'library_screen.gd').read_text(encoding='utf-8')
 
 
 def test_fullscreen_layout_has_adaptive_margins_and_stackable_cards():
@@ -15,11 +17,11 @@ def test_fullscreen_layout_has_adaptive_margins_and_stackable_cards():
     # Settings now uses a fixed vertical folder field with wrap-safe actions.
     # The previous window-wide threshold forced a horizontal row inside a
     # narrow drawer, hiding Browse/Save on the user's 1536x960 screen.
-    assert 'folder_controls = VBoxContainer.new()' in SCRIPT
-    assert 'var folder_actions := HFlowContainer.new()' in SCRIPT
+    assert 'folder_controls = VBoxContainer.new()' in SETTINGS
+    assert 'var folder_actions := HFlowContainer.new()' in SETTINGS
     assert 'overlay_drawer.offset_left = inset' in SCRIPT
     assert 'margin_left' in SCRIPT and 'margin_right' in SCRIPT
-    assert 'folder_edit.custom_minimum_size = Vector2(0, 40)' in SCRIPT
+    assert 'folder_edit.custom_minimum_size = Vector2(0, 40)' in SETTINGS
     assert 'scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED' in SCRIPT
     assert 'func _configure_ui_scaling() -> void:' in SCRIPT
     assert 'window.content_scale_factor = factor' in SCRIPT
@@ -34,7 +36,7 @@ def test_long_song_names_cannot_force_controls_wider():
     assert 'title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in library_row
     assert 'title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in SCRIPT
     assert 'home_recent_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in SCRIPT
-    assert 'library_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in SCRIPT
+    assert 'library_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in LIBRARY
 
 
 def test_score_error_does_not_disappear_during_state_polling(tmp_path):
@@ -44,6 +46,6 @@ def test_score_error_does_not_disappear_during_state_polling(tmp_path):
 
 
 def test_failed_library_import_keeps_error_in_library():
-    assert 'library_error = "Cannot open score: " + message' in SCRIPT
-    assert 'if not library_error.is_empty():' in SCRIPT
-    assert 'library_message.text = library_error' in SCRIPT
+    assert 'library_view.present_open_status("Cannot open score: " + message, true)' in SCRIPT
+    assert 'if not library_error.is_empty():' in LIBRARY
+    assert 'library_message.text = library_error' in LIBRARY

@@ -97,7 +97,7 @@ func test_start_picker_keyboard_is_modal() -> void:
     show_state("ready")
     app._show_open_picker({"title":"Test_-_MIDI", "piece_last_bar":77,
         "selected_start_bar":1})
-    var pending_field: LineEdit = app.open_measure.get_line_edit()
+    var pending_field: LineEdit = app.open_picker.measure.get_line_edit()
     pending_field.grab_focus()
     pending_field.text = "63"
     var space := InputEventKey.new()

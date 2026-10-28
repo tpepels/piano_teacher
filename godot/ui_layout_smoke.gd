@@ -92,7 +92,7 @@ func _run() -> void:
     await process_frame
     await process_frame
     var preview_picker: Control = scene.get("open_picker")
-    var modal: PanelContainer = scene.get("open_panel")
+    var modal: PanelContainer = scene.get("open_picker").get("panel")
     _check(preview_picker.visible and not scene.get("overlay_root").visible,
         "Starting point must hide the library drawer behind its modal")
     _check(modal.size.x >= minf(500.0, viewport.x - 36.0) and
@@ -101,28 +101,27 @@ func _run() -> void:
     _check(absf(modal.get_global_rect().get_center().x - viewport.x * .5) < 6.0 and
         absf(modal.get_global_rect().get_center().y - viewport.y * .5) < 6.0,
         "Starting point modal must be centered in the real viewport")
-    _check(str(scene.get("open_title").text) == "Ala - Joep Beving",
+    _check(str(scene.get("open_picker").get("title_label").text) == "Ala - Joep Beving",
         "MIDI filename separators must render as normal punctuation")
-    _check((scene.get("open_measure") as SpinBox).max_value == 77,
+    _check((scene.get("open_picker").get("measure") as SpinBox).max_value == 77,
         "Starting-point measure range must reflect the opened music")
     var jumps: HBoxContainer = modal.find_child("SourceMeasureQuickJumps", true, false) as HBoxContainer
     _check(jumps != null and jumps.get_child_count() == 3,
         "Measure picker needs visible Beginning, Middle and End shortcuts")
     if jumps != null and jumps.get_child_count() == 3:
         (jumps.get_child(2) as Button).pressed.emit()
-        _check(int((scene.get("open_measure") as SpinBox).value) == 77,
+        _check(int((scene.get("open_picker").get("measure") as SpinBox).value) == 77,
             "End shortcut selects the last source measure")
         (jumps.get_child(0) as Button).pressed.emit()
-        _check(int((scene.get("open_measure") as SpinBox).value) == 1,
+        _check(int((scene.get("open_picker").get("measure") as SpinBox).value) == 1,
             "Beginning shortcut returns to measure one")
     scene.call("_cancel_open_picker")
     _check(not preview_picker.visible and str(scene.get("current_screen")) == "library",
         "Cancel restores music selection instead of opening a lesson")
-    scene.set("library_info", {"pieces": [ {"id": "fixture.mid",
+    scene.get("library_view").present_catalog({"pieces": [ {"id": "fixture.mid",
         "title": "A Very Long Piano Piece With a Complicated Name",
         "format": "MIDI", "folder": "Imported music"}], "warmups": []})
-    scene.call("_populate_library")
-    var rows: VBoxContainer = scene.get("library_rows")
+    var rows: VBoxContainer = scene.get("library_view").get("library_rows")
     var music_rows: Array[Button] = _library_entries(rows)
     _check(music_rows.size() == 1,
         "One score requires exactly one focusable music tile")
@@ -136,8 +135,9 @@ func _run() -> void:
         # During a long file check, changing progress counts should update
         # the message only. Recreating the focused music row on each poll
         # causes visible flicker and unexpected keyboard focus loss.
-        scene.set("library_health_info", {"started": true, "running": true,
+        scene.get("library_view").present_health({"started": true, "running": true,
             "checked": 1, "total": 10, "items": {}})
+        item = _library_entries(rows)[0]
         scene.call("_on_library_health", 0, 200, PackedStringArray(),
             JSON.stringify({"started": true, "running": true,
                 "checked": 2, "total": 10, "ok": 2, "warning": 0,
@@ -266,10 +266,9 @@ func _run() -> void:
 
     # Short library actions must not truncate ('Setting', 'Refres', etc.)
     # while intentionally long MIDI titles remain scroll-safe with ellipsis.
-    scene.set("library_info", {"pieces": [ {
+    scene.get("library_view").present_catalog({"pieces": [ {
         "id": "long.mid", "title": "Bill Evans on Autumn Leaves From the Album Portrait in Jazz",
         "folder": "", "format": "MIDI"}], "warmups": []})
-    scene.call("_populate_library")
     scene.call("_navigate", "library")
     await process_frame
     await process_frame
@@ -286,7 +285,7 @@ func _run() -> void:
         "Music drawer escapes left edge of the window")
     _check(drawer.size.x <= viewport.x + 2.0,
         "Music drawer cannot exceed available window width")
-    _check(library_root.is_ancestor_of(scene.get("library_search")),
+    _check(library_root.is_ancestor_of(scene.get("library_view").get("library_search")),
         "Music search remains inside the library content")
     var rail: Control = scene.get("navigation_rail")
     _check(rail != null and _in_viewport(rail, viewport),
@@ -301,7 +300,7 @@ func _run() -> void:
                 "Sidebar destination remains visible and keyboard accessible: " + destination)
             _check(bool(destination_button.get("is_selected")) == (destination == "library"),
                 "Sidebar selection reflects the current Library view")
-    var filter_timer: Timer = scene.get("library_filter_timer")
+    var filter_timer: Timer = scene.get("library_view").get("library_filter_timer")
     _check(filter_timer != null and filter_timer.one_shot and
         absf(filter_timer.wait_time - .12) < .001,
         "Typing in a large library must coalesce UI row rebuilds")
@@ -317,11 +316,11 @@ func _run() -> void:
                 "Library short control narrower than its text: " + button.text)
     _check(short_buttons == 2,
         "Library keeps Refresh and file-check actions alongside the shared sidebar")
-    _check(str((scene.get("library_health_button") as Button).get_meta(
+    _check(str((scene.get("library_view").get("library_health_button") as Button).get_meta(
         "ui_button_role", "")) == "settings",
         "Library diagnostics require a distinguishable inspection action")
-    var library_items: Control = scene.get("library_rows")
-    var library_status: Label = scene.get("library_message")
+    var library_items: Control = scene.get("library_view").get("library_rows")
+    var library_status: Label = scene.get("library_view").get("library_message")
     _check(library_status.get_global_rect().position.y < library_items.get_global_rect().position.y,
         "Library import failures must appear above the score rows, not below a full screen")
     var found_long_title := false
@@ -344,8 +343,8 @@ func _run() -> void:
     scene.call("_on_library_health", 0, 200, PackedStringArray(),
         JSON.stringify(diagnostics).to_utf8_buffer())
     await process_frame
-    var health_label: Label = scene.get("library_health_label")
-    var health_button: Button = scene.get("library_health_button")
+    var health_label: Label = scene.get("library_view").get("library_health_label")
+    var health_button: Button = scene.get("library_view").get("library_health_button")
     _check(health_label.visible and "1 repaired" in health_label.text,
         "Library health summary must explain repairs")
     _check(not health_button.disabled, "Recheck should be available after scan completes")
@@ -362,11 +361,10 @@ func _run() -> void:
     _check(health_button.disabled, "File check should not restart while still scanning")
     # Validate the real card grid, not just a configured column count. Wide
     # views show two tiles per row; compact views retain a single readable tile.
-    scene.set("library_info", {"warmups": [], "pieces": [
+    scene.get("library_view").present_catalog({"warmups": [], "pieces": [
         {"id": "a.mid", "title": "First piece", "format": "MIDI"},
         {"id": "b.mid", "title": "Second piece", "format": "MIDI"},
         {"id": "c.mid", "title": "Third piece", "format": "MIDI"}]})
-    scene.call("_populate_library")
     for frame in range(6):
         await process_frame
     var tiles := _library_entries(library_items)
@@ -402,9 +400,9 @@ func _run() -> void:
     _check(_in_viewport(settings_panel, viewport),
         "Settings drawer overflows the viewport")
     var essential: Array[Control] = [
-        scene.get("folder_edit"), scene.get("device_button"),
-        scene.get("tempo_setting"), scene.get("apply_tempo_button"),
-        scene.get("metronome_toggle"), scene.get("fullscreen_toggle")]
+        scene.get("settings_view").get("folder_edit"), scene.get("settings_view").get("device_button"),
+        scene.get("settings_view").get("tempo_setting"), scene.get("settings_view").get("apply_tempo_button"),
+        scene.get("settings_view").get("metronome_toggle"), scene.get("settings_view").get("fullscreen_toggle")]
     for field in essential:
         var rect: Rect2 = field.get_global_rect()
         _check(rect.position.x >= settings_panel.get_global_rect().position.x - 2.0
@@ -431,9 +429,9 @@ func _run() -> void:
     })
     await process_frame
     var picker: Control = scene.get("open_picker")
-    var measure: SpinBox = scene.get("open_measure")
-    var slider: HSlider = scene.get("open_measure_slider")
-    var start_mode: OptionButton = scene.get("open_mode")
+    var measure: SpinBox = scene.get("open_picker").get("measure")
+    var slider: HSlider = scene.get("open_picker").get("measure_slider")
+    var start_mode: OptionButton = scene.get("open_picker").get("mode_choice")
     _check(picker.visible, "MIDI opening did not present a starting-measure selector")
     _check(measure.max_value == 128 and measure.min_value == 1,
         "Starting-measure selector does not cover the entire MIDI piece")

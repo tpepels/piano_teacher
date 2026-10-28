@@ -25,7 +25,7 @@ func wait_for(predicate: Callable, description: String, seconds: float = 25.0) -
     return true
 
 func imported_row() -> Button:
-    for row in app.library_rows.find_children("*", "Button", true, false):
+    for row in app.library_view.library_rows.find_children("*", "Button", true, false):
         if row is Button and str(row.get_meta("library_title", "")).begins_with("Imported"):
             return row
     return null
@@ -114,9 +114,9 @@ func capture(label: String, track_beat: float = -999) -> Dictionary:
     check(app.score_frame.size.y >= 135,"Notation retains135px height in "+label)
     if app.performance_review.is_visible_in_tree():
         entry["review_bounds"] = str(app.performance_review.get_global_rect())
-        entry["weak_button_bounds"] = str(app.weak_button.get_global_rect())
+        entry["weak_button_bounds"] = str(app.performance_review.review_button.get_global_rect())
         check(viewport.encloses(app.performance_review.get_global_rect()),"Summary fits actual viewport")
-        check(viewport.encloses(app.weak_button.get_global_rect()),"Weak-section button fits actual viewport")
+        check(viewport.encloses(app.performance_review.review_button.get_global_rect()),"Weak-section button fits actual viewport")
     for button in app.practice_navigation.get_children():
         if button is Button and button.is_visible_in_tree() and not button.text.is_empty():
             var font: Font = button.get_theme_font("font")
@@ -148,13 +148,13 @@ func run() -> void:
     await wait_for(func(): return not app.preferences.is_empty(),"normal initial settings")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,"normal Settings")
-    app.folder_edit.text = music
+    app.settings_view.folder_edit.text = music
     press("Save folder")
     await wait_for(func(): return not app.action_pending and str(app.preferences.get("music_dir","")) == music,"user import folder saved")
     press("Choose USB MIDI piano")
     await wait_for(func(): return not app.device_pending and app.device_names.has("Journey test piano"),"test piano listed")
-    app.device_menu.id_pressed.emit(app.device_names.find("Journey test piano"))
-    app.device_menu.hide()
+    app.settings_view.device_menu.id_pressed.emit(app.device_names.find("Journey test piano"))
+    app.settings_view.device_menu.hide()
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device","")) == "Journey test piano","input selected in MIDI menu")
     press("Library")
     await wait_for(func(): return app.current_screen == "library" and not app.library_pending and imported_row() != null,"temporary user file listed")
@@ -162,7 +162,7 @@ func run() -> void:
     check(str(piece.get_meta("library_title", "")).contains("Imported rest and held ending"),"Library opens arbitrary user MIDI")
     piece.pressed.emit()
     await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
-    app.open_mode.select(0)
+    app.open_picker.mode_choice.select(0)
     press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait","import enters generated Learn")
     # Explicitly choose the available full-source performance using the
@@ -189,9 +189,9 @@ func run() -> void:
     print("MODES_STAGE:full-source-selected")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,"choose tempo")
-    await wait_for(func(): return not app.action_pending and not app.apply_tempo_button.disabled,"Pause acknowledged and tempo control enabled")
+    await wait_for(func(): return not app.action_pending and not app.settings_view.apply_tempo_button.disabled,"Pause acknowledged and tempo control enabled")
     print("MODES_STAGE:tempo-ready")
-    app.tempo_setting.value = 240
+    app.settings_view.tempo_setting.value = 240
     press("Apply tempo")
     await wait_for(func(): return not app.action_pending and int(app.last_state.get("target_bpm",0)) == 240,"chosen target240 acknowledged")
     print("MODES_STAGE:tempo-applied")

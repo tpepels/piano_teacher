@@ -214,8 +214,8 @@ func check_settings_rows(label: String) -> Dictionary:
     var all_captions: Array = []
     collect_captions(app.screens["settings"], all_captions)
     var metrics := {}
-    for item in [["target_tempo", "Target tempo", app.tempo_setting],
-            ["piano_volume", "Piano volume", app.listen_volume_slider]]:
+    for item in [["target_tempo", "Target tempo", app.settings_view.tempo_setting],
+            ["piano_volume", "Piano volume", app.settings_view.listen_volume_slider]]:
         var control: Control = item[2]
         var caption: Label
         for candidate in all_captions:
@@ -427,8 +427,8 @@ func capture(label: String) -> bool:
         for control in app.screen_navigation.values():
             check(fits(screen_rect(control), viewport), label + ": drawer navigation fits")
         if app.current_screen == "library":
-            check(fits(screen_rect(app.library_search), viewport), label + ": library search fits")
-            check(app.library_rows.get_child_count() > 0, label + ": real library rows are populated")
+            check(fits(screen_rect(app.library_view.library_search), viewport), label + ": library search fits")
+            check(app.library_view.library_rows.get_child_count() > 0, label + ": real library rows are populated")
         if app.current_screen == "lesson":
             check(app.lesson_rows.get_child_count() > 0, label + ": lesson path is populated")
         if app.current_screen == "settings":

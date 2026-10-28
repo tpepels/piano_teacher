@@ -9,8 +9,8 @@ const ACCENT := Design.TEAL
 
 signal choose_devices_requested
 signal refresh_devices_requested
-signal save_folder_requested
-signal browse_folder_requested
+signal save_folder_requested(path: String)
+signal device_selected(name: String)
 signal tempo_requested(bpm: int)
 signal metronome_requested(enabled: bool)
 signal volume_changed(db: float)
@@ -31,6 +31,9 @@ var listen_volume_slider: HSlider
 var listen_volume_label: Label
 var fullscreen_toggle: CheckButton
 var settings_message: Label
+var folder_dialog: FileDialog
+var device_menu: PopupMenu
+var _device_names: Array = []
 
 func _ui_font(base: int) -> int:
     return maxi(14, int(round(float(base) * ui_scale)))
@@ -133,14 +136,14 @@ func _ready() -> void:
     folder_edit.custom_minimum_size = Vector2(0, 40)
     folder_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     folder_edit.placeholder_text = "~/Music/Piano Teacher"
-    folder_edit.text_submitted.connect(func(_text: String): save_folder_requested.emit())
+    folder_edit.text_submitted.connect(func(_text: String): save_folder_requested.emit(folder_edit.text.strip_edges()))
     folder_controls.add_child(folder_edit)
     var folder_actions := HFlowContainer.new()
     folder_actions.add_theme_constant_override("h_separation", 10)
     folder_actions.add_theme_constant_override("v_separation", 6)
     folder_controls.add_child(folder_actions)
-    folder_actions.add_child(_button("Choose folder…", func(): browse_folder_requested.emit(), false, "navigation"))
-    folder_actions.add_child(_button("Save folder", func(): save_folder_requested.emit(), false, "secondary"))
+    folder_actions.add_child(_button("Choose folder…", _browse_folder, false, "navigation"))
+    folder_actions.add_child(_button("Save folder", func(): save_folder_requested.emit(folder_edit.text.strip_edges()), false, "secondary"))
     music.add_child(_label("MIDI and MusicXML files in this folder and its subfolders.", 13, MUTED))
 
     var practice := _section("Practice tempo")
@@ -197,7 +200,9 @@ func _ready() -> void:
     audio_row.add_child(listen_volume_slider)
     listen_volume_label = _label("+6 dB", 14, INK)
     audio_row.add_child(listen_volume_label)
-    listen_volume_slider.value_changed.connect(func(db: float): volume_changed.emit(db))
+    listen_volume_slider.value_changed.connect(func(db: float):
+        listen_volume_label.text = "%+d dB" % int(round(db))
+        volume_changed.emit(db))
     fullscreen_toggle = CheckButton.new()
     fullscreen_toggle.text = "Fullscreen application  ·  F11"
     fullscreen_toggle.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
@@ -209,5 +214,85 @@ func _ready() -> void:
     content.add_child(exit_button)
     settings_message = _label("", 14, MUTED)
     content.add_child(settings_message)
+    folder_dialog = FileDialog.new()
+    folder_dialog.access = FileDialog.ACCESS_FILESYSTEM
+    folder_dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
+    folder_dialog.use_native_dialog = true
+    folder_dialog.dir_selected.connect(func(path: String):
+        folder_edit.text = path
+        save_folder_requested.emit(path.strip_edges()))
+    add_child(folder_dialog)
+    device_menu = PopupMenu.new()
+    device_menu.id_pressed.connect(_device_chosen)
+    add_child(device_menu)
 
+func present_preferences(values: Dictionary) -> void:
+    folder_edit.text = str(values.get("music_dir", ""))
+    present_window_mode(bool(values.get("fullscreen", true)))
+    metronome_toggle.set_pressed_no_signal(bool(values.get("metronome", true)))
 
+func begin_editing(state: Dictionary) -> void:
+    tempo_setting.set_value_no_signal(float(state.get("target_bpm", 40)))
+
+func present_practice(state: Dictionary, editing: bool = false) -> void:
+    var age = state.get("midi_input_age")
+    var recent: bool = age != null and float(age) < 1.5
+    if recent:
+        input_activity_label.text = "Input received · MIDI note %d · %d notes received" % [
+            int(state.get("midi_input_note", 0)), int(state.get("midi_input_count", 0))]
+    else:
+        input_activity_label.text = "Play a note to check input." if not str(state.get("device", "")).is_empty() else "Connect your MIDI piano, then play a note to check input."
+    var tone: Color = ACCENT if recent else MUTED
+    if input_activity_label.get_theme_color("font_color") != tone:
+        input_activity_label.add_theme_color_override("font_color", tone)
+    if bool(state.get("loaded", false)):
+        tempo_setting.min_value = float(state.get("minimum_bpm", 12))
+        tempo_setting.max_value = float(state.get("maximum_bpm", 300))
+        if not editing:
+            tempo_setting.set_value_no_signal(float(state.get("target_bpm", state.get("bpm", 40))))
+
+func present_busy(pending: bool) -> void:
+    apply_tempo_button.disabled = pending
+
+func present_volume(db: float) -> void:
+    listen_volume_slider.set_value_no_signal(db)
+    listen_volume_label.text = "%+d dB" % int(round(db))
+
+func present_window_mode(fullscreen: bool) -> void:
+    fullscreen_toggle.set_pressed_no_signal(fullscreen)
+
+func present_message(message: String) -> void:
+    settings_message.text = message
+
+func apply_viewport(view_size: Vector2, scale: float) -> void:
+    ui_scale = scale
+    settings_grid.columns = 2 if view_size.x >= 1100.0 else 1
+    for control in find_children("*", "Control", true, false):
+        if control.has_meta("ui_font_base"):
+            control.add_theme_font_size_override("font_size", _ui_font(int(control.get_meta("ui_font_base"))))
+
+func present_devices(names: Array, connected: String, open_menu: bool = false) -> void:
+    _device_names = names.duplicate(true)
+    device_menu.clear()
+    device_menu.add_item("No MIDI input · timing preview", -2)
+    device_menu.add_separator()
+    for index in range(_device_names.size()):
+        device_menu.add_item(str(_device_names[index]), index)
+    device_button.text = connected if not connected.is_empty() else "Choose USB MIDI piano"
+    if open_menu:
+        device_menu.position = Vector2i(device_button.get_screen_position()) + Vector2i(0, int(device_button.size.y))
+        device_menu.popup()
+
+func present_device_selection(name: String) -> void:
+    device_button.text = name + "  ✓"
+
+func _device_chosen(index: int) -> void:
+    if index == -2:
+        device_selected.emit("")
+    elif index >= 0 and index < _device_names.size():
+        device_selected.emit(str(_device_names[index]))
+
+func _browse_folder() -> void:
+    if DirAccess.dir_exists_absolute(folder_edit.text):
+        folder_dialog.current_dir = folder_edit.text
+    folder_dialog.popup_centered_ratio(0.7)

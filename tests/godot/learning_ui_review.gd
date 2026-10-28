@@ -24,7 +24,7 @@ func wait_for(predicate: Callable,description: String,seconds: float = 25.0) -> 
     return true
 
 func imported_row() -> Button:
-    for row in app.library_rows.find_children("*", "Button", true, false):
+    for row in app.library_view.library_rows.find_children("*", "Button", true, false):
         if row is Button and str(row.get_meta("library_title", "")).begins_with("Imported"):
             return row
     return null
@@ -91,7 +91,7 @@ func capture(label: String) -> Dictionary:
     check(background.r < .2 and background.g < .32 and background.b < .28,
         "Low-glare dark background in "+label)
     if app.open_picker.visible:
-        var modal: Rect2 = app.open_panel.get_global_rect()
+        var modal: Rect2 = app.open_picker.panel.get_global_rect()
         entry["starting_measure_bounds"] = str(modal)
         check(modal.size.x >= 280.0 and modal.size.x <= 680.0,
             "Starting-measure dialog must have readable width in " + label)
@@ -195,13 +195,13 @@ func run() -> void:
     await capture("01-home")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,"normal Settings")
-    app.folder_edit.text = music
+    app.settings_view.folder_edit.text = music
     press("Save folder")
     await wait_for(func(): return not app.action_pending and str(app.preferences.get("music_dir","")) == music,"user folder saved")
     press("Choose USB MIDI piano")
     await wait_for(func(): return not app.device_pending and app.device_names.has("Journey test piano"),"test MIDI adapter listed")
-    app.device_menu.id_pressed.emit(app.device_names.find("Journey test piano"))
-    app.device_menu.hide()
+    app.settings_view.device_menu.id_pressed.emit(app.device_names.find("Journey test piano"))
+    app.settings_view.device_menu.hide()
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device","")) == "Journey test piano","MIDI input selected in real menu")
     await capture("02-settings")
     press("Library")
@@ -213,13 +213,13 @@ func run() -> void:
     await resize_to(Vector2i(800,600))
     await capture("03c-starting-measure-800x600")
     await resize_to(Vector2i(1536,960))
-    app.open_mode.select(0)
+    app.open_picker.mode_choice.select(0)
     press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait","generated Learn opens")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending,"choose practice target")
-    await wait_for(func(): return not app.action_pending and not app.apply_tempo_button.disabled,"Pause acknowledged and tempo control enabled")
-    app.tempo_setting.value = 80
+    await wait_for(func(): return not app.action_pending and not app.settings_view.apply_tempo_button.disabled,"Pause acknowledged and tempo control enabled")
+    app.settings_view.tempo_setting.value = 80
     press("Apply tempo")
     await wait_for(func(): return not app.action_pending and int(app.last_state.get("target_bpm",0)) == 80,"chosen target acknowledged")
     press("Practice")

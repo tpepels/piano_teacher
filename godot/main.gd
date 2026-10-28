@@ -36,7 +36,6 @@ var overlay_root: Control
 var overlay_drawer: PanelContainer
 var navigation_rail: VBoxContainer
 var screen_navigation: Dictionary = {}
-var settings_grid: GridContainer
 var settings_view: SettingsScreen
 var lesson_stage_labels: Dictionary = {}
 var lesson_piece_title: Label
@@ -61,7 +60,6 @@ var preferences: Dictionary = {}
 var home_count_label: Label
 var home_cards: BoxContainer
 var page_margins: Array[MarginContainer] = []
-var folder_controls: BoxContainer
 var practice_settings_button: Button
 var practice_navigation: HFlowContainer
 var practice_header: HBoxContainer
@@ -89,10 +87,6 @@ var practice_stage_labels: Dictionary = {}
 var presented_hand_stages: Array = []
 var practice_retry_button: Button
 var practice_music_button: Button
-var folder_edit: LineEdit
-var folder_dialog: FileDialog
-var fullscreen_toggle: CheckButton
-var settings_message: Label
 var last_post_path := ""
 var last_control_action := ""
 var pending_transport_action := ""
@@ -116,7 +110,6 @@ var lesson_choice_fingerprint := ""
 var lesson_requested_fingerprint := ""
 var feedback_label: Label
 var progress_label: Label
-var device_button: Button
 var device_menu_requested := false
 var start_button: Button
 var score_effects = ScoreEffects.new()
@@ -127,7 +120,6 @@ var game_phase_cue: Control
 var click_player: AudioStreamPlayer
 var click_high: AudioStreamWAV
 var click_low: AudioStreamWAV
-var device_menu: PopupMenu
 var device_names: Array = []
 var revision := -1
 var state_pending := false
@@ -170,9 +162,6 @@ var lesson_options: PanelContainer
 var lesson_rows: VBoxContainer
 var lesson_summary: Label
 var lesson_description: Label
-var input_activity_label: Label
-var tempo_setting: SpinBox
-var metronome_toggle: CheckButton
 var stop_button: Button
 var lesson_info_label: Label
 var practice_progress: ProgressBar
@@ -190,8 +179,6 @@ var mode_choice: OptionButton
 var hints_toggle: CheckButton
 var demo_player: Node
 var listen_button: Button
-var listen_volume_slider: HSlider
-var listen_volume_label: Label
 var performance_review: PerformanceReviewStrip
 var review_sheet: AcceptDialog
 var pause_sheet: Control
@@ -199,7 +186,6 @@ var advanced_pause_open := false
 var skip_stage_button: Button
 var practice_skip_button: Button
 var placement_button: Button
-var apply_tempo_button: Button
 var ui_scale := 1.0
 var last_seen_midi_input_count := -1
 var last_seen_midi_visual_sequence := 0
@@ -224,8 +210,7 @@ func _ready() -> void:
     _build_interface()
     demo_player = preload("res://demo_player.gd").new()
     add_child(demo_player)
-    listen_volume_slider.set_value_no_signal(float(demo_player.get("listen_volume_db")))
-    _show_listen_volume(float(demo_player.get("listen_volume_db")))
+    settings_view.present_volume(float(demo_player.get("listen_volume_db")))
     demo_player.prepared.connect(func(token: String, ready_revision: int):
         _send_action({"action": "demo_ready", "token": token, "revision": ready_revision}))
     demo_player.failed.connect(func(message: String): feedback_label.text = message)
@@ -443,8 +428,8 @@ func _ui_font(base: int) -> int:
     return maxi(14, int(round(float(base) * ui_scale)))
 
 func _resize_ui_fonts(node: Node) -> void:
-    if node == library_view:
-        return # Library applies its own presentation scale through apply_viewport.
+    if node == library_view or node == settings_view:
+        return # Screens own their text scaling through apply_viewport.
     if node is Control and node.has_meta("ui_font_base"):
         (node as Control).add_theme_font_size_override(
             "font_size", _ui_font(int(node.get_meta("ui_font_base"))))
@@ -538,12 +523,7 @@ func _transport_button(label: String, callback: Callable, kind: String, central 
     _game_button(button, central)
     return button
 
-func _show_listen_volume(db: float) -> void:
-    if listen_volume_label != null:
-        listen_volume_label.text = "%+d dB" % int(round(db))
-
 func _on_listen_volume_changed(db: float) -> void:
-    _show_listen_volume(db)
     if demo_player != null:
         demo_player.call("set_listen_volume_db", db)
 
@@ -639,7 +619,7 @@ func _navigate(screen: String) -> void:
         _request_library()
         library_view.call_deferred("focus_search")
     elif screen == "settings":
-        tempo_setting.set_value_no_signal(float(last_state.get("target_bpm", 40)))
+        settings_view.begin_editing(last_state)
         _request_settings()
         _request_devices()
     elif screen == "lesson":
@@ -718,8 +698,8 @@ func _resize_overlay_drawer() -> void:
         # Compact learners can reach hand/mode choices without scrolling
         # past an entire course; the wide view keeps progression first.
         lesson_columns.move_child(lesson_options, 0 if lesson_columns.vertical else 1)
-    if settings_grid != null:
-        settings_grid.columns = 2 if size.x >= 1100.0 else 1
+    if settings_view != null:
+        settings_view.apply_viewport(size, ui_scale)
 
 
 func _go_back() -> void:
@@ -1119,23 +1099,11 @@ func _build_practice_screen() -> void:
     _build_lesson_screen()
     _mount_overlays()
 
-    folder_dialog = FileDialog.new()
-    folder_dialog.access = FileDialog.ACCESS_FILESYSTEM
-    folder_dialog.file_mode = FileDialog.FILE_MODE_OPEN_DIR
-    folder_dialog.use_native_dialog = true
-    folder_dialog.dir_selected.connect(func(path: String):
-        folder_edit.text = path
-        _save_folder()
-    )
-    add_child(folder_dialog)
     open_picker = SourceMeasurePicker.new()
     open_picker.confirmed.connect(func(_bar: int, _mode: String): _confirm_open_picker())
     open_picker.cancel_requested.connect(_cancel_open_picker)
     add_child(open_picker)
     _resize_open_picker()
-    device_menu = PopupMenu.new()
-    device_menu.id_pressed.connect(_choose_device)
-    add_child(device_menu)
     pause_sheet = preload("res://pause_sheet.gd").new()
     pause_sheet.z_index = 30
     add_child(pause_sheet)
@@ -1290,8 +1258,9 @@ func _build_settings_screen() -> void:
     page.add_child(settings_view)
     settings_view.choose_devices_requested.connect(_show_devices)
     settings_view.refresh_devices_requested.connect(_request_devices)
-    settings_view.save_folder_requested.connect(_save_folder)
-    settings_view.browse_folder_requested.connect(_browse_folder)
+    settings_view.save_folder_requested.connect(func(path: String):
+        _send_post("/settings", {"music_dir": path}))
+    settings_view.device_selected.connect(_choose_device)
     settings_view.tempo_requested.connect(func(bpm: int):
         _send_action({"action": "tempo", "bpm": bpm}))
     settings_view.metronome_requested.connect(func(enabled: bool):
@@ -1299,20 +1268,6 @@ func _build_settings_screen() -> void:
     settings_view.volume_changed.connect(_on_listen_volume_changed)
     settings_view.fullscreen_requested.connect(_on_fullscreen_toggle)
     settings_view.exit_requested.connect(_exit_app)
-    # Compatibility references for current state presentation and resizing.
-    settings_grid = settings_view.settings_grid
-    device_button = settings_view.device_button
-    input_activity_label = settings_view.input_activity_label
-    folder_controls = settings_view.folder_controls
-    folder_edit = settings_view.folder_edit
-    tempo_setting = settings_view.tempo_setting
-    apply_tempo_button = settings_view.apply_tempo_button
-    metronome_toggle = settings_view.metronome_toggle
-    listen_volume_slider = settings_view.listen_volume_slider
-    listen_volume_label = settings_view.listen_volume_label
-    fullscreen_toggle = settings_view.fullscreen_toggle
-    settings_message = settings_view.settings_message
-
 
 func _build_lesson_screen() -> void:
     var page := _screen("Lesson")
@@ -1831,28 +1786,18 @@ func _request_settings() -> void:
 func _on_settings(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     settings_pending = false
     if code != 200:
-        settings_message.text = _http_failure(code, body)
+        settings_view.present_message(_http_failure(code, body))
         return
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
     preferences = parsed
-    folder_edit.text = str(preferences.get("music_dir", ""))
-    fullscreen_toggle.set_pressed_no_signal(bool(preferences.get("fullscreen", true)))
-    metronome_toggle.set_pressed_no_signal(bool(preferences.get("metronome", true)))
+    settings_view.present_preferences(preferences)
     _apply_window_mode(bool(preferences.get("fullscreen", true)))
     var saved_device := str(preferences.get("midi_device", ""))
     if not saved_device.is_empty() and str(last_state.get("device", "")) == "" and not device_names.is_empty():
         if device_names.has(saved_device) and not saved_device.to_lower().contains("midi through"):
-            _choose_device(device_names.find(saved_device))
-
-func _save_folder() -> void:
-    _send_post("/settings", {"music_dir": folder_edit.text.strip_edges()})
-
-func _browse_folder() -> void:
-    if DirAccess.dir_exists_absolute(folder_edit.text):
-        folder_dialog.current_dir = folder_edit.text
-    folder_dialog.popup_centered_ratio(0.7)
+            _choose_device(saved_device)
 
 func _apply_window_mode(fullscreen: bool) -> void:
     var expected := Window.MODE_FULLSCREEN if fullscreen else Window.MODE_WINDOWED
@@ -1865,7 +1810,7 @@ func _on_fullscreen_toggle(enabled: bool) -> void:
 
 func _toggle_fullscreen() -> void:
     var enabled := get_window().mode != Window.MODE_FULLSCREEN
-    fullscreen_toggle.set_pressed_no_signal(enabled)
+    settings_view.present_window_mode(enabled)
     _on_fullscreen_toggle(enabled)
 
 func _poll() -> void:
@@ -1901,7 +1846,7 @@ func _process(_delta: float) -> void:
     for index in range(score_effects.preview_pulses.size() - 1, -1, -1):
         if int(score_effects.preview_pulses[index].get("until_ms", 0)) <= ticks:
             score_effects.preview_pulses.remove_at(index)
-    apply_tempo_button.disabled = action_pending
+    settings_view.present_busy(action_pending)
     if tempo_down_button != null:
         tempo_down_button.disabled = (action_pending or not bool(last_state.get("loaded", false))
             or not bool(last_state.get("can_decrease_tempo", false))
@@ -2037,15 +1982,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         var interval := 0.05 if live_rate else 0.15
         if absf(state_poll_timer.wait_time - interval) > 0.001:
             state_poll_timer.wait_time = interval
-    var input_age = parsed.get("midi_input_age")
-    if input_age != null and float(input_age) < 1.5:
-        input_activity_label.text = "Input received · MIDI note %d · %d notes received" % [
-            int(parsed.get("midi_input_note", 0)), int(parsed.get("midi_input_count", 0))]
-    else:
-        input_activity_label.text = "Play a note to check input." if not str(parsed.get("device", "")).is_empty() else "Connect your MIDI piano, then play a note to check input."
-    var input_tone: Color = ACCENT if input_age != null and float(input_age) < 1.5 else MUTED
-    if input_activity_label.get_theme_color("font_color") != input_tone:
-        input_activity_label.add_theme_color_override("font_color", input_tone)
+    settings_view.present_practice(parsed, current_screen == "settings")
     # The backend sampled the clock during this HTTP round trip. Estimate
     # that sample at the midpoint so music never waits for the poll interval.
     var started_ms: int = state_request_started_ms if sample_started_ms < 0 else sample_started_ms
@@ -2107,10 +2044,6 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
     hand_label.tooltip_text = "Current hand of the backend lesson"
     game_input_indicator.present(parsed)
-    tempo_setting.min_value = float(parsed.get("minimum_bpm", 12))
-    tempo_setting.max_value = float(parsed.get("maximum_bpm", 300))
-    if current_screen != "settings":
-        tempo_setting.set_value_no_signal(float(parsed.get("target_bpm", parsed.get("bpm", 40))))
     var stage: String = str(parsed.get("lesson_level", "original"))
     var explanations := {"skeleton": "Find the main notes first.",
         "outline": "Add the chord notes while keeping the pulse.",
@@ -2760,7 +2693,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         elif queued_library_failed:
             library_view.present_open_status("Cannot open selected music: " + message, true)
         feedback_label.text = message
-        settings_message.text = message
+        settings_view.present_message(message)
         if path != "/library/open" and not queued_library_failed:
             library_view.present_request_error(message)
         home_recent_label.text = message
@@ -2795,7 +2728,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         elif opened is Dictionary:
             _show_open_picker(opened)
     elif path == "/settings":
-        settings_message.text = "Settings saved"
+        settings_view.present_message("Settings saved")
         _request_settings()
         _request_library()
     elif path == "/device":
@@ -2894,43 +2827,31 @@ func _on_devices(_result: int, code: int, _headers: PackedStringArray, body: Pac
         # stale device picker. Give a diagnostic in Settings without
         # interrupting a running practice take.
         device_menu_requested = false
-        if current_screen == "settings" and settings_message != null:
-            settings_message.text = "MIDI device scan failed: " + _http_failure(code, body)
+        if current_screen == "settings":
+            settings_view.present_message("MIDI device scan failed: " + _http_failure(code, body))
         return
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         device_menu_requested = false
         return
     device_names = parsed.get("devices", [])
-    device_menu.clear()
-    device_menu.add_item("No MIDI input · timing preview", -2)
-    device_menu.add_separator()
-    for i in range(device_names.size()):
-        device_menu.add_item(str(device_names[i]), i)
-    device_button.text = str(last_state.get("device", "Choose USB MIDI piano")) if not str(last_state.get("device", "")).is_empty() else "Choose USB MIDI piano"
+    var show_picker: bool = device_menu_requested
+    device_menu_requested = false
+    settings_view.present_devices(device_names, str(last_state.get("device", "")), show_picker)
     if str(last_state.get("device", "")) == "":
         var saved: String = str(preferences.get("midi_device", ""))
         if device_names.has(saved) and not saved.is_empty() and not saved.to_lower().contains("midi through"):
-            _choose_device(device_names.find(saved))
-    if device_menu_requested:
-        # Populate from this fresh response before showing the popup. The
-        # former implementation opened stale items while scanning asynchronously.
-        device_menu_requested = false
-        device_menu.position = Vector2i(device_button.get_screen_position()) + Vector2i(0, int(device_button.size.y))
-        device_menu.popup()
+            _choose_device(saved)
 
 func _show_devices() -> void:
     device_menu_requested = true
     _request_devices()
 
-func _choose_device(id: int) -> void:
-    if id == -2:
-        _send_post("/device", {"name": ""})
-        return
-    if id < 0 or id >= device_names.size():
-        return
-    _send_post("/device", {"name": device_names[id]})
-    device_button.text = str(device_names[id]) + "  ✓"
+func _choose_device(name: String) -> void:
+    _send_post("/device", {"name": name})
+    if not name.is_empty():
+        settings_view.present_device_selection(name)
+
 
 func _input(event: InputEvent) -> void:
     if open_picker != null and open_picker.visible and event is InputEventKey \

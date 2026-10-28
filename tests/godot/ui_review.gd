@@ -63,12 +63,13 @@ func run() -> void:
     app = load("res://main.gd").new()
     app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_child(app)
-    await wait_for(func(): return not app.library_info.is_empty())
+    await wait_for(func(): return not app.library_view.library_info.is_empty())
     await capture("home")
     press("Music")
     await wait_for(func(): return app.current_screen == "library" and not app.library_pending)
-    app.library_search.text = source.get_file().get_basename().replace("_", " ")
-    app._populate_library()
+    app.library_view.library_search.text = source.get_file().get_basename().replace("_", " ")
+    app.library_view.library_search.text_changed.emit(app.library_view.library_search.text)
+    await create_timer(.17).timeout
     await capture("library")
     await api("/library/open", {"id": source.get_file()})
     app._navigate("practice")
@@ -92,18 +93,18 @@ func run() -> void:
     app._go_back()
     press("Settings")
     await wait_for(func(): return not app.settings_pending)
-    app.metronome_toggle.button_pressed = false
+    app.settings_view.metronome_toggle.button_pressed = false
     await wait_for(func(): return not app.action_pending and not bool(app.preferences.get("metronome", true)))
-    app.tempo_setting.value = 60
+    app.settings_view.tempo_setting.value = 60
     press("Apply tempo")
     await wait_for(func(): return int(app.last_state.get("target_bpm", 0)) == 60 and score_ready())
     app._show_devices()
     await process_frame
-    if app.device_menu.get_item_id(0) != -2:
+    if app.settings_view.device_menu.get_item_id(0) != -2:
         failures.append("MIDI menu must offer an ungraded timing preview")
     await capture("midi-menu")
-    app.device_menu.hide()
-    app.device_menu.id_pressed.emit(-2)
+    app.settings_view.device_menu.hide()
+    app.settings_view.device_menu.id_pressed.emit(-2)
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device", "")) == "")
     for dimensions in [Vector2i(1536,960), Vector2i(1024,768), Vector2i(800,600)]:
         root.size = dimensions
@@ -116,12 +117,12 @@ func run() -> void:
         app._navigate("settings")
     var saved_hand: String = str(app.last_state.get("hand", ""))
     var saved_tempo: int = int(app.last_state.get("target_bpm", 0))
-    app.library_search.text = ""
+    app.library_view.library_search.text = ""
     app._navigate("library")
     await wait_for(func(): return not app.library_pending)
     await capture("library-recent-800x600")
     var continued := false
-    for row in app.library_rows.find_children("*", "Button", true, false):
+    for row in app.library_view.library_rows.find_children("*", "Button", true, false):
         if str(row.get_meta("library_detail", "")).begins_with("Continue from saved place"):
             row.pressed.emit()
             continued = true

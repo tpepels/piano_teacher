@@ -293,3 +293,10 @@ first-party architectural monoliths.
   repeats retain exact deadline/poll overshoot, and restart explicitly verifies
   reverse motion, the full preparation measure, recorder creation and mastery.
   No production behavior changed; 41 focused progression/transport tests pass.
+
+- Settings now owns its device menu, folder dialog, tempo drafts, captions and
+  responsive presentation; signals carry values and main coordinates HTTP.
+  Widget aliases removed; existing application harnesses target real owners.
+  Parent standalone/app focus: 16 passed. Owner broader UI run: 57 passed and
+  one existing caption-bounds failure reproduced with committed UI; this is
+  tracked for correction in the Practice screen extraction.

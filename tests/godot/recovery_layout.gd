@@ -37,10 +37,9 @@ func run() -> void:
     root.add_child(app)
     await process_frame
     await process_frame
-    app.library_info = {"pieces": [], "warmups": [
+    app.library_view.present_catalog({"pieces": [], "warmups": [
         {"id":"warmup:chords", "title":"Chord Changes", "description":"Beginner triads", "bpm":68},
-        {"id":"warmup:finger-patterns", "title":"Five-Finger Ladders", "description":"Parallel finger motion", "bpm":70}]}
-    app._populate_library()
+        {"id":"warmup:finger-patterns", "title":"Five-Finger Ladders", "description":"Parallel finger motion", "bpm":70}]})
     for stage in range(12):
         var row := Button.new()
         row.text = "Lesson %d · Practice this passage" % (stage + 1)
@@ -68,8 +67,8 @@ func run() -> void:
                 check(rect.position.x >= drawer.position.x - 1 and rect.end.x <= drawer.end.x + 1,
                     "%s action fits drawer: %s %s" % [page, field.name, rect])
         if page == "library":
-            check(app.library_scroll.size.y >= 130,
-                "Library leaves a usable visible list, got %.1fpx" % app.library_scroll.size.y)
+            check(app.library_view.library_scroll.size.y >= 130,
+                "Library leaves a usable visible list, got %.1fpx" % app.library_view.library_scroll.size.y)
         if page == "lesson":
             # The nested lesson list must have a usable viewport, including
             # when there are enough stages to require scrolling.
@@ -91,7 +90,7 @@ func run() -> void:
     app._show_open_picker({"title":"Imported MIDI", "piece_last_bar":77, "selected_start_bar":1})
     for frame in range(8):
         await process_frame
-    check(app.open_panel.get_global_rect().position.x >= 0 and app.open_panel.get_global_rect().end.x <= root.get_visible_rect().size.x,
+    check(app.open_picker.panel.get_global_rect().position.x >= 0 and app.open_picker.panel.get_global_rect().end.x <= root.get_visible_rect().size.x,
         "Starting point fits horizontally")
     if args.size() > 1 and DisplayServer.get_name() != "headless":
         RenderingServer.force_draw()

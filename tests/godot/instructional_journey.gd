@@ -27,7 +27,7 @@ func wait_for(predicate: Callable, description: String, seconds: float = 25.0) -
     return true
 
 func imported_row() -> Button:
-    for row in app.library_rows.find_children("*", "Button", true, false):
+    for row in app.library_view.library_rows.find_children("*", "Button", true, false):
         if row is Button and str(row.get_meta("library_title", "")).begins_with("Imported"):
             return row
     return null
@@ -175,9 +175,9 @@ func finish_earned_modes() -> void:
     check(int(app.last_state.target_bpm) == 240,"Earned stage preserves chosen target before manual tempo change")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending and not app.action_pending,"choose tempo for earned-stage example")
-    app.tempo_setting.value = 240
-    await wait_for(func(): return not app.apply_tempo_button.disabled,"tempo control is available after pending transport")
-    app.apply_tempo_button.pressed.emit()
+    app.settings_view.tempo_setting.value = 240
+    await wait_for(func(): return not app.settings_view.apply_tempo_button.disabled,"tempo control is available after pending transport")
+    app.settings_view.apply_tempo_button.pressed.emit()
     await wait_for(func(): return not app.action_pending and int(app.last_state.get("bpm",0)) == 240,"ordinary Apply target sets current example tempo")
     press("Practice")
     await wait_for(func(): return score_ready() and not app.action_pending,"earned original score and controls ready")
@@ -233,14 +233,14 @@ func run() -> void:
     await wait_for(func(): return not app.preferences.is_empty(), "normal initial settings")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending and not app.action_pending, "normal Settings")
-    app.folder_edit.text = music
+    app.settings_view.folder_edit.text = music
     press("Save folder")
     await wait_for(func(): return not app.action_pending and str(app.preferences.get("music_dir", "")) == music,
         "user import folder saved")
     press("Choose USB MIDI piano")
     await wait_for(func(): return not app.device_pending and app.device_names.has("Journey test piano"), "test piano listed")
-    app.device_menu.id_pressed.emit(app.device_names.find("Journey test piano"))
-    app.device_menu.hide()
+    app.settings_view.device_menu.id_pressed.emit(app.device_names.find("Journey test piano"))
+    app.settings_view.device_menu.hide()
     await wait_for(func(): return not app.action_pending and str(app.last_state.get("device", "")) == "Journey test piano",
         "input selected through visible MIDI menu")
     press("Library")
@@ -250,15 +250,15 @@ func run() -> void:
     check(str(piece.get_meta("library_title", "")).contains("Imported two-measure lesson"), "Library shows the user-imported MIDI")
     piece.pressed.emit()
     await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
-    app.open_mode.select(0)
+    app.open_picker.mode_choice.select(0)
     press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait",
         "import enters source-generated Learn")
     press("Settings")
     await wait_for(func(): return app.current_screen == "settings" and not app.settings_pending and not app.action_pending, "choose target tempo")
-    app.tempo_setting.value = 240
-    await wait_for(func(): return not app.apply_tempo_button.disabled,"tempo control is available after pending transport")
-    app.apply_tempo_button.pressed.emit()
+    app.settings_view.tempo_setting.value = 240
+    await wait_for(func(): return not app.settings_view.apply_tempo_button.disabled,"tempo control is available after pending transport")
+    app.settings_view.apply_tempo_button.pressed.emit()
     await wait_for(func(): return not app.action_pending and int(app.last_state.get("target_bpm", 0)) == 240,
         "chosen target tempo remains authoritative")
     press("Practice")
