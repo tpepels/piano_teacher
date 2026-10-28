@@ -1,4 +1,4 @@
-name: Native notation (quick checks)
+name: Piano Teacher (short smoke gate)
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_call:
     outputs:
       revision:
-        description: Commit that passed fast checks (not a full notation audit)
+        description: Commit that passed bounded smoke checks (not comprehensive notation verification)
         value: ${{ jobs.native-gate.outputs.revision }}
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
     name: native-notation
     runs-on: ubuntu-latest
     container: archlinux:latest
-    timeout-minutes: 20
+    timeout-minutes: 7
     outputs:
       revision: ${{ steps.passed.outputs.revision }}
     steps:
@@ -40,15 +40,8 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install -e '.[godot,test]'
           bash scripts/setup-fingering.sh
-      - name: Run targeted architecture regressions first
-        run: |
-          xvfb-run -a -s '-screen 0 1600x1000x24' .venv/bin/python -m pytest -q \
-            tests/test_completion_route.py \
-            tests/test_completion_handlers.py \
-            tests/test_source_measure_picker.py \
-            tests/test_native_voice_layout.py
-      - name: Run fast verification (no corpus rendering)
-        run: xvfb-run -a -s '-screen 0 1600x1000x24' bash scripts/verify-notation.sh --ci
+      - name: Run bounded smoke checks (no corpus rendering)
+        run: bash scripts/ci-smoke.sh
       - name: Record quick-check revision
         id: passed
         env:

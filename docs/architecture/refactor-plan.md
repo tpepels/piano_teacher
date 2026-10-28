@@ -100,3 +100,17 @@ For each slice: measure duplication/coupling first, preserve public contracts,
 add focused positive/negative tests, run quick CI, and commit separately.
 Do not move code merely to make files shorter. No simultaneous architecture
 rewrites or behavior changes while notation quality is being investigated.
+
+## CI policy (2026-10-28)
+
+Automatic push/PR checks run `scripts/ci-smoke.sh` only. It compiles Python,
+checks the architecture's narrow contract tests, and parses the Godot main
+scene. Test execution is bounded to 105 seconds and scene parsing to 25
+seconds; the GitHub job has a seven-minute outer limit including dependency
+setup. This is a **smoke gate, not a notation-quality certification**.
+
+The older, much broader `bash scripts/verify-notation.sh --ci` remains
+available explicitly for pre-release regression verification; the complete
+`./scripts/verify-notation.sh` additionally runs the source-driven corpus
+audit. Neither is scheduled on every commit. Do not silently weaken those
+independent tests to make automatic CI faster.
