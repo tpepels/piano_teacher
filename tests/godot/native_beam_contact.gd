@@ -1,10 +1,10 @@
 extends SceneTree
 
 class BeamCanvas extends "res://notation/native/view.gd":
-    var layout: Dictionary = {}
+    var beam_plan: Dictionary = {}
     func _draw() -> void:
-        if not layout.is_empty():
-            _paint_beams(layout,17.0)
+        if not beam_plan.is_empty():
+            _paint_beams(beam_plan,17.0)
 
 func _initialize() -> void:
     call_deferred("run")
@@ -38,7 +38,7 @@ func run() -> void:
             var canvas := BeamCanvas.new()
             canvas.size = Vector2(800,560)
             canvas.glyphs = renderer.glyphs
-            canvas.layout = layout
+            canvas.beam_plan = layout
             canvas.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
             view.add_child(canvas)
             views.append(view)

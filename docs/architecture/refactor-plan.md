@@ -222,3 +222,11 @@ first-party architectural monoliths.
   belongs to score geometry and receives explicit source-offset parameters.
   New headless contract RED→GREEN; 13 independent/pixel tests passed;
   independent review found no math or ownership regressions.
+
+- Native connector extraction: `ConnectorGeometry` owns authentic tie/flag
+  clearance and beam/endpoint plans. Source visibility and clock offsets are
+  explicit inputs, not view callbacks. Independent review caught stale viewport
+  state on geometry-policy replacement; a new failing behavior case reproduced
+  Y=40 instead of 220, then setter synchronization fixed it. Three headless
+  contracts and fresh 43 real connector/beam/flag regressions pass. A fixture's
+  obsolete `layout` field was renamed `beam_plan`; assertions unchanged.
