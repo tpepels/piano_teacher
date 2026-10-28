@@ -96,7 +96,6 @@ class AssessmentService:
             return []
         per_bar=total/max(1,phrase.last_bar-phrase.first_bar+1)
         now_beat=played_from_beat+elapsed_seconds*bpm/60
-        played=played
         settled=settled_assessment(phrase,hand,bpm,played,
                                   from_beat=played_from_beat,
                                   until_beat=now_beat,beats_per_bar=per_bar)
@@ -111,7 +110,6 @@ class AssessmentService:
         if settled is None and missed is None:
             return []
         try:
-            layout=layout
             marks=[]
             if settled is not None:
                 marks=projector(settled,phrase,bpm,layout,

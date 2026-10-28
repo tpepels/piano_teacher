@@ -36,12 +36,11 @@ from .notation.model import build_score_model
 from .notation.practice_timeline import preparation_measure_descriptor
 from .lesson_validation import require_lesson_alignment
 from .lesson_timing import lead_in_beats, preparation_meter
-from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at, two_bar_chunks
+from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at
 from .course_navigation import locate_course_section
 from .state_projection import hand_stage_rows, guided_learning_fields
 from .assessment_service import AssessmentService
 from .transport_projection import VisualMotionSnapshot, project_visual_motion
-from .live_feedback import settled_assessment, expired_attack_misses
 from .live_input_view import LiveInputView
 from .hardware_probe import HardwareProbe
 from .instruction import next_full_attempt
