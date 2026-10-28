@@ -308,3 +308,10 @@ first-party architectural monoliths.
   contracts and 44 real chord/flag/tie/beam/fragment/hand tests passed, including
   corrupted tie-policy rejection. Compatibility forwarding removal follows
   separately so production and test callers can migrate to their actual owners.
+
+- Feature verification now has independently importable stem ownership,
+  detached adornment, staff structure, ledger and glyph-evidence components.
+  Coordinator reduced 1306→193 lines; shared facts and status policy have one
+  owner. Owner 134/221 tests and independent 67-test review passed. All 24 saved
+  reports matched byte-for-byte; normalized moved algorithms and thresholds
+  remain unchanged. No renderer geometry is accepted as evidence.

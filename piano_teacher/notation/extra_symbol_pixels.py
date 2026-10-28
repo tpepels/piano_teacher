@@ -26,7 +26,7 @@ import numpy as np
 from PIL import Image, UnidentifiedImageError
 
 from .pixel_motion import register_translation
-from .feature_pixels import _closed_component
+from .glyph_evidence import closed_component
 from .head_registration import register_noteheads
 from .reference_font import feature_glyphs
 from .pixel_context import rectangular_rest_orientation
@@ -662,7 +662,7 @@ def _isolated_rectangle(photo, obj):
     # Starting from ALL support pixels unions unrelated connected components
     # (notably two genuine augmentation dots). A rest body must be one actual
     # connected contour; the reference template supplies no connecting ink.
-    component = _closed_component(layer, dict(bbox=obj['bbox'], support=support and {min(support)}))
+    component = closed_component(layer, dict(bbox=obj['bbox'], support=support and {min(support)}))
     if not component or not support.issubset(component):
         return False
     ys, xs = np.divmod(np.array(tuple(component)), layer.shape[1])

@@ -22,7 +22,7 @@ import pytest
 
 from continuous_repeat_pixel_helpers import DENSITY, PLAYHEAD, _glyph_hits, notation_ink
 from piano_teacher.notation.reference_font import feature_glyphs
-from piano_teacher.notation.feature_pixels import _reference_stem_extension
+from piano_teacher.notation.stem_pixels import reference_stem_extension
 from piano_teacher.notation.phase3_pixels import verify_translation_sequence
 from piano_teacher.notation.pixel_proof import detect_staff_lines, expected_y
 from piano_teacher.notation.proof import read_written_score
@@ -266,7 +266,7 @@ def _complete_half_stem(image, head):
                 break
     assert 2 < tip < image.height - 3, f'RH bass half stem clipped at framebuffer edge (tip row {tip})'
     extension = (tip - y) * sign
-    required = _reference_stem_extension('half', (0,), direction) * gap
+    required = reference_stem_extension('half', (0,), direction) * gap
     assert extension >= required - 2, f'RH bass half stem is truncated ({extension:.2f}px versus {required:.2f}px reference)'
     return dict(direction=direction,sign=sign,column=col,tip=tip)
 

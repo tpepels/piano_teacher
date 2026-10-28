@@ -23,3 +23,10 @@ def rasterize_outline(svg: str, width: int, height: int) -> np.ndarray:
     png = cairosvg.svg2png(bytestring=svg.encode(),
                           output_width=width, output_height=height)
     return np.asarray(Image.open(BytesIO(png)).convert("RGBA"))[:,:,3] > 96
+
+
+def pixel_runs(values):
+    indices = np.flatnonzero(values)
+    if not len(indices):
+        return []
+    return [(int(a[0]), int(a[-1])+1) for a in np.split(indices, np.flatnonzero(np.diff(indices) > 1)+1)]
