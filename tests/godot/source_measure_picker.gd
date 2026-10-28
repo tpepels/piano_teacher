@@ -17,9 +17,14 @@ func _check_picker(picker: Control) -> void:
         print("SOURCE_PICKER_FAILURES:1")
         quit(1)
         return
+    picker.size = Vector2(800, 600)
     picker.call("show_piece", {"title":"Test_Piece", "piece_last_bar":16,
         "selected_start_bar":5})
     var failures := 0
+    var number: SpinBox = picker.get("measure")
+    print("PICKER_RAW size=", picker.size, " value=", number.value,
+        " edit_text=", number.get_line_edit().text,
+        " focus=", picker.get_viewport().gui_get_focus_owner() == number.get_line_edit())
     print("PICKER_INITIAL visible=", picker.visible,
         " bar=", picker.call("selected_bar"),
         " mode=", picker.call("selected_mode"),
