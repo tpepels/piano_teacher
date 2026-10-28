@@ -120,3 +120,9 @@ available explicitly for pre-release regression verification; the complete
 `./scripts/verify-notation.sh` additionally runs the source-driven corpus
 audit. Neither is scheduled on every commit. Do not silently weaken those
 independent tests to make automatic CI faster.
+
+Release verification uses the separately defined `native-release-regressions.yml`
+reusable/manual workflow. It retains the original broad `--ci` suite and
+exact-revision output; normal pushes do not trigger it. A passing automatic
+smoke check is **not** grounds to publish a release or declare the full
+notation corpus verified.

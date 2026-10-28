@@ -20,7 +20,7 @@ concurrency:
 jobs:
   exact-release-gate:
     name: Quick native release checks
-    uses: ./.github/workflows/native-notation.yml
+    uses: ./.github/workflows/native-release-regressions.yml
 
   release-context:
     name: Validate native tag and immutable event revision

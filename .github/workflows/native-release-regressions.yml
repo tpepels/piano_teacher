@@ -1,0 +1,42 @@
+name: Native release regression (explicit only)
+
+on:
+  workflow_call:
+    outputs:
+      revision:
+        description: Commit that passed the broader native regression suite
+        value: ${{ jobs.release-regression.outputs.revision }}
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deliberately never triggered by main pushes or pull requests.
+jobs:
+  release-regression:
+    name: Native pre-release regression
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 20
+    outputs:
+      revision: ${{ steps.passed.outputs.revision }}
+    steps:
+      - name: Install Python, Godot and local inference runtime
+        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango nodejs npm xorg-server-xvfb xorg-xauth
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+      - name: Trust container workspace
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install application
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e '.[godot,test]'
+          bash scripts/setup-fingering.sh
+      - name: Run independent native regression fixtures (not the full corpus audit)
+        run: xvfb-run -a -s '-screen 0 1600x1000x24' bash scripts/verify-notation.sh --ci
+      - name: Record verified revision
+        id: passed
+        env:
+          REVISION: ${{ github.sha }}
+        run: printf 'revision=%s\n' "$REVISION" >> "$GITHUB_OUTPUT"
