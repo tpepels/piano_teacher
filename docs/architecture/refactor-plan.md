@@ -265,3 +265,12 @@ first-party architectural monoliths.
   import/cache/health/generator suite passed 17 tests. Generator documentation
   now reflects actual variant consumption. Baseline inventory includes all
   180 first-party Python/GDScript/shell/Node-bridge files.
+
+- Backend immutable state slice: frozen value snapshots separate phase/payload
+  projection from locked engine sampling and stateful teaching/input adapters.
+  Fourteen baseline/current payload and clock-call sequences matched; owner
+  42/116-test focuses and independent 33-test review passed with no regressions.
+  Synthetic 1024-mark responses add ~4.2ms copying (ordinary polls <0.4ms),
+  bounded and not an established CPU defect. Three expanded-suite baseline
+  expectations predate exact overshoot/restart preparation and will be updated
+  with exact deadline and lifecycle assertions in a separate test correction.
