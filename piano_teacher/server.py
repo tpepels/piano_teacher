@@ -1447,7 +1447,7 @@ class PracticeEngine:
             return self._change_stage(action, kwargs)
 
     def _open_selected_measure(self, kwargs: dict):
-        """Handle  open selected measure; called with the practice lock held."""
+        """Open a source measure using the existing lesson navigation policy."""
         # Select a source measure across the entire imported piece,
         # then enter the existing learning or timed-practice flow.
         # No score is awarded simply by changing the starting point.
@@ -1484,7 +1484,7 @@ class PracticeEngine:
         return
 
     def _start_or_restart(self, action: str):
-        """Handle  start or restart; called with the practice lock held."""
+        """Start a take or schedule a seamless retry under the control lock."""
         if self.mode == "listen":
             self._prepare_listen()
             return
@@ -1524,7 +1524,7 @@ class PracticeEngine:
         return
 
     def _pause_current_session(self):
-        """Handle  pause current session; called with the practice lock held."""
+        """Pause learning, playback or preparation using the current clock."""
         if self.paused:
             raise ValueError("Cannot pause an exercise that is already paused")
         context = self._phase(time.monotonic())
@@ -1540,7 +1540,7 @@ class PracticeEngine:
         return
 
     def _resume_current_session(self):
-        """Handle  resume current session; called with the practice lock held."""
+        """Shift all paused transport deadlines before resuming."""
         if not self.paused:
             raise ValueError("Cannot resume unless an exercise is paused")
         duration = time.monotonic() - self.paused_at
@@ -1575,7 +1575,7 @@ class PracticeEngine:
         return
 
     def _change_stage(self, action: str, kwargs: dict):
-        """Handle  change stage; called with the practice lock held."""
+        """Change the active lesson or tempo while preserving scoring state."""
         p=self.plan
         if not p:
             raise ValueError("Open a piece first")
@@ -1658,7 +1658,7 @@ class PracticeEngine:
                 # error must not turn the entire /state endpoint into a 400.
                 pass
 
-    def _advance_pending_feedback(self):
+    def _advance_pending_feedback(self, now: float):
         """Commit finished feedback and schedule exactly one next transition."""
         if self.auto and self.next_at and now >= self.next_at:
             deadline = self.next_at
@@ -1767,7 +1767,7 @@ class PracticeEngine:
             self.practice_preparation["phase"] = (
                 "reverse" if now < self._preparation_at else "preparing")
         if self.pending_result is not None:
-            self._advance_pending_feedback()
+            self._advance_pending_feedback(now)
             return
         if self.awaiting_score_revision is not None:
             return
