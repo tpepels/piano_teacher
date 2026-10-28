@@ -15,9 +15,6 @@ class CorruptedView extends "res://notation/native/view.gd":
     # transport snapshots and glyph assets intact.
     var corruption := ""
     var cutoff := 0.0
-    var preparing := false
-    var preparation_rule := 0
-
     func present(state: Dictionary, transport: float, visual: float = NAN) -> void:
         if corruption == "changed-speed" and visual > cutoff:
             visual = cutoff+(visual-cutoff)*.5
@@ -25,29 +22,36 @@ class CorruptedView extends "res://notation/native/view.gd":
             visual += .25
         super.present(state,transport,visual)
 
-    func _paint_preparation_measure(measure: Dictionary, previous: Dictionary,
+class CorruptedContextPainter extends "res://notation/native/context_painter.gd":
+    # Preparation corruption belongs at the actual drawing policy. The source
+    # model/transport snapshot stays correct for the independent pixel oracle.
+    var corruption := ""
+    var preparing := false
+    var preparation_rule := 0
+
+    func paint_preparation_measure(canvas, frame: RenderPass, measure: Dictionary, previous: Dictionary,
             gap: float, playhead: float, opening: bool = false) -> void:
         var candidate: Dictionary = measure.duplicate(true)
-        var density: float = timeline.pixels_per_beat
+        var density: float = score_layout.timeline.pixels_per_beat
         if corruption == "compressed-rest":
             candidate["end_beat"] = float(candidate["start_beat"])+float(candidate["duration_beats"])*.5
         elif corruption == "translated-rest":
             candidate["start_beat"] = float(candidate["start_beat"])+.25
             candidate["end_beat"] = float(candidate["end_beat"])+.25
         elif corruption == "local-density":
-            timeline.pixels_per_beat = density*.5
+            score_layout.timeline.pixels_per_beat = density*.5
         preparing = true
         preparation_rule = 0
-        super._paint_preparation_measure(candidate,previous,gap,playhead,opening)
+        super.paint_preparation_measure(canvas,frame,candidate,previous,gap,playhead,opening)
         preparing = false
-        timeline.pixels_per_beat = density
+        score_layout.timeline.pixels_per_beat = density
 
-    func _practice_barline(x: float, mark: Dictionary, gap: float) -> void:
+    func practice_barline(canvas, frame: RenderPass, x: float, mark: Dictionary, gap: float) -> void:
         preparation_rule += 1
-        var shift := 8.0 if preparing and corruption == "moved-boundary" and preparation_rule == 2 else 0.0
-        super._practice_barline(x+shift,mark,gap)
+        var shift: float = 8.0 if preparing and corruption == "moved-boundary" and preparation_rule == 2 else 0.0
+        super.practice_barline(canvas,frame,x+shift,mark,gap)
         if preparing and corruption == "duplicate-boundary" and preparation_rule == 1:
-            super._practice_barline(x+8.0,mark,gap)
+            super.practice_barline(canvas,frame,x+8.0,mark,gap)
 
 func _initialize() -> void:
     call_deferred("run")
@@ -73,13 +77,18 @@ func run() -> void:
             quit(1)
             return
         var renderer: Control = app.timeline_preview
-        if not str(configuration.get("corruption","")).is_empty():
+        var corruption: String = str(configuration.get("corruption",""))
+        if corruption in ["changed-speed","repeat-jump"]:
             renderer.set_script(CorruptedView)
-            renderer.corruption = configuration["corruption"]
+            renderer.corruption = corruption
             renderer.cutoff = float(payload.model.duration_beats)-.25
             app._on_layout(0,200,PackedStringArray(),JSON.stringify(payload.layout).to_utf8_buffer())
             app._on_timeline_model(0,200,PackedStringArray(),JSON.stringify(payload.model).to_utf8_buffer())
             assert(app._native_score_ready(),renderer.failure_reason)
+        elif not corruption.is_empty():
+            var painter: CorruptedContextPainter = CorruptedContextPainter.new(renderer.layout,renderer.symbols)
+            painter.corruption = corruption
+            renderer.context_painter = painter
         # One public scale input, chosen before the first attempt and then
         # retained across all tempo/phase changes without reloading the model.
         assert(renderer.set_density(float(configuration["density"])))

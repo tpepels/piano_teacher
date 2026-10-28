@@ -76,6 +76,7 @@ func run() -> void:
     if Geometry == null or Renderer == null or Timeline == null:
         quit(1)
         return
+    check_barline_source_clock()
     var model: Dictionary = _score()
     check(Geometry.supported(model).is_empty(),
         "Ordinary notes, chords, stems, ties and eighth rests are supported")
@@ -135,42 +136,42 @@ func run() -> void:
     check(renderer.set_density(96.0), "User density accepted")
     check(renderer.load_score(model), "Native renderer accepts complete symbolic model")
     check(renderer.native_ready, "No raster or SVG is necessary")
-    check(renderer.slur_pairs.size()==1 and
+    check(renderer.layout.slur_pairs.size()==1 and
         renderer.glyphs.slur_note_ids("n1|n3")==["n1","n3"],
         "An original Verovio slur binds to its two music-source note IDs")
     # Actual piano barlines span both staves and clear the following notehead.
     # The first visible source measure must never produce a fake barline.
-    var staff_gap: float = renderer._gap()
-    check(renderer._barline_geometry(model["measures"][0], 0.0, 480.0,
+    var staff_gap: float = renderer.staff_gap()
+    check(renderer.layout.barline_geometry(model["measures"][0], 0.0, 480.0,
         staff_gap).is_empty(), "Opening clef/meter has no invented barline")
-    var joined: Dictionary = renderer._barline_geometry(
+    var joined: Dictionary = renderer.layout.barline_geometry(
         model["measures"][1], 0.0, 480.0, staff_gap)
     check(not joined.is_empty(), "Later measure has a barline")
     if not joined.is_empty():
-        check(approx(float(joined["top"]),renderer._staff_center("right")-
+        check(approx(float(joined["top"]),renderer.layout.staff_center("right")-
             2.0*staff_gap) and
-            approx(float(joined["bottom"]),renderer._staff_center("left")+
+            approx(float(joined["bottom"]),renderer.layout.staff_center("left")+
             2.0*staff_gap), "Barline connects all ten piano staff rules")
         check(approx(float(joined["x"]),
-            renderer.timeline.screen_x(3.0,0.0,480.0,0.0)-
-            staff_gap*1.35), "Barline clears first note without moving onset")
-    var ending: Dictionary = renderer._terminal_barline_geometry(0.0,480.0,
+            480.0+3.0*renderer.timeline.pixels_per_beat-staff_gap*1.35), "Barline clears first note without moving onset")
+    # Terminal and incoming boundaries share one constant engraving lead.
+    var ending: Dictionary = renderer.layout.terminal_barline_geometry(0.0,480.0,
         staff_gap)
     check(not ending.is_empty() and ending["style"] == "regular" and
         approx(float(ending["x"]),
-            renderer.timeline.screen_x(7.0,0.0,480.0,0.0)-staff_gap*.45),
+            480.0+7.0*renderer.timeline.pixels_per_beat-staff_gap*1.35),
         "Terminal barline exists at exercise end without changing timing")
-    check(renderer._barline_strokes("regular",staff_gap).size()==1,
+    check(renderer.layout.barline_strokes("regular",staff_gap).size()==1,
         "Single measure barline is one continuous thin stroke")
-    var double_bar: Array = renderer._barline_strokes("light-light",staff_gap)
+    var double_bar: Array = renderer.layout.barline_strokes("light-light",staff_gap)
     check(double_bar.size()==2 and
         approx(float(double_bar[0]["width"]),float(double_bar[1]["width"])),
         "Double measure barline has two thin equal-weight strokes")
-    var final_bar: Array = renderer._barline_strokes("light-heavy",staff_gap)
+    var final_bar: Array = renderer.layout.barline_strokes("light-heavy",staff_gap)
     check(final_bar.size()==2 and
         float(final_bar[1]["width"])>float(final_bar[0]["width"])*2.0,
         "Final measure barline has thick right stroke")
-    var forward: Array = renderer._barline_strokes("heavy-light",staff_gap)
+    var forward: Array = renderer.layout.barline_strokes("heavy-light",staff_gap)
     check(forward.size()==2 and
         float(forward[0]["width"])>float(forward[1]["width"]),
         "Forward repeat uses thick left stroke")
@@ -201,11 +202,11 @@ func run() -> void:
     styled["measures"][1]["right_barline"] = {
         "style":"light-light","repeat":""}
     check(renderer.load_score(styled),"Explicit double-repeat bars remain native")
-    var shared: Dictionary = renderer._barline_geometry(
+    var shared: Dictionary = renderer.layout.barline_geometry(
         styled["measures"][1],0.0,480.0,staff_gap)
     check(shared["style"]=="heavy-heavy" and shared["repeat"]=="both",
         "Back-to-back backward/forward repeats share one correctly composed boundary")
-    check(renderer._terminal_barline_geometry(0.0,480.0,
+    check(renderer.layout.terminal_barline_geometry(0.0,480.0,
         staff_gap)["style"] == "light-light",
         "Explicit right-hand ending style remains a double terminal bar")
     var contradiction: Dictionary = styled.duplicate(true)
@@ -215,14 +216,14 @@ func run() -> void:
         "Incompatible barline styles on the same boundary trigger fallback")
     check(renderer.load_score(model),
         "Restore source model after barline style tests")
-    check(renderer.chord_members.has("n6") and
-        renderer.chord_members["n6"].size() == 2,
+    check(renderer.layout.chord_members.has("n6") and
+        renderer.layout.chord_members["n6"].size() == 2,
         "Two simultaneous right-hand notes use one MusicXML chord leader")
-    var chord: Dictionary = renderer._chord_extents(
+    var chord: Dictionary = renderer.layout.chord_extents(
         model["notation_events"][5],staff_gap)
     check(float(chord["top_y"]) < float(chord["bottom_y"]) and
         bool(chord["up"]), "Chord stem covers top and bottom real glyph heads")
-    check(renderer._chord_template_key(model["notation_events"][5]) ==
+    check(renderer.layout.chord_template_key(model["notation_events"][5]) ==
         "quarter|up|0,2", "Exact chord interval/clef signature matches backend")
     check(renderer.glyphs.has_chord("quarter|up|0,2"),
         "Completed original Verovio chord ink is resident and can be reused")
@@ -237,8 +238,8 @@ func run() -> void:
         "Reversed equal-time MusicXML events can still be painted")
     var leader_pos := -1
     var follower_pos := -1
-    for i in range(renderer.ordered_events.size()):
-        var identifier: String = str(renderer.ordered_events[i].get("id",""))
+    for i in range(renderer.layout.ordered_events.size()):
+        var identifier: String = str(renderer.layout.ordered_events[i].get("id",""))
         if identifier == "n6":
             leader_pos = i
         if identifier == "n7":
@@ -247,7 +248,7 @@ func run() -> void:
         "Verovio chord leader always precedes displaced child notes")
     check(renderer.load_score(model),
         "Restore notation after unstable chord ordering regression")
-    var tie: Dictionary = renderer._tie_placement(
+    var tie: Dictionary = renderer.connector_geometry.tie_placement(
         model["notation_events"][3],model["notation_events"][4],
         160.0,330.0,staff_gap)
     check(not tie.is_empty() and renderer.glyphs.ties_ready(),
@@ -257,7 +258,7 @@ func run() -> void:
             approx(float(tie["x1"]),330.0),
             "Verovio contour anchors follow both original note onsets")
         check(bool(tie["down"]) and approx(float(tie["y"]),
-            renderer._event_y(model["notation_events"][3],staff_gap)),
+            renderer.layout.event_y(model["notation_events"][3],staff_gap)),
             "Tie direction and staff height are semantically derived")
     # Chopin fixture has a very short 1/8 pickup directly before 12/8.
     # Both time signatures must remain legible without moving any note X.
@@ -270,11 +271,11 @@ func run() -> void:
         event["measure"] = 1 if float(event["beat"]) < .5 else 2
     check(renderer.load_score(pickup),
         "Native renderer accepts 1/8 pickup followed by 12/8")
-    var pickup_gap: float = renderer._gap()
-    check(renderer._meter_is_crowded(pickup["measures"][1],
+    var pickup_gap: float = renderer.staff_gap()
+    check(renderer.context_painter.meter_is_crowded(pickup["measures"][1],
         pickup["measures"][0],pickup_gap),
         "Close meter change uses a dedicated upper-staff annotation lane")
-    check(not renderer._meter_is_crowded(pickup["measures"][0],
+    check(not renderer.context_painter.meter_is_crowded(pickup["measures"][0],
         {},pickup_gap), "Opening meter stays in conventional staff position")
     check(approx(renderer.timeline.screen_x(.5,0.0,480.0,0.0)-
         renderer.timeline.screen_x(0.0,0.0,480.0,0.0),
@@ -292,21 +293,21 @@ func run() -> void:
         "Measure lengths retain exact quarter units")
     # Phase 1 performance: one viewport scans only nearby onsets, and
     # immutable measure lookups and staff fitting survive unchanged frames.
-    check(renderer.measure_by_number.size() == model["measures"].size(),
+    check(renderer.layout.measure_by_number.size() == model["measures"].size(),
         "Native measure geometry indexed once at lesson load")
-    var first_gap: float = renderer._gap()
-    check(approx(renderer._gap(),first_gap) and
-        approx(renderer.cached_staff_gap,first_gap),
+    var first_gap: float = renderer.staff_gap()
+    check(approx(renderer.staff_gap(),first_gap) and
+        approx(renderer.layout.cached_staff_gap,first_gap),
         "Native grand-staff vertical fitting reused across frames")
     var nearby: Array = renderer._visible_events(0.0, 1.0)
-    check(not nearby.is_empty() and nearby.size() < renderer.ordered_events.size(),
+    check(not nearby.is_empty() and nearby.size() < renderer.layout.ordered_events.size(),
         "Viewport culls off-screen native noteheads")
     check(renderer.frame_scanned_events == nearby.size(),
         "Viewport budget counts only notation actually scanned")
     var empty_view: Array = renderer._visible_events(100.0,101.0)
     check(empty_view.is_empty() and renderer.frame_scanned_events == 0,
         "Off-screen native passage performs no note rendering work")
-    check(renderer._measure_for(model["notation_events"][0]).get("number",0) == 1,
+    check(renderer.layout.measure_for(model["notation_events"][0]).get("number",0) == 1,
         "Source note measure lookup remains stable with cached dictionary")
     renderer.present({"bpm":40, "running":true,"paused":false,
         "count_in_beats":3.0,"play_from_beat":0.0,"hand":"both",
@@ -339,12 +340,12 @@ func run() -> void:
         if str(symbol.get("id", "")) == "n8":
             symbol["spelling"] = {"step":"C","octave":1,"alter":0}
     check(renderer.load_score(extremes),"Extreme ledger notes remain supported")
-    var fitted_gap: float = renderer._gap()
+    var fitted_gap: float = renderer.staff_gap()
     var highest: float = INF
     var lowest: float = -INF
     for symbol in extremes["notation_events"]:
         if str(symbol.get("kind","")) == "note":
-            var y: float = renderer._event_y(symbol,fitted_gap)
+            var y: float = renderer.layout.event_y(symbol,fitted_gap)
             highest = minf(highest,y)
             lowest = maxf(lowest,y)
     check(highest >= 31.0 and lowest <= renderer.size.y-31.0,
@@ -355,10 +356,10 @@ func run() -> void:
     var missing_tuplet: Dictionary = {
         "events":[model["notation_events"][0],model["notation_events"][2]],
         "staff":"right"}
-    renderer.notation_tuplets = [missing_tuplet]
+    renderer.layout.notation_tuplets = [missing_tuplet]
     check(renderer._missing_source_engraving().contains("tuplet"),
         "Unmatched source triplet must use original Verovio raster fallback")
-    renderer.notation_tuplets.clear()
+    renderer.layout.notation_tuplets.clear()
     renderer.expected_slur_pairs = [["n1","n6"]]
     check(renderer._missing_source_engraving().contains("slur"),
         "Missing original MusicXML slur cannot silently vanish")
@@ -380,3 +381,27 @@ func run() -> void:
         "New lesson clears the old native scene")
     print("PHASE_C_NOTATION_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)
+
+
+func check_barline_source_clock() -> void:
+    var Timeline = load("res://notation/shared/timeline.gd")
+    var Barline = load("res://notation/native/barline_layout.gd")
+    var axis: RefCounted = Timeline.new()
+    axis.pixels_per_beat = 100.0
+    axis.duration_beats = 7.0
+    var measures: Array = [{"start_beat":0.0,"end_beat":3.0},
+        {"start_beat":3.0,"end_beat":7.0}]
+    # Independently calculated pixels: 480+(beat-clock-play_from)*100-1.35*gap.
+    # Literal expectations catch ignored/doubled clock or play-from values and
+    # an end-only engraving lead without comparing geometry to its own helper.
+    var incoming: Dictionary = Barline.boundary(measures,measures[1],axis,
+        .75,480.0,1.5,20.0,100.0,300.0)
+    check(approx(float(incoming["x"]),528.0),
+        "Incoming barline uses explicit source beat, clock and play-from once")
+    for sample in [[.75,1.5,20.0,928.0],[1.25,1.5,20.0,878.0],
+            [.75,2.5,20.0,828.0],[.75,1.5,40.0,901.0]]:
+        var terminal: Dictionary = Barline.terminal(measures,axis,
+            float(sample[0]),480.0,float(sample[1]),float(sample[2]),100.0,300.0)
+        check(not terminal.is_empty() and terminal["style"] == "regular" and
+            approx(float(terminal["x"]),float(sample[3])),
+            "Terminal barline preserves source clock and common engraving lead: "+str(sample))

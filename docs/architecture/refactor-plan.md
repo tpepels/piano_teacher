@@ -360,3 +360,12 @@ first-party architectural monoliths.
   geometry imports still have real users and are preserved. Feedback's internal
   locate-beat dependency now names the canonical geometry owner directly;
   nine feedback/assessment/server tests pass.
+
+- Preparation framebuffer corruptions now inject ContextPainter's actual
+  preparation/barline policy; all seven negative controls remain effective.
+  Native source contracts inspect actual painter/layout owners. Two additional
+  stale assertions reproduced on untouched a093c5c: tie inventory predates
+  flag-aware templates, and terminal bars predate the common 1.35-space lead.
+  Tests now require the exact 12-template atlas and literal clock/play-from
+  barline coordinates, without changing tolerance. Three geometry mutations
+  were rejected. Fresh aggregate: 47 passed (including 28 measure invariants).

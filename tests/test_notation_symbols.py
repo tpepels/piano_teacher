@@ -51,13 +51,17 @@ def test_native_renderer_has_no_original_hand_drawn_musical_glyphs():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
-    gd = (root / "godot/notation/native/view.gd").read_text()
+    native = root / "godot/notation/native"
+    view = (native / "view.gd").read_text()
+    gd = (native / "symbol_painter.gd").read_text()
+    renderers = view+gd+(native / "context_painter.gd").read_text()
     atlas = (root / "godot/notation/native/glyphs.gd").read_text()
-    assert "const VerovioGlyphs" in gd
-    assert "func _paint_ellipse(" not in gd
-    assert "draw_circle(" not in gd
-    assert "draw_arc(" not in gd
-    assert "glyphs.paint(self, \"head_black\"" in gd
-    assert "glyphs.paint(self, \"rest_\" + note_type" in gd
+    assert "const VerovioGlyphs" in view
+    assert "func _paint_ellipse(" not in renderers
+    assert "func paint_ellipse(" not in renderers
+    assert "draw_circle(" not in renderers
+    assert "draw_arc(" not in renderers
+    assert "glyphs.paint(canvas, \"head_black\"" in gd
+    assert "glyphs.paint(canvas, \"rest_\" + note_type" in gd
     assert "load_svg_from_buffer(" in atlas
     assert "draw_texture_rect(" in atlas

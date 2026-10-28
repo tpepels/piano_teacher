@@ -99,10 +99,20 @@ def test_tie_is_real_verovio_engraved_curve_and_disk_cache(tmp_path,monkeypatch)
     from piano_teacher.notation.assets import ties as tie
     cache=PreprocessingCache(tmp_path)
     templates=tie.tie_templates(cache)
-    assert set(templates)=={"up","down"}
-    for item in templates.values():
+    expected = {"up", "down"} | {
+        f"{endpoint}_{kind}_{side}"
+        for kind in ("eighth", "16th", "32nd", "64th", "128th")
+        for endpoint, side in (("start", "above"), ("end", "below"))
+    }
+    assert set(templates) == expected
+    for name, item in templates.items():
         _valid_sprite(item,"verovio-engraved-tie")
         assert item["span"]>0
+        assert len(item["head_centers"]) == len(item["head_widths"]) == 2
+        expected_heads = (["black", "half"] if name.startswith("start_") else
+                          ["half", "black"] if name.startswith("end_") else
+                          ["half", "half"])
+        assert item["head_families"] == expected_heads
     assert templates["up"]["png_base64"] != templates["down"]["png_base64"]
     monkeypatch.setattr(tie,"_generate",lambda _:(_ for _ in ()).throw(
         AssertionError("Second use must never call Verovio again")))
@@ -160,22 +170,30 @@ def test_chord_sprite_is_actual_verovio_compound_and_reusable(tmp_path,monkeypat
 def test_native_compound_code_has_no_drawn_tie_path():
     from pathlib import Path
     root=Path(__file__).resolve().parents[1]
-    source=(root/"godot/notation/native/view.gd").read_text()
-    assert "func _tie_shape(" not in source
+    native=root/"godot/notation/native"
+    source=(native/"symbol_painter.gd").read_text()
+    geometry=(native/"connector_geometry.gd").read_text()
+    renderers=source+geometry+(native/"view.gd").read_text()+(native/"context_painter.gd").read_text()
+    assert "func _tie_shape(" not in renderers
+    assert "func tie_shape(" not in renderers
     # Real source-contour framebuffer checks live in test_native_tie_attachments;
-    # endpoint adaptation belongs to the production view's contour painter.
-    assert "glyphs.paint_chord(self" in source
+    # endpoint adaptation belongs to ConnectorGeometry and SymbolPainter.
+    assert "glyphs.paint_chord(canvas" in source
 
 
 def test_native_renderer_never_draws_imitated_beams_stems_or_tuplets():
     from pathlib import Path
-    source=(Path(__file__).resolve().parents[1] /
-            "godot/notation/native/view.gd").read_text()
-    assert "func _beam_segment(" not in source
-    assert "func _paint_flag(" not in source
-    assert "draw_line(Vector2(stem_x,anchor_y)" not in source
-    tuplet=source.split("func _paint_tuplet_brackets(")[1].split(
-        "func _paint_rest(")[0]
+    native=Path(__file__).resolve().parents[1]/"godot/notation/native"
+    source=(native/"symbol_painter.gd").read_text()
+    renderers="\n".join((native/name).read_text() for name in (
+        "view.gd","symbol_painter.gd","context_painter.gd","connector_geometry.gd"))
+    assert "func _beam_segment(" not in renderers
+    assert "func beam_segment(" not in renderers
+    assert "func _paint_flag(" not in renderers
+    assert "func paint_flag(" not in renderers
+    assert "draw_line(Vector2(stem_x,anchor_y)" not in renderers
+    tuplet=source.split("func paint_tuplet_brackets(")[1].split(
+        "func paint_rest(")[0]
     assert "draw_line(" not in tuplet
     assert "draw_string(" not in tuplet
     assert "glyphs.paint_tuplet(" in tuplet

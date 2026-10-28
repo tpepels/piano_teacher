@@ -25,12 +25,16 @@ def test_native_eighth_sixteenth_beams_in_simple_and_compound_meters():
 
 
 def test_beaming_uses_semantic_beat_and_never_verovio_x():
-    renderer = (ROOT / "godot/notation/native/view.gd").read_text()
-    assert "func _paint_beams(data: Dictionary, gap: float)" in renderer
-    index = (ROOT / "godot/notation/native/score_index.gd").read_text()
+    native = ROOT / "godot/notation/native"
+    renderer = (native / "symbol_painter.gd").read_text()
+    layout = (native / "score_layout.gd").read_text()
+    connectors = (native / "connector_geometry.gd").read_text()
+    index = (native / "score_index.gd").read_text()
+    owners = layout+connectors+renderer+(native / "view.gd").read_text()
+    assert "func paint_beams(canvas, frame: RenderPass, data: Dictionary, gap: float)" in renderer
     assert 'var beam_groups: Array = source_beams.get("groups",[])' in index
-    assert 'var index: Dictionary = ScoreIndex.build(timeline.model, glyphs)' in renderer
-    assert "glyphs.beam_metadata" in renderer
-    assert "Geometry.beam_groups(timeline.model)" not in renderer
-    assert 'timeline.screen_x(float(event.get("beat", 0.0))' in renderer
-    assert 'notation/legacy/motion_curve.gd' not in renderer
+    assert 'var index: Dictionary = ScoreIndex.build(timeline.model, glyphs)' in layout
+    assert "glyphs.beam_metadata" in connectors
+    assert "Geometry.beam_groups(timeline.model)" not in owners
+    assert 'timeline.screen_x(float(event.get("beat", 0.0))' in connectors
+    assert 'notation/legacy/motion_curve.gd' not in owners
