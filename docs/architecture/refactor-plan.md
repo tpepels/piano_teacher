@@ -241,3 +241,11 @@ first-party architectural monoliths.
   old obstacle policy rather than editing a moved view implementation.
   Fresh aggregate: 62 passed / four deliberately inapplicable fixture variants
   skipped, including real XML/Chopin/Hanon application popup corrections.
+
+- Audit capture extraction: `scripts/audits/capture_store.py` owns provenance,
+  atomic publication and interrupted publication recovery; `capture_runner.py`
+  owns actual Godot capture independently of proof execution. Input identity
+  includes every extracted audit module. New component contracts RED→GREEN;
+  owner suites 61/35/41 passed and independent review ran 55 tests with three
+  unrelated CI tests deselected, no blocking findings. No retained audit files
+  or corpus were written. Worker stage ownership and CLI decomposition follow.

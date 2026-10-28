@@ -32,7 +32,6 @@ import multiprocessing
 import os
 import resource
 import signal
-import tempfile
 import time
 import traceback
 import uuid
@@ -45,23 +44,25 @@ from PIL import Image, ImageDraw
 # A direct file has scripts/ (not its parent) on sys.path.
 if __package__:
     from .package_notation_diagnostics import TerminationSignals, package
+    from .audits import capture_runner, capture_store
 else:
     from package_notation_diagnostics import TerminationSignals, package
+    from audits import capture_runner, capture_store
 
 from piano_teacher.application.score_preparation import assemble_layout
 from piano_teacher.music import Phrase, source_note_id
 from piano_teacher.notation.audit_annotations import CANONICAL_CAPTURE_CONFIG, canonical_piece
 from piano_teacher.notation.lesson import build_lesson_score, infer_piece_clefs
 from piano_teacher.notation.model import build_score_model
-from piano_teacher.raster import rasterize_score
 from piano_teacher.score import import_piece, render_layout
 
 ROOT = Path(__file__).resolve().parents[1]
 _CASE_STATE = None
 
 
-class CaptureProvenanceError(AssertionError):
-    """Only invalid producer evidence warrants another Godot capture."""
+CaptureProvenanceError = capture_store.CaptureProvenanceError
+atomic_json = capture_store.atomic_json
+_copy_capture_file = capture_store.copy_capture_file
 
 
 @contextmanager
@@ -76,24 +77,6 @@ def audit_lock(directory):
             yield
         finally:
             fcntl.flock(lock,fcntl.LOCK_UN)
-
-
-def atomic_json(path: Path, value: dict) -> None:
-    """An interrupted write must leave the last complete checkpoint intact."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(mode='w',dir=path.parent,prefix='.pending-',
-                                         encoding='utf-8',delete=False) as stream:
-            temporary=Path(stream.name)
-            json.dump(value,stream,indent=2)
-            stream.write('\n')
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary,path)
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
 
 
 def audit_stage(stage: str) -> None:
@@ -893,88 +876,23 @@ def draw_overlay(reference: Image.Image, native: Image.Image,
 
 
 def capture_dependency_hash(root: Path = ROOT) -> str:
-    """Include shared theme/resources as well as notation-specific scripts."""
-    sources=[root/"tests/godot/native_verovio_overlay.gd"]
-    sources.extend(p for p in (root/"godot").rglob("*")
-                   if p.is_file() and ".godot" not in p.relative_to(root/"godot").parts
-                   and p.suffix in {".gd",".gdshader",".gdshaderinc",".tscn",".tres",".godot",
-                                    ".ttf",".otf",".woff",".woff2",".png",".svg"})
-    digest=hashlib.sha256()
-    for path in sorted(sources):
-        digest.update(path.relative_to(root).as_posix().encode())
-        digest.update(b"\0")
-        digest.update(path.read_bytes())
-        digest.update(b"\0")
-    return digest.hexdigest()
+    return capture_store.capture_dependency_hash(root)
 
 
 def validate_capture_manifest(folder: Path, *, dependency_hash: str, godot_version: str) -> None:
-    manifest=json.loads((folder/"capture-manifest.json").read_text())
-    _validate_capture_files(folder,manifest,dependency_hash=dependency_hash,godot_version=godot_version)
-    if manifest.get('capture_config')!=CANONICAL_CAPTURE_CONFIG:
-        raise AssertionError('Cached capture configuration differs from the explicit canonical audit mode')
-
-
-def _validate_capture_files(folder,manifest,*,dependency_hash,godot_version):
-    if manifest.get("renderer_dependencies_sha256")!=dependency_hash:
-        raise AssertionError("Cached renderer dependencies changed or are unrecorded")
-    if manifest.get("godot")!=godot_version:
-        raise AssertionError("Cached Godot engine version differs from the current engine")
-    captures=manifest.get("screenshots")
-    if not isinstance(captures,list) or not captures:
-        raise AssertionError("Cached capture manifest has no actual screenshot hashes")
-    observed={path.name for pattern in ('native-*.png','rest-without-*.png','repeat-*.png','restored-*.png')
-              for path in folder.glob(pattern)}
-    recorded=[entry.get('file') for entry in captures]
-    if len(set(recorded))!=len(recorded) or set(recorded)!=observed:
-        raise AssertionError('Cached screenshot inventory differs from this capture manifest')
-    for entry in captures:
-        if hashlib.sha256((folder/entry["file"]).read_bytes()).hexdigest()!=entry["sha256"]:
-            raise AssertionError(f"Cached actual screenshot changed: {entry['file']}")
-
-
-CAPTURE_PATTERNS=('native-*.png','rest-without-*.png','repeat-*.png','restored-*.png',
-                  'verovio-*.svg','verovio-*.png','capture-manifest.json','native-overlay-report.json')
-
-
-def _copy_capture_file(source,destination):
-    with tempfile.NamedTemporaryFile(dir=destination.parent,prefix='.capture-file-',delete=False) as stream:
-        temporary=Path(stream.name)
-    try:
-        shutil.copyfile(source,temporary)
-        os.replace(temporary,destination)
-    finally:
-        temporary.unlink(missing_ok=True)
+    capture_store.validate_capture_manifest(folder, dependency_hash=dependency_hash,
+        godot_version=godot_version, capture_config=CANONICAL_CAPTURE_CONFIG)
 
 
 def recover_capture_publish(out):
-    """Finish an interrupted publication from its intact validated staging dir."""
-    marker=out/'capture-publish.json'
-    if not marker.is_file():
-        return
-    staging=Path(json.loads(marker.read_text())['staging'])
-    if staging.parent!=out.parent or not staging.name.startswith('.capture-'+out.name+'-'):
-        raise AssertionError('Capture staging directory does not belong to this case')
-    manifest=json.loads((staging/'capture-manifest.json').read_text())
-    # Finish the previous producer's transaction even across a mode upgrade.
-    # Publishing preserves its bytes; callers must still validate the current
-    # configuration before reuse, just as they revalidate engine/dependencies.
-    _validate_capture_files(staging,manifest,dependency_hash=manifest['renderer_dependencies_sha256'],
-                            godot_version=manifest['godot'])
-    # Staging stays intact until every file is published. A killed writer can
-    # resume this copy without invoking Godot again or admitting older PNGs.
-    for pattern in CAPTURE_PATTERNS:
-        for artifact in out.glob(pattern):
-            artifact.unlink()
-    for artifact in sorted(staging.iterdir(),key=lambda p:p.name=='capture-manifest.json'):
-        _copy_capture_file(artifact,out/artifact.name)
-    marker.unlink()
-    shutil.rmtree(staging)
+    # Retain the legacy copy patch point until recovery callers move to the store.
+    capture_store.recover_capture_publish(out, copy_file=_copy_capture_file)
 
 
 def verification_inputs_hash(sources) -> str:
     """A long sweep must finish against the inputs and code it started with."""
     paths=[*sources,ROOT/'scripts/check_native_verovio_overlay.py',
+           *sorted((ROOT/'scripts/audits').rglob('*.py')),
            *sorted((ROOT/'piano_teacher').rglob('*.py')),
            ROOT/'tests/fixtures/musical_fidelity/manifest.json']
     digest=hashlib.sha256(capture_dependency_hash().encode())
@@ -1011,67 +929,10 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
             raise AssertionError("Distinct source onsets would overwrite a screenshot filename")
     # Preserve the actual lesson MusicXML as the single reference score.
     xml=data.pop("xml")
-    capture_sources=[ROOT/"tests/godot/native_verovio_overlay.gd",
-                     *sorted((ROOT/"godot/notation").rglob("*.gd"))]
-    data["capture_protocol_sha256"]=hashlib.sha256(b"".join(
-        p.relative_to(ROOT).as_posix().encode()+p.read_bytes()
-        for p in capture_sources)).hexdigest()
-    dependencies = capture_dependency_hash()
-    if reuse_captures:
-        try:
-            if json.loads((out/"fixture.json").read_text()) != data or (
-                    (out/"score.musicxml").read_text()!=xml):
-                raise AssertionError("Cached capture provenance does not match current source/layout/protocol")
-            validate_capture_manifest(out,dependency_hash=dependencies,
-                godot_version=subprocess.check_output([godot,"--version"],text=True).strip())
-        except (OSError,ValueError,AssertionError) as exc:
-            raise CaptureProvenanceError(str(exc)) from exc
-    def write_inputs(directory):
-        (directory/'score.musicxml').write_text(xml,encoding='utf-8')
-        (directory/'fixture.json').write_text(json.dumps(data))
-        for page,svg in enumerate(engraving.pages):
-            (directory/f'verovio-{page}.svg').write_text(svg)
-            if not all_symbols:
-                (directory/f'verovio-{page}.png').write_bytes(rasterize_score(svg,width=2400))
-    if reuse_captures:
-        write_inputs(out)
-    if not reuse_captures:
-        audit_stage('capture')
-        staging=Path(tempfile.mkdtemp(prefix='.capture-'+out.name+'-',dir=out.parent))
-        try:
-            write_inputs(staging)
-            result = subprocess.run([
-                godot, "--path",str(ROOT/"godot"),"--rendering-method","gl_compatibility",
-                "--windowed", "--resolution", "16x16", "--position", "-16384,-16384",
-                "--disable-vsync", "--max-fps", "0",
-                "--audio-driver", "Dummy",
-                "--script",str(ROOT/"tests/godot/native_verovio_overlay.gd"),
-                "--",str(staging/'fixture.json'),str(staging)],
-                capture_output=True,text=True,timeout=max(180,2*len(data['sample_beats'])))
-            (staging/'godot.log').write_text(result.stdout+result.stderr)
-            if capture_dependency_hash()!=dependencies:
-                raise AssertionError('Renderer dependencies changed during actual capture; rerun the passage')
-            assert result.returncode==0 and 'NATIVE_VEROVIO_OVERLAY_FAILURES:0' in result.stdout, (
-                'Actual native renderer failed:\n'+(result.stdout+result.stderr)[-9000:])
-            import platform
-            import verovio
-            captures=[dict(file=p.name,sha256=hashlib.sha256(p.read_bytes()).hexdigest())
-                for pattern in ('native-*.png','rest-without-*.png','repeat-*.png','restored-*.png')
-                for p in sorted(staging.glob(pattern))]
-            atomic_json(staging/'capture-manifest.json',dict(
-                capture_config=data['capture_config'],
-                capture_protocol_sha256=data['capture_protocol_sha256'],
-                renderer_dependencies_sha256=dependencies,python=platform.python_version(),
-                verovio=verovio.toolkit().getVersion(),
-                godot=subprocess.check_output([godot,'--version'],text=True).strip(),screenshots=captures))
-            atomic_json(out/'capture-publish.json',dict(staging=str(staging)))
-            recover_capture_publish(out)
-        except BaseException as exc:
-            if staging.exists() and not (out/'capture-publish.json').exists():
-                (staging/'capture-error.txt').write_text(f'{type(exc).__name__}: {exc}\n')
-                attempt=out/('capture-incomplete-'+uuid.uuid4().hex[:12])
-                staging.rename(attempt)
-            raise
+    data = capture_runner.capture(out, godot, payload=data, xml=xml, pages=engraving.pages,
+        root=ROOT, all_symbols=all_symbols, reuse_captures=reuse_captures,
+        record_stage=audit_stage, dependency_hash=capture_dependency_hash,
+        recover_publish=recover_capture_publish)
     report = json.loads((out/"native-overlay-report.json").read_text())
     legacy_diagnostics = readability_errors(model, report, case)
     # The older editorial audit uses renderer geometry and per-passage

@@ -24,6 +24,8 @@ def isolated_audit(tmp_path):
     scripts.mkdir()
     for name in ('check_native_verovio_overlay.py', 'package_notation_diagnostics.py'):
         shutil.copyfile(ROOT / 'scripts' / name, scripts / name)
+    shutil.copytree(ROOT / 'scripts/audits', scripts / 'audits',
+                    ignore=shutil.ignore_patterns('__pycache__'))
     for name in ('tests', 'godot', 'piano_teacher'):
         (tmp_path / name).symlink_to(ROOT / name, target_is_directory=True)
     (tmp_path / 'midi').mkdir()
