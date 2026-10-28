@@ -6,6 +6,17 @@ func _initialize() -> void:
     var picker: Control = SourceMeasurePicker.new()
     root.add_child(picker)
     picker.size = Vector2(800, 600)
+    # SceneTree._initialize runs before the first ready notification.
+    # Defer interaction until the independently built Control is ready.
+    call_deferred("_check_picker", picker)
+
+
+func _check_picker(picker: Control) -> void:
+    if picker.get("panel") == null:
+        push_error("SourceMeasurePicker did not finish building its controls")
+        print("SOURCE_PICKER_FAILURES:1")
+        quit(1)
+        return
     picker.call("show_piece", {"title":"Test_Piece", "piece_last_bar":16,
         "selected_start_bar":5})
     var failures := 0
