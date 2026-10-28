@@ -58,6 +58,10 @@ may use pure geometry/layout helpers but never import verifier internals.
 - [x] Split the backend update loop into focused methods for MIDI health,
   pending feedback settlement and rolling-error recovery transitions, without
   moving clock/tempo ownership outside the locked engine.
+- [x] Give SQLite schema initialization, versioned progress restoration,
+  durable mastery/tempo persistence, and scoped path deletion to
+  `ProgressRepository`, independent of the engine. Keep a documented legacy
+  `db` alias for learner-store and existing tests.
 - [ ] Continue decomposing the post-performance assessment branch of
   `_update` behind stable phase/result interfaces.
 - [x] Split the giant _build_interface method into separate Home, Library and
