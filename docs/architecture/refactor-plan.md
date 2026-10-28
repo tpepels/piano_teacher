@@ -369,3 +369,11 @@ first-party architectural monoliths.
   Tests now require the exact 12-template atlas and literal clock/play-from
   barline coordinates, without changing tolerance. Three geometry mutations
   were rejected. Fresh aggregate: 47 passed (including 28 measure invariants).
+
+- Visual coverage now separates independent source inventory, event binding,
+  primitive evidence acceptance and note/rest/curve/group/ledger/tuplet policies.
+  Coordinator reduced 1632→135 lines. No acceptance owner imports detectors or
+  production rendering; source occurrence/evidence consumption order retained.
+  Independent review normalized 43 moved bodies without policy changes. Parent
+  15 new contracts passed and replayed all 64 saved reports/inventories with
+  byte-identical JSON; owner broader focuses passed 339 and 316 tests.
