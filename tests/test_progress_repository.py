@@ -51,6 +51,7 @@ def test_engine_uses_repository_connection_and_preserves_legacy_db_api(tmp_path)
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
         assert engine.db is engine.progress.db
+        assert engine.learner_store is engine.progress.learner_store
         engine.plan = _plan()
         engine.fingerprint = "engine"
         engine.plan.set_bpm(75)

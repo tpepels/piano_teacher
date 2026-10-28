@@ -61,7 +61,8 @@ may use pure geometry/layout helpers but never import verifier internals.
 - [x] Give SQLite schema initialization, versioned progress restoration,
   durable mastery/tempo persistence, and scoped path deletion to
   `ProgressRepository`, independent of the engine. Keep a documented legacy
-  `db` alias for learner-store and existing tests.
+  `db` alias for existing tests. The repository initializes LearnerStateStore
+  and its schema as part of owning the local progress database.
 - [ ] Continue decomposing the post-performance assessment branch of
   `_update` behind stable phase/result interfaces.
 - [x] Split the giant _build_interface method into separate Home, Library and

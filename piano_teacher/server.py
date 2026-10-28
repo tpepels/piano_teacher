@@ -44,7 +44,7 @@ from .live_feedback import settled_assessment, expired_attack_misses
 from .live_input_view import LiveInputView
 from .hardware_probe import HardwareProbe
 from .instruction import next_full_attempt
-from .learner_state import LearnerStateStore, guided_units, next_guided_unit, placement_candidate
+from .learner_state import guided_units, next_guided_unit, placement_candidate
 from .progress_repository import ProgressRepository
 from .lesson_settings import SETTINGS
 
@@ -154,7 +154,7 @@ class PracticeEngine:
         self.progress = ProgressRepository(data_dir / "progress.db")
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
-        self.learner_store = LearnerStateStore(self.db)
+        self.learner_store = self.progress.learner_store
 
     MIDI_SCAN_SECONDS = 3.0
     MIDI_RETRY_SECONDS = 4.0

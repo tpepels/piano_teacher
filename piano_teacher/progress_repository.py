@@ -12,6 +12,7 @@ from pathlib import Path
 from .learning import LearningPlan, build_exercises
 from .exercise_generator import generate_variants
 from .lesson_settings import SETTINGS
+from .learner_state import LearnerStateStore
 
 
 class ProgressRepository:
@@ -37,6 +38,8 @@ class ProgressRepository:
             fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL,
             PRIMARY KEY (fingerprint,stage_key))""")
         self.db.commit()
+        # One owner initializes both progress and learner-state tables.
+        self.learner_store = LearnerStateStore(self.db)
 
     def restore(self, plan: LearningPlan | None, fingerprint: str) -> None:
         p = plan
