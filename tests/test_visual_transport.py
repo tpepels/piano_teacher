@@ -1,5 +1,4 @@
 """Visual transport owns clock/rewind state without importing the engine."""
-from dataclasses import asdict
 import pytest
 
 from piano_teacher.server import PracticeEngine
