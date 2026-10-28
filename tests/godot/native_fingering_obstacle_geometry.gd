@@ -101,7 +101,8 @@ func _run() -> void:
     if fixture.has("regressed_script"):
         renderer.queue_free()
         await process_frame
-        renderer = _renderer(viewport,fixture["assets"],fixture["regressed_script"],dimensions)
+        renderer = _renderer(viewport,fixture["assets"],"res://notation/native/view.gd",dimensions)
+        renderer.annotations.obstacles = load(fixture["regressed_script"]).new(renderer.layout,renderer.connector_geometry)
         regressed = await _frame(viewport,renderer,fixture["model"],.125,"regressed")
     var references: Array = frames.duplicate()
     if not regressed.is_empty():

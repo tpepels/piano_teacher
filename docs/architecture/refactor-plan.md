@@ -230,3 +230,14 @@ first-party architectural monoliths.
   Y=40 instead of 220, then setter synchronization fixed it. Three headless
   contracts and fresh 43 real connector/beam/flag regressions pass. A fixture's
   obsolete `layout` field was renamed `beam_plan`; assertions unchanged.
+
+- Native annotation integration: `FingeringAnnotations` owns layout, metrics,
+  editing and label metadata; `FingeringObstacles` owns source reservations and
+  sprite-envelope cache; `SourceVisibility` supplies one recovery clipping rule.
+  No helper calls back into the view. Review caught viewport synchronization;
+  application tests additionally exposed the shared view replacing its axis on
+  clear. A new failing clear/rebind contract now passes after explicit rebinding
+  and owner-driven cache clearing. Corrupted reservation fixtures inject the
+  old obstacle policy rather than editing a moved view implementation.
+  Fresh aggregate: 62 passed / four deliberately inapplicable fixture variants
+  skipped, including real XML/Chopin/Hanon application popup corrections.

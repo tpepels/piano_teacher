@@ -30,16 +30,36 @@ signal fingering_change_requested(source_id: String, finger: Variant)
 
 # Annotation cells live on the same immutable score axis as the note ink.
 # Cache once per score/vertical size; scrolling only translates their X.
-var fingering_layout: Array = []
-var drawn_fingerings: Array = []
-var fingering_layout_gap := -1.0
-var fingering_layout_height := -1.0
-var fingering_popup: PopupMenu
-var fingering_annotations_enabled := true
-var fingering_placement_issues: Array = []
-var fingering_metrics_cache: Dictionary = {}
-var fingering_staff_lines: Array = []
-var fingering_sprite_envelopes: Dictionary = {}
+var fingering_layout: Array:
+    get: return annotations.fingering_layout
+    set(value): annotations.fingering_layout = value
+var drawn_fingerings: Array:
+    get: return annotations.drawn_fingerings
+    set(value): annotations.drawn_fingerings = value
+var fingering_layout_gap: float:
+    get: return annotations.fingering_layout_gap
+    set(value): annotations.fingering_layout_gap = value
+var fingering_layout_height: float:
+    get: return annotations.fingering_layout_height
+    set(value): annotations.fingering_layout_height = value
+var fingering_popup: PopupMenu:
+    get: return annotations.fingering_popup
+    set(value): annotations.fingering_popup = value
+var fingering_annotations_enabled: bool:
+    get: return annotations.fingering_annotations_enabled
+    set(value): annotations.fingering_annotations_enabled = value
+var fingering_placement_issues: Array:
+    get: return annotations.fingering_placement_issues
+    set(value): annotations.fingering_placement_issues = value
+var fingering_metrics_cache: Dictionary:
+    get: return annotations.fingering_metrics_cache
+    set(value): annotations.fingering_metrics_cache = value
+var fingering_staff_lines: Array:
+    get: return annotations.obstacles.staff_lines
+    set(value): annotations.obstacles.staff_lines = value
+var fingering_sprite_envelopes: Dictionary:
+    get: return annotations.obstacles.sprite_envelopes
+    set(value): annotations.obstacles.sprite_envelopes = value
 var transport_overlay_enabled := true
 var fingering_pass_clocks: Array = []
 
@@ -48,12 +68,7 @@ func set_transport_overlay_enabled(enabled: bool) -> void:
     queue_redraw()
 
 func set_fingering_annotations_enabled(enabled: bool) -> void:
-    fingering_annotations_enabled = enabled
-    drawn_fingerings.clear()
-    fingering_placement_issues.clear()
-    fingering_layout_gap = -1.0
-    if not enabled and fingering_popup != null:
-        fingering_popup.hide()
+    annotations.set_enabled(enabled)
     queue_redraw()
 
 const ScoreLayout := preload("res://notation/native/score_layout.gd")
@@ -68,10 +83,17 @@ var layout = ScoreLayout.new(timeline,glyphs):
         if connector_geometry != null:
             connector_geometry.score = value
             connector_geometry.clear_cache()
+        if annotations != null:
+            annotations.score_layout = value
+            annotations.obstacles.score_layout = value
+            annotations.clear()
 const InkGeometry := preload("res://notation/native/ink_geometry.gd")
 var ink_geometry = InkGeometry.new(layout)
 const ConnectorGeometry := preload("res://notation/native/connector_geometry.gd")
 var connector_geometry = ConnectorGeometry.new(layout)
+const FingeringAnnotations := preload("res://notation/native/fingering_annotations.gd")
+const SourceVisibility := preload("res://notation/native/source_visibility.gd")
+var annotations = FingeringAnnotations.new(layout,connector_geometry)
 var native_ready := false
 var failure_reason := ""
 var visible_symbols := 0
@@ -162,49 +184,24 @@ var frame_visible_beam_groups := 0
 
 func _init() -> void:
     resized.connect(func(): layout.set_viewport(size))
+    annotations.fingering_change_requested.connect(func(source_id, finger):
+        fingering_change_requested.emit(source_id,finger))
     mouse_filter = Control.MOUSE_FILTER_PASS
     tooltip_text = "Right-click a note or tap a finger number to change its fingering"
 
 
 func _reset_fingering() -> void:
-    fingering_layout.clear()
-    drawn_fingerings.clear()
-    fingering_placement_issues.clear()
-    fingering_layout_gap = -1.0
-    if fingering_popup != null:
-        fingering_popup.hide()
-
+    annotations.clear()
 
 func clear_score() -> void:
     _reset_fingering()
     super.clear_score()
+    layout.timeline = timeline
     timeline.set_density(configured_density)
     staff_gap_limit = MAX_STAFF_GAP
     native_ready = false
     failure_reason = ""
-    beam_groups.clear()
-    beamed_note_ids.clear()
-    beam_stem_up_by_note.clear()
-    voice_stem_up_by_note.clear()
-    chord_members.clear()
-    notation_tuplets.clear()
-    measure_by_number.clear()
-    ordered_events.clear()
-    ink_density_witness.clear()
-    selected_density_witness.clear()
-    attached_grace_notes.clear()
-    source_expressions.clear()
-    expression_note_index.clear()
-    tie_pairs.clear()
-    slur_pairs.clear()
-    previous_attack_before_measure.clear()
-    cached_staff_gap = -1.0
-    cached_gap_height = -1.0
-    cached_head_offsets.clear()
-    cached_accidental_offsets.clear()
-    rest_lane_offsets.clear()
-    unavoidable_rest_overlaps = 0
-    cached_offsets_gap = -1.0
+    layout.clear()
 
 
 func set_density(value: float) -> bool:
@@ -228,7 +225,7 @@ func set_verovio_glyphs(items: Dictionary, note_items: Dictionary = {},
         slur_items: Dictionary = {},
         required_slurs: Array = [], slurs_complete: bool = true,
         required_beams: Array = [], beams_complete: bool = true) -> bool:
-    fingering_sprite_envelopes.clear()
+    annotations.obstacles.clear()
     connector_geometry.clear_cache()
     ink_geometry.clear_cache()
     if not glyphs.load_font(items):
@@ -388,472 +385,47 @@ func load_score(candidate: Dictionary) -> bool:
 # No provider-specific state reaches this view. Invalid and genuinely unknown
 # assignments produce no number; the source attack remains editable.
 func _fingering_assignment(event: Dictionary) -> Dictionary:
-    if str(event.get("kind", "")) != "note" or not bool(event.get("is_attack", false)):
-        return {}
-    var value: Variant = event.get("fingering")
-    if not value is Dictionary:
-        return {}
-    var finger: Variant = value.get("finger")
-    if typeof(finger) not in [TYPE_INT, TYPE_FLOAT] or \
-            not is_finite(float(finger)) or float(finger) != floorf(float(finger)) or \
-            int(finger) < 1 or int(finger) > 5:
-        return {}
-    if value.get("hand") not in ["left", "right"] or \
-            not value.get("source_id") is String or str(value["source_id"]).is_empty() or \
-            value.get("origin") not in ["manual", "authored", "automatic"]:
-        return {}
-    return value
-
+    return FingeringPlacement.assignment(event)
 
 func _fingering_source(event: Dictionary) -> String:
-    var assignment: Variant = event.get("fingering")
-    if assignment is Dictionary and assignment.get("source_id") is String:
-        return assignment["source_id"]
-    var source: Variant = event.get("source_id")
-    return source if source is String else ""
-
+    return FingeringPlacement.source(event)
 
 func _fingering_block(rect: Rect2, bins: Dictionary, cell: float) -> void:
-    FingeringSpatialLayout.block(rect,bins,cell)
-
+    annotations.obstacles.block(rect,bins,cell)
 
 func _fingering_clear(rect: Rect2, bins: Dictionary, cell: float) -> bool:
-    return FingeringSpatialLayout.is_clear(
-        rect,bins,cell,fingering_staff_lines,size.y)
-
+    return annotations.obstacles.is_clear(rect,bins,cell)
 
 func _fingering_obstacles(gap: float, bins: Dictionary, cell: float) -> void:
-    var density: float = timeline.pixels_per_beat
-    var unit: float = gap/250.0
-    var span: float = maxf(size.x,float(ordered_events[-1].get("beat",0.0))*density+gap*12.0) if not ordered_events.is_empty() else size.x
-    fingering_staff_lines.clear()
-    for hand in ["right","left"]:
-        for line in range(-2,3):
-            fingering_staff_lines.append(Rect2(-gap*12.0,_staff_center(hand)+float(line)*gap-.5,span+gap*12.0,1.0))
-    for event in ordered_events:
-        _fingering_event_obstacles(event,gap,bins,cell)
-    # Source beam masks and their stretched native stems, including chords.
-    for group in beam_groups:
-        var ids := PackedStringArray()
-        for event in group:
-            ids.append(str(event.get("id","")))
-        var key: String = "|".join(ids)
-        if not glyphs.beam_metadata.has(key):
-            continue
-        var info: Dictionary = glyphs.beam_metadata[key]
-        var box: Array = info["bounds"]
-        var first: Dictionary = group[0]
-        var last: Dictionary = group[-1]
-        var x0: float = float(first["beat"])*density+_voice_column_offset(first,gap,cached_head_offsets)
-        var x1: float = float(last["beat"])*density+_voice_column_offset(last,gap,cached_head_offsets)
-        var source_offsets: Array = info["head_offsets"]
-        _fingering_block(Rect2(x0+(float(box[0])-float(source_offsets[0]))*unit,
-            _event_y(first,gap)+float(box[1])*unit,
-            x1-x0+(float(box[2])-float(source_offsets[-1])+float(source_offsets[0]))*unit,
-            float(box[3])*unit),bins,cell)
-        for index in range(group.size()):
-            var event: Dictionary = group[index]
-            var extents: Dictionary = _chord_extents(event,gap,cached_head_offsets)
-            var head_y: float = float(extents["bottom_y" if info["stem_up"] else "top_y"])
-            var tip_y: float = head_y+float(info["tip_offsets"][index])*unit
-            var x: float = float(event["beat"])*density+_voice_column_offset(event,gap,cached_head_offsets)
-            var stem: Array = _source_stem_bounds(event,bool(info["stem_up"]))
-            if stem.size() == 4:
-                _fingering_block(Rect2(x+float(stem[0])*unit,minf(head_y,tip_y),
-                    float(stem[2])*unit,absf(head_y-tip_y)),bins,cell)
-    for pair in tie_pairs:
-        var first: Dictionary = pair["first"]
-        var last: Dictionary = pair["last"]
-        var place: Dictionary = _tie_placement(first,last,float(first["beat"])*density,
-            float(last["beat"])*density,gap)
-        if place.is_empty():
-            continue
-        _fingering_block(_tie_contour_rect(first,last,place,gap),bins,cell)
-    for pair in slur_pairs:
-        var first: Dictionary = pair["first"]
-        var last: Dictionary = pair["last"]
-        var info: Dictionary = glyphs.slur_metadata[pair["key"]]
-        var box: Array = info["bounds"]
-        var x0: float = float(first["beat"])*density+float(cached_head_offsets.get(str(first["id"]),0.0))
-        var x1: float = float(last["beat"])*density+float(cached_head_offsets.get(str(last["id"]),0.0))
-        var change: float = _event_y(last,gap)-_event_y(first,gap)-float(info.get("original_end_y",0.0))*unit
-        var a: float = change*float(box[0])/float(info["span"])
-        var b: float = change*(float(box[0])+float(box[2]))/float(info["span"])
-        _fingering_block(Rect2(x0+float(box[0])*(x1-x0)/float(info["span"]),
-            _event_y(first,gap)+float(box[1])*unit+minf(a,b),
-            float(box[2])*(x1-x0)/float(info["span"]),float(box[3])*unit+absf(b-a)),bins,cell)
-    for group in notation_tuplets:
-        var events: Array = group.get("events",[])
-        if events.is_empty() or _tuplet_hidden(group):
-            continue
-        var ids := PackedStringArray()
-        for event in events:
-            ids.append(str(event["id"]))
-        var info: Dictionary = glyphs.tuplet_metadata.get("|".join(ids),{})
-        var first: Dictionary = events[0]
-        var x0: float = float(first["beat"])*density+_voice_column_offset(first,gap,cached_head_offsets)
-        var x1: float = float(events[-1]["beat"])*density+_voice_column_offset(events[-1],gap,cached_head_offsets)
-        var y: float = _rest_y(first,gap) if first["kind"] == "rest" else _event_y(first,gap)
-        for kind in ["number","bracket"]:
-            if not info.get(kind) is Dictionary or info[kind].is_empty():
-                continue
-            var box: Array = info[kind]["bounds"]
-            var left: float = (x0+x1)*.5-float(box[2])*unit*.5 if kind == "number" and events.size() > 1 else x0+float(box[0])*unit
-            var width: float = float(box[2])*unit if kind == "number" or events.size() == 1 else x1-x0+(float(box[2])-float(info["span"]))*unit
-            _fingering_block(Rect2(left,y+float(box[1])*unit,width,float(box[3])*unit),bins,cell)
-    for mark in source_expressions:
-        var hand: String = _display_staff(mark)
-        var kind: String = str(mark.get("kind",""))
-        var value: String = str(mark.get("value",""))
-        var x: float = float(mark.get("beat",0.0))*density
-        var y: float = _staff_center(hand)+gap*(3.0 if kind == "dynamic" else 3.55)
-        var name := ""
-        if kind == "dynamic":
-            name = "dynamic_"+value
-        elif kind == "pedal":
-            name = "pedal_start" if value == "start" else "pedal_stop"
-        elif kind == "articulation":
-            var event: Dictionary = expression_note_index.get(str(mark.get("note_id","")),{})
-            if event.is_empty():
-                continue
-            var step: int = Geometry.staff_step(event.get("spelling",{}),_clef_for(hand,_measure_for(event)))
-            var below: bool = step < 4
-            y = maxf(_event_y(event,gap)+gap*1.05,_staff_center(hand)+gap*2.9) if below else minf(_event_y(event,gap)-gap*1.05,_staff_center(hand)-gap*2.9)
-            x = float(event["beat"])*density+float(cached_head_offsets.get(str(event["id"]),0.0))
-            name = "artic_"+value+("_below" if below else "_above")
-        if glyphs.bounds.has(name):
-            var box: Array = glyphs.bounds[name]
-            var scale: float = unit*.9
-            _fingering_block(Rect2(x-float(box[2])*scale*.5,y+float(box[1])*scale,
-                float(box[2])*scale,float(box[3])*scale),bins,cell)
-    var translation: float = timeline.screen_x(0.0,0.0,0.0,play_from_beat)
-    var boundaries: Array = []
-    for measure in timeline.measures:
-        boundaries.append(_barline_geometry(measure,0.0,0.0,gap))
-    boundaries.append(_terminal_barline_geometry(0.0,0.0,gap))
-    for boundary in boundaries:
-        if boundary.is_empty():
-            continue
-        var x: float = float(boundary["x"])-translation
-        var strokes: Array = _barline_strokes(str(boundary.get("style","regular")),gap)
-        if strokes.is_empty():
-            continue
-        for stroke in strokes:
-            var width: float = float(stroke["width"])
-            var stroke_x: float = x+float(stroke["offset"])
-            for segment in boundary.get("segments",[]):
-                _fingering_block(Rect2(stroke_x-width*.5,float(segment["top"]),width,
-                    float(segment["bottom"])-float(segment["top"])),bins,cell)
-        var repetition: String = str(boundary.get("repeat",""))
-        var positions: Array = []
-        if repetition in ["backward","both"]:
-            positions.append(x-gap*.92)
-        if repetition in ["forward","both"]:
-            positions.append(x+gap*.56)
-        var dot: Array = glyphs.bounds.get("repeat_dot",[])
-        if dot.size()==4:
-            for dot_x in positions:
-                for hand in ["right","left"]:
-                    for dot_y in [_staff_center(hand)-gap*.5,_staff_center(hand)+gap*.5]:
-                        _fingering_block(Rect2(float(dot_x)-float(dot[2])*unit*.5,
-                            float(dot_y)-float(dot[3])*unit*.5,
-                            float(dot[2])*unit,float(dot[3])*unit),bins,cell)
-    for grace in attached_grace_notes:
-        var target: Dictionary = expression_note_index.get(str(grace.get("before_note_id","")),{})
-        if target.is_empty():
-            continue
-        var hand: String = _display_staff(grace)
-        var step: int = Geometry.staff_step(grace.get("spelling",{}),_clef_for(hand,_measure_for(grace)))
-        var y: float = Geometry.note_y(step,_staff_center(hand)+gap*2.0,gap)
-        var kind: String = str(grace.get("note_type","eighth"))
-        var box: Array = glyphs.note_bounds.get(kind+("_up" if step<4 else "_down"),[])
-        if box.size() == 4:
-            var scale: float = unit*.66
-            var x: float = float(target["beat"])*density+float(cached_head_offsets.get(str(target["id"]),0.0))-gap*1.4
-            _fingering_block(Rect2(x+float(box[0])*scale,y+float(box[1])*scale,
-                float(box[2])*scale,float(box[3])*scale),bins,cell)
-    var pending: Dictionary = {}
-    for mark in source_expressions:
-        if str(mark.get("kind","")) != "hairpin":
-            continue
-        var hand: String = _display_staff(mark)
-        var key: String = hand+"|"+str(mark.get("number","1"))
-        if str(mark.get("value","")) in ["crescendo","diminuendo"]:
-            pending[key] = mark
-        elif str(mark.get("value","")) == "stop" and pending.has(key):
-            var start: Dictionary = pending[key]
-            pending.erase(key)
-            var x0: float = float(start.get("beat",0.0))*density+gap*.48
-            var x1: float = float(mark.get("beat",0.0))*density-gap*.25
-            if x1>x0:
-                _fingering_block(Rect2(x0,_staff_center(hand)+gap*3.55-gap*.3,x1-x0,gap*.6),bins,cell)
-
+    annotations.obstacles.build(gap,bins,cell,play_from_beat)
 
 func _fingering_event_obstacles(event: Dictionary, gap: float, bins: Dictionary, cell: float) -> void:
-    var id: String = str(event["id"])
-    var kind: String = str(event.get("note_type","quarter"))
-    var unit: float = gap/250.0
-    var anchor: float = float(event["beat"])*timeline.pixels_per_beat
-    var x: float = anchor+float(cached_head_offsets.get(id,0.0))
-    var y: float = _rest_y(event,gap) if event["kind"] == "rest" else _event_y(event,gap)
-    var box: Array
-    if event["kind"] == "rest":
-        box = glyphs.bounds["rest_"+kind]
-        _fingering_block(Rect2(anchor-float(box[2])*unit*.5,y+float(box[1])*unit,
-            float(box[2])*unit,float(box[3])*unit),bins,cell)
-    else:
-        box = glyphs.bounds["head_"+(kind if kind in ["whole","half"] else "black")]
-        _fingering_block(Rect2(x-float(box[2])*unit*.5,y+float(box[1])*unit,
-            float(box[2])*unit,float(box[3])*unit),bins,cell)
-        var step: int = Geometry.staff_step(event.get("spelling",{}),_clef_for(str(event["staff"]),_measure_for(event)))
-        var bottom: float = _staff_center(str(event["staff"]))+gap*2.0
-        var line_step: int = -2 if step<0 else 10
-        while line_step>=step if step<0 else line_step<=step:
-            var line_y: float = Geometry.note_y(line_step,bottom,gap)
-            var half: float = maxf(18.0,gap*.95)
-            var weight: float = maxf(1.6,gap*.075)
-            _fingering_block(Rect2(x-half,line_y-weight*.5,half*2.0,weight),bins,cell)
-            line_step += -2 if step<0 else 2
-        if not bool(event.get("chord",false)) and not beamed_note_ids.has(id) and kind != "whole":
-            var up: bool = bool(_chord_extents(event,gap,cached_head_offsets)["up"])
-            var stem: Array = _source_stem_bounds(event,up)
-            if stem.size()==4:
-                var stem_x: float = anchor+_voice_column_offset(event,gap,cached_head_offsets)
-                _fingering_block(Rect2(stem_x+float(stem[0])*unit,y+float(stem[1])*unit,
-                    float(stem[2])*unit,float(stem[3])*unit),bins,cell)
-            if kind not in ["quarter","half"]:
-                # A flagged sprite's enclosing note/stem rectangle contains
-                # empty space beside the shaft. Ledger/accidental unions make
-                # that empty region even larger. Reserve the authentic flag
-                # side of the sprite; heads, ledgers and shaft are separate.
-                var chord_key: String = _chord_template_key(event) if chord_members.has(id) else ""
-                var envelope: Rect2 = _fingering_nonhead_envelope(kind,up,chord_key)
-                var origin: float = anchor+_voice_column_offset(event,gap,cached_head_offsets) if chord_members.has(id) else x
-                _fingering_block(Rect2(Vector2(origin,y)+envelope.position*unit,envelope.size*unit),bins,cell)
-        if cached_accidental_offsets.has(id):
-            var name: String = str(Geometry.ACCIDENTAL_GLYPHS[str(event["accidental"])])
-            box = glyphs.bounds[name]
-            var center: float = x+float(cached_accidental_offsets[id])
-            _fingering_block(Rect2(center-float(box[2])*unit*.5,y+float(box[1])*unit,
-                float(box[2])*unit,float(box[3])*unit),bins,cell)
-    box = glyphs.bounds["augmentation_dot"]
-    # Chord dots share the painter's rightmost head and distinct staff spaces.
-    # The leader reserves the complete group once; other tones keep their
-    # independent head/ledger/accidental reservations above.
-    if bool(event.get("chord",false)):
-        return
-    var dot_events: Array = chord_members.get(id,[event]).duplicate()
-    var dot_anchors: Dictionary = {}
-    if chord_members.has(id):
-        dot_events.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.diatonic_index(a.get("spelling",{})) < Geometry.diatonic_index(b.get("spelling",{})))
-        var centers: Array = []
-        for member in dot_events:
-            centers.append(Vector2(anchor+float(cached_head_offsets.get(str(member["id"]),0.0)),
-                _event_y(member,gap)))
-        dot_anchors = _chord_dot_anchors(dot_events,centers,gap)
-    for member in dot_events:
-        var dot_anchor: Vector2 = dot_anchors.get(str(member["id"]),
-            Vector2(x,y+(Geometry.rest_dot_offset(kind)*gap if event["kind"] == "rest" else 0.0)))
-        var dot_y: float = dot_anchor.y-gap*.24
-        for index in range(int(member.get("dots",0))):
-            var dot_x: float = dot_anchor.x+gap*(1.05+float(index)*.63)
-            _fingering_block(Rect2(dot_x-float(box[2])*unit*.5,dot_y+float(box[1])*unit,
-                float(box[2])*unit,float(box[3])*unit),bins,cell)
-
+    annotations.obstacles.event_obstacles(event,gap,bins,cell)
 
 func _fingering_nonhead_envelope(kind: String, up: bool, chord_key: String = "") -> Rect2:
-    # Read the authentic sprite once per template, including faint edge ink.
-    # Excluding only its separately reserved head rectangles leaves an exact
-    # conservative shaft/flag envelope without a guessed flag-side cutoff.
-    var key: String = kind+("_up" if up else "_down")
-    var cache_key: String = "note|"+key if chord_key.is_empty() else "chord|"+chord_key
-    if fingering_sprite_envelopes.has(cache_key):
-        return fingering_sprite_envelopes[cache_key]
-    var box: Array = glyphs.note_bounds[key] if chord_key.is_empty() else glyphs.chord_metadata[chord_key]["bounds"]
-    var texture: Texture2D = glyphs.note_textures[key] if chord_key.is_empty() else glyphs.chord_textures[chord_key]
-    var picture: Image = texture.get_image()
-    var pixel := Vector2(float(box[2])/picture.get_width(),float(box[3])/picture.get_height())
-    var head_box: Array = glyphs.bounds["head_"+(kind if kind in ["half","whole"] else "black")]
-    var positions: Array = [[0.0,0.0]] if chord_key.is_empty() else glyphs.chord_metadata[chord_key]["head_positions"]
-    var heads: Array = []
-    for position in positions:
-        heads.append(Rect2(float(position[0])-float(head_box[2])*.5,
-            float(position[1])+float(head_box[1]),float(head_box[2]),float(head_box[3])))
-    var envelope := Rect2()
-    var found := false
-    for row in range(picture.get_height()):
-        for column in range(picture.get_width()):
-            if picture.get_pixel(column,row).a == 0.0:
-                continue
-            var point := Vector2(float(box[0]),float(box[1]))+Vector2(column+.5,row+.5)*pixel
-            var in_head := false
-            for head in heads:
-                if head.has_point(point):
-                    in_head = true
-                    break
-            if in_head:
-                continue
-            var cell := Rect2(point-pixel*.5,pixel)
-            envelope = envelope.merge(cell) if found else cell
-            found = true
-    fingering_sprite_envelopes[cache_key] = envelope
-    return envelope
-
+    return annotations.obstacles.nonhead_envelope(kind,up,chord_key)
 
 func _layout_fingerings(gap: float) -> void:
-    fingering_layout.clear()
-    fingering_placement_issues.clear()
-    fingering_layout_gap = gap
-    fingering_layout_height = size.y
-    var cell: float = maxf(64.0,timeline.pixels_per_beat)
-    var bins: Dictionary = {}
-    _fingering_obstacles(gap,bins,cell)
-    var candidates: Array = []
-    var physical_keys: Dictionary = {}
-    for event in ordered_events:
-        var assignment: Dictionary = _fingering_assignment(event)
-        if assignment.is_empty():
-            continue
-        var key: String = "%.8f|%s|%s|%d" % [float(event["beat"]),assignment["hand"],
-            str(event.get("midi_pitch",event.get("spelling",{}))),int(assignment["finger"])]
-        if physical_keys.has(key):
-            physical_keys[key]["event_ids"].append(str(event["id"]))
-            continue
-        var id: String = str(event["id"])
-        var up: bool = bool(_chord_extents(event,gap,cached_head_offsets)["up"])
-        var direction: float = -1.0 if assignment["hand"] == "right" else 1.0
-        if voice_stem_up_by_note.has(id):
-            direction = -1.0 if up else 1.0
-        var item: Dictionary = {
-            "event":event, "assignment":assignment, "event_ids":[id],
-            "head":Vector2(float(event["beat"])*timeline.pixels_per_beat
-                +float(cached_head_offsets.get(id,0.0)),_event_y(event,gap)),
-            "up":up, "direction":direction,
-            "chord":bool(event.get("chord",false)) or chord_members.has(id),
-            "staff_center":_staff_center(str(event["staff"]))}
-        physical_keys[key] = item
-        candidates.append(item)
-    var font_size: int = clampi(roundi(gap*.75),11,FINGERING_FONT_SIZE)
-    var metrics: Dictionary = _fingering_metrics(font_size)
-    var packed: Dictionary = FingeringSpatialLayout.pack(candidates, metrics,
-        gap, size.y, cell, bins, fingering_staff_lines, font_size)
-    fingering_layout = packed["layout"]
-    fingering_placement_issues = packed["issues"]
-
+    layout.set_viewport(size)
+    annotations.layout_fingerings(gap,play_from_beat)
 
 func _fingering_metrics(font_size: int) -> Dictionary:
-    if fingering_metrics_cache.has(font_size):
-        return fingering_metrics_cache[font_size]
-    var font: Font = ThemeDB.fallback_font
-    var server := TextServerManager.get_primary_interface()
-    var ink := Rect2()
-    var width := 0.0
-    for digit in range(1,6):
-        width = maxf(width,font.get_string_size(str(digit),HORIZONTAL_ALIGNMENT_LEFT,-1,font_size).x)
-        var rid: RID = font.get_rids()[0]
-        var glyph: int = server.font_get_glyph_index(rid,font_size,str(digit).unicode_at(0),0)
-        var box := Rect2(server.font_get_glyph_offset(rid,Vector2i(font_size,0),glyph),
-            server.font_get_glyph_size(rid,Vector2i(font_size,0),glyph))
-        ink = box if digit == 1 else ink.merge(box)
-    var value := {"cell":Vector2(ceilf(width)+2.0,ceilf(font.get_height(font_size))),
-        "ink_offset":Vector2(1.0,font.get_ascent(font_size))+ink.position,"ink_size":ink.size}
-    fingering_metrics_cache[font_size] = value
-    return value
-
+    return annotations.metrics(font_size)
 
 func _paint_fingerings(clock: float, playhead_x: float, gap: float,
         pass_index: int = 0, pass_start: float = 0.0) -> void:
-    if not fingering_annotations_enabled:
-        return
-    if absf(fingering_layout_gap-gap) > .001 or absf(fingering_layout_height-size.y) > .001:
-        _layout_fingerings(gap)
-    var translation := Vector2(timeline.screen_x(0.0,clock,playhead_x,play_from_beat),0.0)
     paint_pass_index = pass_index
     paint_pass_start = pass_start
     current_preparation = preparation_history.get(pass_start,{}) if score_loop_enabled else {}
-    for item in fingering_layout:
-        if not _practice_event_visible(expression_note_index.get(str(item["event_ids"][0]),{})):
-            continue
-        var rect: Rect2 = item["rect"]
-        rect.position += translation
-        # A partial numeral can look like a different finger. Keep annotation
-        # cells whole at the brace and viewport edges, without reflowing them.
-        if rect.position.x < 30.0 or rect.end.x > size.x:
-            continue
-        var ink: Color = _ink(str(item["hand"]))
-        if item["hand"] == "left":
-            ink = ink.lerp(Design.BLUE,.32)
-        var font_size: int = int(item["font_size"])
-        draw_string(ThemeDB.fallback_font,rect.position+Vector2(1.0,ThemeDB.fallback_font.get_ascent(font_size)),
-            str(item["finger"]),HORIZONTAL_ALIGNMENT_LEFT,-1,font_size,ink)
-        var shown: Dictionary = item.duplicate()
-        shown["pass_index"] = pass_index
-        shown["rect"] = rect
-        shown["head"] = item["head"]+translation
-        shown["ink_rect"] = Rect2(item["ink_rect"].position+translation,item["ink_rect"].size)
-        drawn_fingerings.append(shown)
-
+    annotations.paint(self,clock,playhead_x,gap,pass_index,pass_start,{
+        "active_hand":active_hand,"play_from_beat":play_from_beat,
+        "score_loop_enabled":score_loop_enabled,"preparation_history":preparation_history})
 
 func _fill_fingering_menu(menu: PopupMenu, event: Dictionary) -> void:
-    var assignment: Dictionary = _fingering_assignment(event)
-    menu.add_item(_performing_hand(event).capitalize()+" hand · fingering", 100)
-    menu.set_item_disabled(0,true)
-    for finger in range(1,6):
-        menu.add_radio_check_item(str(finger),finger)
-        menu.set_item_checked(menu.item_count-1,int(assignment.get("finger",0)) == finger)
-    menu.add_separator()
-    menu.add_item("Use original / automatic",0)
-    menu.id_pressed.connect(func(finger: int):
-        fingering_change_requested.emit(_fingering_source(event),null if finger == 0 else finger)
-        fingering_popup.hide())
-
+    annotations.fill_menu(menu,event)
 
 func _open_fingering_editor(point: Vector2) -> bool:
-    if not fingering_annotations_enabled:
-        return false
-    var selected: Dictionary = {}
-    var radius: float = maxf(12.0,_gap()*.8)
-    for item in drawn_fingerings:
-        if item["rect"].grow(5.0).has_point(point):
-            for id in item["event_ids"]:
-                selected[id] = true
-    for instance in drawn_note_instances:
-        if instance["position"].distance_to(point) <= radius:
-            selected[instance["event_id"]] = true
-    var targets: Array = []
-    var sources: Dictionary = {}
-    for id in selected:
-        var event: Dictionary = expression_note_index.get(str(id),{})
-        var source: String = _fingering_source(event)
-        if not bool(event.get("is_attack",false)) or source.is_empty() or sources.has(source):
-            continue
-        sources[source] = true
-        targets.append(event)
-    if targets.is_empty():
-        return false
-    if fingering_popup != null:
-        remove_child(fingering_popup)
-        fingering_popup.queue_free()
-    fingering_popup = PopupMenu.new()
-    add_child(fingering_popup)
-    if targets.size() == 1:
-        _fill_fingering_menu(fingering_popup,targets[0])
-    else:
-        for i in range(targets.size()):
-            var event: Dictionary = targets[i]
-            var submenu := PopupMenu.new()
-            submenu.name = "Note%d" % i
-            fingering_popup.add_child(submenu)
-            _fill_fingering_menu(submenu,event)
-            var pitch: Dictionary = event.get("spelling",{})
-            fingering_popup.add_submenu_item("%s · voice %s · %s%s" % [
-                _performing_hand(event).capitalize(),str(event.get("voice","1")),
-                str(pitch.get("step","")),str(pitch.get("octave",""))],submenu.name)
-    var screen: Vector2 = get_screen_transform()*point
-    fingering_popup.popup(Rect2i(Vector2i(screen),Vector2i.ZERO))
-    return true
-
+    return annotations.open_editor(self,point,_gap(),drawn_note_instances)
 
 func _gui_input(event: InputEvent) -> void:
     if not native_ready:
@@ -1476,6 +1048,7 @@ func _paint_beams(data: Dictionary, gap: float) -> void:
 # position. Godot never produces its own bow paths or tapered polygons.
 func _tie_placement(first: Dictionary, last: Dictionary,
         x0: float, x1: float, gap: float) -> Dictionary:
+    layout.set_viewport(size)
     return connector_geometry.tie_placement(first,last,x0,x1,gap)
 
 func _tie_chord_leader(event: Dictionary) -> Dictionary:
@@ -1756,31 +1329,13 @@ func _record_notehead(event: Dictionary, point: Vector2) -> void:
 
 
 func _practice_event_visible(event: Dictionary) -> bool:
-    if not score_loop_enabled:
-        return true
-    var at: float = paint_pass_start+float(event.get("beat",event.get("start_beat",0.0)))
-    for preparation in preparation_history.values():
-        var silence: Dictionary = preparation["measure"]
-        if at>=float(silence["start_beat"])-.00001 and at<float(silence["end_beat"])-.00001:
-            return false
-    return true
-
+    return SourceVisibility.event_visible(event,paint_pass_start,score_loop_enabled,preparation_history)
 
 func _practice_span_visible(first: Dictionary, last: Dictionary) -> bool:
-    if not score_loop_enabled:
-        return true
-    for preparation in preparation_history.values():
-        var silence: Dictionary = preparation["measure"]
-        if paint_pass_start+float(last["beat"])>=float(silence["start_beat"])-.00001 and \
-                paint_pass_start+float(first["beat"])<float(silence["end_beat"])-.00001:
-            return false
-    return true
-
+    return SourceVisibility.span_visible(first,last,paint_pass_start,score_loop_enabled,preparation_history)
 
 func _practice_intervals_overlap(first: Dictionary, second: Dictionary) -> bool:
-    return float(first["start_beat"])<float(second["end_beat"])-.00001 and \
-        float(second["start_beat"])<float(first["end_beat"])-.00001
-
+    return SourceVisibility.intervals_overlap(first,second)
 
 func _remember_preparation() -> void:
     if practice_preparation.is_empty():
@@ -2039,7 +1594,7 @@ func _draw() -> void:
     drawn_note_instances.clear()
     pass_noteheads.clear()
     visible_symbols = 0
-    drawn_fingerings.clear()
+    annotations.begin_frame()
     fingering_pass_clocks.clear()
     if size.x < 100.0 or size.y < 100.0:
         return

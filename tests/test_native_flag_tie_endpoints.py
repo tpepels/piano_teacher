@@ -106,6 +106,28 @@ class FixedStaffLayout extends "res://notation/native/score_layout.gd":
     func staff_center(hand: String) -> float:
         return 110.0 if hand=="right" else 290.0
 
+class LegacyTieObstacles extends "res://notation/native/fingering_obstacles.gd":
+    var old_reservation := false
+    func build(gap: float, bins: Dictionary, cell: float, play_from_beat: float = 0.0) -> void:
+        if not old_reservation:
+            super.build(gap,bins,cell,play_from_beat)
+            return
+        var pairs: Array = score_layout.tie_pairs
+        score_layout.tie_pairs = []
+        super.build(gap,bins,cell,play_from_beat)
+        score_layout.tie_pairs = pairs
+        # Exact former reservation, with the current authentic painter.
+        for pair in pairs:
+            var first: Dictionary = pair["first"]
+            var last: Dictionary = pair["last"]
+            var place: Dictionary = connector_geometry.tie_placement(first,last,float(first["beat"])*score_layout.timeline.pixels_per_beat,
+                float(last["beat"])*score_layout.timeline.pixels_per_beat,gap)
+            var info: Dictionary = score_layout.glyphs.tie_metadata[connector_geometry.tie_template_key(first,last,place,gap)]
+            var box: Array = info["bounds"]
+            var scale: float = (float(place["x1"])-float(place["x0"]))/float(info["span"])
+            block(Rect2(float(place["x0"])+float(box[0])*scale,
+                float(place["y"])+float(box[1])*gap/250.0,float(box[2])*scale,float(box[3])*gap/250.0),bins,cell)
+
 class TieView extends "res://notation/native/view.gd":
     var spec: Dictionary
     var selected := ""
@@ -115,6 +137,7 @@ class TieView extends "res://notation/native/view.gd":
     var reference := Rect2()
     func _init() -> void:
         layout = FixedStaffLayout.new(timeline,glyphs)
+        annotations.obstacles = LegacyTieObstacles.new(layout,connector_geometry)
     func selector_checks() -> Dictionary:
         var leader := {"id":"leader","kind":"note","staff":"right","voice":"1","measure":1,"beat":0.0,
             "chord":false,"note_type":"eighth","stem":"up","spelling":{"step":"E","octave":4}}
@@ -142,26 +165,8 @@ class TieView extends "res://notation/native/view.gd":
         ordered_events = [leader,child,top,last]
         checks["middle_tone_bow_down"] = _tie_bow_down(child,last,21.875)
         return checks
-    func _fingering_obstacles(gap: float, bins: Dictionary, cell: float) -> void:
-        if not spec.get("old_reservation",false):
-            super._fingering_obstacles(gap,bins,cell)
-            return
-        var pairs: Array = tie_pairs
-        tie_pairs = []
-        super._fingering_obstacles(gap,bins,cell)
-        tie_pairs = pairs
-        # Exact former reservation, with the current authentic painter.
-        for pair in pairs:
-            var first: Dictionary = pair["first"]
-            var last: Dictionary = pair["last"]
-            var place: Dictionary = _tie_placement(first,last,float(first["beat"])*timeline.pixels_per_beat,
-                float(last["beat"])*timeline.pixels_per_beat,gap)
-            var info: Dictionary = glyphs.tie_metadata[_tie_template_key(first,last,place,gap)]
-            var box: Array = info["bounds"]
-            var scale: float = (float(place["x1"])-float(place["x0"]))/float(info["span"])
-            _fingering_block(Rect2(float(place["x0"])+float(box[0])*scale,
-                float(place["y"])+float(box[1])*gap/250.0,float(box[2])*scale,float(box[3])*gap/250.0),bins,cell)
     func _draw() -> void:
+        annotations.obstacles.old_reservation = bool(spec.get("old_reservation",false))
         var gap: float = float(spec["gap"])
         draw_rect(Rect2(Vector2.ZERO,size),Design.STAGE)
         for center in [110.0,290.0]:

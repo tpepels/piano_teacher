@@ -88,3 +88,29 @@ static func fallback_candidates(head: Vector2, ink: Vector2, gap: float,
         result.append({"position":head+offset*gap-ink*.5,
             "orientation":"above" if offset.y<-.7 else "below" if offset.y>.7 else "side"})
     return result
+
+
+static func assignment(event: Dictionary) -> Dictionary:
+    if str(event.get("kind", "")) != "note" or not bool(event.get("is_attack", false)):
+        return {}
+    var value: Variant = event.get("fingering")
+    if not value is Dictionary:
+        return {}
+    var finger: Variant = value.get("finger")
+    if typeof(finger) not in [TYPE_INT, TYPE_FLOAT] or \
+            not is_finite(float(finger)) or float(finger) != floorf(float(finger)) or \
+            int(finger) < 1 or int(finger) > 5:
+        return {}
+    if value.get("hand") not in ["left", "right"] or \
+            not value.get("source_id") is String or str(value["source_id"]).is_empty() or \
+            value.get("origin") not in ["manual", "authored", "automatic"]:
+        return {}
+    return value
+
+
+static func source(event: Dictionary) -> String:
+    var assignment: Variant = event.get("fingering")
+    if assignment is Dictionary and assignment.get("source_id") is String:
+        return assignment["source_id"]
+    var source: Variant = event.get("source_id")
+    return source if source is String else ""

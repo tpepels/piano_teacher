@@ -15,6 +15,16 @@ func _settle(app: Control, after_revision: int = -1) -> bool:
             await RenderingServer.frame_post_draw
             return true
     failures.append("Native app did not become ready: "+str(app.score_error))
+    push_error(failures[-1]+" "+str({"rendered":app.rendered_revision,
+        "ready":app._native_score_ready(),"pending":app.action_pending,
+        "size":app.timeline_preview.size,"labels":app.timeline_preview.drawn_fingerings.size(),
+        "layout":app.timeline_preview.fingering_layout.size(),
+        "same_layout":is_same(app.timeline_preview.layout,app.timeline_preview.annotations.score_layout),
+        "indices":[app.timeline_preview.ordered_events.size(),app.timeline_preview.annotations.score_layout.ordered_events.size()],
+        "assigned":app.timeline_preview.ordered_events[0].get("fingering") if not app.timeline_preview.ordered_events.is_empty() else null,
+        "issues":app.timeline_preview.fingering_placement_issues,
+        "enabled":app.timeline_preview.fingering_annotations_enabled,
+        "running":app.last_state.get("running"),"phase":app.last_state.get("phase")}))
     return false
 
 func _run() -> void:

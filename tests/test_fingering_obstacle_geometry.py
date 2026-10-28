@@ -88,28 +88,28 @@ def _authored_source(folder, kind):
 
 def _regressed_script(folder, kind):
     """Run the real compositor with just the pre-fix reservation restored."""
-    source = (ROOT / 'godot/notation/native/view.gd').read_text()
+    source = (ROOT / 'godot/notation/native/fingering_obstacles.gd').read_text()
     if kind == 'dotted-seconds':
-        start = source.index('    box = glyphs.bounds["augmentation_dot"]', source.index('func _fingering_event_obstacles'))
-        end = source.index('\n\n\nfunc ', start)
-        source = source[:start] + '''    box = glyphs.bounds["augmentation_dot"]
+        start = source.index('    box = score_layout.glyphs.bounds["augmentation_dot"]', source.index('func event_obstacles'))
+        end = source.index('\n\nfunc nonhead_envelope(', start)
+        source = source[:start] + '''    box = score_layout.glyphs.bounds["augmentation_dot"]
     var dot_y: float = y-gap*.24+(Geometry.rest_dot_offset(kind)*gap if event["kind"] == "rest" else 0.0)
     for index in range(int(event.get("dots",0))):
         var dot_x: float = x+gap*(1.05+float(index)*.63)
-        _fingering_block(Rect2(dot_x-float(box[2])*unit*.5,dot_y+float(box[1])*unit,
+        block(Rect2(dot_x-float(box[2])*unit*.5,dot_y+float(box[1])*unit,
             float(box[2])*unit,float(box[3])*unit),bins,cell)''' + source[end:]
     else:
         start = source.index('    for boundary in boundaries:')
-        end = source.index('    for grace in attached_grace_notes:', start)
+        end = source.index('    for grace in score_layout.attached_grace_notes:', start)
         source = source[:start] + '''    for boundary in boundaries:
         if boundary.is_empty():
             continue
         var x: float = float(boundary["x"])-translation
         for segment in boundary.get("segments",[]):
-            _fingering_block(Rect2(x-2.0,float(segment["top"]),4.0,
+            block(Rect2(x-2.0,float(segment["top"]),4.0,
                 float(segment["bottom"])-float(segment["top"])),bins,cell)
 ''' + source[end:]
-    path = folder / 'regressed-view.gd'
+    path = folder / 'regressed-obstacles.gd'
     path.write_text(source)
     return str(path)
 

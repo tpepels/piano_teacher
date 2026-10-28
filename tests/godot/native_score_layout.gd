@@ -40,5 +40,10 @@ func _initialize() -> void:
         failures += 1
     if axis.model != original:
         failures += 1
+    var view = load("res://notation/native/view.gd").new()
+    view.clear_score()
+    if not is_same(view.timeline,view.layout.timeline):
+        failures += 1
+    view.free()
     print("SCORE_LAYOUT_FAILURES:",failures)
     quit(0 if failures==0 else 1)
