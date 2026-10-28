@@ -102,6 +102,10 @@ def test_ordinary_atlas_is_exact_original_half_note_engraving(atlas, stem):
 
 HARNESS = r'''extends SceneTree
 
+class FixedStaffLayout extends "res://notation/native/score_layout.gd":
+    func staff_center(hand: String) -> float:
+        return 110.0 if hand=="right" else 290.0
+
 class TieView extends "res://notation/native/view.gd":
     var spec: Dictionary
     var selected := ""
@@ -109,8 +113,8 @@ class TieView extends "res://notation/native/view.gd":
     var labels: Array = []
     var reservations: Array = []
     var reference := Rect2()
-    func _staff_center(hand: String) -> float:
-        return 110.0 if hand=="right" else 290.0
+    func _init() -> void:
+        layout = FixedStaffLayout.new(timeline,glyphs)
     func selector_checks() -> Dictionary:
         var leader := {"id":"leader","kind":"note","staff":"right","voice":"1","measure":1,"beat":0.0,
             "chord":false,"note_type":"eighth","stem":"up","spelling":{"step":"E","octave":4}}

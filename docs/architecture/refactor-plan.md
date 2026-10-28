@@ -208,3 +208,11 @@ first-party architectural monoliths.
 - Static Python scan: 93 modules; verification lazy cycles involve
   raster_matching/phase3_pixels/symbol_pixel_proof and connector_pixels/feature_pixels.
   music/fingering.types requires distinguishing typing-only from runtime coupling.
+
+- Native geometry extraction: `ScoreLayout` owns source indices, note/chord/voice
+  geometry, rest lanes and cached positions independently of a CanvasItem.
+  Standalone headless contracts RED→GREEN; focused 3 + 12 + 31 tests passed.
+  A custom-staff test fixture now injects its geometry policy rather than
+  overriding canvas geometry; expected pixels and corruption checks unchanged.
+  Independent review found no issues. Remaining forwarding accessors are
+  transitional callers and will be removed during native pass separation.

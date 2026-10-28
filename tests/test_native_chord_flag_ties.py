@@ -13,10 +13,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 HARNESS = r'''extends SceneTree
+class FixedStaffLayout extends "res://notation/native/score_layout.gd":
+    func staff_center(hand: String) -> float:
+        return 110.0 if hand=="right" else 280.0
 class Probe extends "res://notation/native/view.gd":
     var spec: Dictionary
-    func _staff_center(hand: String) -> float:
-        return 110.0 if hand=="right" else 280.0
+    func _init() -> void:
+        layout = FixedStaffLayout.new(timeline,glyphs)
     func _tie_contour_rect(first: Dictionary,last: Dictionary,place: Dictionary,gap: float) -> Rect2:
         if not spec.get("old",false):
             return super._tie_contour_rect(first,last,place,gap)
