@@ -48,6 +48,7 @@ quick_checks() {
     tests/test_transport_projection.py \
     tests/test_recovery_projection.py \
     tests/test_control_dispatch_refactor.py \
+    tests/test_engine_update_refactor.py \
     tests/test_idle_rendering.py \
     tests/test_peace_piece_pixels.py \
     tests/test_continuous_practice_loop.py \

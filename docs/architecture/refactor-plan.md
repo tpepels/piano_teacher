@@ -55,8 +55,11 @@ may use pure geometry/layout helpers but never import verifier internals.
 - [x] Separate the command dispatch path from focused engine-owned handlers
   for source navigation, restart, pause/resume and stage selection. The public
   control method still owns the re-entrant lock and its prior error semantics.
-- [ ] Move recovery *transitions* into coherent handlers after characterizing
-  feedback settlement and repeated-failure edge cases.
+- [x] Split the backend update loop into focused methods for MIDI health,
+  pending feedback settlement and rolling-error recovery transitions, without
+  moving clock/tempo ownership outside the locked engine.
+- [ ] Continue decomposing the post-performance assessment branch of
+  `_update` behind stable phase/result interfaces.
 - [x] Split the giant _build_interface method into separate Home, Library and
   Practice builders, preserving construction order and event wiring.
 - [ ] Move Home/Library/Settings/Practice screen construction into

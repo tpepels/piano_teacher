@@ -1640,7 +1640,8 @@ class PracticeEngine:
                 self._begin_learn(bump_revision=False)
         self._save()
 
-    def _update(self):
+    def _poll_midi_connection(self):
+        """Keep MIDI device discovery separate from practice progression."""
         # State polling is frequent, so enumerate ALSA inputs only once per
         # interval. This works even if the USB device vanishes without the
         # driver marking the existing port object as closed.
@@ -1656,6 +1657,90 @@ class PracticeEngine:
                 # Preserve readable feedback; a temporary ALSA discovery
                 # error must not turn the entire /state endpoint into a 400.
                 pass
+
+    def _advance_pending_feedback(self):
+        """Commit finished feedback and schedule exactly one next transition."""
+        if self.auto and self.next_at and now >= self.next_at:
+            deadline = self.next_at
+            previous_revision = self.score_revision
+            previous_identity = self.plan.identity
+            message = self._commit_pending()
+            self.feedback_marks=[]
+            self.feedback_unmapped=0
+            if self.auto and message != "Piece mastered":
+                if self.course_guided and self.plan.identity != previous_identity:
+                    self._begin_course_stage()
+                    return
+                if self.score_revision != previous_revision:
+                    # Never consume the next count-in while Godot is still
+                    # rendering the newly selected score and its note map.
+                    self.awaiting_score_revision = self.score_revision
+                    self.auto = False
+                    self.feedback = "Preparing next passage"
+                    self.next_at = 0
+                else:
+                    # Clean takes advance to the appended copy. Failed
+                    # takes rewind the SAME copy (already animated during
+                    # feedback); there is no jump/re-engrave on retry.
+                    if not self._retry_previous_pass:
+                        self.visual_offset_beats += self._source_model()["practice_timeline"]["stride_beats"]
+                    target = (self.practice_preparation["source_from_beat"]
+                              if self._retry_previous_pass and self.practice_preparation else 0.0)
+                    self._continue_at(deadline, from_beat=target)
+            else:
+                self.next_at=0
+                self.auto=False
+                self.feedback = message or self.feedback
+        return
+
+    def _apply_rolling_recovery(self, decision, phrase: Phrase, grid, score_beat: float, now: float):
+        """Apply an accepted source-grid recovery decision atomically."""
+        # Capture marks at the performance tempo, not at the slower
+        # BPM selected for the next retry. Re-scaling the recorded
+        # timestamps early would move mistakes to incorrect notes.
+        self.feedback_marks=self._live_feedback((now-self.run_at))
+        if self.fingerprint:
+            unit = next((unit for unit in guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)
+                         if unit["start_beat"] == decision.restart_beat and unit["end_beat"] == decision.end_beat), None)
+            if unit is not None:
+                assessed = evaluate(Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
+                    phrase.start+self.play_from_beat, phrase.end,
+                    tuple(note for note in phrase.notes if note.start >= phrase.start+self.play_from_beat)),
+                    self.plan.hand, self.plan.bpm, self.recorder.presses if self.recorder else [])
+                # Rolling detection can include the preceding idea;
+                # saved trouble describes only this canonical unit.
+                unit_errors = [entry for entry in assessed.notes
+                    if entry.status in ("missed", "wrong")
+                    and phrase.start+decision.restart_beat <= entry.note.start < phrase.start+decision.end_beat]
+                pitches = sorted({entry.note.pitch for entry in unit_errors})
+                self.learner_store.record_trouble(self.fingerprint, self.plan.identity, unit,
+                                                 errors=len(unit_errors), pitches=pitches)
+                self.learner_store.save_resume(self.fingerprint, self.plan.identity, unit)
+        self.plan.streak=0
+        self.plan.failures+=1
+        before=self.plan.bpm
+        self.plan.bpm=max(SETTINGS.minimum_bpm,round(before*SETTINGS.recovery_tempo_multiplier))
+        self._rewind_requires_layout = False
+        self._save()
+        self._schedule_preparation(decision.restart_beat, now=now,
+            from_visual=self.visual_offset_beats + score_beat,
+            reverse_seconds=self.feedback_seconds)
+        key = (self.plan.identity, decision.restart_beat, decision.end_beat)
+        self._trouble_count = self._trouble_count + 1 if key == self._trouble_key else 1
+        self._trouble_key = key
+        self._guided_recovery_pending = self._trouble_count >= SETTINGS.guided_recovery_after_failures
+        recovery = recovery_display(
+            decision, grid=grid, first_bar=phrase.first_bar,
+            before_bpm=before, after_bpm=self.plan.bpm,
+            now=now, guided=self._guided_recovery_pending)
+        self.recovery_notice = recovery.notice
+        self.retry_range = recovery.retry_range
+        self.feedback = recovery.feedback
+        self.next_action = recovery.next_action
+        return
+
+    def _update(self):
+        self._poll_midi_connection()
         if not self.plan:
             return
         now=time.monotonic()
@@ -1682,37 +1767,7 @@ class PracticeEngine:
             self.practice_preparation["phase"] = (
                 "reverse" if now < self._preparation_at else "preparing")
         if self.pending_result is not None:
-            if self.auto and self.next_at and now >= self.next_at:
-                deadline = self.next_at
-                previous_revision = self.score_revision
-                previous_identity = self.plan.identity
-                message = self._commit_pending()
-                self.feedback_marks=[]
-                self.feedback_unmapped=0
-                if self.auto and message != "Piece mastered":
-                    if self.course_guided and self.plan.identity != previous_identity:
-                        self._begin_course_stage()
-                        return
-                    if self.score_revision != previous_revision:
-                        # Never consume the next count-in while Godot is still
-                        # rendering the newly selected score and its note map.
-                        self.awaiting_score_revision = self.score_revision
-                        self.auto = False
-                        self.feedback = "Preparing next passage"
-                        self.next_at = 0
-                    else:
-                        # Clean takes advance to the appended copy. Failed
-                        # takes rewind the SAME copy (already animated during
-                        # feedback); there is no jump/re-engrave on retry.
-                        if not self._retry_previous_pass:
-                            self.visual_offset_beats += self._source_model()["practice_timeline"]["stride_beats"]
-                        target = (self.practice_preparation["source_from_beat"]
-                                  if self._retry_previous_pass and self.practice_preparation else 0.0)
-                        self._continue_at(deadline, from_beat=target)
-                else:
-                    self.next_at=0
-                    self.auto=False
-                    self.feedback = message or self.feedback
+            self._advance_pending_feedback()
             return
         if self.awaiting_score_revision is not None:
             return
@@ -1747,48 +1802,7 @@ class PracticeEngine:
                     from_beat=self.play_from_beat, end_beat=self.next_boundary_beat, grid=grid,
                     threshold=SETTINGS.recovery_errors_in_window)
             if decision is not None:
-                # Capture marks at the performance tempo, not at the slower
-                # BPM selected for the next retry. Re-scaling the recorded
-                # timestamps early would move mistakes to incorrect notes.
-                self.feedback_marks=self._live_feedback((now-self.run_at))
-                if self.fingerprint:
-                    unit = next((unit for unit in guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)
-                                 if unit["start_beat"] == decision.restart_beat and unit["end_beat"] == decision.end_beat), None)
-                    if unit is not None:
-                        assessed = evaluate(Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
-                            phrase.start+self.play_from_beat, phrase.end,
-                            tuple(note for note in phrase.notes if note.start >= phrase.start+self.play_from_beat)),
-                            self.plan.hand, self.plan.bpm, self.recorder.presses if self.recorder else [])
-                        # Rolling detection can include the preceding idea;
-                        # saved trouble describes only this canonical unit.
-                        unit_errors = [entry for entry in assessed.notes
-                            if entry.status in ("missed", "wrong")
-                            and phrase.start+decision.restart_beat <= entry.note.start < phrase.start+decision.end_beat]
-                        pitches = sorted({entry.note.pitch for entry in unit_errors})
-                        self.learner_store.record_trouble(self.fingerprint, self.plan.identity, unit,
-                                                         errors=len(unit_errors), pitches=pitches)
-                        self.learner_store.save_resume(self.fingerprint, self.plan.identity, unit)
-                self.plan.streak=0
-                self.plan.failures+=1
-                before=self.plan.bpm
-                self.plan.bpm=max(SETTINGS.minimum_bpm,round(before*SETTINGS.recovery_tempo_multiplier))
-                self._rewind_requires_layout = False
-                self._save()
-                self._schedule_preparation(decision.restart_beat, now=now,
-                    from_visual=self.visual_offset_beats + score_beat,
-                    reverse_seconds=self.feedback_seconds)
-                key = (self.plan.identity, decision.restart_beat, decision.end_beat)
-                self._trouble_count = self._trouble_count + 1 if key == self._trouble_key else 1
-                self._trouble_key = key
-                self._guided_recovery_pending = self._trouble_count >= SETTINGS.guided_recovery_after_failures
-                recovery = recovery_display(
-                    decision, grid=grid, first_bar=phrase.first_bar,
-                    before_bpm=before, after_bpm=self.plan.bpm,
-                    now=now, guided=self._guided_recovery_pending)
-                self.recovery_notice = recovery.notice
-                self.retry_range = recovery.retry_range
-                self.feedback = recovery.feedback
-                self.next_action = recovery.next_action
+                self._apply_rolling_recovery(decision, phrase, grid, score_beat, now)
                 return
             previous_boundary=self.next_boundary_beat
             self.next_boundary_beat=next_chunk_end(grid,previous_boundary)
