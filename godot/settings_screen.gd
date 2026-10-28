@@ -133,7 +133,7 @@ func _ready() -> void:
     folder_edit.custom_minimum_size = Vector2(0, 40)
     folder_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     folder_edit.placeholder_text = "~/Music/Piano Teacher"
-    folder_edit.text_submitted.connect(func(_text: String): func(): save_folder_requested.emit()())
+    folder_edit.text_submitted.connect(func(_text: String): save_folder_requested.emit())
     folder_controls.add_child(folder_edit)
     var folder_actions := HFlowContainer.new()
     folder_actions.add_theme_constant_override("h_separation", 10)
