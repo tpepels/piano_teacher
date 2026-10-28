@@ -315,3 +315,9 @@ first-party architectural monoliths.
   owner. Owner 134/221 tests and independent 67-test review passed. All 24 saved
   reports matched byte-for-byte; normalized moved algorithms and thresholds
   remain unchanged. No renderer geometry is accepted as evidence.
+
+- Audit worker lifecycle, process identity, checkpoint/resume, serialized case
+  contract and bounded executor now have explicit owners. StageRecorder is
+  passed per case; global `_CASE_STATE` removed. Owner 118/26-test selections
+  and independent 80-test review passed, including cancellation, recycling,
+  deadlines and evidence tampering. No retained audit rerun or modifications.

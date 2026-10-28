@@ -1,11 +1,14 @@
 """The canonical comparison must retain difficult and silent source cases."""
 from dataclasses import replace
+from functools import partial
 from pathlib import Path
 
 import mido
 import pytest
 
 from scripts import check_native_verovio_overlay as audit
+from scripts.audits import job_executor
+from scripts.audits.case_checkpoint import ignore_stage
 from piano_teacher.music import Note, Phrase
 from piano_teacher.exercise_generator import ExerciseVariant
 
@@ -74,10 +77,11 @@ def test_full_audit_exercises_all_original_sources_before_curriculum(tmp_path,mo
         paths.append(path)
     monkeypatch.setattr(audit,'library_sources',lambda **_:tuple(paths))
     calls=[]
-    def job(case,source,variant,*_):
+    def job(job, *, record_stage):
+        case,variant=job['case'],job['variant']
         calls.append((Path(case.filename).name,variant is None))
         return dict(errors=[],error_count=0,captured=True,symbols={},nonverified_symbols={})
-    monkeypatch.setattr(audit,'_library_job',job)
+    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=job))
     class LocalPool:
         def __init__(self,**_):pass
         def __enter__(self):return self
@@ -86,7 +90,7 @@ def test_full_audit_exercises_all_original_sources_before_curriculum(tmp_path,mo
             future=Future()
             future.set_result(fn(*args))
             return future
-    monkeypatch.setattr(audit,'ProcessPoolExecutor',LocalPool)
+    monkeypatch.setattr(job_executor,'ProcessPoolExecutor',LocalPool)
     summary=audit.audit_library(tmp_path/'output','godot',include_fixtures=False)
     first_stage=next(i for i,(_,original) in enumerate(calls) if not original)
     assert set(calls[:first_stage])=={(p.name,True) for p in paths}
@@ -105,20 +109,20 @@ def test_source_changes_during_capture_cannot_produce_a_passing_library(tmp_path
                                       mido.Message('note_off',note=60,time=1920)]))
     midi.save(source)
     monkeypatch.setattr(audit,'library_sources',lambda **_:(source,))
-    def job(*_):
+    def job(*_,**__):
         if mido.MidiFile(source).tracks[0][0].note==60:
             midi.tracks[0][0].note=61
             midi.tracks[0][1].note=61
             midi.save(source)
         return dict(errors=[],error_count=0,captured=True,symbols={},nonverified_symbols={})
-    monkeypatch.setattr(audit,'_library_job',job)
+    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=job))
     class LocalPool:
         def __init__(self,**_):pass
         def __enter__(self):return self
         def __exit__(self,*_):pass
         def submit(self,fn,*args):
             result=Future();result.set_result(fn(*args));return result
-    monkeypatch.setattr(audit,'ProcessPoolExecutor',LocalPool)
+    monkeypatch.setattr(job_executor,'ProcessPoolExecutor',LocalPool)
     summary=audit.audit_library(tmp_path/'output','godot',include_fixtures=False)
     assert not summary['passed']
     assert any('changed during' in failure for failure in summary['failures'])
@@ -134,18 +138,18 @@ def test_library_membership_changes_during_capture_block_completeness(tmp_path,m
     midi.save(source)
     discover=audit.library_sources
     monkeypatch.setattr(audit,'library_sources',lambda **options:discover(tmp_path,**options))
-    def job(*_):
+    def job(*_,**__):
         if change=='added':midi.save(tmp_path/'added.mid')
         elif source.exists():source.unlink()
         return dict(errors=[],captured=True,symbols={},nonverified_symbols={})
-    monkeypatch.setattr(audit,'_library_job',job)
+    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=job))
     class LocalPool:
         def __init__(self,**_):pass
         def __enter__(self):return self
         def __exit__(self,*_):pass
         def submit(self,fn,*args):
             future=Future();future.set_result(fn(*args));return future
-    monkeypatch.setattr(audit,'ProcessPoolExecutor',LocalPool)
+    monkeypatch.setattr(job_executor,'ProcessPoolExecutor',LocalPool)
     summary=audit.audit_library(tmp_path/'output','godot',include_fixtures=False)
     assert not summary['passed']
     assert any('membership changed' in error for error in summary['failures'])
@@ -165,9 +169,10 @@ def test_retained_capture_recheck_recaptures_changed_inputs(tmp_path,monkeypatch
         if reuse and stale:
             raise audit.CaptureProvenanceError('Cached renderer dependencies changed')
         return dict(errors=[],nonverified_symbols={},whole_window_coverage=dict(symbols={}))
-    monkeypatch.setattr(audit,'run',compare)
+    monkeypatch.setattr(audit,'_run_case',compare)
     case=audit.AuditCase('case','example.mid',1,1)
-    result=audit._library_job(case,None,None,directory,'godot',reuse_captures=True)
+    result=audit._library_job(dict(case=case,source_phrase=None,variant=None,
+        directory=directory,godot='godot',focused=False,reuse_captures=True),record_stage=ignore_stage)
     assert result['captured'] and not result['errors']
     assert calls==([True,False] if stale else [True])
 
@@ -182,9 +187,10 @@ def test_verifier_exception_does_not_recapture_valid_retained_pngs(tmp_path,monk
     def broken_probe(*_,**options):
         calls.append(options.get('reuse_captures',False))
         raise ValueError('Independent verifier could not process this symbol')
-    monkeypatch.setattr(audit,'run',broken_probe)
-    result=audit._library_job(audit.AuditCase('case','example.mid',1,1),None,None,
-                              directory,'godot',reuse_captures=True)
+    monkeypatch.setattr(audit,'_run_case',broken_probe)
+    result=audit._library_job(dict(case=audit.AuditCase('case','example.mid',1,1),
+        source_phrase=None,variant=None,directory=directory,godot='godot',focused=False,
+        reuse_captures=True),record_stage=ignore_stage)
     assert not result['captured']
     assert calls==[True]
     assert (directory/'native-0.00000.png').read_bytes()==b'preserved successful capture'
@@ -331,10 +337,11 @@ def test_focused_midi_file_is_resolved_under_bundled_library(tmp_path, monkeypat
     observed = []
     monkeypatch.setattr(audit, "_library_piece", lambda path: observed.append(path) or None)
     monkeypatch.setattr(audit, "fixture", lambda *args, **kw: (None, None))
-    monkeypatch.setattr(audit, "run", lambda *args, **kw: dict(
+    monkeypatch.setattr(audit, "_run_case", lambda *args, **kw: dict(
         errors=[], nonverified_symbols={}, whole_window_coverage=None))
     case = audit.AuditCase("focused", source.name, 1, 2)
-    result = audit._library_job(case, None, None, tmp_path, "godot", focused=True)
+    result = audit._library_job(dict(case=case,source_phrase=None,variant=None,
+        directory=tmp_path,godot='godot',focused=True),record_stage=ignore_stage)
     assert result['captured'] and not result['errors']
     assert observed == [str(source.resolve())]
 

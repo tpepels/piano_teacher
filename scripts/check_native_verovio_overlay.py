@@ -15,10 +15,9 @@ the score or a requirement that notation moves at varying speeds.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from bisect import bisect_right
 from collections import Counter
-from concurrent.futures import ProcessPoolExecutor, FIRST_COMPLETED, wait
 from functools import lru_cache
 import json
 from pathlib import Path
@@ -26,17 +25,10 @@ import shutil
 import subprocess
 import sys
 import hashlib
-import faulthandler
 import math
-import multiprocessing
 import os
-import resource
-import signal
 import time
 import traceback
-import uuid
-import fcntl
-from contextlib import contextmanager
 
 from PIL import Image, ImageDraw
 
@@ -44,10 +36,14 @@ from PIL import Image, ImageDraw
 # A direct file has scripts/ (not its parent) on sys.path.
 if __package__:
     from .package_notation_diagnostics import TerminationSignals, package
-    from .audits import capture_runner, capture_store
+    from .audits import capture_runner, capture_store, job_executor, worker_ownership
+    from .audits.case_checkpoint import ignore_stage
+    from .audits.case_types import AuditCase
 else:
     from package_notation_diagnostics import TerminationSignals, package
-    from audits import capture_runner, capture_store
+    from audits import capture_runner, capture_store, job_executor, worker_ownership
+    from audits.case_checkpoint import ignore_stage
+    from audits.case_types import AuditCase
 
 from piano_teacher.application.score_preparation import assemble_layout
 from piano_teacher.music import Phrase, source_note_id
@@ -57,7 +53,6 @@ from piano_teacher.notation.model import build_score_model
 from piano_teacher.score import import_piece, render_layout
 
 ROOT = Path(__file__).resolve().parents[1]
-_CASE_STATE = None
 
 
 CaptureProvenanceError = capture_store.CaptureProvenanceError
@@ -65,394 +60,19 @@ atomic_json = capture_store.atomic_json
 _copy_capture_file = capture_store.copy_capture_file
 
 
-@contextmanager
-def audit_lock(directory):
-    directory.mkdir(parents=True,exist_ok=True)
-    with (directory/'.audit.lock').open('a') as lock:
-        try:
-            fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise ValueError(f'Another audit is already writing {directory}') from exc
-        try:
-            yield
-        finally:
-            fcntl.flock(lock,fcntl.LOCK_UN)
-
-
-def audit_stage(stage: str) -> None:
-    if _CASE_STATE is not None:
-        path,record=_CASE_STATE
-        record.update(stage=stage,updated_at=time.time())
-        atomic_json(path,record)
-
-
-@lru_cache(maxsize=1)
-def _boot_id():
-    return Path('/proc/sys/kernel/random/boot_id').read_text().strip()
-
-
-def _process_identity(pid):
-    """Read lifetime identity; the comm field can itself contain spaces/parentheses."""
-    try:
-        directory=Path('/proc')/str(pid)
-        fields=(directory/'stat').read_text().rsplit(')',1)[1].split()
-        return dict(pid=pid,start_ticks=int(fields[19]),session=int(fields[3]),
-                    process_group=int(fields[2]),boot_id=_boot_id(),state=fields[0],
-                    parent_pid=int(fields[1]),uid=directory.stat().st_uid)
-    except FileNotFoundError:
-        return None
-
-
-_IDENTITY_FIELDS=('pid','start_ticks','session','process_group','boot_id')
-
-
-def _process_snapshot():
-    processes={}
-    for directory in Path('/proc').glob('[0-9]*'):
-        try:
-            member=_process_identity(int(directory.name))
-        except PermissionError:
-            continue
-        if member is not None:processes[member['pid']]=member
-    return processes
-
-
-def _owned_members(owner, processes):
-    """An extant session reserves its leader PID even after the leader exits."""
-    if (isinstance(owner,dict) and isinstance(owner.get('boot_id'),str) and
-            owner['boot_id'] and owner['boot_id']!=_boot_id()):
-        return []  # Power loss/reboot: all old processes are gone; never signal new PIDs.
-    if (not isinstance(owner,dict) or
-            any(type(owner.get(k)) is not int or owner[k]<=0
-                for k in _IDENTITY_FIELDS if k!='boot_id') or
-            owner.get('boot_id')!=_boot_id() or
-            owner['session']!=owner['pid'] or owner['process_group']!=owner['pid']):
-        raise ValueError('Cannot validate prior worker ownership identity')
-    leader=processes.get(owner['pid'])
-    if leader is not None and any(leader[k]!=owner[k] for k in _IDENTITY_FIELDS):
-        raise ValueError('Cannot validate prior worker ownership: PID lifetime changed')
-    members=[]
-    for member in processes.values():
-        if member['session']!=owner['session'] or member['state'] in {'Z','X'}:
-            continue
-        if member['uid']!=os.getuid() or member['start_ticks']<owner['start_ticks']:
-            raise ValueError('Cannot validate prior worker ownership of session member')
-        members.append(member)
-    return members
-
-
-def _signal_identity(identity, signum):
-    # A PID can exit/recycle between /proc reads and signalling. A pidfd binds
-    # the signal to the process opened here, not the later occupant of its PID.
-    if not hasattr(os,'pidfd_open') or not hasattr(signal,'pidfd_send_signal'):
-        raise ValueError('Cannot safely signal worker ownership without Linux pidfds')
-    try:
-        descriptor=os.pidfd_open(identity['pid'])
-    except ProcessLookupError:
-        return
-    try:
-        current=_process_identity(identity['pid'])
-        if current is None:
-            return
-        if current['uid']!=os.getuid() or any(current[k]!=identity[k] for k in _IDENTITY_FIELDS):
-            raise ValueError('Cannot validate worker ownership immediately before signalling')
-        signal.pidfd_send_signal(descriptor,signum)
-    except ProcessLookupError:
-        pass
-    finally:
-        os.close(descriptor)
-
-
-def _stop_owned_groups(owners, *, stacks=False):
-    # Validate every owner before sending any signal. Keep the session identity
-    # through escalation: the worker can exit on TERM while Godot ignores it.
-    processes=_process_snapshot() if owners else {}
-    groups=[(owner,_owned_members(owner,processes)) for owner in owners]
-    if stacks:
-        for owner,members in groups:
-            for member in members:
-                if member['pid']==owner['pid']:
-                    _signal_identity(member,signal.SIGUSR1)
-        if groups:time.sleep(.05)
-    for _,members in groups:
-        for member in members:
-            _signal_identity(member,signal.SIGTERM)
-    for signum in (signal.SIGKILL,None):
-        deadline=time.monotonic()+1
-        while True:
-            processes=_process_snapshot() if owners else {}
-            remaining=[member for owner in owners for member in _owned_members(owner,processes)]
-            if not remaining:
-                return
-            if time.monotonic()>=deadline:
-                break
-            time.sleep(.02)
-        if signum is not None:
-            for member in remaining:_signal_identity(member,signum)
-    raise ValueError('Cannot stop surviving prior worker ownership; refusing to replan')
-
-
-def _owner_records(directory):
-    records=[]
-    for path in directory.rglob('.audit-workers/*.json'):
-        try:
-            records.append((path,json.loads(path.read_text())))
-        except (OSError,ValueError) as exc:
-            raise ValueError(f'Cannot read prior worker ownership: {path}') from exc
-    return records
-
-
-def _recover_prior_workers(out):
-    records=_owner_records(out)
-    owners=[record for _,record in records]
-    known={record.get('pid') for record in owners if isinstance(record,dict)}
-    for path in out.glob('*/*/case-state.json'):
-        try:
-            state=json.loads(path.read_text())
-        except (OSError,ValueError) as exc:
-            raise ValueError(f'Cannot read prior worker ownership: {path}') from exc
-        if not isinstance(state,dict):
-            raise ValueError(f'Cannot read prior worker ownership: {path}')
-        pid=state.get('pid')
-        if pid is not None and (type(pid) is not int or pid<=0):
-            raise ValueError(f'Cannot validate prior worker ownership: {path}')
-        if pid and pid not in known and _process_identity(pid) is not None:
-            if state.get('worker_identity'):
-                owners.append(state['worker_identity'])
-                known.add(pid)
-            elif state.get('stage') not in {'completed','error','timed_out'}:
-                raise ValueError(f'Cannot validate legacy worker ownership: {path}')
-    _stop_owned_groups(owners)
-    for path,_ in records:path.unlink(missing_ok=True)
-
-
-def _worker_limits(memory_limit_mib, ownership_directory=None, run_id=None,
-                   coordinator_identity=None):
-    # Each worker owns its Godot process group, so cancellation also reaps
-    # a renderer that is still capturing. No unrelated desktop is signalled.
-    os.setsid()
-    signal.signal(signal.SIGINT,signal.SIG_IGN)
-    signal.signal(signal.SIGTERM,signal.SIG_DFL)
-    faulthandler.register(signal.SIGUSR1,all_threads=True)
-    if ownership_directory is not None:
-        identity=_process_identity(os.getpid())
-        atomic_json(Path(ownership_directory)/f"{os.getpid()}-{identity['start_ticks']}.json",
-                    dict(identity,run_id=run_id))
-    if coordinator_identity is not None:
-        parent=_process_identity(os.getppid())
-        if parent is None or any(parent[k]!=coordinator_identity[k] for k in _IDENTITY_FIELDS):
-            raise ValueError('Coordinator ownership lifetime ended before worker initialization')
-    if memory_limit_mib:
-        limit=int(memory_limit_mib*1024**2)
-        resource.setrlimit(resource.RLIMIT_AS,(limit,limit))
-
-
-def _record_case(job, row):
-    directory=job['directory']
-    witnesses={name:hashlib.sha256((directory/name).read_bytes()).hexdigest()
-        for name in ('audit.json','fixture.json','score.musicxml','capture-manifest.json')
-        if (directory/name).is_file()}
-    atomic_json(directory/'case-result.json',dict(key=job['key'],**row,witnesses=witnesses))
-
-
-def _case_worker(job, function, case_timeout):
-    global _CASE_STATE
-    directory=job['directory']
-    directory.mkdir(parents=True,exist_ok=True)
-    state=dict(key=job['key'],run_id=job['run_id'],pid=os.getpid(),stage='starting',
-               worker_identity=_process_identity(os.getpid()),
-               started_at=time.time(),started_monotonic=time.monotonic())
-    _CASE_STATE=directory/'case-state.json',state
-    audit_stage('starting')
-    deadline=[False]
-    def expired(*_):
-        deadline[0]=True
-        raise TimeoutError(f'Case deadline exceeded ({case_timeout:g}s)')
-    previous=signal.signal(signal.SIGALRM,expired)
-    start=time.monotonic()
-    with (directory/'worker-stack.log').open('a') as stack:
-        faulthandler.register(signal.SIGUSR1,file=stack,all_threads=True)
-        faulthandler.dump_traceback_later(max(.1,case_timeout*.8),file=stack)
-        signal.setitimer(signal.ITIMER_REAL,case_timeout)
-        try:
-            result=function(job['case'],job['source_phrase'],job['variant'],directory,
-                            job['godot'],job.get('reuse_captures',False),job['focused'])
-            status='timed_out' if deadline[0] else 'completed' if result.get('captured') else 'error'
-        except Exception as exc:
-            status='timed_out' if deadline[0] else 'error'
-            result=dict(errors=[f'{type(exc).__name__}: {exc}'],error_count=1,captured=False,
-                        symbols={},nonverified_symbols={})
-        finally:
-            signal.setitimer(signal.ITIMER_REAL,0)
-            faulthandler.cancel_dump_traceback_later()
-            faulthandler.unregister(signal.SIGUSR1)
-            faulthandler.register(signal.SIGUSR1,all_threads=True)
-            signal.signal(signal.SIGALRM,previous)
-    if deadline[0]:
-        result['captured']=False
-        result['errors']=[f'Case deadline exceeded ({case_timeout:g}s); see worker-stack.log']
-    row=dict(state=status,result=result,resumed=False,elapsed_seconds=round(time.monotonic()-start,3),
-             worker_peak_rss_kib=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
-             renderer_peak_rss_kib=resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss)
-    audit_stage(status)
-    _record_case(job,row)
-    _CASE_STATE=None
-    return row
-
-
-def _resumable_case(job,godot_version):
-    try:
-        recover_capture_publish(job['directory'])
-        record=json.loads((job['directory']/'case-result.json').read_text())
-        if record.get('key')!=job['key'] or record.get('state')!='completed':
-            return None
-        witnesses=record.get('witnesses',{})
-        required={'audit.json','fixture.json','score.musicxml','capture-manifest.json'}
-        if set(witnesses)!=required:
-            return None
-        for name,digest in witnesses.items():
-            if hashlib.sha256((job['directory']/name).read_bytes()).hexdigest()!=digest:
-                return None
-        validate_capture_manifest(job['directory'],dependency_hash=capture_dependency_hash(),
-                                  godot_version=godot_version)
-        if not isinstance(record.get('result',{}).get('errors'),list):
-            return None
-        return dict(record,resumed=True)
-    except (OSError,ValueError,KeyError,TypeError,AssertionError):
-        return None
-
-
-def _stop_workers(pool):
-    # terminate_workers is public on Python 3.14. Older supported Pythons
-    # expose the processes but lack a nonblocking cancellation API.
-    processes=list((getattr(pool,'_processes',None) or {}).values())
-    directory=getattr(pool,'_audit_owner_directory',None)
-    records=_owner_records(directory) if directory is not None else []
-    owners={owner['pid']:owner for _,owner in records}
-    starting=[]
-    for process in processes:
-        if process.is_alive() and process.pid not in owners:
-            identity=_process_identity(process.pid)
-            # Bind this first observation to the still-live Process object,
-            # not merely a PID which might have exited/recycled meanwhile.
-            if identity is not None and process.is_alive():
-                if identity['parent_pid']!=os.getpid() or identity['uid']!=os.getuid():
-                    raise ValueError('Cannot validate unregistered worker ownership')
-                if identity['session']==identity['process_group']==process.pid:
-                    owners[process.pid]=identity
-                else:
-                    starting.append(identity)  # Has not reached setsid/registration yet.
-    for identity in starting:_signal_identity(identity,signal.SIGKILL)
-    _stop_owned_groups(list(owners.values()),stacks=True)
-    for process in processes:
-        process.join(timeout=1)
-        if process.is_alive():
-            raise ValueError('Cannot stop worker ownership; refusing to leave a live pool')
-    for path,_ in records:path.unlink(missing_ok=True)
-    if hasattr(pool,'shutdown'):
-        pool.shutdown(wait=False,cancel_futures=True)
-
-
 def execute_case_jobs(jobs, *, workers, case_timeout, memory_limit_mib, resume,
                       godot_version, progress=None):
-    """Bound the existing worker queue; checkpoint before publishing results."""
-    pending=[]
-    run_id=uuid.uuid4().hex
-    for job in jobs:
-        saved=_resumable_case(job,godot_version) if resume else None
-        if saved is not None:
-            yield job,saved
-        else:
-            pending.append(dict(job,run_id=run_id))
-    if not pending:
-        return
-    # A fresh spawned worker imports NumPy with one BLAS thread, including
-    # recycled workers. Restore the caller's environment after pool cleanup.
-    variables=('OPENBLAS_NUM_THREADS','OMP_NUM_THREADS','MKL_NUM_THREADS')
-    previous={name:os.environ.get(name) for name in variables}
-    os.environ.update(dict.fromkeys(variables,'1'))
-    owner_directory=Path(os.path.commonpath([job['directory'].parent for job in pending]))/'.audit-workers'
-    pool=ProcessPoolExecutor(max_workers=workers,mp_context=multiprocessing.get_context('spawn'),
-        initializer=_worker_limits,
-        initargs=(memory_limit_mib,owner_directory,run_id,_process_identity(os.getpid())),
-        max_tasks_per_child=8)
-    pool._audit_owner_directory=owner_directory.parent
-    active={}
-    remaining=iter(pending)
-    abort=False
-    try:
-        def submit():
-            for _ in range(workers-len(active)):
-                job=next(remaining,None)
-                if job is None:
-                    break
-                future=pool.submit(_case_worker,job,_library_job,case_timeout)
-                active[future]=(job,time.monotonic())
-        submit()
-        while active:
-            done,_=wait(tuple(active),timeout=.5,return_when=FIRST_COMPLETED)
-            for future in done:
-                job,_=active.pop(future)
-                try:
-                    row=future.result()
-                except Exception as exc:
-                    row=dict(state='interrupted',resumed=False,result=dict(captured=False,
-                        errors=[f'Worker failed: {exc}'],error_count=1,symbols={},nonverified_symbols={}))
-                    _record_case(job,row)
-                if row['state'] in {'timed_out','interrupted'}:
-                    abort=True
-                yield job,row
-            if abort:
-                break
-            for future,(job,submitted) in active.items():
-                try:
-                    record=json.loads((job['directory']/'case-state.json').read_text())
-                    started=record['started_monotonic'] if record.get('run_id')==run_id else submitted+10
-                except (OSError,ValueError,KeyError):
-                    started=submitted+10
-                if time.monotonic()-started>case_timeout+2:
-                    row=dict(state='timed_out',resumed=False,result=dict(captured=False,
-                        errors=[f'Hard case deadline exceeded ({case_timeout:g}s); worker terminated'],
-                        error_count=1,symbols={},nonverified_symbols={}))
-                    _record_case(job,row)
-                    yield job,row
-                    abort=True
-                    break
-            if abort:
-                break
-            if progress is not None:
-                progress([job for job,_ in active.values()])
-            submit()
-    finally:
-        try:
-            _stop_workers(pool) if active else pool.shutdown(wait=True) if hasattr(pool,'shutdown') else None
-            records=_owner_records(owner_directory.parent)
-            _stop_owned_groups([owner for _,owner in records])
-            for path,_ in records:path.unlink(missing_ok=True)
-        finally:
-            for name,value in previous.items():
-                if value is None:
-                    os.environ.pop(name,None)
-                else:
-                    os.environ[name]=value
+    """Compose the independent executor with this CLI's case execution."""
+    yield from job_executor.execute_jobs(jobs, execute_case=_library_job,
+        workers=workers, case_timeout=case_timeout, memory_limit_mib=memory_limit_mib,
+        resume=resume, godot_version=godot_version, progress=progress,
+        dependency_hash=capture_dependency_hash)
+
+
 AUTUMN_FILE = "Bill_Evans_on_Autunm_Leaves_From_the_Album_Portrait_in_Jazz.midi"
 # Preserve the regression threshold that would have caught the 438px/beat
 # user screenshot. More complex pieces use independently specified budgets.
 MAX_AUTUMN_DENSITY = 400.0
-
-
-@dataclass(frozen=True)
-class AuditCase:
-    name: str
-    filename: str
-    first_bar: int
-    last_bar: int
-    hand: str = "both"
-    max_density: float = 640.0
-    max_tiny_rests: int = 8
-    max_dots: int = 2
-    features: tuple[str, ...] = ()
-    min_lookahead_beats: float = 0.0
 
 
 # Explicit, pinned real MIDI corpus. Case changes require an intentional
@@ -905,6 +525,14 @@ def verification_inputs_hash(sources) -> str:
 def run(out: Path, godot: str, case: AuditCase = CASES[0],
         *, all_symbols: bool = False, strict: bool = True,
         reuse_captures: bool = False, prepared=None) -> dict:
+    return _run_case(out, godot, case, all_symbols=all_symbols, strict=strict,
+                     reuse_captures=reuse_captures, prepared=prepared,
+                     record_stage=ignore_stage)
+
+
+def _run_case(out: Path, godot: str, case: AuditCase,
+              *, all_symbols: bool = False, strict: bool = True,
+              reuse_captures: bool = False, prepared=None, record_stage) -> dict:
     out=out.resolve()
     out.mkdir(parents=True,exist_ok=True)
     recover_capture_publish(out)
@@ -931,7 +559,7 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
     xml=data.pop("xml")
     data = capture_runner.capture(out, godot, payload=data, xml=xml, pages=engraving.pages,
         root=ROOT, all_symbols=all_symbols, reuse_captures=reuse_captures,
-        record_stage=audit_stage, dependency_hash=capture_dependency_hash,
+        record_stage=record_stage, dependency_hash=capture_dependency_hash,
         recover_publish=recover_capture_publish)
     report = json.loads((out/"native-overlay-report.json").read_text())
     legacy_diagnostics = readability_errors(model, report, case)
@@ -1038,13 +666,13 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
         from piano_teacher.notation.phase3_pixels import (
             verify_all_notehead_pixels, verify_all_rest_pixels, verify_scroll_pixels)
         engraving_xml=(out/"score.musicxml").read_text(encoding="utf-8")
-        audit_stage('noteheads')
+        record_stage('noteheads')
         independent = verify_all_notehead_pixels(
             engraving_xml,out,hand=case.hand)
-        audit_stage('rests')
+        record_stage('rests')
         rests_independent = verify_all_rest_pixels(
             engraving_xml,out,hand=case.hand)
-        audit_stage('scroll')
+        record_stage('scroll')
         motion = verify_scroll_pixels(engraving_xml, out)
         (out/"independent-motion.json").write_text(json.dumps(motion,indent=2)+"\n")
         for row in motion["measured"]:
@@ -1086,11 +714,11 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
                                   f"{row.get('reason', 'incomplete independent image evidence')}")
         from piano_teacher.notation.symbol_pixel_proof import verify_connector_pixels
         from piano_teacher.notation.connector_pixels import verify_beam_pixels, verify_tuplet_pixels
-        audit_stage('ties-and-slurs')
+        record_stage('ties-and-slurs')
         connectors=verify_connector_pixels(engraving_xml,out,hand=case.hand)
-        audit_stage('beams')
+        record_stage('beams')
         beams=verify_beam_pixels(engraving_xml,out,hand=case.hand)
-        audit_stage('tuplets')
+        record_stage('tuplets')
         tuplets=verify_tuplet_pixels(engraving_xml,out,hand=case.hand)
         by_id={event['id']:event for event in model['notation_events']}
         for label,proof in (('connectors',connectors),('beams',beams),('tuplets',tuplets)):
@@ -1104,9 +732,9 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
                         source=dict(source,id='|'.join(str(i) for i in ids)),status=observation['status'],
                         reason=observation.get('reason') or observation.get('evidence',{}).get('reason','No independent connector evidence'))))
         from piano_teacher.notation.feature_pixels import verify_note_feature_pixels, verify_structure_pixels, verify_ledger_pixels
-        audit_stage('note-features')
+        record_stage('note-features')
         features = verify_note_feature_pixels(engraving_xml, out, hand=case.hand)
-        audit_stage('ledger-lines')
+        record_stage('ledger-lines')
         ledgers=verify_ledger_pixels(engraving_xml,out,hand=case.hand)
         (out/'independent-ledgers.json').write_text(json.dumps(ledgers,indent=2)+'\n')
         errors.extend(feature_evidence_errors(ledgers))
@@ -1115,7 +743,7 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
         errors.extend(feature_evidence_errors(features))
         full_coverage["independent_note_features"] = features["coverage"]
         from piano_teacher.notation.semantic_contract import verify_generated_contract
-        audit_stage('semantics')
+        record_stage('semantics')
         semantics = verify_generated_contract(engraving_xml, model)
         (out/"semantics.json").write_text(json.dumps(semantics,indent=2)+"\n")
         for row in semantics["elements"]:
@@ -1128,7 +756,7 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
             source_name=case.filename, feature_report=features,connector_report=connectors,
             beam_report=beams,tuplet_report=tuplets,ledger_report=ledgers,
             semantic_report=semantics)
-        audit_stage('structure')
+        record_stage('structure')
         structures = verify_structure_pixels(engraving_xml, out, elements,
                                               hand=case.hand, first_bar=case.first_bar)
         structural = {row["id"]: row for row in structures}
@@ -1146,7 +774,7 @@ def run(out: Path, godot: str, case: AuditCase = CASES[0],
             if row["status"] != "verified":
                 errors.append(symbol_error(row))
         from piano_teacher.notation.extra_symbol_pixels import verify_extra_symbol_pixels
-        audit_stage('unexpected-symbols')
+        record_stage('unexpected-symbols')
         absence = verify_extra_symbol_pixels(engraving_xml, out, hand=case.hand)
         (out/'independent-unexpected-symbols.json').write_text(json.dumps(absence,indent=2)+'\n')
         full_coverage['unexpected_symbols'] = absence['coverage']
@@ -1215,11 +843,13 @@ def _library_piece(path: str):
     return import_piece(Path(path))[0]
 
 
-def _library_job(case, source_phrase, variant, directory, godot, reuse_captures=False,
-                 focused=False):
-    """One native/Verovio worker; named editorial regressions share the renderer."""
+def _library_job(job, *, record_stage):
+    """One native/Verovio worker with an explicit per-case stage recorder."""
+    case, source_phrase, variant, directory, godot, focused = (
+        job[key] for key in ('case', 'source_phrase', 'variant', 'directory', 'godot', 'focused'))
+    reuse_captures = job.get('reuse_captures', False)
     try:
-        audit_stage('prepare')
+        record_stage('prepare')
         if variant is not None:
             problems = variant_errors(source_phrase, variant)
             if problems:
@@ -1234,12 +864,13 @@ def _library_job(case, source_phrase, variant, directory, godot, reuse_captures=
         result=None
         if reuse_captures and (directory/'capture-manifest.json').is_file():
             try:
-                result=run(directory,godot,case,all_symbols=not focused,strict=False,
-                           prepared=prepared,reuse_captures=True)
+                result=_run_case(directory,godot,case,all_symbols=not focused,strict=False,
+                           prepared=prepared,reuse_captures=True,record_stage=record_stage)
             except CaptureProvenanceError as exc:
                 print(f'RECAPTURE {case.name}: {exc}',flush=True)
         if result is None:
-            result=run(directory,godot,case,all_symbols=not focused,strict=False,prepared=prepared)
+            result=_run_case(directory,godot,case,all_symbols=not focused,strict=False,prepared=prepared,
+                             record_stage=record_stage)
         # Successful PNGs are reusable evidence too. Keep them alongside the
         # exact-input manifest instead of recapturing every passing case.
         return {"errors": result["errors"][:25], "error_count": len(result["errors"]),
@@ -1477,7 +1108,7 @@ def package_previous_interruption(out: Path):
     Call only while holding the batch writer lock. A hard kill cannot execute
     a finally block; its last atomic summary and case checkpoints survive.
     """
-    _recover_prior_workers(out)
+    worker_ownership.recover_prior_workers(out)
     try:
         previous=json.loads((out/'summary.json').read_text())
     except (OSError,ValueError):
@@ -1531,7 +1162,7 @@ def main() -> int:
         failure_status=1
         with TerminationSignals() as signals:
             try:
-                with audit_lock(a.out):
+                with worker_ownership.audit_lock(a.out):
                     recovered=False
                     try:
                         with signals.defer():

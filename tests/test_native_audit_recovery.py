@@ -1,5 +1,5 @@
 """A stuck/crashed capture must not lose completed work or certify a batch."""
-from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 import hashlib
 import json
 import os
@@ -12,6 +12,7 @@ import sys
 import pytest
 
 from scripts import check_native_verovio_overlay as audit
+from scripts.audits import job_executor, worker_ownership
 
 
 def process_running(pid):
@@ -21,8 +22,10 @@ def process_running(pid):
         return False
 
 
-def renderer_worker(case,source,variant,directory,godot,reuse,focused):
+def renderer_worker(job, *, record_stage):
     """A renderer that survives TERM even when its Python parent exits."""
+    directory=job['directory']
+    record_stage('capture')
     directory.mkdir(parents=True,exist_ok=True)
     code='''import os,signal,sys,time
 from pathlib import Path
@@ -44,18 +47,20 @@ def delayed_worker_limits(memory,ownership_directory,run_id,*coordinator):
     root=Path(ownership_directory).parent
     (root/'initializer-ready').write_text(str(os.getpid()))
     while not (root/'initialize-now').exists():time.sleep(.01)
-    audit._worker_limits(memory,ownership_directory,run_id,*coordinator)
+    worker_ownership.initialize_worker(memory,ownership_directory,run_id,*coordinator)
 
 
 def test_worker_cannot_begin_queued_case_after_coordinator_dies_during_initialization(tmp_path):
     root=Path(__file__).resolve().parents[1]
     runner=tmp_path/'run.py'
     runner.write_text('''from pathlib import Path
+from functools import partial
 from scripts import check_native_verovio_overlay as audit
+from scripts.audits import job_executor, worker_ownership
 from test_native_audit_recovery import delayed_worker_limits,renderer_worker,jobs
 if __name__=='__main__':
-    audit._worker_limits=delayed_worker_limits
-    audit._library_job=renderer_worker
+    audit.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=renderer_worker,
+                                    initializer=delayed_worker_limits)
     list(audit.execute_case_jobs(jobs(Path(%r),['render']),workers=1,case_timeout=10,
          memory_limit_mib=3072,resume=False,godot_version='test-engine'))
 '''%str(tmp_path))
@@ -85,7 +90,7 @@ if __name__=='__main__':
 
 
 def test_cancellation_stops_term_ignoring_renderer_after_its_worker_exits(tmp_path,monkeypatch):
-    monkeypatch.setattr(audit,'_library_job',renderer_worker)
+    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=renderer_worker))
     directory=tmp_path/'render'
     def cancel_when_capturing(_):
         if (directory/'ready').exists():
@@ -115,14 +120,16 @@ def test_sigkill_restart_stops_prior_owned_processes_before_planning(tmp_path):
     out=tmp_path/'shard'
     runner=tmp_path/'run.py'
     runner.write_text('''from pathlib import Path
+from functools import partial
 from scripts import check_native_verovio_overlay as audit
+from scripts.audits import job_executor, worker_ownership
 from test_native_audit_recovery import renderer_worker,checkpoint_worker,process_running
 if __name__=='__main__':
     import os,sys,json
     audit.library_sources=lambda **_: (Path(%r),)
     audit.curriculum_cases=lambda *_: ()
     audit.CASES=()
-    audit._library_job=renderer_worker
+    audit.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=renderer_worker)
     if os.environ.get('RESTART')=='1':
         original=audit._library_piece
         def checked_piece(path):
@@ -132,7 +139,7 @@ if __name__=='__main__':
             assert all(stopped.values()),'Prior processes still running at source planning'
             return original(path)
         audit._library_piece=checked_piece
-        audit._library_job=checkpoint_worker
+        audit.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=checkpoint_worker)
     sys.argv=['audit','--out',%r,'--only','source','--resume','--workers','1','--case-timeout','15']
     sys.exit(audit.main())
 '''%(str(source),str(tmp_path/'old-pids.json'),str(tmp_path/'planning-check.json'),str(out)))
@@ -184,7 +191,7 @@ def test_restart_rejects_unvalidated_identity_without_signalling_live_process(tm
         registry=tmp_path/'.audit-workers';registry.mkdir()
         (registry/'prior.json').write_text(json.dumps(identity))
         (tmp_path/'summary.json').write_text('{"state":"running","passed":false}')
-        with audit.audit_lock(tmp_path),pytest.raises(ValueError,match='ownership'):
+        with worker_ownership.audit_lock(tmp_path),pytest.raises(ValueError,match='ownership'):
             audit.package_previous_interruption(tmp_path)
         assert process.poll() is None,'Unvalidated process was signalled'
         assert json.loads((tmp_path/'summary.json').read_text())['state']=='running'
@@ -201,7 +208,7 @@ def test_restart_retires_previous_boot_without_signalling_same_number_pid(tmp_pa
         record.write_text(json.dumps(dict(pid=process.pid,start_ticks=1,session=process.pid,
             process_group=process.pid,boot_id='previous-boot')))
         (tmp_path/'summary.json').write_text('{"state":"running","passed":false}')
-        with audit.audit_lock(tmp_path):
+        with worker_ownership.audit_lock(tmp_path):
             archive=audit.package_previous_interruption(tmp_path)
         assert archive.is_file()
         assert process.poll() is None,'Recovery signalled a process from the current boot'
@@ -228,7 +235,9 @@ def test_next_start_packages_hard_interrupted_run_before_replacing_summary(tmp_p
     assert json.loads((out/'summary.json').read_text()) == previous
 
 
-def checkpoint_worker(case, source, variant, directory, godot, reuse, focused):
+def checkpoint_worker(job, *, record_stage):
+    case,directory=job['case'],job['directory']
+    record_stage('note-features')
     directory.mkdir(parents=True, exist_ok=True)
     marker=directory/'executions'
     marker.write_text(marker.read_text()+'x' if marker.exists() else 'x')
@@ -286,7 +295,9 @@ def test_legacy_interrupted_publication_is_preserved_but_cannot_be_reused(tmp_pa
                                         godot_version='historical-engine')
 
 
-def blocking_worker(case,source,variant,directory,godot,reuse,focused):
+def blocking_worker(job, *, record_stage):
+    directory=job['directory']
+    record_stage('capture')
     directory.mkdir(parents=True,exist_ok=True)
     (directory/'fixture.json').write_text('{"hand":"both"}')
     (directory/'native-0.00000.png').write_bytes(b'captured before interruption')
@@ -301,7 +312,7 @@ def jobs(tmp_path, names):
 
 
 def test_resume_reuses_completed_cases_and_keeps_their_captures(tmp_path,monkeypatch):
-    monkeypatch.setattr(audit,'_library_job',checkpoint_worker)
+    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
     pending=jobs(tmp_path,['one','two'])
     first=list(audit.execute_case_jobs(pending,workers=1,case_timeout=10,
         memory_limit_mib=3072,resume=True,godot_version='test-engine'))
@@ -320,7 +331,7 @@ def test_resume_reuses_completed_cases_and_keeps_their_captures(tmp_path,monkeyp
 
 
 def test_one_stuck_case_has_a_deadline_and_completed_work_survives(tmp_path,monkeypatch):
-    monkeypatch.setattr(audit,'_library_job',checkpoint_worker)
+    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
     start=time.monotonic()
     result=list(audit.execute_case_jobs(jobs(tmp_path,['one','stuck','unstarted']),
         workers=1,case_timeout=1,memory_limit_mib=3072,resume=True,godot_version='test-engine'))
@@ -334,7 +345,7 @@ def test_one_stuck_case_has_a_deadline_and_completed_work_survives(tmp_path,monk
 
 
 def test_worker_crash_is_explicit_and_does_not_hang_pool_shutdown(tmp_path,monkeypatch):
-    monkeypatch.setattr(audit,'_library_job',checkpoint_worker)
+    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
     result=list(audit.execute_case_jobs(jobs(tmp_path,['crash','unstarted']),
         workers=1,case_timeout=5,memory_limit_mib=3072,resume=True,godot_version='test-engine'))
     assert result[0][1]['state']=='interrupted'
@@ -355,7 +366,7 @@ def test_interrupted_checkpoint_write_keeps_last_valid_json(tmp_path,monkeypatch
 
 @pytest.mark.parametrize('filename',['fixture.json','score.musicxml','native-0.00000.png'])
 def test_changed_capture_evidence_cannot_reuse_a_completed_verdict(tmp_path,monkeypatch,filename):
-    monkeypatch.setattr(audit,'_library_job',checkpoint_worker)
+    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
     pending=jobs(tmp_path,['one'])
     options=dict(workers=1,case_timeout=10,memory_limit_mib=3072,resume=True,godot_version='test-engine')
     list(audit.execute_case_jobs(pending,**options))
@@ -377,7 +388,7 @@ def test_batch_timeout_summary_resumes_without_repeating_completed_cases(tmp_pat
         (audit.AuditCase(name,str(path),1,1) for name in ('one','stuck')))
     monkeypatch.setattr(audit,'curriculum_cases',lambda *_:())
     monkeypatch.setattr(audit,'CASES',())
-    monkeypatch.setattr(audit,'_library_job',checkpoint_worker)
+    monkeypatch.setattr(audit,'execute_case_jobs',partial(job_executor.execute_jobs,execute_case=checkpoint_worker))
     monkeypatch.setattr(audit.subprocess,'check_output',lambda *_,**__:'test-engine')
     out=tmp_path/'out'
     first=audit.audit_library(out,'godot',include_fixtures=False,workers=1,
@@ -397,9 +408,9 @@ def test_batch_timeout_summary_resumes_without_repeating_completed_cases(tmp_pat
 
 def test_second_writer_cannot_overwrite_an_active_capture_directory(tmp_path):
     frame=tmp_path/'native-0.00000.png';frame.write_bytes(b'current frame')
-    with audit.audit_lock(tmp_path):
+    with worker_ownership.audit_lock(tmp_path):
         with pytest.raises(ValueError,match='already writing'):
-            with audit.audit_lock(tmp_path):
+            with worker_ownership.audit_lock(tmp_path):
                 frame.unlink()
     assert frame.read_bytes()==b'current frame'
 
@@ -427,14 +438,16 @@ def test_sigterm_checkpoints_packages_and_reaps_the_active_worker(tmp_path,phase
     out=tmp_path/'shard'
     runner=tmp_path/'run.py'
     runner.write_text('''from pathlib import Path
+from functools import partial
 from scripts import check_native_verovio_overlay as audit
+from scripts.audits import job_executor, worker_ownership
 from test_native_audit_recovery import blocking_worker
 if __name__=='__main__':
     import os,sys,time
     audit.library_sources=lambda **_: (Path(%r),)
     audit.curriculum_cases=lambda *_: ()
     audit.CASES=()
-    audit._library_job=blocking_worker
+    audit.execute_case_jobs=partial(job_executor.execute_jobs,execute_case=blocking_worker)
     if os.environ.get('BLOCK_PLANNING')=='1':
         def blocked_piece(*_):
             Path(%r).touch()
