@@ -353,3 +353,10 @@ first-party architectural monoliths.
   lifecycle, source, cache-identity, tempo or revision regressions found.
   Fresh expanded smoke with artifact contracts: 141 passed in 21.61s and
   main parse passed, retaining the existing 105s/25s limits.
+
+- Remaining-domain audit found no additional major runtime cycle or application
+  backreference. Course construction/progression and source annotation
+  compilation remain cohesive domain pipelines; optional Qt/Curriculum/public
+  geometry imports still have real users and are preserved. Feedback's internal
+  locate-beat dependency now names the canonical geometry owner directly;
+  nine feedback/assessment/server tests pass.

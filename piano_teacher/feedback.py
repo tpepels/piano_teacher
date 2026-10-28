@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from .music import Phrase, note_name, source_note_id
 from .practice import Assessment
-from .score_geometry import locate_beat
+from .rendering.legacy.geometry import locate_beat
 
 
 def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layout: dict, *, played_from_beat: float = 0.0) -> dict:
