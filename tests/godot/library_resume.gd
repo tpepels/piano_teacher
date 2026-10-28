@@ -96,7 +96,7 @@ func run() -> void:
         app._navigate("library")
         app.action_pending = true
         app.last_post_path = "/control"
-        app._resume_last()
+        app.home_view.resume_button.pressed.emit()
         check(app.posts.is_empty(), "Continue waits for an in-flight transport action")
         app._on_action(0, 200, PackedStringArray(), JSON.stringify(saved_state()).to_utf8_buffer())
         await process_frame
@@ -112,7 +112,7 @@ func run() -> void:
         app.posts.clear()
         app.action_pending = true
         app.last_post_path = "/control"
-        app._resume_last()
+        app.home_view.resume_button.pressed.emit()
         check(app.pending_library_piece == "Collection/real.mid",
             "Continue queues the recent piece behind an in-flight Pause")
         app._on_action(0, 400, PackedStringArray(),
@@ -147,7 +147,7 @@ func run() -> void:
     listing["last_piece"] = "deleted.mid"
     app._on_library(0, 200, PackedStringArray(), JSON.stringify(listing).to_utf8_buffer())
     app.posts.clear()
-    app._resume_last()
+    app.home_view.resume_button.pressed.emit()
     check(app.posts.is_empty(), "A missing last-opened file must not expose a broken Continue action")
     for row in entries(app):
         var detail := row.find_child("MusicDetail", true, false) as Label

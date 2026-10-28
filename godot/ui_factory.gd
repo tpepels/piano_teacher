@@ -40,3 +40,15 @@ static func button(value: String, role: String = "secondary", scale: float = 1.0
     control.custom_minimum_size = Vector2(
         maxf(96.0, width + 48.0 * scale), 38.0 * scale)
     return control
+
+static func card() -> PanelContainer:
+    var panel := PanelContainer.new()
+    panel.add_theme_stylebox_override("panel", Design.card_surface())
+    return panel
+
+static func card_body(panel: PanelContainer, margin: int = 28) -> MarginContainer:
+    var body := MarginContainer.new()
+    for side in ["left", "right", "top", "bottom"]:
+        body.add_theme_constant_override("margin_" + side, margin)
+    panel.add_child(body)
+    return body

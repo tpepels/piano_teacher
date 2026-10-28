@@ -321,3 +321,8 @@ first-party architectural monoliths.
   passed per case; global `_CASE_STATE` removed. Owner 118/26-test selections
   and independent 80-test review passed, including cancellation, recycling,
   deadlines and evidence tampering. No retained audit rerun or modifications.
+
+- Home now owns catalog counts, captured Continue target, errors and layout;
+  main composes intent signals. Fresh owner UI focus 38 passed, scene parse
+  passed; parent review found no state coupling. Main annotation-status read
+  also migrated to the actual annotation owner for NativeView alias removal.

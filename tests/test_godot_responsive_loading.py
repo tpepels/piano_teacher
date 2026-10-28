@@ -8,12 +8,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = (ROOT / 'godot' / 'main.gd').read_text(encoding='utf-8')
 SETTINGS = (ROOT / 'godot' / 'settings_screen.gd').read_text(encoding='utf-8')
 LIBRARY = (ROOT / 'godot' / 'library_screen.gd').read_text(encoding='utf-8')
+HOME = (ROOT / 'godot' / 'home_screen.gd').read_text(encoding='utf-8')
 
 
 def test_fullscreen_layout_has_adaptive_margins_and_stackable_cards():
     assert 'resized.connect(_update_responsive_layout)' in SCRIPT
     assert 'func _update_responsive_layout() -> void:' in SCRIPT
-    assert 'home_cards.vertical = width < 1380' in SCRIPT
+    assert 'cards.vertical = width < 1380' in HOME
     # Settings now uses a fixed vertical folder field with wrap-safe actions.
     # The previous window-wide threshold forced a horizontal row inside a
     # narrow drawer, hiding Browse/Save on the user's 1536x960 screen.
@@ -35,7 +36,7 @@ def test_long_song_names_cannot_force_controls_wider():
     assert 'detail_label.clip_text = true' in library_row
     assert 'title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in library_row
     assert 'title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in SCRIPT
-    assert 'home_recent_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in SCRIPT
+    assert 'recent_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in HOME
     assert 'library_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in LIBRARY
 
 

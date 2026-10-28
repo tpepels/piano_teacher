@@ -29,6 +29,7 @@ const FrameMeter := preload("res://frame_meter.gd")
 const SourceMeasurePicker := preload("res://source_measure_picker.gd")
 const PerformanceReviewStrip := preload("res://performance_review_strip.gd")
 const SettingsScreen := preload("res://settings_screen.gd")
+const HomeScreen := preload("res://home_screen.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -37,6 +38,7 @@ var overlay_drawer: PanelContainer
 var navigation_rail: VBoxContainer
 var screen_navigation: Dictionary = {}
 var settings_view: SettingsScreen
+var home_view: HomeScreen
 var lesson_stage_labels: Dictionary = {}
 var lesson_piece_title: Label
 var path_reset_button: Button
@@ -52,13 +54,10 @@ var settings_request: HTTPRequest
 var library_pending := false
 var library_view: LibraryScreen
 var library_health_running := false
-var recent_library_piece := ""
 var library_health_request: HTTPRequest
 var library_health_pending := false
 var settings_pending := false
 var preferences: Dictionary = {}
-var home_count_label: Label
-var home_cards: BoxContainer
 var page_margins: Array[MarginContainer] = []
 var practice_settings_button: Button
 var practice_navigation: HFlowContainer
@@ -79,8 +78,6 @@ var score_error := ""
 var pending_library_piece := ""
 var pending_library_resume := false
 var library_resume_requested := false
-var home_recent_label: Label
-var home_resume_button: Button
 var open_picker: SourceMeasurePicker
 var practice_stage_bar: HFlowContainer
 var practice_stage_labels: Dictionary = {}
@@ -428,7 +425,7 @@ func _ui_font(base: int) -> int:
     return maxi(14, int(round(float(base) * ui_scale)))
 
 func _resize_ui_fonts(node: Node) -> void:
-    if node == library_view or node == settings_view:
+    if node == library_view or node == settings_view or node == home_view:
         return # Screens own their text scaling through apply_viewport.
     if node is Control and node.has_meta("ui_font_base"):
         (node as Control).add_theme_font_size_override(
@@ -542,23 +539,6 @@ func _screen(name: String) -> MarginContainer:
     page_margins.append(panel)
     return panel
 
-
-func _space() -> Control:
-    var spacer := Control.new()
-    spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    return spacer
-
-func _card() -> PanelContainer:
-    var panel := PanelContainer.new()
-    panel.add_theme_stylebox_override("panel", Design.card_surface())
-    return panel
-
-func _card_body(panel: PanelContainer, margin: int = 28) -> MarginContainer:
-    var body := MarginContainer.new()
-    for side in ["left", "right", "top", "bottom"]:
-        body.add_theme_constant_override("margin_" + side, margin)
-    panel.add_child(body)
-    return body
 
 # Music selection, lesson path and settings share a dedicated workspace.
 # Opening another view pauses an ongoing attempt
@@ -719,56 +699,14 @@ func _build_interface() -> void:
 
 
 func _build_home_screen() -> void:
-    # Home: a title, one recent piece and two decisions, with ample whitespace.
-    var home := _screen("Home")
-    screens["home"] = home
-    var home_scroll := ScrollContainer.new()
-    home_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    home_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    home_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    home.add_child(home_scroll)
-    var home_layout := UI.stack(26)
-    home_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    home_scroll.add_child(home_layout)
-    var home_nav := HBoxContainer.new()
-    home_layout.add_child(home_nav)
-    home_nav.add_child(UI.label("Piano Teacher", 24, INK, true))
-    home_nav.add_child(_space())
-    home_nav.add_child(_button("Settings", func(): _navigate("settings"), false, "settings"))
-    home_nav.add_child(_button("Quit", func(): get_tree().quit(), false, "danger"))
-    var header := UI.stack(12)
-    home_layout.add_child(header)
-    header.add_child(UI.label("Your practice", 34, INK, true))
-    header.add_child(UI.label("Choose your music or continue your last lesson.", 18, MUTED))
-    var home_row := BoxContainer.new()
-    home_cards = home_row
-    home_row.add_theme_constant_override("separation", 20)
-    home_layout.add_child(home_row)
-    var library_card := _card()
-    library_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    home_row.add_child(library_card)
-    var library_inner := UI.stack(17)
-    _card_body(library_card, 32).add_child(library_inner)
-    library_inner.add_child(UI.label("YOUR MUSIC", 13, MUTED, true))
-    home_count_label = UI.label("Discovering your music…", 25, INK, true)
-    library_inner.add_child(home_count_label)
-    library_inner.add_child(UI.label("MIDI and MusicXML from your selected folder", 15, MUTED))
-    library_inner.add_child(_button("Browse library  →", func(): _navigate("library"), true))
-    var recent_card := _card()
-    recent_card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    home_row.add_child(recent_card)
-    var recent_inner := UI.stack(17)
-    _card_body(recent_card, 32).add_child(recent_inner)
-    recent_inner.add_child(UI.label("LAST OPENED", 13, MUTED, true))
-    home_recent_label = UI.label("No recent piece", 25, INK, true)
-    home_recent_label.autowrap_mode = TextServer.AUTOWRAP_OFF
-    home_recent_label.clip_text = true
-    home_recent_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-    recent_inner.add_child(home_recent_label)
-    recent_inner.add_child(UI.label("Pick up where you left off", 15, MUTED))
-    home_resume_button = _button("Continue  →", _resume_last, true)
-    recent_inner.add_child(home_resume_button)
-    home_layout.add_child(UI.label("Connect your USB MIDI keyboard and select your music. Progress stays on this computer.", 14, MUTED))
+    var page := _screen("Home")
+    screens["home"] = page
+    home_view = HomeScreen.new()
+    page.add_child(home_view)
+    home_view.library_requested.connect(func(): _navigate("library"))
+    home_view.settings_requested.connect(func(): _navigate("settings"))
+    home_view.exit_requested.connect(_exit_app)
+    home_view.open_requested.connect(_open_library_piece)
 
 
 func _build_library_screen() -> void:
@@ -870,13 +808,13 @@ func _build_practice_screen() -> void:
     practice_playback_banner.visible = false
     practice_playback_banner.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     practice_playback_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    var score_panel := _card()
+    var score_panel := UI.card()
     # One continuous performance stage, not another grey website card.
     score_panel.add_theme_stylebox_override("panel", Design.stage_surface())
     practice_score_panel = score_panel
     score_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
     practice_layout.add_child(score_panel)
-    var score_margin := _card_body(score_panel, 10)
+    var score_margin := UI.card_body(score_panel, 10)
     score_margin_box = score_margin
     var score_region := VBoxContainer.new()
     score_region.add_theme_constant_override("separation", 8)
@@ -1167,8 +1105,8 @@ func _update_responsive_layout() -> void:
         panel.add_theme_constant_override("margin_right", margin)
         panel.add_theme_constant_override("margin_top", 14 if compact else 19)
         panel.add_theme_constant_override("margin_bottom", 14 if compact else 19)
-    if home_cards != null:
-        home_cards.vertical = width < 1380
+    if home_view != null:
+        home_view.apply_viewport(size, ui_scale)
     _resize_overlay_drawer()
     _resize_open_picker()
     if practice_stage_bar != null:
@@ -1308,13 +1246,13 @@ func _build_lesson_screen() -> void:
     lesson_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     lesson_rows.size_flags_stretch_ratio = 1.15
     lesson_columns.add_child(lesson_rows)
-    var options_panel := _card()
+    var options_panel := UI.card()
     lesson_options = options_panel
     options_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     options_panel.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
     lesson_columns.add_child(options_panel)
     var path_options := UI.stack(14)
-    _card_body(options_panel, 18).add_child(path_options)
+    UI.card_body(options_panel, 18).add_child(path_options)
     path_options.add_child(UI.label("Practice choices", 17, INK, true))
     # FlowContainer inside an expanding, vertically scrolling VBox can
     # calculate a near-zero width for its Label during a resize. The label
@@ -1626,30 +1564,15 @@ func _on_library(_result: int, code: int, _headers: PackedStringArray, body: Pac
     library_pending = false
     if code != 200:
         library_view.present_request_error(_http_failure(code, body))
-        home_count_label.text = "Practice engine unavailable"
-        home_resume_button.disabled = true
+        home_view.present_catalog_unavailable()
         return
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
     library_view.present_catalog(parsed)
-    home_count_label.text = "%d scores · %d built-in warm-ups" % [int(parsed.get("count", 0)), parsed.get("warmups", []).size()]
+    home_view.present_catalog(parsed)
     _request_library_health()
-    var recent: String = str(parsed.get("last_piece", ""))
-    home_resume_button.disabled = recent.is_empty()
-    var exists_in_library := false
-    for entry in parsed.get("warmups", []) + parsed.get("pieces", []):
-        if str(entry.get("id", "")) == recent:
-            exists_in_library = true
-            break
-    recent_library_piece = recent if exists_in_library else ""
-    home_resume_button.disabled = not exists_in_library
-    var recent_title := recent.get_file().get_basename().replace("_", " ")
-    for entry in parsed.get("warmups", []):
-        if str(entry.get("id", "")) == recent:
-            recent_title = str(entry.get("title", recent_title))
-            break
-    home_recent_label.text = recent_title if not recent.is_empty() else "No recent piece"
+
 
 func _request_library_health() -> void:
     if library_health_request == null or library_health_pending:
@@ -1770,10 +1693,6 @@ func _open_library_piece(identifier: String, resume_saved := false) -> void:
     library_view.present_open_status("Opening score…")
     library_resume_requested = resume_saved
     _send_post("/library/open", {"id": identifier})
-
-func _resume_last() -> void:
-    if not recent_library_piece.is_empty():
-        _open_library_piece(recent_library_piece, true)
 
 
 func _request_settings() -> void:
@@ -2598,7 +2517,7 @@ func _present_fingering_status(summary: Variant) -> void:
     var status: String = str(summary.get("status",""))
     var unknown: int = int(summary.get("unknown",0))
     var review: int = int(summary.get("review",0))
-    var placement_issues: int = timeline_preview.fingering_placement_issues.size() if timeline_preview != null and _native_score_ready() else 0
+    var placement_issues: int = timeline_preview.annotations.fingering_placement_issues.size() if timeline_preview != null and _native_score_ready() else 0
     var unavailable: bool = status in ["unavailable","failed","error"]
     var detail: String = str(summary.get("error",""))
     var issues := PackedStringArray()
@@ -2696,7 +2615,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         settings_view.present_message(message)
         if path != "/library/open" and not queued_library_failed:
             library_view.present_request_error(message)
-        home_recent_label.text = message
+        home_view.present_operation_error(message)
         _flush_transport_action()
         return
     if path == "/fingering":
