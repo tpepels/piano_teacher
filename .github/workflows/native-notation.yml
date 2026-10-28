@@ -13,12 +13,18 @@ on:
 permissions:
   contents: read
 
+# Each main update supersedes earlier quick gates; don't spend runner time
+# re-checking stale refactor commits. Release/tag and PR refs are independent.
+concurrency:
+  group: native-quick-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   native-gate:
     name: native-notation
     runs-on: ubuntu-latest
     container: archlinux:latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     outputs:
       revision: ${{ steps.passed.outputs.revision }}
     steps:
@@ -34,6 +40,13 @@ jobs:
           python -m venv .venv
           .venv/bin/python -m pip install -e '.[godot,test]'
           bash scripts/setup-fingering.sh
+      - name: Run targeted architecture regressions first
+        run: |
+          xvfb-run -a -s '-screen 0 1600x1000x24' .venv/bin/python -m pytest -q \
+            tests/test_completion_route.py \
+            tests/test_completion_handlers.py \
+            tests/test_source_measure_picker.py \
+            tests/test_native_voice_layout.py
       - name: Run fast verification (no corpus rendering)
         run: xvfb-run -a -s '-screen 0 1600x1000x24' bash scripts/verify-notation.sh --ci
       - name: Record quick-check revision
