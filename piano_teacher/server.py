@@ -29,7 +29,7 @@ from .preprocessing_cache import PreprocessingCache
 from .library_health import LibraryHealth
 from .warmups import is_warmup
 from .recovery import check_rolling_two_bar_window, check_two_bar_window
-from .recovery_projection import recovery_display
+from .application.rolling_recovery import plan_rolling_recovery
 from .music import Phrase, source_note_id
 from .notation.practice_timeline import preparation_measure_descriptor
 from .lesson_timing import lead_in_beats, preparation_meter
@@ -42,6 +42,7 @@ from .state_projection import (
 )
 from .assessment_service import AssessmentService
 from .application.lesson_snapshot import build_lesson_snapshot
+from .application.control_dispatch import ControlDispatcher
 from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
 from .live_input_view import LiveInputView
@@ -918,118 +919,10 @@ class PracticeEngine:
 
 
     def control(self, action: str, **kwargs) -> None:
+        # Session state and all command transitions remain serialized here.
         with self.lock:
             self._apply_listen_failure()
-            # Explicit navigation, Stop and Restart abandon the current
-            # attempt. Only the timed feedback lifecycle commits assessment.
-            # Otherwise Stop during feedback could accidentally earn mastery.
-            if action == "reset_path":
-                self._reset_current_path(
-                    fingerprint=kwargs.get("fingerprint"),
-                    confirm=kwargs.get("confirm") is True)
-                return
-            if action == "score_ready":
-                revision = int(kwargs.get("revision", -1))
-                # Ignore delayed PNG acknowledgements from older passages.
-                if self.awaiting_score_revision == revision and revision == self.score_revision:
-                    if self.paused:
-                        self._deferred_score_ack = revision
-                        return
-                    if self.mode == "listen":
-                        self.listen.acknowledge_score(revision)
-                        self._start_listen_if_ready()
-                    elif self.mode == "learn" and self.teaching is not None:
-                        self.awaiting_score_revision = None
-                        self.teaching.start(now=time.monotonic())
-                    else:
-                        self.start(from_beat=self.pending_rewind if self.pending_rewind is not None
-                                   else self.open_from_beat,
-                                   mode="perform" if self.mode == "perform" else "practice")
-                return
-            if action == "demo_ready":
-                # The token identifies unchanged PCM even when a fingering
-                # correction advances the score revision during download.
-                # Stop, tempo changes and navigation discard that token.
-                if self.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
-                    self._start_listen_if_ready()
-                return
-            if action == "listen":
-                self._prepare_listen()
-                return
-            if action == "perform":
-                self._prepare_perform(scope=str(kwargs.get("scope", "current")))
-                return
-            if action == "practice_weak":
-                self._practice_weak()
-                return
-            if action == "review_retry":
-                self._review_retry(kwargs.get("first_bar"), kwargs.get("last_bar"))
-                return
-            if action == "seek":
-                self._seek(kwargs.get("bar"))
-                return
-            if action == "learn_next":
-                if (self.mode != "learn" or self.teaching is None
-                        or not self.teaching.snapshot(now=time.monotonic())["completed"]):
-                    raise ValueError("Find the current notes before continuing to the next idea")
-                self._save_guided_preparation()
-                if self._guided_return is not None:
-                    self._prepare_practice()
-                else:
-                    self._begin_course_stage()
-                return
-            if action == "skip_stage":
-                if self.is_builtin_warmup:
-                    raise ValueError("Warm-up stages unlock after three clean runs, not skips")
-                self._skip_stage(kwargs.get("reason"))
-                return
-            if action == "place_original":
-                if self.is_builtin_warmup:
-                    raise ValueError("Warm-up stages unlock after three clean runs")
-                self._place_original()
-                return
-            if action == "revisit_trouble":
-                self._revisit_trouble(kwargs.get("stage_key"), kwargs.get("start_beat"))
-                return
-            if action in ("learn", "learn_retry"):
-                if action == "learn":
-                    self.course_guided = True
-                    if "from_beat" not in kwargs:
-                        self._begin_course_stage(explicit_learn=True)
-                        return
-                previous_start = self.guided_range[0] if self.guided_range else 0.0
-                self._begin_learn(from_beat=float(kwargs.get("from_beat", previous_start if action == "learn_retry" else 0.0)),
-                                  recovery=self._guided_return is not None and action == "learn_retry")
-                return
-            if action == "open_at":
-                return self._open_selected_measure(kwargs)
-            if action == "practice":
-                self._prepare_practice()
-                if kwargs.get("wait_for_player", False):
-                    # Returning from Listen must not start a count-in simply
-                    # because the renderer completed. Wait for a fresh piano
-                    # note or the central Play action.
-                    self.awaiting_score_revision = None
-                    self.feedback = "Ready to play"
-                    self.next_action = "Play one piano key to begin, or press Play."
-                return
-            if action == "hints":
-                self.persistent_hints = bool(kwargs.get("enabled", False))
-                if self.teaching is not None:
-                    self.teaching.set_hints(self.persistent_hints, now=time.monotonic())
-                return
-            if action == "stop":
-                self._stop()
-                self.feedback="Stopped"
-                self.next_action="Start when you are ready."
-                return
-            if action in ("start", "restart"):
-                return self._start_or_restart(action)
-            if action == "pause":
-                return self._pause_current_session()
-            if action == "resume":
-                return self._resume_current_session()
-            return self._change_stage(action, kwargs)
+            return ControlDispatcher.dispatch(self, action, kwargs)
 
     def _open_selected_measure(self, kwargs: dict):
         """Open a source measure using the existing lesson navigation policy."""
@@ -1281,26 +1174,24 @@ class PracticeEngine:
                 self.learner_store.record_trouble(self.fingerprint, self.plan.identity, unit,
                                                  errors=len(unit_errors), pitches=pitches)
                 self.learner_store.save_resume(self.fingerprint, self.plan.identity, unit)
+        transition = plan_rolling_recovery(
+            decision, identity=self.plan.identity, bpm=self.plan.bpm,
+            previous_key=self._trouble_key, previous_count=self._trouble_count,
+            grid=grid, first_bar=phrase.first_bar, now=now)
         self.plan.streak=0
         self.plan.failures+=1
-        before=self.plan.bpm
-        self.plan.bpm=max(SETTINGS.minimum_bpm,round(before*SETTINGS.recovery_tempo_multiplier))
+        self.plan.bpm=transition.bpm
         self._save()
         self._schedule_preparation(decision.restart_beat, now=now,
             from_visual=self.visual_offset_beats + score_beat,
             reverse_seconds=self.feedback_seconds)
-        key = (self.plan.identity, decision.restart_beat, decision.end_beat)
-        self._trouble_count = self._trouble_count + 1 if key == self._trouble_key else 1
-        self._trouble_key = key
-        self._guided_recovery_pending = self._trouble_count >= SETTINGS.guided_recovery_after_failures
-        recovery = recovery_display(
-            decision, grid=grid, first_bar=phrase.first_bar,
-            before_bpm=before, after_bpm=self.plan.bpm,
-            now=now, guided=self._guided_recovery_pending)
-        self.recovery_notice = recovery.notice
-        self.retry_range = recovery.retry_range
-        self.feedback = recovery.feedback
-        self.next_action = recovery.next_action
+        self._trouble_key = transition.trouble_key
+        self._trouble_count = transition.trouble_count
+        self._guided_recovery_pending = transition.guided
+        self.recovery_notice = transition.display.notice
+        self.retry_range = transition.display.retry_range
+        self.feedback = transition.display.feedback
+        self.next_action = transition.display.next_action
         return
 
     def _complete_attempt(self, phrase: Phrase, ending: float,

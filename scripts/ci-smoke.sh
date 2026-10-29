@@ -12,6 +12,7 @@ timeout 105s "$PYTHON" -m pytest -q \
   tests/test_completion_route.py \
   tests/test_completion_handlers.py \
   tests/test_control_dispatch_refactor.py \
+  tests/test_rolling_recovery_transition.py \
   tests/test_engine_update_refactor.py \
   tests/test_progress_repository.py \
   tests/test_assessment_service.py \
@@ -27,6 +28,7 @@ timeout 105s "$PYTHON" -m pytest -q \
   tests/test_native_voice_layout.py \
   tests/test_native_refactor_helpers.py \
   tests/test_library_catalog_coordinator.py \
+  tests/test_midi_device_coordinator.py \
   tests/test_rest_lane_layout.py \
   tests/test_fingering_spatial_layout.py \
   tests/test_library_screen.py \

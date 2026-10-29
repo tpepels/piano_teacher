@@ -23,6 +23,7 @@ const LessonSession := preload("res://lesson_session.gd")
 const PracticeScreen := preload("res://practice_screen.gd")
 const NavigationDrawer := preload("res://navigation_drawer.gd")
 const LibraryCatalogCoordinator := preload("res://library_catalog_coordinator.gd")
+const MidiDeviceCoordinator := preload("res://midi_device_coordinator.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -52,15 +53,24 @@ var action_request_started_ms := 0
 var state_request: HTTPRequest
 var layout_request: HTTPRequest
 var action_request: HTTPRequest
-var device_request: HTTPRequest
-var device_menu_requested := false
+var midi_devices = MidiDeviceCoordinator.new()
+var device_request: HTTPRequest  # Existing request callback wiring.
+var device_menu_requested: bool:
+    get:
+        return midi_devices.picker_requested
+    set(value):
+        midi_devices.picker_requested = value
 var score_effects = ScoreEffects.new()
 var count_tick_index := -1
 var play_tick_index := -1
 var click_player: AudioStreamPlayer
 var click_high: AudioStreamWAV
 var click_low: AudioStreamWAV
-var device_names: Array = []
+var device_names: Array:
+    get:
+        return midi_devices.names
+    set(value):
+        midi_devices.names = value
 var revision := -1
 var state_pending := false
 var layout_revision := -1
@@ -92,7 +102,11 @@ var phase0_last_phase := ""
 var phase0_last_cursor_tick := -1
 var phase0_last_lead_tick := -999
 var lesson_request: HTTPRequest
-var device_pending := false
+var device_pending: bool:
+    get:
+        return midi_devices.pending
+    set(value):
+        midi_devices.pending = value
 var demo_player: Node
 var ui_scale := 1.0
 var last_seen_midi_visual_sequence := 0
@@ -141,6 +155,7 @@ func _ready() -> void:
     action_request = _new_request(_on_action)
     action_request.timeout = 90.0
     device_request = _new_request(_on_devices)
+    midi_devices.attach_request(device_request)
     library_catalog.attach_requests(
         _new_request(library_catalog.on_catalog),
         _new_request(library_catalog.on_health))
@@ -452,6 +467,8 @@ func _build_interface() -> void:
     _build_settings_screen()
     _build_practice_screen()
     library_catalog.configure(URL, library_view, home_view,
+        _decode_json, _http_failure, _send_post)
+    midi_devices.configure(URL, settings_view,
         _decode_json, _http_failure, _send_post)
 
 
@@ -1261,43 +1278,19 @@ func _restart_practice() -> void:
         _send_action({"action": "learn_retry" if str(last_state.get("mode", "practice")) == "learn" else "restart"})
 
 func _request_devices() -> void:
-    if device_pending or device_request == null:
-        return
-    device_pending = true
-    if device_request.request(URL + "/devices") != OK:
-        device_pending = false
+    midi_devices.discover()
 
-func _on_devices(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-    device_pending = false
-    if code != 200:
-        # Failed ALSA discovery previously disappeared silently, leaving a
-        # stale device picker. Give a diagnostic in Settings without
-        # interrupting a running practice take.
-        device_menu_requested = false
-        if current_screen == "settings":
-            settings_view.present_message("MIDI device scan failed: " + _http_failure(code, body))
-        return
-    var parsed = _decode_json(body)
-    if typeof(parsed) != TYPE_DICTIONARY:
-        device_menu_requested = false
-        return
-    device_names = parsed.get("devices", [])
-    var show_picker: bool = device_menu_requested
-    device_menu_requested = false
-    settings_view.present_devices(device_names, str(last_state.get("device", "")), show_picker)
-    if str(last_state.get("device", "")) == "":
-        var saved: String = str(preferences.get("midi_device", ""))
-        if device_names.has(saved) and not saved.is_empty() and not saved.to_lower().contains("midi through"):
-            _choose_device(saved)
+func _on_devices(_result: int, code: int,
+        _headers: PackedStringArray, body: PackedByteArray) -> void:
+    midi_devices.receive(code, body, current_screen,
+        str(last_state.get("device", "")),
+        str(preferences.get("midi_device", "")))
 
 func _show_devices() -> void:
-    device_menu_requested = true
-    _request_devices()
+    midi_devices.show_picker()
 
 func _choose_device(name: String) -> void:
-    _send_post("/device", {"name": name})
-    if not name.is_empty():
-        settings_view.present_device_selection(name)
+    midi_devices.choose(name)
 
 
 func _input(event: InputEvent) -> void:
