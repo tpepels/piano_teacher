@@ -103,7 +103,7 @@ def test_snapshot_counts_only_current_bindings_and_projects_after_the_current_id
     before = (plan.identity, plan.bpm, plan.streak, dict(plan.mastered))
     actual = service.snapshot(plan, fingerprint=FINGERPRINT, mode="learn",
                               guided_range=(8.0, 16.0), course_guided=True)
-    assert json.dumps(actual) == json.dumps(expected)
+    assert actual == expected  # JSON object key ordering is not a contract.
     assert (plan.identity, plan.bpm, plan.streak, plan.mastered) == before
     assert service.saved(plan, fingerprint=FINGERPRINT)["resume_unit"] == SECOND
 
