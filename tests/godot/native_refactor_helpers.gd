@@ -1,6 +1,7 @@
 extends SceneTree
 
 const NavigationDrawer := preload("res://navigation_drawer.gd")
+const ActionButton := preload("res://action_button.gd")
 const EventWindow := preload("res://notation/native/event_window.gd")
 const SourceVisibility := preload("res://notation/native/source_visibility.gd")
 const EngravingReadiness := preload("res://notation/native/engraving_readiness.gd")
@@ -27,8 +28,9 @@ class MockGlyphs:
 var chosen := ""
 
 func _button(label: String, callback: Callable, _primary: bool, _role: String) -> Button:
-    var button := Button.new()
+    var button := ActionButton.new()
     button.text = label
+    button.configure(_role)
     button.pressed.connect(callback)
     return button
 
@@ -55,7 +57,7 @@ func _initialize() -> void:
     if screens["lesson"].get_parent() == host:
         failures += 1
     drawer.present("library", "practice")
-    if not drawer.root.visible or not drawer.navigation["library"].button_pressed:
+    if not drawer.root.visible or not drawer.navigation["library"].is_selected:
         failures += 1
     drawer.navigation["settings"].emit_signal("pressed")
     if chosen != "settings":
