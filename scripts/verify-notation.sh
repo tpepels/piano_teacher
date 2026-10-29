@@ -50,6 +50,11 @@ quick_checks() {
     tests/test_library_screen.py \
     tests/test_settings_ownership.py \
     tests/test_home_screen.py \
+    tests/test_lesson_ownership.py \
+    tests/test_midi_connection.py \
+    tests/test_source_svg_ownership.py \
+    tests/test_visual_ledger_ownership.py \
+    tests/test_audit_pipeline_components.py \
     tests/test_native_score_layout.py \
     tests/test_native_ink_geometry.py \
     tests/test_native_connector_geometry.py \

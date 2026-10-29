@@ -30,6 +30,9 @@ timeout 105s "$PYTHON" -m pytest -q \
   tests/test_library_screen.py \
   tests/test_settings_ownership.py \
   tests/test_home_screen.py \
+  tests/test_lesson_ownership.py \
+  tests/test_midi_connection.py \
+  tests/test_source_svg_ownership.py \
   tests/test_native_score_layout.py \
   tests/test_native_ink_geometry.py \
   tests/test_native_connector_geometry.py \
@@ -37,8 +40,11 @@ timeout 105s "$PYTHON" -m pytest -q \
   tests/test_native_fingering_components.py \
   tests/test_native_paint_components.py \
   tests/test_verification_pixel_ownership.py \
-  tests/test_feature_pixel_ownership.py::test_feature_family_dependencies_do_not_reach_the_coordinator_or_production \
-  tests/test_audit_worker_components.py::test_stage_recorders_own_independent_case_state \
+  tests/test_feature_pixel_ownership.py \
+  tests/test_visual_ledger_ownership.py \
+  tests/test_audit_capture_components.py \
+  tests/test_audit_worker_components.py \
+  tests/test_audit_pipeline_components.py \
   tests/test_importing_boundaries.py \
   tests/test_godot_parse_gate.py \
   tests/test_script_permissions.py

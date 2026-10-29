@@ -419,3 +419,8 @@ first-party architectural monoliths.
   phase0-workflow assertion now checks the actual bounded automatic gate.
   Existing graphical instructional-journey failure is recorded for UI triage;
   it reproduces on the pre-extraction backend. Listen extraction follows.
+
+- Expanded bounded automatic gate now covers the new Library/Settings/Home/
+  Lesson, MIDI, neutral SVG, native owners, independent proof ownership and
+  actual capture/worker/pipeline contracts: 265 passed in 36.41s, with the
+  diagnostic-aware main parse succeeding. The 105s/25s limits remain intact.
