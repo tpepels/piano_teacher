@@ -36,6 +36,13 @@ def group_variants(phrase: Phrase, hand: str, groups, max_attacks: int):
     def union(a, b):
         parent[find(b)] = find(a)
 
+    # For both-hand drills a simultaneous onset is a single learner action.
+    # Do not practise half of that time slice in a group-aligned subset.
+    if hand == "both":
+        for i in range(1, len(ordered)):
+            if ordered[i][3] == ordered[i - 1][3]:
+                union(i - 1, i)
+
     for kind, onsets in groups:
         if kind != "beam" and (kind != "slur" or len(onsets) > max_attacks):
             continue
@@ -50,13 +57,17 @@ def group_variants(phrase: Phrase, hand: str, groups, max_attacks: int):
     for i in range(len(ordered)):
         blocks[find(i)].append(i)
     ordered_blocks = sorted(blocks.values(), key=lambda block: block[0])
+    def attack_count(chosen):
+        return len({ordered[i][3] for i in chosen})
+
     def prefix(limit):
         chosen = set()
         for block in ordered_blocks:
-            if chosen and len(chosen) + len(block) > limit:
+            proposed = chosen | set(block)
+            if chosen and attack_count(proposed) > limit:
                 break
-            chosen.update(block)
-            if len(chosen) >= limit:
+            chosen = proposed
+            if attack_count(chosen) >= limit:
                 break
         return chosen
 
