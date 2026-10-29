@@ -184,6 +184,55 @@ def test_midi_beaming_model_is_derived_before_exercise_simplification():
     assert plan.variants[-1].notes == notes
 
 
+def test_thinned_source_chord_keeps_its_visible_slur():
+    from piano_teacher.notation.lesson import build_lesson_score
+    from piano_teacher.notation.assets.slurs import slur_pairs_from_xml
+
+    xml = """<score-partwise version="4.0"><part-list>
+      <score-part id="P1"><part-name>Right Hand</part-name></score-part>
+      </part-list><part id="P1"><measure number="1"><attributes>
+      <divisions>10080</divisions><time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>5040</duration><voice>1</voice><type>eighth</type>
+        <notations><slur number="1" type="start"/></notations></note>
+      <note><chord/><pitch><step>E</step><octave>4</octave></pitch>
+        <duration>5040</duration><voice>1</voice><type>eighth</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>5040</duration><voice>1</voice><type>eighth</type>
+        <notations><slur number="1" type="stop"/></notations></note>
+      <note><rest/><duration>30240</duration><voice>1</voice>
+        <type>half</type><dot/></note>
+      </measure></part></score-partwise>"""
+    voice = "xml-p0-s1-v1"
+    notes = (
+        Note(0., .5, 60, 0, 0, "right", "xml-p0-m0-e1", voice=voice),
+        Note(0., .5, 64, 0, 0, "right", "xml-p0-m0-e2", voice=voice),
+        Note(.5, 1., 62, 0, 0, "right", "xml-p0-m0-e3", voice=voice),
+    )
+    piece = Piece("Slurred source chord", 100, notes, (),
+                  bar_boundaries=(0., 4.),
+                  time_signatures=((0., 4, 4),),
+                  source_musicxml=xml)
+    phrase = Phrase(1, 1, 1, 0., 4., notes)
+    grouping = grouping_for_piece(piece)
+    simplified = generate_variants(phrase, "right",
+        groups=grouping.for_phrase(phrase, "right"))[0].phrase
+    assert [n.pitch for n in simplified.notes] == [64, 62]
+    lesson = build_lesson_score(
+        simplified, boundaries=piece.bar_boundaries,
+        time_signatures=piece.time_signatures,
+        source_musicxml=piece.source_musicxml)
+    projected = ET.fromstring(lesson.musicxml)
+    start_note = projected.find(".//note[notations/slur[@type='start']]")
+    stop_note = projected.find(".//note[notations/slur[@type='stop']]")
+    assert start_note is not None and stop_note is not None
+    assert start_note.findtext("pitch/step") == "E"
+    assert stop_note.findtext("pitch/step") == "D"
+    assert slur_pairs_from_xml(lesson.musicxml) == (
+        (start_note.get("id"), stop_note.get("id")),)
+
+
 def test_no_invented_slurs_for_midi_and_no_change_to_grading_events():
     notes = tuple(Note(float(i), i+1., 60+i, 0, 0, "right",
                        f"n{i}") for i in range(4))
