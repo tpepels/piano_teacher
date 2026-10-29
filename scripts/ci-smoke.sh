@@ -58,6 +58,7 @@ timeout 105s "$PYTHON" -m pytest -q \
 timeout 100s "$PYTHON" -m pytest -q \
   tests/test_practice_screen.py \
   tests/test_score_asset_session.py \
+  tests/test_score_application_lifecycle.py \
   tests/test_practice_metronome.py \
   tests/test_guided_session.py \
   tests/test_listen_session.py \

@@ -609,7 +609,7 @@ func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: Pack
     lesson_session.complete_response(_decode_json(body) if code == 200 else null,
         "" if code == 200 else _http_failure(code, body), Time.get_ticks_msec())
 
-func _refresh_score_status() -> void:
+func _refresh_score_status(_status: Dictionary = {}) -> void:
     if practice_view != null:
         practice_view.present_score(_native_score_ready(), score_error)
 
