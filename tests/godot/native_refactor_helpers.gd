@@ -7,6 +7,8 @@ const SourceVisibility := preload("res://notation/native/source_visibility.gd")
 const EngravingReadiness := preload("res://notation/native/engraving_readiness.gd")
 const CaptionLayout := preload("res://practice_caption_layout.gd")
 const RestLanePlanning := preload("res://notation/native/rest_lane_planning.gd")
+const NativeScoreAssets := preload("res://native_score_assets.gd")
+const ScoreEffects := preload("res://score_effects.gd")
 
 class TestFrame:
     extends RefCounted
@@ -26,6 +28,17 @@ class MockGlyphs:
     var slur_metadata: Dictionary = {}
     func slur_note_ids(_key: String) -> Array:
         return []
+
+class MockNativeRenderer:
+    extends RefCounted
+    var accepted := true
+    var failure_reason := "Source glyphs missing"
+    var beam_input: Dictionary = {}
+    func set_verovio_glyphs(_glyphs, _heads, _ties, _chords, beams,
+            _tuplets, _slurs, _slur_pairs, _slur_ok, _beam_pairs,
+            _beam_ok) -> bool:
+        beam_input = beams
+        return accepted
 
 var chosen := ""
 
@@ -118,6 +131,32 @@ func _initialize() -> void:
         func(event, _gap, _heads, _accidentals):
             return Rect2(0, 0, 18, 18))
     if not rest_result["offsets"].has("rest") or rest_result["unavoidable"] != 0:
+        failures += 1
+    var renderer := MockNativeRenderer.new()
+    var score_reply: Dictionary = {
+        "anchors": [{"beat":0.0}], "revision":5,
+        "native_beam_fragments":{"source-beam":"authentic"},
+        "native_slurs_complete":true}
+    var installed: Dictionary = NativeScoreAssets.install(renderer, score_reply)
+    if not bool(installed["ok"]) or installed["layout"].has("native_beam_fragments"):
+        failures += 1
+    if not score_reply.has("native_beam_fragments") or renderer.beam_input.is_empty():
+        failures += 1
+    if int(installed["layout"].get("revision",-1)) != 5:
+        failures += 1
+    renderer.accepted = false
+    var rejected: Dictionary = NativeScoreAssets.install(renderer, score_reply)
+    if bool(rejected["ok"]) or rejected.get("error","") != "Source glyphs missing":
+        failures += 1
+    var effects := ScoreEffects.new()
+    effects.marks = [{"id":"canonical"}]
+    effects.hit_pulses = [{"until_ms":49},{"until_ms":51}]
+    effects.wrong_ghosts = [{"until_ms":0},{"until_ms":99}]
+    effects.preview_pulses = [{"until_ms":50}]
+    effects.prune_expired(50)
+    if (effects.marks.size() != 1 or effects.hit_pulses.size() != 1
+            or effects.wrong_ghosts.size() != 1
+            or not effects.preview_pulses.is_empty()):
         failures += 1
     print("NATIVE_REFACTOR_FAILURES:", failures)
     quit(0 if failures == 0 else 1)

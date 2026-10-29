@@ -24,6 +24,7 @@ const PracticeScreen := preload("res://practice_screen.gd")
 const NavigationDrawer := preload("res://navigation_drawer.gd")
 const LibraryCatalogCoordinator := preload("res://library_catalog_coordinator.gd")
 const MidiDeviceCoordinator := preload("res://midi_device_coordinator.gd")
+const NativeScoreAssets := preload("res://native_score_assets.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -697,15 +698,7 @@ func _process(_delta: float) -> void:
             print("PHASE8D_FRAME_INTERVALS:", JSON.stringify(frame_result))
     # Animate short-lived hit pulses between HTTP state samples.
     var ticks: int = Time.get_ticks_msec()
-    for index in range(score_effects.hit_pulses.size() - 1, -1, -1):
-        if int(score_effects.hit_pulses[index].get("until_ms", 0)) <= ticks:
-            score_effects.hit_pulses.remove_at(index)
-    for index in range(score_effects.wrong_ghosts.size() - 1, -1, -1):
-        if int(score_effects.wrong_ghosts[index].get("until_ms", 0)) <= ticks:
-            score_effects.wrong_ghosts.remove_at(index)
-    for index in range(score_effects.preview_pulses.size() - 1, -1, -1):
-        if int(score_effects.preview_pulses[index].get("until_ms", 0)) <= ticks:
-            score_effects.preview_pulses.remove_at(index)
+    score_effects.prune_expired(ticks)
     settings_view.present_busy(action_pending)
     practice_view.present_busy(action_pending)
     lesson_view.present_busy(action_pending)
@@ -1003,33 +996,12 @@ func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: Pack
         # A control request may have advanced the server before its state
         # response reached this window. Wait for that revision's normal poll.
         return
-    # Authentic Verovio contours remain the only musical glyph assets.
-    if not practice_view.stage.renderer.set_verovio_glyphs(
-            parsed.get("native_glyphs", {}),
-            parsed.get("native_note_templates", {}),
-            parsed.get("native_tie_templates", {}),
-            parsed.get("native_chord_templates", {}),
-            parsed.get("native_beam_fragments", {}),
-            parsed.get("native_tuplet_fragments", {}),
-            parsed.get("native_slur_fragments", {}),
-            parsed.get("native_required_slur_pairs", []),
-            bool(parsed.get("native_slurs_complete", false)),
-            parsed.get("native_required_beam_groups", []),
-            bool(parsed.get("native_beams_complete", false))):
-        _score_failed(str(practice_view.stage.renderer.failure_reason))
+    var installed: Dictionary = NativeScoreAssets.install(
+        practice_view.stage.renderer, parsed)
+    if not bool(installed.get("ok",false)):
+        _score_failed(str(installed.get("error","Verovio asset failure")))
         return
-    parsed.erase("native_glyphs")
-    parsed.erase("native_note_templates")
-    parsed.erase("native_tie_templates")
-    parsed.erase("native_chord_templates")
-    parsed.erase("native_beam_fragments")
-    parsed.erase("native_tuplet_fragments")
-    parsed.erase("native_slur_fragments")
-    parsed.erase("native_required_slur_pairs")
-    parsed.erase("native_slurs_complete")
-    parsed.erase("native_required_beam_groups")
-    parsed.erase("native_beams_complete")
-    score_layout = parsed
+    score_layout = installed["layout"]
     living_chords = LivingScore.prepare(score_layout)
     layout_revision = revision
     timeline_model_revision = -1
