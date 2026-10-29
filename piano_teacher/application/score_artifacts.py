@@ -6,6 +6,7 @@ source values, never an engine, learning plan, transport or renderer callback.
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 from dataclasses import dataclass
 
 from ..fingering.projection import authored_projection_sources, project_model
@@ -108,7 +109,9 @@ class ScoreArtifacts:
         fingering_key = ((("fingering_sources", tuple(sorted(fingering_sources))),)
                          if fingering_sources else ())
         key = self.preprocessing.key(
-            "engraving", "readable-midi-engraving-v3", selected.fingerprint, selected.stage_key,
+            "engraving", "readable-midi-engraving-v4",
+            hashlib.sha256(notation.musicxml.encode("utf-8")).hexdigest(),
+            selected.fingerprint, selected.stage_key,
             phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
             selected.hand, piece.bpm, compact,
             tuple((n.source_id, n.start, n.end, n.pitch, n.hand) for n in phrase.notes),

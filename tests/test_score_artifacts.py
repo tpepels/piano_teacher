@@ -127,6 +127,27 @@ def test_selection_identity_keeps_source_hand_stage_and_revision_distinct(
     assert owner.cached_layout(changed) is fresh
 
 
+def test_engraving_cache_invalidates_when_generated_musicxml_changes(
+        artifacts_api, selected, rendering, tmp_path, monkeypatch):
+    """New beam metadata must not reuse an earlier flag-only Verovio SVG."""
+    owner = artifacts_api.ScoreArtifacts(PreprocessingCache(tmp_path))
+    owner.engraving(selected)
+    first_key = owner.engraving_cache_key
+    assert len(rendering) == 1
+
+    compile_original = artifacts_api.build_lesson_score
+
+    def updated_notation(*args, **kwargs):
+        original = compile_original(*args, **kwargs)
+        return replace(original, musicxml=original.musicxml + "<!-- new beams -->")
+
+    monkeypatch.setattr(artifacts_api, "build_lesson_score", updated_notation)
+    updated = artifacts_api.ScoreArtifacts(PreprocessingCache(tmp_path))
+    updated.engraving(selected)
+    assert updated.engraving_cache_key != first_key
+    assert len(rendering) == 2
+
+
 def test_persisted_engraving_and_png_reuse_survive_owner_replacement(
         artifacts_api, selected, rendering, tmp_path, monkeypatch):
     raster_calls = []
