@@ -21,20 +21,16 @@ const HomeScreen := preload("res://home_screen.gd")
 const LessonScreen := preload("res://lesson_screen.gd")
 const LessonSession := preload("res://lesson_session.gd")
 const PracticeScreen := preload("res://practice_screen.gd")
+const NavigationDrawer := preload("res://navigation_drawer.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
-var overlay_root: Control
-var overlay_drawer: PanelContainer
-var navigation_rail: VBoxContainer
-var screen_navigation: Dictionary = {}
+var navigation_drawer = NavigationDrawer.new()
 var settings_view: SettingsScreen
 var home_view: HomeScreen
 var practice_view: PracticeScreen
 var lesson_view: LessonScreen
 var lesson_session := LessonSession.new()
-var drawer_intro: Tween
-var overlay_backdrop: ColorRect
 var screens: Dictionary = {}
 var library_request: HTTPRequest
 var settings_request: HTTPRequest
@@ -415,22 +411,8 @@ func _navigate(screen: String) -> void:
                       "recovering", "loading", "preview_gap"] or starting):
             _send_action({"action": "pause"})
     current_screen = screen
-    for destination in screen_navigation:
-        screen_navigation[destination].set_selected(destination == screen)
     _update_visual_frame_rate(last_state)
-    if overlay_root != null:
-        overlay_root.visible = screen != "practice"
-        if drawer_intro != null and drawer_intro.is_running():
-            drawer_intro.kill()
-        if screen != "practice" and previous_screen == "practice":
-            # A quick deliberate entrance; no continuously animated glass.
-            # Only the drawer fades, not the fullscreen scrim or the score.
-            overlay_drawer.modulate.a = 0.0
-            drawer_intro = create_tween()
-            drawer_intro.tween_property(overlay_drawer, "modulate:a", 1.0, .18) \
-                .set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-        else:
-            overlay_drawer.modulate.a = 1.0
+    navigation_drawer.present(screen, previous_screen)
     if practice_view != null:
         practice_view.set_active(screen == "practice")
     for key in screens:
@@ -447,71 +429,8 @@ func _navigate(screen: String) -> void:
         lesson_session.refresh(Time.get_ticks_msec())
 
 
-func _mount_overlays() -> void:
-    # Dedicated music/settings views share a quiet navigation rail. The
-    # practice scene remains mounted so returning preserves the exact take.
-    overlay_root = Control.new()
-    overlay_root.name = "MusicAndSettingsDrawer"
-    overlay_root.z_index = 10
-    overlay_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    add_child(overlay_root)
-    overlay_backdrop = ColorRect.new()
-    overlay_backdrop.color = Design.NIGHT
-    overlay_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    overlay_root.add_child(overlay_backdrop)
-    overlay_drawer = PanelContainer.new()
-    overlay_drawer.name = "ContextDrawer"
-    overlay_drawer.clip_contents = true
-    overlay_drawer.add_theme_stylebox_override("panel", Design.bordered_surface(Design.PANEL_RECESSED, 14, .25))
-    overlay_root.add_child(overlay_drawer)
-    var shell := HBoxContainer.new()
-    shell.add_theme_constant_override("separation", 0)
-    overlay_drawer.add_child(shell)
-    var rail_panel := PanelContainer.new()
-    rail_panel.add_theme_stylebox_override("panel", Design.surface(Color(Design.NIGHT, .52), 10))
-    shell.add_child(rail_panel)
-    navigation_rail = UI.stack(8)
-    navigation_rail.custom_minimum_size.x = 150
-    rail_panel.add_child(navigation_rail)
-    var brand := UI.title("Piano\nTeacher", 23)
-    brand.custom_minimum_size.y = 100
-    navigation_rail.add_child(brand)
-    for item in [["library", "Library"], ["lesson", "Lesson path"], ["settings", "Settings"]]:
-        var destination: String = item[0]
-        var button := _button(item[1], func(): _navigate(destination), false, "choice")
-        button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        button.custom_minimum_size.x = 0
-        navigation_rail.add_child(button)
-        screen_navigation[destination] = button
-    var spacer := Control.new()
-    spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    navigation_rail.add_child(spacer)
-    navigation_rail.add_child(_button("Practice", func(): _navigate("practice"), true, "primary"))
-    var rail_exit := _button("Exit", _exit_app, false, "danger")
-    rail_exit.tooltip_text = "Close Piano Teacher (Ctrl+Q)"
-    navigation_rail.add_child(rail_exit)
-    var pages := Control.new()
-    pages.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    pages.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    shell.add_child(pages)
-    for page in ["library", "settings", "lesson"]:
-        var content: Control = screens[page]
-        content.reparent(pages, false)
-        content.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    overlay_root.visible = false
-    _resize_overlay_drawer()
-
-
 func _resize_overlay_drawer() -> void:
-    if overlay_drawer == null:
-        return
-    var inset := 18.0 if size.x >= 1100.0 else 8.0
-    overlay_drawer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    overlay_drawer.offset_left = inset
-    overlay_drawer.offset_top = inset
-    overlay_drawer.offset_right = -inset
-    overlay_drawer.offset_bottom = -inset
-    navigation_rail.custom_minimum_size.x = 160.0 if size.x >= 1100.0 else 125.0
+    navigation_drawer.resize(size)
     if library_view != null:
         library_view.apply_viewport(size, ui_scale)
     if lesson_view != null:
@@ -570,7 +489,8 @@ func _build_practice_screen() -> void:
     practice_view.score_retry_requested.connect(_retry_score)
     practice_view.stage.renderer.fingering_change_requested.connect(_on_fingering_change_requested)
     _build_lesson_screen()
-    _mount_overlays()
+    navigation_drawer.mount(self, screens, _button, _navigate, _exit_app)
+    _resize_overlay_drawer()
     _navigate("practice")
     _refresh_score_status()
 
