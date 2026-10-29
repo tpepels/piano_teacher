@@ -55,8 +55,13 @@ def test_resume_moves_each_active_deadline_by_the_same_paused_duration(shift_run
     t.resume(now=111, shift_run_at=shift_run_at)
     assert t.run_at == (100 if shift_run_at else 90)
     assert t.next_at == 116 and t._visual_rewind_at == 110 and t._preparation_at == 112
-    assert t.position(111, phrase_length=8, bpm=60, running=False,
-                      pending_auto_result=False) == frozen
+    resumed = t.position(111, phrase_length=8, bpm=60, running=False,
+                         pending_auto_result=False)
+    # Pause freezes velocity, not the recoverable position or destination.
+    # Resuming restores the same backward motion from exactly that position.
+    assert frozen == (10.5, 0.0, 6)
+    assert resumed[0] == frozen[0] and resumed[2] == frozen[2]
+    assert resumed[1] < 0.0
     assert t.pending_rewind == 2 and t.visual_offset_beats == 8
     assert not t.paused and t.paused_at == 0
 
