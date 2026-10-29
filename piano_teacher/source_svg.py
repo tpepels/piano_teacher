@@ -1,13 +1,14 @@
-"""Locate engraved noteheads and rests using Verovio SVG + its quarter-note timemap.
+"""Original SVG structure, inherited source geometry, and subtree isolation.
 
-Positions are SVG viewBox-relative. Timing is expressed in *notated quarter beats*,
-not wall-clock milliseconds. Tempo can change spacing while preserving beat IDs.
-No guessed linear page offsets are produced when Verovio supplies no matching notes.
+Reads original transforms, ancestry, glyph IDs/origins and staff/ledger paths.
+Asset construction, application layout and raster recognition depend on this
+neutral structural layer; none is imported or implemented here.
 """
 from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+import copy
 import math
 import re
 import xml.etree.ElementTree as ET
@@ -289,3 +290,45 @@ def parse_svg_geometry(svg: str) -> PageGeometry:
     return PageGeometry(width, height, found, system_ends, staff_systems, ink_left, stem_x)
 
 
+def isolate(root: ET.Element, target: ET.Element) -> str:
+    """Keep the original XML graphics and inherited transforms/defs."""
+    clone = copy.deepcopy(root)
+    # Node identity changes on deepcopy: retain the child-index path.
+    path=[]
+    def locate(node):
+        if node is target:
+            return True
+        for index,child in enumerate(node):
+            path.append(index)
+            if locate(child):
+                return True
+            path.pop()
+        return False
+    if not locate(root):
+        raise ValueError("Detached Verovio source node")
+    selected=clone
+    for index in path:
+        selected=selected[index]
+
+    def trim(node):
+        if node is selected:
+            for el in node.iter():
+                for child in list(el):
+                    if set(child.get("class","").split()) & {"bounding-box","content-bounding-box"}:
+                        el.remove(child)
+            return True
+        if node.tag.rsplit("}",1)[-1] in {"defs","style"}:
+            return True
+        yes=False
+        for child in list(node):
+            if trim(child):
+                yes=True
+            else:
+                node.remove(child)
+        return yes
+    trim(clone)
+    return ET.tostring(clone,encoding="unicode")
+
+
+__all__ = ("Matrix", "IDENTITY", "TRANSFORM", "NUMBERS", "PageGeometry",
+           "parse_svg_geometry", "isolate")

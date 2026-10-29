@@ -122,7 +122,7 @@ def extract_beam_fragments(svgs: list[str] | tuple[str,...],
     tempo-dependent page positions replace source-beat timing.
     """
     import cairosvg
-    from .svg_geometry import parse_svg_geometry
+    from ...source_svg import parse_svg_geometry
 
     # Every source attack gets its own anchor, including long beam groups.
     events = {e.get("id"):e for e in model.get("notation_events",[])

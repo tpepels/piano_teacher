@@ -61,8 +61,8 @@ def test_ordinary_atlas_is_exact_original_half_note_engraving(atlas, stem):
     import cairosvg
     import verovio
     from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
-    from piano_teacher.notation.assets.svg import isolate
-    from piano_teacher.notation.assets.svg_geometry import parse_svg_geometry
+    from piano_teacher.source_svg import isolate
+    from piano_teacher.source_svg import parse_svg_geometry
 
     xml = f'''<score-partwise version="4.0"><work><work-title> </work-title></work>
     <movement-title> </movement-title><part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>

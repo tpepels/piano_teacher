@@ -107,7 +107,7 @@ def _only_stem_svg(note_svg: str) -> str:
 def _render_template(toolkit, kind: str, direction: str,
                      head_center_units: float) -> dict:
     import cairosvg
-    from .svg_geometry import parse_svg_geometry
+    from ...source_svg import parse_svg_geometry
 
     if not toolkit.loadData(_one_note_xml(kind, direction)):
         raise RuntimeError(f"Verovio rejected note template: {kind}/{direction}")

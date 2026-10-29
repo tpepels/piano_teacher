@@ -69,7 +69,7 @@ def semantic_tuplets(model: dict) -> dict[tuple[str,...],dict]:
 
 
 # Compatibility import for existing extraction callers.
-from .svg import isolate
+from ...source_svg import isolate
 
 
 def crop_art(svg: str, staff_space: float,
@@ -259,7 +259,7 @@ def _canonical_rest_aliases(pages, model: dict) -> dict[str, str]:
 
 
 def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
-    from .svg_geometry import parse_svg_geometry
+    from ...source_svg import parse_svg_geometry
     desired=semantic_tuplets(model)
     if not desired:
         return {}

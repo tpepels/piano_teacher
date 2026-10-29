@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 import math
 
-from ...notation.assets.svg_geometry import parse_svg_geometry
+from ...source_svg import parse_svg_geometry
 
 
 def layout_from_pages(svgs: list[str], timemap: list[dict], total_beats: float,

@@ -17,8 +17,8 @@ from xml.etree import ElementTree as ET
 import numpy as np
 from PIL import Image
 
-from .assets.svg import isolate
-from .assets.svg_geometry import parse_svg_geometry
+from ..source_svg import isolate
+from ..source_svg import parse_svg_geometry
 from .proof import read_written_score
 from .raster_matching import match_glyph
 from .captured_frames import CapturedFrames

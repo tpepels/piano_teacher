@@ -22,7 +22,7 @@ def reference_clearances():
     import cairosvg
     import verovio
     from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
-    from piano_teacher.notation.assets.svg import isolate
+    from piano_teacher.source_svg import isolate
 
     xml = """<score-partwise version="4.0"><part-list><score-part id="P">
       <part-name>Piano</part-name></score-part></part-list><part id="P">

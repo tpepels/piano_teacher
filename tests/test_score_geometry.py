@@ -1,9 +1,10 @@
 """Synthetic Verovio-shaped SVG/timemap regression tests (no engine required)."""
 import math
 import pytest
+from piano_teacher.source_svg import _transform, _apply
 
 from piano_teacher.score_geometry import (
-    parse_svg_geometry, layout_from_pages, locate_beat, _transform, _apply,
+    parse_svg_geometry, layout_from_pages, locate_beat,
 )
 
 

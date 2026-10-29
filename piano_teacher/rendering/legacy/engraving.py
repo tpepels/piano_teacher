@@ -10,7 +10,7 @@ from pathlib import Path
 from dataclasses import dataclass
 
 from .geometry import layout_from_pages
-from ...notation.assets.svg_geometry import parse_svg_geometry
+from ...source_svg import parse_svg_geometry
 from ...notation.lesson import LessonScore
 from .spacing import space_for_reading, space_for_continuous_reading
 
@@ -85,7 +85,7 @@ def _fade_inactive_staff(svg: str, hand: str, *, note_bindings: dict | None = No
                 # Associate each path with the heads it supports in this
                 # staff's local coordinates. A shared rule is active when any
                 # contributing performer is active, just like a shared head.
-                from ...notation.assets.svg_geometry import (
+                from ...source_svg import (
                     IDENTITY, NUMBERS, _mul, _transform, _apply, _element_position)
                 matrices={}
                 def locate(node,parent):

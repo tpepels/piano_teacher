@@ -87,7 +87,7 @@ def test_actual_verovio_singleton_number_and_bracket_are_retained(kind, chord, b
 
 
 def test_singleton_fragment_retains_its_actual_offset_instead_of_recentering():
-    import piano_teacher.notation.assets.svg_geometry as geometry
+    import piano_teacher.source_svg as geometry
     svg = '''<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400" viewBox="0 0 800 400">
     <g class="tuplet"><g class="tupletNum"><rect x="130" y="100" width="40" height="20"/></g>
     <g class="tupletBracket"><path d="M90 150L90 140L180 140L180 150" fill="none" stroke="black" stroke-width="2"/></g>
@@ -122,7 +122,7 @@ def test_unpaired_ratio_does_not_invent_a_semantic_singleton():
 
 
 def test_idless_graphic_cannot_choose_between_coincident_singletons(monkeypatch):
-    import piano_teacher.notation.assets.svg_geometry as geometry
+    import piano_teacher.source_svg as geometry
     svg = source_svg(bracket=False)
     root = ET.fromstring(svg)
     for node in root.iter():

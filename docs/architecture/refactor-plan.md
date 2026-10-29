@@ -402,3 +402,10 @@ first-party architectural monoliths.
   independent review each passed 11 contracts with no new findings.
 - Independent follow-up on alternate-root hash/parse gate: 46 passed, no
   findings; exit 9, zero-exit diagnostic rejection and timeout 124 confirmed.
+
+- Generic source-SVG parsing/isolation now lives below both asset extraction
+  and independent reference verification, with no duplicate math or production
+  recognition dependency. Removed the two asset-owned helper modules; retained
+  the supported score_geometry facade. Owner 57/146 tests, parent 15 and
+  independent 65 tests passed. Eight definitions/79 callers and all 15 saved
+  snapshots preserve exact behavior; input XML isolation remains nonmutating.
