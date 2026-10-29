@@ -94,6 +94,31 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                     voice_hands[(pi, voice)].add(hand)
                     measure_voice_hands[(pi, mi, voice)].add(hand)
 
+    # A slur may start/end on one tone of a chord. An exercise can omit that
+    # specific pitch while retaining another pitch at the same source onset.
+    # Reanchor the slur to the surviving chord tone, never to a later attack.
+    chord_siblings = {}
+    for pi, part in enumerate(source_parts):
+        for mi, measure in enumerate(part.findall("measure")):
+            active = []
+            for ordinal, original in enumerate(measure):
+                if original.tag != "note" or original.find("pitch") is None:
+                    active = []
+                    continue
+                sid = f"xml-p{pi}-m{mi}-e{ordinal}"
+                if original.find("chord") is None:
+                    active = [sid]
+                else:
+                    active.append(sid)
+                for member in active:
+                    chord_siblings[member] = tuple(active)
+
+    def rendered_slur_anchor(sid):
+        if sid in targets:
+            return sid
+        return next((sibling for sibling in chord_siblings.get(sid, ())
+                     if sibling in targets), None)
+
     # Preserve source-authored beam groups only when ALL their notes survive
     # in the same generated hand, measure and voice with the same written
     # duration. We must not silently replace explicit 8th-note beams with
@@ -192,7 +217,11 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                         started[key] = sid
                     elif mark.get("type") == "stop" and key in started:
                         first = started.pop(key)
-                        if first in targets and sid in targets and hands[first] == hands[sid]:
+                        first_target = rendered_slur_anchor(first)
+                        last_target = rendered_slur_anchor(sid)
+                        if (first_target is not None and last_target is not None
+                                and hands[first_target] == hands[last_target]
+                                and first_target != last_target):
                             paired_slurs.add((first, sid, key))
 
     unrendered = set()
@@ -224,18 +253,9 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                     # Recomputed from the exercise's own note durations.
                     continue
                 if item.tag == "slur":
-                    key = (int(sid.split("-")[1][1:]),
-                           original.findtext("voice", "1"),
-                           item.get("number", "1"))
-                    mark_type = item.get("type")
-                    if mark_type == "start":
-                        keep = any(a == sid and k == key for a,b,k in paired_slurs)
-                    elif mark_type == "stop":
-                        keep = any(b == sid and k == key for a,b,k in paired_slurs)
-                    else:
-                        keep = False
-                    if not keep:
-                        continue
+                    # Inject paired source slurs after other notations, so a
+                    # chord-reduced endpoint can use its retained head.
+                    continue
                 if target_notations is None:
                     target_notations = ET.SubElement(dest, "notations")
                 target_notations.append(deepcopy(item))
@@ -244,6 +264,17 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
         for lyric in original.findall("lyric"):
             dest.append(deepcopy(lyric))
             unrendered.add("note:lyric")
+
+    for first, last, key in paired_slurs:
+        for sid, role in ((first, "start"), (last, "stop")):
+            destination = targets[rendered_slur_anchor(sid)]
+            annotations = destination.find("notations")
+            if annotations is None:
+                annotations = ET.SubElement(destination, "notations")
+            for mark in original_notes[sid].findall("notations/slur"):
+                if (mark.get("type") == role
+                        and mark.get("number", "1") == key[2]):
+                    annotations.append(deepcopy(mark))
 
     # A grace note's XML ordinal is not a graded attack. Project it only
     # when its immediately following scored note is in this lesson. This
