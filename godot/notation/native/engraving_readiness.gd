@@ -5,8 +5,8 @@ extends RefCounted
 const SymbolPainter := preload("res://notation/native/symbol_painter.gd")
 
 static func missing(layout, glyphs, connector_geometry,
-        required_beams: Array, beams_complete: bool,
-        required_slurs: Array, slurs_complete: bool) -> String:
+        expected_beam_groups: Array, beam_extraction_complete: bool,
+        expected_slur_pairs: Array, slur_extraction_complete: bool) -> String:
     if not beam_extraction_complete:
         return "Source Verovio beam extraction failed"
     for key in expected_beam_groups:
