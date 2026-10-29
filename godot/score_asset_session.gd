@@ -12,6 +12,7 @@ signal status_changed(values: Dictionary)
 signal action_requested(command: Dictionary)
 
 const MODEL_RETRY_MS := 2000
+const NativeScoreAssets := preload("res://native_score_assets.gd")
 const ASSET_KEYS := ["native_glyphs","native_note_templates","native_tie_templates",
     "native_chord_templates","native_beam_fragments","native_tuplet_fragments",
     "native_slur_fragments","native_required_slur_pairs","native_slurs_complete",
@@ -91,6 +92,15 @@ func poll(now_ms: int) -> void:
     if _loaded and score_error.is_empty() and timeline_model_revision != revision and \
             not timeline_model_pending and now_ms >= timeline_model_retry_after_ms:
         request_model()
+
+func pending_id(kind: String) -> int:
+    return int(_requests.get(kind,{}).get("id",-1))
+
+func fail(message: String) -> void:
+    _fail(message)
+
+func finish_native_score() -> void:
+    _finish_native_score()
 
 func request_layout() -> bool:
     if layout_pending or not _loaded:
@@ -179,17 +189,11 @@ func _complete_layout(code: int, body: PackedByteArray) -> void:
         return
     if not is_instance_valid(_renderer):
         return
-    if not _renderer.set_verovio_glyphs(parsed.get("native_glyphs",{}),
-            parsed.get("native_note_templates",{}),parsed.get("native_tie_templates",{}),
-            parsed.get("native_chord_templates",{}),parsed.get("native_beam_fragments",{}),
-            parsed.get("native_tuplet_fragments",{}),parsed.get("native_slur_fragments",{}),
-            parsed.get("native_required_slur_pairs",[]),bool(parsed.get("native_slurs_complete",false)),
-            parsed.get("native_required_beam_groups",[]),bool(parsed.get("native_beams_complete",false))):
-        _fail(str(_renderer.failure_reason))
+    var installed: Dictionary = NativeScoreAssets.install(_renderer, parsed)
+    if not bool(installed.get("ok",false)):
+        _fail(str(installed.get("error","Authentic engraving unavailable")))
         return
-    for key in ASSET_KEYS:
-        parsed.erase(key)
-    _layout = parsed
+    _layout = installed["layout"]
     layout_revision = revision
     timeline_model_revision = -1
     score_error = ""
