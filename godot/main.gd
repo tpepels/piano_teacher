@@ -141,8 +141,6 @@ func _ready() -> void:
     action_request = _new_request(_on_action)
     action_request.timeout = 90.0
     device_request = _new_request(_on_devices)
-    library_catalog.configure(URL, library_view, home_view,
-        _decode_json, _http_failure, _send_post)
     library_catalog.attach_requests(
         _new_request(library_catalog.on_catalog),
         _new_request(library_catalog.on_health))
@@ -453,6 +451,8 @@ func _build_interface() -> void:
     _build_library_screen()
     _build_settings_screen()
     _build_practice_screen()
+    library_catalog.configure(URL, library_view, home_view,
+        _decode_json, _http_failure, _send_post)
 
 
 func _build_home_screen() -> void:
@@ -589,8 +589,17 @@ func _retry_score() -> void:
 func _request_library() -> void:
     library_catalog.request_catalog()
 
+func _on_library(result: int, code: int,
+        headers: PackedStringArray, body: PackedByteArray) -> void:
+    # Keep the existing application callback contract for in-process clients.
+    library_catalog.on_catalog(result, code, headers, body)
+
 func _request_library_health() -> void:
     library_catalog.request_health()
+
+func _on_library_health(result: int, code: int,
+        headers: PackedStringArray, body: PackedByteArray) -> void:
+    library_catalog.on_health(result, code, headers, body)
 
 func _start_library_health() -> void:
     library_catalog.start_health(action_pending)
