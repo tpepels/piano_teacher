@@ -188,6 +188,37 @@ def test_midi_beaming_model_is_derived_before_exercise_simplification():
     assert plan.variants[-1].notes == notes
 
 
+def test_both_hands_share_one_rhythmic_attack_budget():
+    from piano_teacher.musical_groups import MusicalGroup, MusicalGrouping
+
+    notes = tuple(Note(i*.25, (i+1)*.25, 60 + i, 0, 0,
+                       "right", f"r{i}", voice="r")
+                  for i in range(12)) + tuple(
+                  Note(i*.25, (i+1)*.25, 48 + i, 1, 0,
+                       "left", f"l{i}", voice="l")
+                  for i in range(12))
+    phrase = Phrase(1, 1, 1, 0., 4., notes)
+    groups = (
+        MusicalGroup("beam", tuple(frozenset({i}) for i in range(4))),
+        MusicalGroup("beam", tuple(frozenset({i}) for i in range(4, 8))),
+        MusicalGroup("beam", tuple(frozenset({i}) for i in range(8, 12))),
+        MusicalGroup("beam", tuple(frozenset({12+i}) for i in range(4))),
+        MusicalGroup("beam", tuple(frozenset({12+i}) for i in range(4, 8))),
+        MusicalGroup("beam", tuple(frozenset({12+i}) for i in range(8, 12))),
+    )
+    grouping = MusicalGrouping(groups, {id(n): i for i, n in enumerate(notes)})
+    variants = generate_variants(phrase, "both", groups=grouping.for_phrase(
+        phrase, "both"), max_attacks=SETTINGS.focus_max_attacks)
+    assert [_onset_set(v.notes) for v in variants] == [
+        {i*.25 for i in range(4)},
+        {i*.25 for i in range(8)},
+        {i*.25 for i in range(12)}]
+    for stage in variants:
+        times = _onset_set(stage.notes)
+        assert all({n.hand for n in stage.notes if n.start == at} ==
+                   {"right", "left"} for at in times)
+
+
 def test_thinned_source_chord_keeps_its_authored_beam():
     from piano_teacher.notation.lesson import build_lesson_score
     from piano_teacher.notation.model import build_score_model
