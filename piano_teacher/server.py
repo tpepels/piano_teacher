@@ -48,6 +48,7 @@ from .live_input_view import LiveInputView
 from .instruction import next_full_attempt
 from .learner_state import guided_units, next_guided_unit, placement_candidate
 from .progress_repository import ProgressRepository
+from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
 
 
@@ -139,6 +140,7 @@ class PracticeEngine:
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
         self.learner_store = self.progress.learner_store
+        self.learner_progress = LearnerProgress(self.learner_store)
 
     def _midi_lost(self, reason: str = "device_disconnected") -> None:
         """Cancel session state after detachment and before closing the input."""
@@ -425,17 +427,12 @@ class PracticeEngine:
         self._guided_prepared=False
 
     def _learner_saved(self, stage_key: str | None = None) -> dict:
-        if self.fingerprint and self.plan is not None:
-            return self.learner_store.read(self.fingerprint, stage_key or self.plan.identity)
-        # Older in-process clients can bind an unsaved plan directly.
-        return {"resume_unit": None, "completed_units": [], "trouble_units": [],
-                "skip_status": "active", "skip_reason": ""}
+        return self.learner_progress.saved(
+            self.plan, fingerprint=self.fingerprint, stage_key=stage_key)
 
     def _guided_unit(self) -> dict | None:
-        if self.plan is None or self.mode != "learn" or self.guided_range is None:
-            return None
-        return next((unit for unit in guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)
-                     if (unit["start_beat"], unit["end_beat"]) == self.guided_range), None)
+        return self.learner_progress.guided_unit(
+            self.plan, mode=self.mode, guided_range=self.guided_range)
 
     def _save_guided_preparation(self):
         if self._guided_prepared or self.teaching is None or self.mode != "learn":
@@ -450,22 +447,9 @@ class PracticeEngine:
         self._guided_prepared = True
 
     def _learner_snapshot(self) -> dict:
-        p = self.plan
-        units = guided_units(p.active_variant, p.piece.bar_boundaries)
-        saved = self._learner_saved()
-        saved["trouble_units"] = [{key: value for key, value in spot.items() if key != "stage_key"}
-                                 for spot in self._valid_trouble_spots(stage_key=p.identity)]
-        current = self._guided_unit()
-        completed = saved["completed_units"]
-        prepared = sum(any(all(unit[field] == previous.get(field)
-                               for field in ("start_beat", "end_beat", "source_indices"))
-                           for previous in completed) for unit in units)
-        next_state = saved if current is None else {**saved, "resume_unit": None,
-                                                    "completed_units": completed+[current]}
-        following = next_guided_unit(p.active_variant, p.piece.bar_boundaries, next_state)
-        return {**saved, "course_guided": self.course_guided, "prepared_units": prepared,
-                "total_units": len(units), "current_unit": current, "next_unit": following,
-                "unit_number": next((i+1 for i, unit in enumerate(units) if unit == current), 0)}
+        return self.learner_progress.snapshot(
+            self.plan, fingerprint=self.fingerprint, mode=self.mode,
+            guided_range=self.guided_range, course_guided=self.course_guided)
 
     def _begin_course_stage(self, *, bump_revision: bool = True, explicit_learn: bool = False):
         if self.plan.exercise.kind == "perform" and not explicit_learn:
@@ -517,27 +501,8 @@ class PracticeEngine:
         self._save()
 
     def _valid_trouble_spots(self, *, stage_key: str | None = None) -> list[dict]:
-        if self.plan is None or not self.fingerprint:
-            return []
-        p = self.plan
-        steps = {step.key: step for step in p.lesson_steps}
-        canonical = {}
-        valid = []
-        for stored in self.learner_store.trouble_for_piece(self.fingerprint):
-            key = stored["stage_key"]
-            step = steps.get(key)
-            if step is None or (stage_key is not None and stage_key != key):
-                continue
-            if key not in canonical:
-                variant = next((variant for variant in p._stage_variants(p.exercises[step.exercise_index], step.hand)
-                                if variant.level == step.level), None)
-                canonical[key] = guided_units(variant, p.piece.bar_boundaries) if variant else ()
-            unit = next((unit for unit in canonical[key]
-                         if all(unit[field] == stored.get(field)
-                                for field in ("start_beat", "end_beat", "source_indices"))), None)
-            if unit is not None:
-                valid.append({**stored, **unit})
-        return valid
+        return self.learner_progress.valid_trouble_spots(
+            self.plan, fingerprint=self.fingerprint, stage_key=stage_key)
 
     def _revisit_trouble(self, stage_key, start_beat):
         # Saved evidence can outlive a course revision. Validate the exact
@@ -564,19 +529,11 @@ class PracticeEngine:
         self._save()
 
     def _record_saved_trouble(self, phrase: Phrase, result, *, start: float, end: float, errors: int):
-        if not self.fingerprint:
-            return
-        unit = next((unit for unit in guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)
-                     if unit["start_beat"] == start and unit["end_beat"] == end), None)
-        # An extra during a silent unit is still in the performance summary,
-        # but cannot become a guided key-finding task without source attacks.
-        if unit is None:
-            return
-        pitches = sorted({entry.note.pitch for entry in result.notes if entry.status != "correct"
-                          and phrase.start+start <= entry.note.start < phrase.start+end})
-        self.learner_store.record_trouble(self.fingerprint, self.plan.identity, unit,
-                                         errors=errors, pitches=pitches)
-        self.learner_store.save_resume(self.fingerprint, self.plan.identity, unit)
+        if self.plan is not None:
+            self.learner_progress.record_saved_trouble(
+                self.plan, fingerprint=self.fingerprint,
+                phrase_start=phrase.start, assessed_notes=result.notes,
+                start=start, end=end, errors=errors)
 
     def _reset_trouble(self):
         self._trouble_key = None
@@ -1732,29 +1689,9 @@ class PracticeEngine:
             return self.score_artifacts.geometry(self._score_selection(), native_notes=native_notes)
 
     def lesson_overview(self) -> dict:
-        """Full readable curriculum, with unique per-hand/per-level progress."""
         with self.lock:
-            if self.plan is None:
-                raise ValueError("Open a piece first")
-            p = self.plan
-            return {
-                "trouble_spots": self._valid_trouble_spots(),
-                "route_version": p.route_version,
-                "piece_fingerprint": self.fingerprint,
-                "current_step": p.lesson_step_number,
-                "total_steps": len(p.lesson_steps),
-                "completed_steps": p.lesson_steps_mastered,
-                "steps": [
-                    {"number": i+1, "exercise": step.exercise_index+1,
-                     "hand": step.hand, "level": step.level, "key": step.key,
-                     "kind": step.kind, "first_bar": step.first_bar,
-                     "last_bar": step.last_bar, "required_notes": step.required_notes,
-                     "completed": step.key in p.mastered,
-                     "skip_status": self._learner_saved(step.key)["skip_status"],
-                     "skip_reason": self._learner_saved(step.key)["skip_reason"]}
-                    for i, step in enumerate(p.lesson_steps)
-                ],
-            }
+            return self.learner_progress.lesson_overview(
+                self.plan, fingerprint=self.fingerprint)
 
 
 # Keep the original public Handler import stable for clients and tests.

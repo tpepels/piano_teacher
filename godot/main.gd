@@ -22,6 +22,7 @@ const LessonScreen := preload("res://lesson_screen.gd")
 const LessonSession := preload("res://lesson_session.gd")
 const PracticeScreen := preload("res://practice_screen.gd")
 const NavigationDrawer := preload("res://navigation_drawer.gd")
+const LibraryCatalogCoordinator := preload("res://library_catalog_coordinator.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -32,13 +33,9 @@ var practice_view: PracticeScreen
 var lesson_view: LessonScreen
 var lesson_session := LessonSession.new()
 var screens: Dictionary = {}
-var library_request: HTTPRequest
+var library_catalog = LibraryCatalogCoordinator.new()
 var settings_request: HTTPRequest
-var library_pending := false
 var library_view: LibraryScreen
-var library_health_running := false
-var library_health_request: HTTPRequest
-var library_health_pending := false
 var settings_pending := false
 var preferences: Dictionary = {}
 var page_margins: Array[MarginContainer] = []
@@ -144,8 +141,11 @@ func _ready() -> void:
     action_request = _new_request(_on_action)
     action_request.timeout = 90.0
     device_request = _new_request(_on_devices)
-    library_request = _new_request(_on_library)
-    library_health_request = _new_request(_on_library_health)
+    library_catalog.configure(URL, library_view, home_view,
+        _decode_json, _http_failure, _send_post)
+    library_catalog.attach_requests(
+        _new_request(library_catalog.on_catalog),
+        _new_request(library_catalog.on_health))
     settings_request = _new_request(_on_settings)
     lesson_request = _new_request(_on_lesson)
     state_poll_timer = Timer.new()
@@ -177,7 +177,7 @@ func _ready() -> void:
     health_timer.wait_time = 1.2
     health_timer.autostart = true
     health_timer.timeout.connect(func():
-        if current_screen == "library" and library_health_running:
+        if current_screen == "library" and library_catalog.health_running:
             _request_library_health())
     add_child(health_timer)
     set_process(true)
@@ -587,51 +587,13 @@ func _retry_score() -> void:
     _request_layout()
 
 func _request_library() -> void:
-    if library_pending or library_request == null:
-        return
-    library_pending = true
-    if library_request.request(URL + "/library") != OK:
-        library_pending = false
-
-func _on_library(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-    library_pending = false
-    if code != 200:
-        library_view.present_request_error(_http_failure(code, body))
-        home_view.present_catalog_unavailable()
-        return
-    var parsed = _decode_json(body)
-    if typeof(parsed) != TYPE_DICTIONARY:
-        return
-    library_view.present_catalog(parsed)
-    home_view.present_catalog(parsed)
-    _request_library_health()
-
+    library_catalog.request_catalog()
 
 func _request_library_health() -> void:
-    if library_health_request == null or library_health_pending:
-        return
-    library_health_pending = true
-    if library_health_request.request(URL + "/library/health") != OK:
-        library_health_pending = false
-
+    library_catalog.request_health()
 
 func _start_library_health() -> void:
-    if action_pending or library_health_running:
-        return
-    library_view.present_health_message("Starting music file check…")
-    _send_post("/library/health", {})
-
-
-func _on_library_health(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-    library_health_pending = false
-    if code != 200:
-        library_view.present_health_message("Cannot check music files: " + _http_failure(code, body))
-        return
-    var parsed: Variant = _decode_json(body)
-    if not parsed is Dictionary:
-        return
-    library_health_running = bool(parsed.get("running", false))
-    library_view.present_health(parsed)
+    library_catalog.start_health(action_pending)
 
 
 func _open_library_piece(identifier: String, resume_saved := false) -> void:
