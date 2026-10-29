@@ -87,10 +87,10 @@ func run() -> void:
         if args.size() > 1 and DisplayServer.get_name() != "headless":
             RenderingServer.force_draw()
             root.get_texture().get_image().save_png(args[1] + "/" + args[0] + "-" + page + ".png")
-    app._show_open_picker({"title":"Imported MIDI", "piece_last_bar":77, "selected_start_bar":1})
+    app.practice_view.show_source_picker({"title":"Imported MIDI", "piece_last_bar":77, "selected_start_bar":1})
     for frame in range(8):
         await process_frame
-    check(app.open_picker.panel.get_global_rect().position.x >= 0 and app.open_picker.panel.get_global_rect().end.x <= root.get_visible_rect().size.x,
+    check(app.practice_view.open_picker.panel.get_global_rect().position.x >= 0 and app.practice_view.open_picker.panel.get_global_rect().end.x <= root.get_visible_rect().size.x,
         "Starting point fits horizontally")
     if args.size() > 1 and DisplayServer.get_name() != "headless":
         RenderingServer.force_draw()

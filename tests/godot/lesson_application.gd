@@ -23,7 +23,7 @@ func run() -> void:
         check(app.lesson_calls == 2,"Reset invalidates the lesson session through the real acknowledgement route")
         app.action_pending = false
         app._on_lesson(0,200,PackedStringArray(),JSON.stringify({"piece_fingerprint":"song","steps":[{"number":1},{"number":2}]}).to_utf8_buffer())
-        app.lesson_steps.picker.item_selected.emit(1)
+        app.practice_view.stage.steps.picker.item_selected.emit(1)
         check(app.posts.back().payload == {"action":"select_step","number":2}, "Practice step selection routes an explicit numeric command")
     app.free()
     print("LESSON_FAILURES:",failures.size())

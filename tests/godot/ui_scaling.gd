@@ -75,18 +75,18 @@ func measure(app: Control, dimensions: Vector2i) -> Dictionary:
     app._navigate("practice")
     await settle()
     var result := {
-        "transport_width": screen_rect(app.start_button).size.x,
-        "transport_height": screen_rect(app.start_button).size.y,
-        "transport_font": screen_font(app.start_button),
-        "navigation_height": screen_rect(app.practice_music_button).size.y,
-        "navigation_font": screen_font(app.practice_music_button),
-        "input_lamp_width": screen_rect(app.game_input_indicator).size.x,
-        "input_lamp_height": screen_rect(app.game_input_indicator).size.y,
+        "transport_width": screen_rect(app.practice_view.start_button).size.x,
+        "transport_height": screen_rect(app.practice_view.start_button).size.y,
+        "transport_font": screen_font(app.practice_view.start_button),
+        "navigation_height": screen_rect(app.practice_view.practice_music_button).size.y,
+        "navigation_font": screen_font(app.practice_view.practice_music_button),
+        "input_lamp_width": screen_rect(app.practice_view.game_input_indicator).size.x,
+        "input_lamp_height": screen_rect(app.practice_view.game_input_indicator).size.y,
         # The custom lamp paints at FONT_SIZE=13 rather than theme font size.
-        "input_lamp_font": 13.0 * screen_transform(app.game_input_indicator).y.length(),
+        "input_lamp_font": 13.0 * screen_transform(app.practice_view.game_input_indicator).y.length(),
     }
-    for button in [app.start_button, app.practice_retry_button, app.listen_button,
-            app.practice_music_button, app.practice_settings_button]:
+    for button in [app.practice_view.start_button, app.practice_view.practice_retry_button, app.practice_view.listen_button,
+            app.practice_view.practice_music_button, app.practice_view.practice_settings_button]:
         check(in_screen(button, dimensions), "%s: practice action fits: %s" % [dimensions, button.text])
     app._navigate("library")
     await settle()
@@ -105,29 +105,29 @@ func measure(app: Control, dimensions: Vector2i) -> Dictionary:
     result["settings_font"] = screen_font(app.settings_view.device_button)
     check(in_screen(app.settings_view.device_button, dimensions), "%s: MIDI device control fits" % dimensions)
 
-    app.pause_sheet.present({"paused":true, "mode":"practice", "bpm":80,
+    app.practice_view.pause_sheet.present({"paused":true, "mode":"practice", "bpm":80,
         "hand":"right", "hands":["right", "left", "both"], "first_bar":1, "last_bar":4})
     await settle()
-    result["pause_width"] = screen_rect(app.pause_sheet.modal_panel).size.x
-    result["pause_height"] = screen_rect(app.pause_sheet.modal_panel).size.y
-    result["pause_font"] = screen_font(app.pause_sheet.resume_button)
-    check(in_screen(app.pause_sheet.modal_panel, dimensions), "%s: pause modal fits" % dimensions)
-    check(in_screen(app.pause_sheet.resume_button, dimensions), "%s: pause Resume action fits" % dimensions)
-    app.pause_sheet.present({})
+    result["pause_width"] = screen_rect(app.practice_view.pause_sheet.modal_panel).size.x
+    result["pause_height"] = screen_rect(app.practice_view.pause_sheet.modal_panel).size.y
+    result["pause_font"] = screen_font(app.practice_view.pause_sheet.resume_button)
+    check(in_screen(app.practice_view.pause_sheet.modal_panel, dimensions), "%s: pause modal fits" % dimensions)
+    check(in_screen(app.practice_view.pause_sheet.resume_button, dimensions), "%s: pause Resume action fits" % dimensions)
+    app.practice_view.pause_sheet.present({})
 
     # AcceptDialog/PopupMenu are Windows, unlike the Control-based pause sheet.
     # Embedded windows inherit the parent's final transform; native windows
     # must provide their own content scale and appropriately sized surface.
-    app.review_sheet.open_review({"accuracy_percent":75, "correct":3, "total":4,
+    app.practice_view.review_sheet.open_review({"accuracy_percent":75, "correct":3, "total":4,
         "missed":1, "sections":[]})
     await settle()
-    result["review_width"] = window_size(app.review_sheet).x
-    result["review_height"] = window_size(app.review_sheet).y
-    result["review_font"] = float(app.review_sheet.summary_label.get_theme_font_size("font_size")) \
-        * window_scale(app.review_sheet)
-    check(window_size(app.review_sheet).x <= dimensions.x + 2 \
-        and window_size(app.review_sheet).y <= dimensions.y + 2, "%s: review dialog fits" % dimensions)
-    app.review_sheet.hide()
+    result["review_width"] = window_size(app.practice_view.review_sheet).x
+    result["review_height"] = window_size(app.practice_view.review_sheet).y
+    result["review_font"] = float(app.practice_view.review_sheet.summary_label.get_theme_font_size("font_size")) \
+        * window_scale(app.practice_view.review_sheet)
+    check(window_size(app.practice_view.review_sheet).x <= dimensions.x + 2 \
+        and window_size(app.practice_view.review_sheet).y <= dimensions.y + 2, "%s: review dialog fits" % dimensions)
+    app.practice_view.review_sheet.hide()
     app.settings_view.present_devices(["Digital Piano (MIDI)"], "", true)
     await settle()
     result["device_menu_font"] = float(app.settings_view.device_menu.get_theme_font_size("font_size")) * window_scale(app.settings_view.device_menu)

@@ -35,7 +35,7 @@ func draw_frame() -> void:
         app.last_state.phase = "count_in" if app._transport_beat_now() < 0.0 else "playing"
     app._process(0.0)
     clock_matched = clock_matched and app.visual_transport_clock.matches(app.last_state) \
-        and absf(app.timeline_preview.clock_beat - app._transport_beat_now()) < .01
+        and absf(app.practice_view.stage.renderer.clock_beat - app._transport_beat_now()) < .01
     await process_frame
     await process_frame
 
@@ -48,12 +48,12 @@ func set_state(beat: float, running: bool, paused := false, play_from := 0.0) ->
         "running":running, "paused":paused, "clock_beat":beat,
         "bpm":120.0, "play_from_beat":play_from,
         "count_in_beats":.5, "count_in_bar_beats":4,
-        "duration_beats":app.timeline_preview.timeline.duration_beats}
+        "duration_beats":app.practice_view.stage.renderer.timeline.duration_beats}
     app.last_state_tick = Time.get_ticks_msec()
     app.visual_transport_clock.accept(app.last_state, app.last_state_tick, app.last_state_tick)
 
 func capture(label: String) -> Dictionary:
-    var view = app.timeline_preview
+    var view = app.practice_view.stage.renderer
     var heads: Array = []
     for event in view.layout.ordered_events:
         var id: String = str(event.get("id", ""))
@@ -78,7 +78,7 @@ func run() -> void:
     root.add_child(app)
     app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     app._navigate("practice")
-    if app.timeline_preview == null or app.timeline_preview.get_script() != load(
+    if app.practice_view.stage.renderer == null or app.practice_view.stage.renderer.get_script() != load(
             "res://notation/native/view.gd"):
         push_error("Production camera must use the app's native notation view")
         quit(1)
@@ -92,7 +92,7 @@ func run() -> void:
         push_error("Real fixture assets and model must prepare the production view")
         quit(1)
         return
-    var view = app.timeline_preview
+    var view = app.practice_view.stage.renderer
     var timeline = view.timeline
     var events: Array = view.layout.ordered_events
     var textures: Dictionary = view.glyphs.textures.duplicate()
@@ -152,7 +152,7 @@ func run() -> void:
         "lead_samples":lead_samples, "playing_samples":playing_samples,
         "pause_frozen":paused.heads == frozen.heads and paused.clock == frozen.clock,
         "resume_advanced":float(advanced.clock) > float(resumed.clock),
-        "clock_matched":clock_matched, "clipped":app.score_frame.clip_contents,
+        "clock_matched":clock_matched, "clipped":app.practice_view.stage.score_frame.clip_contents,
         "same_timeline":view.timeline == timeline,
         "same_index":is_same(view.layout.ordered_events, events),
         "same_atlas":view.glyphs.textures == textures,

@@ -500,27 +500,50 @@ def test_correction_during_listen_audio_render_preserves_readiness(engine, music
     monkeypatch.setattr(DemoAudioCache, "render", delayed)
     monkeypatch.setattr(sample_piano, "find_soundfont", lambda: None)
     # Render real PCM at the supported low sample rate to keep this race test fast.
-    engine._demo_cache = DemoAudioCache(engine._data_dir / "demo-audio", sample_rate=8000)
+    engine.listen.cache = DemoAudioCache(engine._data_dir / "demo-audio", sample_rate=8000)
     engine.control("listen")
     try:
         assert started.wait(10)
-        token, revision = engine.demo["token"], engine.score_revision
+        token, revision = engine.listen.snapshot()["token"], engine.score_revision
         source_id, original = next(iter(_fingers(engine.semantic_score()).items()))
         engine.correct_fingering(source_id, original["finger"])
     finally:
         release.set()
-        engine._demo_thread.join(timeout=20)
-    assert not engine._demo_thread.is_alive()
-    assert engine.demo["token"] == token and engine.demo["audio_available"]
+        engine.listen.thread.join(timeout=20)
+    assert not engine.listen.thread.is_alive()
+    assert engine.listen.snapshot()["token"] == token and engine.listen.snapshot()["audio_available"]
     assert engine.score_revision == revision + 1
     # DemoPlayer retains the audio token and the revision at which its WAV
     # request began. A fingering-only score update must accept that audio ack.
     engine.control("demo_ready", token=token, revision=revision)
-    assert engine.demo["ready"] and not engine.running
+    assert engine.listen.snapshot()["ready"] and not engine.running
     engine.control("score_ready", revision=revision)
     assert not engine.running
     engine.control("score_ready", revision=engine.score_revision)
     assert engine.running and engine.mode == "listen"
+
+
+def test_correction_after_failed_listen_render_does_not_restore_loading(engine, music):
+    engine.load(str(music))
+
+    class FailedCache:
+        def render(self, variant, bpm):
+            raise OSError('Controlled unavailable audio cache')
+
+    engine.listen.cache = FailedCache()
+    engine.control('listen')
+    engine.listen.thread.join(3)
+    assert not engine.listen.thread.is_alive()
+    source_id, original = next(iter(_fingers(engine.semantic_score()).items()))
+    # No state poll has consumed the worker's failure before this correction.
+    revision = engine.score_revision
+    engine.correct_fingering(source_id, original['finger'])
+    state = engine.state()
+    assert state['revision'] == revision + 1
+    assert state['phase'] == 'ready' and engine.awaiting_score_revision is None
+    assert state['demo']['error'] == state['feedback']
+    engine.control('score_ready', revision=state['revision'])
+    assert not engine.state()['running']
 
 
 def test_load_inference_keeps_state_responsive_and_rejects_queued_old_piece_edit(

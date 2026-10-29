@@ -46,7 +46,7 @@ func probe() -> void:
         push_error(error)
         quit(1)
         return
-    var view = app.timeline_preview
+    var view = app.practice_view.stage.renderer
     var note: Dictionary = app.score_layout.notes[0]
     var later_pass_seen := false
     for beat in [-.1, 1.1]:

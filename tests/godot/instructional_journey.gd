@@ -42,8 +42,8 @@ func press(text: String) -> void:
     check(false, "Visible enabled control missing: " + text)
 
 func score_ready() -> bool:
-    return app.timeline_preview != null and app._native_score_ready() \
-        and app.timeline_preview.is_visible_in_tree() and not app.layout_pending \
+    return app.practice_view.stage.renderer != null and app._native_score_ready() \
+        and app.practice_view.stage.renderer.is_visible_in_tree() and not app.layout_pending \
         and not app.timeline_model_pending
 
 func phase() -> String:
@@ -59,7 +59,7 @@ func visible_instruction() -> bool:
     return false
 
 func position(note: Dictionary) -> Vector2:
-    var renderer = app.timeline_preview
+    var renderer = app.practice_view.stage.renderer
     if renderer != null and renderer.drawn_noteheads.has(str(note.id)):
         return renderer.get_global_transform_with_canvas() * \
             Vector2(renderer.drawn_noteheads[str(note.id)])
@@ -73,7 +73,7 @@ func track(beat: float) -> void:
     check(false, "Displayed generated source has note at beat " + str(beat))
 
 func note_in_view(beat: float) -> bool:
-    var renderer = app.timeline_preview
+    var renderer = app.practice_view.stage.renderer
     if int(renderer.transport_id) != int(app.last_state.get("transport_id", -1)):
         return false
     # A tempo reload can retain the previous feedback frame's draw map
@@ -84,7 +84,7 @@ func note_in_view(beat: float) -> bool:
         return false
     for note in app.score_layout.get("notes", []):
         if absf(float(note.get("beat", -100)) - beat) < .01:
-            return app.score_frame.get_global_rect().grow(-25).has_point(position(note))
+            return app.practice_view.stage.score_frame.get_global_rect().grow(-25).has_point(position(note))
     return false
 
 func ink(picture: Image, point: Vector2) -> int:
@@ -103,8 +103,8 @@ func capture(label: String, beat: float = -999) -> Dictionary:
     var picture := root.get_texture().get_image()
     check(picture.save_png(folder+"/"+label+".png") == OK, "Save actual rendered " + label)
     var scale := Vector2(picture.get_size()) / root.get_visible_rect().size
-    var panel: Rect2 = app.score_frame.get_global_rect()
-    var pause_modal: Control = app.get("pause_sheet")
+    var panel: Rect2 = app.practice_view.stage.score_frame.get_global_rect()
+    var pause_modal: Control = app.practice_view.pause_sheet
     var obscured := pause_modal != null and pause_modal.is_visible_in_tree()
     var selected: Dictionary = {}
     if beat > -998:
@@ -132,7 +132,7 @@ func capture(label: String, beat: float = -999) -> Dictionary:
         "streak":app.last_state.get("streak", -1), "mastered":app.last_state.get("mastered", -1),
         "next_action":app.last_state.get("next_action", ""),
         "transition":app.last_state.get("transition_in_seconds"),
-        "retry_range":app.last_state.get("retry_range"), "score_height":app.score_frame.size.y,
+        "retry_range":app.last_state.get("retry_range"), "score_height":app.practice_view.stage.score_frame.size.y,
         "notation_occluded_by_pause":obscured}
     if str(app.last_state.get("mode","")) == "listen":
         entry["audio_playing"] = app.demo_player.player.playing
@@ -145,16 +145,16 @@ func capture(label: String, beat: float = -999) -> Dictionary:
         entry["notehead_ink"] = ink(picture, point)
         check(int(entry.notehead_ink) >= 8, "Actual notehead pixels exist in " + label)
     if str(app.last_state.get("mode", "")) == "practice":
-        var renderer = app.timeline_preview
+        var renderer = app.practice_view.stage.renderer
         var line: Vector2 = renderer.get_global_transform_with_canvas() * Vector2(
             renderer.size.x * renderer.PLAYHEAD_FRACTION, 0)
         entry["line_x"] = line.x*scale.x
         check(absf(line.x-(panel.position.x+panel.size.x*.42)) < 2,
             "Timing line remains fixed in " + label)
     if not obscured:
-        check(app.start_button.is_visible_in_tree() and app.practice_retry_button.is_visible_in_tree() and app.listen_button.is_visible_in_tree(),
+        check(app.practice_view.start_button.is_visible_in_tree() and app.practice_view.practice_retry_button.is_visible_in_tree() and app.practice_view.listen_button.is_visible_in_tree(),
             "Three transport controls stay visible in " + label)
-        check(root.get_visible_rect().encloses(app.start_button.get_global_rect()),
+        check(root.get_visible_rect().encloses(app.practice_view.start_button.get_global_rect()),
             "Primary control fits desktop during " + label)
     if phase() in ["recovering", "feedback", "paused"]:
         check(visible_instruction(), "The next musical action is actually displayed in " + label)
@@ -249,8 +249,8 @@ func run() -> void:
     var piece := imported_row()
     check(str(piece.get_meta("library_title", "")).contains("Imported two-measure lesson"), "Library shows the user-imported MIDI")
     piece.pressed.emit()
-    await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
-    app.open_picker.mode_choice.select(0)
+    await wait_for(func(): return app.practice_view.open_picker.visible, "starting-point dialog opens")
+    app.practice_view.open_picker.mode_choice.select(0)
     press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait",
         "import enters source-generated Learn")
@@ -265,10 +265,10 @@ func run() -> void:
     await wait_for(func(): return score_ready() and phase() == "guided_wait", "new guided engraving ready")
     await capture("01-learn-ready", 0)
     print("INSTRUCTIONAL_STAGE:wrong-ready")
-    await wait_for(func(): return app.hint_keyboard.is_visible_in_tree(), "wrong note reveals contextual keyboard")
+    await wait_for(func(): return app.practice_view.stage.keyboard.is_visible_in_tree(), "wrong note reveals contextual keyboard")
     await capture("02-learn-wrong-hint", 1)
-    check(app.hint_keyboard._expected_label.text.contains("C5"), "Hint names actual expected C5")
-    check(app.hint_keyboard._heard_label.text.contains("C#4"), "Heard wrong pitch remains separate")
+    check(app.practice_view.stage.keyboard._expected_label.text.contains("C5"), "Hint names actual expected C5")
+    check(app.practice_view.stage.keyboard._heard_label.text.contains("C#4"), "Heard wrong pitch remains separate")
     print("INSTRUCTIONAL_STAGE:hint-rendered")
     await wait_for(func(): return phase() == "guided_complete", "learner finds opening pitches")
     # Learn keeps a static score window; completion is proved by all eight
@@ -279,7 +279,7 @@ func run() -> void:
     # A pause-sheet seek is a temporary partial; a library opening measure
     # deliberately persists across later tempo changes. Abandon this count-in
     # before any assessed playing, then choose the five-attack second measure.
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     await wait_for(func(): return score_ready() and phase() == "count_in" \
         and float(app.last_state.get("play_from_beat",-1)) == 0 and not app.action_pending,
         "prepared passage enters its initial count-in")
@@ -288,20 +288,21 @@ func run() -> void:
         and not app.lesson_session.pending and not app.action_pending,
         "Path pauses the initial count-in before assessed playing")
     press("Advanced practice controls")
-    await wait_for(func(): return phase() == "paused" and app.pause_sheet.visible \
-        and not app.action_pending and not app.pause_sheet.seek_button.disabled,
+    await wait_for(func(): return phase() == "paused" and app.practice_view.pause_sheet.visible \
+        and not app.action_pending and not app.practice_view.pause_sheet.seek_button.disabled,
         "pause exposes the ordinary source-measure control")
-    check(app.pause_sheet.bar_choice.is_visible_in_tree() and app.pause_sheet.seek_button.is_visible_in_tree(),
+    check(app.practice_view.pause_sheet.bar_choice.is_visible_in_tree() and app.practice_view.pause_sheet.seek_button.is_visible_in_tree(),
         "Learner can visibly choose the temporary partial")
-    app.pause_sheet.bar_choice.value = 2
-    app.pause_sheet.seek_button.pressed.emit()
+    app.practice_view.pause_sheet.bar_choice.value = 2
+    app.practice_view.pause_sheet.seek_button.pressed.emit()
     await wait_running(240,8)
     print("INSTRUCTIONAL_STAGE:partial-timed-ready")
     await capture("04-practice-count-in",8)
-    await wait_for(func(): return phase() == "playing" and app._transport_beat_now() >= 1,
+    await wait_for(func(): return phase() == "playing" and app._transport_beat_now() >= 1 and note_in_view(13),
         "selected second measure contains missed required notes")
     var missed_a := await capture("05-errors-score-moving-a",13)
-    await wait_for(func(): return phase() == "playing" and app._transport_beat_now() >= 2,
+    var first_clock: float = float(missed_a.beat)
+    await wait_for(func(): return phase() == "playing" and app._transport_beat_now() >= first_clock + 1.0 and note_in_view(13),
         "mistakes do not stop musical time")
     var missed_b := await capture("06-errors-score-moving-b",13)
     check(float(missed_b.note_x) < float(missed_a.note_x)-8, "Rendered score keeps moving despite missed notes")
@@ -312,7 +313,7 @@ func run() -> void:
     check(str(app.last_state.next_action).contains("Retry bars 2-2"), "First failure names the exact failed measure")
     check(app.last_state.get("transition_in_seconds") != null, "Retry has a visible nonblocking break")
     await capture("07-retry-instruction")
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     await wait_for(func(): return phase() == "paused" and str(app.last_state.get("pause_context", "")) == "recovering",
         "Pause freezes instructional break")
     var remaining := float(app.last_state.transition_in_seconds)
@@ -323,7 +324,7 @@ func run() -> void:
         "Paused break cannot start another attempt")
     check(absf(float(app.last_state.transition_in_seconds)-remaining) < .05,
         "Paused feedback countdown remains frozen")
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     await wait_running(216,8,false)
     await capture("09-exact-chunk-retry-count-in")
     await wait_for(func(): return phase() == "recovering" and bool(app.last_state.get("guided_recovery", false)),
@@ -343,7 +344,7 @@ func run() -> void:
     check(int(app.last_state.mastered) == 0 and int(app.last_state.streak) == 0,
         "Guided recovery cannot count toward mastery")
     await capture("13-guided-recovery-complete",0)
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     await wait_running(194,8)
     await capture("14-return-to-failed-chunk-count-in")
     await wait_for(func(): return phase() == "recovering" \

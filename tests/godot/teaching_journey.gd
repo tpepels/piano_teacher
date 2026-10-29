@@ -42,12 +42,12 @@ func press(text: String) -> void:
     check(false, "Visible enabled control missing: " + text)
 
 func score_ready() -> bool:
-    return app.timeline_preview != null and app._native_score_ready() \
-        and app.timeline_preview.is_visible_in_tree() and not app.layout_pending \
+    return app.practice_view.stage.renderer != null and app._native_score_ready() \
+        and app.practice_view.stage.renderer.is_visible_in_tree() and not app.layout_pending \
         and not app.timeline_model_pending
 
 func note_position() -> Vector2:
-    var renderer = app.timeline_preview
+    var renderer = app.practice_view.stage.renderer
     if renderer.drawn_noteheads.has(tracked_id):
         return renderer.get_global_transform_with_canvas() * renderer.drawn_noteheads[tracked_id]
     # Keep tracking an authentic source event after it leaves the drawn viewport.
@@ -73,8 +73,8 @@ func capture(label: String) -> Dictionary:
     var entry := {"frame": filename, "phase": app.last_state.get("phase", ""),
         "mode": app.last_state.get("mode", ""), "beat": app._transport_beat_now(),
         "width": picture.get_width(), "height": picture.get_height(),
-        "score_height": app.score_frame.size.y}
-    var renderer = app.timeline_preview
+        "score_height": app.practice_view.stage.score_frame.size.y}
+    var renderer = app.practice_view.stage.renderer
     entry["native_ready"] = renderer.native_ready
     entry["native_visible"] = renderer.is_visible_in_tree()
     entry["native_noteheads"] = renderer.drawn_noteheads.size()
@@ -97,14 +97,14 @@ func capture(label: String) -> Dictionary:
                         ink += 1
         entry["notehead_ink"] = ink
         check(ink >= 8 or (str(app.last_state.get("phase", "")) == "count_in"
-            and position.x > app.score_frame.get_global_rect().end.x * pixel_scale.x),
+            and position.x > app.practice_view.stage.score_frame.get_global_rect().end.x * pixel_scale.x),
             "Real notehead pixels remain visible or approach from beyond the count-in: " + label)
     if label == "wrong-note-hint":
-        var keyboard: Control = app.hint_keyboard
+        var keyboard: Control = app.practice_view.stage.keyboard
         check(keyboard.is_visible_in_tree(), "Wrong input reveals contextual keyboard")
         check(keyboard.get_global_rect().end.y <= root.get_visible_rect().size.y,
             "Hint keyboard fits actual desktop viewport")
-        check(app.score_frame.size.y >= 135, "Hints preserve readable notation height")
+        check(app.practice_view.stage.score_frame.size.y >= 135, "Hints preserve readable notation height")
         var expected: Array = app.last_state.teaching.expected_notes
         var painted := 0
         for note in expected:
@@ -127,7 +127,7 @@ func capture(label: String) -> Dictionary:
         entry["hint_bounds"] = str(keyboard.get_global_rect())
     if app.current_screen == "practice":
         var viewport := root.get_visible_rect()
-        for control in [app.start_button, app.practice_retry_button, app.listen_button]:
+        for control in [app.practice_view.start_button, app.practice_view.practice_retry_button, app.practice_view.listen_button]:
             check(control.is_visible_in_tree(), "Practice control is visible: " + label)
             check(viewport.encloses(control.get_global_rect()), "Practice control fits viewport: " + label)
     frames.append(entry)
@@ -166,8 +166,8 @@ func run() -> void:
     check(piece_button != null and str(piece_button.get_meta("library_title", "")).contains("Imported repeated chords"),
         "User MIDI is the imported library piece")
     piece_button.pressed.emit()
-    await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
-    app.open_picker.mode_choice.select(0)
+    await wait_for(func(): return app.practice_view.open_picker.visible, "starting-point dialog opens")
+    app.practice_view.open_picker.mode_choice.select(0)
     press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() \
         and str(app.last_state.get("phase", "")) == "guided_wait", "import automatically enters Learn")
@@ -178,13 +178,13 @@ func run() -> void:
         and str(app.last_state.get("hand", "")) == "both" \
         and str(app.last_state.get("phase", "")) == "guided_wait", "generated both-hand fragment")
     tracked_id = str(app.score_layout.notes[0].id)
-    check(not app.hint_keyboard.visible, "Successful learner starts without immediate hints")
+    check(not app.practice_view.stage.keyboard.visible, "Successful learner starts without immediate hints")
     var position := note_position()
     await create_timer(.35).timeout
     check(position.distance_to(note_position()) < .1, "Untimed score does not advance with wall clock")
     await capture("guided-ready")
     print("TEACHING_STAGE:wrong-ready")
-    await wait_for(func(): return app.hint_keyboard.is_visible_in_tree() \
+    await wait_for(func(): return app.practice_view.stage.keyboard.is_visible_in_tree() \
         and bool(app.last_state.teaching.get("hint_visible", false)), "wrong-note hint arrives through HTTP")
     # Feedback may cover the tiny current notehead at compact display scales.
     # Track the next engraved attack so the pixel check still proves notation
@@ -198,13 +198,13 @@ func run() -> void:
     print("TEACHING_STAGE:hint-rendered")
     await wait_for(func(): return str(app.last_state.get("phase", "")) == "guided_complete",
         "slow fresh MIDI chords finish guided fragment")
-    check(not app.hint_keyboard.visible, "Completed fragment hides hint keyboard")
+    check(not app.practice_view.stage.keyboard.visible, "Completed fragment hides hint keyboard")
     check(int(app.last_state.get("streak", -1)) == 0 and int(app.last_state.get("mastered", -1)) == 0,
         "Assisted Learn never earns clean mastery")
     tracked_id = str(app.score_layout.notes[-1].id)
     await capture("guided-complete")
-    check(app.start_button.text.begins_with("Try rhythm"), "Completion offers Try rhythm")
-    app.start_button.pressed.emit()
+    check(app.practice_view.start_button.text.begins_with("Try rhythm"), "Completion offers Try rhythm")
+    app.practice_view.start_button.pressed.emit()
     await wait_for(func(): return score_ready() and str(app.last_state.get("mode", "")) == "practice" \
         and str(app.last_state.get("phase", "")) == "count_in", "Try rhythm waits for real engraved score then counts in")
     tracked_id = str(app.score_layout.notes[0].id)
@@ -217,7 +217,7 @@ func run() -> void:
     await create_timer(.5).timeout
     var later := await capture("practice-playing-b")
     check(float(later.note_x) < float(playing.note_x)-10, "Actual notes move left during practice")
-    check(not app.hint_keyboard.visible or app.hint_keyboard._live_mode,
+    check(not app.practice_view.stage.keyboard.visible or app.practice_view.stage.keyboard._live_mode,
         "Timed practice switches from the guided target to real live MIDI input")
     app.lesson_view.stop_button.pressed.emit()
     await wait_for(func(): return not app.action_pending and not bool(app.last_state.get("running", true)) \

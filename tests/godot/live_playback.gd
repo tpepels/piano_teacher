@@ -9,8 +9,8 @@ class LiveApp extends "res://main.gd":
         super._process(delta)
         # Record the exact clock supplied to the native view, rather than
         # sampling the advancing transport again after super._process.
-        if timeline_preview != null:
-            rendered_clock = timeline_preview.clock_beat
+        if practice_view.stage.renderer != null:
+            rendered_clock = practice_view.stage.renderer.clock_beat
 
 var app: Control
 var folder := ""
@@ -58,8 +58,8 @@ func api(command: Dictionary) -> Dictionary:
     return parsed
 
 func score_ready() -> bool:
-    return app.timeline_preview != null and app._native_score_ready() \
-        and app.timeline_preview.is_visible_in_tree() and not app.layout_pending \
+    return app.practice_view.stage.renderer != null and app._native_score_ready() \
+        and app.practice_view.stage.renderer.is_visible_in_tree() and not app.layout_pending \
         and not app.timeline_model_pending
 
 func active_attempt(transport_id: int) -> bool:
@@ -67,7 +67,7 @@ func active_attempt(transport_id: int) -> bool:
         and bool(app.last_state.get("running", false)) and score_ready()
 
 func note_position(note: Dictionary) -> Vector2:
-    var renderer = app.timeline_preview
+    var renderer = app.practice_view.stage.renderer
     var id: String = str(note["id"])
     for event in renderer.layout.ordered_events:
         if str(event.get("id", "")) == id:
@@ -231,24 +231,24 @@ func capture(bpm: int, label: String) -> Dictionary:
     # the actual render target dimensions.
     var pixel_scale := Vector2(frame.get_size()) / root.get_visible_rect().size
     var position: Vector2 = note_position(note) * pixel_scale
-    var renderer = app.timeline_preview
+    var renderer = app.practice_view.stage.renderer
     var beam: Vector2 = (renderer.get_global_transform_with_canvas() * Vector2(
         renderer.size.x * renderer.PLAYHEAD_FRACTION,0.0)) * pixel_scale
-    var canvas_panel: Rect2 = app.score_frame.get_global_rect()
+    var canvas_panel: Rect2 = app.practice_view.stage.score_frame.get_global_rect()
     var panel := Rect2(canvas_panel.position * pixel_scale, canvas_panel.size * pixel_scale)
     check(absf(beam.x - (panel.position.x + panel.size.x * 0.42)) < 2.0,
         "%d BPM %s: timing line stays fixed" % [bpm, label])
-    check(app.timeline_preview.size.distance_to(baseline_size) < 0.5,
+    check(app.practice_view.stage.renderer.size.distance_to(baseline_size) < 0.5,
         "%d BPM %s: notation scale stays stable" % [bpm, label])
     var staff_gap: Vector2 = Vector2.ONE * renderer.staff_gap() * pixel_scale
     check(score_ready(), "%d BPM %s: current source revision remains visibly native" % [bpm,label])
     var ink := local_ink(frame, position, staff_gap)
-    var paused_modal: bool = app.pause_sheet.is_visible_in_tree()
+    var paused_modal: bool = app.practice_view.pause_sheet.is_visible_in_tree()
     var modal_ink: Dictionary = {}
     if paused_modal:
         # The real pause sheet deliberately shades the staff. Its Resume text
         # must render, while note geometry remains frozen until it is uncovered.
-        var resume_center: Vector2 = app.pause_sheet.resume_button.get_global_rect().get_center()
+        var resume_center: Vector2 = app.practice_view.pause_sheet.resume_button.get_global_rect().get_center()
         modal_ink = local_ink(frame, (resume_center - Vector2(12, 0)) * pixel_scale)
         check(int(modal_ink.pixels) >= 6 and int(modal_ink.rows) >= 3 and int(modal_ink.columns) >= 3,
             "%d BPM %s: actual rendered Resume text exists (%s)" % [bpm, label, str(modal_ink)])
@@ -271,7 +271,7 @@ func capture(bpm: int, label: String) -> Dictionary:
     var result := {"bpm": bpm, "label": label, "beat": app.rendered_clock,
         "phase": app.last_state.get("phase", ""), "note_id": tracked_id,
         "note_x": position.x, "note_y": position.y, "beam_x": beam.x,
-        "width": app.timeline_preview.size.x, "height": app.timeline_preview.size.y,
+        "width": app.practice_view.stage.renderer.size.x, "height": app.practice_view.stage.renderer.size.y,
         "ink": ink, "paused_modal": paused_modal, "modal_ink": modal_ink,
         "frame": filename, "pixel_scale": [pixel_scale.x, pixel_scale.y]}
     result["native_ready"] = renderer.native_ready
@@ -294,11 +294,11 @@ func run_tempo(bpm: int) -> void:
         return
     await process_frame
     await process_frame
-    baseline_size = app.timeline_preview.size
+    baseline_size = app.practice_view.stage.renderer.size
     tracked_id = str(app.score_layout["notes"][0].get("id", ""))
     check(not tracked_id.is_empty(), "Required note has a stable ID")
     var prior_id: int = int(app.last_state.get("transport_id", -1))
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     if not await wait_for(func(): return int(app.last_state.get("transport_id", -1)) > prior_id \
             and active_attempt(int(app.last_state.get("transport_id", -1))), 10.0, "Play button starts a running attempt"):
         return
@@ -329,7 +329,7 @@ func run_tempo(bpm: int) -> void:
             var at_downbeat: float = float(sample.note_x) + float(sample.beat) * pixels_per_beat
             check(absf(at_downbeat - float(sample.beam_x)) < 1.5,
                 "%d BPM: constant screen-space travel arrives at the line on beat zero" % bpm)
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     if not await wait_for(func(): return bool(app.last_state.get("paused", false)), 5.0, "pause"):
         return
     var paused_a: Dictionary = await capture(bpm, "paused-a")
@@ -338,7 +338,7 @@ func run_tempo(bpm: int) -> void:
     check(absf(float(paused_b.get("note_x", 0.0)) - float(paused_a.get("note_x", 0.0))) < 1.0,
         "%d BPM: pause freezes the actual displayed note" % bpm)
     var pause_beat: float = app._transport_beat_now()
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     if not await wait_for(func(): return not bool(app.last_state.get("paused", true)) \
             and app._transport_beat_now() >= pause_beat + 0.35, 5.0, "resume"):
         return

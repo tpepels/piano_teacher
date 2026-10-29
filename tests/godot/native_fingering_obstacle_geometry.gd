@@ -86,15 +86,15 @@ func _run() -> void:
     var witnesses: Array = _local_witnesses(renderer)
     var envelope: Dictionary = _envelope_coverage(renderer)
     var app = load("res://main.gd").new()
-    app.timeline_preview = renderer
+    app.practice_view.stage.renderer = renderer
     app.layout_revision = app.revision
     app.timeline_model_revision = app.revision
     app.rendered_revision = app.revision
-    app.fingering_status_label = Label.new()
+    app.practice_view.stage.fingering_status_label = Label.new()
     app._present_fingering_status(fixture["summary"])
-    var warning := {"text":app.fingering_status_label.text,"tooltip":app.fingering_status_label.tooltip_text,
-        "visible":app.fingering_status_label.visible}
-    app.fingering_status_label.free()
+    var warning := {"text":app.practice_view.stage.fingering_status_label.text,"tooltip":app.practice_view.stage.fingering_status_label.tooltip_text,
+        "visible":app.practice_view.stage.fingering_status_label.visible}
+    app.practice_view.stage.fingering_status_label.free()
     app.free()
     frames.append(await _frame(viewport,renderer,fixture["model"],.375,"scroll"))
     var regressed: Dictionary = {}

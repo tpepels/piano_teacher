@@ -44,12 +44,12 @@ func test_app_open_resume(app: Control) -> void:
     check(app.posts == [{"path":"/library/open","payload":{"id":"Collection/real.mid"}}],
         "Continue is coordinated through the real application open route")
     app._on_action(0,200,PackedStringArray(),JSON.stringify(saved_state()).to_utf8_buffer())
-    check(app.current_screen == "practice" and not app.open_picker.visible and app.last_state.lesson_step == 17,
+    check(app.current_screen == "practice" and not app.practice_view.open_picker.visible and app.last_state.lesson_step == 17,
         "Continue preserves saved place and bypasses the source picker")
     app._navigate("library")
     entries(view)[1].pressed.emit()
     app._on_action(0,200,PackedStringArray(),JSON.stringify(saved_state()).to_utf8_buffer())
-    check(app.open_picker.visible and app.open_picker.title_label.text == "Saved music",
+    check(app.practice_view.open_picker.visible and app.practice_view.open_picker.title_label.text == "Saved music",
         "Ordinary selection still opens the independent source picker")
 
 func test_app_pending_failure(app: Control) -> void:

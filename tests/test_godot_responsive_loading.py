@@ -10,6 +10,7 @@ SETTINGS = (ROOT / 'godot' / 'settings_screen.gd').read_text(encoding='utf-8')
 LIBRARY = (ROOT / 'godot' / 'library_screen.gd').read_text(encoding='utf-8')
 HOME = (ROOT / 'godot' / 'home_screen.gd').read_text(encoding='utf-8')
 LESSON = (ROOT / 'godot' / 'lesson_screen.gd').read_text(encoding='utf-8')
+PRACTICE = (ROOT / 'godot' / 'practice_screen.gd').read_text(encoding='utf-8')
 
 
 def test_fullscreen_layout_has_adaptive_margins_and_stackable_cards():
@@ -36,7 +37,7 @@ def test_long_song_names_cannot_force_controls_wider():
     assert 'title_label.clip_text = true' in library_row
     assert 'detail_label.clip_text = true' in library_row
     assert 'title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in library_row
-    assert 'title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in SCRIPT
+    assert 'title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in PRACTICE
     assert 'recent_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in HOME
     assert 'library_path_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS' in LIBRARY
 

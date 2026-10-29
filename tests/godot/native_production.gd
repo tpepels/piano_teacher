@@ -55,8 +55,8 @@ func run() -> void:
         OS.get_cmdline_user_args()[0]))
     var app := FixtureApp.new()
     root.add_child(app)
-    check(app.timeline_preview != null and
-        app.timeline_preview.get_script() == load("res://notation/native/view.gd"),
+    check(app.practice_view.stage.renderer != null and
+        app.practice_view.stage.renderer.get_script() == load("res://notation/native/view.gd"),
         "Production always creates the native view, including under retired switches")
     var retired_canvases := 0
     for node in app.find_children("*", "", true, false):
@@ -64,7 +64,7 @@ func run() -> void:
         if script != null and script.resource_path in ["res://score_overlay.gd", "res://note_reactions.gd"]:
             retired_canvases += 1
     check(retired_canvases == 0, "Production never mounts retired page-coordinate drawing canvases")
-    if app.timeline_preview == null or not app.timeline_preview.has_method("set_verovio_glyphs"):
+    if app.practice_view.stage.renderer == null or not app.practice_view.stage.renderer.has_method("set_verovio_glyphs"):
         print("NATIVE_PRODUCTION_FAILURES:", failures.size())
         quit(1)
         return
@@ -74,16 +74,16 @@ func run() -> void:
     var broken_assets: Dictionary = payload.layout.duplicate(true)
     broken_assets["native_glyphs"] = {}
     deliver_layout(app, broken_assets)
-    check(not app.score_error.is_empty() and app.score_status_panel.visible,
+    check(not app.score_error.is_empty() and app.practice_view.stage.score_status_panel.visible,
         "Rejected assets expose a persistent score error")
-    check(app.start_button.disabled and app.rendered_revision != app.revision,
+    check(app.practice_view.start_button.disabled and app.rendered_revision != app.revision,
         "Rejected assets cannot enable Play or complete readiness")
     check(app.commands.is_empty() and app.raster_requests == 0,
         "Rejected assets never acknowledge readiness or fall back to PNG pages")
     var failed_state := {"loaded":true,"revision":app.revision,"phase":"ready","mode":"practice"}
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(failed_state).to_utf8_buffer())
-    check(not app.score_error.is_empty() and app.score_status_panel.visible
-        and app.score_retry_button.visible and app.score_status_label.text.contains(app.score_error),
+    check(not app.score_error.is_empty() and app.practice_view.stage.score_status_panel.visible
+        and app.practice_view.stage.score_retry_button.visible and app.practice_view.stage.score_status_label.text.contains(app.score_error),
         "State polling preserves the native preparation error and its Retry action")
     app.last_state = {"loaded":true,"mode":"learn","phase":"ready"}
     app._toggle_playing()
@@ -92,7 +92,7 @@ func run() -> void:
     app._retry_score()
     check(app.score_error.is_empty() and app.layout_requests == 1
         and app.layout_revision == -1 and app.rendered_revision == -1
-        and not app.timeline_preview.native_ready and not app.score_retry_button.visible,
+        and not app.practice_view.stage.renderer.native_ready and not app.practice_view.stage.score_retry_button.visible,
         "Retry clears failed preparation and requests fresh native assets")
     app.last_state = {"loaded":true,"phase":"loading", "awaiting_score_revision":app.revision}
     deliver_layout(app, payload.layout)
@@ -102,10 +102,10 @@ func run() -> void:
     check(app.commands.is_empty() and app.rendered_revision != app.revision,
         "A newer model cannot complete the current revision")
     deliver_model(app, payload.model)
-    check(app.timeline_preview.native_ready and app.timeline_preview.visible,
+    check(app.practice_view.stage.renderer.native_ready and app.practice_view.stage.renderer.visible,
         "Valid source model and authentic Verovio assets prepare the production native view")
-    check(app.rendered_revision == app.revision and not app.start_button.disabled
-        and not app.score_status_panel.visible,
+    check(app.rendered_revision == app.revision and not app.practice_view.start_button.disabled
+        and not app.practice_view.stage.score_status_panel.visible,
         "Native readiness enables Play and hides preparation status")
     check(app.commands.size() == 1 and app.commands[0] ==
         {"action":"score_ready","revision":app.revision},
@@ -115,10 +115,10 @@ func run() -> void:
     var unsupported: Dictionary = payload.model.duplicate(true)
     unsupported["notation_events"][0]["note_type"] = "unrenderable"
     deliver_model(app, unsupported)
-    check(not app.score_error.is_empty() and app.score_status_panel.visible,
+    check(not app.score_error.is_empty() and app.practice_view.stage.score_status_panel.visible,
         "Rejected notation exposes the native preparation failure")
-    check(app.start_button.disabled and app.rendered_revision != app.revision
-        and not app.timeline_preview.visible,
+    check(app.practice_view.start_button.disabled and app.rendered_revision != app.revision
+        and not app.practice_view.stage.renderer.visible,
         "Rejected notation cannot retain old readiness or display stale ink")
     check(app.commands.is_empty() and app.raster_requests == 0,
         "Rejected notation never acknowledges readiness or falls back to PNG pages")
@@ -136,13 +136,13 @@ func run() -> void:
     app.commands.clear()
     deliver_layout(app, payload.layout)
     deliver_model(app, payload.model)
-    check(app.timeline_preview.native_ready and not app.start_button.disabled
+    check(app.practice_view.stage.renderer.native_ready and not app.practice_view.start_button.disabled
         and app.score_error.is_empty(), "Valid native preparation recovers from failure")
     app.commands.clear()
     var changed := {"loaded":true,"revision":app.revision+1,"phase":"ready","mode":"practice"}
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(changed).to_utf8_buffer())
-    check(not app.timeline_preview.native_ready and not app.timeline_preview.visible
-        and app.start_button.disabled and app.practice_retry_button.disabled,
+    check(not app.practice_view.stage.renderer.native_ready and not app.practice_view.stage.renderer.visible
+        and app.practice_view.start_button.disabled and app.practice_view.practice_retry_button.disabled,
         "A new revision immediately clears native ink and disables starting the previous lesson")
     print("NATIVE_PRODUCTION_FAILURES:", failures.size())
     app.queue_free()

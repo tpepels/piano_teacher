@@ -12,13 +12,13 @@ import os
 from pathlib import Path
 import threading
 import time
-import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 from .learning import LearningPlan
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection, validate_png_width
 from .application.midi_connection import MidiConnection, MidiNotice
+from .application.listen_session import ListenSelection, ListenSession
 from .practice import Recorder, evaluate
 from .importing.pieces import import_piece
 from .rendering.legacy.engraving import EngravedScore
@@ -99,11 +99,6 @@ class PracticeEngine:
         self._trouble_count = 0
         self._guided_recovery_pending = False
         self._guided_return: tuple[str, float] | None = None
-        self.demo: dict | None = None
-        self._demo_audio = None
-        self._demo_cache = None
-        self._demo_thread: threading.Thread | None = None
-        self._demo_score_ready = False
         self.performance_summary: dict | None = None
         self.review_stage_identity: str | None = None
         self.review_end_beat: float | None = None
@@ -135,6 +130,7 @@ class PracticeEngine:
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
         data_dir.mkdir(parents=True, exist_ok=True)
         self._data_dir = data_dir
+        self.listen = ListenSession(data_dir / "demo-audio", lock=self.lock)
         self.fingering = FingeringService(data_dir / "fingering")
         self.preprocessing = PreprocessingCache(data_dir / "preprocessed")
         self.score_artifacts = ScoreArtifacts(self.preprocessing)
@@ -335,6 +331,7 @@ class PracticeEngine:
         if finger is not None and (type(finger) is not int or not 1 <= finger <= 5):
             raise ValueError("Finger must be an integer from 1 to 5, or null to remove a correction")
         with self.lock:
+            self._apply_listen_failure()
             if self.plan is None:
                 raise ValueError("Open a piece before correcting fingering")
             if fingerprint is not None and fingerprint != self.fingerprint:
@@ -353,13 +350,14 @@ class PracticeEngine:
                         or self.fingerprint != source_fingerprint
                         or self.plan.piece.notes is not piece.notes):
                     raise ValueError("The loaded piece changed; refresh the score before correcting fingering")
+                self._apply_listen_failure()
                 self.plan.piece = replace(self.plan.piece, fingering_plan=plan)
                 self.score_artifacts.invalidate()
                 self.score_revision += 1
                 if self.awaiting_score_revision is not None:
                     self.awaiting_score_revision = self.score_revision
                     self._deferred_score_ack = None
-                    self._demo_score_ready = False
+                    self.listen.retarget_score(self.score_revision)
 
     def _restore(self):
         self.progress.restore(self.plan, self.fingerprint)
@@ -418,9 +416,7 @@ class PracticeEngine:
         self.retry_range=None
         self._guided_recovery_pending=False
         self._guided_return=None
-        self.demo=None
-        self._demo_audio=None
-        self._demo_score_ready=False
+        self.listen.cancel()
         self.performance_summary=None
         self.review_stage_identity=None
         self.review_end_beat=None
@@ -706,14 +702,17 @@ class PracticeEngine:
                             if self.is_builtin_warmup else
                             "Get ready to retry the rhythm." if return_context else "Get ready to play in time.")
 
+    def _apply_listen_failure(self) -> None:
+        failure = self.listen.take_failure()
+        if failure is not None:
+            self.awaiting_score_revision = None
+            self.feedback = failure
+            self.next_action = failure
+
     def _prepare_listen(self):
         if self.plan is None:
             raise ValueError("Open a piece first")
-        from .demo import DemoAudioCache
         self._stop()
-        # Listen's WAV is rendered from the beginning of the active phrase.
-        # Reset a previous seek/recovery location so the moving notation
-        # also starts at the first note of that exact same phrase.
         self.play_from_beat = 0.0
         self.mode = "listen"
         self.teaching = None
@@ -722,77 +721,31 @@ class PracticeEngine:
         self.awaiting_score_revision = self.score_revision
         self.feedback = "Preparing an audible example"
         self.next_action = "Listen to the notes, then choose Learn or Practice."
-        if self._demo_cache is None:
-            self._demo_cache = DemoAudioCache(self._data_dir / "demo-audio")
-        variant, bpm = self.plan.active_variant, self.plan.bpm
-        audio_end = max(variant.phrase.end, max((note.end for note in variant.notes), default=variant.phrase.end))
-        token = uuid.uuid4().hex
-        self.demo = {"token": token, "url": "", "audio_available": False,
-                     "instrument": "Preparing piano audio",
-                     "duration_seconds": (audio_end-variant.phrase.start)*60/bpm, "ready": False,
-                     "stage_key": self.plan.identity,
-                     "source_ids": [f"{self.plan.identity}:{index}"
-                                    for index in variant.source_indices],
-                     "canonical_source_ids": [source_note_id(note, index)
-                                              for index, note in enumerate(variant.notes)]}
-        cache = self._demo_cache
-        # Waveform synthesis never holds the transport/MIDI lock. Immutable
-        # inputs and the unique token guard make Stop/navigation authoritative
-        # even when an obsolete render finishes much later.
-        def render():
-            try:
-                audio = cache.render(variant, bpm)
-            except Exception as exc:
-                with self.lock:
-                    if self.demo is not None and self.demo["token"] == token:
-                        self.awaiting_score_revision = None
-                        self.feedback = f"Listen audio could not be prepared: {exc}"
-                        self.next_action = self.feedback
-                        self.demo["error"] = self.feedback
-                return
-            with self.lock:
-                if self.demo is not None and self.demo["token"] == token:
-                    self._demo_audio = audio
-                    self.demo.update(url=f"/demo.wav?token={token}", audio_available=True,
-                                     duration_seconds=audio.duration_seconds,
-                                     instrument=audio.instrument,
-                                     sampled=audio.instrument != "Basic synthesized piano")
-        self._demo_thread = threading.Thread(target=render, name="piano-demo-render", daemon=True)
-        self._demo_thread.start()
+        self.listen.prepare(ListenSelection(
+            variant=self.plan.active_variant, bpm=self.plan.bpm,
+            stage_key=self.plan.identity, revision=self.score_revision,
+            bar_boundaries=self.plan.piece.bar_boundaries,
+            time_signatures=self.plan.piece.time_signatures))
 
     def demo_audio(self, token: str) -> Path:
         with self.lock:
-            if self.demo is None or token != self.demo["token"] or self._demo_audio is None:
-                raise ValueError("This audio example is no longer current")
-            return self._demo_audio.path
+            return self.listen.audio_path(token)
 
     def _start_listen_if_ready(self):
-        if (self.mode != "listen" or self.demo is None or self.paused or self.running
-                or self.awaiting_score_revision != self.score_revision
-                or self._demo_audio is None or not self._demo_score_ready or not self.demo["ready"]):
+        self._apply_listen_failure()
+        if (self.mode != "listen" or self.paused or self.running
+                or self.awaiting_score_revision != self.score_revision):
+            return
+        start = self.listen.begin_playback(self.score_revision)
+        if start is None:
             return
         self.awaiting_score_revision = None
         self.transport_id += 1
         self.running = True
-        # Listen also needs a real, visible lead-in. Starting the transport
-        # immediately at zero allowed HTTP/audio buffer latency to skip the
-        # first piano attack. The PCM remains untrimmed and begins at beat 0.
-        phrase = self.plan.active_phrase
-        grid = phrase_grid(phrase, self.plan.piece.bar_boundaries)
-        self.count_in_bar_beats = grid[1] - grid[0]
-        meter = next(((num, den) for beat, num, den in
-            sorted(self.plan.piece.time_signatures, reverse=True)
-            if beat <= phrase.start + 1e-7), None)
-        # A 1/8 pickup belongs in the score but makes an unusably short
-        # count-in. Use the next complete measure solely for preparation.
-        meter = preparation_meter(
-            meter, self.plan.piece.time_signatures, phrase.start)
-        self.count_in_meter = list(meter) if meter is not None else [
-            max(1, round(self.count_in_bar_beats)), 4]
-        if meter is not None:
-            self.count_in_bar_beats = meter[0] * 4 / meter[1]
-        self.count_in_beats = lead_in_beats(self.count_in_bar_beats, self.plan.bpm)
-        self.run_at = time.monotonic() + self.count_in_beats * 60 / self.plan.bpm
+        self.count_in_bar_beats = start.count_in_bar_beats
+        self.count_in_meter = list(start.count_in_meter)
+        self.count_in_beats = start.count_in_beats
+        self.run_at = time.monotonic()+start.delay_seconds
         self.feedback = "Count in, then listen"
 
     def _prepare_perform(self, *, scope: str = "current"):
@@ -1008,6 +961,7 @@ class PracticeEngine:
 
     def control(self, action: str, **kwargs) -> None:
         with self.lock:
+            self._apply_listen_failure()
             # Explicit navigation, Stop and Restart abandon the current
             # attempt. Only the timed feedback lifecycle commits assessment.
             # Otherwise Stop during feedback could accidentally earn mastery.
@@ -1024,7 +978,7 @@ class PracticeEngine:
                         self._deferred_score_ack = revision
                         return
                     if self.mode == "listen":
-                        self._demo_score_ready = True
+                        self.listen.acknowledge_score(revision)
                         self._start_listen_if_ready()
                     elif self.mode == "learn" and self.teaching is not None:
                         self.awaiting_score_revision = None
@@ -1038,10 +992,7 @@ class PracticeEngine:
                 # The token identifies unchanged PCM even when a fingering
                 # correction advances the score revision during download.
                 # Stop, tempo changes and navigation discard that token.
-                if (self.mode == "listen" and self.demo is not None
-                        and self.demo["audio_available"]
-                        and kwargs.get("token") == self.demo["token"]):
-                    self.demo["ready"] = True
+                if self.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
                     self._start_listen_if_ready()
                 return
             if action == "listen":
@@ -1533,6 +1484,7 @@ class PracticeEngine:
 
     def _update(self):
         self._poll_midi_connection()
+        self._apply_listen_failure()
         if not self.plan:
             return
         now=time.monotonic()
@@ -1544,7 +1496,7 @@ class PracticeEngine:
         if self.paused:
             return
         if self.mode == "listen":
-            if self.running and self.demo is not None and now >= self.run_at+self.demo["duration_seconds"]:
+            if self.running and self.listen.finished(now=now, run_at=self.run_at):
                 self.running = False
                 self.feedback = "Example complete"
                 self.next_action = "Choose Learn to find the notes, or Practice to play the rhythm."
@@ -1674,7 +1626,7 @@ class PracticeEngine:
             recovery_notice=self.recovery_notice,
             guided_recovery=self._guided_recovery_pending or self._guided_return is not None,
             pause_context=self.pause_context,
-            demo=self.demo,
+            demo=self.listen.snapshot(),
             performance_summary=self.performance_summary,
             review_pending=self.review_end_beat is not None,
             midi_input_count=self.midi.input_count,

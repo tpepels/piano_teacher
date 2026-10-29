@@ -10,20 +10,20 @@ func _settle(app: Control, after_revision: int = -1) -> bool:
     while Time.get_ticks_msec() < deadline:
         await process_frame
         if app.rendered_revision > after_revision and app._native_score_ready() and \
-                not app.timeline_preview.annotations.drawn_fingerings.is_empty() and not app.action_pending:
+                not app.practice_view.stage.renderer.annotations.drawn_fingerings.is_empty() and not app.action_pending:
             await process_frame
             await RenderingServer.frame_post_draw
             return true
     failures.append("Native app did not become ready: "+str(app.score_error))
     push_error(failures[-1]+" "+str({"rendered":app.rendered_revision,
         "ready":app._native_score_ready(),"pending":app.action_pending,
-        "size":app.timeline_preview.size,"labels":app.timeline_preview.annotations.drawn_fingerings.size(),
-        "layout":app.timeline_preview.annotations.fingering_layout.size(),
-        "same_layout":is_same(app.timeline_preview.layout,app.timeline_preview.annotations.score_layout),
-        "indices":[app.timeline_preview.layout.ordered_events.size(),app.timeline_preview.annotations.score_layout.ordered_events.size()],
-        "assigned":app.timeline_preview.layout.ordered_events[0].get("fingering") if not app.timeline_preview.layout.ordered_events.is_empty() else null,
-        "issues":app.timeline_preview.annotations.fingering_placement_issues,
-        "enabled":app.timeline_preview.annotations.fingering_annotations_enabled,
+        "size":app.practice_view.stage.renderer.size,"labels":app.practice_view.stage.renderer.annotations.drawn_fingerings.size(),
+        "layout":app.practice_view.stage.renderer.annotations.fingering_layout.size(),
+        "same_layout":is_same(app.practice_view.stage.renderer.layout,app.practice_view.stage.renderer.annotations.score_layout),
+        "indices":[app.practice_view.stage.renderer.layout.ordered_events.size(),app.practice_view.stage.renderer.annotations.score_layout.ordered_events.size()],
+        "assigned":app.practice_view.stage.renderer.layout.ordered_events[0].get("fingering") if not app.practice_view.stage.renderer.layout.ordered_events.is_empty() else null,
+        "issues":app.practice_view.stage.renderer.annotations.fingering_placement_issues,
+        "enabled":app.practice_view.stage.renderer.annotations.fingering_annotations_enabled,
         "running":app.last_state.get("running"),"phase":app.last_state.get("phase")}))
     return false
 
@@ -43,12 +43,12 @@ func _run() -> void:
     # The complete path arrives independently of the initial score. Long
     # sources must finish building it before the memory assertion or edits.
     var path_deadline: int = Time.get_ticks_msec()+25000
-    while (app.lesson_session.pending or app.lesson_steps.entries.is_empty()) and Time.get_ticks_msec() < path_deadline:
+    while (app.lesson_session.pending or app.practice_view.stage.steps.entries.is_empty()) and Time.get_ticks_msec() < path_deadline:
         await process_frame
-    if app.lesson_session.pending or app.lesson_steps.entries.is_empty():
+    if app.lesson_session.pending or app.practice_view.stage.steps.entries.is_empty():
         failures.append("Complete lesson path did not become ready")
     var folder: String = OS.get_cmdline_user_args()[0]
-    var renderer: Control = app.timeline_preview
+    var renderer: Control = app.practice_view.stage.renderer
     var first: Dictionary = renderer.annotations.drawn_fingerings[0]
     var id: String = first["event_ids"][0]
     var source: String = renderer.FingeringPlacement.source(renderer.layout.expression_note_index[id])
@@ -78,7 +78,7 @@ func _run() -> void:
         quit(1)
         return
     var corrected := false
-    for event in app.timeline_preview.layout.ordered_events:
+    for event in app.practice_view.stage.renderer.layout.ordered_events:
         if event.get("source_id") == source and event.get("is_attack",false):
             corrected = event.get("fingering",{}).get("finger") == changed and \
                 event.get("fingering",{}).get("origin") == "manual"
@@ -92,39 +92,39 @@ func _run() -> void:
         quit(1)
         return
     var restored := false
-    for event in app.timeline_preview.layout.ordered_events:
+    for event in app.practice_view.stage.renderer.layout.ordered_events:
         if event.get("source_id") == source and event.get("is_attack",false):
             restored = event.get("fingering",{}).get("finger") == previous and \
                 event.get("fingering",{}).get("origin") != "manual"
     if not restored:
         failures.append("Removing the correction did not restore the production assignment")
     app._present_fingering_status({"status":"partial","unknown":6,"assigned":12})
-    if not app.fingering_status_label.visible or "6" not in app.fingering_status_label.text or \
-            "Right-click" not in app.fingering_status_label.tooltip_text:
+    if not app.practice_view.stage.fingering_status_label.visible or "6" not in app.practice_view.stage.fingering_status_label.text or \
+            "Right-click" not in app.practice_view.stage.fingering_status_label.tooltip_text:
         failures.append("Partial predictions need a minimal count and editing help")
     app._present_fingering_status({"status":"unavailable","unknown":18,"error":"Offline runtime missing"})
-    if "unavailable" not in app.fingering_status_label.text or \
-            "Offline runtime missing" not in app.fingering_status_label.tooltip_text:
+    if "unavailable" not in app.practice_view.stage.fingering_status_label.text or \
+            "Offline runtime missing" not in app.practice_view.stage.fingering_status_label.tooltip_text:
         failures.append("Unavailable fingering needs an actionable provider-neutral status")
     app._present_fingering_status({"status":"ready","unknown":0})
-    if app.fingering_status_label.visible and app.timeline_preview.annotations.fingering_placement_issues.is_empty():
+    if app.practice_view.stage.fingering_status_label.visible and app.practice_view.stage.renderer.annotations.fingering_placement_issues.is_empty():
         failures.append("Available automatic predictions should not add status clutter")
-    var placement_issues: Array = app.timeline_preview.annotations.fingering_placement_issues.duplicate(true)
-    app.timeline_preview.annotations.fingering_placement_issues = [{"source_id":source,"reason":"No local space"}]
+    var placement_issues: Array = app.practice_view.stage.renderer.annotations.fingering_placement_issues.duplicate(true)
+    app.practice_view.stage.renderer.annotations.fingering_placement_issues = [{"source_id":source,"reason":"No local space"}]
     app._present_fingering_status({"status":"ready","unknown":0})
-    if not app.fingering_status_label.visible or "1 fingering needs space" != app.fingering_status_label.text or \
-            "Enlarge" not in app.fingering_status_label.tooltip_text:
+    if not app.practice_view.stage.fingering_status_label.visible or "1 fingering needs space" != app.practice_view.stage.fingering_status_label.text or \
+            "Enlarge" not in app.practice_view.stage.fingering_status_label.tooltip_text:
         failures.append("Unfit annotations must be reported with actionable space guidance")
     for summary in [{"status":"partial","unknown":6},{"status":"partial","unknown":0,"review":2},
             {"status":"unavailable","error":"Offline runtime missing"}]:
         app._present_fingering_status(summary)
-        if "1 needs space" not in app.fingering_status_label.text or "Enlarge" not in app.fingering_status_label.tooltip_text:
+        if "1 needs space" not in app.practice_view.stage.fingering_status_label.text or "Enlarge" not in app.practice_view.stage.fingering_status_label.tooltip_text:
             failures.append("Unknown/review/provider status must not hide unfit annotations")
-    app.timeline_preview.annotations.fingering_placement_issues = placement_issues
+    app.practice_view.stage.renderer.annotations.fingering_placement_issues = placement_issues
     app._present_fingering_status({"status":"partial","unknown":0,"review":2,
         "issues":["Two fixed notes require the same finger"]})
-    if not app.fingering_status_label.visible or "2" not in app.fingering_status_label.text or \
-            "Two fixed notes" not in app.fingering_status_label.tooltip_text:
+    if not app.practice_view.stage.fingering_status_label.visible or "2" not in app.practice_view.stage.fingering_status_label.text or \
+            "Two fixed notes" not in app.practice_view.stage.fingering_status_label.tooltip_text:
         failures.append("Conflicting fixed assignments need a review count and explanation")
     var current: Dictionary = app.last_state.duplicate(true)
     app.last_state["revision"] = app.revision+1
@@ -137,7 +137,7 @@ func _run() -> void:
     var file := FileAccess.open(folder.path_join("app-report.json"),FileAccess.WRITE)
     file.store_string(JSON.stringify({"source_id":source,"before":previous,"changed":changed,
         "revision":app.rendered_revision,"failures":failures,
-        "static_memory":OS.get_static_memory_usage(),"path_steps":app.lesson_steps.entries.size(),
+        "static_memory":OS.get_static_memory_usage(),"path_steps":app.practice_view.stage.steps.entries.size(),
         "finger_rect":[finger_rect.position.x,finger_rect.position.y,finger_rect.size.x,finger_rect.size.y]}))
     for failure in failures:
         push_error(failure)

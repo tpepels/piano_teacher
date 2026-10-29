@@ -2,6 +2,7 @@ extends SceneTree
 
 class FixtureApp extends "res://main.gd":
     func _ready() -> void:
+        _build_interface()
         set_process(false)
 
 func _initialize() -> void:
@@ -12,8 +13,6 @@ func run() -> void:
     root.add_child(app)
     app.revision = 2
     app.requested_layout_revision = 2
-    app.score_frame = Control.new()
-    app.add_child(app.score_frame)
     app.score_layout = {"original":true}
     app._on_layout(0,200,PackedStringArray(),JSON.stringify({
         "revision":3,"anchors":[],"pages":0}).to_utf8_buffer())
@@ -21,10 +20,8 @@ func run() -> void:
         push_error("A layout from a newer server revision replaced this lesson's assets")
         quit(1)
         return
-    app.timeline_preview = load("res://notation/native/view.gd").new()
-    app.add_child(app.timeline_preview)
     var fixture = load("res://tests/native_glyph_fixture.gd")
-    app.timeline_preview.glyphs.load_font(fixture.catalogue())
+    app.practice_view.stage.renderer.glyphs.load_font(fixture.catalogue())
     app.timeline_model_request = HTTPRequest.new()
     app.add_child(app.timeline_model_request)
     app.last_state = {"loaded":true}

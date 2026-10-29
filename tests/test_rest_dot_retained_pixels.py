@@ -130,7 +130,7 @@ def test_extra_short_rest_flag_cannot_be_relabelled_as_a_written_dot(tmp_path, e
 
 
 def test_body_and_dot_partition_accounts_for_every_original_changed_pixel_once(tmp_path):
-    from piano_teacher.notation.phase3_pixels import _rest_delta_parts, _rest_body_dot_partition
+    from piano_teacher.notation.rest_contours import rest_delta_parts, partition_rest_body_dots
     from piano_teacher.notation.pixel_proof import detect_staff_lines
     from piano_teacher.notation.reference_font import reference_glyphs
 
@@ -142,8 +142,8 @@ def test_body_and_dot_partition_accounts_for_every_original_changed_pixel_once(t
         suppressed = np.asarray(raw.convert('RGB'), dtype=int)
     delta = np.max(abs(np.asarray(original, dtype=int)-suppressed), axis=2) >= 10
     gap = detect_staff_lines(original)[source['staff']].gap
-    parts = _rest_delta_parts(delta, gap)
-    body, dots = _rest_body_dot_partition(parts[0], parts[1:],
+    parts = rest_delta_parts(delta, gap)
+    body, dots = partition_rest_body_dots(parts[0], parts[1:],
         reference_glyphs()['rest_64th'], gap, 1)
     owned = set()
     for part in [body, *dots]:
@@ -182,8 +182,8 @@ def test_actual_rest_dot_erasure_wrong_shape_or_joined_ink_cannot_receive_credit
             if mutation == 'joined':
                 image[181,673:677] = (235,242,234)
             if mutation == 'extra':
-                from piano_teacher.notation.phase3_pixels import _rest_dot_template_mask
-                mask = _rest_dot_template_mask(21.875)
+                from piano_teacher.notation.rest_contours import rest_dot_template_mask
+                mask = rest_dot_template_mask(21.875)
                 ys, xs = np.nonzero(mask)
                 mask = mask[ys.min():ys.max()+1,xs.min():xs.max()+1]
                 region = image[176:176+mask.shape[0],690:690+mask.shape[1]]

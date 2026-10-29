@@ -76,7 +76,7 @@ func run() -> void:
             push_error(error)
             quit(1)
             return
-        var renderer: Control = app.timeline_preview
+        var renderer: Control = app.practice_view.stage.renderer
         var corruption: String = str(configuration.get("corruption",""))
         if corruption in ["changed-speed","repeat-jump"]:
             renderer.set_script(CorruptedView)
@@ -94,7 +94,7 @@ func run() -> void:
         assert(renderer.set_density(float(configuration["density"])))
         renderer.set_fingering_annotations_enabled(false)
         renderer.set_transport_overlay_enabled(false)
-        app.native_score_feedback.visible = false
+        app.practice_view.stage.feedback.visible = false
         await process_frame
         await process_frame
         var fixed_region := Rect2i()

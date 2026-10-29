@@ -25,7 +25,7 @@ def native_fixture(tmp_path_factory):
 @pytest.mark.skipif(GODOT is None, reason="Godot 4 is not installed")
 @pytest.mark.parametrize("scenario", [
     "three_button_stage", "short_challenge_loop", "primary_transport", "secondary_stop", "focused_shortcuts", "practice_detours",
-    "settings_back_origin", "abandon_practice", "compact_feedback", "caption_bounds", "notation_phase_cues", "instructional_transition", "modes", "pause_choices", "focus_trap", "learner_progression", "handsfree_midi",
+    "settings_back_origin", "abandon_practice", "compact_feedback", "caption_bounds", "notation_phase_cues", "instructional_transition", "modes", "pause_choices", "focus_trap", "learner_progression", "handsfree_midi", "picker_polling", "picker_midi_guard",
 ])
 def test_actual_practice_interactions(scenario, tmp_path, native_fixture):
     # Isolate any Godot user settings from the real desktop session.

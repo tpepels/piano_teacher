@@ -22,7 +22,7 @@ func run() -> void:
     if not error.is_empty():
         quit(1)
         return
-    var view = app.timeline_preview
+    var view = app.practice_view.stage.renderer
     for dimensions in [Vector2i(1536,960),Vector2i(1024,768),Vector2i(800,600)]:
         root.size = dimensions
         await process_frame
@@ -34,7 +34,7 @@ func run() -> void:
                 "running":phase != "ready","paused":true,"clock_beat":0.0,
                 "hand":"both","bpm":80,"play_from_beat":0.0,"count_in_beats":4.0,
                 "hand_stages":[{"hand":"left","active":true},{"hand":"right"},{"hand":"both"}]}
-            app._update_hand_stages(app.last_state)
+            app.practice_view.stage._update_hand_stages(app.last_state)
             app._process(0.0)
             view.queue_redraw()
             await process_frame
@@ -45,7 +45,7 @@ func run() -> void:
                 baseline_gap = view.staff_gap()
             check(view.get_global_rect() == baseline and is_equal_approx(view.staff_gap(),baseline_gap),
                 "%s %s: transport preserves actual notation scale" % [dimensions,phase])
-            check(app.score_frame.get_global_rect().encloses(view.get_global_rect()),
+            check(app.practice_view.stage.score_frame.get_global_rect().encloses(view.get_global_rect()),
                 "Native notation stays inside the music stage")
             check(view.size.y >= 135.0 and not view.drawn_noteheads.is_empty(),
                 "Compact stage contains real painted source notes")

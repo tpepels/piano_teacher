@@ -59,11 +59,11 @@ func run() -> void:
     if not failures.is_empty():
         quit(1)
         return
-    for entry in [["score", app.timeline_preview], ["feedback", app.native_score_feedback],
-            ["speed", app.speed_label], ["progress", app.progress_label],
-            ["instruction", app.lesson_info_label], ["passage", app.passage_label],
-            ["caption", app.feedback_label],
-            ["keyboard", app.hint_keyboard]]:
+    for entry in [["score", app.practice_view.stage.renderer], ["feedback", app.practice_view.stage.feedback],
+            ["speed", app.practice_view.speed_label], ["progress", app.practice_view.progress_label],
+            ["instruction", app.practice_view.lesson_info_label], ["passage", app.practice_view.passage_label],
+            ["caption", app.practice_view.feedback_label],
+            ["keyboard", app.practice_view.stage.keyboard]]:
         var label: String = entry[0]
         entry[1].draw.connect(func(): redraws[label] = int(redraws.get(label, 0)) + 1)
     var state: Dictionary = app.last_state.duplicate(true)
@@ -77,7 +77,7 @@ func run() -> void:
     await unchanged_polls(app, state, "Ready")
     state["feedback_unmapped"] = 1
     await unchanged_polls(app, state, "Ready with unmapped warning")
-    check(app.feedback_label.text.ends_with("1 unpositioned note(s)"),
+    check(app.practice_view.feedback_label.text.ends_with("1 unpositioned note(s)"),
         "A retained unmapped assessment warning stays visible")
     state["feedback_unmapped"] = 0
     state["device"] = "Framebuffer MIDI fixture"
@@ -85,7 +85,7 @@ func run() -> void:
     state.merge({"running":true, "paused":true, "phase":"paused"}, true)
     await unchanged_polls(app, state, "Paused")
     var attack: Dictionary = {}
-    for event in app.timeline_preview.layout.ordered_events:
+    for event in app.practice_view.stage.renderer.layout.ordered_events:
         if bool(event.get("is_attack", false)):
             attack = event
             break
@@ -109,13 +109,13 @@ func run() -> void:
     state["bpm"] = int(state["bpm"]) + 5
     present(app, state)
     await settle()
-    check(int(redraws.get("speed", 0)) > 0 and app.speed_label.text.begins_with(str(state.bpm)),
+    check(int(redraws.get("speed", 0)) > 0 and app.practice_view.speed_label.text.begins_with(str(state.bpm)),
         "Tempo changes still repaint the actual caption")
     redraws.clear()
     state["midi_visual_events"] = [{"sequence":11,"pitch":60,"status":"unexpected","age":.1}]
     present(app, state)
     await settle()
-    check(int(redraws.get("keyboard", 0)) > 0 and app.hint_keyboard._pressed.get(60) == "unexpected",
+    check(int(redraws.get("keyboard", 0)) > 0 and app.practice_view.stage.keyboard._pressed.get(60) == "unexpected",
         "New physical notes still paint their independent assessment color")
     redraws.clear()
     for sample_index in range(8):
@@ -128,23 +128,23 @@ func run() -> void:
     state["midi_held_pitches"] = [60]
     present(app, state)
     await settle()
-    check(int(redraws.get("keyboard", 0)) > 0 and app.hint_keyboard._pressed.get(60) == "heard",
+    check(int(redraws.get("keyboard", 0)) > 0 and app.practice_view.stage.keyboard._pressed.get(60) == "heard",
         "Expiry removes a transient color while preserving a physically held key")
     redraws.clear()
     state["midi_held_pitches"] = []
     present(app, state)
     await settle()
-    check(int(redraws.get("keyboard", 0)) > 0 and app.hint_keyboard._pressed.is_empty(),
+    check(int(redraws.get("keyboard", 0)) > 0 and app.practice_view.stage.keyboard._pressed.is_empty(),
         "Physical releases still repaint the keyboard")
     state.merge({"running":false, "paused":false, "phase":"ready", "preview_only":true}, true)
     await unchanged_polls(app, state, "Ungraded preview Ready")
-    check(app.native_score_feedback.markers.is_empty(), "Preview clears assessed marks")
+    check(app.practice_view.stage.feedback.markers.is_empty(), "Preview clears assessed marks")
     state["mode"] = "listen"
     await unchanged_polls(app, state, "Listen Ready")
     state.merge({"running":true,"paused":true,"phase":"paused",
         "demo":{"instrument":"Framebuffer piano","audio_available":true,"sampled":true}}, true)
     await unchanged_polls(app, state, "Paused Listen")
-    check(app.feedback_label.text == "Listen paused · Framebuffer piano",
+    check(app.practice_view.feedback_label.text == "Listen paused · Framebuffer piano",
         "Paused Listen retains the selected instrument caption")
     state.merge({"mode":"learn", "preview_only":false, "phase":"guided_wait",
         "running":false, "paused":false,
@@ -156,7 +156,7 @@ func run() -> void:
     state["teaching"]["expected_notes"] = [{"pitch":67,"label":"G4"}]
     present(app, state)
     await settle()
-    check(int(redraws.get("keyboard", 0)) > 0 and app.hint_keyboard._expected.has(67),
+    check(int(redraws.get("keyboard", 0)) > 0 and app.practice_view.stage.keyboard._expected.has(67),
         "Changed guided targets still repaint their literal pitches")
     state.merge({"mode":"practice", "preview_only":false, "running":true,
         "paused":false, "phase":"playing", "clock_beat":0.0}, true)

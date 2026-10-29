@@ -36,7 +36,7 @@ func run() -> void:
     if not error.is_empty():
         quit(1)
         return
-    var view = app.timeline_preview
+    var view = app.practice_view.stage.renderer
     var atlas: Dictionary = atlas_ids(view)
     var source: Dictionary = view.timeline.model.duplicate(true)
     var child_count: int = app.find_children("*","",true,false).size()

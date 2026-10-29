@@ -43,8 +43,8 @@ func phase() -> String:
     return str(app.last_state.get("phase",""))
 
 func score_ready() -> bool:
-    return app.timeline_preview != null and app._native_score_ready() \
-        and app.timeline_preview.is_visible_in_tree() and not app.layout_pending \
+    return app.practice_view.stage.renderer != null and app._native_score_ready() \
+        and app.practice_view.stage.renderer.is_visible_in_tree() and not app.layout_pending \
         and not app.timeline_model_pending
 
 func demo_player() -> AudioStreamPlayer:
@@ -54,7 +54,7 @@ func demo_player() -> AudioStreamPlayer:
     return null
 
 func note_position(note: Dictionary) -> Vector2:
-    var renderer = app.timeline_preview
+    var renderer = app.practice_view.stage.renderer
     if renderer != null and renderer.drawn_noteheads.has(str(note.id)):
         return renderer.get_global_transform_with_canvas() * \
             Vector2(renderer.drawn_noteheads[str(note.id)])
@@ -75,7 +75,7 @@ func capture(label: String, track_beat: float = -999) -> Dictionary:
     RenderingServer.force_draw()
     var picture := root.get_texture().get_image()
     var scale := Vector2(picture.get_size())/root.get_visible_rect().size
-    var panel: Rect2 = app.score_frame.get_global_rect()
+    var panel: Rect2 = app.practice_view.stage.score_frame.get_global_rect()
     var selected: Dictionary = {}
     for note in app.score_layout.get("notes",[]):
         if track_beat > -998:
@@ -89,7 +89,7 @@ func capture(label: String, track_beat: float = -999) -> Dictionary:
     var entry := {"frame":label+".png","phase":phase(),"mode":app.last_state.get("mode",""),
         "beat":app._transport_beat_now(),"bpm":app.last_state.get("bpm",0),
         "mastered":app.last_state.get("mastered",-1),"streak":app.last_state.get("streak",-1),
-        "score_height":app.score_frame.size.y}
+        "score_height":app.practice_view.stage.score_frame.size.y}
     if not selected.is_empty():
         var point := note_position(selected)*scale
         entry["note_id"] = str(selected.id)
@@ -103,21 +103,21 @@ func capture(label: String, track_beat: float = -999) -> Dictionary:
         entry["audio_position"] = player.get_playback_position()
         entry["pcm_bytes"] = player.stream.data.size()
     check(picture.save_png(folder+"/"+label+".png") == OK,"Save actual mode frame "+label)
-    check(app.start_button.is_visible_in_tree() and app.practice_retry_button.is_visible_in_tree() and app.listen_button.is_visible_in_tree(),
+    check(app.practice_view.start_button.is_visible_in_tree() and app.practice_view.practice_retry_button.is_visible_in_tree() and app.practice_view.listen_button.is_visible_in_tree(),
         "Transport controls stay visible in "+label)
     var viewport := root.get_visible_rect()
     entry["viewport"] = str(viewport)
-    entry["primary_bounds"] = str(app.start_button.get_global_rect())
+    entry["primary_bounds"] = str(app.practice_view.start_button.get_global_rect())
     entry["stop_bounds"] = str(app.lesson_view.stop_button.get_global_rect())
-    for control in [app.start_button,app.practice_retry_button,app.listen_button]:
+    for control in [app.practice_view.start_button,app.practice_view.practice_retry_button,app.practice_view.listen_button]:
         check(viewport.encloses(control.get_global_rect()),"Transport control fits actual viewport in "+label)
-    check(app.score_frame.size.y >= 135,"Notation retains135px height in "+label)
-    if app.performance_review.is_visible_in_tree():
-        entry["review_bounds"] = str(app.performance_review.get_global_rect())
-        entry["weak_button_bounds"] = str(app.performance_review.review_button.get_global_rect())
-        check(viewport.encloses(app.performance_review.get_global_rect()),"Summary fits actual viewport")
-        check(viewport.encloses(app.performance_review.review_button.get_global_rect()),"Weak-section button fits actual viewport")
-    for button in app.practice_navigation.get_children():
+    check(app.practice_view.stage.score_frame.size.y >= 135,"Notation retains135px height in "+label)
+    if app.practice_view.performance_review.is_visible_in_tree():
+        entry["review_bounds"] = str(app.practice_view.performance_review.get_global_rect())
+        entry["weak_button_bounds"] = str(app.practice_view.performance_review.review_button.get_global_rect())
+        check(viewport.encloses(app.practice_view.performance_review.get_global_rect()),"Summary fits actual viewport")
+        check(viewport.encloses(app.practice_view.performance_review.review_button.get_global_rect()),"Weak-section button fits actual viewport")
+    for button in app.practice_view.practice_navigation.get_children():
         if button is Button and button.is_visible_in_tree() and not button.text.is_empty():
             var font: Font = button.get_theme_font("font")
             var font_size: int = button.get_theme_font_size("font_size")
@@ -161,26 +161,26 @@ func run() -> void:
     var piece := imported_row()
     check(str(piece.get_meta("library_title", "")).contains("Imported rest and held ending"),"Library opens arbitrary user MIDI")
     piece.pressed.emit()
-    await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
-    app.open_picker.mode_choice.select(0)
+    await wait_for(func(): return app.practice_view.open_picker.visible, "starting-point dialog opens")
+    app.practice_view.open_picker.mode_choice.select(0)
     press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait","import enters generated Learn")
     # Explicitly choose the available full-source performance using the
     # existing lesson picker so Listen/Perform include
     # the opening rest, internal rest and held ending in bars 3-4.
     await wait_for(func(): return not app.lesson_session.pending and not app.action_pending \
-        and not app.lesson_steps.picker.disabled,"normal lesson picker is ready")
+        and not app.practice_view.stage.steps.picker.disabled,"normal lesson picker is ready")
     var full_step := -1
-    for index in range(app.lesson_steps.entries.size()):
-        var step: Dictionary = app.lesson_steps.entries[index]
+    for index in range(app.practice_view.stage.steps.entries.size()):
+        var step: Dictionary = app.practice_view.stage.steps.entries[index]
         if str(step.get("kind","")) == "perform" and int(step.get("first_bar",0)) == 1 \
                 and int(step.get("last_bar",0)) == 4 and str(step.get("level","")) == "original":
             full_step = index
             break
     check(full_step >= 0,"Lesson picker exposes the full four-bar original performance")
     if full_step >= 0:
-        app.lesson_steps.picker.select(full_step)
-        app.lesson_steps.picker.item_selected.emit(full_step)
+        app.practice_view.stage.steps.picker.select(full_step)
+        app.practice_view.stage.steps.picker.item_selected.emit(full_step)
     await wait_for(func(): return score_ready() and not app.action_pending \
         and str(app.last_state.get("kind","")) == "perform" \
         and int(app.last_state.get("lesson_step",0)) == full_step+1,
@@ -254,9 +254,9 @@ func run() -> void:
     check(weak_button != null,"Weakest section has a real visible Practice control")
     if weak_button != null:
         weak_button.pressed.emit()
-    await wait_for(func(): return app.review_sheet.visible, "Detailed source assessment opens")
+    await wait_for(func(): return app.practice_view.review_sheet.visible, "Detailed source assessment opens")
     var repeat_button: Button = null
-    for candidate in app.review_sheet.find_children("*", "Button", true, false):
+    for candidate in app.practice_view.review_sheet.find_children("*", "Button", true, false):
         if candidate.text.begins_with("Repeat Measures"):
             repeat_button = candidate
             break
@@ -265,7 +265,7 @@ func run() -> void:
         repeat_button.pressed.emit()
     await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "practice" \
         and phase() == "ready", "Reviewed source section waits for the learner")
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "practice" and phase() == "count_in","weak section starts actual timed Practice")
     await capture("10-weak-section-practice-count-in")
     print("MODES_STAGE:weak-practice-playing")

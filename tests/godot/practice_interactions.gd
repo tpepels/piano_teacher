@@ -4,6 +4,8 @@ extends SceneTree
 # Only outbound HTTP requests are replaced; controls and navigation stay real.
 class FixtureApp extends "native_production_fixture.gd":
     var commands: Array[Dictionary] = []
+    var layout_calls := 0
+    var model_calls := 0
 
     func _ready() -> void:
         _build_interface()
@@ -27,7 +29,10 @@ class FixtureApp extends "native_production_fixture.gd":
         pass
 
     func _request_layout() -> void:
-        pass
+        layout_calls += 1
+
+    func _request_timeline_model() -> void:
+        model_calls += 1
 
     func _poll() -> void:
         pass
@@ -90,23 +95,23 @@ func expect_command(action: String, description: String) -> void:
     app.commands.clear()
 
 func test_three_button_stage() -> void:
-    app.game_phase_cue.present({"loaded":false, "phase":"ready"})
-    check(app.game_phase_cue.message.is_empty(),
+    app.practice_view.stage.phase_cue.present({"loaded":false, "phase":"ready"})
+    check(app.practice_view.stage.phase_cue.message.is_empty(),
         "Empty library must not invite the pianist to start an absent score")
     show_state()
-    check(app.practice_controls.get_child_count() == 3,
+    check(app.practice_view.practice_controls.get_child_count() == 3,
         "Practice surface must have exactly Play, Retry and Listen")
-    check(app.practice_controls.get_child(0) == app.practice_retry_button,
+    check(app.practice_view.practice_controls.get_child(0) == app.practice_view.practice_retry_button,
         "Retry is the first primary action")
-    check(app.practice_controls.get_child(1) == app.start_button,
+    check(app.practice_view.practice_controls.get_child(1) == app.practice_view.start_button,
         "Play/Pause occupies the central primary position")
-    check(app.practice_controls.get_child(2) == app.listen_button,
+    check(app.practice_view.practice_controls.get_child(2) == app.practice_view.listen_button,
         "Listen is the third primary action")
-    check(app.start_button.has_method("configure") and app.listen_button.has_method("configure"),
+    check(app.practice_view.start_button.has_method("configure") and app.practice_view.listen_button.has_method("configure"),
         "Transport controls support animated game state")
-    check(app.start_button.focus_mode == Control.FOCUS_ALL,
+    check(app.practice_view.start_button.focus_mode == Control.FOCUS_ALL,
         "Piano transport keys must retain keyboard focus")
-    check(app.start_button.get_theme_color("font_color").a < .01,
+    check(app.practice_view.start_button.get_theme_color("font_color").a < .01,
         "Default Godot button label must not overlap the custom game icon")
     var exit_controls: Array = app.screens["settings"].find_children("*", "Button", true, false)
     check(exit_controls.any(func(node):
@@ -114,34 +119,34 @@ func test_three_button_stage() -> void:
         "Fullscreen application retains a keyboard-accessible Exit in Settings")
     check(app.settings_view.listen_volume_slider.max_value >= 12.0,
         "Settings needs a separate Listen gain adjustment")
-    check(app.game_phase_cue.get_parent() == app.score_frame,
+    check(app.practice_view.stage.phase_cue.get_parent() == app.practice_view.stage.score_frame,
         "Compact phase cue remains on the music stage")
     check(not app.lesson_view.mode_choice.is_visible_in_tree() and not app.lesson_view.hints_toggle.is_visible_in_tree(),
         "Advanced dropdowns must not appear during playing")
     show_state("paused")
-    check(app.start_button.visible and app.start_button.text.begins_with("Resume"),
+    check(app.practice_view.start_button.visible and app.practice_view.start_button.text.begins_with("Resume"),
         "Paused score retains its Resume control")
-    check(not app.pause_sheet.visible,
+    check(not app.practice_view.pause_sheet.visible,
         "Pausing must not force a modal menu over the music")
     show_state("ready")
     app.commands.clear()
-    app.listen_button.pressed.emit()
+    app.practice_view.listen_button.pressed.emit()
     expect_command("listen", "One tap enters Listen")
     var listening: Dictionary = state("ready")
     listening["mode"] = "listen"
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(listening).to_utf8_buffer())
-    check(app.listen_button.text == "Practice", "Listen becomes a one-tap return")
+    check(app.practice_view.listen_button.text == "Practice", "Listen becomes a one-tap return")
     listening["demo"] = {"token":"sound-test", "instrument":"Salamander Grand Piano (sampled)",
         "sampled":true, "audio_available":true, "url":""}
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(listening).to_utf8_buffer())
-    check(app.lesson_info_label.text.contains("Acoustic grand piano"),
+    check(app.practice_view.lesson_info_label.text.contains("Acoustic grand piano"),
         "Listen must identify sampled acoustic audio rather than synthetic tones")
     listening["demo"] = {"token":"basic-test", "instrument":"Basic synthesized piano",
         "sampled":false, "audio_available":true, "url":""}
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(listening).to_utf8_buffer())
-    check(app.lesson_info_label.text.contains("Basic piano sound"),
+    check(app.practice_view.lesson_info_label.text.contains("Basic piano sound"),
         "Missing optional samples must be identified instead of claimed acoustic")
-    app.listen_button.pressed.emit()
+    app.practice_view.listen_button.pressed.emit()
     check(app.commands == [{"action":"practice", "wait_for_player":true}],
         "Returning from Listen prepares a manual piano-first start: " + str(app.commands))
     app.commands.clear()
@@ -169,32 +174,32 @@ func test_short_challenge_loop() -> void:
         {"hand":"right","active":false,"complete":false,"locked":true},
         {"hand":"both","active":false,"complete":false,"locked":true}]
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
-    var ribbon_visible_at_ready: bool = app.practice_stage_bar.visible
-    check("LEFT HAND" in app.progress_label.text and "1/3 CLEAN" in app.progress_label.text,
+    var ribbon_visible_at_ready: bool = app.practice_view.stage.practice_stage_bar.visible
+    check("LEFT HAND" in app.practice_view.progress_label.text and "1/3 CLEAN" in app.practice_view.progress_label.text,
         "Practice should show the short musical challenge and committed clean streak")
     run["phase"] = "count_in"
     run["running"] = true
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
-    check(app.game_phase_cue.message == "GET READY",
+    check(app.practice_view.stage.phase_cue.message == "GET READY",
         "Count-in uses one compact cue alongside beat lights")
-    check(not app.feedback_label.visible,
+    check(not app.practice_view.feedback_label.visible,
         "Count-in hides repeated status text")
-    check(app.practice_stage_bar.visible == ribbon_visible_at_ready
-        and app.practice_stage_bar.visible,
+    check(app.practice_view.stage.practice_stage_bar.visible == ribbon_visible_at_ready
+        and app.practice_view.stage.practice_stage_bar.visible,
         "Hand progression remains an overlay through count-in at all supported sizes")
     run["phase"] = "playing"
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
-    check(app.game_phase_cue.message.is_empty() and not app.feedback_label.visible,
+    check(app.practice_view.stage.phase_cue.message.is_empty() and not app.practice_view.feedback_label.visible,
         "Graded playing leaves the sheet music as the main feedback")
     run["preview_only"] = true
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
-    check(app.feedback_label.visible,
+    check(app.practice_view.feedback_label.visible,
         "An ungraded preview is still clearly identified")
     run["preview_only"] = false
     run["phase"] = "ready"
     run["running"] = false
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(run).to_utf8_buffer())
-    check(app.game_phase_cue.message == "READY FOR PREVIEW",
+    check(app.practice_view.stage.phase_cue.message == "READY FOR PREVIEW",
         "Ready is explicit before any piano input")
     var pending := run.duplicate(true)
     pending["phase"] = "feedback"
@@ -202,33 +207,33 @@ func test_short_challenge_loop() -> void:
     pending["auto"] = true
     pending["transition_in_seconds"] = 1.2
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
-    check("CLEAN PASS" in app.progress_label.text and "2/3" in app.progress_label.text,
+    check("CLEAN PASS" in app.practice_view.progress_label.text and "2/3" in app.practice_view.progress_label.text,
         "Success must show the engine-confirmed clean pass before the next automatic take")
-    check(app.game_phase_cue.message == "CLEAN PASS",
+    check(app.practice_view.stage.phase_cue.message == "CLEAN PASS",
         "A clean cue must correspond to the backend result")
-    check("1.2" in app.lesson_info_label.text,
+    check("1.2" in app.practice_view.lesson_info_label.text,
         "Next automatic attempt should be visible without a menu")
     pending["take_result"] = {"clean":false,"correct":1,"total":3}
     pending["auto"] = false
     pending["transition_in_seconds"] = null
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
-    check("RETRY" in app.progress_label.text and "CLEAN PASS" not in app.progress_label.text,
+    check("RETRY" in app.practice_view.progress_label.text and "CLEAN PASS" not in app.practice_view.progress_label.text,
         "Failed take must never appear as a clean completion")
-    check(app.game_phase_cue.message == "RETRY",
+    check(app.practice_view.stage.phase_cue.message == "RETRY",
         "A failed take must not appear to be a success")
     pending["recovery_notice"] = {"kind":"slowdown", "from_bpm":80,
         "to_bpm":68, "first_bar":3, "last_bar":4}
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
-    check("80" in app.lesson_info_label.text and "68" in app.lesson_info_label.text
-        and "3–4" in app.lesson_info_label.text,
+    check("80" in app.practice_view.lesson_info_label.text and "68" in app.practice_view.lesson_info_label.text
+        and "3–4" in app.practice_view.lesson_info_label.text,
         "Recovery tempo and retry bars remain visible below score")
-    check(not app.practice_playback_banner.visible,
+    check(not app.practice_view.stage.practice_playback_banner.visible,
         "Recovery guidance must not obscure moving sheet music")
     pending["preview_only"] = true
     pending["phase"] = "playing"
     pending["take_result"] = null
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
-    check("PREVIEW" in app.progress_label.text,
+    check("PREVIEW" in app.practice_view.progress_label.text,
         "Disconnected preview must not pretend the user is earning mastery")
     pending["preview_only"] = false
     pending["phase"] = "ready"
@@ -239,32 +244,32 @@ func test_short_challenge_loop() -> void:
     pending["hand_stages"][1]["locked"] = false
     pending["hand_stages"][1]["active"] = true
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(pending).to_utf8_buffer())
-    var labels: Dictionary = app.practice_stage_labels
+    var labels: Dictionary = app.practice_view.stage.practice_stage_labels
     check(labels["left"].text.begins_with("✓") and labels["right"].text.begins_with("●"),
         "Backend hand completion must unlock the next real stage")
-    check("RIGHT HAND UNLOCKED" in app.progress_label.text,
+    check("RIGHT HAND UNLOCKED" in app.practice_view.progress_label.text,
         "Completed first hand should visibly unlock the next without opening a menu")
-    check(app.practice_controls.get_child_count() == 3,
+    check(app.practice_view.practice_controls.get_child_count() == 3,
         "Game-like challenge flow must not add another transport button")
 
 
 func test_primary_transport() -> void:
     show_state()
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     expect_command("start", "Primary button starts a ready passage")
     for phase in ["count_in", "playing", "feedback", "recovering", "loading"]:
         show_state(phase)
         app.commands.clear() # Ignore the ordinary loading score-ready acknowledgement.
         key(KEY_SPACE)
         expect_command("pause", "Space pauses " + phase + " without abandoning the attempt")
-        check(app.start_button.text.begins_with("Pause"), "Primary control offers Pause during " + phase)
+        check(app.practice_view.start_button.text.begins_with("Pause"), "Primary control offers Pause during " + phase)
         check(visible_buttons("Pause").size() == 1, "Only one Pause control is visible during " + phase)
-        app.start_button.pressed.emit()
+        app.practice_view.start_button.pressed.emit()
         expect_command("pause", "Primary button pauses " + phase)
     show_state("paused")
     key(KEY_SPACE)
     expect_command("resume", "Space resumes the same paused attempt")
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     expect_command("resume", "Primary button resumes the same paused attempt")
     check(visible_buttons("Resume").size() == 1, "Paused practice offers exactly one Resume control")
 
@@ -306,7 +311,7 @@ func routed_key(code: Key, unicode_value: int = 0, shifted: bool = false) -> voi
 func test_focused_shortcuts() -> void:
     for phase in ["ready", "playing", "paused"]:
         show_state(phase)
-        for control in app.practice_controls.get_children():
+        for control in app.practice_view.practice_controls.get_children():
             if not control is Button or control.disabled:
                 continue
             control.grab_focus()
@@ -319,7 +324,7 @@ func test_focused_shortcuts() -> void:
     # Enter keeps ordinary button activation, and typing in Settings remains
     # native text input rather than invoking practice shortcuts.
     show_state()
-    for control in app.practice_controls.get_children():
+    for control in app.practice_view.practice_controls.get_children():
         if control is Button and control.text == "Retry":
             control.grab_focus()
     await routed_key(KEY_ENTER)
@@ -396,15 +401,15 @@ func test_compact_feedback() -> void:
     await process_frame
     await process_frame
     var viewport := root.get_visible_rect()
-    check(app.feedback_label.max_lines_visible == 1 and app.feedback_label.clip_text
-        and app.feedback_label.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS,
+    check(app.practice_view.feedback_label.max_lines_visible == 1 and app.practice_view.feedback_label.clip_text
+        and app.practice_view.feedback_label.text_overrun_behavior == TextServer.OVERRUN_TRIM_ELLIPSIS,
         "Compact feedback uses one readable line with ellipsis")
-    check(app.feedback_label.tooltip_text == state()["feedback"],
+    check(app.practice_view.feedback_label.tooltip_text == state()["feedback"],
         "Full MIDI connection guidance remains available from the bounded feedback")
-    var font_size: int = app.feedback_label.get_theme_font_size("font_size")
-    check(font_size >= 14 and app.feedback_label.size.y >= font_size,
+    var font_size: int = app.practice_view.feedback_label.get_theme_font_size("font_size")
+    check(font_size >= 14 and app.practice_view.feedback_label.size.y >= font_size,
         "Feedback reserves enough height without shrinking readable type")
-    for control in [app.feedback_label, app.progress_label, app.practice_controls, app.speed_label]:
+    for control in [app.practice_view.feedback_label, app.practice_view.progress_label, app.practice_view.practice_controls, app.practice_view.speed_label]:
         check(viewport.encloses(control.get_global_rect()), "Compact practice control remains inside the viewport: " + str(control))
 
 func test_caption_bounds() -> void:
@@ -427,7 +432,7 @@ func test_caption_bounds() -> void:
             app._on_state(0, 200, PackedStringArray(), JSON.stringify(snapshot).to_utf8_buffer())
             for frame in range(6):
                 await process_frame
-            var score_rect: Rect2 = app.score_frame.get_global_rect()
+            var score_rect: Rect2 = app.practice_view.stage.score_frame.get_global_rect()
             if expected.size == Vector2.ZERO:
                 expected = score_rect
             check(score_rect.is_equal_approx(expected),
@@ -435,9 +440,9 @@ func test_caption_bounds() -> void:
             var viewport := root.get_visible_rect()
             check(score_rect.size.y >= 135.0 and viewport.encloses(score_rect),
                 "Captions leave a usable notation region at %s" % dimensions)
-            check(viewport.encloses(app.practice_controls.get_global_rect()),
+            check(viewport.encloses(app.practice_view.practice_controls.get_global_rect()),
                 "Caption slots must leave all transport controls visible at %s" % dimensions)
-            for caption in [app.feedback_label, app.lesson_info_label]:
+            for caption in [app.practice_view.feedback_label, app.practice_view.lesson_info_label]:
                 check(caption.get_theme_font_size("font_size") >= 14,
                     "Caption containment must preserve readable typography")
                 check(caption.tooltip_text == caption.text,
@@ -446,7 +451,7 @@ func test_caption_bounds() -> void:
                     "Bounded captions must receive pointer hover for their full tooltip")
                 check(viewport.encloses(caption.get_parent().get_global_rect()),
                     "Caption slot must fit the viewport at %s" % dimensions)
-            check(app.feedback_label.max_lines_visible == 1 and app.lesson_info_label.max_lines_visible == (2 if app.size.x < 1000.0 else 1),
+            check(app.practice_view.feedback_label.max_lines_visible == 1 and app.practice_view.lesson_info_label.max_lines_visible == (2 if app.size.x < 1000.0 else 1),
                 "Reserve a feedback line and enough instruction space for this viewport")
 
 func test_notation_phase_cues() -> void:
@@ -467,33 +472,33 @@ func test_notation_phase_cues() -> void:
             app._update_count_in()
             await process_frame
             await process_frame
-            check(not app.game_phase_cue.is_visible_in_tree(),
+            check(not app.practice_view.stage.phase_cue.is_visible_in_tree(),
                 "A phase capsule must never obscure loaded notation during %s at %s" % [phase, dimensions])
-            var score_rect: Rect2 = app.score_frame.get_global_rect()
+            var score_rect: Rect2 = app.practice_view.stage.score_frame.get_global_rect()
             check(score_rect.size.y >= 135.0,
                 "Removing an overlapping capsule must not reduce the notation floor")
-            check(not app.progress_label.text.is_empty()
-                and not score_rect.intersects(app.progress_label.get_global_rect()),
+            check(not app.practice_view.progress_label.text.is_empty()
+                and not score_rect.intersects(app.practice_view.progress_label.get_global_rect()),
                 "Useful practice progress remains outside notation during " + phase)
-            for caption in [app.feedback_label, app.lesson_info_label]:
+            for caption in [app.practice_view.feedback_label, app.practice_view.lesson_info_label]:
                 if caption.is_visible_in_tree():
                     check(not caption.text.is_empty()
                         and not score_rect.intersects(caption.get_global_rect()),
                         "Visible phase guidance must remain outside notation during " + phase)
             if phase == "count_in":
-                check(app.game_count_in.visible and app.game_count_in.beats_left > 0,
+                check(app.practice_view.stage.count_in.visible and app.practice_view.stage.count_in.beats_left > 0,
                     "Backend-timed preparation lights remain available without the capsule")
             elif phase == "ready":
-                check(app.lesson_info_label.visible and "Play any piano key" in app.lesson_info_label.text,
+                check(app.practice_view.lesson_info_label.visible and "Play any piano key" in app.practice_view.lesson_info_label.text,
                     "Ready practice retains its actionable starting instruction")
             elif phase == "paused":
-                check(app.feedback_label.visible and "Paused" in app.feedback_label.text,
+                check(app.practice_view.feedback_label.visible and "Paused" in app.practice_view.feedback_label.text,
                     "Pause retains its ordinary state caption")
         # A preparing score can still show a genuine transition cue: there
         # are no engraved noteheads until the native model is ready.
-        app.timeline_preview.clear_score()
+        app.practice_view.stage.renderer.clear_score()
         app._on_state(0, 200, PackedStringArray(), JSON.stringify(state("loading")).to_utf8_buffer())
-        check(app.game_phase_cue.visible and app.game_phase_cue.message == "PREPARING",
+        check(app.practice_view.stage.phase_cue.visible and app.practice_view.stage.phase_cue.message == "PREPARING",
             "The phase cue remains available while engraving is not yet ready")
 
 
@@ -502,15 +507,15 @@ func test_instructional_transition() -> void:
     retry["next_action"] = "Retry measures 3–4 at 72 BPM"
     retry["transition_in_seconds"] = 1.5
     app._on_state(0,200,PackedStringArray(),JSON.stringify(retry).to_utf8_buffer())
-    check(app.lesson_info_label.text.contains("Retry measures 3–4 at 72 BPM"),
+    check(app.practice_view.lesson_info_label.text.contains("Retry measures 3–4 at 72 BPM"),
         "The teaching instruction says exactly what will happen next")
-    check(app.lesson_info_label.text.contains("1.5"), "The brief automatic break has a visible countdown")
+    check(app.practice_view.lesson_info_label.text.contains("1.5"), "The brief automatic break has a visible countdown")
     retry["phase"] = "paused"
     retry["paused"] = true
     retry["pause_context"] = "recovering"
-    app.timeline_preview.clear_score() # Pausing loading must not disable Resume.
+    app.practice_view.stage.renderer.clear_score() # Pausing loading must not disable Resume.
     app._on_state(0,200,PackedStringArray(),JSON.stringify(retry).to_utf8_buffer())
-    check(not app.start_button.disabled, "Resume remains available while the next score is loading")
+    check(not app.practice_view.start_button.disabled, "Resume remains available while the next score is loading")
     check(not app.lesson_view.stop_button.disabled, "Stop remains available during an automatic break")
     retry["mode"] = "learn"
     retry["phase"] = "loading"
@@ -518,7 +523,7 @@ func test_instructional_transition() -> void:
     app._on_state(0,200,PackedStringArray(),JSON.stringify(retry).to_utf8_buffer())
     app.commands.clear()
     app._toggle_playing()
-    check(app.start_button.text.contains("Pause"), "Guided preparation offers Pause")
+    check(app.practice_view.start_button.text.contains("Pause"), "Guided preparation offers Pause")
     check(app.commands.back().get("action") == "pause", "Primary transport pauses guided preparation")
 
 func test_modes() -> void:
@@ -526,7 +531,7 @@ func test_modes() -> void:
     app.lesson_view.mode_choice.item_selected.emit(2)
     check(app.commands.back().get("action") == "perform", "Perform is a functioning mode")
     app.commands.clear()
-    app.listen_button.pressed.emit()
+    app.practice_view.listen_button.pressed.emit()
     check(app.commands.back().get("action") == "listen", "Listen requests real active-variant audio")
     var review := state("performance_complete")
     review["mode"] = "perform"
@@ -545,16 +550,16 @@ func test_modes() -> void:
         }]
     }
     app._on_state(0,200,PackedStringArray(),JSON.stringify(review).to_utf8_buffer())
-    check(app.performance_review.visible, "Finished Perform shows a persistent review")
-    check(app.performance_review.summary_label.text.contains("25") and app.performance_review.summary_label.text.contains("missed"),
+    check(app.practice_view.performance_review.visible, "Finished Perform shows a persistent review")
+    check(app.practice_view.performance_review.summary_label.text.contains("25") and app.practice_view.performance_review.summary_label.text.contains("missed"),
         "Review summarizes accuracy and specific error categories")
     app.commands.clear()
-    app.performance_review.review_button.pressed.emit()
-    check(app.review_sheet.visible, "Review opens a readable detailed dialog")
-    check("Expected C4, played D4" in app.review_sheet.call("_issue_text",
+    app.practice_view.performance_review.review_button.pressed.emit()
+    check(app.practice_view.review_sheet.visible, "Review opens a readable detailed dialog")
+    check("Expected C4, played D4" in app.practice_view.review_sheet.call("_issue_text",
         review["performance_summary"]["sections"][0]["issues"][1]),
         "Review reports physical wrong keys, not only expected pitches")
-    app.review_sheet.call("_repeat_section", 3, 4)
+    app.practice_view.review_sheet.call("_repeat_section", 3, 4)
     check(app.commands.back().get("action") == "review_retry"
         and app.commands.back().get("first_bar") == 3
         and app.commands.back().get("last_bar") == 4,
@@ -575,30 +580,30 @@ func test_pause_choices() -> void:
     paused["seek_available"] = true
     paused["seek_range"] = {"first_bar":1,"last_bar":6}
     app._on_state(0,200,PackedStringArray(),JSON.stringify(paused).to_utf8_buffer())
-    check(not app.pause_sheet.visible, "Ordinary Pause never opens a menu over the score")
-    app._open_advanced_pause()
-    check(app.pause_sheet.visible, "Explicit advanced controls open a focused sheet")
-    check(app.pause_sheet.z_index > app.game_stage.z_index,
+    check(not app.practice_view.pause_sheet.visible, "Ordinary Pause never opens a menu over the score")
+    app.practice_view.open_advanced_pause()
+    check(app.practice_view.pause_sheet.visible, "Explicit advanced controls open a focused sheet")
+    check(app.practice_view.pause_sheet.z_index > app.practice_view.stage.effects.z_index,
         "Advanced pause sheet covers the native progress rail")
     app.commands.clear()
-    app.pause_sheet.resume_button.pressed.emit()
+    app.practice_view.pause_sheet.resume_button.pressed.emit()
     expect_command("resume", "Sheet Resume continues the same attempt")
-    app.pause_sheet.retry_button.pressed.emit()
+    app.practice_view.pause_sheet.retry_button.pressed.emit()
     expect_command("restart", "Sheet Retry starts a fresh attempt")
-    app.pause_sheet.listen_button.pressed.emit()
+    app.practice_view.pause_sheet.listen_button.pressed.emit()
     expect_command("listen", "Sheet Listen starts real example audio")
-    app.pause_sheet.bar_choice.value = 3
-    app.pause_sheet.seek_button.pressed.emit()
+    app.practice_view.pause_sheet.bar_choice.value = 3
+    app.practice_view.pause_sheet.seek_button.pressed.emit()
     check(app.commands == [{"action":"seek", "bar":3}], "Bar selection sends a real source bar")
     app.commands.clear()
-    check(not app.progress_label.text.contains("Stage"), "Foreground explains clean runs rather than numeric curriculum counts")
-    check(app.speed_label.text.contains("80 BPM") and app.settings_view.tempo_setting.value == 80,
+    check(not app.practice_view.progress_label.text.contains("Stage"), "Foreground explains clean runs rather than numeric curriculum counts")
+    check(app.practice_view.speed_label.text.contains("80 BPM") and app.settings_view.tempo_setting.value == 80,
         "Matching current and target tempo retains one clear BPM value")
     paused["bpm"] = 64
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(paused).to_utf8_buffer())
-    check(app.speed_label.text.contains("64 BPM") and app.speed_label.text.contains("target 80"),
+    check(app.practice_view.speed_label.text.contains("64 BPM") and app.practice_view.speed_label.text.contains("target 80"),
         "Reduced practice tempo shows both its current BPM and the selected target")
-    app.pause_sheet.exit_button.pressed.emit()
+    app.practice_view.pause_sheet.exit_button.pressed.emit()
     check(app.current_screen == "library", "Sheet Exit returns to the music library")
     check(app.commands == [{"action":"stop"}], "Explicit Exit stops the paused attempt before opening music")
 
@@ -607,34 +612,34 @@ func test_focus_trap() -> void:
     paused["seek_available"] = true
     paused["seek_range"] = {"first_bar":1,"last_bar":6}
     app._on_state(0,200,PackedStringArray(),JSON.stringify(paused).to_utf8_buffer())
-    app._open_advanced_pause()
+    app.practice_view.open_advanced_pause()
     await process_frame
     app.commands.clear()
-    check(root.gui_get_focus_owner() == app.pause_sheet.resume_button,
+    check(root.gui_get_focus_owner() == app.practice_view.pause_sheet.resume_button,
         "Opening the pause sheet focuses its Resume action")
     for shifted in [false,true]:
         for index in range(20):
             await routed_key(KEY_TAB,0,shifted)
             var owner: Control = root.gui_get_focus_owner()
-            check(owner != null and app.pause_sheet.is_ancestor_of(owner),
+            check(owner != null and app.practice_view.pause_sheet.is_ancestor_of(owner),
                 "Tab stays inside the pause sheet, reverse=" + str(shifted) + " step=" + str(index))
     for code in [KEY_LEFT,KEY_RIGHT,KEY_UP,KEY_DOWN]:
-        app.pause_sheet.resume_button.grab_focus()
+        app.practice_view.pause_sheet.resume_button.grab_focus()
         for index in range(12):
             # OptionButton up/down intentionally opens its native popup;
             # test the sheet's own directional focus loop from a button.
             if root.gui_get_focus_owner() is OptionButton:
-                app.pause_sheet.exit_button.grab_focus()
+                app.practice_view.pause_sheet.exit_button.grab_focus()
             await routed_key(code)
             var owner: Control = root.gui_get_focus_owner()
-            check(owner != null and app.pause_sheet.is_ancestor_of(owner),
+            check(owner != null and app.practice_view.pause_sheet.is_ancestor_of(owner),
                 "Arrow focus stays inside the pause sheet: key=" + str(code) + " step=" + str(index)
                 + " owner=" + str(owner.get_path() if owner != null else "none"))
     for code in [KEY_LEFT,KEY_RIGHT]:
-        app.pause_sheet.hand_choice.grab_focus()
+        app.practice_view.pause_sheet.hand_choice.grab_focus()
         await routed_key(code)
     check(app.commands.is_empty(), "Modal focus navigation never activates hidden course navigation")
-    var field: LineEdit = app.pause_sheet.bar_choice.get_line_edit()
+    var field: LineEdit = app.practice_view.pause_sheet.bar_choice.get_line_edit()
     field.grab_focus()
     await routed_key(KEY_RIGHT)
     await routed_key(KEY_LEFT)
@@ -643,9 +648,9 @@ func test_focus_trap() -> void:
     paused["seek_available"] = false
     paused["seek_range"] = null
     app._on_state(0,200,PackedStringArray(),JSON.stringify(paused).to_utf8_buffer())
-    check(app.pause_sheet.visible and app.pause_sheet.seek_button.disabled,
+    check(app.practice_view.pause_sheet.visible and app.practice_view.pause_sheet.seek_button.disabled,
         "Paused Listen accepts a null seek range and offers no seek action")
-    check(not app.pause_sheet.bar_choice.editable, "Unavailable Listen seek cannot be edited")
+    check(not app.practice_view.pause_sheet.bar_choice.editable, "Unavailable Listen seek cannot be edited")
 
 func test_learner_progression() -> void:
     app.action_pending = true
@@ -661,11 +666,11 @@ func test_learner_progression() -> void:
     learned["placement_available"] = true
     learned["skip_available"] = true
     app._on_state(0,200,PackedStringArray(),JSON.stringify(learned).to_utf8_buffer())
-    check(app.start_button.text.contains("Next idea"), "Prepared idea offers the next musical unit")
+    check(app.practice_view.start_button.text.contains("Next idea"), "Prepared idea offers the next musical unit")
     app.commands.clear()
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     expect_command("learn_next", "Guided units advance before full-passage rhythm")
-    check(app.progress_label.text.contains("Idea"), "Short-unit context is readable")
+    check(app.practice_view.progress_label.text.contains("Idea"), "Short-unit context is readable")
     app.lesson_view.skip_button.pressed.emit()
     check(app.commands.back().get("action") == "skip_stage", "Skip is a real explicit choice")
     check(app.lesson_view.skip_button.text.contains("no mastery"), "Skip never pretends mastery")
@@ -762,14 +767,52 @@ func test_handsfree_midi_start_and_readability() -> void:
     app._update_responsive_layout()
     var physical_scale: float = root.content_scale_factor
     check(physical_scale >= 1.5, "Fullscreen UI uses native window scaling")
-    check(app.progress_label.get_theme_font_size("font_size") * physical_scale >= 22,
+    check(app.practice_view.progress_label.get_theme_font_size("font_size") * physical_scale >= 22,
         "Progress labels retain readable physical pixel size at high resolution")
-    check(app.start_button.get_theme_font_size("font_size") * physical_scale >= 22,
+    check(app.practice_view.start_button.get_theme_font_size("font_size") * physical_scale >= 22,
         "Start button retains readable physical pixel size at high resolution")
-    check(app.hint_keyboard.custom_minimum_size.y * physical_scale >= 145,
+    check(app.practice_view.stage.keyboard.custom_minimum_size.y * physical_scale >= 145,
         "Piano hint diagram scales with native window content")
-    check(app.practice_controls.get_global_rect().end.x <= root.get_visible_rect().size.x + 1,
+    check(app.practice_view.practice_controls.get_global_rect().end.x <= root.get_visible_rect().size.x + 1,
         "Scaled controls remain inside the full-size window")
+
+func test_picker_polling() -> void:
+    var before := state()
+    before["piece_fingerprint"] = "old-piece"
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(before).to_utf8_buffer())
+    app.layout_calls = 0
+    app.model_calls = 0
+    var choosing := state()
+    choosing["revision"] = 99
+    choosing["piece_fingerprint"] = "new-piece"
+    choosing["piece_last_bar"] = 80
+    app.practice_view.show_source_picker(choosing)
+    check(app.current_screen == "practice" and app.practice_view.open_picker.visible,"Source picker is the only overlay above Practice")
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(choosing).to_utf8_buffer())
+    check(app.revision == 1 and app.last_state.piece_fingerprint == "old-piece",
+        "State polls cannot replace the chosen passage while its source picker is open")
+    check(app.layout_calls == 0 and app.model_calls == 0,
+        "Opening a source picker must not engrave its default passage before confirmation")
+
+func test_picker_midi_guard() -> void:
+    var ready := state()
+    ready["mode"] = "perform"
+    ready["device"] = "Test piano"
+    ready["midi_input_count"] = 0
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(ready).to_utf8_buffer())
+    app.practice_view.show_source_picker(ready)
+    app.commands.clear()
+    ready["midi_input_count"] = 1
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(ready).to_utf8_buffer())
+    check(app.commands.is_empty(),"Piano input cannot start a transport under the source picker")
+    app.practice_view.cancel_source_picker()
+    app._navigate("practice")
+    app.commands.clear()
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(ready).to_utf8_buffer())
+    check(app.commands.is_empty(),"Closing the picker cannot replay a key heard while choosing a source measure")
+    ready["midi_input_count"] = 2
+    app._on_state(0,200,PackedStringArray(),JSON.stringify(ready).to_utf8_buffer())
+    expect_command("start","A fresh key after closing the picker still starts Perform")
 
 func run() -> void:
     root.mode = Window.MODE_WINDOWED
@@ -804,6 +847,8 @@ func run() -> void:
         "focus_trap": await test_focus_trap()
         "learner_progression": test_learner_progression()
         "handsfree_midi": await test_handsfree_midi_start_and_readability()
+        "picker_polling": test_picker_polling()
+        "picker_midi_guard": test_picker_midi_guard()
         _: check(false, "Unknown interaction scenario: " + scenario)
     print("PRACTICE_INTERACTION_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

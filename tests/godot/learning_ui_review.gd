@@ -42,11 +42,11 @@ func phase() -> String:
     return str(app.last_state.get("phase",""))
 
 func sheet() -> Control:
-    return app.get("pause_sheet")
+    return app.practice_view.pause_sheet
 
 func score_ready() -> bool:
-    return app.timeline_preview != null and app._native_score_ready() \
-        and app.timeline_preview.is_visible_in_tree() and not app.layout_pending \
+    return app.practice_view.stage.renderer != null and app._native_score_ready() \
+        and app.practice_view.stage.renderer.is_visible_in_tree() and not app.layout_pending \
         and not app.timeline_model_pending
 
 func key(code: Key) -> void:
@@ -90,8 +90,8 @@ func capture(label: String) -> Dictionary:
     var background := picture.get_pixel(5,5)
     check(background.r < .2 and background.g < .32 and background.b < .28,
         "Low-glare dark background in "+label)
-    if app.open_picker.visible:
-        var modal: Rect2 = app.open_picker.panel.get_global_rect()
+    if app.practice_view.open_picker.visible:
+        var modal: Rect2 = app.practice_view.open_picker.panel.get_global_rect()
         entry["starting_measure_bounds"] = str(modal)
         check(modal.size.x >= 280.0 and modal.size.x <= 680.0,
             "Starting-measure dialog must have readable width in " + label)
@@ -108,20 +108,20 @@ func capture(label: String) -> Dictionary:
                 check(button is Button and button.is_visible_in_tree()
                     and viewport.encloses(button.get_global_rect()),
                     "Starting-measure action must fit the viewport in " + label)
-    if app.current_screen == "practice" and not app.open_picker.visible:
-        entry["score_height"] = app.score_frame.size.y
-        check(app.score_frame.size.y >= 135,"Notation retains readable height in "+label)
-        check(viewport.encloses(app.practice_navigation.get_global_rect()),"Learning navigation fits actual viewport in "+label)
-        for label_node in [app.speed_label,app.hand_label]:
+    if app.current_screen == "practice" and not app.practice_view.open_picker.visible:
+        entry["score_height"] = app.practice_view.stage.score_frame.size.y
+        check(app.practice_view.stage.score_frame.size.y >= 135,"Notation retains readable height in "+label)
+        check(viewport.encloses(app.practice_view.practice_navigation.get_global_rect()),"Learning navigation fits actual viewport in "+label)
+        for label_node in [app.practice_view.speed_label,app.practice_view.hand_label]:
             var font: Font = label_node.get_theme_font("font")
             var text_width := font.get_string_size(label_node.text,HORIZONTAL_ALIGNMENT_LEFT,-1,label_node.get_theme_font_size("font_size")).x
             check(viewport.encloses(label_node.get_global_rect()),"Speed/hand label fits actual viewport in "+label)
             check(label_node.size.x >= text_width,"Speed/hand text is not clipped in "+label)
         if not paused and bool(app.last_state.get("loaded", false)):
-            var panel: Rect2 = app.score_frame.get_global_rect()
+            var panel: Rect2 = app.practice_view.stage.score_frame.get_global_rect()
             var found := false
             check(score_ready(), "Current native source revision is visible in " + label)
-            var view = app.timeline_preview
+            var view = app.practice_view.stage.renderer
             for id in view.drawn_noteheads:
                 var local: Vector2 = view.drawn_noteheads[id]
                 var point: Vector2 = view.get_global_transform_with_canvas()*local
@@ -133,18 +133,18 @@ func capture(label: String) -> Dictionary:
                     break
             check(found or phase() == "count_in",
                 "Actual engraved note pixels remain visible after the count-in in "+label)
-            for button in [app.start_button,app.practice_retry_button,app.listen_button]:
+            for button in [app.practice_view.start_button,app.practice_view.practice_retry_button,app.practice_view.listen_button]:
                 check(button.is_visible_in_tree() and viewport.encloses(button.get_global_rect()),
                     "Three transport controls fit actual viewport in "+label)
-        for button in app.practice_navigation.get_children():
+        for button in app.practice_view.practice_navigation.get_children():
             if button is Button and button.is_visible_in_tree() and not button.text.is_empty():
                 var font: Font = button.get_theme_font("font")
                 var width := font.get_string_size(button.text,HORIZONTAL_ALIGNMENT_LEFT,-1,button.get_theme_font_size("font_size")).x
                 check(button.size.x >= width+8,"Navigation text has visible width: "+button.text)
-        if app.hint_keyboard.is_visible_in_tree() and not paused:
-            entry["hint_bounds"] = str(app.hint_keyboard.get_global_rect())
-            check(viewport.encloses(app.hint_keyboard.get_global_rect()),"Conditional keyboard fits actual viewport in "+label)
-            check(not app.hint_keyboard._expected_label.text.is_empty(),"Keyboard identifies the actual expected pitch")
+        if app.practice_view.stage.keyboard.is_visible_in_tree() and not paused:
+            entry["hint_bounds"] = str(app.practice_view.stage.keyboard.get_global_rect())
+            check(viewport.encloses(app.practice_view.stage.keyboard.get_global_rect()),"Conditional keyboard fits actual viewport in "+label)
+            check(not app.practice_view.stage.keyboard._expected_label.text.is_empty(),"Keyboard identifies the actual expected pitch")
         if paused:
             entry["pause_bounds"] = str(sheet().get_global_rect())
             var commands: Array = []
@@ -169,7 +169,7 @@ func ensure_paused() -> void:
     if phase() == "paused" and sheet() != null and sheet().is_visible_in_tree():
         return
     if not bool(app.last_state.get("running",false)) and phase() not in ["guided_wait","loading","feedback","recovering"]:
-        app.start_button.pressed.emit()
+        app.practice_view.start_button.pressed.emit()
         await wait_for(func(): return bool(app.last_state.get("running",false)) or phase() == "guided_wait" or phase() == "loading",
             "ordinary Start before pausing")
     await wait_for(func(): return not app.action_pending,"transport control ready")
@@ -208,12 +208,12 @@ func run() -> void:
     await wait_for(func(): return app.current_screen == "library" and not app.library_pending and imported_row() != null,"user MIDI listed")
     await capture("03-library")
     (imported_row()).pressed.emit()
-    await wait_for(func(): return app.open_picker.visible, "starting-point dialog opens")
+    await wait_for(func(): return app.practice_view.open_picker.visible, "starting-point dialog opens")
     await capture("03b-starting-measure-1536x960")
     await resize_to(Vector2i(800,600))
     await capture("03c-starting-measure-800x600")
     await resize_to(Vector2i(1536,960))
-    app.open_picker.mode_choice.select(0)
+    app.practice_view.open_picker.mode_choice.select(0)
     press("Open music")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() and phase() == "guided_wait","generated Learn opens")
     press("Settings")
@@ -226,7 +226,7 @@ func run() -> void:
     await wait_for(func(): return score_ready() and phase() == "guided_wait","guided revision ready")
     check(sheet() != null,"Learning app integrates a real Pause sheet")
     print("LEARNING_UI_STAGE:input-ready")
-    await wait_for(func(): return app.hint_keyboard.is_visible_in_tree(),"real wrong MIDI input reveals keyboard")
+    await wait_for(func(): return app.practice_view.stage.keyboard.is_visible_in_tree(),"real wrong MIDI input reveals keyboard")
     for dimensions in [Vector2i(1536,960),Vector2i(1024,768),Vector2i(800,600)]:
         await resize_to(dimensions)
         await capture("hinted-learn-%dx%d" % [dimensions.x,dimensions.y])

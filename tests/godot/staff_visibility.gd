@@ -26,7 +26,7 @@ func run() -> void:
         if not error.is_empty():
             quit(1)
             return
-        var view = app.timeline_preview
+        var view = app.practice_view.stage.renderer
         for dimensions in [Vector2i(1536,960),Vector2i(800,600)]:
             root.size = dimensions
             await process_frame
@@ -45,8 +45,8 @@ func run() -> void:
                 var frame: Image = root.get_texture().get_image()
                 var pixels := Vector2(frame.get_size()) / root.get_visible_rect().size
                 var transform: Transform2D = view.get_global_transform_with_canvas()
-                var panel: Rect2 = app.score_frame.get_global_rect()
-                check(not app.lesson_steps.get_global_rect().intersects(panel),
+                var panel: Rect2 = app.practice_view.stage.score_frame.get_global_rect()
+                check(not app.practice_view.stage.steps.get_global_rect().intersects(panel),
                     "Lesson navigation stays outside native notation")
                 var gap: float = view.staff_gap()
                 for index in range(10):

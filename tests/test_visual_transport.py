@@ -44,6 +44,32 @@ def test_visual_transport_preparation_preserves_source_and_continuous_visual_axi
     assert t.practice_preparation is None
 
 
+@pytest.mark.parametrize("shift_run_at", (False, True))
+def test_resume_moves_each_active_deadline_by_the_same_paused_duration(shift_run_at):
+    t = VisualTransport(run_at=90, visual_offset_beats=8)
+    t.schedule_preparation({"duration_beats": 4}, source_from_beat=2,
+        from_visual=15, now=100, reverse_seconds=2, bpm=60)
+    t.pause(at=101)
+    frozen = t.position(101, phrase_length=8, bpm=60, running=False,
+                        pending_auto_result=False)
+    t.resume(now=111, shift_run_at=shift_run_at)
+    assert t.run_at == (100 if shift_run_at else 90)
+    assert t.next_at == 116 and t._visual_rewind_at == 110 and t._preparation_at == 112
+    assert t.position(111, phrase_length=8, bpm=60, running=False,
+                      pending_auto_result=False) == frozen
+    assert t.pending_rewind == 2 and t.visual_offset_beats == 8
+    assert not t.paused and t.paused_at == 0
+
+
+def test_resume_keeps_inactive_clock_sentinels_and_source_position_unchanged():
+    t = VisualTransport(run_at=90, play_from_beat=3)
+    t.pause(at=100)
+    t.resume(now=110, shift_run_at=False)
+    assert t.run_at == 90 and t.play_from_beat == 3
+    assert t.next_at == t._visual_rewind_at == t._preparation_at == 0
+    assert not t.paused and t.paused_at == 0
+
+
 def test_transport_engine_alias_has_exactly_one_state_owner(tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:

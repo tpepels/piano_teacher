@@ -51,8 +51,8 @@ func run() -> void:
         app.free()
         quit(1)
         return
-    var renderer = app.timeline_preview
-    var feedback = app.native_score_feedback
+    var renderer = app.practice_view.stage.renderer
+    var feedback = app.practice_view.stage.feedback
     check(feedback.score == renderer and feedback.score_revision == app.revision,
         "Production binds native feedback to the loaded source revision")
     check(feedback.is_visible_in_tree(), "Native feedback is the visible presentation layer")
@@ -154,7 +154,7 @@ func run() -> void:
         app.score_effects.preview_pulses[0].status == "preview" and
         app.score_effects.hit_pulses.is_empty() and feedback.pulses.is_empty(),
         "Preview source arrivals remain distinct from assessed native rewards")
-    check(app.game_stage.impact_energy == 0.0 and app.game_stage.preview_energy > 0.0,
+    check(app.practice_view.stage.effects.impact_energy == 0.0 and app.practice_view.stage.effects.preview_energy > 0.0,
         "Ungraded source arrivals illuminate the stage without earned success")
     app._clear_assessed_effects_in_ungraded_mode({"preview_only":false,"mode":"practice"})
     check(app.score_effects.preview_pulses.is_empty(),

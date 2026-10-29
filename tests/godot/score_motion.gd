@@ -21,13 +21,13 @@ func sample(beat: float, bpm: float = 80.0, start: float = 0.0) -> Dictionary:
         "mode":"practice", "preview_only":true, "clock_beat":beat,
         "bpm":bpm, "hand":"both", "transport_id":198,
         "play_from_beat":start, "count_in_beats":4.0,
-        "duration_beats":app.timeline_preview.timeline.duration_beats}
+        "duration_beats":app.practice_view.stage.renderer.timeline.duration_beats}
     app._process(0.0)
-    app.timeline_preview.queue_redraw()
+    app.practice_view.stage.renderer.queue_redraw()
     await process_frame
     await process_frame
     RenderingServer.force_draw()
-    return app.timeline_preview.drawn_noteheads.duplicate()
+    return app.practice_view.stage.renderer.drawn_noteheads.duplicate()
 
 func run() -> void:
     var folder: String = OS.get_cmdline_user_args()[0]
@@ -43,7 +43,7 @@ func run() -> void:
     if not error.is_empty():
         quit(1)
         return
-    var view = app.timeline_preview
+    var view = app.practice_view.stage.renderer
     var source: Dictionary = view.timeline.model.duplicate(true)
     var size_before: Vector2 = view.size
     var position_before: Vector2 = view.position

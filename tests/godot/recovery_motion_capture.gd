@@ -41,7 +41,7 @@ func run() -> void:
         var state := {"revision":app.revision, "transport_id":bpm, "bpm":bpm,
             "loaded":true, "running":true, "paused":false, "phase":"count_in",
             "mode":"practice", "preview_only":true, "clock_beat":initial_beat,
-            "play_from_beat":0.0, "duration_beats":app.timeline_preview.timeline.duration_beats,
+            "play_from_beat":0.0, "duration_beats":app.practice_view.stage.renderer.timeline.duration_beats,
             "count_in_beats":1, "count_in_bar_beats":4}
         var clock = load(args[2] if args.size() > 2 else "res://visual_transport_clock.gd").new()
         clock.accept(state, 100000, 100000)
@@ -62,15 +62,15 @@ func run() -> void:
             app.last_state.phase = "playing" if beat >= 0 else "count_in"
             # Sample the production native compositor on every display frame.
             app._process(0.0)
-            app.timeline_preview.queue_redraw()
+            app.practice_view.stage.renderer.queue_redraw()
             await process_frame
             RenderingServer.force_draw()
             var pixels: Image = root.get_texture().get_image()
             if not checking:
                 pixels.save_png(output + "/%d-%03d.png" % [bpm, frame])
             var pixel_scale := Vector2(pixels.get_size()) / root.get_visible_rect().size
-            var expected_x: float = (app.timeline_preview.global_position.x + app.timeline_preview.size.x * .42) * pixel_scale.x
-            var line_y: int = roundi(app.timeline_preview.get_global_rect().get_center().y * pixel_scale.y)
+            var expected_x: float = (app.practice_view.stage.renderer.global_position.x + app.practice_view.stage.renderer.size.x * .42) * pixel_scale.x
+            var line_y: int = roundi(app.practice_view.stage.renderer.get_global_rect().get_center().y * pixel_scale.y)
             var line_x := -1
             var best := 1.0
             for x in range(maxi(0,roundi(expected_x)-35), mini(pixels.get_width(),roundi(expected_x)+36)):
@@ -81,8 +81,8 @@ func run() -> void:
                     best = distance
                     line_x = x
             samples.append({"bpm":bpm, "frame":frame, "seconds":elapsed,
-                "beat":beat, "clock_beat":app.timeline_preview.clock_beat,
-                "noteheads":app.timeline_preview.drawn_noteheads,
+                "beat":beat, "clock_beat":app.practice_view.stage.renderer.clock_beat,
+                "noteheads":app.practice_view.stage.renderer.drawn_noteheads,
                 "expected_line_x":expected_x, "rendered_line_x":line_x, "line_color_error":best,
                 "width":pixels.get_width(), "height":pixels.get_height(),
                 "pixel_scale":[pixel_scale.x, pixel_scale.y]})

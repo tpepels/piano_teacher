@@ -49,15 +49,15 @@ func _capture(label: String) -> void:
     await process_frame
     # Sample the same clock used to draw the frame, not one taken after
     # PNG encoding (which may take 20-50ms on a software-rendered CI GPU).
-    var capture_beat: float = app.timeline_preview.clock_beat
+    var capture_beat: float = app.practice_view.stage.renderer.clock_beat
     RenderingServer.force_draw()
     var image: Image = root.get_texture().get_image()
     var path: String = folder.path_join(label + ".png")
     if image.is_empty() or image.save_png(path) != OK:
         errors.append("Cannot capture real rendered desktop: " + label)
         return
-    var bounds: Rect2 = app.score_frame.get_global_rect()
-    var renderer = app.timeline_preview
+    var bounds: Rect2 = app.practice_view.stage.score_frame.get_global_rect()
+    var renderer = app.practice_view.stage.renderer
     var rows: Array = []
     if _native_notation_ready():
         var gap: float = renderer.staff_gap()
@@ -176,22 +176,22 @@ func _audit_all_screens() -> void:
 
 
 func _native_failure() -> String:
-    if app.timeline_preview == null:
+    if app.practice_view.stage.renderer == null:
         return ""
-    return str(app.timeline_preview.get("failure_reason"))
+    return str(app.practice_view.stage.renderer.get("failure_reason"))
 
 
 func _native_notation_ready() -> bool:
-    return app.timeline_preview != null and app._native_score_ready() and \
-        app.timeline_preview.is_visible_in_tree() and not app.layout_pending and \
+    return app.practice_view.stage.renderer != null and app._native_score_ready() and \
+        app.practice_view.stage.renderer.is_visible_in_tree() and not app.layout_pending and \
         not app.timeline_model_pending
 
 
 func _notation_ready() -> bool:
     return _native_notation_ready() and \
-        not app.timeline_preview.timeline.notes.is_empty() and \
+        not app.practice_view.stage.renderer.timeline.notes.is_empty() and \
         not app.score_layout.get("notes", []).is_empty() and \
-        app.score_frame.is_visible_in_tree()
+        app.practice_view.stage.score_frame.is_visible_in_tree()
 
 func _is_counting() -> bool:
     return str(app.last_state.get("phase", "")) == "count_in" and \

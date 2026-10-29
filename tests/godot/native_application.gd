@@ -21,8 +21,8 @@ func run() -> void:
     app.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     app._navigate("practice")
     var ready: bool = await wait_for(func() -> bool:
-        return app.timeline_preview != null and app._native_score_ready() and \
-            app.timeline_preview.is_visible_in_tree(),
+        return app.practice_view.stage.renderer != null and app._native_score_ready() and \
+            app.practice_view.stage.renderer.is_visible_in_tree(),
         "actual native compositor ready")
     if not ready:
         quit(1)
@@ -33,7 +33,7 @@ func run() -> void:
     if not ready:
         quit(1)
         return
-    var renderer = app.timeline_preview
+    var renderer = app.practice_view.stage.renderer
     var density: float = renderer.timeline.pixels_per_beat
     var first_clock: float = renderer.clock_beat
     var first_x: float = renderer.timeline.screen_x(1, first_clock, 500, 0)

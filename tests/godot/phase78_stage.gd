@@ -130,9 +130,9 @@ func run() -> void:
     check(music_row.title_label.get_theme_font("font") != music_row.detail_label.get_theme_font("font"),
         "Music titles use the editorial face while metadata stays in the interface face")
     music_row.queue_free()
-    check(app.game_stage.get_parent() == app.score_frame,
+    check(app.practice_view.stage.effects.get_parent() == app.practice_view.stage.score_frame,
         "Beat lighting lives beneath the same score canvas as real engraving")
-    check(app.game_count_in.get_parent() == app.score_frame,
+    check(app.practice_view.stage.count_in.get_parent() == app.practice_view.stage.score_frame,
         "Countdown stays inside the music rather than creating a website row")
     app._update_visual_frame_rate({"running":false, "paused":false})
     check(Engine.max_fps == 30, "Idle Godot presentation must run at lower CPU cost")
@@ -148,18 +148,18 @@ func run() -> void:
         "clock_beat":-1.5, "bpm":60.0, "count_in_bar_beats":3,
         "transport_id":12}
     app.last_state_tick = Time.get_ticks_msec()
-    app.game_stage.present(app.last_state)
+    app.practice_view.stage.effects.present(app.last_state)
     app._process(1.0 / 60.0)
-    check(app.game_stage.score_preview and app.game_stage.transport_active,
+    check(app.practice_view.stage.effects.score_preview and app.practice_view.stage.effects.transport_active,
         "The actual UI samples preview beat lighting from its transport")
-    check(app.game_count_in.visible and app.game_count_in.beats_left == 2,
+    check(app.practice_view.stage.count_in.visible and app.practice_view.stage.count_in.beats_left == 2,
         "The actual UI shows an unobtrusive numeric preparation countdown")
     app.last_state["paused"] = true
-    app.game_stage.present(app.last_state)
+    app.practice_view.stage.effects.present(app.last_state)
     app._process(1.0 / 60.0)
-    check(not app.game_stage.transport_active and not app.game_count_in.visible,
+    check(not app.practice_view.stage.effects.transport_active and not app.practice_view.stage.count_in.visible,
         "The UI freezes both the score and countdown on pause")
-    check(app.practice_controls.get_child_count() == 3,
+    check(app.practice_view.practice_controls.get_child_count() == 3,
         "Performance lighting cannot add menus or transport controls")
     print("PHASE78_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

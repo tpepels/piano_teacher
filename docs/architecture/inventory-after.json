@@ -1,0 +1,2808 @@
+{
+  "baseline": "a093c5c",
+  "scope": "First-party Python, GDScript, shell and ONNX bridge; third-party addons/import caches/model packages excluded",
+  "files": [
+    {
+      "path": "godot/main.gd",
+      "lines": 2493
+    },
+    {
+      "path": "piano_teacher/server.py",
+      "lines": 1957
+    },
+    {
+      "path": "piano_teacher/notation/extra_symbol_pixels.py",
+      "lines": 909
+    },
+    {
+      "path": "piano_teacher/notation/semantic_contract.py",
+      "lines": 880
+    },
+    {
+      "path": "piano_teacher/notation/phase3_pixels.py",
+      "lines": 868
+    },
+    {
+      "path": "piano_teacher/notation/symbol_pixel_proof.py",
+      "lines": 815
+    },
+    {
+      "path": "piano_teacher/notation/lesson.py",
+      "lines": 795
+    },
+    {
+      "path": "piano_teacher/notation/connector_pixels.py",
+      "lines": 743
+    },
+    {
+      "path": "godot/notation/native/glyphs.gd",
+      "lines": 671
+    },
+    {
+      "path": "godot/notation/native/view.gd",
+      "lines": 645
+    },
+    {
+      "path": "piano_teacher/learning.py",
+      "lines": 638
+    },
+    {
+      "path": "piano_teacher/notation/midi_transcription_rules.py",
+      "lines": 617
+    },
+    {
+      "path": "godot/notation/native/score_layout.gd",
+      "lines": 599
+    },
+    {
+      "path": "scripts/aggregate_phase3_corpus.py",
+      "lines": 543
+    },
+    {
+      "path": "godot/ui_layout_smoke.gd",
+      "lines": 532
+    },
+    {
+      "path": "piano_teacher/ui.py",
+      "lines": 486
+    },
+    {
+      "path": "godot/notation/native/geometry.gd",
+      "lines": 450
+    },
+    {
+      "path": "piano_teacher/notation/model.py",
+      "lines": 443
+    },
+    {
+      "path": "piano_teacher/notation/proof.py",
+      "lines": 440
+    },
+    {
+      "path": "piano_teacher/rendering/legacy/engraving.py",
+      "lines": 439
+    },
+    {
+      "path": "godot/notation/native/context_painter.gd",
+      "lines": 403
+    },
+    {
+      "path": "piano_teacher/notation/source_annotations.py",
+      "lines": 400
+    },
+    {
+      "path": "piano_teacher/notation/assets/tuplets.py",
+      "lines": 393
+    },
+    {
+      "path": "piano_teacher/state_projection.py",
+      "lines": 381
+    },
+    {
+      "path": "scripts/smoke_instructional_godot.py",
+      "lines": 377
+    },
+    {
+      "path": "piano_teacher/notation/pixel_proof.py",
+      "lines": 372
+    },
+    {
+      "path": "piano_teacher/notation/assets/chords.py",
+      "lines": 361
+    },
+    {
+      "path": "piano_teacher/notation/visual_inventory.py",
+      "lines": 359
+    },
+    {
+      "path": "scripts/audit_phase3_whole_pieces.py",
+      "lines": 357
+    },
+    {
+      "path": "scripts/review_art_direction.py",
+      "lines": 352
+    },
+    {
+      "path": "piano_teacher/notation/structure_pixels.py",
+      "lines": 347
+    },
+    {
+      "path": "godot/lesson_screen.gd",
+      "lines": 322
+    },
+    {
+      "path": "piano_teacher/notation/raster_matching.py",
+      "lines": 322
+    },
+    {
+      "path": "godot/hint_keyboard.gd",
+      "lines": 317
+    },
+    {
+      "path": "godot/notation/native/symbol_painter.gd",
+      "lines": 309
+    },
+    {
+      "path": "godot/notation/native/fingering_obstacles.gd",
+      "lines": 303
+    },
+    {
+      "path": "piano_teacher/notation/assets/beams.py",
+      "lines": 301
+    },
+    {
+      "path": "scripts/smoke_godot.py",
+      "lines": 299
+    },
+    {
+      "path": "godot/settings_screen.gd",
+      "lines": 298
+    },
+    {
+      "path": "piano_teacher/notation/assets/svg_geometry.py",
+      "lines": 291
+    },
+    {
+      "path": "godot/library_screen.gd",
+      "lines": 290
+    },
+    {
+      "path": "godot/score_overlay.gd",
+      "lines": 287
+    },
+    {
+      "path": "scripts/verify-notation.sh",
+      "lines": 285
+    },
+    {
+      "path": "piano_teacher/music.py",
+      "lines": 284
+    },
+    {
+      "path": "scripts/summarize_hardware_acceptance.py",
+      "lines": 277
+    },
+    {
+      "path": "godot/notation/native/connector_geometry.gd",
+      "lines": 276
+    },
+    {
+      "path": "piano_teacher/notation/visual_groups.py",
+      "lines": 273
+    },
+    {
+      "path": "scripts/verify_library_pipeline.py",
+      "lines": 267
+    },
+    {
+      "path": "godot/game_stage.gd",
+      "lines": 262
+    },
+    {
+      "path": "piano_teacher/demo.py",
+      "lines": 262
+    },
+    {
+      "path": "piano_teacher/notation/assets/notes.py",
+      "lines": 257
+    },
+    {
+      "path": "piano_teacher/notation/adornment_pixels.py",
+      "lines": 255
+    },
+    {
+      "path": "scripts/smoke_teaching_godot.py",
+      "lines": 255
+    },
+    {
+      "path": "scripts/smoke_modes_godot.py",
+      "lines": 253
+    },
+    {
+      "path": "piano_teacher/importing/musicxml.py",
+      "lines": 250
+    },
+    {
+      "path": "piano_teacher/notation/stem_pixels.py",
+      "lines": 246
+    },
+    {
+      "path": "scripts/smoke_adaptive_godot.py",
+      "lines": 242
+    },
+    {
+      "path": "piano_teacher/notation/measure_pixels.py",
+      "lines": 241
+    },
+    {
+      "path": "scripts/audits/case_execution.py",
+      "lines": 234
+    },
+    {
+      "path": "scripts/audit_phase5_scores.py",
+      "lines": 229
+    },
+    {
+      "path": "scripts/package_notation_diagnostics.py",
+      "lines": 226
+    },
+    {
+      "path": "piano_teacher/learner_state.py",
+      "lines": 224
+    },
+    {
+      "path": "piano_teacher/warmups.py",
+      "lines": 224
+    },
+    {
+      "path": "piano_teacher/notation/release_diagnostics.py",
+      "lines": 217
+    },
+    {
+      "path": "piano_teacher/teaching.py",
+      "lines": 215
+    },
+    {
+      "path": "piano_teacher/notation/ledger_pixels.py",
+      "lines": 214
+    },
+    {
+      "path": "piano_teacher/notation/visual_curves.py",
+      "lines": 213
+    },
+    {
+      "path": "godot/source_measure_picker.gd",
+      "lines": 205
+    },
+    {
+      "path": "godot/tempo_strip.gd",
+      "lines": 205
+    },
+    {
+      "path": "piano_teacher/fingering/service.py",
+      "lines": 205
+    },
+    {
+      "path": "godot/notation/native/fingering_annotations.gd",
+      "lines": 204
+    },
+    {
+      "path": "scripts/audits/proof_execution.py",
+      "lines": 204
+    },
+    {
+      "path": "godot/pause_sheet.gd",
+      "lines": 201
+    },
+    {
+      "path": "godot/notation/native/ink_geometry.gd",
+      "lines": 199
+    },
+    {
+      "path": "scripts/check_native_verovio_overlay.py",
+      "lines": 196
+    },
+    {
+      "path": "piano_teacher/notation/feature_pixels.py",
+      "lines": 193
+    },
+    {
+      "path": "scripts/check_grading_session.py",
+      "lines": 192
+    },
+    {
+      "path": "piano_teacher/practice.py",
+      "lines": 191
+    },
+    {
+      "path": "godot/practice_theme.gd",
+      "lines": 189
+    },
+    {
+      "path": "scripts/audits/worker_ownership.py",
+      "lines": 188
+    },
+    {
+      "path": "piano_teacher/notation/visual_notes.py",
+      "lines": 187
+    },
+    {
+      "path": "piano_teacher/application/score_artifacts.py",
+      "lines": 186
+    },
+    {
+      "path": "godot/game_transport_button.gd",
+      "lines": 184
+    },
+    {
+      "path": "piano_teacher/notation/support_policy.py",
+      "lines": 180
+    },
+    {
+      "path": "scripts/audits/batch_run.py",
+      "lines": 178
+    },
+    {
+      "path": "piano_teacher/preprocessing_cache.py",
+      "lines": 177
+    },
+    {
+      "path": "piano_teacher/notation/assets/slurs.py",
+      "lines": 174
+    },
+    {
+      "path": "scripts/audit_phase3_semantics.py",
+      "lines": 173
+    },
+    {
+      "path": "scripts/audits/frame_evidence.py",
+      "lines": 171
+    },
+    {
+      "path": "piano_teacher/notation/assets/ties.py",
+      "lines": 170
+    },
+    {
+      "path": "piano_teacher/notation/captured_frames.py",
+      "lines": 165
+    },
+    {
+      "path": "piano_teacher/sample_piano.py",
+      "lines": 161
+    },
+    {
+      "path": "piano_teacher/library.py",
+      "lines": 160
+    },
+    {
+      "path": "piano_teacher/notation/visual_rests.py",
+      "lines": 157
+    },
+    {
+      "path": "piano_teacher/notation/visual_tuplets.py",
+      "lines": 157
+    },
+    {
+      "path": "scripts/check_user_midi_desktop.py",
+      "lines": 156
+    },
+    {
+      "path": "godot/notation/shared/view_base.gd",
+      "lines": 155
+    },
+    {
+      "path": "piano_teacher/progress_repository.py",
+      "lines": 154
+    },
+    {
+      "path": "piano_teacher/rendering/legacy/spacing.py",
+      "lines": 152
+    },
+    {
+      "path": "godot/action_button.gd",
+      "lines": 150
+    },
+    {
+      "path": "godot/demo_player.gd",
+      "lines": 150
+    },
+    {
+      "path": "scripts/audit_scroll_velocity.py",
+      "lines": 150
+    },
+    {
+      "path": "scripts/check_visible_playback.py",
+      "lines": 150
+    },
+    {
+      "path": "piano_teacher/rendering/legacy/geometry.py",
+      "lines": 149
+    },
+    {
+      "path": "godot/game_phase_cue.gd",
+      "lines": 146
+    },
+    {
+      "path": "piano_teacher/transport/http.py",
+      "lines": 144
+    },
+    {
+      "path": "scripts/smoke_phase0.py",
+      "lines": 141
+    },
+    {
+      "path": "piano_teacher/hardware_probe.py",
+      "lines": 137
+    },
+    {
+      "path": "godot/native_score_feedback.gd",
+      "lines": 135
+    },
+    {
+      "path": "piano_teacher/notation/visual_coverage.py",
+      "lines": 135
+    },
+    {
+      "path": "godot/tests/native_glyph_fixture.gd",
+      "lines": 134
+    },
+    {
+      "path": "piano_teacher/visual_transport.py",
+      "lines": 134
+    },
+    {
+      "path": "scripts/audits/case_catalog.py",
+      "lines": 134
+    },
+    {
+      "path": "godot/library_row.gd",
+      "lines": 133
+    },
+    {
+      "path": "godot/review_sheet.gd",
+      "lines": 133
+    },
+    {
+      "path": "godot/game_impact_callout.gd",
+      "lines": 132
+    },
+    {
+      "path": "piano_teacher/notation/head_registration.py",
+      "lines": 132
+    },
+    {
+      "path": "scripts/audits/job_executor.py",
+      "lines": 132
+    },
+    {
+      "path": "godot/notation/native/voice_layout.gd",
+      "lines": 131
+    },
+    {
+      "path": "scripts/smoke_learning_ui.py",
+      "lines": 131
+    },
+    {
+      "path": "piano_teacher/live_input_view.py",
+      "lines": 130
+    },
+    {
+      "path": "scripts/audits/case_inputs.py",
+      "lines": 129
+    },
+    {
+      "path": "piano_teacher/assessment_service.py",
+      "lines": 125
+    },
+    {
+      "path": "godot/notation/shared/timeline.gd",
+      "lines": 123
+    },
+    {
+      "path": "piano_teacher/notation/audit_annotations.py",
+      "lines": 121
+    },
+    {
+      "path": "piano_teacher/notation/assets/glyphs.py",
+      "lines": 120
+    },
+    {
+      "path": "piano_teacher/recovery.py",
+      "lines": 120
+    },
+    {
+      "path": "godot/notation/native/score_index.gd",
+      "lines": 119
+    },
+    {
+      "path": "scripts/audits/capture_store.py",
+      "lines": 119
+    },
+    {
+      "path": "piano_teacher/library_health.py",
+      "lines": 118
+    },
+    {
+      "path": "godot/notation/native/ink_spacing.gd",
+      "lines": 117
+    },
+    {
+      "path": "piano_teacher/fingering/lumikey_runtime/bridge.cjs",
+      "lines": 117
+    },
+    {
+      "path": "godot/game_streak.gd",
+      "lines": 116
+    },
+    {
+      "path": "godot/notation/native/fingering_placement.gd",
+      "lines": 116
+    },
+    {
+      "path": "godot/home_screen.gd",
+      "lines": 109
+    },
+    {
+      "path": "godot/living_score.gd",
+      "lines": 105
+    },
+    {
+      "path": "scripts/smoke_native_notation.py",
+      "lines": 104
+    },
+    {
+      "path": "piano_teacher/notation/practice_timeline.py",
+      "lines": 101
+    },
+    {
+      "path": "godot/note_reactions.gd",
+      "lines": 100
+    },
+    {
+      "path": "scripts/audits/capture_runner.py",
+      "lines": 100
+    },
+    {
+      "path": "scripts/check_native_pixels.py",
+      "lines": 100
+    },
+    {
+      "path": "godot/challenge_flow.gd",
+      "lines": 98
+    },
+    {
+      "path": "piano_teacher/application/score_preparation.py",
+      "lines": 97
+    },
+    {
+      "path": "scripts/check_native_symbols.py",
+      "lines": 97
+    },
+    {
+      "path": "godot/game_input_indicator.gd",
+      "lines": 96
+    },
+    {
+      "path": "godot/notation/diagnostics/timeline_preview.gd",
+      "lines": 93
+    },
+    {
+      "path": "scripts/audit_notation_proof.py",
+      "lines": 92
+    },
+    {
+      "path": "scripts/check_user_midi_visual_regression.py",
+      "lines": 92
+    },
+    {
+      "path": "piano_teacher/notation/visual_ledgers.py",
+      "lines": 91
+    },
+    {
+      "path": "scripts/check_hardware_session.py",
+      "lines": 91
+    },
+    {
+      "path": "scripts/install_piano_soundfont.py",
+      "lines": 90
+    },
+    {
+      "path": "piano_teacher/notation/pixel_motion.py",
+      "lines": 89
+    },
+    {
+      "path": "piano_teacher/notation/expressions.py",
+      "lines": 86
+    },
+    {
+      "path": "godot/notation/native/barline_layout.gd",
+      "lines": 85
+    },
+    {
+      "path": "godot/practice_step_selector.gd",
+      "lines": 84
+    },
+    {
+      "path": "piano_teacher/fingering/types.py",
+      "lines": 84
+    },
+    {
+      "path": "piano_teacher/notation/piano_registers.py",
+      "lines": 84
+    },
+    {
+      "path": "piano_teacher/notation/pixel_context.py",
+      "lines": 83
+    },
+    {
+      "path": "piano_teacher/live_feedback.py",
+      "lines": 81
+    },
+    {
+      "path": "godot/notation/native/fingering_spatial_layout.gd",
+      "lines": 80
+    },
+    {
+      "path": "piano_teacher/lesson_validation.py",
+      "lines": 80
+    },
+    {
+      "path": "scripts/audits/planning.py",
+      "lines": 80
+    },
+    {
+      "path": "piano_teacher/feedback.py",
+      "lines": 79
+    },
+    {
+      "path": "piano_teacher/lesson_settings.py",
+      "lines": 79
+    },
+    {
+      "path": "piano_teacher/notation/glyph_evidence.py",
+      "lines": 77
+    },
+    {
+      "path": "godot/visual_transport_clock.gd",
+      "lines": 73
+    },
+    {
+      "path": "piano_teacher/exercise_generator.py",
+      "lines": 71
+    },
+    {
+      "path": "godot/notation/native/viewport_fit.gd",
+      "lines": 70
+    },
+    {
+      "path": "godot/lesson_session.gd",
+      "lines": 69
+    },
+    {
+      "path": "piano_teacher/transport_projection.py",
+      "lines": 69
+    },
+    {
+      "path": "godot/notation/native/render_pass.gd",
+      "lines": 68
+    },
+    {
+      "path": "piano_teacher/notation/reference_font.py",
+      "lines": 68
+    },
+    {
+      "path": "piano_teacher/notation/visual_binding.py",
+      "lines": 68
+    },
+    {
+      "path": "piano_teacher/fingering/lumikey.py",
+      "lines": 65
+    },
+    {
+      "path": "godot/game_countin.gd",
+      "lines": 64
+    },
+    {
+      "path": "scripts/check_generated_lesson.py",
+      "lines": 59
+    },
+    {
+      "path": "scripts/audits/case_checkpoint.py",
+      "lines": 57
+    },
+    {
+      "path": "scripts/check_engraving.py",
+      "lines": 57
+    },
+    {
+      "path": "godot/listen_sync.gd",
+      "lines": 56
+    },
+    {
+      "path": "godot/staff_continuity.gd",
+      "lines": 54
+    },
+    {
+      "path": "godot/ui_factory.gd",
+      "lines": 54
+    },
+    {
+      "path": "piano_teacher/notation/visual_presence.py",
+      "lines": 54
+    },
+    {
+      "path": "piano_teacher/notation/feature_source.py",
+      "lines": 53
+    },
+    {
+      "path": "piano_teacher/recovery_projection.py",
+      "lines": 52
+    },
+    {
+      "path": "godot/notation/native/rest_lane_layout.gd",
+      "lines": 51
+    },
+    {
+      "path": "piano_teacher/importing/pieces.py",
+      "lines": 50
+    },
+    {
+      "path": "scripts/audits/worker_protocol.py",
+      "lines": 50
+    },
+    {
+      "path": "godot/performance_review_strip.gd",
+      "lines": 49
+    },
+    {
+      "path": "scripts/check_musical_fidelity_corpus.py",
+      "lines": 48
+    },
+    {
+      "path": "piano_teacher/fingering/placement.py",
+      "lines": 46
+    },
+    {
+      "path": "piano_teacher/notation/assets/runtime.py",
+      "lines": 46
+    },
+    {
+      "path": "piano_teacher/notation/assets/svg.py",
+      "lines": 45
+    },
+    {
+      "path": "piano_teacher/rendering/legacy/raster.py",
+      "lines": 44
+    },
+    {
+      "path": "scripts/ci-smoke.sh",
+      "lines": 44
+    },
+    {
+      "path": "scripts/notation_release_provenance.py",
+      "lines": 43
+    },
+    {
+      "path": "piano_teacher/repeated_passages.py",
+      "lines": 42
+    },
+    {
+      "path": "piano_teacher/notation/visual_contract.py",
+      "lines": 41
+    },
+    {
+      "path": "godot/frame_meter.gd",
+      "lines": 40
+    },
+    {
+      "path": "piano_teacher/notation/musicxml.py",
+      "lines": 40
+    },
+    {
+      "path": "piano_teacher/measure_grid.py",
+      "lines": 39
+    },
+    {
+      "path": "piano_teacher/lesson_timing.py",
+      "lines": 37
+    },
+    {
+      "path": "piano_teacher/course_navigation.py",
+      "lines": 36
+    },
+    {
+      "path": "scripts/audits/batch_checkpoint.py",
+      "lines": 34
+    },
+    {
+      "path": "piano_teacher/midi_input.py",
+      "lines": 33
+    },
+    {
+      "path": "godot/game_backdrop.gd",
+      "lines": 32
+    },
+    {
+      "path": "piano_teacher/instruction.py",
+      "lines": 32
+    },
+    {
+      "path": "piano_teacher/notation/pixel_ink.py",
+      "lines": 32
+    },
+    {
+      "path": "scripts/check_native_notation.py",
+      "lines": 30
+    },
+    {
+      "path": "godot/notation/native/source_visibility.gd",
+      "lines": 29
+    },
+    {
+      "path": "scripts/smoke_student_journey.py",
+      "lines": 29
+    },
+    {
+      "path": "piano_teacher/fingering/projection.py",
+      "lines": 28
+    },
+    {
+      "path": "scripts/check_desktop_ui.py",
+      "lines": 28
+    },
+    {
+      "path": "godot/notehead_ink.gd",
+      "lines": 23
+    },
+    {
+      "path": "godot/preview_motion.gd",
+      "lines": 23
+    },
+    {
+      "path": "piano_teacher/completion_route.py",
+      "lines": 22
+    },
+    {
+      "path": "scripts/audits/verification_inputs.py",
+      "lines": 20
+    },
+    {
+      "path": "scripts/check_godot.sh",
+      "lines": 20
+    },
+    {
+      "path": "piano_teacher/__main__.py",
+      "lines": 18
+    },
+    {
+      "path": "scripts/audits/case_types.py",
+      "lines": 17
+    },
+    {
+      "path": "piano_teacher/notation/feature_contract.py",
+      "lines": 16
+    },
+    {
+      "path": "piano_teacher/score.py",
+      "lines": 15
+    },
+    {
+      "path": "scripts/check_phase2_ui.sh",
+      "lines": 15
+    },
+    {
+      "path": "scripts/setup-fingering.sh",
+      "lines": 14
+    },
+    {
+      "path": "piano_teacher/fingering/__init__.py",
+      "lines": 8
+    },
+    {
+      "path": "godot/score_effects.gd",
+      "lines": 7
+    },
+    {
+      "path": "piano_teacher/score_geometry.py",
+      "lines": 6
+    },
+    {
+      "path": "piano_teacher/raster.py",
+      "lines": 4
+    },
+    {
+      "path": "piano_teacher/__init__.py",
+      "lines": 3
+    },
+    {
+      "path": "piano_teacher/application/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/importing/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/notation/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/notation/assets/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/rendering/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/rendering/legacy/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "piano_teacher/transport/__init__.py",
+      "lines": 1
+    },
+    {
+      "path": "scripts/audits/__init__.py",
+      "lines": 1
+    }
+  ],
+  "python_import_graph_including_typing_and_lazy": {
+    "piano_teacher": [],
+    "piano_teacher.__main__": [],
+    "piano_teacher.midi_input": [],
+    "piano_teacher.ui": [
+      {
+        "target": "piano_teacher.midi_input",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.practice",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.exercise_generator": [
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.recovery": [
+      {
+        "target": "piano_teacher.measure_grid",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.practice",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.learner_state": [
+      {
+        "target": "piano_teacher.exercise_generator",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.measure_grid",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.feedback": [
+      {
+        "target": "piano_teacher.lesson_validation",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.practice",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.rendering.legacy.geometry",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.lesson_validation": [
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.library": [
+      {
+        "target": "piano_teacher.warmups",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.teaching": [
+      {
+        "target": "piano_teacher.exercise_generator",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.warmups": [],
+    "piano_teacher.live_feedback": [
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.practice",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.live_input_view": [
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.library_health": [
+      {
+        "target": "piano_teacher.importing.pieces",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.library",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.hardware_probe": [],
+    "piano_teacher.demo": [
+      {
+        "target": "piano_teacher.exercise_generator",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.sample_piano",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.preprocessing_cache": [
+      {
+        "target": "piano_teacher.importing.pieces",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.raster": [
+      {
+        "target": "piano_teacher.rendering.legacy.raster",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.score": [
+      {
+        "target": "piano_teacher.importing.pieces",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.assets.runtime",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.rendering.legacy.engraving",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.score_geometry": [
+      {
+        "target": "piano_teacher.notation.assets.svg_geometry",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.rendering.legacy.geometry",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.lesson_timing": [
+      {
+        "target": "piano_teacher.lesson_settings",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.measure_grid": [
+      {
+        "target": "piano_teacher.lesson_settings",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.practice": [
+      {
+        "target": "piano_teacher.lesson_settings",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.repeated_passages": [
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.instruction": [
+      {
+        "target": "piano_teacher.lesson_settings",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.sample_piano": [],
+    "piano_teacher.music": [
+      {
+        "target": "piano_teacher.fingering.types",
+        "typing_only": true,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.lesson_settings": [],
+    "piano_teacher.learning": [
+      {
+        "target": "piano_teacher.exercise_generator",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.lesson_settings",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.repeated_passages",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.assessment_service": [
+      {
+        "target": "piano_teacher.feedback",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.live_feedback",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.measure_grid",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.practice",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.completion_route": [],
+    "piano_teacher.course_navigation": [
+      {
+        "target": "piano_teacher.measure_grid",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.progress_repository": [
+      {
+        "target": "piano_teacher.exercise_generator",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.learner_state",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.learning",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.lesson_settings",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.recovery_projection": [
+      {
+        "target": "piano_teacher.measure_grid",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.recovery",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.server": [
+      {
+        "target": "piano_teacher.application.score_artifacts",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.assessment_service",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.completion_route",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.course_navigation",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.demo",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.feedback",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.fingering",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.hardware_probe",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.importing.pieces",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.instruction",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.learner_state",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.learning",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.lesson_settings",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.lesson_timing",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.library",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.library_health",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.live_input_view",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.measure_grid",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.practice_timeline",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.practice",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.preprocessing_cache",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.progress_repository",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.recovery",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.recovery_projection",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.rendering.legacy.engraving",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.state_projection",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.teaching",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.transport.http",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.visual_transport",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.warmups",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.state_projection": [
+      {
+        "target": "piano_teacher.measure_grid",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.transport_projection": [],
+    "piano_teacher.visual_transport": [
+      {
+        "target": "piano_teacher.transport_projection",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.application": [],
+    "piano_teacher.application.score_preparation": [
+      {
+        "target": "piano_teacher.notation.assets.beams",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.chords",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.glyphs",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.notes",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.slurs",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.ties",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.tuplets",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.application.score_artifacts": [
+      {
+        "target": "piano_teacher.application",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.application.score_preparation",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.fingering.projection",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.lesson_validation",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.lesson",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.model",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.preprocessing_cache",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.rendering.legacy.engraving",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.rendering.legacy.raster",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.importing": [],
+    "piano_teacher.importing.pieces": [
+      {
+        "target": "piano_teacher.importing.musicxml",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.importing.musicxml": [
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.musicxml",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation": [],
+    "piano_teacher.notation.expressions": [
+      {
+        "target": "piano_teacher.notation.lesson",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.source_annotations",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.musicxml": [],
+    "piano_teacher.notation.source_annotations": [],
+    "piano_teacher.notation.symbol_pixel_proof": [
+      {
+        "target": "piano_teacher.notation.pixel_context",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.raster_matching",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.reference_font",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.notation.feature_pixels": [
+      {
+        "target": "piano_teacher.notation.adornment_pixels",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.feature_contract",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.feature_source",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.head_registration",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.ledger_pixels",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_context",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.raster_matching",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.reference_font",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.stem_pixels",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.structure_pixels",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.lesson": [
+      {
+        "target": "piano_teacher.measure_grid",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.piano_registers",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.source_annotations",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.midi_transcription_rules": [],
+    "piano_teacher.notation.model": [
+      {
+        "target": "piano_teacher.measure_grid",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.expressions",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.lesson",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.musicxml",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.practice_timeline",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.pixel_proof": [
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.proof": [],
+    "piano_teacher.notation.raster_matching": [
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.reference_font": [],
+    "piano_teacher.notation.release_diagnostics": [
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.reference_font",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.notation.semantic_contract": [
+      {
+        "target": "piano_teacher.notation.midi_transcription_rules",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.support_policy": [
+      {
+        "target": "piano_teacher.notation.midi_transcription_rules",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.notation.visual_coverage": [
+      {
+        "target": "piano_teacher.notation.visual_binding",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_contract",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_curves",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_groups",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_inventory",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_ledgers",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_notes",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_presence",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_rests",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_tuplets",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.phase3_pixels": [
+      {
+        "target": "piano_teacher.notation.pixel_context",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_motion",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.raster_matching",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.reference_font",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.connector_pixels": [
+      {
+        "target": "piano_teacher.notation.assets.svg",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.assets.svg_geometry",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.captured_frames",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.raster_matching",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.extra_symbol_pixels": [
+      {
+        "target": "piano_teacher.notation.glyph_evidence",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.head_registration",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_context",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_motion",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.reference_font",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.audit_annotations": [
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.practice_timeline": [
+      {
+        "target": "piano_teacher.lesson_timing",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.piano_registers": [],
+    "piano_teacher.notation.measure_pixels": [
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.pixel_ink": [],
+    "piano_teacher.notation.pixel_context": [
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.pixel_motion": [
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.head_registration": [
+      {
+        "target": "piano_teacher.notation.pixel_context",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.raster_matching",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.captured_frames": [
+      {
+        "target": "piano_teacher.notation.head_registration",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_context",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_motion",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.raster_matching",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.reference_font",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.feature_contract": [],
+    "piano_teacher.notation.feature_source": [
+      {
+        "target": "piano_teacher.notation.feature_contract",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.glyph_evidence": [
+      {
+        "target": "piano_teacher.notation.feature_contract",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.raster_matching",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.stem_pixels": [
+      {
+        "target": "piano_teacher.notation.feature_contract",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.feature_source",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.adornment_pixels": [
+      {
+        "target": "piano_teacher.notation.feature_contract",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.glyph_evidence",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.head_registration",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_context",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.raster_matching",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.reference_font",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.structure_pixels": [
+      {
+        "target": "piano_teacher.notation.feature_contract",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.feature_source",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.glyph_evidence",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.head_registration",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_context",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_motion",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.raster_matching",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.reference_font",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.ledger_pixels": [
+      {
+        "target": "piano_teacher.notation.captured_frames",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.feature_contract",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.feature_source",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.head_registration",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_context",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_ink",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.pixel_proof",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.reference_font",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.visual_contract": [],
+    "piano_teacher.notation.visual_inventory": [
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_contract",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.visual_binding": [
+      {
+        "target": "piano_teacher.notation.visual_contract",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.visual_presence": [
+      {
+        "target": "piano_teacher.notation.visual_contract",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_rests",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.visual_notes": [
+      {
+        "target": "piano_teacher.notation.visual_binding",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_contract",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.visual_rests": [
+      {
+        "target": "piano_teacher.notation.visual_contract",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.visual_curves": [
+      {
+        "target": "piano_teacher.notation.visual_contract",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.visual_groups": [
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_contract",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.visual_ledgers": [
+      {
+        "target": "piano_teacher.notation.visual_binding",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_contract",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.visual_tuplets": [
+      {
+        "target": "piano_teacher.notation.proof",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_binding",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_contract",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_inventory",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.visual_notes",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.rendering": [],
+    "piano_teacher.transport": [],
+    "piano_teacher.transport.http": [],
+    "piano_teacher.fingering.types": [
+      {
+        "target": "piano_teacher.music",
+        "typing_only": true,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.fingering.projection": [
+      {
+        "target": "piano_teacher.fingering.placement",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.fingering.types",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.fingering.lumikey": [
+      {
+        "target": "piano_teacher.fingering.types",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.fingering.service": [
+      {
+        "target": "piano_teacher.fingering.lumikey",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.fingering.types",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.fingering": [
+      {
+        "target": "piano_teacher.fingering.lumikey",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.fingering.projection",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.fingering.service",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.fingering.types",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.fingering.placement": [],
+    "piano_teacher.rendering.legacy": [],
+    "piano_teacher.rendering.legacy.raster": [],
+    "piano_teacher.rendering.legacy.spacing": [],
+    "piano_teacher.rendering.legacy.engraving": [
+      {
+        "target": "piano_teacher.importing.pieces",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.music",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.assets.runtime",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.assets.svg_geometry",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.assets.svg_geometry",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.lesson",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.rendering.legacy.geometry",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.rendering.legacy.spacing",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.rendering.legacy.spacing",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.rendering.legacy.geometry": [
+      {
+        "target": "piano_teacher.notation.assets.svg_geometry",
+        "typing_only": false,
+        "function_local": false
+      }
+    ],
+    "piano_teacher.notation.assets": [],
+    "piano_teacher.notation.assets.beams": [
+      {
+        "target": "piano_teacher.notation.assets.svg_geometry",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.notation.assets.runtime": [],
+    "piano_teacher.notation.assets.slurs": [
+      {
+        "target": "piano_teacher.notation.assets.svg",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.svg_geometry",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.notation.assets.svg": [],
+    "piano_teacher.notation.assets.svg_geometry": [],
+    "piano_teacher.notation.assets.ties": [
+      {
+        "target": "piano_teacher.notation.assets.glyphs",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.runtime",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.svg_geometry",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.notation.assets.tuplets": [
+      {
+        "target": "piano_teacher.notation.assets.svg",
+        "typing_only": false,
+        "function_local": false
+      },
+      {
+        "target": "piano_teacher.notation.assets.svg_geometry",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.notation.assets.chords": [
+      {
+        "target": "piano_teacher.notation.assets.glyphs",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.runtime",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.svg_geometry",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.notation.assets.glyphs": [
+      {
+        "target": "piano_teacher.notation.assets.runtime",
+        "typing_only": false,
+        "function_local": true
+      }
+    ],
+    "piano_teacher.notation.assets.notes": [
+      {
+        "target": "piano_teacher.notation.assets.glyphs",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.runtime",
+        "typing_only": false,
+        "function_local": true
+      },
+      {
+        "target": "piano_teacher.notation.assets.svg_geometry",
+        "typing_only": false,
+        "function_local": true
+      }
+    ]
+  },
+  "runtime_cycles": [],
+  "runtime_cycle_policy": "Function-local imports included; TYPE_CHECKING-only imports excluded from runtime cycles",
+  "gdscript_resource_dependencies": {
+    "hint_keyboard.gd": [
+      "practice_theme.gd"
+    ],
+    "notehead_ink.gd": [],
+    "visual_transport_clock.gd": [],
+    "preview_motion.gd": [],
+    "frame_meter.gd": [],
+    "listen_sync.gd": [],
+    "living_score.gd": [],
+    "game_backdrop.gd": [
+      "practice_theme.gd"
+    ],
+    "game_input_indicator.gd": [
+      "practice_theme.gd"
+    ],
+    "pause_sheet.gd": [
+      "action_button.gd",
+      "practice_theme.gd"
+    ],
+    "tempo_strip.gd": [],
+    "ui_layout_smoke.gd": [
+      "main.gd",
+      "tests/native_glyph_fixture.gd"
+    ],
+    "game_countin.gd": [],
+    "game_phase_cue.gd": [
+      "practice_theme.gd"
+    ],
+    "library_row.gd": [
+      "action_button.gd",
+      "practice_theme.gd"
+    ],
+    "game_impact_callout.gd": [
+      "practice_theme.gd"
+    ],
+    "game_transport_button.gd": [
+      "practice_theme.gd"
+    ],
+    "practice_theme.gd": [],
+    "staff_continuity.gd": [
+      "practice_theme.gd"
+    ],
+    "review_sheet.gd": [
+      "action_button.gd",
+      "practice_theme.gd"
+    ],
+    "demo_player.gd": [
+      "listen_sync.gd"
+    ],
+    "note_reactions.gd": [
+      "notehead_ink.gd",
+      "practice_theme.gd"
+    ],
+    "game_stage.gd": [
+      "practice_theme.gd"
+    ],
+    "score_overlay.gd": [
+      "note_reactions.gd",
+      "notehead_ink.gd",
+      "practice_theme.gd",
+      "staff_continuity.gd"
+    ],
+    "native_score_feedback.gd": [
+      "practice_theme.gd"
+    ],
+    "challenge_flow.gd": [],
+    "game_streak.gd": [
+      "practice_theme.gd"
+    ],
+    "action_button.gd": [
+      "practice_theme.gd"
+    ],
+    "score_effects.gd": [],
+    "main.gd": [
+      "action_button.gd",
+      "challenge_flow.gd",
+      "demo_player.gd",
+      "frame_meter.gd",
+      "game_backdrop.gd",
+      "game_countin.gd",
+      "game_impact_callout.gd",
+      "game_input_indicator.gd",
+      "game_phase_cue.gd",
+      "game_stage.gd",
+      "game_streak.gd",
+      "game_transport_button.gd",
+      "hint_keyboard.gd",
+      "home_screen.gd",
+      "lesson_screen.gd",
+      "lesson_session.gd",
+      "library_screen.gd",
+      "living_score.gd",
+      "native_score_feedback.gd",
+      "notation/native/view.gd",
+      "pause_sheet.gd",
+      "performance_review_strip.gd",
+      "practice_step_selector.gd",
+      "practice_theme.gd",
+      "review_sheet.gd",
+      "score_effects.gd",
+      "settings_screen.gd",
+      "source_measure_picker.gd",
+      "ui_factory.gd",
+      "visual_transport_clock.gd"
+    ],
+    "performance_review_strip.gd": [
+      "action_button.gd",
+      "practice_theme.gd"
+    ],
+    "settings_screen.gd": [
+      "action_button.gd",
+      "practice_theme.gd"
+    ],
+    "source_measure_picker.gd": [
+      "action_button.gd",
+      "practice_theme.gd"
+    ],
+    "ui_factory.gd": [
+      "action_button.gd",
+      "practice_theme.gd"
+    ],
+    "library_screen.gd": [
+      "library_row.gd",
+      "practice_theme.gd",
+      "ui_factory.gd"
+    ],
+    "home_screen.gd": [
+      "practice_theme.gd",
+      "ui_factory.gd"
+    ],
+    "lesson_screen.gd": [
+      "practice_theme.gd",
+      "ui_factory.gd"
+    ],
+    "lesson_session.gd": [],
+    "practice_step_selector.gd": [
+      "ui_factory.gd"
+    ],
+    "tests/native_glyph_fixture.gd": [
+      "notation/native/glyphs.gd"
+    ],
+    "notation/diagnostics/timeline_preview.gd": [
+      "notation/shared/view_base.gd"
+    ],
+    "notation/native/barline_layout.gd": [],
+    "notation/native/score_index.gd": [
+      "notation/native/geometry.gd"
+    ],
+    "notation/native/geometry.gd": [],
+    "notation/native/fingering_placement.gd": [],
+    "notation/native/fingering_spatial_layout.gd": [
+      "notation/native/fingering_placement.gd"
+    ],
+    "notation/native/ink_spacing.gd": [],
+    "notation/native/rest_lane_layout.gd": [],
+    "notation/native/view.gd": [
+      "notation/native/barline_layout.gd",
+      "notation/native/connector_geometry.gd",
+      "notation/native/context_painter.gd",
+      "notation/native/fingering_annotations.gd",
+      "notation/native/fingering_placement.gd",
+      "notation/native/geometry.gd",
+      "notation/native/glyphs.gd",
+      "notation/native/ink_geometry.gd",
+      "notation/native/render_pass.gd",
+      "notation/native/score_index.gd",
+      "notation/native/score_layout.gd",
+      "notation/native/source_visibility.gd",
+      "notation/native/symbol_painter.gd",
+      "notation/native/viewport_fit.gd",
+      "notation/shared/view_base.gd",
+      "practice_theme.gd"
+    ],
+    "notation/native/voice_layout.gd": [],
+    "notation/native/glyphs.gd": [],
+    "notation/native/score_layout.gd": [
+      "notation/native/barline_layout.gd",
+      "notation/native/fingering_placement.gd",
+      "notation/native/geometry.gd",
+      "notation/native/rest_lane_layout.gd",
+      "notation/native/score_index.gd",
+      "notation/native/voice_layout.gd"
+    ],
+    "notation/native/ink_geometry.gd": [
+      "notation/native/barline_layout.gd",
+      "notation/native/geometry.gd",
+      "notation/native/ink_spacing.gd"
+    ],
+    "notation/native/connector_geometry.gd": [],
+    "notation/native/fingering_obstacles.gd": [
+      "notation/native/fingering_spatial_layout.gd",
+      "notation/native/geometry.gd"
+    ],
+    "notation/native/fingering_annotations.gd": [
+      "notation/native/fingering_obstacles.gd",
+      "notation/native/fingering_placement.gd",
+      "notation/native/fingering_spatial_layout.gd",
+      "notation/native/source_visibility.gd",
+      "practice_theme.gd"
+    ],
+    "notation/native/source_visibility.gd": [],
+    "notation/native/viewport_fit.gd": [],
+    "notation/native/symbol_painter.gd": [
+      "notation/native/geometry.gd",
+      "notation/native/render_pass.gd",
+      "practice_theme.gd"
+    ],
+    "notation/native/context_painter.gd": [
+      "notation/native/barline_layout.gd",
+      "notation/native/geometry.gd",
+      "notation/native/render_pass.gd",
+      "practice_theme.gd"
+    ],
+    "notation/native/render_pass.gd": [
+      "notation/native/source_visibility.gd",
+      "practice_theme.gd"
+    ],
+    "notation/shared/timeline.gd": [],
+    "notation/shared/view_base.gd": [
+      "notation/shared/timeline.gd"
+    ]
+  },
+  "gdscript_resource_cycles": []
+}

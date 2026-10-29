@@ -30,7 +30,7 @@ func run() -> void:
     if not error.is_empty():
         quit(1)
         return
-    var view = app.timeline_preview
+    var view = app.practice_view.stage.renderer
     for onset in [0.0,4.0]:
         app.last_state = {"loaded":true,"revision":app.revision,"running":false,
             "paused":false,"phase":"ready","clock_beat":0.0,"hand":"right",
@@ -51,7 +51,7 @@ func run() -> void:
         app.last_state.clock_beat = -10.0/view.timeline.pixels_per_beat
         app._process(0.0)
         var prepared: Image = await frame()
-        check(app.game_count_in.visible, "Backend count-in actually enables preparation lights")
+        check(app.practice_view.stage.count_in.visible, "Backend count-in actually enables preparation lights")
         check(original.get_data() != prepared.get_data(), "Preparation intervention changes the actual stage")
         original.save_png(folder.path_join("original-%.0f.png" % onset))
         prepared.save_png(folder.path_join("prepared-%.0f.png" % onset))

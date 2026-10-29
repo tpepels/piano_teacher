@@ -29,7 +29,7 @@ func state(phase: String, hint: bool = false) -> Dictionary:
     return {"loaded": true, "mode": "learn", "phase": phase, "running": false,
         "paused": phase == "paused", "revision": 1, "transport_id": 4,
         "title": "Learn a short imported idea", "hand": "right", "hands": ["right"],
-        "bpm": 80, "target_bpm": 100, "duration_beats": app.timeline_preview.timeline.duration_beats, "clock_beat": 0,
+        "bpm": 80, "target_bpm": 100, "duration_beats": app.practice_view.stage.renderer.timeline.duration_beats, "clock_beat": 0,
         "first_bar": 1, "last_bar": 2, "required_notes": 4, "lesson_level": "original",
         "feedback": "Find C4 at your own pace.", "streak": 0,
         "feedback_marks": [{"source_id":str(target.id),"status":"expected"}],
@@ -59,16 +59,16 @@ func run() -> void:
     if not fixture_error.is_empty():
         quit(1)
         return
-    target = app.timeline_preview.timeline.notes[0]
+    target = app.practice_view.stage.renderer.timeline.notes[0]
     show("guided_wait")
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     expect("pause","Learn primary pauses without starting timed playback: ")
     check(not app.lesson_view.stop_button.disabled,"Stop is available during untimed Learn")
     show("paused")
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     expect("resume","Resume retains guided target: ")
     show("guided_complete")
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     expect("practice","Guided success offers real rhythm practice: ")
     show("guided_wait")
     app._navigate("lesson")
@@ -77,12 +77,12 @@ func run() -> void:
     show("guided_wait",true)
     await process_frame
     await process_frame
-    var keyboard: Control = app.get("hint_keyboard")
+    var keyboard: Control = app.practice_view.stage.keyboard
     check(keyboard != null,"The live practice screen contains the contextual keyboard")
     if keyboard != null:
         check(keyboard.is_visible_in_tree(),"Wrong-note hint reveals the actual keyboard")
         check(keyboard.get_global_rect().end.y <= 600,"Hints fit inside compact viewport")
-        check(app.score_frame.size.y >= 135,"Hints retain readable notation height")
+        check(app.practice_view.stage.score_frame.size.y >= 135,"Hints retain readable notation height")
         show("guided_wait",false)
         check(not keyboard.visible,"Successful unaided acquisition keeps hints hidden")
     show("guided_wait")
@@ -90,25 +90,25 @@ func run() -> void:
     await process_frame
     await process_frame
     RenderingServer.force_draw()
-    var id: String = str(app.native_score_feedback.source_to_id.get(str(target.id), ""))
-    check(app.timeline_preview.drawn_noteheads.has(id), "Guided source target is actually painted")
-    var painted: Dictionary = app.timeline_preview.drawn_noteheads.duplicate()
-    var position: float = app.timeline_preview.clock_beat
+    var id: String = str(app.practice_view.stage.feedback.source_to_id.get(str(target.id), ""))
+    check(app.practice_view.stage.renderer.drawn_noteheads.has(id), "Guided source target is actually painted")
+    var painted: Dictionary = app.practice_view.stage.renderer.drawn_noteheads.duplicate()
+    var position: float = app.practice_view.stage.renderer.clock_beat
     app.last_state_tick -= 100000
     app._process(0.0)
-    app.timeline_preview.queue_redraw()
+    app.practice_view.stage.renderer.queue_redraw()
     await process_frame
     await process_frame
     RenderingServer.force_draw()
-    check(app.timeline_preview.clock_beat == position,"Guided score never advances with wall-clock time")
-    check(app.timeline_preview.drawn_noteheads == painted,
+    check(app.practice_view.stage.renderer.clock_beat == position,"Guided score never advances with wall-clock time")
+    check(app.practice_view.stage.renderer.drawn_noteheads == painted,
         "Actual guided source head projection stays fixed across wall-clock time")
-    check(app.native_score_feedback.markers.get(id, "") == "expected",
+    check(app.practice_view.stage.feedback.markers.get(id, "") == "expected",
         "Guided feedback marks the real source target")
     if painted.has(id):
-        check(app.native_score_feedback.note_position(id) == painted[id],
+        check(app.practice_view.stage.feedback.note_position(id) == painted[id],
             "Guided feedback uses the compositor's painted source head")
-    check(app.native_score_feedback.score == app.timeline_preview, "Guided feedback binds the actual production view")
+    check(app.practice_view.stage.feedback.score == app.practice_view.stage.renderer, "Guided feedback binds the actual production view")
     check(app._native_score_ready(), "Guided transport preserves native revision readiness")
     print("GUIDED_UI_FAILURES:",failures.size())
     quit(0 if failures.is_empty() else 1)

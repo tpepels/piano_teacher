@@ -73,12 +73,12 @@ func _run() -> void:
         "Phase 7.1 must open directly on the practice stage")
     _check(not (scene.get("overlay_root") as Control).visible,
         "No drawer is open at startup")
-    var browse_button: Button = scene.get("score_browse_button")
+    var browse_button: Button = scene.practice_view.stage.score_browse_button
     _check(browse_button.visible,
         "Empty practice stage must have a prominent Choose music action")
-    var toolbar: Control = scene.get("practice_navigation")
-    var transport: Control = scene.get("practice_controls")
-    var score: Control = scene.get("score_frame")
+    var toolbar: Control = scene.practice_view.practice_navigation
+    var transport: Control = scene.practice_view.practice_controls
+    var score: Control = scene.practice_view.stage.score_frame
     print("PHASE2_LAYOUT_DIAGNOSTIC: window=", viewport, " scene=", scene.size,
         " toolbar=", toolbar.get_global_rect(), " transport=", transport.get_global_rect(),
         " score=", score.get_global_rect())
@@ -87,12 +87,12 @@ func _run() -> void:
     _check(score.size.y >= 135.0, "Notation area became unusably small")
     # A sourced MIDI piece must open in a true centered in-app modal, not
     # a narrow embedded Window accidentally stretched to viewport height.
-    scene.call("_show_open_picker", {"title": "Ala_-_Joep_Beving",
+    scene.practice_view.show_source_picker( {"title": "Ala_-_Joep_Beving",
         "piece_last_bar": 77, "selected_start_bar": 1})
     await process_frame
     await process_frame
-    var preview_picker: Control = scene.get("open_picker")
-    var modal: PanelContainer = scene.get("open_picker").get("panel")
+    var preview_picker: Control = scene.practice_view.open_picker
+    var modal: PanelContainer = scene.practice_view.open_picker.get("panel")
     _check(preview_picker.visible and not scene.get("overlay_root").visible,
         "Starting point must hide the library drawer behind its modal")
     _check(modal.size.x >= minf(500.0, viewport.x - 36.0) and
@@ -101,21 +101,21 @@ func _run() -> void:
     _check(absf(modal.get_global_rect().get_center().x - viewport.x * .5) < 6.0 and
         absf(modal.get_global_rect().get_center().y - viewport.y * .5) < 6.0,
         "Starting point modal must be centered in the real viewport")
-    _check(str(scene.get("open_picker").get("title_label").text) == "Ala - Joep Beving",
+    _check(str(scene.practice_view.open_picker.get("title_label").text) == "Ala - Joep Beving",
         "MIDI filename separators must render as normal punctuation")
-    _check((scene.get("open_picker").get("measure") as SpinBox).max_value == 77,
+    _check((scene.practice_view.open_picker.get("measure") as SpinBox).max_value == 77,
         "Starting-point measure range must reflect the opened music")
     var jumps: HBoxContainer = modal.find_child("SourceMeasureQuickJumps", true, false) as HBoxContainer
     _check(jumps != null and jumps.get_child_count() == 3,
         "Measure picker needs visible Beginning, Middle and End shortcuts")
     if jumps != null and jumps.get_child_count() == 3:
         (jumps.get_child(2) as Button).pressed.emit()
-        _check(int((scene.get("open_picker").get("measure") as SpinBox).value) == 77,
+        _check(int((scene.practice_view.open_picker.get("measure") as SpinBox).value) == 77,
             "End shortcut selects the last source measure")
         (jumps.get_child(0) as Button).pressed.emit()
-        _check(int((scene.get("open_picker").get("measure") as SpinBox).value) == 1,
+        _check(int((scene.practice_view.open_picker.get("measure") as SpinBox).value) == 1,
             "Beginning shortcut returns to measure one")
-    scene.call("_cancel_open_picker")
+    scene.practice_view.cancel_source_picker()
     _check(not preview_picker.visible and str(scene.get("current_screen")) == "library",
         "Cancel restores music selection instead of opening a lesson")
     scene.get("library_view").present_catalog({"pieces": [ {"id": "fixture.mid",
@@ -145,13 +145,13 @@ func _run() -> void:
         _check(rows.is_ancestor_of(item),
             "Checking another music file must not replace existing library rows")
     scene.call("_navigate", "practice")
-    var cue: Control = scene.get("game_phase_cue")
+    var cue: Control = scene.practice_view.stage.phase_cue
     _check(cue != null and cue.get_parent() == score,
         "Transitions belong to a single small on-stage cue")
     _check(_in_viewport(cue, viewport), "Transition cue clips outside the stage")
     _check(_in_viewport(score, viewport), "Notation panel extends outside window")
-    var illuminated: Control = scene.get("game_stage")
-    var streak_meter: Control = scene.get("game_streak")
+    var illuminated: Control = scene.practice_view.stage.effects
+    var streak_meter: Control = scene.practice_view.game_streak
     _check(illuminated != null and illuminated.get_parent() == score,
         "The musical stage must be behind the real score, not a separate game simulation")
     _check(streak_meter != null and streak_meter.custom_minimum_size.x >= 120,
@@ -160,14 +160,14 @@ func _run() -> void:
         "Clean-run indicators collapsed to an invisible line")
     _check(_in_viewport(streak_meter, viewport),
         "Game clean-run indicators leave the visible window")
-    var three: Control = scene.get("practice_controls")
+    var three: Control = scene.practice_view.practice_controls
     _check(three.get_child_count() == 3,
         "The game must have only Retry, Play/Pause and Listen as transport controls")
-    _check((scene.get("start_button") as Button).get_theme_stylebox("normal") is StyleBoxFlat,
+    _check((scene.practice_view.start_button as Button).get_theme_stylebox("normal") is StyleBoxFlat,
         "Primary piano control must have a tactile custom skin")
-    var retry: Button = scene.get("practice_retry_button")
-    var primary: Button = scene.get("start_button")
-    var listen: Button = scene.get("listen_button")
+    var retry: Button = scene.practice_view.practice_retry_button
+    var primary: Button = scene.practice_view.start_button
+    var listen: Button = scene.practice_view.listen_button
     _check(primary.size.y >= retry.size.y and primary.size.y >= listen.size.y,
         "Play is visually dominant, not another website-sized button")
     _check(retry.size.x >= 145.0 and listen.size.x >= 145.0,
@@ -184,18 +184,18 @@ func _run() -> void:
         "Play has the single accent while Retry and Listen share neutral faces")
     _check(str(browse_button.get_meta("ui_button_role", "")) == "primary",
         "Choose music must use the primary action rather than a utility skin")
-    var nav: Control = scene.get("practice_settings_button")
+    var nav: Control = scene.practice_view.practice_settings_button
     _check(str(nav.get_meta("ui_button_role", "")) == "settings"
         and nav.get_theme_stylebox("normal").bg_color != play_face.bg_color,
         "Settings navigation stays neutral while Play holds the accent")
-    _check((scene.get("practice_settings_button") as Button).focus_mode ==
+    _check((scene.practice_view.practice_settings_button as Button).focus_mode ==
         Control.FOCUS_ALL, "Navigation must stay keyboard accessible")
-    _check(not (scene.get("practice_progress") as ProgressBar).visible,
+    _check(not (scene.practice_view.practice_progress as ProgressBar).visible,
         "A duplicate progress bar below the score must not compete with the stage rail")
-    var brand: Label = scene.get("game_brand")
+    var brand: Label = scene.practice_view.game_brand
     _check(not brand.visible,
         "Practice keeps the piece title above music without a competing brand row")
-    var count_in: Control = scene.get("game_count_in")
+    var count_in: Control = scene.practice_view.stage.count_in
     count_in.present(-2.5, 3, true, false)
     _check(count_in.visible and int(count_in.get("count")) == 3,
         "Rhythmic prepare lights should use the piece's real meter")
@@ -244,8 +244,8 @@ func _run() -> void:
 
     # Mapped notes belong on the engraved staff, not under a large red
     # rectangle. Reserve a small fallback warning for unmapped backend data.
-    var hud: Control = scene.get("practice_note_feedback_panel")
-    var hud_label: Label = scene.get("practice_note_feedback_label")
+    var hud: Control = scene.practice_view.stage.practice_note_feedback_panel
+    var hud_label: Label = scene.practice_view.stage.practice_note_feedback_label
     scene.call("_update_note_feedback_hud", {"mode": "practice", "phase": "playing",
         "preview_only": false, "live_note_feedback":
         {"status": "missed", "pitch": 67, "name": "G4", "count": 1}})
@@ -422,16 +422,16 @@ func _run() -> void:
 
     # Imported MIDI starting-point dialog must expose the entire source,
     # synchronize slider and editable measure, and remain usable without MIDI.
-    scene.call("_show_open_picker", {
+    scene.practice_view.show_source_picker( {
         "title": "Long Imported Piano Piece",
         "piece_last_bar": 128,
         "selected_start_bar": 87
     })
     await process_frame
-    var picker: Control = scene.get("open_picker")
-    var measure: SpinBox = scene.get("open_picker").get("measure")
-    var slider: HSlider = scene.get("open_picker").get("measure_slider")
-    var start_mode: OptionButton = scene.get("open_picker").get("mode_choice")
+    var picker: Control = scene.practice_view.open_picker
+    var measure: SpinBox = scene.practice_view.open_picker.get("measure")
+    var slider: HSlider = scene.practice_view.open_picker.get("measure_slider")
+    var start_mode: OptionButton = scene.practice_view.open_picker.get("mode_choice")
     _check(picker.visible, "MIDI opening did not present a starting-measure selector")
     _check(measure.max_value == 128 and measure.min_value == 1,
         "Starting-measure selector does not cover the entire MIDI piece")
@@ -445,19 +445,19 @@ func _run() -> void:
     _check(measure.value == 23, "Measure timeline did not synchronize the spinner")
     picker.hide()
 
-    scene.call("_update_hand_stages", {"hand_stages": [
+    scene.practice_view.stage._update_hand_stages( {"hand_stages": [
         {"hand": "left", "active": false, "complete": true, "locked": false},
         {"hand": "right", "active": true, "complete": false, "locked": false},
         {"hand": "both", "active": false, "complete": false, "locked": true}]})
-    var ribbon: Control = scene.get("practice_stage_bar")
-    var stage_labels: Dictionary = scene.get("practice_stage_labels")
+    var ribbon: Control = scene.practice_view.stage.practice_stage_bar
+    var stage_labels: Dictionary = scene.practice_view.stage.practice_stage_labels
     _check(ribbon.visible,
         "Hand progression stays in the stage without consuming a layout row")
     _check(stage_labels["left"].text.begins_with("✓")
         and stage_labels["right"].text.begins_with("●")
         and "locked" in stage_labels["both"].text.to_lower(),
         "The hand progression does not show completed, current and locked stages")
-    scene.call("_update_hand_stages", {"hand_stages": []})
+    scene.practice_view.stage._update_hand_stages( {"hand_stages": []})
     _check(not ribbon.visible, "Hand ribbon should disappear when no hand course exists")
 
     # Stage chips describe the current exercise and hand, not every level
@@ -492,7 +492,7 @@ func _run() -> void:
                  "played_pitch": 66, "played_name": "F#4"},
                 {"bar": 4, "status": "short", "pitch": 67, "name": "G4"}
             ]}]}
-    var review: AcceptDialog = scene.get("review_sheet")
+    var review: AcceptDialog = scene.practice_view.review_sheet
     review.call("open_review", report)
     await process_frame
     var review_summary: Label = review.get("summary_label")
@@ -508,7 +508,7 @@ func _run() -> void:
         "Review lacks a direct retry button for the assessed section")
     review.hide()
 
-    var pause: Control = scene.get("pause_sheet")
+    var pause: Control = scene.practice_view.pause_sheet
     pause.call("present", {"paused": true, "mode": "practice", "bpm": 68,
         "hand": "left", "hands": ["left", "right", "both"],
         "first_bar": 1, "last_bar": 8, "seek_available": true,

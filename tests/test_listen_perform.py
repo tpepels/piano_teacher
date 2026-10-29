@@ -20,7 +20,7 @@ def deterministic_transport_audio(monkeypatch):
 
 
 def wait_audio(e):
-    worker = e._demo_thread
+    worker = e.listen.thread
     worker.join(10)
     assert not worker.is_alive(), 'Audio synthesis did not finish'
     return e.state()
@@ -255,7 +255,7 @@ def test_listen_render_does_not_block_controls_and_late_result_cannot_revive_sto
             entered.set()
             release.wait(2)
             return real_cache.render(variant, bpm)
-    e._demo_cache = SlowCache()
+    e.listen.cache = SlowCache()
     started = time.perf_counter()
     try:
         e.control('listen')
@@ -273,7 +273,7 @@ def test_listen_render_does_not_block_controls_and_late_result_cannot_revive_sto
         assert e.state()['phase'] == 'ready'
     finally:
         release.set()
-        worker = getattr(e, '_demo_thread', None)
+        worker = e.listen.thread
         if worker:
             worker.join(5)
     assert e.state()['demo'] is None and not e.state()['running']
@@ -301,9 +301,9 @@ def test_old_render_cannot_replace_a_new_tempo_demo(lesson):
                 entered.set()
                 release.wait(3)
             return real_cache.render(variant, bpm)
-    e._demo_cache = SlowFirstCache()
+    e.listen.cache = SlowFirstCache()
     e.control('listen')
-    first_worker = e._demo_thread
+    first_worker = e.listen.thread
     assert entered.wait(.5)
     try:
         e.control('tempo', bpm=60)
@@ -322,7 +322,7 @@ def test_failed_background_render_exposes_honest_error_and_cannot_be_acknowledge
     class FailedCache:
         def render(self, variant, bpm):
             raise OSError('Controlled unavailable audio cache')
-    e._demo_cache = FailedCache()
+    e.listen.cache = FailedCache()
     e.control('listen')
     state = wait_audio(e)
     assert state['phase'] == 'ready' and not state['running']
@@ -332,6 +332,24 @@ def test_failed_background_render_exposes_honest_error_and_cannot_be_acknowledge
     e.control('demo_ready', token=state['demo']['token'], revision=state['revision'])
     assert e.state()['phase'] == 'ready' and not e.state()['running']
     assert e.recorder is None and not e.plan.mastered
+
+
+def test_failed_render_is_settled_before_a_control_without_a_state_poll(lesson):
+    e, _, _ = lesson()
+
+    class FailedCache:
+        def render(self, variant, bpm):
+            raise OSError('Controlled unavailable audio cache')
+
+    e.listen.cache = FailedCache()
+    e.control('listen')
+    e.listen.thread.join(3)
+    assert not e.listen.thread.is_alive()
+    with pytest.raises(ValueError, match='Cannot pause unless'):
+        e.control('pause')
+    state = e.state()
+    assert state['phase'] == 'ready' and not state['running']
+    assert state['feedback'] == 'Listen audio could not be prepared: Controlled unavailable audio cache'
 
 
 def test_real_demo_http_route_returns_pcm_and_rejects_abandoned_tokens(lesson):
@@ -453,6 +471,6 @@ def test_listen_starts_with_moving_negative_beat_and_no_audio_trim(lesson):
     first = e.state()
     assert first["phase"] == "playing"
     assert 0 <= first["clock_beat"] < .1
-    assert e.demo["ready"]
+    assert e.listen.snapshot()["ready"]
     assert e.recorder is None and e.pending_result is None
 

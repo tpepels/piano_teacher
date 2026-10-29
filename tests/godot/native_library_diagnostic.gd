@@ -41,10 +41,10 @@ func run() -> void:
             app.queue_free()
             await process_frame
             continue
-        var view = app.timeline_preview
-        var feedback = app.native_score_feedback
+        var view = app.practice_view.stage.renderer
+        var feedback = app.practice_view.stage.feedback
         check(app._native_score_ready() and app.rendered_revision == app.revision
-            and not app.start_button.disabled and not app.score_status_panel.visible,
+            and not app.practice_view.start_button.disabled and not app.practice_view.stage.score_status_panel.visible,
             filename + ": native readiness must enable production display and Play")
         var source_ids: Array[String] = []
         for note in view.timeline.notes:

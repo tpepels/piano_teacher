@@ -424,3 +424,8 @@ first-party architectural monoliths.
   Lesson, MIDI, neutral SVG, native owners, independent proof ownership and
   actual capture/worker/pipeline contracts: 265 passed in 36.41s, with the
   diagnostic-aware main parse succeeding. The 105s/25s limits remain intact.
+
+- Godot MCP connection verified against application/config/name `Piano Teacher`
+  and main_scene `res://main.tscn`. Native view validation returned valid=true
+  with no diagnostics. Stopped the task-owned headless editor, preserved its
+  generated metadata under /tmp, and restored only its cache/UID changes.

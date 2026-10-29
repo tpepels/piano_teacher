@@ -17,8 +17,8 @@ func wait_for(predicate: Callable, seconds: float = 60.0) -> bool:
     return true
 
 func score_ready() -> bool:
-    return app.timeline_preview != null and app._native_score_ready() \
-        and app.timeline_preview.is_visible_in_tree() and not app.layout_pending \
+    return app.practice_view.stage.renderer != null and app._native_score_ready() \
+        and app.practice_view.stage.renderer.is_visible_in_tree() and not app.layout_pending \
         and not app.timeline_model_pending
 
 func api(route: String, body: Dictionary) -> Dictionary:
@@ -76,15 +76,15 @@ func run() -> void:
     await wait_for(func(): return score_ready())
     await api("/control", {"action": "tempo", "bpm": 80})
     await wait_for(func(): return int(app.last_state.get("bpm", 0)) == 80 and score_ready())
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     app._navigate("settings") # The Start HTTP response has not arrived yet.
     await wait_for(func(): return bool(app.last_state.get("paused", false)))
     if app.current_screen != "settings":
         failures.append("Immediate Settings detour must retain its destination")
     app._go_back()
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     await wait_for(func(): return app._transport_beat_now() >= .3 and bool(app.last_state.get("running", false)) and not bool(app.last_state.get("paused", true)))
-    app.start_button.pressed.emit()
+    app.practice_view.start_button.pressed.emit()
     await wait_for(func(): return bool(app.last_state.get("paused", false)))
     await capture("practice")
     press("Path")
@@ -112,7 +112,7 @@ func run() -> void:
         app._navigate("practice")
         await capture("practice-%dx%d" % [dimensions.x, dimensions.y])
         var visible_width: float = root.get_visible_rect().size.x
-        if app.practice_controls.get_global_rect().end.x > visible_width + 1:
+        if app.practice_view.practice_controls.get_global_rect().end.x > visible_width + 1:
             failures.append("Practice controls overflow " + str(dimensions))
         app._navigate("settings")
     var saved_hand: String = str(app.last_state.get("hand", ""))
@@ -132,7 +132,7 @@ func run() -> void:
     else:
         await wait_for(func(): return not app.action_pending and app.current_screen == "practice" \
             and score_ready())
-        if app.open_picker.visible or str(app.last_state.get("hand", "")) != saved_hand \
+        if app.practice_view.open_picker.visible or str(app.last_state.get("hand", "")) != saved_hand \
                 or int(app.last_state.get("target_bpm", 0)) != saved_tempo:
             failures.append("Continue must restore saved hand and tempo without a starting-point picker")
         await capture("continued-practice-800x600")

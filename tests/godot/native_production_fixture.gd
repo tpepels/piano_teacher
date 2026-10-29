@@ -20,9 +20,9 @@ func _poll() -> void: pass
 func _send_post(_path: String, _payload: Dictionary) -> void: pass
 
 func load_native_fixture(folder: String) -> String:
-    if timeline_preview == null:
+    if practice_view.stage.renderer == null:
         return "Production must construct the native notation view unconditionally"
-    if timeline_preview.get_script().resource_path != "res://notation/native/view.gd":
+    if practice_view.stage.renderer.get_script().resource_path != "res://notation/native/view.gd":
         return "Practice must use the production native notation view"
     var payload: Variant = JSON.parse_string(FileAccess.get_file_as_string(
         folder.path_join("native.json")))
@@ -34,7 +34,7 @@ func load_native_fixture(folder: String) -> String:
     _on_layout(0, 200, PackedStringArray(), JSON.stringify(payload.layout).to_utf8_buffer())
     _on_timeline_model(0, 200, PackedStringArray(), JSON.stringify(payload.model).to_utf8_buffer())
     if not has_method("_native_score_ready") or not call("_native_score_ready"):
-        return "Production native score is not ready: " + str(timeline_preview.failure_reason)
-    if timeline_preview.timeline.notes.is_empty():
+        return "Production native score is not ready: " + str(practice_view.stage.renderer.failure_reason)
+    if practice_view.stage.renderer.timeline.notes.is_empty():
         return "Production loaded no source notes"
     return ""

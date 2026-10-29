@@ -87,7 +87,7 @@ func run() -> void:
             "Continue opens the actual stored identifier through the existing backend")
         app._on_action(0, 200, PackedStringArray(), JSON.stringify(saved_state()).to_utf8_buffer())
         await process_frame
-        check(app.current_screen == "practice" and not app.open_picker.visible,
+        check(app.current_screen == "practice" and not app.practice_view.open_picker.visible,
             "Continue returns to restored practice without replacing it through a starting-point chooser")
         check(app.last_state.get("lesson_step") == 17 and app.last_state.get("hand") == "left"
             and app.last_state.get("bpm") == 64 and app.last_state.get("streak") == 2,
@@ -104,7 +104,7 @@ func run() -> void:
         check(app.posts == [{"path": "/library/open", "payload": {"id": "Collection/real.mid"}}],
             "Queued Continue retains the exact saved identifier")
         app._on_action(0, 200, PackedStringArray(), JSON.stringify(saved_state()).to_utf8_buffer())
-        check(not app.open_picker.visible, "Queued Continue retains resume intent after transport completion")
+        check(not app.practice_view.open_picker.visible, "Queued Continue retains resume intent after transport completion")
 
         # A failed Pause must cancel its queued Continue. Otherwise the next
         # successful ordinary open drains the stale queue and reopens A.
@@ -130,9 +130,9 @@ func run() -> void:
         await process_frame
         check(app.posts == [{"path": "/library/open", "payload": {"id": "other.mid"}}],
             "Opening B after a failed Pause cannot replay stale Continue A")
-        check(app.open_picker.visible and app.open_picker.title_label.text == "Another piece",
+        check(app.practice_view.open_picker.visible and app.practice_view.open_picker.title_label.text == "Another piece",
             "The later ordinary selection retains its own starting-point chooser")
-        app.open_picker.hide()
+        app.practice_view.open_picker.hide()
 
     # Ordinary title/folder searches remain complete and must not surface an
     # unrelated pinned recent entry, nor show the same music twice.
@@ -156,8 +156,8 @@ func run() -> void:
     app.action_pending = false
     app._open_library_piece("other.mid")
     app._on_action(0, 200, PackedStringArray(), JSON.stringify(saved_state()).to_utf8_buffer())
-    check(app.open_picker.visible, "Ordinary music selection retains its starting-point chooser")
-    app.open_picker.hide()
+    check(app.practice_view.open_picker.visible, "Ordinary music selection retains its starting-point chooser")
+    app.practice_view.open_picker.hide()
     listing["last_piece"] = "warmup:chords"
     listing["warmups"] = [{"id": "warmup:chords", "title": "Chord Changes", "bpm": 68, "focus": "Triads"}]
     app._on_library(0, 200, PackedStringArray(), JSON.stringify(listing).to_utf8_buffer())
@@ -172,7 +172,7 @@ func run() -> void:
     warmup["warmup"] = true
     warmup["title"] = "Chord Changes"
     app._on_action(0, 200, PackedStringArray(), JSON.stringify(warmup).to_utf8_buffer())
-    check(app.current_screen == "practice" and not app.open_picker.visible,
+    check(app.current_screen == "practice" and not app.practice_view.open_picker.visible,
         "Recent warm-up continues through the same saved-state route")
     print("LIBRARY_RESUME_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)
