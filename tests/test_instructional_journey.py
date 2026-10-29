@@ -59,7 +59,7 @@ def test_source_measure_retry_still_reaches_five_errors_and_clean_partial_cannot
 
     try:
         engine.load(str(source))
-        engine.midi_port = object()
+        engine.midi.port = object()
         engine.control('tempo', bpm=240)
         engine.control('practice')
         assert ready()['phase'] == 'count_in'

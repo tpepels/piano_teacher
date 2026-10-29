@@ -60,8 +60,8 @@ def test_engine_diagnostics_do_not_interfere_with_existing_practice_or_progress(
     try:
         with pytest.raises(RuntimeError, match="Connect"):
             engine.hardware_diagnostics_action("start")
-        engine.midi_device = "Kawai"
-        engine.midi_port = SimpleNamespace(closed=False)
+        engine.midi.device = "Kawai"
+        engine.midi.port = SimpleNamespace(closed=False)
         engine.hardware_diagnostics_action("start")
         engine._receive(midi("note_on", note=60, velocity=91, channel=0))
         engine._receive(midi("note_off", note=60, velocity=0, channel=0))
@@ -81,8 +81,8 @@ def test_engine_diagnostics_do_not_interfere_with_existing_practice_or_progress(
 def test_running_engine_rejects_probe_start(tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        engine.midi_device = "Kawai"
-        engine.midi_port = SimpleNamespace(closed=False)
+        engine.midi.device = "Kawai"
+        engine.midi.port = SimpleNamespace(closed=False)
         engine.running = True
         with pytest.raises(RuntimeError, match="Stop the current"):
             engine.hardware_diagnostics_action("start")
@@ -118,8 +118,8 @@ def test_loopback_diagnostics_api_only_records_when_armed(tmp_path):
         with pytest.raises(HTTPError) as caught:
             call("/diagnostics/hardware", {"action": "start"})
         assert caught.value.code == 400
-        engine.midi_device = "Test MIDI"
-        engine.midi_port = SimpleNamespace(closed=False)
+        engine.midi.device = "Test MIDI"
+        engine.midi.port = SimpleNamespace(closed=False)
         assert call("/diagnostics/hardware", {"action": "start"})["active"]
         engine._receive(midi("note_on", note=72, velocity=100))
         observed = call("/diagnostics/hardware")

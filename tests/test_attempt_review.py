@@ -92,7 +92,7 @@ def test_bounded_retry_stops_at_selected_chunk_and_cannot_grant_mastery(tmp_path
         engine.review_stage_identity = engine.plan.identity
         engine.control("review_retry", first_bar=target["first_bar"],
                        last_bar=target["last_bar"])
-        engine.midi_port = object()  # isolated MIDI test device; no real instrument
+        engine.midi.port = object()  # isolated MIDI test device; no real instrument
         engine.engraving()  # real canonical source-note geometry
         engine.start()
         assert not engine.preview_only

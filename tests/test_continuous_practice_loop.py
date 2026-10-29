@@ -58,7 +58,7 @@ def test_preview_continues_after_one_empty_measure_without_reloading(tmp_path):
 def test_clean_auto_take_increases_bpm_without_reengraving(tmp_path):
     app = engine(tmp_path)
     try:
-        app._piano_connected = lambda: True
+        app.midi.port = object()
         app.start()
         assert not app.preview_only and app.auto
         bpm, original_revision = app.plan.bpm, app.score_revision
@@ -81,7 +81,7 @@ def test_clean_auto_take_increases_bpm_without_reengraving(tmp_path):
 def test_failed_auto_take_moves_back_in_place_and_never_advances_repeat(tmp_path):
     app = engine(tmp_path)
     try:
-        app._piano_connected = lambda: True
+        app.midi.port = object()
         app.start()
         length = app.plan.active_phrase.end - app.plan.active_phrase.start
         app.running = False
@@ -110,7 +110,7 @@ def test_failed_auto_take_moves_back_in_place_and_never_advances_repeat(tmp_path
 def test_backward_recovery_is_still_local_to_source_measure_grid(tmp_path):
     app = engine(tmp_path)
     try:
-        app._piano_connected = lambda: True
+        app.midi.port = object()
         app.start()
         app.running = False
         app.pending_rewind = 4.0
@@ -224,7 +224,7 @@ def test_paused_rewind_resumes_without_skipping_backward_frames(tmp_path, monkey
     monkeypatch.setattr(server.time, "monotonic", lambda: now[0])
     app = engine(tmp_path)
     try:
-        app._piano_connected = lambda: True
+        app.midi.port = object()
         app.start()
         app.running = False
         app.pending_rewind = 4.0
@@ -291,7 +291,7 @@ def clocked_engine(tmp_path, monkeypatch):
         app.plan = LearningPlan(piece, consolidate=True)
         app.plan.set_bpm(bpm)
         if connected:
-            app._piano_connected = lambda: True
+            app.midi.port = object()
         return app, now
 
     yield create
@@ -642,7 +642,7 @@ def midi_handoff(clocked_engine, monkeypatch):
         if kind == "preview":
             assert app._preview_loop_pending
             # A piano has connected since the previous silent preview.
-            app._piano_connected = lambda: True
+            app.midi.port = object()
         target = app.pending_rewind if app.pending_rewind is not None else 0
         note = next(n for n in phrase.notes if n.start == phrase.start + target
                     and (app.plan.hand == "both" or n.hand == app.plan.hand))
@@ -664,8 +664,8 @@ def test_midi_deadline_handoff_retains_first_attack_release_and_feedback(
     transport = app.transport_id
     previous_recorder = app.recorder
     revision = app.score_revision
-    app.hardware_probe.start("Review piano", now=now[0])
-    probe_start = app.hardware_probe.started_at
+    app.midi.probe.start("Review piano", now=now[0])
+    probe_start = app.midi.probe.started_at
     original_update = app._update
     calls = []
 
@@ -681,8 +681,8 @@ def test_midi_deadline_handoff_retains_first_attack_release_and_feedback(
     assert app.running and app.transport_id == transport + 1
     assert app.score_revision == revision and app.count_in_beats == 0
     assert app.run_at == pytest.approx(deadline)
-    assert app.midi_input_at == received_at
-    assert app.hardware_probe.events[-1]["at_s"] == pytest.approx(
+    assert app.midi.input_at == received_at
+    assert app.midi.probe.events[-1]["at_s"] == pytest.approx(
         round(received_at-probe_start, 4))
     recorder = app.recorder
     assert recorder is not previous_recorder
@@ -799,7 +799,7 @@ def test_midi_settles_unpolled_source_before_next_attack(
         + app.visual_gap_beats*60/app.plan.bpm
     assert app.running and app.next_at == 0 and app.pending_result is None
     if preview:
-        app._piano_connected = lambda: True
+        app.midi.port = object()
     now[0] = received_at = deadline + overshoot
     note = phrase.notes[0]
     app._receive(midi_note(note.pitch))
@@ -811,7 +811,7 @@ def test_midi_settles_unpolled_source_before_next_attack(
     recorder = app.recorder
     assert recorder is not old_recorder
     assert recorder.presses == [PlayedNote(note.pitch, pytest.approx(overshoot), None)]
-    assert app.midi_input_at == received_at
+    assert app.midi.input_at == received_at
     event = app.live_input.events[-1]
     assert event["received_at"] == received_at
     assert event["status"] == "on_time" and event["source_id"] == note.source_id
@@ -884,7 +884,7 @@ def peace_timing_engine(tmp_path, monkeypatch):
         app.plan.set_hand(hand)
         app.plan.set_bpm(bpm)
         if connected:
-            app._piano_connected = lambda: True
+            app.midi.port = object()
         return app, now
 
     yield create

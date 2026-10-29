@@ -23,8 +23,8 @@ def learner(tmp_path, monkeypatch):
                                time_signatures=((0, 4, 4),)), consolidate=True)
     e.plan.variant_index = len(e.plan.variants) - 1
     e.plan.set_bpm(120)
-    e.midi_port = object()
-    e.midi_device = 'Test piano'
+    e.midi.port = object()
+    e.midi.device = 'Test piano'
     try:
         yield e, now
     finally:
@@ -154,8 +154,8 @@ def test_guided_pause_stop_retry_and_stage_change_clear_old_keys(learner):
 
 def test_no_device_cannot_progress_guided_but_timed_preview_is_available(learner):
     e, _ = learner
-    e.midi_port = None
-    e.midi_device = ''
+    e.midi.port = None
+    e.midi.device = ''
     state = begin(e)
     assert state['phase'] == 'disconnected'
     send(e, 60)  # Even stale callbacks after device loss cannot teach a note.
@@ -201,7 +201,7 @@ def test_closed_input_port_blocks_stale_callbacks_before_next_discovery_poll(lea
     begin(e)
     class ClosedPort:
         closed = True
-    e.midi_port = ClosedPort()
+    e.midi.port = ClosedPort()
     send(e, 60)
     state = e.state()
     assert state['phase'] == 'disconnected'

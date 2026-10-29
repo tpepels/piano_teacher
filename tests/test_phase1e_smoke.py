@@ -6,7 +6,7 @@ from test_phase1_camera import native_camera_run
 ROOT=Path(__file__).resolve().parents[1]
 SCRIPT=(ROOT/"scripts"/"smoke_adaptive_godot.py").read_text()
 GODOT=(ROOT/"godot"/"main.gd").read_text()
-WORKFLOW=(ROOT/".github"/"workflows"/"phase0.yml").read_text()
+WORKFLOW=(ROOT/".github"/"workflows"/"native-notation.yml").read_text()
 
 
 def test_adaptive_smoke_exercises_real_godot_and_three_clean_repeats():
@@ -20,8 +20,11 @@ def test_adaptive_smoke_exercises_real_godot_and_three_clean_repeats():
     assert 'lesson_rendered(log, first_revision)' in SCRIPT
     assert 'lesson_rendered(log, next_revision)' in SCRIPT
     assert 'engine.lesson_overview()' in SCRIPT
-    assert 'engine.midi_port = object()' in SCRIPT
-    assert 'scripts/smoke_adaptive_godot.py' in WORKFLOW
+    assert 'engine.midi.port = object()' in SCRIPT
+    # The historical phase0 push workflow was replaced by a bounded smoke
+    # gate; adaptive graphical journeys remain explicit local checks.
+    assert 'scripts/ci-smoke.sh' in WORKFLOW
+    assert 'scripts/smoke_adaptive_godot.py' not in WORKFLOW
 
 
 def test_godot_reports_actual_loaded_native_lesson(native_camera_run):

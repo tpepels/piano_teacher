@@ -27,8 +27,8 @@ def lesson(tmp_path, monkeypatch):
         e.plan = LearningPlan(piece, consolidate=True)
         e.plan.set_bpm(bpm)
         if connected:
-            e.midi_port = object()
-            e.midi_device = 'Learner piano'
+            e.midi.port = object()
+            e.midi.device = 'Learner piano'
         e.geometry()
         e.start()
         return e, now, grid
@@ -476,7 +476,7 @@ def test_disconnected_piano_replaces_old_play_instruction(lesson):
     e, _, _ = lesson()
     class ClosedPiano:
         closed = True
-    e.midi_port = ClosedPiano()
+    e.midi.port = ClosedPiano()
     state = e.state()
     assert state['phase'] == 'ready'
     assert 'piano' in state['next_action'].lower() and 'connect' in state['next_action'].lower()

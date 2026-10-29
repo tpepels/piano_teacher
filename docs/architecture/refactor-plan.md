@@ -409,3 +409,13 @@ first-party architectural monoliths.
   the supported score_geometry facade. Owner 57/146 tests, parent 15 and
   independent 65 tests passed. Eight definitions/79 callers and all 15 saved
   snapshots preserve exact behavior; input XML isolation remains nonmutating.
+
+- MidiConnection owns device lifetime, discovery/reconnect deadlines, hardware
+  diagnostics and physical input facts. Session cancellation occurs between
+  detachment and port closure; callbacks still timestamp before the lock.
+  Engine aliases removed; hardware/application consumers migrated. Owner
+  192/149/43-test focuses and independent 153-test review passed. Parent 33
+  device/probe and 13 real camera/smoke contracts passed. A stale removed
+  phase0-workflow assertion now checks the actual bounded automatic gate.
+  Existing graphical instructional-journey failure is recorded for UI triage;
+  it reproduces on the pre-extraction backend. Listen extraction follows.

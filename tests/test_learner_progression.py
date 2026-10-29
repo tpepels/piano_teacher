@@ -55,8 +55,8 @@ def course(tmp_path, monkeypatch):
         e.plan = LearningPlan(e.plan.piece, consolidate=True)
         e._restore()
         if connected:
-            e.midi_port = object()
-            e.midi_device = 'Learner piano'
+            e.midi.port = object()
+            e.midi.device = 'Learner piano'
         return e, now, path, data_dir
 
     yield create

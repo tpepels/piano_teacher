@@ -136,7 +136,7 @@ def run() -> None:
                 layout["native_tie_templates"], "The generated skeleton lacks native assets"
             print(f"PASS preflight generated skeleton: {len(layout['notes'])} mapped notes, "
                   f"{len(layout['native_note_templates'])} native note templates", flush=True)
-            engine.midi_port = object()  # Isolated harness; no production mock MIDI.
+            engine.midi.port = object()  # Isolated harness; no production mock MIDI.
             http = ThreadingHTTPServer(("127.0.0.1",8765),Handler)
             Handler.engine = engine
             thread = threading.Thread(target=http.serve_forever, daemon=True)
@@ -229,7 +229,7 @@ def run() -> None:
                 http.server_close()
             if thread:
                 thread.join(timeout=5)
-            engine.midi_port = None
+            engine.midi.port = None
             engine.db.close()
 
 

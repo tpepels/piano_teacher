@@ -26,7 +26,7 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
     e.plan=LearningPlan(music())
     e.fingerprint="complete-journey"
     e.plan.set_bpm(80)
-    e.midi_port=object()  # In-process test only: no MIDI simulation endpoint.
+    e.midi.port=object()  # In-process test only: no MIDI simulation endpoint.
     def fake_engraving():
         phrase=e.plan.active_phrase
         return EngravedScore(("<svg/>",),{
@@ -106,5 +106,5 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
         assert started["transport_id"]==transport+1
         assert started["required_notes"]>8
     finally:
-        e.midi_port=None
+        e.midi.port=None
         e.db.close()

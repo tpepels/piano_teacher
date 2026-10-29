@@ -22,7 +22,7 @@ def _engine(tmp_path: object, hand: str) -> PracticeEngine:
     # Force real canonical Verovio mapping, instead of mocked coordinates.
     layout = engine.geometry()
     assert layout["mapping_schema"] == "source-note-v1"
-    engine.midi_port = object()  # Isolated in-process test instrument only.
+    engine.midi.port = object()  # Isolated in-process test instrument only.
     engine.start()
     # At 68 BPM, the allowed onset window for beat zero has expired after
     # 0.65 beats, before a two-beat half-note is released.

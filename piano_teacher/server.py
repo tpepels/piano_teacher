@@ -18,6 +18,7 @@ from urllib.parse import urlsplit
 
 from .learning import LearningPlan
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection, validate_png_width
+from .application.midi_connection import MidiConnection, MidiNotice
 from .practice import Recorder, evaluate
 from .importing.pieces import import_piece
 from .rendering.legacy.engraving import EngravedScore
@@ -43,7 +44,6 @@ from .assessment_service import AssessmentService
 from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
 from .live_input_view import LiveInputView
-from .hardware_probe import HardwareProbe
 from .instruction import next_full_attempt
 from .learner_state import guided_units, next_guided_unit, placement_candidate
 from .progress_repository import ProgressRepository
@@ -127,19 +127,9 @@ class PracticeEngine:
         self.pending_result = None
         self.feedback_marks: list[dict] = []
         self.feedback_unmapped = 0
-        self.midi_port = None
-        self.midi_device = ""
-        # Phase 8K: bounded reconnect of the explicitly saved MIDI preference.
-        # Never infer another device or resume an interrupted take.
-        self._midi_next_scan_at = 0.0
-        self._midi_retry_after = 0.0
-        self.midi_input_count = 0
-        self.midi_input_note = None
-        self.midi_input_at = None
+        self.midi = MidiConnection(enabled=enable_midi)
         self.live_input = LiveInputView()
         self.assessment = AssessmentService()
-        self.hardware_probe = HardwareProbe()
-        self.enable_midi = enable_midi
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
         self.library_health = LibraryHealth(self.library)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
@@ -153,130 +143,58 @@ class PracticeEngine:
         self.db = self.progress.db
         self.learner_store = self.progress.learner_store
 
-    MIDI_SCAN_SECONDS = 3.0
-    MIDI_RETRY_SECONDS = 4.0
-
     def _midi_lost(self, reason: str = "device_disconnected") -> None:
-        """Cancel every active/pending take before allowing reconnection."""
-        old_name, old_port = self.midi_device, self.midi_port
-        self.midi_device = ""
-        self.midi_port = None
-        self.live_input.clear_device()
-        # The last key shown in the HUD must not survive a USB loss.
-        self.midi_input_note = None
-        self.midi_input_at = None
-        self.hardware_probe.stop(reason)
-        self._stop()
-        if self.teaching is not None:
-            self.teaching.set_connected(False, now=time.monotonic())
-        if old_port is not None:
-            try:
-                old_port.close()
-            except Exception:
-                pass  # ALSA may have already released an unplugged port.
-        self._midi_retry_after = time.monotonic() + self.MIDI_RETRY_SECONDS
-        self.feedback = f"MIDI piano disconnected: {old_name}. Reconnect it, then press Start."
-        self.next_action = "Reconnect your piano, then press Start."
+        """Cancel session state after detachment and before closing the input."""
+        with self.midi.disconnected(reason) as notice:
+            self.live_input.clear_device()
+            self._stop()
+            if self.teaching is not None:
+                self.teaching.set_connected(False, now=time.monotonic())
+        self.feedback = notice.feedback
+        self.next_action = notice.next_action
+
+    def _present_midi_notice(self, notice: MidiNotice | None) -> None:
+        if notice is None:
+            return
+        if notice.connected is not None and self.teaching is not None:
+            self.teaching.set_connected(notice.connected, now=(notice.sampled_at
+                if notice.sampled_at is not None else time.monotonic()))
+        self.feedback = notice.feedback
+        self.next_action = notice.next_action
 
     def ports(self) -> list[str]:
-        """Discover input names and cautiously restore the chosen device.
-
-        Only the explicitly stored preferred device may reconnect. Discovery
-        failure never destroys a known healthy connection. Neither successful
-        reconnection nor startup with a remembered piano starts gameplay.
-        """
-        if not self.enable_midi:
+        if not self.midi.enabled:
             return []
         with self.lock:
-            try:
-                import mido
-                names = list(mido.get_input_names())
-            except Exception as exc:
-                if self.midi_device and (self.midi_port is None
-                        or getattr(self.midi_port, "closed", False)):
-                    self._midi_lost()
-                self.feedback = (
-                    f"Cannot list MIDI input devices: {exc}. "
-                    "Check your MIDI backend and connection.")
-                raise RuntimeError(self.feedback) from exc
-            if self.midi_device and (self.midi_port is None
-                    or getattr(self.midi_port, "closed", False)
-                    or self.midi_device not in names):
+            scan = self.midi.scan()
+            if scan.lost:
                 self._midi_lost()
-            preferred = self.library.settings.get("midi_device", "")
-            now = time.monotonic()
-            if (preferred and not self._piano_connected()
-                    and preferred in names and now >= self._midi_retry_after):
-                try:
-                    port = mido.open_input(preferred, callback=self._receive)
-                except Exception as exc:
-                    self._midi_retry_after = now + self.MIDI_RETRY_SECONDS
-                    self.feedback = (
-                        f"Cannot reconnect MIDI piano {preferred}: {exc}. "
-                        "Check the USB connection or select a device in Settings.")
-                    self.next_action = "Reconnect your piano, then press Start."
-                else:
-                    self.midi_port = port
-                    self.midi_device = preferred
-                    if self.teaching is not None:
-                        self.teaching.set_connected(True, now=now)
-                    self.feedback = (
-                        f"MIDI piano reconnected: {preferred}. Press Start when ready.")
-                    self.next_action = "Press Start when you are ready."
-            return names
+            if scan.error is not None:
+                self.feedback = scan.feedback
+                raise RuntimeError(self.feedback) from scan.error
+            self._present_midi_notice(self.midi.restore_preferred(
+                scan.names, self.library.settings.get("midi_device", ""), callback=self._receive))
+            return list(scan.names)
 
     def connect(self, name: str):
         with self.lock:
-            port = self.midi_port
-            self.midi_port = None
-            self.midi_device = ""
-            self.live_input.clear_device()
-            self.midi_input_note = None
-            self.midi_input_at = None
-            self.hardware_probe.stop("device_changed")
-            self._stop()
-            if port is not None:
-                try:
-                    port.close()
-                except Exception:
-                    pass  # Failure closing a lost device must not retain it.
-            self._midi_retry_after = 0.0
-            self._midi_next_scan_at = time.monotonic() + self.MIDI_SCAN_SECONDS
-            if not isinstance(name, str):
-                raise ValueError("MIDI input name must be text")
-            if name:
-                if not self.enable_midi:
-                    raise ValueError("MIDI input is disabled")
-                try:
-                    import mido
-                    self.midi_port = mido.open_input(name, callback=self._receive)
-                except Exception as exc:
-                    self.feedback = f"Cannot connect to MIDI input {name}: {exc}. Check the device and try again."
-                    raise RuntimeError(self.feedback) from exc
-                self.midi_device = name
-                self.feedback = f"MIDI piano connected: {name}. Press Start when ready."
-            else:
-                self.feedback = "MIDI piano disconnected. Connect a device to enable scoring."
-            if self.teaching is not None:
-                self.teaching.set_connected(self.midi_port is not None, now=time.monotonic())
-            self.next_action = "Press Start when you are ready." if name else "Connect your piano for feedback."
+            try:
+                with self.midi.selecting(name, callback=self._receive) as selected:
+                    self.live_input.clear_device()
+                    self._stop()
+            except RuntimeError as exc:
+                self.feedback = str(exc)
+                raise
+            self._present_midi_notice(selected.notice)
             self.library.update(midi_device=name)
 
     def hardware_diagnostics(self) -> dict:
         with self.lock:
-            return self.hardware_probe.snapshot()
+            return self.midi.diagnostics_snapshot()
 
     def hardware_diagnostics_action(self, action: str) -> dict:
         with self.lock:
-            if action == "start":
-                if not self._piano_connected():
-                    raise RuntimeError("Connect a MIDI piano in Settings before testing")
-                if self.running:
-                    raise RuntimeError("Stop the current practice attempt before testing MIDI input")
-                return self.hardware_probe.start(self.midi_device)
-            if action == "stop":
-                return self.hardware_probe.stop()
-            raise ValueError("Hardware diagnostics action must be start or stop")
+            return self.midi.diagnostics_action(action, running=self.running)
 
     def library_listing(self) -> dict:
         with self.lock:
@@ -323,11 +241,7 @@ class PracticeEngine:
         # Timestamp in the hardware input callback, not on the rendering thread.
         now = time.monotonic()
         with self.lock:
-            self.hardware_probe.receive(message, now=now)
-            if message.type == "note_on" and message.velocity > 0:
-                self.midi_input_count += 1
-                self.midi_input_note = message.note
-                self.midi_input_at = now
+            self.midi.observe(message, now=now)
             # A key can reach the next attempt's musical deadline before the
             # next HTTP state poll, even if no poll observed the source ending.
             # Settle only a due handoff; retain the hardware timestamp above.
@@ -359,7 +273,7 @@ class PracticeEngine:
                     transport_id=self.transport_id,
                 )
             if self.mode == "learn":
-                if (self.teaching is not None and self._piano_connected()
+                if (self.teaching is not None and self.midi.connected
                         and message.type in ("note_on", "note_off")):
                     self.teaching.receive(pitch=message.note,
                         is_on=message.type == "note_on" and message.velocity > 0,
@@ -373,9 +287,6 @@ class PracticeEngine:
                     self.recorder.add(message.note, message.velocity > 0, now - self.run_at)
                 elif message.type == "note_off":
                     self.recorder.add(message.note, False, now - self.run_at)
-
-    def _piano_connected(self) -> bool:
-        return self.midi_port is not None and not getattr(self.midi_port, "closed", False)
 
     def load(self, path: str, *, warmup: bool = False):
         with self._fingering_lock:
@@ -727,7 +638,7 @@ class PracticeEngine:
             self.teaching = TeachingController(TeachingConfig(persistent_hints=self.persistent_hints))
         self.teaching.bind(stage_key=self.plan.identity, revision=self.score_revision,
             variant=self.plan.active_variant, fragment_start=grid[first], fragment_end=grid[end_index],
-            now=time.monotonic(), connected=self._piano_connected())
+            now=time.monotonic(), connected=self.midi.connected)
         self.awaiting_score_revision = self.score_revision
         self.feedback = "Preparing a short idea to learn"
         self.next_action = (f"Learn bars {self.display_phrase().first_bar}-{self.display_phrase().last_bar} "
@@ -1024,7 +935,7 @@ class PracticeEngine:
             self.review_session_complete = False
             # A user must be able to watch the time-driven score without a
             # connected instrument. Only actual MIDI input enables assessment.
-            self.preview_only = not self._piano_connected()
+            self.preview_only = not self.midi.connected
             phrase=self.plan.active_phrase
             position = self.open_from_beat if from_beat is None else from_beat
             self.play_from_beat=max(0.0,min(float(position),phrase.end-phrase.start-1e-6))
@@ -1406,21 +1317,13 @@ class PracticeEngine:
         self._save()
 
     def _poll_midi_connection(self):
-        """Keep MIDI device discovery separate from practice progression."""
-        # State polling is frequent, so enumerate ALSA inputs only once per
-        # interval. This works even if the USB device vanishes without the
-        # driver marking the existing port object as closed.
-        if self.midi_port is not None and getattr(self.midi_port, "closed", False):
+        if self.midi.closed:
             self._midi_lost()
-        now = time.monotonic()
-        if (self.enable_midi and now >= self._midi_next_scan_at and (
-                self.midi_device or self.library.settings.get("midi_device"))):
-            self._midi_next_scan_at = now + self.MIDI_SCAN_SECONDS
+        if self.midi.scan_due(self.library.settings.get("midi_device", "")):
             try:
                 self.ports()
             except RuntimeError:
-                # Preserve readable feedback; a temporary ALSA discovery
-                # error must not turn the entire /state endpoint into a 400.
+                # Keep actionable device feedback without failing /state.
                 pass
 
     def _advance_pending_feedback(self, now: float):
@@ -1634,7 +1537,7 @@ class PracticeEngine:
             return
         now=time.monotonic()
         if self.mode == "learn" and self.teaching is not None:
-            self.teaching.set_connected(self._piano_connected(), now=now)
+            self.teaching.set_connected(self.midi.connected, now=now)
             self.teaching.tick(now=now)
             self._save_guided_preparation()
             return
@@ -1774,10 +1677,10 @@ class PracticeEngine:
             demo=self.demo,
             performance_summary=self.performance_summary,
             review_pending=self.review_end_beat is not None,
-            midi_input_count=self.midi_input_count,
-            midi_input_note=self.midi_input_note,
-            midi_now=time.monotonic() if self.midi_input_at is not None else 0.0,
-            midi_input_at=self.midi_input_at,
+            midi_input_count=self.midi.input_count,
+            midi_input_note=self.midi.input_note,
+            midi_now=time.monotonic() if self.midi.input_at is not None else 0.0,
+            midi_input_at=self.midi.input_at,
             metronome=self.library.settings["metronome"],
             hints_enabled=self.persistent_hints,
             fingering=p.piece.fingering_plan.summary()
@@ -1796,7 +1699,7 @@ class PracticeEngine:
         ))
         if p is None:
             return SessionSnapshot(mode=self.mode, feedback=self.feedback,
-                device=self.midi_device, revision=self.score_revision,
+                device=self.midi.device, revision=self.score_revision,
                 transport_id=self.transport_id, activity=activity)
         practice_timeline = self._source_model()["practice_timeline"]
         self.visual_gap_beats = practice_timeline["gap"]["duration_beats"]
@@ -1848,7 +1751,7 @@ class PracticeEngine:
                          if self.mode == "practice" and self.pending_result is not None else None),
             feedback_marks=self.feedback_marks, live_marks=live_marks,
             feedback_unmapped=self.feedback_unmapped,
-            scoring_available=(not self.preview_only and self._piano_connected()
+            scoring_available=(not self.preview_only and self.midi.connected
                                and self.mode in ("practice", "perform")),
         )
         guided = None
@@ -1866,7 +1769,7 @@ class PracticeEngine:
                 feedback_marks=self._guided_marks(teaching),
             )
         return SessionSnapshot(mode=self.mode, feedback=self.feedback,
-            device=self.midi_device, revision=self.score_revision,
+            device=self.midi.device, revision=self.score_revision,
             transport_id=self.transport_id, phase=phase, activity=activity,
             lesson=lesson, timing=timing, guided=guided)
 

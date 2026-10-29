@@ -44,8 +44,8 @@ def test_guided_simultaneous_cross_hand_unisons_use_distinct_real_noteheads(tmp_
     try:
         e.load(str(path))
         e.plan.set_hand('both')
-        e.midi_port = object()
-        e.midi_device = 'Fixture piano'
+        e.midi.port = object()
+        e.midi.device = 'Fixture piano'
         e.control('learn')
         e.geometry()
         e.control('score_ready', revision=e.score_revision)

@@ -54,22 +54,22 @@ def connected(tmp_path, monkeypatch):
     engine.plan = LearningPlan(Piece("Reconnect", 100, notes, (Phrase(1, 1, 2, 0, 8, notes),)))
     engine.connect("USB Piano")
     yield engine, midi
-    if engine.midi_port is not None:
-        engine.midi_port.close_error = False
-        engine.midi_port.close()
+    if engine.midi.port is not None:
+        engine.midi.port.close_error = False
+        engine.midi.port.close()
     engine.db.close()
 
 
 def test_unplug_stops_attempt_and_retains_saved_device_for_replug(connected):
     engine, midi = connected
-    old_port = engine.midi_port
+    old_port = engine.midi.port
     engine.start()
     assert not engine.preview_only
     midi.names = []
 
     assert engine.ports() == []
 
-    assert engine.midi_port is None and engine.midi_device == ""
+    assert engine.midi.port is None and engine.midi.device == ""
     assert old_port.closed
     assert not engine.running and engine.recorder is None
     assert not engine.auto and engine.next_at == 0
@@ -80,8 +80,8 @@ def test_unplug_stops_attempt_and_retains_saved_device_for_replug(connected):
     midi.names = ["USB Piano"]
     assert engine.ports() == ["USB Piano"]
     engine.connect(engine.preferences()["midi_device"])
-    assert engine.midi_device == "USB Piano"
-    assert engine.midi_port is not old_port and not engine.midi_port.closed
+    assert engine.midi.device == "USB Piano"
+    assert engine.midi.port is not old_port and not engine.midi.port.closed
     engine.start()
     assert not engine.preview_only
 
@@ -89,11 +89,11 @@ def test_unplug_stops_attempt_and_retains_saved_device_for_replug(connected):
 def test_closed_port_is_detected_even_when_name_is_still_enumerated(connected):
     engine, _ = connected
     engine.start()
-    engine.midi_port.closed = True
+    engine.midi.port.closed = True
 
     assert engine.ports() == ["USB Piano"]
 
-    assert engine.midi_device == "" and engine.midi_port is None
+    assert engine.midi.device == "" and engine.midi.port is None
     assert not engine.running
     assert engine.preferences()["midi_device"] == "USB Piano"
 
@@ -119,7 +119,7 @@ def test_unplug_during_clean_feedback_discards_pending_mastery(connected):
 
 def test_failed_reconnect_clears_selection_without_forgetting_preferred_device(connected):
     engine, midi = connected
-    old_port = engine.midi_port
+    old_port = engine.midi.port
     engine.start()
     midi.open_error = OSError("Access denied")
 
@@ -127,64 +127,64 @@ def test_failed_reconnect_clears_selection_without_forgetting_preferred_device(c
         engine.connect("Other Piano")
 
     assert old_port.closed
-    assert engine.midi_port is None and engine.midi_device == ""
+    assert engine.midi.port is None and engine.midi.device == ""
     assert not engine.running and not engine.auto
     assert engine.preferences()["midi_device"] == "USB Piano"
 
 
 def test_close_failure_does_not_prevent_reconnecting_or_unplug_cleanup(connected):
     engine, midi = connected
-    old_port = engine.midi_port
+    old_port = engine.midi.port
     old_port.close_error = True
 
     engine.connect("USB Piano")
 
     assert old_port.close_calls == 1
-    assert engine.midi_port is not old_port
-    assert engine.midi_device == "USB Piano"
-    engine.midi_port.close_error = True
+    assert engine.midi.port is not old_port
+    assert engine.midi.device == "USB Piano"
+    engine.midi.port.close_error = True
     engine.start()
     midi.names = []
     assert engine.ports() == []
-    assert engine.midi_port is None and engine.midi_device == ""
+    assert engine.midi.port is None and engine.midi.device == ""
     assert not engine.running
 
 
 def test_discovery_failure_is_actionable_and_keeps_a_healthy_connection(connected):
     engine, midi = connected
-    port = engine.midi_port
+    port = engine.midi.port
     midi.discovery_error = OSError("ALSA is unavailable")
 
     with pytest.raises(RuntimeError, match="Cannot list MIDI.*ALSA is unavailable"):
         engine.ports()
 
     assert "ALSA is unavailable" in engine.feedback
-    assert engine.midi_port is port and not port.closed
-    assert engine.midi_device == "USB Piano"
+    assert engine.midi.port is port and not port.closed
+    assert engine.midi.device == "USB Piano"
 
 
 def test_closed_port_stops_attempt_even_when_device_discovery_fails(connected):
     engine, midi = connected
     engine.start()
-    engine.midi_port.closed = True
+    engine.midi.port.closed = True
     midi.discovery_error = OSError("ALSA is unavailable")
 
     with pytest.raises(RuntimeError, match="Cannot list MIDI"):
         engine.ports()
 
-    assert engine.midi_port is None and engine.midi_device == ""
+    assert engine.midi.port is None and engine.midi.device == ""
     assert not engine.running
     assert engine.preferences()["midi_device"] == "USB Piano"
 
 
 def test_explicit_disconnect_clears_saved_preference_despite_close_failure(connected):
     engine, _ = connected
-    engine.midi_port.close_error = True
+    engine.midi.port.close_error = True
     engine.start()
 
     engine.connect("")
 
-    assert engine.midi_port is None and engine.midi_device == ""
+    assert engine.midi.port is None and engine.midi.device == ""
     assert engine.preferences()["midi_device"] == ""
     assert not engine.running
 
@@ -199,22 +199,22 @@ def test_previously_selected_piano_auto_connects_without_restarting_practice(
         first.connect("USB Piano")
         preferred = first.preferences()["midi_device"]
     finally:
-        first.midi_port.close()
+        first.midi.port.close()
         first.db.close()
     second = PracticeEngine(tmp_path)
     try:
         assert preferred == "USB Piano"
-        assert second.midi_device == ""
+        assert second.midi.device == ""
         state = second.state()  # first poll should offer bounded discovery
         assert state["device"] == "USB Piano"
-        assert second.midi_port is not None
+        assert second.midi.port is not None
         assert not second.running
         assert second.recorder is None
         assert not second.preview_only
         assert second.transport_id == 0
     finally:
-        if second.midi_port:
-            second.midi_port.close()
+        if second.midi.port:
+            second.midi.port.close()
         second.db.close()
 
 
@@ -227,7 +227,7 @@ def test_auto_reconnect_after_usb_return_never_resumes_cancelled_take(
     engine.start()
     transport_before = engine.transport_id
     assert engine.running
-    original = engine.midi_port
+    original = engine.midi.port
     midi.names = []
     assert engine.ports() == []
     assert original.closed
@@ -238,12 +238,12 @@ def test_auto_reconnect_after_usb_return_never_resumes_cancelled_take(
     midi.names = ["Other Device"]
     clock[0] = 105.0
     assert engine.ports() == ["Other Device"]
-    assert engine.midi_port is None  # no substitution with another piano
+    assert engine.midi.port is None  # no substitution with another piano
     midi.names = ["Other Device", "USB Piano"]
     clock[0] = 107.0
     assert engine.ports() == midi.names
-    assert engine.midi_device == "USB Piano"
-    assert engine.midi_port is not original
+    assert engine.midi.device == "USB Piano"
+    assert engine.midi.port is not original
     assert not engine.running and engine.recorder is None
     assert engine.transport_id == transport_before
     assert not engine.plan.mastered
@@ -272,11 +272,11 @@ def test_auto_reconnect_rate_limits_failed_alsa_open_and_recovers(
     clock[0] = 108.0
     engine.ports()
     assert len(midi.attempts) == attempts_before + 1
-    assert engine.midi_port is None
+    assert engine.midi.port is None
     clock[0] = 109.1
     engine.ports()
-    assert engine.midi_device == "USB Piano"
-    assert engine.midi_port is not None
+    assert engine.midi.device == "USB Piano"
+    assert engine.midi.port is not None
 
 
 def test_automatic_discovery_detects_disappearance_without_open_input_closing(
@@ -286,9 +286,9 @@ def test_automatic_discovery_detects_disappearance_without_open_input_closing(
     clock = [100.0]
     monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
     engine.start()
-    original = engine.midi_port
+    original = engine.midi.port
     midi.names = []
-    engine._midi_next_scan_at = 0.0
+    engine.midi.next_scan_at = 0.0
     clock[0] = 105.0
     state = engine.state()
     assert state["device"] == ""
@@ -305,5 +305,29 @@ def test_explicit_disconnect_never_auto_connects_even_when_port_available(connec
     for _ in range(4):
         engine.ports()
         engine.state()
-    assert engine.midi_port is None
+    assert engine.midi.port is None
     assert len(midi.attempts) == before
+
+
+@pytest.mark.parametrize("operation", ("replace", "unplug"))
+def test_device_release_cancels_the_take_before_the_backend_closes(connected, monkeypatch, operation):
+    engine, midi = connected
+    engine.start()
+    old_port = engine.midi.port
+    close = old_port.close
+    observed = []
+
+    def closing():
+        assert engine.lock._is_owned()
+        observed.append((engine.running, engine.recorder, engine.auto,
+                         engine.next_at, engine.midi.port))
+        close()
+
+    monkeypatch.setattr(old_port, "close", closing)
+    if operation == "replace":
+        engine.connect("USB Piano")
+    else:
+        midi.names = []
+        engine.ports()
+    assert observed == [(False, None, False, 0.0, None)]
+    assert old_port.closed and not engine.plan.mastered

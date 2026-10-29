@@ -63,7 +63,7 @@ def transport_capture(request,repeat_originals,tmp_path_factory):
     xml=tmp_path/'source.musicxml';xml.write_text(data['xml'])
     now=[100.0]
     monkeypatch.setattr(server.time,'monotonic',lambda:now[0])
-    engine._piano_connected=lambda:flow in ('clean','failure','local-recovery')
+    engine.midi.port = object() if (flow in ('clean', 'failure', 'local-recovery')) else None
     try:
         assert engine._source_model()['practice_timeline']==data['model']['practice_timeline']
         fields=('id','onset_beats','duration_beats','midi_pitch','hand')

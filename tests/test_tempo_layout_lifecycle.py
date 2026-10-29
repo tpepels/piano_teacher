@@ -18,7 +18,7 @@ def harness(tmp_path, monkeypatch):
     engine.plan = LearningPlan(Piece("Tempo layout", 100, notes,
                                     (Phrase(1, 1, 4, 0, 16, notes),)))
     engine.plan.set_bpm(80)
-    engine.midi_port = object()
+    engine.midi.port = object()
     try:
         yield engine, now
     finally:

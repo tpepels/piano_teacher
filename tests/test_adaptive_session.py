@@ -18,7 +18,7 @@ def boot(tmp_path,monkeypatch,bars):
     monkeypatch.setattr(server.time,"monotonic",lambda:now[0])
     engine=PracticeEngine(tmp_path,enable_midi=False)
     engine.plan=LearningPlan(piece(bars))
-    engine.midi_port=object()
+    engine.midi.port=object()
     engine.start()
     return engine,now
 
@@ -39,13 +39,15 @@ def test_tempo_capped_lead_and_five_errors_slow_ten_percent(tmp_path,monkeypatch
         assert state["recovery_beat"]==0
         assert state["bpm"]==36
         assert state["streak"]==0 and state["mastered"]==0
-        now[0]=e.next_at+.01
+        deadline=e.next_at
+        now[0]=deadline+.01
         waiting=e.state()
         assert waiting["phase"]=="playing"
         assert waiting["awaiting_score_revision"] is None
         assert waiting["revision"] == state["revision"]
         assert waiting["count_in_beats"] == 0
-        assert waiting["clock_beat"] == pytest.approx(0.0)
+        assert e.run_at == deadline
+        assert waiting["clock_beat"] == (deadline+.01-deadline)*36/60
     finally:
         e.db.close()
 
@@ -64,13 +66,15 @@ def test_complete_current_chunk_before_rewinding(tmp_path,monkeypatch):
         now[0]=start+16*sec+.01
         assert e.state()["phase"]=="recovering"
         assert e.state()["recovery_beat"]==8
-        now[0]=e.next_at+.01
+        deadline=e.next_at
+        now[0]=deadline+.01
         waiting=e.state()
         assert waiting["phase"]=="playing"
         assert waiting["awaiting_score_revision"] is None
         assert waiting["play_from_beat"]==8
         assert waiting["count_in_beats"]==0
-        assert waiting["clock_beat"]==pytest.approx(0.0)
+        assert waiting["bpm"] == 36 and e.run_at == deadline
+        assert waiting["clock_beat"] == (deadline+.01-deadline)*36/60
     finally:
         e.db.close()
 
