@@ -5,9 +5,9 @@ this module only constructs the immutable lesson/tempo value objects.
 """
 from __future__ import annotations
 
-from .state_projection import LessonSnapshot, TempoSnapshot
-from .measure_grid import phrase_grid
-from .lesson_settings import SETTINGS
+from ..state_projection import LessonSnapshot, TempoSnapshot
+from ..measure_grid import phrase_grid
+from ..lesson_settings import SETTINGS
 
 
 def build_lesson_snapshot(plan, exercise, variant, *, fingerprint: str,
