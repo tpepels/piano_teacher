@@ -12,7 +12,6 @@ from .music import Phrase
 
 def group_variants(phrase: Phrase, hand: str, groups, max_attacks: int):
     """Return nested (level, original phrase indices) preserving hard groups."""
-    from .lesson_settings import SETTINGS
     indexed = [(i, n) for i, n in enumerate(phrase.notes)
                if hand == "both" or n.hand == hand]
     if not indexed:
@@ -92,9 +91,31 @@ def group_variants(phrase: Phrase, hand: str, groups, max_attacks: int):
     # An outline must include the pitch chosen by the skeleton at every
     # retained onset, so the existing progress stages stay nested.
     last = set(range(len(ordered)))
-    candidates = (("skeleton", indices(first, "skeleton")),
-                  ("outline", indices(second, "outline")),
-                  ("original", indices(last, "original")))
+    candidates = [("skeleton", indices(first, "skeleton")),
+                  ("outline", indices(second, "outline"))]
+    # A long slur cannot be made into a single <=8-attack exercise.
+    # Do NOT sample every nth note: cover its remaining complete rhythmic
+    # blocks in consecutive sections before the final original performance.
+    # Keep these sections separate from skeleton/outline rather than
+    # pretending they are increasingly complete subsets of one phrase.
+    if any(kind == "slur" and len(onsets) > max_attacks
+           for kind, onsets in groups):
+        covered = set(second)
+        remaining = [block for block in ordered_blocks if not set(block) <= covered]
+        section_number = 2
+        while remaining:
+            selected_positions = set()
+            while remaining:
+                block = set(remaining[0])
+                proposed = selected_positions | block
+                if selected_positions and attack_count(proposed) > max_attacks:
+                    break
+                selected_positions = proposed
+                remaining.pop(0)
+            candidates.append((f"section-{section_number}",
+                               indices(selected_positions, "outline")))
+            section_number += 1
+    candidates.append(("original", indices(last, "original")))
     results = []
     for level, selected in candidates:
         if selected and (not results or selected != results[-1][1]):

@@ -133,24 +133,39 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True,
                 if proposed <= end or not within_attack_limit(start, proposed):
                     break
                 end = proposed
-        # A short authored slur is one teachable unit even across a barline.
-        # Extend the passage when possible; otherwise move the boundary to
-        # before the slur. Long slurs remain sectional and finish in Perform.
+        # A short authored slur is one teachable unit, including when it
+        # crosses a measure boundary. The attack target is soft: if a group
+        # starts in this first measure, extend instead of deleting its end.
+        # Resolve to a fixpoint because one extension may cross another slur.
         if adaptive and grouping is not None:
+            short_slurs = []
             for group in grouping.groups:
-                if group.kind != "slur" or group.attack_count > SETTINGS.focus_max_attacks:
-                    continue
-                onset_times = [piece.notes[next(iter(onset))].start for onset in group.onsets]
-                if not (min(onset_times) < boundaries[end] - 1e-7
-                        and boundaries[end] <= max(onset_times) + 1e-7):
-                    continue
-                needed = bisect_right(boundaries, max(onset_times) + 1e-7)
-                needed = min(bars, needed)
+                if group.kind == "slur" and group.attack_count <= SETTINGS.focus_max_attacks:
+                    times = [piece.notes[next(iter(onset))].start for onset in group.onsets]
+                    short_slurs.append((min(times), max(times)))
+            for _ in range(len(short_slurs)):
+                split = next(((first, last) for first, last in short_slurs
+                              if first < boundaries[end] - 1e-7
+                              and boundaries[end] <= last + 1e-7), None)
+                if split is None:
+                    break
+                first, last = split
+                needed = min(bars, bisect_right(boundaries, last + 1e-7))
+                first_bar = bisect_right(boundaries, first + 1e-7) - 1
+                # Prefer normal-budget extensions, then a clean boundary
+                # before the phrase. If neither works, accept an overfull
+                # lesson, provided the eight-measure safety cap still holds.
                 if (needed - start <= SETTINGS.focus_max_measures
                         and within_attack_limit(start, needed)):
                     end = needed
-                elif start < bisect_right(boundaries, min(onset_times)) - 1:
-                    end = min(end, bisect_right(boundaries, min(onset_times)) - 1)
+                elif first_bar > start and onsets(start, first_bar):
+                    end = first_bar
+                elif needed - start <= SETTINGS.focus_max_measures:
+                    end = needed
+                else:
+                    # Exceptionally long short-note slur (>8 measures).
+                    # Preserve the hard bar cap and leave sectional practice.
+                    break
         ranges.append((start, end))
         start = end
 

@@ -242,13 +242,24 @@ func present_overview(values: Dictionary) -> void:
         if step.get("exercise") == current.get("exercise") and step.get("hand") == current.get("hand") \
                 and not available.has(str(step.get("level", ""))):
             available.append(str(step.get("level", "")))
-    var visible_number := 0
+    # New section levels are generated for long slurs and have no fixed
+    # upper bound. Render them in actual lesson order, not a hardcoded trio.
+    var stage_row: Control = stage_labels["original"].get_parent()
+    for level in available:
+        if not stage_labels.has(level):
+            var extra := UI.label(str(level).replace("-", " ").capitalize(), 15, MUTED)
+            extra.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            extra.tooltip_text = "A complete, contiguous section of the phrase."
+            stage_row.add_child(extra)
+            stage_labels[level] = extra
     for level in stage_labels:
+        stage_labels[level].visible = false
+    for position in range(available.size()):
+        var level: String = str(available[position])
         var label: Label = stage_labels[level]
-        label.visible = available.has(level)
-        if label.visible:
-            visible_number += 1
-            label.text = "%d. %s" % [visible_number, str(level).capitalize()]
+        stage_row.move_child(label, position)
+        label.visible = true
+        label.text = "%d. %s" % [position + 1, level.replace("-", " ").capitalize()]
         var selected: bool = str(_context.get("lesson_level", "")) == level
         label.add_theme_color_override("font_color", INK if selected else MUTED)
         var face := Design.bordered_surface(Design.PINE if selected else Design.PANEL_RECESSED, 6, .6 if selected else .25)

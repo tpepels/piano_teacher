@@ -28,6 +28,34 @@ def test_repository_persists_stage_tempo_and_mastery(tmp_path):
     second.close()
 
 
+def test_existing_original_mastery_and_tempo_survive_new_section_levels(tmp_path):
+    from piano_teacher.musical_groups import MusicalGroup, MusicalGrouping
+    from piano_teacher.grouped_variants import group_variants
+
+    notes = tuple(Note(i*.25, (i+1)*.25, 60+i, 0, 0,
+                       "right", f"id-{i}", voice="v") for i in range(16))
+    phrase = Phrase(1, 1, 1, 0., 4., notes)
+    empty = group_variants(phrase, "right", (), 8)
+    assert empty
+    grouping = tuple([("beam", tuple(frozenset({i}) for i in range(j,j+4)))
+                      for j in range(0,16,4)] +
+                     [("slur", tuple(frozenset({i}) for i in range(16)))])
+    variants = group_variants(phrase, "right", grouping, 8)
+    assert variants[-1][0] == "original"
+    assert variants[-1][1] == tuple(range(16))
+    assert any(level.startswith("section-") for level,_ in variants)
+    # The original stage uses exactly the same note events and stable key
+    # formulation, so existing mastery/tempo belongs to that same music.
+    from piano_teacher.exercise_generator import ExerciseVariant
+    from piano_teacher.learning import Exercise
+    ex = Exercise("learn", phrase, "learn:1-1")
+    old = ExerciseVariant("original", phrase, tuple(range(16)))
+    new = ExerciseVariant("original", phrase, variants[-1][1])
+    from piano_teacher.learning import LearningPlan
+    assert LearningPlan._stage_key(ex, "right", old) == LearningPlan._stage_key(
+        ex, "right", new)
+
+
 def test_reset_scopes_all_tables_to_selected_fingerprint(tmp_path):
     repo = ProgressRepository(tmp_path / "progress.db")
     a = _plan()

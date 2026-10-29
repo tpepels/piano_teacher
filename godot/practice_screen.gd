@@ -295,6 +295,8 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     # Assemble each caption before assigning it. Writing a default and then
     # replacing/appending it dirties the canvas on every identical state poll.
     var instruction_text: String = str(explanations.get(stage, ""))
+    if stage.begins_with("section-"):
+        instruction_text = "Play this complete section smoothly, then continue to the next."
     var instruction_tone: Color = INK
     var import_warnings: Array = parsed.get("import_warnings", [])
     if not import_warnings.is_empty() and str(parsed.get("phase", "")) in ["ready", "feedback", "performance_complete"]:

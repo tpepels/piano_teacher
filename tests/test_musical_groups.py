@@ -149,6 +149,59 @@ def test_long_slur_uses_contiguous_beam_aligned_windows_then_original():
             _all_or_none(stages, group)
 
 
+def test_long_slur_covers_all_later_groups_in_preparation_windows():
+    from piano_teacher.musical_groups import MusicalGroup, MusicalGrouping
+
+    notes = tuple(Note(i*.25, (i+1)*.25, 60+i, 0, 0, "right",
+                       f"n{i}", voice="v") for i in range(24))
+    phrase = Phrase(1, 1, 2, 0., 8., notes)
+    groups = tuple(MusicalGroup("beam", tuple(frozenset({i})
+                    for i in range(j, j+4))) for j in range(0, 24, 4))
+    groups += (MusicalGroup("slur", tuple(frozenset({i})
+                                        for i in range(24))),)
+    grouping = MusicalGrouping(groups, {id(n): i for i, n in enumerate(notes)})
+    stages = generate_variants(phrase, "right",
+        groups=grouping.for_phrase(phrase, "right"),
+        max_attacks=SETTINGS.focus_max_attacks)
+    assert [v.level for v in stages] == [
+        "skeleton", "outline", "section-2", "section-3", "original"]
+    assert [_onset_set(v.notes) for v in stages[:-1]] == [
+        {i*.25 for i in range(4)},
+        {i*.25 for i in range(8)},
+        {i*.25 for i in range(8, 16)},
+        {i*.25 for i in range(16, 24)}]
+    assert set.union(*(_onset_set(v.notes) for v in stages[:-1])) == (
+        _onset_set(stages[-1].notes))
+    for group in groups[:-1]:
+        _all_or_none(stages, group)
+    assert stages[-1].notes == phrase.notes
+
+
+def test_grouped_sections_do_not_exceed_budget_when_both_hands_coincide():
+    from piano_teacher.musical_groups import MusicalGroup, MusicalGrouping
+    notes = tuple(
+        Note(i*.25, (i+1)*.25, 60+i, 0, 0, "right", f"r{i}", voice="r")
+        for i in range(16)) + tuple(
+        Note(i*.25, (i+1)*.25, 48+i, 1, 0, "left", f"l{i}", voice="l")
+        for i in range(16))
+    phrase = Phrase(1, 1, 1, 0., 4., notes)
+    groups = tuple(MusicalGroup("beam", tuple(frozenset({offset+i})
+                  for i in range(j, j+4)))
+                  for offset in (0, 16) for j in range(0, 16, 4))
+    groups += (MusicalGroup("slur", tuple(frozenset({i})
+                                         for i in range(16))),)
+    grouping = MusicalGrouping(groups, {id(n): i for i,n in enumerate(notes)})
+    stages = generate_variants(phrase, "both",
+        groups=grouping.for_phrase(phrase, "both"),
+        max_attacks=SETTINGS.focus_max_attacks)
+    assert "section-2" in [s.level for s in stages]
+    for stage in stages[:-1]:
+        assert len(_onset_set(stage.notes)) <= SETTINGS.focus_max_attacks
+        for time in _onset_set(stage.notes):
+            assert {n.hand for n in stage.notes if n.start == time} == {
+                "right", "left"}
+
+
 def test_chord_pitches_can_be_reduced_without_breaking_a_slur():
     from piano_teacher.musical_groups import MusicalGroup, MusicalGrouping
 
