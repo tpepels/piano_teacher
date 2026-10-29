@@ -1158,39 +1158,27 @@ class PracticeEngine:
         if context not in ("playing", "count_in", "feedback", "recovering", "loading", "guided_wait", "preview_gap"):
             raise ValueError("Cannot pause unless an exercise is playing or preparing")
         self.pause_context = context
-        self.paused_at = time.monotonic()
+        self.visual_transport.pause(at=time.monotonic())
         if self.mode == "learn" and self.teaching is not None:
             self.teaching.pause(now=time.monotonic())
-            self.paused = True
-            return
-        self.paused = True
         return
 
     def _resume_current_session(self):
-        """Shift all paused transport deadlines before resuming."""
+        """Resume the teaching controller and shift owned transport deadlines."""
         if not self.paused:
             raise ValueError("Cannot resume unless an exercise is paused")
-        duration = time.monotonic() - self.paused_at
-        if self.mode == "learn" and self.teaching is not None:
+        # Sample once; the transport owner shifts every active deadline by the
+        # same duration, preserving preparation and backward-recovery motion.
+        now = time.monotonic()
+        learning = self.mode == "learn" and self.teaching is not None
+        if learning:
             self.teaching.resume(now=time.monotonic())
-            self.paused = False
-        elif (self.running or self._preview_loop_pending
-              or (self.pending_result is not None and self.auto)):
-            # Keep all forward-moving views on the same paused clock:
-            # count-in/playing, the empty preview bar, and the
-            # successful-take gap before the next repetition.
-            self.run_at += duration
-        if self.next_at:
-            self.next_at += duration
-        # Paused state freezes the frame at paused_at. Move the
-        # independent rewind clock by the same amount so resuming
-        # does not skip the remaining backward travel.
-        if self._visual_rewind_from is not None:
-            self._visual_rewind_at += duration
-        if self._preparation_pending:
-            self._preparation_at += duration
-        self.paused_at = 0.0
-        self.paused = False
+        self.visual_transport.resume(
+            now=now,
+            shift_run_at=(not learning and (
+                self.running or self._preview_loop_pending
+                or (self.pending_result is not None and self.auto))),
+        )
         self.pause_context = None
         if self.running:
             self.feedback = "Count in" if time.monotonic() < self.run_at else "Playing"
