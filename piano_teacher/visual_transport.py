@@ -88,6 +88,33 @@ class VisualTransport:
         self._preview_loop_pending = False
         return self.next_at
 
+    def pause(self, *, at: float) -> None:
+        """Freeze the presentation clock at one sampled instant."""
+        if self.paused:
+            raise ValueError("Transport is already paused")
+        self.paused_at = at
+        self.paused = True
+
+    def resume(self, *, now: float, shift_run_at: bool) -> None:
+        """Advance active deadlines by the exact elapsed paused duration.
+
+        An inactive clock's zero sentinel must stay zero. The source beat and
+        continuous visual offset never change during pause/resume.
+        """
+        if not self.paused:
+            raise ValueError("Transport is not paused")
+        duration = now - self.paused_at
+        if shift_run_at:
+            self.run_at += duration
+        if self.next_at:
+            self.next_at += duration
+        if self._visual_rewind_from is not None:
+            self._visual_rewind_at += duration
+        if self._preparation_pending:
+            self._preparation_at += duration
+        self.paused_at = 0.0
+        self.paused = False
+
     def position(
         self, now: float, *, phrase_length: float, bpm: float,
         running: bool, pending_auto_result: bool,
