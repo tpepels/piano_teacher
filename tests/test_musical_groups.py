@@ -114,6 +114,10 @@ def test_short_slur_across_two_measure_focus_boundary_is_kept_together():
         (0., 1., 60), (4., .5, 62), (7.5, .5, 64),
         (8., .5, 65), (8.5, .5, 67), (12., 1., 69),
     ], slurs=((2, 3, 4),))
+    from piano_teacher.learning import build_exercises
+
+    direct = build_exercises(piece, consolidate=False)
+    assert direct[0].phrase.last_bar >= 3
     plan = LearningPlan(piece)
     # An initial two-bar focus would sever the three-note phrase at beat 8.
     assert plan.exercise.phrase.first_bar == 1

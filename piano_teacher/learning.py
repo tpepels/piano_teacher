@@ -178,6 +178,8 @@ def build_exercises(piece: Piece, *, consolidate: bool = True,
 
     The original two-bar sequence remains reconstructible for old progress.
     """
+    if not consolidate and adaptive_focus and grouping is None:
+        grouping = grouping_for_piece(piece)
     phrases = (_course_phrases(piece) if consolidate
                else _focus_phrases(piece, adaptive=adaptive_focus,
                                    grouping=grouping))
