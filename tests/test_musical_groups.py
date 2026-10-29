@@ -224,8 +224,10 @@ def test_thinned_source_chord_keeps_its_visible_slur():
         time_signatures=piece.time_signatures,
         source_musicxml=piece.source_musicxml)
     projected = ET.fromstring(lesson.musicxml)
-    start_note = projected.find(".//note[notations/slur[@type='start']]")
-    stop_note = projected.find(".//note[notations/slur[@type='stop']]")
+    start_note = next((n for n in projected.findall(".//note")
+                       if n.find("notations/slur[@type='start']") is not None), None)
+    stop_note = next((n for n in projected.findall(".//note")
+                      if n.find("notations/slur[@type='stop']") is not None), None)
     assert start_note is not None and stop_note is not None
     assert start_note.findtext("pitch/step") == "E"
     assert stop_note.findtext("pitch/step") == "D"
