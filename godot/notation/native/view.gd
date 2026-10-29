@@ -66,6 +66,7 @@ const ConnectorGeometry := preload("res://notation/native/connector_geometry.gd"
 var connector_geometry = ConnectorGeometry.new(layout)
 const FingeringAnnotations := preload("res://notation/native/fingering_annotations.gd")
 const SourceVisibility := preload("res://notation/native/source_visibility.gd")
+const EventWindow := preload("res://notation/native/event_window.gd")
 var annotations = FingeringAnnotations.new(layout,connector_geometry)
 const RenderPass := preload("res://notation/native/render_pass.gd")
 const SymbolPainter := preload("res://notation/native/symbol_painter.gd")
@@ -299,21 +300,7 @@ func beam_plan(gap: float, clock: float, playhead_x: float,
 func _visible_events(left: float, right: float, frame: RenderPass = null) -> Array:
     if frame == null:
         frame = _new_paint_frame(clock_beat,size.x*PLAYHEAD_FRACTION,staff_gap(),0,0.0)
-    var begin := 0
-    var end: int = layout.ordered_events.size()
-    while begin < end:
-        var middle: int = (begin + end) >> 1
-        if float(layout.ordered_events[middle].get("beat", 0.0)) < left-.25:
-            begin = middle + 1
-        else:
-            end = middle
-    var results: Array = []
-    for index in range(begin, layout.ordered_events.size()):
-        var event: Dictionary = layout.ordered_events[index]
-        if float(event.get("beat", 0.0)) > right+.25:
-            break
-        if frame.event_visible(event):
-            results.append(event)
+    var results: Array = EventWindow.visible(layout.ordered_events,left,right,frame)
     frame_scanned_events = results.size()
     frame.scanned_events = frame_scanned_events
     return results
@@ -331,30 +318,8 @@ func _remember_preparation() -> void:
     preparation_history[owner] = practice_preparation.duplicate(true)
 
 func _practice_context_before(at: float, stride: float) -> Dictionary:
-    if at<=.00001:
-        return {}
-    var pass_start: float = maxf(0.0,floorf(at/stride))*stride
-    var local: float = at-pass_start
-    var previous: Dictionary = {}
-    for measure in timeline.measures:
-        # A header exactly at silence start is replaced too. Compare with
-        # its predecessor so the necessary change is engraved on the rest.
-        if float(measure["start_beat"])<local-.00001:
-            previous = measure
-    if previous.is_empty() and pass_start>0.0:
-        # At a copy boundary the preceding intact ordinary gap has already
-        # established its actual context. A pickup preparation can use 4/4
-        # while the canonical source still opens in 1/8.
-        var incoming: Dictionary = practice_timeline["gap"].duplicate(true)
-        incoming["start_beat"] = pass_start-float(incoming["duration_beats"])
-        incoming["end_beat"] = pass_start
-        return incoming
-    if previous.is_empty():
-        return {}
-    var result: Dictionary = previous.duplicate(true)
-    result["start_beat"] = float(result["start_beat"])+pass_start
-    result["end_beat"] = float(result["end_beat"])+pass_start
-    return result
+    return SourceVisibility.practice_context_before(
+        at, stride, timeline.measures, practice_timeline["gap"])
 
 func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
         pass_index: int = 0, pass_start: float = 0.0) -> void:
