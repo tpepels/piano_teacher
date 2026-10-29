@@ -48,4 +48,15 @@ timeout 105s "$PYTHON" -m pytest -q \
   tests/test_importing_boundaries.py \
   tests/test_godot_parse_gate.py \
   tests/test_script_permissions.py
+# Recent ownership extractions must be exercised at their actual application
+# boundaries, not merely parsed. Keep this separate from the legacy smoke
+# budget so an unrelated long test cannot hide a new screen/transport failure.
+timeout 100s "$PYTHON" -m pytest -q \
+  tests/test_practice_screen.py \
+  tests/test_score_asset_session.py \
+  tests/test_practice_metronome.py \
+  tests/test_guided_session.py \
+  tests/test_listen_session.py \
+  tests/test_learner_progress_service.py \
+  tests/test_rest_intervention_ownership.py
 "$PYTHON" scripts/check_godot_parse.py --godot "$GODOT" --timeout 25
