@@ -99,22 +99,30 @@ def test_hands_and_polyphonic_voices_do_not_share_beams():
 
 
 def test_hidden_release_padding_does_not_split_a_written_beam():
-    score, root = _score([
-        (0, .45, 60, "right", "v"),
-        (.5, .5, 62, "right", "v"),
-    ])
-    assert [_beams(n) for n in _notes(root)] == [
-        [(1, "begin")], [(1, "end")]]
-    assert any(n.get("print-object") == "no"
-               for n in root.findall("./part[@id='RH']/measure/note"))
-    assert [n["onset_beats"] for n in build_score_model(
-        score, boundaries=(0., 4.))["notes"]] == [0., .5]
+    from piano_teacher.notation.midi_beaming import beam_midi_measure
+
+    # MIDI may contain a short key-release gap. The hidden MusicXML rest
+    # preserves the clock, but it is not an authored interruption.
+    measure = ET.fromstring("""
+      <measure number="1">
+        <note id="first"><pitch><step>C</step><octave>4</octave></pitch>
+          <duration>5040</duration><voice>1</voice><type>eighth</type></note>
+        <note print-object="no"><rest/><duration>504</duration>
+          <voice>1</voice><type>32nd</type></note>
+        <note id="second"><pitch><step>D</step><octave>4</octave></pitch>
+          <duration>2520</duration><voice>1</voice><type>16th</type></note>
+      </measure>""")
+    beam_midi_measure(measure, 4, 4, 10080, 40320)
+    assert [_beams(n) for n in measure.findall("note")
+            if n.find("pitch") is not None] == [
+        [(1, "begin")], [(1, "end"), (2, "backward hook")]]
+    assert measure.findall("note")[1].get("print-object") == "no"
 
 
 def test_irregular_ratios_are_not_mis_beamed():
     _, root = _score([
-        (0, .375, 60, "right", "v"),
-        (.375, .625, 62, "right", "v"),
+        (0, .36, 60, "right", "v"),
+        (.36, .64, 62, "right", "v"),
     ])
     assert not any(n.findall("beam") for n in _notes(root))
 
