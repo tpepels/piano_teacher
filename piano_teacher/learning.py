@@ -385,8 +385,7 @@ class LearningPlan:
             self._variants_cached = (key, self._stage_variants(self.exercise, self.hand))
         return self._variants_cached[1]
 
-    @staticmethod
-    def _stage_variants(exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
+    def _stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
         groups = (self.grouping.for_phrase(exercise.phrase, hand)
                   if self.grouping is not None else ())
         variants = generate_variants(exercise.phrase, hand, groups=groups,
