@@ -119,9 +119,9 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
         return next((sibling for sibling in chord_siblings.get(sid, ())
                      if sibling in targets), None)
 
-    # Preserve source-authored beam groups only when ALL their notes survive
-    # in the same generated hand, measure and voice with the same written
-    # duration. We must not silently replace explicit 8th-note beams with
+    # Preserve source-authored beam groups only when ALL rhythmic attacks
+    # survive in the same generated hand, measure and voice with unchanged
+    # written duration. A removed chord pitch may be reanchored at that onset. We must not silently replace explicit 8th-note beams with
     # isolated flags. Shortened lessons can legitimately lose a partial
     # group: never leave an orphan beam begin/end in those variants. The
     # primary beam owns its secondary levels/subgroups/hooks: select the
@@ -156,11 +156,16 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
         translated = []
         for sid, _kind in members:
             original = original_notes.get(sid)
-            dest = targets.get(sid)
+            anchor = rendered_slur_anchor(sid)
+            dest = targets.get(anchor) if anchor is not None else None
             if original is None or dest is None:
                 break
-            if original.find("chord") is not None or (
-                    original.findtext("type") != dest.findtext("type")):
+            # An authored beam belongs to one rhythmic attack. When a
+            # chord's original leader pitch is thinned out, project its
+            # marks to the remaining note at that exact same onset.
+            if (original.find("chord") is not None
+                    or dest.find("chord") is not None
+                    or original.findtext("type") != dest.findtext("type")):
                 break
             # Never attach source beams to an attack whose exercise rhythm
             # changed during simplification/quantization.
@@ -171,7 +176,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
             translated.append((dest, original, sid))
         if len(translated) != len(members):
             continue
-        if len({(hands[sid], dest.findtext("voice", "1"))
+        if len({(hands[rendered_slur_anchor(sid)], dest.findtext("voice", "1"))
                 for dest, _src, sid in translated}) != 1:
             continue
         source_divisions = None
