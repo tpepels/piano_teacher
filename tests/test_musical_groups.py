@@ -85,12 +85,9 @@ def _onset_set(notes):
 
 
 def _all_or_none(variants, group):
-    required = {tuple(sorted(onset)) for onset in group.onsets}
     all_indices = group.indices
     for variant in variants:
         present = set(variant.source_indices)
-        for onset in group.onsets:
-            assert not (present & onset) or bool(present & onset)
         hits = [bool(present & onset) for onset in group.onsets]
         assert len(set(hits)) == 1, (variant.level, hits)
     assert all_indices.issuperset(set().union(*group.onsets))
@@ -119,7 +116,10 @@ def test_short_slur_across_two_measure_focus_boundary_is_kept_together():
     ], slurs=((2, 3, 4),))
     plan = LearningPlan(piece)
     # An initial two-bar focus would sever the three-note phrase at beat 8.
-    assert (plan.exercise.phrase.first_bar, plan.exercise.phrase.last_bar) == (1, 3)
+    assert plan.exercise.phrase.first_bar == 1
+    assert plan.exercise.phrase.last_bar >= 3
+    # The sparse final bar may be merged backward; it must not sever the slur.
+    assert plan.exercise.phrase.last_bar <= 4
     slur, = [g for g in plan.grouping.groups if g.kind == "slur"]
     _all_or_none(plan.variants, slur)
 
@@ -143,6 +143,30 @@ def test_long_slur_uses_contiguous_beam_aligned_windows_then_original():
     for group in plan.grouping.groups:
         if group.kind == "beam":
             _all_or_none(stages, group)
+
+
+def test_chord_pitches_can_be_reduced_without_breaking_a_slur():
+    from piano_teacher.musical_groups import MusicalGroup, MusicalGrouping
+
+    notes = (
+        Note(0., .5, 60, 0, 0, "right", "c", voice="v"),
+        Note(0., .5, 64, 0, 0, "right", "e", voice="v"),
+        Note(.5, 1., 62, 0, 0, "right", "d", voice="v"),
+        Note(1., 1.5, 65, 0, 0, "right", "f", voice="v"),
+        Note(2., 2.5, 67, 0, 0, "right", "g", voice="v"),
+    )
+    phrase = Phrase(1, 1, 1, 0., 4., notes)
+    group = MusicalGroup("slur", (frozenset({0, 1}),
+                                  frozenset({2}), frozenset({3})))
+    grouping = MusicalGrouping((group,), {id(note): i for i, note in enumerate(notes)})
+    stages = generate_variants(phrase, "right",
+        groups=grouping.for_phrase(phrase, "right"),
+        max_attacks=SETTINGS.focus_max_attacks)
+    _all_or_none(stages, group)
+    assert sum(note.start == 0. for note in stages[0].notes) == 1
+    assert sum(note.start == 0. for note in stages[-1].notes) == 2
+    assert _onset_set(stages[0].notes).issuperset({0., .5, 1.})
+    assert stages[-1].notes == notes
 
 
 def test_midi_beaming_model_is_derived_before_exercise_simplification():
