@@ -5,6 +5,8 @@ const ActionButton := preload("res://action_button.gd")
 const EventWindow := preload("res://notation/native/event_window.gd")
 const SourceVisibility := preload("res://notation/native/source_visibility.gd")
 const EngravingReadiness := preload("res://notation/native/engraving_readiness.gd")
+const CaptionLayout := preload("res://practice_caption_layout.gd")
+const RestLanePlanning := preload("res://notation/native/rest_lane_planning.gd")
 
 class TestFrame:
     extends RefCounted
@@ -97,6 +99,25 @@ func _initialize() -> void:
     glyphs.beam_textures["beam1"] = true
     if EngravingReadiness.missing(layout,glyphs,RefCounted.new(),
             ["beam1"],true,[],true) != "":
+        failures += 1
+    var label := Label.new()
+    label.add_theme_font_size_override("font_size", 15)
+    var slot := CaptionLayout.create(label, 2, true)
+    host.add_child(slot)
+    CaptionLayout.resize([label])
+    if slot.name != "FeedbackCaption" or slot.custom_minimum_size.y <= 0.0:
+        failures += 1
+    if int(label.get_meta("caption_lines")) != 2:
+        failures += 1
+    var notes := [{"id":"one","beat":0.0,"staff":"right",
+        "voice":"1","measure":1,"kind":"note"},
+        {"id":"rest","beat":0.0,"staff":"right",
+        "voice":"2","measure":1,"kind":"rest","note_type":"quarter"}]
+    var rest_result: Dictionary = RestLanePlanning.plan(
+        notes, 15.0, 100.0, {}, {},
+        func(event, _gap, _heads, _accidentals):
+            return Rect2(0, 0, 18, 18))
+    if not rest_result["offsets"].has("rest") or rest_result["unavoidable"] != 0:
         failures += 1
     print("NATIVE_REFACTOR_FAILURES:", failures)
     quit(0 if failures == 0 else 1)

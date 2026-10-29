@@ -4,7 +4,7 @@ extends RefCounted
 const Geometry := preload("res://notation/native/geometry.gd")
 const ScoreIndex := preload("res://notation/native/score_index.gd")
 const VoiceLayout := preload("res://notation/native/voice_layout.gd")
-const RestLaneLayout := preload("res://notation/native/rest_lane_layout.gd")
+const RestLanePlanning := preload("res://notation/native/rest_lane_planning.gd")
 var timeline
 var glyphs
 var size := Vector2.ZERO
@@ -123,47 +123,14 @@ func rest_y(event: Dictionary, gap: float) -> float:
         float(rest_lane_offsets.get(str(event.get("id","")),0.0)))
 
 func layout_rest_lanes(gap: float, density: float) -> void:
-    rest_lane_offsets.clear()
-    unavoidable_rest_overlaps = 0
     var heads: Dictionary = engraved_head_offsets(gap)
     var accidentals: Dictionary = Geometry.accidental_offsets(
         ordered_events,gap,heads,glyphs.bounds)
-    var voices_by_measure: Dictionary = {}
-    var obstacles: Dictionary = {}
-    for event in ordered_events:
-        var lane_key: String = str(event.get("staff","right"))+"|"+str(
-            event.get("measure",-1))
-        if not voices_by_measure.has(lane_key):
-            voices_by_measure[lane_key] = {}
-            obstacles[lane_key] = []
-        var voice: String = str(event.get("voice","1"))
-        voices_by_measure[lane_key][voice] = true
-        if str(event.get("kind","")) != "note":
-            continue
-        var ink: Rect2 = event_ink_rect(event,gap,heads,accidentals)
-        ink.position.x += float(event.get("beat",0.0))*density
-        obstacles[lane_key].append({"voice":voice,"ink":ink})
-    # Production geometry stays in the view. Placement policy is stateless.
-    # All rest glyph rectangles move linearly with their vertical staff lane.
-    for event in ordered_events:
-        if str(event.get("kind","")) != "rest":
-            continue
-        var lane_key: String = str(event.get("staff","right"))+"|"+str(
-            event.get("measure",-1))
-        var id: String = str(event.get("id",""))
-        var voice: String = str(event.get("voice","1"))
-        var voices: Array = voices_by_measure[lane_key].keys()
-        voices.sort()
-        rest_lane_offsets[id] = 0.0
-        var source_rect: Rect2 = event_ink_rect(event,gap,heads,accidentals)
-        source_rect.position.x += float(event.get("beat",0.0))*density
-        var placement: Dictionary = RestLaneLayout.place_rest(source_rect,
-            voice,voices,str(event.get("note_type","quarter")),gap,
-            obstacles[lane_key])
-        rest_lane_offsets[id] = placement["shift"]
-        obstacles[lane_key].append({"voice":voice,"ink":placement["ink"]})
-        if not bool(placement["placed"]):
-            unavoidable_rest_overlaps += 1
+    var placement: Dictionary = RestLanePlanning.plan(
+        ordered_events, gap, density, heads, accidentals,
+        Callable(self, "event_ink_rect"))
+    rest_lane_offsets = placement["offsets"]
+    unavoidable_rest_overlaps = int(placement["unavoidable"])
 
 func stem_attachment(note_type: String, gap: float, up: bool) -> float:
     # The musical anchor is the centred original Verovio notehead. Derive

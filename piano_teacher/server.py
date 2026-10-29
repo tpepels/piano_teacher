@@ -36,11 +36,12 @@ from .lesson_timing import lead_in_beats, preparation_meter
 from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at
 from .course_navigation import locate_course_section
 from .state_projection import (
-    ActivitySnapshot, GuidedSnapshot, LessonSnapshot, PhaseSnapshot,
-    SessionSnapshot, TempoSnapshot, TimingSnapshot, project_phase,
+    ActivitySnapshot, GuidedSnapshot, PhaseSnapshot,
+    SessionSnapshot, TimingSnapshot, project_phase,
     project_session_state,
 )
 from .assessment_service import AssessmentService
+from .application.lesson_snapshot import build_lesson_snapshot
 from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
 from .live_input_view import LiveInputView
@@ -1651,27 +1652,9 @@ class PracticeEngine:
         phase = self._phase(now)
         live_marks = self._live_feedback(elapsed) if phase == "playing" else []
         visual_motion = self._visual_motion(now)
-        lesson = LessonSnapshot(
-            title=p.piece.title, kind=ex.kind,
-            first_bar=ex.phrase.first_bar, last_bar=ex.phrase.last_bar,
-            measure_boundaries=phrase_grid(p.active_phrase, p.piece.bar_boundaries),
-            duration_beats=ex.phrase.end-ex.phrase.start,
-            exercise_index=p.index, exercise_count=len(p.exercises),
-            level=variant.level, level_number=p.variant_index+1,
-            level_count=len(p.variants), required_notes=len(variant.notes),
-            warmup=self.is_builtin_warmup, piece_last_bar=len(p.piece.bar_boundaries)-1,
-            import_warnings=p.piece.import_warnings, hand=p.hand, hands=p.hands,
-            lesson_steps=lesson_steps, lesson_step=p.lesson_step_number,
-            lesson_steps_mastered=p.lesson_steps_mastered, mastered=tuple(p.mastered),
-            fingerprint=self.fingerprint,
-            tempo=TempoSnapshot(bpm=p.bpm, original_bpm=p.piece.bpm,
-                target_bpm=p.target_bpm, start_bpm=p.start_bpm, streak=p.streak,
-                rungs=p.tempo_rungs(), minimum_bpm=SETTINGS.minimum_bpm,
-                maximum_bpm=SETTINGS.maximum_bpm,
-                clean_runs_required=SETTINGS.clean_runs_to_master,
-                manual_tempo_step_bpm=SETTINGS.manual_tempo_step_bpm,
-                automatic_tempo_steps=SETTINGS.automatic_tempo_steps),
-        )
+        lesson = build_lesson_snapshot(
+            p, ex, variant, fingerprint=self.fingerprint,
+            warmup=self.is_builtin_warmup, lesson_steps=lesson_steps)
         timing = TimingSnapshot(
             sampled_at=sampled_at, now=now, run_at=self.run_at,
             running=self.running, paused=self.paused, auto=self.auto,
