@@ -15,6 +15,7 @@ from xml.etree import ElementTree as ET
 from ..music import Note, Phrase, _assign_hands, _named_hand, source_note_id
 from ..measure_grid import phrase_grid
 from .source_annotations import project_annotations
+from .midi_beaming import beam_midi_measure
 from .piano_registers import distribute_piano_registers
 
 DIVISIONS = 10080
@@ -788,6 +789,9 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                             hide_performance_micro_rests=not bool(source_musicxml))
             _write_accidentals(measure,active_key.fifths if active_key else 0)
             _write_tuplet_groups(measure)
+            if not source_musicxml:
+                beam_midi_measure(measure, beats, beat_type, DIVISIONS,
+                                  bar_end - bar_start)
             append_barline(measure,phrase.start+grid[b+1],"right")
     xml, unsupported = project_annotations(
         source_musicxml, ET.tostring(root, encoding="unicode"),
