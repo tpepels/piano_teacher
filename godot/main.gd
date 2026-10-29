@@ -24,7 +24,8 @@ const PracticeScreen := preload("res://practice_screen.gd")
 const NavigationDrawer := preload("res://navigation_drawer.gd")
 const LibraryCatalogCoordinator := preload("res://library_catalog_coordinator.gd")
 const MidiDeviceCoordinator := preload("res://midi_device_coordinator.gd")
-const NativeScoreAssets := preload("res://native_score_assets.gd")
+const ScoreAssetSession := preload("res://score_asset_session.gd")
+const ScoreAssetHttp := preload("res://score_asset_http.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -42,8 +43,18 @@ var settings_pending := false
 var preferences: Dictionary = {}
 var page_margins: Array[MarginContainer] = []
 var fingering_save_error := ""
-var native_score_piece_fingerprint := ""
-var score_error := ""
+var score_session
+var score_http = ScoreAssetHttp.new()
+var native_score_piece_fingerprint: String:
+    get:
+        return score_session.native_score_piece_fingerprint if score_session != null else ""
+var score_error: String:
+    get:
+        return score_session.score_error if score_session != null else ""
+    set(value):
+        if score_session != null:
+            score_session.score_error = value
+
 var pending_library_piece := ""
 var pending_library_resume := false
 var library_resume_requested := false
@@ -72,14 +83,27 @@ var device_names: Array:
         return midi_devices.names
     set(value):
         midi_devices.names = value
-var revision := -1
+var revision: int:
+    get:
+        return score_session.revision if score_session != null else -1
+    set(value):
+        if score_session != null:
+            score_session.revision = value
 var state_pending := false
-var layout_revision := -1
-var requested_layout_revision := -1
-var layout_pending := false
-var score_layout: Dictionary = {}
+var layout_revision: int:
+    get:
+        return score_session.layout_revision if score_session != null else -1
+var layout_pending: bool:
+    get:
+        return score_session.layout_pending if score_session != null else false
+var score_layout: Dictionary:
+    get:
+        return score_session.layout_snapshot() if score_session != null else {}
 var living_chords: Array = []
-var rendered_revision := -1
+var rendered_revision: int:
+    get:
+        return score_session.rendered_revision if score_session != null else -1
+
 var action_pending := false
 var last_state: Dictionary = {}
 var last_state_tick := 0
@@ -88,9 +112,16 @@ var last_playhead_strike_transport := -1
 var visual_transport_clock = VisualTransportClock.new()
 # The native compositor is the sole production score view.
 var timeline_model_request: HTTPRequest
-var timeline_model_pending := false
-var timeline_model_revision := -1
-var timeline_model_retry_after_ms := 0
+var timeline_model_pending: bool:
+    get:
+        return score_session.timeline_model_pending if score_session != null else false
+var timeline_model_revision: int:
+    get:
+        return score_session.timeline_model_revision if score_session != null else -1
+var timeline_model_retry_after_ms: int:
+    get:
+        return score_session.timeline_model_retry_after_ms if score_session != null else 0
+
 var state_request_started_ms := 0
 var last_audio_transport_id := -1
 # Opt-in diagnostic hook for the actual headless UI integration test only.
@@ -148,11 +179,10 @@ func _ready() -> void:
         get_window().size_changed.connect(_update_responsive_layout)
     _update_responsive_layout()
     state_request = _new_request(_on_state)
-    layout_request = _new_request(_on_layout)
-    timeline_model_request = _new_request(_on_timeline_model)
-    # Verovio can take longer to engrave a dense MIDI score on the first run.
-    # Do not abandon the request after the generic five-second timeout.
-    layout_request.timeout = 90.0
+    score_http.attach(self, score_session, URL)
+    layout_request = score_http.layout_request
+    timeline_model_request = score_http.model_request
+
     action_request = _new_request(_on_action)
     action_request.timeout = 90.0
     device_request = _new_request(_on_devices)
@@ -288,9 +318,7 @@ func _update_count_in() -> void:
         _count_tick(posmod(tick, bar_beats) == 0)
 
 func _native_score_ready() -> bool:
-    return practice_view.stage.renderer != null and practice_view.stage.renderer.native_ready \
-        and layout_revision == revision and timeline_model_revision == revision \
-        and rendered_revision == revision
+    return score_session != null and score_session.is_ready()
 
 
 func _visible_score_noteheads() -> int:
@@ -471,6 +499,14 @@ func _build_interface() -> void:
         _decode_json, _http_failure, _send_post)
     midi_devices.configure(URL, settings_view,
         _decode_json, _http_failure, _send_post)
+    score_session = ScoreAssetSession.new(
+        practice_view.stage.renderer, practice_view.stage.feedback)
+    score_session.assets_invalidated.connect(_on_score_assets_invalidated)
+    score_session.layout_published.connect(_on_score_layout_published)
+    score_session.score_published.connect(_on_score_published)
+    score_session.score_failed.connect(_on_score_asset_failure)
+    score_session.status_changed.connect(_refresh_score_status)
+    score_session.action_requested.connect(_send_action)
 
 
 func _build_home_screen() -> void:
@@ -578,31 +614,34 @@ func _refresh_score_status() -> void:
         practice_view.present_score(_native_score_ready(), score_error)
 
 func _score_failed(message: String) -> void:
+    if score_session != null:
+        score_session.fail(message)
+
+func _on_score_asset_failure(message: String) -> void:
     if phase0_smoke_mode:
         print("PHASE0_SCORE_ERROR:", message)
-    score_error = message
-    rendered_revision = -1
-    timeline_model_revision = -1
-    if practice_view.stage.renderer != null:
-        practice_view.stage.renderer.clear_score()
-        practice_view.stage.renderer.visible = false
-    if practice_view.stage.feedback != null:
-        practice_view.stage.feedback.bind_score(practice_view.stage.renderer, -1)
     practice_view.present_message(message)
-    _refresh_score_status()
+
+func _on_score_assets_invalidated(_new_revision: int) -> void:
+    living_chords.clear()
+    score_effects.marks.clear()
+    score_effects.hit_pulses.clear()
+    score_effects.wrong_ghosts.clear()
+    score_effects.preview_pulses.clear()
+
+func _on_score_layout_published(_published_revision: int, values: Dictionary) -> void:
+    living_chords = LivingScore.prepare(values)
+
+func _on_score_published(published_revision: int) -> void:
+    if phase0_smoke_mode:
+        print("PHASE0_SCORE_READY_NATIVE: REVISION:", published_revision)
+    print("NATIVE_MODEL_READY: ", published_revision,
+        " NOTES: ", practice_view.stage.renderer.timeline.notes.size(),
+        " DENSITY: ", practice_view.stage.renderer.timeline.pixels_per_beat)
 
 func _retry_score() -> void:
-    if not bool(last_state.get("loaded", false)) or layout_pending:
-        return
-    score_error = ""
-    score_layout = {}
-    layout_revision = -1
-    rendered_revision = -1
-    timeline_model_revision = -1
-    practice_view.stage.renderer.clear_score()
-    practice_view.stage.renderer.visible = false
-    _refresh_score_status()
-    _request_layout()
+    if score_session != null:
+        score_session.retry(Time.get_ticks_msec())
 
 func _request_library() -> void:
     library_catalog.request_catalog()
@@ -675,11 +714,9 @@ func _toggle_fullscreen() -> void:
     _on_fullscreen_toggle(enabled)
 
 func _poll() -> void:
-    if not practice_view.is_source_picker_open() and bool(last_state.get("loaded", false)) and score_error.is_empty() \
-            and timeline_model_revision != revision \
-            and not timeline_model_pending \
-            and Time.get_ticks_msec() >= timeline_model_retry_after_ms:
-        _request_timeline_model()
+    if score_session != null and not practice_view.is_source_picker_open():
+        score_session.poll(Time.get_ticks_msec())
+
     if not state_pending and not action_pending:
         state_pending = true
         state_request_started_ms = Time.get_ticks_msec()
@@ -818,6 +855,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     visual_transport_clock.accept(parsed, last_state_tick, received_ms)
     if demo_player != null and bool(parsed.get("loaded",false)):
         demo_player.synchronize(parsed, _transport_beat_now())
+    # ScoreAssetSession owns revision invalidation and the score_ready handshake.
+    score_session.update_context(parsed, received_ms)
     practice_view.present(parsed, _native_score_ready(), action_pending,
         demo_player != null and bool(demo_player.get("audio_error")))
     if not bool(parsed.get("loaded",false)):
@@ -831,27 +870,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     for marker in parsed.get("feedback_marks", []):
         score_effects.marks.append(marker)
     _consume_live_piano_hits(parsed)
-    var new_revision := int(parsed.get("revision", 0))
-    if new_revision != revision:
-        revision = new_revision
-        if practice_view.stage.renderer != null:
-            practice_view.stage.renderer.clear_score()
-            practice_view.stage.renderer.visible = false
-            timeline_model_revision = -1
-            timeline_model_retry_after_ms = 0
-        layout_revision = -1
-        score_layout = {}
-        living_chords.clear()
-        rendered_revision = -1
-        score_error = ""
-        _refresh_score_status()
-        score_effects.marks = []
-        score_effects.hit_pulses.clear()
-        score_effects.wrong_ghosts.clear()
-        score_effects.preview_pulses.clear()
-        _request_layout()
-    if str(parsed.get("phase", "")) == "loading" and _native_score_ready():
-        _send_action({"action": "score_ready", "revision": revision})
+
     practice_view.present_busy(action_pending)
     practice_view.consider_piano_start(sample_started_ms < 0, current_screen == "practice")
     _refresh_score_status()
@@ -971,104 +990,30 @@ func _consume_live_piano_hits(state: Dictionary) -> void:
 
 
 func _request_layout() -> void:
-    if layout_pending:
-        return
-    layout_pending = true
-    requested_layout_revision = revision
-    var score_url: String = URL + "/score/layout?native=1"
-    if layout_request.request(score_url) != OK:
-        layout_pending = false
-        _score_failed("Cannot request score geometry from the practice engine")
+    if score_session != null:
+        score_session.request_layout()
 
-func _on_layout(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-    layout_pending = false
-    if requested_layout_revision != revision:
-        _request_layout()
-        return
-    if code != 200:
-        _score_failed(_http_failure(code, body))
-        return
-    var parsed = _decode_json(body)
-    if typeof(parsed) != TYPE_DICTIONARY or not parsed.has("anchors"):
-        _score_failed("The engraving engine returned invalid note positions")
-        return
-    if parsed.has("revision") and int(parsed["revision"]) != revision:
-        # A control request may have advanced the server before its state
-        # response reached this window. Wait for that revision's normal poll.
-        return
-    var installed: Dictionary = NativeScoreAssets.install(
-        practice_view.stage.renderer, parsed)
-    if not bool(installed.get("ok",false)):
-        _score_failed(str(installed.get("error","Verovio asset failure")))
-        return
-    score_layout = installed["layout"]
-    living_chords = LivingScore.prepare(score_layout)
-    layout_revision = revision
-    timeline_model_revision = -1
-    score_error = ""
-    _refresh_score_status()
-    _request_timeline_model()
+func _on_layout(_result: int, code: int, _headers: PackedStringArray,
+        body: PackedByteArray) -> void:
+    if score_session != null:
+        score_session.complete_response(
+            "layout", score_session.pending_id("layout"), code, body,
+            Time.get_ticks_msec())
 
 func _finish_native_score() -> void:
-    if layout_revision != revision or timeline_model_revision != revision \
-            or not practice_view.stage.renderer.native_ready:
-        return
-    rendered_revision = revision
-    score_error = ""
-    _refresh_score_status()
-    if phase0_smoke_mode:
-        print("PHASE0_SCORE_READY_NATIVE: REVISION:", revision)
-    if str(last_state.get("phase","")) == "loading" and \
-            int(last_state.get("awaiting_score_revision",-1)) == revision:
-        _send_action({"action":"score_ready","revision":revision})
-
+    if score_session != null:
+        score_session.finish_native_score()
 
 func _request_timeline_model() -> void:
-    if timeline_model_request == null or timeline_model_pending \
-            or not bool(last_state.get("loaded", false)):
-        return
-    # The semantic model must wait for this revision's authentic glyphs.
-    # _on_layout requests the model once the font atlas is actually ready.
-    if not score_error.is_empty() or layout_revision != revision or \
-            practice_view.stage.renderer == null or not practice_view.stage.renderer.glyphs.ready():
-        return
-    timeline_model_pending = true
-    var error: Error = timeline_model_request.request(URL + "/score/model")
-    if error != OK:
-        timeline_model_pending = false
-        timeline_model_retry_after_ms = Time.get_ticks_msec() + 2000
-        if practice_view.stage.renderer != null:
-            practice_view.stage.renderer.notice = "Cannot load semantic score"
-            practice_view.stage.renderer.queue_redraw()
-
+    if score_session != null:
+        score_session.request_model()
 
 func _on_timeline_model(_result: int, code: int,
         _headers: PackedStringArray, body: PackedByteArray) -> void:
-    timeline_model_pending = false
-    if practice_view.stage.renderer == null or layout_revision != revision or not score_error.is_empty():
-        return
-    var candidate: Variant = _decode_json(body)
-    if code == 200 and candidate is Dictionary:
-        # Ignore stale replies after lesson/hand/variant transitions.
-        if int(candidate.get("revision", -1)) != revision:
-            return
-        if not practice_view.stage.renderer.load_score(candidate):
-            _score_failed(str(practice_view.stage.renderer.failure_reason))
-            return
-        native_score_piece_fingerprint = str(last_state.get("piece_fingerprint",""))
-        timeline_model_revision = revision
-        practice_view.stage.renderer.visible = true
-        _finish_native_score()
-        if practice_view.stage.feedback != null:
-            practice_view.stage.feedback.bind_score(practice_view.stage.renderer, revision)
-            practice_view.stage.feedback.present(last_state)
-        print("NATIVE_MODEL_READY: ", revision,
-            " NOTES: ", practice_view.stage.renderer.timeline.notes.size(),
-            " DENSITY: ", practice_view.stage.renderer.timeline.pixels_per_beat)
-        return
-    timeline_model_retry_after_ms = Time.get_ticks_msec() + 2000
-    practice_view.stage.renderer.notice = "Score model unavailable; retrying"
-    practice_view.stage.renderer.queue_redraw()
+    if score_session != null:
+        score_session.complete_response(
+            "model", score_session.pending_id("model"), code, body,
+            Time.get_ticks_msec())
 
 
 func _send_action(command: Dictionary) -> void:
