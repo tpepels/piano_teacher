@@ -128,6 +128,21 @@ def test_short_slur_across_two_measure_focus_boundary_is_kept_together():
     _all_or_none(plan.variants, slur)
 
 
+def test_short_slur_over_budget_keeps_barline_attacks_together():
+    # A dense first bar would normally force the two-bar focus down to one.
+    # That would sever the two-note slur crossing the first barline.
+    attacks = [(i*.5, .5, 60+i) for i in range(8)] + [
+        (4+i*.5, .5, 68+i) for i in range(4)]
+    piece = written_piece(2, attacks, slurs=((7, 8, 9),))
+    plan = LearningPlan(piece)
+    assert (plan.exercise.phrase.first_bar, plan.exercise.phrase.last_bar) == (1, 2)
+    assert len(_onset_set(plan.exercise.phrase.notes)) > SETTINGS.focus_max_attacks
+    slur, = [g for g in plan.grouping.groups if g.kind == "slur"]
+    assert slur.attack_count == 3
+    _all_or_none(plan.variants, slur)
+    assert plan.variants[-1].notes == piece.notes
+
+
 def test_long_slur_uses_contiguous_beam_aligned_windows_then_original():
     attacks = [(i * .25, .25, 60 + i) for i in range(12)]
     piece = written_piece(1, attacks,
@@ -137,10 +152,12 @@ def test_long_slur_uses_contiguous_beam_aligned_windows_then_original():
     plan = LearningPlan(piece)
     assert sorted(g.attack_count for g in plan.grouping.groups) == [4, 4, 4, 12]
     stages = plan.variants
-    assert [stage.level for stage in stages] == ["skeleton", "outline", "original"]
+    assert [stage.level for stage in stages] == [
+        "skeleton", "outline", "section-2", "original"]
     assert [_onset_set(stage.notes) for stage in stages] == [
         {i*.25 for i in range(4)},
         {i*.25 for i in range(8)},
+        {i*.25 for i in range(8, 12)},
         {i*.25 for i in range(12)}]
     assert len(stages[1].notes) <= SETTINGS.focus_max_attacks
     assert stages[-1].notes == piece.notes
