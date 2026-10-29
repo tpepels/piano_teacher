@@ -8,6 +8,7 @@ import json
 import math
 from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant, generate_variants
+from .musical_groups import grouping_for_piece, MusicalGrouping
 from .lesson_settings import SETTINGS
 from .repeated_passages import exact_repetition_signature
 
@@ -68,7 +69,8 @@ def _course_phrases(piece: Piece) -> tuple[Phrase, ...]:
     return tuple(groups)
 
 
-def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]:
+def _focus_phrases(piece: Piece, *, adaptive: bool = True,
+                   grouping: MusicalGrouping | None = None) -> tuple[Phrase, ...]:
     """Keep a short focus by default; extend it when attacks are very sparse.
 
     Count distinct attack times rather than noteheads: an entire chord is one
@@ -131,6 +133,23 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]
                 if proposed <= end or not within_attack_limit(start, proposed):
                     break
                 end = proposed
+        # A short authored slur is one teachable unit even across a barline.
+        # Extend the passage when possible; otherwise move the boundary to
+        # before the slur. Long slurs remain sectional and finish in Perform.
+        if adaptive and grouping is not None:
+            for group in grouping.groups:
+                if group.kind != "slur" or group.attack_count > SETTINGS.focus_max_attacks:
+                    continue
+                onset_times = [piece.notes[next(iter(onset))].start for onset in group.onsets]
+                if not min(onset_times) < boundaries[end] - 1e-7 < max(onset_times):
+                    continue
+                needed = bisect_right(boundaries, max(onset_times) + 1e-7)
+                needed = min(bars, needed)
+                if (needed - start <= SETTINGS.focus_max_measures
+                        and within_attack_limit(start, needed)):
+                    end = needed
+                elif start < bisect_right(boundaries, min(onset_times)) - 1:
+                    end = min(end, bisect_right(boundaries, min(onset_times)) - 1)
         ranges.append((start, end))
         start = end
 
@@ -152,12 +171,15 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True) -> tuple[Phrase, ...]
     return tuple(groups)
 
 def build_exercises(piece: Piece, *, consolidate: bool = True,
-                    adaptive_focus: bool = True) -> tuple[Exercise, ...]:
+                    adaptive_focus: bool = True,
+                    grouping: MusicalGrouping | None = None) -> tuple[Exercise, ...]:
     """Learn sections, bridge their boundaries, then perform the complete source.
 
     The original two-bar sequence remains reconstructible for old progress.
     """
-    phrases = _course_phrases(piece) if consolidate else _focus_phrases(piece, adaptive=adaptive_focus)
+    phrases = (_course_phrases(piece) if consolidate
+               else _focus_phrases(piece, adaptive=adaptive_focus,
+                                   grouping=grouping))
     exercises: list[Exercise] = []
     for index, phrase in enumerate(phrases):
         exercises.append(Exercise("learn", phrase, f"learn:{phrase.first_bar}-{phrase.last_bar}"))
@@ -219,13 +241,17 @@ def _sample_attack_times(times: list[float], limit: int) -> set[float]:
             for i in range(limit)}
 
 
-def _dense_single_measure_variants(phrase: Phrase, hand: str) -> tuple[ExerciseVariant, ...]:
+def _dense_single_measure_variants(phrase: Phrase, hand: str, *,
+                                   groups=()) -> tuple[ExerciseVariant, ...]:
     """Learn a too-dense source measure in nested subsets, then all notes.
 
     No MIDI note is synthesized or moved, and the final stage contains the
     complete original source, even though it necessarily exceeds the budget.
     A chord counts once because notes at the same onset remain together.
     """
+    if groups:
+        return generate_variants(phrase, hand, groups=groups,
+                                 max_attacks=SETTINGS.focus_max_attacks)
     indexed = [(i, n) for i, n in enumerate(phrase.notes)
                if hand == "both" or n.hand == hand]
     times = sorted({round(n.start, 6) for _, n in indexed})
@@ -297,13 +323,15 @@ class LearningPlan:
                  consolidate: bool = False) -> None:
         self.piece = piece
         self.warmup = warmup
+        self.grouping = (None if warmup else grouping_for_piece(piece))
         if warmup:
             # Warm-ups retain their deliberately complete phrase.
             duration = piece.bar_boundaries[-1] if piece.bar_boundaries else max(n.end for n in piece.notes)
             bars = len(piece.bar_boundaries) - 1 if piece.bar_boundaries else piece.phrases[-1].last_bar
             self.exercises = (Exercise("warmup", Phrase(0, 1, bars, 0.0, duration, piece.notes), "warmup:all"),)
         else:
-            self.exercises = build_exercises(piece, consolidate=consolidate)
+            self.exercises = build_exercises(piece, consolidate=consolidate,
+                                             grouping=self.grouping)
         if not self.exercises:
             raise ValueError("Piece has no practice passages")
         self.index = 0
@@ -359,14 +387,18 @@ class LearningPlan:
 
     @staticmethod
     def _stage_variants(exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
-        variants = generate_variants(exercise.phrase, hand)
+        groups = (self.grouping.for_phrase(exercise.phrase, hand)
+                  if self.grouping is not None else ())
+        variants = generate_variants(exercise.phrase, hand, groups=groups,
+                                     max_attacks=SETTINGS.focus_max_attacks)
         if exercise.kind != "learn":
             return variants[-1:]
         if (exercise.phrase.first_bar == exercise.phrase.last_bar
                 and len({round(n.start, 6) for n in exercise.phrase.notes
                          if hand == "both" or n.hand == hand})
                     > SETTINGS.focus_max_attacks):
-            return _dense_single_measure_variants(exercise.phrase, hand)
+            return _dense_single_measure_variants(exercise.phrase, hand,
+                                                   groups=groups)
         if hand == "both":
             return variants[-1:]
         if len(variants) == 3:

@@ -7,6 +7,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from .music import Note, Phrase
+from .grouped_variants import group_variants
 
 
 @dataclass(frozen=True)
@@ -20,10 +21,17 @@ class ExerciseVariant:
         return self.phrase.notes
 
 
-def generate_variants(phrase: Phrase, hand: str = "both") -> tuple[ExerciseVariant, ...]:
+def generate_variants(phrase: Phrase, hand: str = "both", *,
+                      groups=(), max_attacks: int = 8) -> tuple[ExerciseVariant, ...]:
     """Skeleton -> chord outline -> original; omit musically redundant stages."""
     if hand not in ("right", "left", "both"):
         raise ValueError("Expected right, left, or both hands")
+    if groups:
+        selections = group_variants(phrase, hand, groups, max_attacks)
+        return tuple(ExerciseVariant(level, Phrase(
+            phrase.number, phrase.first_bar, phrase.last_bar,
+            phrase.start, phrase.end, tuple(phrase.notes[i] for i in indices)),
+            indices) for level, indices in selections)
     indexed=[(i,n) for i,n in enumerate(phrase.notes) if hand=="both" or n.hand==hand]
     if not indexed:
         return ()
