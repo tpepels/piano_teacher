@@ -42,8 +42,14 @@ def written_piece(bars, attacks, *, slurs=(), beams=()):
             ordinal = len(measure)
             el = ET.SubElement(measure, "note")
             note_pitch = ET.SubElement(el, "pitch")
-            ET.SubElement(note_pitch, "step").text = "C"
-            ET.SubElement(note_pitch, "octave").text = str(4+attack_index//8)
+            scale = (("C", 0), ("C", 1), ("D", 0), ("D", 1),
+                     ("E", 0), ("F", 0), ("F", 1), ("G", 0),
+                     ("G", 1), ("A", 0), ("A", 1), ("B", 0))
+            step, alter = scale[pitch % 12]
+            ET.SubElement(note_pitch, "step").text = step
+            if alter:
+                ET.SubElement(note_pitch, "alter").text = str(alter)
+            ET.SubElement(note_pitch, "octave").text = str(pitch // 12 - 1)
             ET.SubElement(el, "duration").text = str(round(duration * 10080))
             ET.SubElement(el, "voice").text = "1"
             ET.SubElement(el, "type").text = ("16th" if duration == .25 else

@@ -46,9 +46,16 @@ class MusicalGrouping:
             # slur/beam cannot make a valid whole-group simplification.
             present = [frozenset(local[index] for index in onset if index in selected)
                        for onset in group.onsets]
-            if any(not onset for onset in present):
+            # A long slur may be divided into contiguous focus passages.
+            # Its complete original still returns in the final performance.
+            # Preserve the retained fragment as a local melodic unit rather
+            # than sampling isolated notes from the middle of the slur.
+            fragment = tuple(onset for onset in present if onset)
+            if len(fragment) < 2:
                 continue
-            result.append((group.kind, tuple(present)))
+            if group.kind == "beam" and len(fragment) != len(present):
+                continue
+            result.append((group.kind, fragment))
         return tuple(result)
 
 

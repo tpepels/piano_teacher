@@ -141,7 +141,8 @@ def _focus_phrases(piece: Piece, *, adaptive: bool = True,
                 if group.kind != "slur" or group.attack_count > SETTINGS.focus_max_attacks:
                     continue
                 onset_times = [piece.notes[next(iter(onset))].start for onset in group.onsets]
-                if not min(onset_times) < boundaries[end] - 1e-7 < max(onset_times):
+                if not (min(onset_times) < boundaries[end] - 1e-7
+                        and boundaries[end] <= max(onset_times) + 1e-7):
                     continue
                 needed = bisect_right(boundaries, max(onset_times) + 1e-7)
                 needed = min(bars, needed)
