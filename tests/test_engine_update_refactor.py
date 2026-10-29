@@ -66,3 +66,77 @@ def test_no_auto_commit_when_feedback_is_manual(tmp_path, monkeypatch):
         assert app.next_at == 10
     finally:
         app.db.close()
+
+from dataclasses import replace
+from types import SimpleNamespace
+
+from piano_teacher.application.practice_transitions import (
+    TransitionContext, phase, run_before_assessment,
+)
+
+
+def test_transition_priority_is_explicit_and_pure():
+    base = TransitionContext(
+        has_plan=True, learning=False, paused=False, listening=False,
+        preview_pending=False, preparation_pending=False,
+        feedback_pending=False, awaiting_score=False, rewind_pending=False,
+        running=True, run_at=100.0)
+    assert phase(base, 99.0) == "idle"
+    assert phase(base, 100.0) == "performing"
+    assert phase(replace(base, feedback_pending=True, rewind_pending=True), 101) == "feedback"
+    assert phase(replace(base, preview_pending=True, feedback_pending=True), 101) == "preview"
+    assert phase(replace(base, awaiting_score=True, rewind_pending=True), 101) == "awaiting_score"
+    assert phase(replace(base, learning=True, paused=True), 101) == "learning"
+    assert phase(replace(base, paused=True, listening=True), 101) == "paused"
+    assert phase(replace(base, has_plan=False, learning=True), 101) == "no_plan"
+
+
+def test_preview_continuation_uses_original_deadline_and_never_grades(tmp_path):
+    app = _app(tmp_path)
+    try:
+        app._preview_loop_pending = True
+        app.next_at = 200.0
+        app.running = False
+        called = []
+        app._source_model = lambda: {"practice_timeline": {"stride_beats": 12.0}}
+        app._continue_at = lambda deadline: called.append(deadline)
+        assert run_before_assessment(app, 199.9)
+        assert called == []
+        assert run_before_assessment(app, 201.0)
+        assert called == [200.0]
+        assert app.visual_offset_beats == 12.0
+    finally:
+        app.db.close()
+
+
+def test_rewind_waits_for_deadline_then_resumes_exact_target(tmp_path):
+    app = _app(tmp_path)
+    try:
+        app.pending_rewind = 3.0
+        app.next_at = 90.0
+        app.running = False
+        called = []
+        app._continue_at = lambda deadline, *, from_beat: called.append(
+            (deadline, from_beat))
+        assert run_before_assessment(app, 89.9)
+        assert called == []
+        assert run_before_assessment(app, 90.0)
+        assert called == [(90.0, 3.0)]
+    finally:
+        app.db.close()
+
+
+def test_loading_and_paused_takes_cannot_finish_assessment(tmp_path):
+    app = _app(tmp_path)
+    try:
+        app.running = True
+        app.run_at = 0.0
+        app.awaiting_score_revision = 42
+        assert run_before_assessment(app, 100.0)
+        app.awaiting_score_revision = None
+        app.paused = True
+        assert run_before_assessment(app, 100.0)
+        app.paused = False
+        assert not run_before_assessment(app, 100.0)
+    finally:
+        app.db.close()

@@ -43,6 +43,7 @@ from .state_projection import (
 from .assessment_service import AssessmentService
 from .application.lesson_snapshot import build_lesson_snapshot
 from .application.control_dispatch import ControlDispatcher
+from .application.practice_transitions import run_before_assessment
 from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
 from .live_input_view import LiveInputView
@@ -1322,44 +1323,8 @@ class PracticeEngine:
     def _update(self):
         self._poll_midi_connection()
         self._apply_listen_failure()
-        if not self.plan:
-            return
         now=time.monotonic()
-        if self.mode == "learn" and self.teaching is not None:
-            self.teaching.set_connected(self.midi.connected, now=now)
-            self.teaching.tick(now=now)
-            self._save_guided_preparation()
-            return
-        if self.paused:
-            return
-        if self.mode == "listen":
-            if self.running and self.listen.finished(now=now, run_at=self.run_at):
-                self.running = False
-                self.feedback = "Example complete"
-                self.next_action = "Choose Learn to find the notes, or Practice to play the rhythm."
-            return
-        if self._preview_loop_pending:
-            if self.next_at and now >= self.next_at:
-                deadline = self.next_at
-                self.visual_offset_beats += self._source_model()["practice_timeline"]["stride_beats"]
-                self._continue_at(deadline)
-            return
-        if self._preparation_pending:
-            self.practice_preparation["phase"] = (
-                "reverse" if now < self._preparation_at else "preparing")
-        if self.pending_result is not None:
-            self._advance_pending_feedback(now)
-            return
-        if self.awaiting_score_revision is not None:
-            return
-        if self.pending_rewind is not None:
-            if now >= self.next_at:
-                if self._guided_recovery_pending:
-                    self._begin_learn(from_beat=self.pending_rewind, recovery=True)
-                else:
-                    self._continue_at(self.next_at, from_beat=self.pending_rewind)
-            return
-        if not self.running or self.paused or now < self.run_at:
+        if run_before_assessment(self, now):
             return
         phrase=self.plan.active_phrase
         total_beats=phrase.end-phrase.start
