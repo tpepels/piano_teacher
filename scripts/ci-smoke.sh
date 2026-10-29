@@ -59,6 +59,10 @@ timeout 100s "$PYTHON" -m pytest -q \
   tests/test_listen_session.py \
   tests/test_learner_progress_service.py \
   tests/test_rest_intervention_ownership.py \
+  tests/test_musical_groups.py \
+  tests/test_exercise_generator.py \
+  tests/test_sparse_focus.py \
+  tests/test_learning.py \
   tests/test_midi_beaming.py \
   tests/test_source_beam_pixel_fidelity.py
 "$PYTHON" scripts/check_godot_parse.py --godot "$GODOT" --timeout 25
