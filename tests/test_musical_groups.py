@@ -188,6 +188,54 @@ def test_midi_beaming_model_is_derived_before_exercise_simplification():
     assert plan.variants[-1].notes == notes
 
 
+def test_thinned_source_chord_keeps_its_authored_beam():
+    from piano_teacher.notation.lesson import build_lesson_score
+    from piano_teacher.notation.model import build_score_model
+
+    xml = """<score-partwise version="4.0"><part-list>
+      <score-part id="P1"><part-name>Right Hand</part-name></score-part>
+      </part-list><part id="P1"><measure number="1"><attributes>
+      <divisions>10080</divisions><time><beats>4</beats><beat-type>4</beat-type></time>
+      </attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>5040</duration><voice>1</voice><type>eighth</type>
+        <beam number="1">begin</beam></note>
+      <note><chord/><pitch><step>E</step><octave>4</octave></pitch>
+        <duration>5040</duration><voice>1</voice><type>eighth</type></note>
+      <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>5040</duration><voice>1</voice><type>eighth</type>
+        <beam number="1">end</beam></note>
+      <note><chord/><pitch><step>F</step><octave>4</octave></pitch>
+        <duration>5040</duration><voice>1</voice><type>eighth</type></note>
+      <note><rest/><duration>30240</duration><voice>1</voice>
+        <type>half</type><dot/></note>
+      </measure></part></score-partwise>"""
+    voice = "xml-p0-s1-v1"
+    notes = (
+        Note(0., .5, 60, 0, 0, "right", "xml-p0-m0-e1", voice=voice),
+        Note(0., .5, 64, 0, 0, "right", "xml-p0-m0-e2", voice=voice),
+        Note(.5, 1., 62, 0, 0, "right", "xml-p0-m0-e3", voice=voice),
+        Note(.5, 1., 65, 0, 0, "right", "xml-p0-m0-e4", voice=voice),
+    )
+    piece = Piece("Beamed source chords", 100, notes, (),
+                  bar_boundaries=(0., 4.), time_signatures=((0., 4, 4),),
+                  source_musicxml=xml)
+    phrase = Phrase(1, 1, 1, 0., 4., notes)
+    grouping = grouping_for_piece(piece)
+    variant = generate_variants(phrase, "right",
+        groups=grouping.for_phrase(phrase, "right"))[0].phrase
+    assert [note.pitch for note in variant.notes] == [64, 65]
+    lesson = build_lesson_score(variant, boundaries=piece.bar_boundaries,
+        time_signatures=piece.time_signatures, source_musicxml=piece.source_musicxml)
+    root = ET.fromstring(lesson.musicxml)
+    selected = [el for el in root.findall("./part[@id='RH']/measure/note")
+                if el.find("pitch") is not None]
+    assert [el.findtext("beam") for el in selected] == ["begin", "end"]
+    model = build_score_model(lesson, boundaries=piece.bar_boundaries)
+    assert [e["beams"][0][1] for e in model["notation_events"]
+            if e["kind"] == "note"] == ["begin", "end"]
+
+
 def test_thinned_source_chord_keeps_its_visible_slur():
     from piano_teacher.notation.lesson import build_lesson_score
     from piano_teacher.notation.assets.slurs import slur_pairs_from_xml
