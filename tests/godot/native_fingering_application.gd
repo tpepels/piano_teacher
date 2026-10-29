@@ -43,9 +43,9 @@ func _run() -> void:
     # The complete path arrives independently of the initial score. Long
     # sources must finish building it before the memory assertion or edits.
     var path_deadline: int = Time.get_ticks_msec()+25000
-    while (app.lesson_pending or app.practice_step_entries.is_empty()) and Time.get_ticks_msec() < path_deadline:
+    while (app.lesson_session.pending or app.lesson_steps.entries.is_empty()) and Time.get_ticks_msec() < path_deadline:
         await process_frame
-    if app.lesson_pending or app.practice_step_entries.is_empty():
+    if app.lesson_session.pending or app.lesson_steps.entries.is_empty():
         failures.append("Complete lesson path did not become ready")
     var folder: String = OS.get_cmdline_user_args()[0]
     var renderer: Control = app.timeline_preview
@@ -137,7 +137,7 @@ func _run() -> void:
     var file := FileAccess.open(folder.path_join("app-report.json"),FileAccess.WRITE)
     file.store_string(JSON.stringify({"source_id":source,"before":previous,"changed":changed,
         "revision":app.rendered_revision,"failures":failures,
-        "static_memory":OS.get_static_memory_usage(),"path_steps":app.practice_step_entries.size(),
+        "static_memory":OS.get_static_memory_usage(),"path_steps":app.lesson_steps.entries.size(),
         "finger_rect":[finger_rect.position.x,finger_rect.position.y,finger_rect.size.x,finger_rect.size.y]}))
     for failure in failures:
         push_error(failure)

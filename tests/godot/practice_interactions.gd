@@ -116,7 +116,7 @@ func test_three_button_stage() -> void:
         "Settings needs a separate Listen gain adjustment")
     check(app.game_phase_cue.get_parent() == app.score_frame,
         "Compact phase cue remains on the music stage")
-    check(not app.mode_choice.is_visible_in_tree() and not app.hints_toggle.is_visible_in_tree(),
+    check(not app.lesson_view.mode_choice.is_visible_in_tree() and not app.lesson_view.hints_toggle.is_visible_in_tree(),
         "Advanced dropdowns must not appear during playing")
     show_state("paused")
     check(app.start_button.visible and app.start_button.text.begins_with("Resume"),
@@ -146,10 +146,10 @@ func test_three_button_stage() -> void:
         "Returning from Listen prepares a manual piano-first start: " + str(app.commands))
     app.commands.clear()
     app._navigate("lesson")
-    check(app.mode_choice.is_visible_in_tree()
-        and app.hints_toggle.get_parent() == app.mode_choice.get_parent(),
+    check(app.lesson_view.mode_choice.is_visible_in_tree()
+        and app.lesson_view.hints_toggle.get_parent() == app.lesson_view.mode_choice.get_parent(),
         "Activity and hint options belong to Lesson Path, not the practice screen")
-    check(not app.hints_toggle.visible,
+    check(not app.lesson_view.hints_toggle.visible,
         "Hints stay hidden in Listen mode instead of showing irrelevant controls")
     app._navigate("practice")
 
@@ -283,10 +283,10 @@ func test_secondary_stop() -> void:
             "Stop must remain out of the normal practice flow")
     show_state("playing")
     app._navigate("lesson")
-    check(app.stop_button.is_visible_in_tree() and not app.stop_button.disabled,
+    check(app.lesson_view.stop_button.is_visible_in_tree() and not app.lesson_view.stop_button.disabled,
         "Advanced Stop stays accessible in Lesson Path")
     app.commands.clear()
-    app.stop_button.pressed.emit()
+    app.lesson_view.stop_button.pressed.emit()
     expect_command("stop", "Advanced Stop retains its actual transport action")
     app._navigate("practice")
 
@@ -511,7 +511,7 @@ func test_instructional_transition() -> void:
     app.timeline_preview.clear_score() # Pausing loading must not disable Resume.
     app._on_state(0,200,PackedStringArray(),JSON.stringify(retry).to_utf8_buffer())
     check(not app.start_button.disabled, "Resume remains available while the next score is loading")
-    check(not app.stop_button.disabled, "Stop remains available during an automatic break")
+    check(not app.lesson_view.stop_button.disabled, "Stop remains available during an automatic break")
     retry["mode"] = "learn"
     retry["phase"] = "loading"
     retry["paused"] = false
@@ -522,8 +522,8 @@ func test_instructional_transition() -> void:
     check(app.commands.back().get("action") == "pause", "Primary transport pauses guided preparation")
 
 func test_modes() -> void:
-    check(app.mode_choice.item_count == 4, "Learn, Practice and section/whole Perform are available")
-    app.mode_choice.item_selected.emit(2)
+    check(app.lesson_view.mode_choice.item_count == 4, "Learn, Practice and section/whole Perform are available")
+    app.lesson_view.mode_choice.item_selected.emit(2)
     check(app.commands.back().get("action") == "perform", "Perform is a functioning mode")
     app.commands.clear()
     app.listen_button.pressed.emit()
@@ -666,15 +666,15 @@ func test_learner_progression() -> void:
     app.start_button.pressed.emit()
     expect_command("learn_next", "Guided units advance before full-passage rhythm")
     check(app.progress_label.text.contains("Idea"), "Short-unit context is readable")
-    app.skip_stage_button.pressed.emit()
+    app.lesson_view.skip_button.pressed.emit()
     check(app.commands.back().get("action") == "skip_stage", "Skip is a real explicit choice")
-    check(app.skip_stage_button.text.contains("no mastery"), "Skip never pretends mastery")
-    app.placement_button.pressed.emit()
+    check(app.lesson_view.skip_button.text.contains("no mastery"), "Skip never pretends mastery")
+    app.lesson_view.placement_button.pressed.emit()
     check(app.commands.back().get("action") == "place_original", "Optional placement selects original source notes")
     var overview: Dictionary = {"completed_steps":0,"total_steps":3,"steps":[],"trouble_spots":[{"stage_key":"source-stage","first_bar":3,"last_bar":4,"start_beat":8,"errors":5}]}
     app._on_lesson(0,200,PackedStringArray(),JSON.stringify(overview).to_utf8_buffer())
     var found := false
-    for node in app.lesson_rows.find_children("*","Button",true,false):
+    for node in app.lesson_view.rows.find_children("*","Button",true,false):
         if node.text.contains("Revisit bars"):
             node.pressed.emit()
             var command: Dictionary = app.commands.back()

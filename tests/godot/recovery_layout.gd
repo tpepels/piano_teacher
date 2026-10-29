@@ -44,7 +44,7 @@ func run() -> void:
         var row := Button.new()
         row.text = "Lesson %d · Practice this passage" % (stage + 1)
         row.custom_minimum_size.y = 54
-        app.lesson_rows.add_child(row)
+        app.lesson_view.rows.add_child(row)
     for page in ["library", "lesson", "settings", "library", "lesson"]:
         app._navigate(page)
         # Containers and minimum-size invalidation settle on deferred frames.
@@ -72,11 +72,11 @@ func run() -> void:
         if page == "lesson":
             # The nested lesson list must have a usable viewport, including
             # when there are enough stages to require scrolling.
-            check(app.lesson_rows.get_parent().size.y >= 100,
-                "Lesson stages have a visible scroll area, got %.1fpx" % app.lesson_rows.get_parent().size.y)
-            var outer := app.lesson_rows.get_parent().get_parent() as ScrollContainer
+            check(app.lesson_view.rows.get_parent().size.y >= 100,
+                "Lesson stages have a visible scroll area, got %.1fpx" % app.lesson_view.rows.get_parent().size.y)
+            var outer := app.lesson_view as ScrollContainer
             if outer != null:
-                var final_row: Control = app.lesson_rows.get_child(app.lesson_rows.get_child_count()-1)
+                var final_row: Control = app.lesson_view.rows.get_child(app.lesson_view.rows.get_child_count()-1)
                 outer.ensure_control_visible(final_row)
                 await process_frame
                 await process_frame

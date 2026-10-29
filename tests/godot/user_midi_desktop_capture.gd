@@ -113,7 +113,7 @@ func _capture(label: String) -> void:
         else:
             var activity_rect: Rect2 = activity_row.get_global_rect()
             var caption_rect: Rect2 = caption.get_global_rect()
-            var dropdown_rect: Rect2 = app.mode_choice.get_global_rect()
+            var dropdown_rect: Rect2 = app.lesson_view.mode_choice.get_global_rect()
             info["activity_rect"] = [
                 activity_rect.position.x, activity_rect.position.y,
                 activity_rect.size.x, activity_rect.size.y]
@@ -129,14 +129,14 @@ func _capture(label: String) -> void:
                 errors.append("Lesson Activity selector grew vertically at " + label)
             if dropdown_rect.position.x + dropdown_rect.size.x > image.get_width() - 10:
                 errors.append("Lesson mode choice overflows viewport at " + label)
-            if not app.lesson_rows.is_visible_in_tree():
+            if not app.lesson_view.rows.is_visible_in_tree():
                 errors.append("Lesson step list is not visible at " + label)
     print("MIDI_DESKTOP_FRAME:", label, " size=", image.get_size(),
         " notes=", info.note_count, " native_heads=", info.native_noteheads)
 
 func _lesson_ready() -> bool:
-    return not app.lesson_pending and app.lesson_rows.get_child_count() > 0 \
-        and app.current_screen == "lesson" and app.lesson_summary.text.contains("stages completed")
+    return not app.lesson_session.pending and app.lesson_view.rows.get_child_count() > 0 \
+        and app.current_screen == "lesson" and app.lesson_view.summary.text.contains("stages completed")
 
 
 func _settings_ready() -> bool:

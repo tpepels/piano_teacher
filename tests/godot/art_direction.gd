@@ -23,7 +23,11 @@ class GeometryApp extends "res://main.gd":
         pass
 
     func _request_lesson() -> void:
-        pass
+        _on_lesson(0, 200, PackedStringArray(), JSON.stringify({
+            "current_step": 1, "completed_steps": 0, "total_steps": 3,
+            "steps": [{"number": 1, "exercise": 1, "hand": "right", "level": "original",
+                "kind": "practice", "first_bar": 9, "last_bar": 12}]
+        }).to_utf8_buffer())
 
     func _request_layout() -> void:
         pass
@@ -250,7 +254,7 @@ func check_settings_rows(label: String) -> Dictionary:
 func requests_idle() -> bool:
     # Polls continue normally; only actions/assets/drawer data gate captures.
     return not (app.action_pending or app.layout_pending or
-        app.timeline_model_pending or app.library_pending or app.lesson_pending or
+        app.timeline_model_pending or app.library_pending or app.lesson_session.pending or
         app.settings_pending or app.device_pending or app.library_health_pending) and \
         app.pending_transport_action.is_empty() and app.pending_library_piece.is_empty()
 
@@ -430,7 +434,7 @@ func capture(label: String) -> bool:
             check(fits(screen_rect(app.library_view.library_search), viewport), label + ": library search fits")
             check(app.library_view.library_rows.get_child_count() > 0, label + ": real library rows are populated")
         if app.current_screen == "lesson":
-            check(app.lesson_rows.get_child_count() > 0, label + ": lesson path is populated")
+            check(app.lesson_view.rows.get_child_count() > 0, label + ": lesson path is populated")
         if app.current_screen == "settings":
             sample["settings_rows"] = check_settings_rows(label)
     var shown: Array = []
@@ -507,11 +511,6 @@ func geometry_journey() -> bool:
         show_geometry_state(phase)
         if not await capture("practice_" + phase):
             return false
-    app._on_lesson(0, 200, PackedStringArray(), JSON.stringify({
-        "current_step": 1, "completed_steps": 0, "total_steps": 3,
-        "steps": [{"number": 1, "exercise": 1, "hand": "right", "level": "original",
-            "kind": "practice", "first_bar": 9, "last_bar": 12}]
-    }).to_utf8_buffer())
     for destination in ["library", "lesson", "settings"]:
         app._navigate(destination)
         if not await capture("lesson_path" if destination == "lesson" else destination):
@@ -603,14 +602,14 @@ func native_picker_backwards() -> bool:
             break
     check(not window_id.is_empty(), "Find numeric native window identity")
     if window_id.is_empty(): return false
-    var point: Vector2 = screen_rect(app.practice_step_picker).get_center()
+    var point: Vector2 = screen_rect(app.lesson_steps.picker).get_center()
     var details: Array = []
     status = OS.execute("xdotool", PackedStringArray(["windowfocus", "--sync", window_id,
         "mousemove", "--window", window_id, str(int(point.x)), str(int(point.y)), "click", "1"]), details, true)
     check(status == 0, "Native mouse opens lesson picker")
     if status != 0: return false
-    if not await wait_until(func() -> bool: return app.practice_step_picker.get_popup().visible, "actual native lesson popup"): return false
-    var popup: PopupMenu = app.practice_step_picker.get_popup()
+    if not await wait_until(func() -> bool: return app.lesson_steps.picker.get_popup().visible, "actual native lesson popup"): return false
+    var popup: PopupMenu = app.lesson_steps.picker.get_popup()
     # A native menu may start without keyboard focus when the pointer is
     # outside its rows. Read actual UI focus, then reach the desired item using
     # real keys; never set selection or emit its signal in this path.
@@ -669,11 +668,11 @@ func practice_control_journey() -> bool:
     if not await workflow_ready("visible +5 BPM acknowledged"): return false
     check(int(app.last_state.get("bpm", 0)) == original_bpm, "Visible +5 BPM restores tempo")
     workflow_checks.append("manual_plus_five")
-    if not await click_control(app.practice_step_next_button): return false
+    if not await click_control(app.lesson_steps.next_button): return false
     if not await workflow_ready("next lesson step"): return false
     check(int(app.last_state.get("lesson_step", 0)) == original_step + 1, "Next selects following step")
     workflow_checks.append("next_step")
-    if not await click_control(app.practice_step_previous_button): return false
+    if not await click_control(app.lesson_steps.previous_button): return false
     if not await workflow_ready("previous lesson step"): return false
     check(int(app.last_state.get("lesson_step", 0)) == original_step, "Previous returns to the prior step")
     check(int(app.last_state.get("bpm", 0)) == original_bpm, "Returning step restores its saved manual tempo")
@@ -684,8 +683,8 @@ func practice_control_journey() -> bool:
     else:
         # Headless coverage checks the selection binding, independently of the
         # rendered X11 journey which exercises the native popup itself.
-        app.practice_step_picker.select(original_step - 2)
-        app.practice_step_picker.item_selected.emit(original_step - 2)
+        app.lesson_steps.picker.select(original_step - 2)
+        app.lesson_steps.picker.item_selected.emit(original_step - 2)
     if not await wait_until(func() -> bool:
         return requests_idle() and native_is_ready() and app.revision > picker_revision,
         "picker backward selection"): return false
@@ -695,19 +694,19 @@ func practice_control_journey() -> bool:
     workflow_checks.append("picker_backwards")
     # The preceding entry may be a connection passage (Both only). Return to
     # this source's Learn passage before exercising its three hand choices.
-    if not await click_control(app.practice_step_next_button): return false
+    if not await click_control(app.lesson_steps.next_button): return false
     if not await workflow_ready("restore source step before hand choices"): return false
     check(int(app.last_state.get("lesson_step", 0)) == original_step, "Restore source lesson step")
     # Switch away first so the Right check must click its real control too.
     app._navigate("lesson")
     if not await wait_until(func() -> bool: return requests_idle(), "initial hand choices loaded"): return false
-    if not await click_control(app.hand_buttons["left"]): return false
+    if not await click_control(app.lesson_view.hand_buttons["left"]): return false
     if not await workflow_ready("switch away before testing Right control"): return false
     for hand in ["right", "left", "both"]:
         app._navigate("lesson")
         if not await wait_until(func() -> bool: return requests_idle(), "hand choices loaded"): return false
         if str(app.last_state.get("hand", "")) != hand:
-            if not await click_control(app.hand_buttons[hand]): return false
+            if not await click_control(app.lesson_view.hand_buttons[hand]): return false
         else:
             app._navigate("practice")
         if not await workflow_ready(hand + " hand notation ready"): return false

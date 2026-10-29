@@ -63,7 +63,7 @@ func run() -> void:
     show("guided_wait")
     app.start_button.pressed.emit()
     expect("pause","Learn primary pauses without starting timed playback: ")
-    check(not app.stop_button.disabled,"Stop is available during untimed Learn")
+    check(not app.lesson_view.stop_button.disabled,"Stop is available during untimed Learn")
     show("paused")
     app.start_button.pressed.emit()
     expect("resume","Resume retains guided target: ")

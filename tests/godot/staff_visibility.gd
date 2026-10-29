@@ -46,7 +46,7 @@ func run() -> void:
                 var pixels := Vector2(frame.get_size()) / root.get_visible_rect().size
                 var transform: Transform2D = view.get_global_transform_with_canvas()
                 var panel: Rect2 = app.score_frame.get_global_rect()
-                check(not app.practice_step_controls.get_global_rect().intersects(panel),
+                check(not app.lesson_steps.get_global_rect().intersects(panel),
                     "Lesson navigation stays outside native notation")
                 var gap: float = view.staff_gap()
                 for index in range(10):

@@ -88,7 +88,7 @@ func run() -> void:
     await wait_for(func(): return bool(app.last_state.get("paused", false)))
     await capture("practice")
     press("Path")
-    await wait_for(func(): return not app.lesson_pending and app.lesson_rows.get_child_count() > 0)
+    await wait_for(func(): return not app.lesson_session.pending and app.lesson_view.rows.get_child_count() > 0)
     await capture("lesson")
     app._go_back()
     press("Settings")
@@ -142,5 +142,5 @@ func run() -> void:
     for child in app.get_children():
         if child is Timer:
             child.stop()
-    await wait_for(func(): return not app.state_pending and not app.device_pending and not app.library_pending and not app.settings_pending and not app.lesson_pending and not app.action_pending)
+    await wait_for(func(): return not app.state_pending and not app.device_pending and not app.library_pending and not app.settings_pending and not app.lesson_session.pending and not app.action_pending)
     quit(0 if failures.is_empty() else 1)

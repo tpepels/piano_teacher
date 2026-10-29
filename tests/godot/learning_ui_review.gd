@@ -248,8 +248,8 @@ func run() -> void:
     check(int(app.last_state.teaching.target_index) == guided_index and int(app.last_state.transport_id) == guided_session,
         "Ordinary Resume preserves guided target and attempt")
     await capture("resume-guided-same-target")
-    app.mode_choice.select(1)
-    app.mode_choice.item_selected.emit(1)
+    app.lesson_view.mode_choice.select(1)
+    app.lesson_view.mode_choice.item_selected.emit(1)
     await wait_for(func(): return score_ready() and phase() == "playing" and app._transport_beat_now() >= .15,"ordinary timed Practice starts")
     await capture("practice-playing-compact")
     await ensure_paused()
@@ -303,7 +303,7 @@ func run() -> void:
         if child is Timer:
             child.stop()
     await wait_for(func(): return not app.state_pending and not app.device_pending and not app.library_pending \
-        and not app.settings_pending and not app.lesson_pending and not app.action_pending \
+        and not app.settings_pending and not app.lesson_session.pending and not app.action_pending \
         and not app.layout_pending and not app.timeline_model_pending,"drain ordinary requests before exit")
     var result := FileAccess.open(folder+"/result.json",FileAccess.WRITE)
     result.store_string(JSON.stringify({"frames":frames,"failures":failures,"renderer":DisplayServer.get_name()},"  "))

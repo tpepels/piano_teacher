@@ -9,6 +9,7 @@ SCRIPT = (ROOT / 'godot' / 'main.gd').read_text(encoding='utf-8')
 SETTINGS = (ROOT / 'godot' / 'settings_screen.gd').read_text(encoding='utf-8')
 LIBRARY = (ROOT / 'godot' / 'library_screen.gd').read_text(encoding='utf-8')
 HOME = (ROOT / 'godot' / 'home_screen.gd').read_text(encoding='utf-8')
+LESSON = (ROOT / 'godot' / 'lesson_screen.gd').read_text(encoding='utf-8')
 
 
 def test_fullscreen_layout_has_adaptive_margins_and_stackable_cards():
@@ -23,7 +24,7 @@ def test_fullscreen_layout_has_adaptive_margins_and_stackable_cards():
     assert 'overlay_drawer.offset_left = inset' in SCRIPT
     assert 'margin_left' in SCRIPT and 'margin_right' in SCRIPT
     assert 'folder_edit.custom_minimum_size = Vector2(0, 40)' in SETTINGS
-    assert 'scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED' in SCRIPT
+    assert 'horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED' in LESSON
     assert 'func _configure_ui_scaling() -> void:' in SCRIPT
     assert 'window.content_scale_factor = factor' in SCRIPT
 

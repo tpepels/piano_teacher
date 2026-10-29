@@ -172,7 +172,7 @@ func run() -> void:
     await wait_for(func(): return app.current_screen == "practice" and score_ready() \
         and str(app.last_state.get("phase", "")) == "guided_wait", "import automatically enters Learn")
     press("Path")
-    await wait_for(func(): return app.current_screen == "lesson" and not app.lesson_pending, "hand selection")
+    await wait_for(func(): return app.current_screen == "lesson" and not app.lesson_session.pending, "hand selection")
     press("Both hands")
     await wait_for(func(): return app.current_screen == "practice" and score_ready() \
         and str(app.last_state.get("hand", "")) == "both" \
@@ -219,7 +219,7 @@ func run() -> void:
     check(float(later.note_x) < float(playing.note_x)-10, "Actual notes move left during practice")
     check(not app.hint_keyboard.visible or app.hint_keyboard._live_mode,
         "Timed practice switches from the guided target to real live MIDI input")
-    app.stop_button.pressed.emit()
+    app.lesson_view.stop_button.pressed.emit()
     await wait_for(func(): return not app.action_pending and not bool(app.last_state.get("running", true)) \
         and str(app.last_state.get("phase", "")) == "ready", "visible Stop abandons practice")
     await capture("stopped")
@@ -232,7 +232,7 @@ func run() -> void:
         if child is Timer:
             child.stop()
     await wait_for(func(): return not app.state_pending and not app.device_pending \
-        and not app.library_pending and not app.settings_pending and not app.lesson_pending \
+        and not app.library_pending and not app.settings_pending and not app.lesson_session.pending \
         and not app.action_pending and not app.layout_pending and not app.timeline_model_pending,
         "drain ordinary HTTP requests before exit")
     print("TEACHING_RESULT:", "PASS" if failures.is_empty() else "FAIL")

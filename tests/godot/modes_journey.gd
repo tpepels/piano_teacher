@@ -108,7 +108,7 @@ func capture(label: String, track_beat: float = -999) -> Dictionary:
     var viewport := root.get_visible_rect()
     entry["viewport"] = str(viewport)
     entry["primary_bounds"] = str(app.start_button.get_global_rect())
-    entry["stop_bounds"] = str(app.stop_button.get_global_rect())
+    entry["stop_bounds"] = str(app.lesson_view.stop_button.get_global_rect())
     for control in [app.start_button,app.practice_retry_button,app.listen_button]:
         check(viewport.encloses(control.get_global_rect()),"Transport control fits actual viewport in "+label)
     check(app.score_frame.size.y >= 135,"Notation retains135px height in "+label)
@@ -168,19 +168,19 @@ func run() -> void:
     # Explicitly choose the available full-source performance using the
     # existing lesson picker so Listen/Perform include
     # the opening rest, internal rest and held ending in bars 3-4.
-    await wait_for(func(): return not app.lesson_pending and not app.action_pending \
-        and not app.practice_step_picker.disabled,"normal lesson picker is ready")
+    await wait_for(func(): return not app.lesson_session.pending and not app.action_pending \
+        and not app.lesson_steps.picker.disabled,"normal lesson picker is ready")
     var full_step := -1
-    for index in range(app.practice_step_entries.size()):
-        var step: Dictionary = app.practice_step_entries[index]
+    for index in range(app.lesson_steps.entries.size()):
+        var step: Dictionary = app.lesson_steps.entries[index]
         if str(step.get("kind","")) == "perform" and int(step.get("first_bar",0)) == 1 \
                 and int(step.get("last_bar",0)) == 4 and str(step.get("level","")) == "original":
             full_step = index
             break
     check(full_step >= 0,"Lesson picker exposes the full four-bar original performance")
     if full_step >= 0:
-        app.practice_step_picker.select(full_step)
-        app.practice_step_picker.item_selected.emit(full_step)
+        app.lesson_steps.picker.select(full_step)
+        app.lesson_steps.picker.item_selected.emit(full_step)
     await wait_for(func(): return score_ready() and not app.action_pending \
         and str(app.last_state.get("kind","")) == "perform" \
         and int(app.last_state.get("lesson_step",0)) == full_step+1,
@@ -222,10 +222,10 @@ func run() -> void:
     await capture("04-listen-complete-no-mastery")
     check(int(app.last_state.get("mastered",-1)) == 0 and int(app.last_state.get("streak",-1)) == 0,
         "Listen completion never confers clean credit")
-    check(app.mode_choice.item_count >= 3,"Distinct Perform mode is visible")
-    check(app.mode_choice.get_item_text(2).to_lower().contains("perform"),"Third mode clearly names Perform")
-    app.mode_choice.select(2)
-    app.mode_choice.item_selected.emit(2)
+    check(app.lesson_view.mode_choice.item_count >= 3,"Distinct Perform mode is visible")
+    check(app.lesson_view.mode_choice.get_item_text(2).to_lower().contains("perform"),"Third mode clearly names Perform")
+    app.lesson_view.mode_choice.select(2)
+    app.lesson_view.mode_choice.item_selected.emit(2)
     await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "perform" and phase() == "count_in","Perform loads source score then counts in")
     await capture("05-perform-count-in")
     await wait_for(func(): return phase() == "playing" and app._transport_beat_now() >= .2,"uninterrupted performance starts")
@@ -270,13 +270,13 @@ func run() -> void:
     await capture("10-weak-section-practice-count-in")
     print("MODES_STAGE:weak-practice-playing")
     await create_timer(.15).timeout
-    app.stop_button.pressed.emit()
+    app.lesson_view.stop_button.pressed.emit()
     await wait_for(func(): return not app.action_pending and not bool(app.last_state.get("running",true)),"Stop abandons weak practice safely")
     for child in app.get_children():
         if child is Timer:
             child.stop()
     await wait_for(func(): return not app.state_pending and not app.device_pending and not app.library_pending \
-        and not app.settings_pending and not app.lesson_pending and not app.action_pending \
+        and not app.settings_pending and not app.lesson_session.pending and not app.action_pending \
         and not app.layout_pending and not app.timeline_model_pending,"drain normal requests before exit")
     var result := FileAccess.open(folder+"/result.json",FileAccess.WRITE)
     result.store_string(JSON.stringify({"frames":frames,"failures":failures,"renderer":DisplayServer.get_name()},"  "))

@@ -462,17 +462,17 @@ func _run() -> void:
 
     # Stage chips describe the current exercise and hand, not every level
     # that appears anywhere else in the course. Numbers stay consecutive.
-    scene.set("last_state", {"title": "Current piece", "lesson_level": "original"})
+    scene.get("lesson_view").present_context({"loaded":true,"title":"Current piece","lesson_level":"original"}, false)
     scene.call("_navigate", "lesson")
-    scene.call("_on_lesson", 0, 200, PackedStringArray(), JSON.stringify({
+    scene.get("lesson_view").present_overview({
         "current_step": 2, "completed_steps": 0, "total_steps": 4, "steps": [
             {"number": 1, "exercise": 1, "hand": "right", "level": "skeleton", "first_bar": 1, "last_bar": 2},
             {"number": 2, "exercise": 2, "hand": "right", "level": "original", "first_bar": 3, "last_bar": 4},
             {"number": 3, "exercise": 1, "hand": "right", "level": "outline", "first_bar": 1, "last_bar": 2},
             {"number": 4, "exercise": 2, "hand": "left", "level": "skeleton", "first_bar": 3, "last_bar": 4}]
-        }).to_utf8_buffer())
+        })
     await process_frame
-    var levels: Dictionary = scene.get("lesson_stage_labels")
+    var levels: Dictionary = scene.get("lesson_view").stage_labels
     _check(levels["original"].is_visible_in_tree() and levels["original"].text == "1. Original"
         and not levels["skeleton"].visible and not levels["outline"].visible,
         "Lesson stages must show only the current exercise/hand's available Original as stage 1")

@@ -392,3 +392,13 @@ first-party architectural monoliths.
   root: a new failing mutation test reproduced it, forwarding the root fixed it.
   Updated hash doubles to the actual signature; fresh parent 74 component tests
   pass. No retained captures or corpus were changed.
+
+- Lesson owns path widgets, activity/hand choices and captured reset confirmation;
+  PracticeStepSelector owns entries and numeric intent. LessonSession owns
+  overview identity, generation, coalescing and bounded retry. Main reduced
+  2865→2493 lines, widget aliases removed. New RED→GREEN cases fix same-song
+  retry after 503 and a warm-up item overwriting the Listen caption. Owner 63
+  tests passed with known Practice caption-bounds deselected; parent and
+  independent review each passed 11 contracts with no new findings.
+- Independent follow-up on alternate-root hash/parse gate: 46 passed, no
+  findings; exit 9, zero-exit diagnostic rejection and timeout 124 confirmed.

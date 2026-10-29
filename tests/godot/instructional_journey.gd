@@ -189,8 +189,8 @@ func finish_earned_modes() -> void:
     await capture("29-earned-original-listen")
     await wait_for(func(): return str(app.last_state.get("mode","")) == "listen" and phase() == "ready","earned original example finishes naturally")
     check(int(app.last_state.mastered) == 1 and int(app.last_state.streak) == 0,"Example adds no original-stage mastery")
-    app.mode_choice.select(2)
-    app.mode_choice.item_selected.emit(2)
+    app.lesson_view.mode_choice.select(2)
+    app.lesson_view.mode_choice.item_selected.emit(2)
     await wait_for(func(): return score_ready() and str(app.last_state.get("mode","")) == "perform" \
         and phase() == "count_in" and note_in_view(0),"same original variant enters Perform with its first source note in view")
     await capture("30-earned-original-perform-count-in")
@@ -203,7 +203,7 @@ func finish_earned_modes() -> void:
     check(int(app.last_state.mastered) == 1 and int(app.last_state.streak) == 0,"All-missed original Perform adds no mastery")
     await capture("33-earned-original-performance-review")
     press("Path")
-    await wait_for(func(): return app.current_screen == "lesson" and not app.lesson_pending,"saved source trouble appears in lesson path")
+    await wait_for(func(): return app.current_screen == "lesson" and not app.lesson_session.pending,"saved source trouble appears in lesson path")
     var revisit: Button = null
     for button in app.find_children("*","Button",true,false):
         if button.is_visible_in_tree() and not button.disabled and button.text.begins_with("Revisit bars"):
@@ -285,7 +285,7 @@ func run() -> void:
         "prepared passage enters its initial count-in")
     press("Path")
     await wait_for(func(): return app.current_screen == "lesson" and phase() == "paused" \
-        and not app.lesson_pending and not app.action_pending,
+        and not app.lesson_session.pending and not app.action_pending,
         "Path pauses the initial count-in before assessed playing")
     press("Advanced practice controls")
     await wait_for(func(): return phase() == "paused" and app.pause_sheet.visible \
@@ -365,13 +365,13 @@ func run() -> void:
     await capture("28-next-original-variant")
     if continue_modes:
         await finish_earned_modes()
-    app.stop_button.pressed.emit()
+    app.lesson_view.stop_button.pressed.emit()
     await wait_for(func(): return not app.action_pending and not bool(app.last_state.get("running",true)), "Stop remains available after advancement")
     for child in app.get_children():
         if child is Timer:
             child.stop()
     await wait_for(func(): return not app.state_pending and not app.device_pending and not app.library_pending \
-        and not app.settings_pending and not app.lesson_pending and not app.action_pending \
+        and not app.settings_pending and not app.lesson_session.pending and not app.action_pending \
         and not app.layout_pending and not app.timeline_model_pending, "drain ordinary HTTP requests before exit")
     var file := FileAccess.open(folder+"/result.json",FileAccess.WRITE)
     file.store_string(JSON.stringify({"frames":frames,"failures":failures,"renderer":DisplayServer.get_name()},"  "))
