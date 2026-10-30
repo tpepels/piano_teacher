@@ -204,6 +204,22 @@ class TempoMap:
             elapsed = end
         return self.duration_beats + (seconds-elapsed)*self.segments[-1].bpm/60.0
 
+    def bpm_at(self, beat: float) -> float:
+        for segment in self.segments:
+            if beat < segment.end_beat:
+                return segment.bpm
+        return self.segments[-1].bpm
+
+    def from_beat(self, start_beat: float) -> "TempoMap":
+        """Return a local zero-origin map for a partial retry or seek."""
+        if not 0 <= start_beat < self.duration_beats:
+            raise ValueError("Starting beat is outside tempo map")
+        remaining = tuple(
+            TempoSegment(max(0.0, segment.start_beat - start_beat),
+                         segment.end_beat - start_beat, segment.bpm)
+            for segment in self.segments if segment.end_beat > start_beat + 1e-8)
+        return TempoMap(self.name, remaining)
+
     def as_segments(self) -> tuple[dict, ...]:
         return tuple({"start_beat": s.start_beat, "end_beat": s.end_beat,
                       "bpm": s.bpm, "start_seconds": self.seconds_at(s.start_beat)}
