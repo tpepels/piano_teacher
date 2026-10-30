@@ -125,6 +125,7 @@ class LessonSnapshot(_Snapshot):
     exercise_index: int = 0
     exercise_count: int = 1
     level: str = "original"
+    exercise_strategy: str = "legacy"
     level_number: int = 1
     level_count: int = 1
     required_notes: int = 0
