@@ -92,3 +92,32 @@ dependencies. It made 660 test predictions, with mean balanced accuracy
 GitHub [verification run 41093460920](https://github.com/tpepels/piano_teacher/actions/runs/41093460920)
 passed, along with the 10 model tests. These checks do not yet establish
 MusicXML descriptor-extraction parity; that remains the next gate.
+
+## Official MusicXML descriptor oracle and source-to-model path
+
+The full upstream feature extractor has additional dependencies (including
+music21, SciPy, scikit-learn and a PyTorch fingering module imported by the
+original research source). It is run in a **separate, pinned upstream checkout**,
+not inside the application server. For the official reference score:
+
+```bash
+python -m scripts.research.verify_rubricnet_source_features \
+  --upstream /tmp/rubricnet-upstream --check-oracle
+
+python -m scripts.research.predict_rubricnet_musicxml \
+  --upstream /tmp/rubricnet-upstream \
+  --score /tmp/rubricnet-upstream/inven01.musicxml \
+  --output /tmp/invention-rubricnet.json
+```
+
+The oracle confirms every one of the **twelve** descriptors against the values
+recorded in the upstream `predict.py::check_features_extractor`. The predictor
+then applies the authentic shipped camera-ready models. It emits the source
+file SHA256, upstream commit, descriptor names and values, five complete fold
+outputs and the median class. This isolates the research code and prevents
+unvalidated MusicXML features from reaching a learner session.
+
+A separate three-minute, one-shot GitHub Actions check runs the original source
+oracle with these optional dependencies. The resulting source-to-model command
+is **not** yet an app-native difficulty strategy: packaging/porting the exact
+extractor, input-score parity and classroom/device acceptance remain open.
