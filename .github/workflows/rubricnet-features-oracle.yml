@@ -1,5 +1,5 @@
 # Explicit, hard-bounded reproduction of the upstream MusicXML feature oracle.
-# Narrow sparse-hand compatibility guard is regression-tested separately.
+# Sparse-hand refusal and multiple real beaming/chord scores are checked.
 # Never part of ordinary push CI. The original extractor is isolated under
 # a pinned source checkout, not silently injected into Piano Teacher runtime.
 name: RubricNet (upstream MusicXML descriptor oracle)
