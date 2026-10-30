@@ -134,3 +134,9 @@ No long-running full-corpus audits or background work were initiated.
   tempo conversion/grading, polyphony and protected annotations.
 - These are **new research prototypes only**. No production strategy is
   enabled or described as a faithful Coda implementation.
+
+- Strict source-grid checks now reject missing internal measure boundaries
+  rather than mislabeling sections or retiming across an unknown bar.
+- Passage splitting conservatively rejects connector links spanning a cut,
+  including slurs that began before the current selected phrase. Duplicate
+  MusicXML tie/tied declarations are treated as one connector.

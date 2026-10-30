@@ -37,7 +37,7 @@ def _is_safe_cut(matrix: MatrixScore, beat: float) -> bool:
         return False
     # Source slur/tie arcs have their own semantics. A simple passage
     # subdivision must not create two independent fragments of an arc.
-    opened: dict[tuple[int, str, str, str], float] = {}
+    opened: dict[tuple, float] = {}
     for item in matrix.notation_elements:
         if item.kind != "note":
             continue
@@ -48,21 +48,32 @@ def _is_safe_cut(matrix: MatrixScore, beat: float) -> bool:
             marks = element.findall("{*}notations/{*}"+tag)
             if tag == "tied":
                 marks += element.findall("{*}tie")
-            for mark in marks:
-                key = (item.part_index, item.voice_id or "",
-                       tag, mark.get("number", "1"))
+            # MusicXML often supplies both <tie> and <notations><tied>.
+            # They describe one link, not two independent arcs.
+            identifiers = {(mark.get("type"), mark.get("number", "1"))
+                           for mark in marks}
+            for kind, number in sorted(identifiers):
+                key: tuple = (item.part_index, item.voice_id or "", tag, number)
                 if tag == "tied":
                     pitch = element.find("{*}pitch")
                     if pitch is not None:
                         key += (ET.tostring(pitch, encoding="unicode"),)
-                if mark.get("type") == "stop":
+                if kind == "stop":
                     start = opened.pop(key, None)
-                    if start is not None and start < beat + 1e-7 <= item.onset + 1e-7:
+                    # A stop with no visible start may refer to an arc
+                    # beginning *before* this selected phrase. Fail closed
+                    # when it could cross our proposed split.
+                    if start is None:
+                        if item.onset >= beat - 1e-7:
+                            return False
+                    elif start < beat - 1e-7 and item.onset >= beat - 1e-7:
                         return False
-                if mark.get("type") == "start":
+                elif kind == "start":
                     opened[key] = item.onset
-    return not any(start < beat + 1e-7 for start in opened.values())
-
+                else:
+                    # Unknown connector types have no safe cut semantics.
+                    return False
+    return not any(start < beat - 1e-7 for start in opened.values())
 
 @dataclass(frozen=True)
 class ResearchPassage:
@@ -85,6 +96,8 @@ class ResearchPartSplitter:
         source = MatrixScore.from_phrase(
             variant.phrase, boundaries=boundaries, source_musicxml=source_musicxml)
         grid = source.boundaries
+        if len(grid) != variant.phrase.last_bar - variant.phrase.first_bar + 2:
+            raise ValueError("Incomplete source measure grid")
         intervals = [(i, min(i+self.measures_per_passage, len(grid)-1))
                      for i in range(0, len(grid)-1, self.measures_per_passage)]
         cuts = [grid[stop] for _, stop in intervals[:-1]]
@@ -125,6 +138,8 @@ class ResearchTempoShaper:
         source = plan.original.phrase
         grid = MatrixScore.from_phrase(
             source, boundaries=boundaries).boundaries
+        if len(grid) != source.last_bar - source.first_bar + 2:
+            raise ValueError("Incomplete source measure grid")
         local = tuple(value - source.start for value in grid)
         # A held source attack can legitimately extend the phrase. Tempo
         # shaping must still cover the full transformed TimingPlan.
@@ -172,6 +187,9 @@ class ResearchPolyphonicDottedRhythm:
         matrix = MatrixScore.from_phrase(
             variant.phrase, boundaries=boundaries,
             source_musicxml=source_musicxml)
+        if len(matrix.boundaries) != (variant.phrase.last_bar -
+                                     variant.phrase.first_bar + 2):
+            raise ValueError("Incomplete source measure grid")
         original = OriginalTiming().transform(variant)
         protected = _source_protection(source_musicxml)
         # Unprojected expressive notation would not survive arbitrary

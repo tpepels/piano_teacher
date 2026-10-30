@@ -123,3 +123,54 @@ def test_source_rests_block_dotted_pair_but_other_voice_is_unchanged():
         variant, boundaries=(0,4),source_musicxml=xml)
     assert not result.decisions
     assert result.timing.exercise_phrase.notes == variant.notes
+
+
+def test_split_and_tempo_refuse_missing_internal_measure_boundaries():
+    v = sample()
+    with pytest.raises(ValueError, match="Incomplete source measure grid"):
+        ResearchPartSplitter().split(v, boundaries=(0,8))
+    with pytest.raises(ValueError, match="Incomplete source measure grid"):
+        ResearchTempoShaper().generate(
+            OriginalTiming().transform(v), 60, boundaries=(0,8))
+    with pytest.raises(ValueError, match="Incomplete source measure grid"):
+        ResearchPolyphonicDottedRhythm().transform(v, boundaries=(0,8))
+
+
+def test_part_split_rejects_source_slur_spanning_measure_cut():
+    xml = """<score-partwise><part id="P">
+      <measure number="1"><note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration><voice>1</voice>
+        <notations><slur type="start" number="1"/></notations></note>
+        <forward><duration>3</duration></forward></measure>
+      <measure number="2"><note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration><voice>1</voice>
+        <notations><slur type="stop" number="1"/></notations></note>
+        <forward><duration>3</duration></forward></measure>
+    </part></score-partwise>"""
+    notes = (
+        Note(0,1,60,0,0,"right","xml-p0-m0-e0","xml-p0-s1-v1"),
+        Note(4,5,62,0,0,"right","xml-p0-m1-e0","xml-p0-s1-v1"),
+    )
+    v = ExerciseVariant("original", Phrase(1,1,2,0,8,notes),(0,1))
+    with pytest.raises(ValueError, match="crosses passage boundary"):
+        ResearchPartSplitter().split(v, boundaries=(0,4,8),source_musicxml=xml)
+
+
+def test_part_split_detects_connector_from_outside_selected_phrase():
+    xml = """<score-partwise><part id="P">
+      <measure number="1"><note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice>
+        <notations><slur type="start" number="1"/></notations></note></measure>
+      <measure number="2"><note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice></note></measure>
+      <measure number="3"><note><pitch><step>E</step><octave>4</octave></pitch>
+        <duration>4</duration><voice>1</voice>
+        <notations><slur type="stop" number="1"/></notations></note></measure>
+    </part></score-partwise>"""
+    notes = (
+        Note(4,8,62,0,0,"right","xml-p0-m1-e0","xml-p0-s1-v1"),
+        Note(8,12,64,0,0,"right","xml-p0-m2-e0","xml-p0-s1-v1"),
+    )
+    v = ExerciseVariant("original",Phrase(2,2,3,4,12,notes),(0,1))
+    with pytest.raises(ValueError, match="crosses passage boundary"):
+        ResearchPartSplitter().split(v,boundaries=(4,8,12),source_musicxml=xml)
