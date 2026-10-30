@@ -25,6 +25,9 @@ class ExerciseContext:
     hand: str
     groups: Groups = ()
     max_attacks: int = 8
+    min_onsets: int = 2
+    kind: str = "learn"
+    warmup: bool = False
 
     @property
     def source_indices(self) -> tuple[int, ...]:
@@ -227,6 +230,41 @@ class CompositeStrategy:
         return _finish(context, nested)
 
 
+@dataclass(frozen=True)
+class SourcePreservingAdapter:
+    """Enforces applicability and common learning constraints for strategies.
+
+    The application can call every strategy identically. The adapter alone
+    decides when to delegate to the original generator, and whether proposed
+    stages are suitable for the current hand and exercise kind.
+    """
+    delegate: ExerciseStrategy
+
+    @property
+    def name(self) -> str:
+        return self.delegate.name
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
+        if context.warmup or context.kind != "learn" or context.hand == "both":
+            return baseline()
+        proposed = self.delegate.generate(context, baseline)
+        if not proposed or proposed[-1].level != "original":
+            raise ValueError("Exercise strategy must finish with the original source")
+        if proposed[-1].source_indices != context.source_indices:
+            raise ValueError("Exercise strategy changed the original source")
+        complete_onsets = len({round(n.start, 6) for n in proposed[-1].notes})
+        def attacks(variant: ExerciseVariant) -> int:
+            return len({round(n.start, 6) for n in variant.notes})
+        prepared = tuple(variant for variant in proposed[:-1]
+                         if (attacks(variant) <= context.max_attacks
+                             and (complete_onsets < context.min_onsets
+                                  or attacks(variant) >= context.min_onsets)))
+        if (not prepared and context.phrase.first_bar == context.phrase.last_bar
+                and complete_onsets > context.max_attacks):
+            return baseline()
+        return prepared + proposed[-1:]
+
+
 _FACTORIES = {
     "legacy": LegacyStrategy,
     "fukuda": FukudaStrategy,
@@ -242,7 +280,7 @@ def resolve_strategy(spec: str | ExerciseStrategy | None) -> ExerciseStrategy:
         if (not isinstance(getattr(spec, "name", None), str)
                 or not callable(getattr(spec, "generate", None))):
             raise TypeError("Expected a strategy with name and generate")
-        return spec
+        return SourcePreservingAdapter(spec)
     names = spec.split("+")
     if not names or any(name not in _FACTORIES for name in names):
         raise ValueError(f"Unknown exercise strategy {spec!r}; choose from "
@@ -250,4 +288,5 @@ def resolve_strategy(spec: str | ExerciseStrategy | None) -> ExerciseStrategy:
     if len(set(names)) != len(names):
         raise ValueError("A strategy cannot be composed with itself")
     parts = tuple(_FACTORIES[name]() for name in names)
-    return parts[0] if len(parts) == 1 else CompositeStrategy(parts)
+    strategy = parts[0] if len(parts) == 1 else CompositeStrategy(parts)
+    return strategy if strategy.name == "legacy" else SourcePreservingAdapter(strategy)
