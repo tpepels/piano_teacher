@@ -39,9 +39,9 @@ def _render(piece):
 
 def test_both_tie_endpoints_retain_authored_placement_across_barline(tmp_path):
     piece = _piece(tmp_path, start_style={"placement":"above"},
-                   stop_style={"placement":"below"})
+                   stop_style={"placement":"above"})
     root, model, score = _render(piece)
-    for measure_index, expected in ((0, "above"), (1, "below")):
+    for measure_index, expected in ((0, "above"), (1, "above")):
         notes = root.findall("./part[@id='RH']/measure")[measure_index].findall("note")
         notes = [n for n in notes if n.find("pitch") is not None]
         assert len(notes) == 3
@@ -54,6 +54,15 @@ def test_both_tie_endpoints_retain_authored_placement_across_barline(tmp_path):
                for m in marks)
     assert "note:tied" not in score.unrendered_expressions
     assert len(piece.notes) == 3  # A sounded tie is one graded attack.
+
+
+def test_incompatible_authored_endpoint_placements_request_fallback(tmp_path):
+    piece = _piece(tmp_path, start_style={"placement":"above"},
+                   stop_style={"placement":"below"})
+    root, _model, score = _render(piece)
+    assert {mark.get("placement") for mark in root.findall(".//notations/tied")} == {
+        "above", "below"}
+    assert "note:tied" in score.unrendered_expressions
 
 
 def test_complex_authored_tie_style_is_preserved_but_not_claimed_native(tmp_path):

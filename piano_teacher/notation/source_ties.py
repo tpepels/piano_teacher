@@ -102,11 +102,29 @@ def project_authored_ties(source_parts: list[ET.Element],
                     for name, value in authored.attrib.items():
                         if name != "type":
                             dest.set(name, value)
-                            if name not in {"placement"}:
+                            if name != "placement" or value not in {"above", "below"}:
                                 unsupported.add("note:tied")
                     if len(authored):
                         # No native renderer for arbitrary styled tie content.
                         for child in authored:
                             dest.append(ET.fromstring(ET.tostring(child)))
                         unsupported.add("note:tied")
+
+    # Native tie contours have one side across both endpoints. A conflicting
+    # authored start/stop placement cannot be faithfully represented.
+    for segments in candidates.values():
+        active_placement = None
+        for _start, _end, rendered in sorted(segments, key=lambda item: (item[0], item[1])):
+            marks = rendered.findall("notations/tied")
+            for mark in marks:
+                if mark.get("type") == "stop":
+                    stop_placement = mark.get("placement")
+                    if (active_placement in {"above", "below"}
+                            and stop_placement in {"above", "below"}
+                            and active_placement != stop_placement):
+                        unsupported.add("note:tied")
+                    active_placement = None
+            for mark in marks:
+                if mark.get("type") == "start":
+                    active_placement = mark.get("placement")
     return unsupported
