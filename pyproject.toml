@@ -21,6 +21,7 @@ piano-teacher = "piano_teacher.server:main"
 piano_teacher = ["lesson_settings.json"]
 "piano_teacher.fingering" = ["lumikey_runtime/*.cjs", "lumikey_runtime/package*.json", "lumikey_runtime/THIRD_PARTY_NOTICES.md"]
 "piano_teacher.research" = ["models/rubricnet/fold_*.json", "models/rubricnet/THIRD_PARTY_NOTICES.md"]
+"piano_teacher.research._upstream_rubricnet" = ["LICENSE"]
 
 [tool.setuptools.packages.find]
 include = ["piano_teacher*"]
