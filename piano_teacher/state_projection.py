@@ -170,6 +170,8 @@ class TimingSnapshot(_Snapshot):
     live_marks: tuple[Mapping, ...] = ()
     feedback_unmapped: int = 0
     scoring_available: bool = False
+    tempo_segments: tuple[Mapping, ...] = ()
+    mapped_clock_beat: float | None = None
 
 
 @dataclass(frozen=True)
@@ -245,7 +247,9 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
     practice_end = min(total_beats, timing.review_end_beat) if timing.review_end_beat is not None else total_beats
     start_beat = timing.play_from_beat if timing.review_end_beat is not None else 0.0
     elapsed = timing.now-timing.run_at
-    exercise_beat = timing.play_from_beat+max(0.0, elapsed*tempo.bpm/60)
+    active_beat = (timing.mapped_clock_beat if timing.mapped_clock_beat is not None
+                   else elapsed*tempo.bpm/60)
+    exercise_beat = timing.play_from_beat+max(0.0, active_beat)
     progress = (min(1.0, max(0.0, (exercise_beat-start_beat)/max(1e-6, practice_end-start_beat)))
                 if timing.running else 0.0)
     live_errors = [mark for mark in timing.live_marks if mark.get("status") in ("missed", "wrong")]
@@ -285,7 +289,9 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "countdown": max(0, -elapsed) if timing.running else 0,
         "lead_in_bars": 1, "play_from_beat": timing.play_from_beat,
         "recovery_beat": timing.pending_rewind,
-        "clock_beat": elapsed*tempo.bpm/60 if timing.running else 0.0,
+        "clock_beat": active_beat if timing.running else 0.0,
+        "clock_elapsed_seconds": elapsed if timing.running else 0.0,
+        "tempo_segments": _payload(timing.tempo_segments),
         "visual_offset_beats": timing.visual_offset_beats,
         "visual_scroll_beat": timing.visual_motion[0], "visual_target_beat": timing.visual_motion[2],
         "visual_scroll_speed": timing.visual_motion[1], "visual_gap_beats": timing.visual_gap_beats,
@@ -296,7 +302,14 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "count_in_beats": timing.count_in_beats if timing.running else 0,
         "count_in_bar_beats": timing.count_in_bar_beats, "count_in_meter": list(timing.count_in_meter),
         "midi_notes": timing.midi_notes, "preview_only": timing.preview_only,
-        "progress": progress, "duration": (practice_end-start_beat)*60/tempo.bpm,
+        "progress": progress, "duration": (
+            sum((min(practice_end, float(segment["end_beat"])) -
+                 max(start_beat, float(segment["start_beat"]))) * 60 / float(segment["bpm"])
+                for segment in timing.tempo_segments
+                if float(segment["end_beat"]) > start_beat and
+                   float(segment["start_beat"]) < practice_end)
+            if timing.tempo_segments else
+            (practice_end-start_beat)*60/tempo.bpm),
         "beat": exercise_beat if timing.running else 0.0, "duration_beats": total_beats,
         "running": timing.running, "feedback": "Paused" if timing.paused else snapshot.feedback,
         "feedback_marks": _payload(timing.feedback_marks if feedback_phase in
