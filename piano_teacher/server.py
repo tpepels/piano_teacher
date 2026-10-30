@@ -1356,8 +1356,8 @@ class PracticeEngine:
             projection = project_assessment(
                 result, phrase, self.plan.bpm, self.engraving().layout,
                 played_from_beat=self.play_from_beat,
-                elapsed_to_beat=(lambda seconds: tempo_map.beat_at(
-                    tempo_map.seconds_at(self.play_from_beat) + seconds)
+                elapsed_to_beat=((lambda seconds: tempo_map.beat_at(
+                    tempo_map.seconds_at(self.play_from_beat) + seconds))
                     if tempo_map is not None else None))
             self.feedback_marks = projection["marks"]
             self.feedback_unmapped = projection["unmapped"]
