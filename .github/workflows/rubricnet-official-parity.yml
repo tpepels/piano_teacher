@@ -1,0 +1,56 @@
+# Explicit, one-shot, hard-bounded *trained* RubricNet acceptance.
+# Never executes on ordinary commits or the app's fast push gate.
+name: RubricNet (official five-fold numerical parity)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/rubricnet-official-parity.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  official-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install CPU-only inference requirements, bounded
+        run: |
+          timeout 100s python -m pip install -q --disable-pip-version-check \
+            'torch==2.5.1+cpu' --index-url https://download.pytorch.org/whl/cpu
+          timeout 30s python -m pip install -q --disable-pip-version-check scikit-learn
+      - name: Fetch and verify exact pinned official scaler/checkpoint blobs
+        run: |
+          timeout 45s python -m scripts.research.fetch_rubricnet_assets \
+            --destination "$RUNNER_TEMP/rubricnet-official"
+      - name: Export verified five folds and compare with original PyTorch tensors
+        run: |
+          timeout 35s python -m scripts.research.export_rubricnet \
+            --upstream "$RUNNER_TEMP/rubricnet-official" \
+            --output "$RUNNER_TEMP/rubricnet-verified" \
+            --allow-verified-upstream-pickle
+          timeout 35s python -m scripts.research.verify_rubricnet_parity \
+            --upstream "$RUNNER_TEMP/rubricnet-official" \
+            --exported "$RUNNER_TEMP/rubricnet-verified" \
+            --per-fold 20
+      - name: Publish inert, verified model parameters to acceptance logs
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+
+          folder = Path(os.environ['RUNNER_TEMP']) / 'rubricnet-verified'
+          for i in range(5):
+              raw = (folder / f'fold_{i}.json').read_bytes()
+              assert json.loads(raw)['split'] == i
+              print(f'RUBRICNET_VERIFIED_FOLD_{i}='
+                    + base64.b64encode(raw).decode('ascii'))
+          PY
