@@ -47,3 +47,19 @@ def rhythm_protected_source_ids(source_musicxml: str) -> frozenset[str]:
                         note.findall("{*}notations/{*}tuplet")):
                     protected.add(ties.get(key, sid))
     return frozenset(protected)
+
+
+def slur_endpoint_source_ids(source_musicxml: str) -> frozenset[str]:
+    """Attacks whose authored slur anchors cannot be collapsed into a chord."""
+    if not source_musicxml:
+        return frozenset()
+    source = ET.fromstring(source_musicxml)
+    protected = set()
+    for pi, part in enumerate(source.findall(".//{*}part")):
+        for mi, measure in enumerate(part.findall("{*}measure")):
+            for ordinal, node in enumerate(measure):
+                if (node.tag.rsplit("}", 1)[-1] == "note"
+                        and node.find("{*}pitch") is not None
+                        and node.findall("{*}notations/{*}slur")):
+                    protected.add(f"xml-p{pi}-m{mi}-e{ordinal}")
+    return frozenset(protected)
