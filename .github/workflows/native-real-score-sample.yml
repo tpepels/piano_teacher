@@ -1,0 +1,62 @@
+name: Small real-score rest and dense-head framebuffer sample
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/native-real-score-sample.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  two-real-scores:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PYTHONUNBUFFERED: "1"
+      PIANO_REAL_PIXEL_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax preflight
+        run: python -m compileall -q tests/test_notation_real_score_sample.py
+      - name: Install minimum screenshot dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri libgl1 libx11-6 libxcursor1 libxinerama1 libxi6 libxrandr2 unzip
+          python -m pip install -e '.[godot,test]' numpy
+          curl -fsSL --retry 2 -o /tmp/godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_linux.x86_64.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo install -m 755 /tmp/godot-bin/Godot_v4.5.1-stable_linux.x86_64 /usr/local/bin/godot
+          godot --headless --version
+      - name: Capture independent rest and dense-head samples
+        id: sample
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/real-score-sample"
+          echo "${{ github.sha }}" > "$RUNNER_TEMP/real-score-sample/revision.txt"
+          set -o pipefail
+          timeout 115s xvfb-run -a -s '-screen 0 1700x1000x24' \
+            python -m pytest -q -rx --tb=short \
+              --basetemp="$RUNNER_TEMP/real-score-sample/captures" \
+              --junitxml="$RUNNER_TEMP/real-score-sample/junit.xml" \
+              tests/test_notation_real_score_sample.py \
+            | tee "$RUNNER_TEMP/real-score-sample/pytest.txt"
+      - name: Retain actual PNG and all failing rows
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-score-rest-dense-${{ github.sha }}
+          path: ${{ runner.temp }}/real-score-sample/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Reject unverified selected symbols
+        if: steps.sample.outcome != 'success'
+        run: exit 1
