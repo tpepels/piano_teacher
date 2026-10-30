@@ -114,6 +114,7 @@ class LearnerProgress:
         return {
             "trouble_spots": self.valid_trouble_spots(plan, fingerprint=fingerprint),
             "route_version": plan.route_version,
+            "exercise_strategy": plan.exercise_strategy.name,
             "piece_fingerprint": fingerprint,
             "current_step": plan.lesson_step_number,
             "total_steps": len(plan.lesson_steps),
