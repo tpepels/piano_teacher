@@ -1,0 +1,28 @@
+# One-shot visual-asset acceptance for the user's actual Moonlight Sonata MIDI.
+# Never part of normal CI; no full corpus, physical MIDI, or long Godot audit.
+name: Moonlight (3-note triplet beam atlas)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/moonlight-beam-focused.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-beams:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install bounded SVG/notation test dependencies
+        run: |
+          timeout 40s python -m pip install -q --disable-pip-version-check \
+            mido pytest verovio cairosvg pillow
+      - name: Verify real MIDI metadata and extracted Verovio beam image
+        run: |
+          timeout 50s python -m pytest -q --tb=short \
+            tests/test_moonlight_real_midi_beams.py
