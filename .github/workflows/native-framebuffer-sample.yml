@@ -1,0 +1,69 @@
+name: Targeted native framebuffer evidence
+
+# Explicit-only after the first source-bound push. Never run the full corpus,
+# and do not slow down routine source/policy CI.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/native-framebuffer-sample.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  focused-pixels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PYTHONUNBUFFERED: "1"
+      PIANO_REAL_PIXEL_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install only native framebuffer dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri libgl1 libx11-6 libxcursor1 libxinerama1 libxi6 libxrandr2 unzip
+          python -m pip install -e '.[godot,test]' numpy
+          curl -fsSL --retry 2 -o /tmp/godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.5.1-stable/Godot_v4.5.1-stable_linux.x86_64.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo install -m 755 /tmp/godot-bin/Godot_v4.5.1-stable_linux.x86_64 /usr/local/bin/godot
+          godot --headless --version
+      - name: Fresh independent score pixels (bounded)
+        id: pixel
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/framebuffer-sample"
+          echo "${{ github.sha }}" > "$RUNNER_TEMP/framebuffer-sample/revision.txt"
+          # The Xvfb display is real native Godot output in software OpenGL.
+          # All proof functions inspect source-registered PNG ink, not painter
+          # layout telemetry. -rx reports any still-unresolved overlap cases.
+          timeout 155s xvfb-run -a -s '-screen 0 1700x1000x24' \
+            python -m pytest -q -rx --tb=short \
+              --basetemp="$RUNNER_TEMP/framebuffer-sample/captures" \
+              --junitxml="$RUNNER_TEMP/framebuffer-sample/junit.xml" \
+              'tests/test_native_voice_collisions.py::test_actual_voice_columns_have_distinct_required_shafts[three-voice-neighbors]' \
+              'tests/test_native_voice_collisions.py::test_erasing_one_voice_shaft_cannot_borrow_the_other[three-voice-neighbors]' \
+              'tests/test_native_audit_ties.py::test_real_autumn_chord_ties_attach_without_borrowing_the_flag[standard]' \
+              'tests/test_real_source_connector_overlap.py::test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownership[default]' \
+              'tests/test_real_source_connector_overlap.py::test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownership[separated]' \
+            | tee "$RUNNER_TEMP/framebuffer-sample/pytest.txt"
+          test "${PIPESTATUS[0]}" -eq 0
+      - name: Retain canonical PNGs, independent reports and JUnit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-framebuffer-${{ github.sha }}
+          path: ${{ runner.temp }}/framebuffer-sample/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Reject failing framebuffer sample
+        if: steps.pixel.outcome != 'success'
+        run: exit 1

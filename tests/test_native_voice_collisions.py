@@ -17,9 +17,14 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def collision_source(kind):
     groups=([(('C',5),('E',5)),(('C',5),('G',5))] if kind=='mixed-chords'
+            else [(('C',5),),(('D',5),),(('E',5),)] if kind=='three-voice-neighbors'
             else [(('C',5),),(('C',5),),(('G',5),)] if kind=='unrelated-third-voice'
             else [(('C',5),),(('C',5),)])
-    explicit=['up','up'] if kind=='same-direction' else ['up','down','up'][:len(groups)]
+    # The three-voice specimen deliberately has NO explicit source stems:
+    # it exercises the renderer's new default selection, not overrides.
+    explicit=([] if kind=='three-voice-neighbors' else
+              ['up','up'] if kind=='same-direction' else
+              ['up','down','up'][:len(groups])
     tree=ET.fromstring(source(groups,explicit))
     if kind in {'mixed-chords','beamed-overlap','tuplet-overlap','unrelated-third-voice'}:
         for note in tree.findall('.//note'):
@@ -63,7 +68,7 @@ def collision_source(kind):
     return ET.tostring(tree,encoding='unicode')
 
 
-@pytest.fixture(scope='module',params=['mixed-chords','same-shape-shared','same-direction','beamed-overlap','unrelated-third-voice','tuplet-overlap'])
+@pytest.fixture(scope='module',params=['mixed-chords','same-shape-shared','same-direction','beamed-overlap','unrelated-third-voice','three-voice-neighbors','tuplet-overlap'])
 def actual_collision(request,tmp_path_factory):
     binary=shutil.which('godot') or shutil.which('godot4')
     if not binary or not (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
@@ -102,10 +107,10 @@ def test_actual_voice_columns_have_distinct_required_shafts(actual_collision):
     report=verify_note_feature_pixels(xml,folder,hand='right')
     rows=[r for r in report['measured'] if r['beat']==0]
     (folder/'proof.json').write_text(json.dumps(report,indent=2))
-    assert len(rows)==(4 if kind=='mixed-chords' else 3 if kind=='unrelated-third-voice' else 2)
+    assert len(rows)==(4 if kind=='mixed-chords' else 3 if kind in {'unrelated-third-voice','three-voice-neighbors'} else 2)
     assert all(r['features']['stem']['status']=='verified' for r in rows),rows
     shafts={r['features']['stem']['evidence']['physical_shaft_id'] for r in rows}
-    assert len(shafts)==(3 if kind=='unrelated-third-voice' else 2),rows
+    assert len(shafts)==(3 if kind in {'unrelated-third-voice','three-voice-neighbors'} else 2),rows
     from piano_teacher.notation.phase3_pixels import verify_all_notehead_pixels
     pitches=verify_all_notehead_pixels(xml,folder,hand='right')
     onset=[r for r in pitches['measured'] if r['beat']==0]
