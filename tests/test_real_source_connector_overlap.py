@@ -89,10 +89,12 @@ def test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownersh
                                      constructs=("slur", "tie"))
     (folder/"overlap-proof.json").write_text(json.dumps(report, indent=2))
     assert report["coverage"]["expected"] == 4, report
-    assert report["complete"], [
+    details = [
         (row["construct"], row["source_ids"], row["status"],
          row.get("evidence", {}).get("reason"))
         for row in report["observations"]]
+    print("OVERLAP_CONNECTOR_STATUS=" + json.dumps(details))
+    assert report["complete"], json.dumps(details)
 
 
 def test_overlap_source_independent_score_retains_sound_tie_and_both_slurs(overlap_native):
