@@ -85,3 +85,34 @@ def test_moonlight_initial_practice_stage_uses_complete_triplet_groups():
     assert [[tag.text for tag in n.findall("beam")] for n in grouped] == [
         ["begin"], ["continue"], ["end"]]
     assert set(first.source_indices) <= set(variants[-1].source_indices)
+
+
+def test_actual_moonlight_verovio_beam_survives_svg_to_native_asset_pipeline():
+    verovio = __import__("pytest").importorskip("verovio")
+    __import__("pytest").importorskip("cairosvg")
+    __import__("pytest").importorskip("PIL")
+    from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
+    from piano_teacher.notation.assets.beams import (
+        expected_beam_groups, extract_beam_fragments)
+
+    piece = load_midi(SOURCE)
+    first = LearningPlan(piece).variants[0]
+    score, root = _source_xml(piece, first.phrase)
+    model = build_score_model(score, boundaries=(0., 4.))
+    ids = [e["id"] for e in model["notation_events"]
+           if e["kind"] == "note" and e["staff"] == "right"]
+    assert len(ids) == 3
+    toolkit = _create_verovio_toolkit(verovio)
+    assert toolkit.setOptions({"inputFrom": "xml", "scale": 48,
+                               "pageWidth": 900, "pageHeight": 650,
+                               "svgViewBox": True,
+                               "svgBoundingBoxes": True,
+                               "svgContentBoundingBoxes": True})
+    assert toolkit.loadData(score.musicxml)
+    svg = toolkit.renderToSVG(1)
+    key = "|".join(ids)
+    assert key in expected_beam_groups([svg], model)
+    fragments = extract_beam_fragments([svg], model)
+    assert key in fragments, "Verovio beam was not available to Godot's native atlas"
+    assert fragments[key]["note_ids"] == ids
+    assert len(fragments[key]["tip_offsets"]) == 3
