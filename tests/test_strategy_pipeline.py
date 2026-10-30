@@ -139,3 +139,34 @@ def test_assessment_policies_are_injectable_without_session_mutation():
         played=[PlayedNote(n.pitch, map_.seconds_at(n.start),
                            map_.seconds_at(n.end)) for n in source().notes],
         from_beat=0, end_beat=4, tempo=map_).clean
+
+
+def test_policy_settings_persist_without_resetting_current_practice(tmp_path):
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        engine.fingerprint = "policy-fixture"
+        engine.plan = LearningPlan(source())
+        original_plan = engine.plan
+        original_key = engine.plan.identity
+        original_bpm = engine.plan.bpm
+        returned = engine.set_preferences(
+            diagnosis_strategy="accuracy-only",
+            learner_strategy="repeat-only")
+        assert returned["diagnosis_strategy"] == "accuracy-only"
+        assert returned["learner_strategy"] == "repeat-only"
+        assert engine.practice_policy.diagnosis.name == "accuracy-only"
+        assert engine.practice_policy.learner.name == "repeat-only"
+        assert engine.plan is original_plan
+        assert engine.plan.identity == original_key
+        assert engine.plan.bpm == original_bpm
+        assert engine.mode == "practice"
+    finally:
+        engine.db.close()
+    reloaded = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        assert reloaded.practice_policy.diagnosis.name == "accuracy-only"
+        assert reloaded.practice_policy.learner.name == "repeat-only"
+        with pytest.raises(ValueError):
+            reloaded.set_preferences(diagnosis_strategy="nonexistent")
+    finally:
+        reloaded.db.close()
