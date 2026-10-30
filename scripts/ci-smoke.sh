@@ -17,4 +17,5 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_exercise_strategies.py \
   tests/test_timing_live_integration.py \
   tests/test_strategy_pipeline.py \
-  tests/test_timed_real_scores_and_recovery.py
+  tests/test_timed_real_scores_and_recovery.py \
+  tests/test_step4_algorithms.py
