@@ -1,4 +1,5 @@
 # One-shot Step 3 acceptance checks; not an always-on corpus audit.
+# Includes exact authored tuplet presentation regression and Listen PCM timing.
 name: Piano Teacher (Step 3 transformed notation)
 on:
   push:
