@@ -451,6 +451,24 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                     absolute = measure_start + float(relative)
                     if not phrase.start - 1e-7 <= absolute < phrase.end - 1e-7:
                         continue
+                    if retimed_source:
+                        # Relocate directions *anchored to a retained attack*.
+                        # Ambiguous/chord-crossing directions stay at their
+                        # authored location; never invent a mapping.
+                        candidate_beats = {
+                            bindings[targets[sid].get("id")]["source_beat"]
+                            for sid, source_at in original_onsets.items()
+                            if sid.startswith(f"xml-p{pi}-")
+                            and sid in targets and hands[sid] == hand
+                            and abs(phrase.start + source_at - absolute) < 1e-7
+                        }
+                        if len(candidate_beats) == 1:
+                            moved = phrase.start + next(iter(candidate_beats))
+                            if measure_start - 1e-7 <= moved < (
+                                    boundaries[mi + 1]
+                                    if mi + 1 < len(boundaries) else phrase.end) - 1e-7:
+                                absolute = moved
+                                relative = Fraction(str(moved - measure_start))
                     types = child.findall("direction-type")
                     if not types:
                         continue
