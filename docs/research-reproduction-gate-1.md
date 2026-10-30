@@ -204,11 +204,38 @@ integration and broad MusicXML robustness remain **unverified**.
   source bytes, isolated worker validation, settings rollback, and
   distinct trained/heuristic selection. Its tests require no optional
   scientific packages.
-- `tests/test_rubricnet_real_scores.py` checks independent two-staff
-  MusicXML fixture types in the isolated optional acceptance job;
-  the broad fixture gate remains subject to its final result.
+- `tests/test_rubricnet_real_scores.py` checks four supported two-staff
+  real MusicXML fixtures (beams, sixteenths, downward beams, and beamed
+  chords), plus two explicit negative cases whose left-hand pitch events are
+  absent. The original upstream extractor returns nonfinite descriptors for
+  those sparse scores; the isolated worker rejects them without synthesizing
+  values. A compatibility guard only affects the upstream calculator's
+  non-model `displacement_stuff` diagnostic on one-onset hands. The original
+  code remains byte-for-byte unmodified.
 
 This does not imply RubricNet learned how to select teaching strategies.
 The only learned output is **whole-score difficulty**. Using it for
 piecewise remediation is an application-designed policy, not part of
 the published model or a pedagogically validated intervention.
+
+### Completed offline app integration checks
+
+- [x] Source packaged in wheel: GitHub one-shot
+  [41098842399](https://github.com/tpepels/piano_teacher/actions/runs/41098842399)
+  verifies all extractor modules, five trained JSON folds, isolated worker and
+  original MIT license are in the actual built distribution.
+- [x] Short push CI at `c10827bc`: **118 passed, 4 optional skips** in 1.73s,
+  including per-file upstream SHA provenance, trained vs heuristic profile
+  separation, class routing, safe failure/rollback and strict worker output.
+- [x] Optional real-score gate
+  [41098371123](https://github.com/tpepels/piano_teacher/actions/runs/41098371123):
+  **7 passed** in 24s. Official MusicXML reference still matches the
+  original 12-descriptor values and five class predictions [2,2,2,3,3].
+- [x] `rubricnet-trained` selectable separately from `feature-gated`, with
+  explicit optional setup and isolated offline scientific worker.
+
+**Known limitation:** RubricNet's camera-ready model was trained on whole
+piano pieces with both hands; sparse/rest-only hand scores do not have all
+12 defined source features. They are rejected. The class-to-exercise routing
+is an app-specific rule, not a learned teaching policy. Accuracy on arbitrary
+user-provided MusicXML and effects on learning require further validation.
