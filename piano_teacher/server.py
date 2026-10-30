@@ -871,10 +871,7 @@ class PracticeEngine:
 
     def _seek_grid(self) -> tuple[float, ...] | None:
         if (self.plan is None or self.mode not in ("learn", "practice", "perform")
-                or not self.plan.piece.bar_boundaries
-                or "two-phase-tempo" in self.plan.active_variant.level):
-            # Partial shaped seeks would need an absolute tempo-map origin
-            # and distinct grading/recovery windows.
+                or not self.plan.piece.bar_boundaries):
             return None
         try:
             return phrase_grid(self.plan.active_phrase, self.plan.piece.bar_boundaries)
@@ -1420,7 +1417,7 @@ class PracticeEngine:
         # A clean *partial* recovery cannot confer full passage mastery.
         self._schedule_preparation(0.0, now=now,
             from_visual=self.visual_offset_beats + self.play_from_beat
-                + (now-self.run_at)*self.plan.bpm/60,
+                + self._elapsed_beat(now-self.run_at),
             reverse_seconds=self.feedback_seconds)
         self.feedback = "Selected section finished · " + result.summary
         self.next_action = "Next: play the whole passage from its beginning to earn mastery."
