@@ -448,9 +448,15 @@ class LearningPlan:
                                               original.source_indices))
         if self.tempo_strategy.name != "constant-tempo":
             # Full-note tempo shaping is a distinct graded exercise stage.
-            # An original at constant tempo remains mandatory afterwards.
+            # The optional combined stage uses the dotted score and its own
+            # variable tempo map; original constant-tempo remains mandatory.
             drills.append(ExerciseVariant(self.tempo_strategy.name,
                                           original.phrase, original.source_indices))
+            if drills and drills[0].level == self.timing_strategy.name:
+                shaped = drills[0]
+                drills.append(ExerciseVariant(
+                    self.timing_strategy.name + "+" + self.tempo_strategy.name,
+                    shaped.phrase, shaped.source_indices))
         return baseline[:-1] + tuple(drills) + (original,)
 
     def _legacy_stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
