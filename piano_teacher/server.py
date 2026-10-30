@@ -869,7 +869,10 @@ class PracticeEngine:
 
     def _seek_grid(self) -> tuple[float, ...] | None:
         if (self.plan is None or self.mode not in ("learn", "practice", "perform")
-                or not self.plan.piece.bar_boundaries):
+                or not self.plan.piece.bar_boundaries
+                or "two-phase-tempo" in self.plan.active_variant.level):
+            # Partial shaped seeks would need an absolute tempo-map origin
+            # and distinct grading/recovery windows.
             return None
         try:
             return phrase_grid(self.plan.active_phrase, self.plan.piece.bar_boundaries)
