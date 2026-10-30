@@ -943,7 +943,7 @@ class PracticeEngine:
             phrase=self.plan.active_phrase
             position = self.open_from_beat if from_beat is None else from_beat
             self.play_from_beat=max(0.0,min(float(position),phrase.end-phrase.start-1e-6))
-            if self.plan.active_variant.level == "two-phase-tempo":
+            if "two-phase-tempo" in self.plan.active_variant.level:
                 # Until partial tempo-map retries are supported, shape the
                 # whole phrase and grade the original note mapping.
                 self.play_from_beat = 0.0
