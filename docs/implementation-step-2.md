@@ -14,7 +14,7 @@ passed on the user's Arch/Godot 4.7.2 laptop at b359918.
       with per-note onset/release clock; preserve compatibility API.
 - [x] 2.4 Isolate feedback/recovery coordination and learner policy
       behind narrowly scoped injectable components or protocols.
-- [ ] 2.5 Add focused compatibility regressions, rerun brief CI, and
+- [x] 2.5 Add focused compatibility regressions, rerun brief CI, and
       report any verification gaps (especially real Godot and physical MIDI).
 
 ## Invariants
@@ -29,13 +29,13 @@ passed on the user's Arch/Godot 4.7.2 laptop at b359918.
 
 ## Acceptance
 
-The architecture is complete only when the new strategy paths have runnable,
-passing regressions. GitHub fast CI is a smoke gate and does **not** substitute
-for the full laptop verification of Step 1.
+The automated Step 2 architecture gate is accepted only after focused Python,
+real MusicXML and Godot 4.7.2 tests pass. Physical MIDI and audible Listen
+synchronization remain separate hands-on production acceptance checks.
 
 ## Progress checkpoint — 2026-10-30
 
-**4 of 5 work items implemented; local acceptance pending.**
+**5 of 5 work items implemented; automated acceptance passed.**
 
 1. `exercise_pipeline.py` owns source-preserving stage composition and
    `ExerciseStage` attaches explicit transformed-rhythm / tempo-policy
@@ -54,18 +54,34 @@ for the full laptop verification of Step 1.
    tempo-policy injection, source-notation metadata, grader equivalence and
    settings persistence. The automatic fast gate now includes the strategy
    and timing tests. On commit 2a86d82d: **89 passed, 4 skipped in 1.34s**.
-   The optional MusicXML cases were skipped by minimal GitHub CI; local
-   real-score and Godot verification is still required after Step 2.
+   The regular fast gate intentionally skips optional MusicXML imports;
+   the dedicated bounded Step 2 gate verifies these with actual dependencies.
 
-### Remaining Step 2 verification / cleanup
+### Automated Step 2 gate — passed
 
-- [ ] Rerun Step 1 and new strategy tests on the laptop with the MusicXML
-      and Godot extras installed, including headless Godot parse/settings.
-- [ ] Manual exercise switch + listen + MIDI practice under transformed rhythm.
-- [ ] Review remaining oversized `PracticeEngine` ownership boundaries in
-      subsequent small extractions; it still coordinates more than one domain.
-      Avoid cosmetic file splitting solely to reduce the line count.
-- [ ] Confirm the final fast gate on the latest main commit.
+- **Full focused run:** [GitHub Actions 41074834536](https://github.com/tpepels/piano_teacher/actions/runs/41074834536), code revision `5cc7ceb7`.
+- **Real-source Python:** 48 passed in 1.55s; one Godot-dependent Python
+  test was skipped at this stage because the runner had not yet installed Godot.
+- **Godot 4.7.2 official release:** headless `main.gd` parsing succeeded;
+  shaped transport clock reported `VISUAL_TRANSPORT_CLOCK_FAILURES:0`;
+  the separately rerun settings-screen pytest passed (1 passed, 0 skipped).
+- The standard lightweight push smoke gate remains unchanged. The dedicated
+  verification job is path-triggered only when its workflow definition changes,
+  or explicitly invoked; it has a three-minute hard job limit.
+- **No failures required implementation fixes.**
+
+### Unverified / subsequent work
+
+- [ ] Manual hardware MIDI, audible Listen timing and live UI feedback during
+      transformed exercises — production checks, not covered by headless CI.
+- [ ] Further reduce unrelated `PracticeEngine` coordination responsibilities
+      in small verified ownership extractions (the class remains oversized).
+- [ ] Complete source-annotation remapping for altered slurs, ties, tuplets
+      and rests as part of Step 3; the current runtime deliberately avoids
+      reusing annotations on a changed clock.
+
+The five scoped Step 2 refactor work items have passed automated acceptance;
+this does **not** assert full SOLID compliance or production-ready timing.
 
 **Scope note:** This refactor does not implement the remaining Coda, Fukuda or
 Piano Tutor research algorithms; these are Step 4 of the system roadmap.
