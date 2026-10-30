@@ -39,8 +39,19 @@ class PolyphonicChordifier:
 
     def transform(self, variant: ExerciseVariant, *,
                   boundaries: tuple[float, ...] = (),
-                  protected_ids: frozenset[str] = frozenset()
+                  protected_ids: frozenset[str] = frozenset(),
+                  source_musicxml: str = ""
                   ) -> ChordificationResult:
+        # Never silently alter an authored beam, slur, tuplet or tie.
+        # The imported source IDs identify these exact written anchors.
+        if source_musicxml:
+            from ..notation.rhythm_safety import (
+                rhythm_protected_source_ids, slur_endpoint_source_ids,
+                beamed_source_ids)
+            protected_ids = protected_ids.union(
+                rhythm_protected_source_ids(source_musicxml),
+                slur_endpoint_source_ids(source_musicxml),
+                beamed_source_ids(source_musicxml))
         source = MatrixScore.from_phrase(variant.phrase, boundaries=boundaries)
         original = OriginalTiming().transform(variant)
         events = list(original.events)
