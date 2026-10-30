@@ -145,7 +145,10 @@ class PracticeEngine:
         self.db = self.progress.db
         self.learner_store = self.progress.learner_store
         self.learner_progress = LearnerProgress(self.learner_store)
-        self.practice_policy = PracticePolicyService(self.progress.assessment_history)
+        self.practice_policy = PracticePolicyService(
+            self.progress.assessment_history,
+            diagnosis=self.library.settings["diagnosis_strategy"],
+            learner=self.library.settings["learner_strategy"])
 
     def _midi_lost(self, reason: str = "device_disconnected") -> None:
         """Cancel session state after detachment and before closing the input."""
@@ -220,6 +223,11 @@ class PracticeEngine:
             old_strategy = tuple(self.library.settings[key] for key in
                                  ("exercise_strategy", "timing_strategy", "tempo_strategy"))
             updated = self.library.update(**changes)
+            if {"diagnosis_strategy", "learner_strategy"} & changes.keys():
+                self.practice_policy = PracticePolicyService(
+                    self.progress.assessment_history,
+                    diagnosis=self.library.settings["diagnosis_strategy"],
+                    learner=self.library.settings["learner_strategy"])
             if before != self.library.settings['music_dir']:
                 self.library_health.reset()
             if (old_strategy != tuple(self.library.settings[key] for key in
