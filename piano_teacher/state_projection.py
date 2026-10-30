@@ -126,6 +126,8 @@ class LessonSnapshot(_Snapshot):
     exercise_count: int = 1
     level: str = "original"
     exercise_strategy: str = "legacy"
+    timing_strategy: str = "original-timing"
+    tempo_strategy: str = "constant-tempo"
     level_number: int = 1
     level_count: int = 1
     required_notes: int = 0
@@ -263,6 +265,7 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
             exercise_beat if timing.running else timing.play_from_beat, lesson.first_bar),
         "exercise": lesson.exercise_index+1, "exercise_count": lesson.exercise_count,
         "lesson_level": lesson.level, "exercise_strategy": lesson.exercise_strategy,
+        "timing_strategy": lesson.timing_strategy, "tempo_strategy": lesson.tempo_strategy,
         "lesson_level_number": lesson.level_number,
         "lesson_level_count": lesson.level_count, "required_notes": lesson.required_notes,
         "warmup": lesson.warmup, "piece_last_bar": lesson.piece_last_bar,
