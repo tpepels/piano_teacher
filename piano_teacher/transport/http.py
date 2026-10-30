@@ -43,6 +43,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200,self.engine.lesson_overview())
             elif route=="/settings":
                 self._json(200,self.engine.preferences())
+            elif route=="/exercise/diagnostics":
+                self._json(200,self.engine.exercise_diagnostics())
             elif route=="/devices":
                 self._json(200,{"devices":self.engine.ports()})
             elif route=="/diagnostics/hardware":
