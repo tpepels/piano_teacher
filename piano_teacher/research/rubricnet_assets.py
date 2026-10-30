@@ -27,3 +27,12 @@ BASIC_FEATURES = (
     "lh_displacement_rate", "lh_pitch_entropy", "rh_pitch_entropy",
 )
 CHIU_FEATURES = BASIC_FEATURES[2:]
+
+# Pinned evaluation corpus and held-out identifiers. Never evaluate training
+# examples as held-out samples. These are official upstream Git blob SHA-1s.
+OFFICIAL_EVALUATION = {
+    "features/cipi-features-ISMIR24.json":
+        "c6e19f674c122032a85eb3597f685d5",
+    "rubricnet/cipi_splits.json":
+        "015239412e5a497806e2dfaf559f78c41fbf0a1a",
+}
