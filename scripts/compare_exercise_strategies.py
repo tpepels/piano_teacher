@@ -14,13 +14,18 @@ from pathlib import Path
 
 from piano_teacher.importing.pieces import import_piece
 from piano_teacher.learning import LearningPlan
+from piano_teacher.exercise_contracts import resolve_timing_strategy, resolve_tempo_strategy
 
 
 DEFAULT_STRATEGIES = "legacy,fukuda,coda-part,feature-gated,fukuda+coda-part"
 
 
-def compare(path: Path, strategies: tuple[str, ...]) -> dict:
+def compare(path: Path, strategies: tuple[str, ...], *,
+            timing_preview: str | None = None,
+            tempo_preview: str = "constant-tempo") -> dict:
     piece, _ = import_piece(path)
+    timing_strategy = resolve_timing_strategy(timing_preview) if timing_preview else None
+    tempo_strategy = resolve_tempo_strategy(tempo_preview) if timing_strategy else None
     results = {}
     for spec in strategies:
         plan = LearningPlan(piece, exercise_strategy=spec)
@@ -29,7 +34,7 @@ def compare(path: Path, strategies: tuple[str, ...]) -> dict:
             exercise = plan.exercises[step.exercise_index]
             variant = next(v for v in plan._stage_variants(exercise, step.hand)
                            if v.level == step.level)
-            steps.append({
+            detail = {
                 "kind": step.kind, "hand": step.hand, "level": step.level,
                 "bars": [step.first_bar, step.last_bar],
                 "key": step.key,
@@ -39,7 +44,27 @@ def compare(path: Path, strategies: tuple[str, ...]) -> dict:
                 "notes": [{"beat": n.start, "duration": n.end - n.start,
                            "pitch": n.pitch, "hand": n.hand}
                           for n in variant.notes],
-            })
+            }
+            if timing_strategy is not None and step.kind == "learn":
+                transformed = timing_strategy.transform(variant)
+                tempo_map = tempo_strategy.generate(transformed, piece.bpm)
+                detail["timing_preview"] = {
+                    "strategy": transformed.name, "tempo_strategy": tempo_map.name,
+                    "exercise_beats": transformed.duration_beats,
+                    "seconds": tempo_map.seconds_at(transformed.duration_beats),
+                    "events": [{
+                        "source_index": event.source_index,
+                        "source_start": event.source_start,
+                        "source_end": event.source_end,
+                        "exercise_start": event.exercise_start,
+                        "exercise_end": event.exercise_end,
+                    } for event in transformed.events],
+                    "tempo_segments": [{
+                        "start_beat": segment.start_beat,
+                        "end_beat": segment.end_beat, "bpm": segment.bpm,
+                    } for segment in tempo_map.segments],
+                }
+            steps.append(detail)
         results[spec] = {
             "steps": steps,
             "step_count": len(steps),
@@ -58,12 +83,17 @@ def main() -> None:
     parser.add_argument("--strategies", default=DEFAULT_STRATEGIES,
                         help="Comma-separated strategy names and + compositions")
     parser.add_argument("--json", action="store_true", help="Full source-aligned JSON report")
+    parser.add_argument("--timing-preview", default=None,
+                        help="Offline timing adapter: original-timing, dotted-long-short, dotted-short-long")
+    parser.add_argument("--tempo-preview", default="constant-tempo",
+                        help="Offline tempo adapter: constant-tempo or two-phase-tempo")
     parser.add_argument("--limit", type=int, default=35, help="Max stages printed per strategy")
     args = parser.parse_args()
     specs = tuple(s.strip() for s in args.strategies.split(","))
     if not specs or any(not s for s in specs):
         parser.error("--strategies must have nonempty entries")
-    report = compare(args.piece, specs)
+    report = compare(args.piece, specs, timing_preview=args.timing_preview,
+                     tempo_preview=args.tempo_preview)
     if args.json:
         print(json.dumps(report, indent=2))
         return
