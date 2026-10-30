@@ -41,3 +41,26 @@ jobs:
         run: |
           timeout 40s python -m scripts.research.verify_rubricnet_source_features \
             --upstream "$RUNNER_TEMP/rubricnet-upstream" --check-oracle
+      - name: Evaluate official Bach MusicXML through source extractor and real folds
+        run: |
+          timeout 40s python -m scripts.research.predict_rubricnet_musicxml \
+            --upstream "$RUNNER_TEMP/rubricnet-upstream" \
+            --score "$RUNNER_TEMP/rubricnet-upstream/inven01.musicxml" \
+            --output "$RUNNER_TEMP/musicxml-prediction.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          data = json.loads((Path(os.environ['RUNNER_TEMP']) /
+                             'musicxml-prediction.json').read_text())
+          assert data['schema'] == 'rubricnet-score-inference-v1'
+          assert len(data['descriptors']) == 12
+          assert len(data['folds']) == 5
+          assert len(data['source_musicxml_sha256']) == 64
+          assert all(len(fold['ordinal_probabilities']) == 9
+                     and len(fold['descriptor_scores']) == 12
+                     for fold in data['folds'])
+          print('REAL_MUSICXML_TRAINED_RUBRICNET_CLASSES:',
+                [fold['difficulty_class'] for fold in data['folds']])
+          PY
+
