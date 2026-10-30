@@ -16,6 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 
 from .learning import LearningPlan
+from .exercise_strategies import resolve_strategy
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection, validate_png_width
 from .application.midi_connection import MidiConnection, MidiNotice
 from .application.listen_session import ListenSelection, ListenSession
@@ -224,6 +225,11 @@ class PracticeEngine:
 
     def set_preferences(self, **changes) -> dict:
         with self.lock:
+            # Validate optional, trained source extraction *before* mutating
+            # persistent settings, stopping transport or resetting progress.
+            if (changes.get("exercise_strategy") == "rubricnet-trained"
+                    and self.plan is not None):
+                resolve_strategy("rubricnet-trained", piece=self.plan.piece)
             before = self.library.settings['music_dir']
             old_strategy = tuple(self.library.settings[key] for key in
                                  ("exercise_strategy", "timing_strategy", "tempo_strategy"))
