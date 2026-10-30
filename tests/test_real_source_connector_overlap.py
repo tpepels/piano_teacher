@@ -48,19 +48,29 @@ def overlap_native(tmp_path_factory, request):
         upper[3].find("notations/slur[@number='1']").set("placement", "below")
         upper[1].find("notations/slur[@number='2']").set("placement", "above")
         later[1].find("notations/slur[@number='2']").set("placement", "above")
-    # The F4 at the end of measure 1 sustains into measure 2. MusicXML
-    # importer must merge its sounding note while preserving two written
-    # tie endpoints underneath the crossing slur.
-    later[0].find("pitch/step").text = "F"
-    ET.SubElement(upper[3], "tie", type="start")
-    ET.SubElement(upper[3].find("notations"), "tied", type="start")
-    ET.SubElement(later[0], "tie", type="stop")
-    _mark(later[0], "stop")
-    ET.SubElement(later[0].find("notations"), "tied", type="stop")
-    # The other staff may legitimately reuse slur number 1 independently.
+    # Keep the exact crossing RH slurs in both cases. The aggressive
+    # default also ties their shared endpoint, while the separated case
+    # uses the same barline-tie rhythm in the other hand. This distinguishes
+    # a missing slur from contour interference at one notehead.
     lower = lh.find("measure").findall("note")
+    lower_later = lh.findall("measure")[1].findall("note")
     _mark(lower[0], "start", slur=1)
-    _mark(lower[3], "stop", slur=1)
+    if request.param == "default":
+        later[0].find("pitch/step").text = "F"
+        ET.SubElement(upper[3], "tie", type="start")
+        ET.SubElement(upper[3].find("notations"), "tied", type="start")
+        ET.SubElement(later[0], "tie", type="stop")
+        _mark(later[0], "stop")
+        ET.SubElement(later[0].find("notations"), "tied", type="stop")
+        _mark(lower[3], "stop", slur=1)
+    else:
+        _mark(lower[2], "stop", slur=1)
+        ET.SubElement(lower[3], "tie", type="start")
+        _mark(lower[3], "start")
+        ET.SubElement(lower[3].find("notations"), "tied", type="start")
+        ET.SubElement(lower_later[0], "tie", type="stop")
+        _mark(lower_later[0], "stop")
+        ET.SubElement(lower_later[0].find("notations"), "tied", type="stop")
     xml_file = folder/"source.musicxml"
     xml_file.write_text(ET.tostring(source.getroot(), encoding="unicode"))
     payload, _ = fixture(AuditCase(
@@ -69,7 +79,7 @@ def overlap_native(tmp_path_factory, request):
     assert payload["assets"]["native_slurs_complete"]
     assert {tuple(pair) for pair in payload["assets"]["native_required_slur_pairs"]} == (
         set(slur_pairs_from_xml(payload["xml"])))
-    payload["sample_beats"] = [0.0, 1.0, 3.0, 4.0, 5.0]
+    payload["sample_beats"] = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
     payload_path = folder/"fixture.json"
     payload_path.write_text(json.dumps(payload))
     command = [*_godot(), "--path", str(ROOT/"godot"),
@@ -112,13 +122,15 @@ def test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownersh
 
 
 def test_overlap_source_independent_score_retains_sound_tie_and_both_slurs(overlap_native):
-    _case, xml, folder = overlap_native
+    case, xml, folder = overlap_native
     assert len(slur_pairs_from_xml(xml)) == 3
     from piano_teacher.importing.musicxml import load_musicxml
     piece = load_musicxml(folder/"source.musicxml", bpm=80)
     assert len(piece.notes) == 15  # Sixteen written heads, one sustained pair.
+    tied_hand = "right" if case == "default" else "left"
+    tied_pitch = 65 if case == "default" else 48
     sustained = [note for note in piece.notes
-                 if note.hand == "right" and note.pitch == 65
+                 if note.hand == tied_hand and note.pitch == tied_pitch
                  and abs(note.start - 3) < 1e-8]
     assert len(sustained) == 1 and sustained[0].end == 5.0
     root = ET.fromstring(xml)
