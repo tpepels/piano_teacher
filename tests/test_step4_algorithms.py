@@ -138,3 +138,96 @@ def test_remediation_never_creates_unscored_mastery_and_repeat_only_stays_manual
         assert baseline._remediation_pending is None
     finally:
         baseline.db.close()
+
+
+def test_fukuda_keeps_annotated_inner_chord_pitch():
+    notes = (
+        Note(0, 1, 60, 0, 0, "right", "root", "v1"),
+        Note(0, 1, 64, 0, 0, "right", "middle", "v1"),
+        Note(0, 1, 67, 0, 0, "right", "top", "v1"),
+        Note(1, 2, 72, 0, 0, "right", "last", "v1"),
+    )
+    phrase = Phrase(1, 1, 1, 0, 4, notes)
+    groups = (("slur", (frozenset({1}), frozenset({3}))),)
+    variants = resolve_strategy("fukuda").generate(
+        ExerciseContext(phrase, "right", groups), lambda: ())
+    assert all(1 in variant.source_indices for variant in variants)
+    assert variants[-1].notes == notes
+
+
+def test_coda_chord_blocks_are_accessible_through_pipeline_and_score_model(tmp_path):
+    from piano_teacher.application.score_artifacts import ScoreArtifacts, ScoreSelection
+    from piano_teacher.preprocessing_cache import PreprocessingCache
+    notes = tuple(Note(float(i), float(i)+1, pitch, 0, 0, "right",
+                       f"chord-src-{i}", "v1")
+                  for i, pitch in enumerate((60, 64, 67, 71)))
+    phrase = Phrase(1, 1, 1, 0, 4, notes)
+    piece = Piece("Chord blocks", 80, notes, (phrase,),
+                  bar_boundaries=(0, 4))
+    plan = LearningPlan(piece, timing_strategy="coda-chord-blocks")
+    index = next(i for i, stage in enumerate(plan.stages)
+                 if stage.transformed_rhythm)
+    plan.variant_index = index
+    assert plan.active_variant.level == "coda-chord-blocks"
+    assert plan.variants[-1].level == "original"
+    assert plan.active_variant.notes[1].start == 0
+    assert plan.active_variant.notes[3].start == 2
+    artifacts = ScoreArtifacts(PreprocessingCache(tmp_path/"preprocessed"))
+    selection = ScoreSelection(piece, plan.active_phrase, "right", plan.identity,
+                               1, "test-source", transformed_rhythm=True)
+    model = artifacts.source_model(selection)
+    actual = {n["id"]: n for n in model["notes"]}
+    assert set(actual) == {n.source_id for n in notes}
+    assert actual["chord-src-1"]["onset_beats"] == 0
+    assert actual["chord-src-3"]["onset_beats"] == 2
+    assert tuple(n.start for n in piece.notes) == (0, 1, 2, 3)
+
+
+@pytest.mark.parametrize("status,action", [
+    ("early", "timing-practice"),
+    ("short", "sustain-practice"),
+])
+def test_repeated_timing_or_duration_errors_route_to_partial_nonmastery_retry(
+        tmp_path, status, action):
+    piece = source(4, two_bars=False)
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        engine.plan = LearningPlan(piece)
+        engine.fingerprint = "timing-errors"
+        identity = engine.plan.identity
+        result = Assessment(tuple(NoteAssessment(n, status if i == 1 else "correct")
+                                  for i, n in enumerate(engine.plan.active_variant.notes)), 0)
+        for attempt in range(2):
+            engine.mode = "practice"
+            engine.auto = True
+            engine.pending_result = result
+            engine._commit_pending()
+        assignment = engine._remediation_pending
+        assert assignment is not None and assignment.action == action
+        assert not assignment.guided
+        engine._start_remedial_assignment(assignment)
+        assert engine.mode == "practice"
+        assert engine.review_end_beat == 4
+        assert engine.retry_range["first_bar"] == 1
+        assert identity not in engine.plan.mastered
+        assert engine.auto is False
+        assert "cannot award mastery" in engine.next_action
+    finally:
+        engine.db.close()
+
+
+def test_manual_attempt_never_automatically_routes_a_remedial_session(tmp_path):
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        engine.plan = LearningPlan(source(4, two_bars=False))
+        engine.fingerprint = "manual"
+        result = Assessment(tuple(NoteAssessment(n, "wrong")
+                                  for n in engine.plan.active_variant.notes), 0)
+        for attempt in range(2):
+            engine.mode = "practice"
+            engine.auto = False
+            engine.pending_result = result
+            engine._commit_pending()
+        assert engine._remediation_pending is None
+    finally:
+        engine.db.close()
