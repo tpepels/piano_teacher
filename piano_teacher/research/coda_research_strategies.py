@@ -32,7 +32,7 @@ def _source_protection(xml: str) -> frozenset[str]:
 def _is_safe_cut(matrix: MatrixScore, beat: float) -> bool:
     # A sounded note held across the boundary must not disappear on the
     # subsequent passage. Tied notes have been merged by the importer.
-    if any(note.start < beat - 1e-7 and note.end > beat - 1e-7
+    if any(note.start < beat - 1e-7 and note.end > beat + 1e-7
            for note in matrix.phrase.notes):
         return False
     # Source slur/tie arcs have their own semantics. A simple passage
