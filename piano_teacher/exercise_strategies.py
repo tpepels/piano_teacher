@@ -285,6 +285,22 @@ _FACTORIES = {
 }
 
 
+# Safe to select in the application: all preserve existing notation/transport timing.
+# Experimental timing transformations use a separate contract and are not yet
+# live-selectable until rendering and MIDI transport share the same timing map.
+APP_STRATEGIES = (
+    ("legacy", "Original progression"),
+    ("fukuda", "Fukuda · chord and leap simplification"),
+    ("coda-part", "Coda · passage splitting"),
+    ("feature-gated", "Feature-guided selection"),
+    ("fukuda+coda-part", "Fukuda + Coda"),
+)
+
+
+def available_strategies() -> tuple[dict[str, str], ...]:
+    return tuple({"id": key, "label": label} for key, label in APP_STRATEGIES)
+
+
 def resolve_strategy(spec: str | ExerciseStrategy | None) -> ExerciseStrategy:
     if spec is None:
         spec = "legacy"
