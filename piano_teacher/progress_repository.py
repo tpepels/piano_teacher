@@ -70,7 +70,7 @@ class ProgressRepository:
             saved_strategy = (segments[2] if len(segments) > 2
                               and segments[2] not in ("learn", "connect", "perform", "warmup")
                               else "legacy")
-            if saved_strategy != p.exercise_strategy.name:
+            if saved_strategy != p.exercise_strategy.name and not p.warmup:
                 # Target tempo belongs to the piece, not the chosen exercise
                 # generator. Do not inherit position, BPM or clean streak.
                 if row[4] is not None:
