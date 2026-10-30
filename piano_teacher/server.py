@@ -272,7 +272,7 @@ class PracticeEngine:
 
     def _elapsed_beat(self, elapsed_seconds: float) -> float:
         tempo = self._active_tempo_map()
-        if tempo is not None:
+        if tempo is not None and elapsed_seconds >= 0:
             return tempo.beat_at(elapsed_seconds)
         return elapsed_seconds * self.plan.bpm / 60.0
 
