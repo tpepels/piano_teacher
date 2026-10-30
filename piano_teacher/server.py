@@ -22,13 +22,11 @@ from .application.listen_session import ListenSelection, ListenSession
 from .practice import Recorder, evaluate
 from .importing.pieces import import_piece
 from .rendering.legacy.engraving import EngravedScore
-from .feedback import project_assessment
 from .fingering import FingeringService
 from .library import ScoreLibrary
 from .preprocessing_cache import PreprocessingCache
 from .library_health import LibraryHealth
 from .warmups import is_warmup
-from .recovery import check_rolling_two_bar_window, check_two_bar_window
 from .application.rolling_recovery import plan_rolling_recovery
 from .music import Phrase, source_note_id
 from .notation.practice_timeline import preparation_measure_descriptor
@@ -41,6 +39,7 @@ from .state_projection import (
     project_session_state,
 )
 from .assessment_service import AssessmentService
+from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.lesson_snapshot import build_lesson_snapshot
 from .application.control_dispatch import ControlDispatcher
 from .application.practice_transitions import run_before_assessment
@@ -53,7 +52,6 @@ from .progress_repository import ProgressRepository
 from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
 from .exercise_contracts import AssessmentEvidence
-from .timed_assessment import assess_timed_window, timed_live_marks, timed_rolling_recovery
 from .practice_history import PracticePolicyService
 
 
@@ -132,6 +130,7 @@ class PracticeEngine:
         self.midi = MidiConnection(enabled=enable_midi)
         self.live_input = LiveInputView()
         self.assessment = AssessmentService()
+        self.assessment_policies = PracticeAssessmentPolicies.defaults(self.assessment)
         self.library = ScoreLibrary(config_dir=(data_dir / 'config') if data_dir is not None else None)
         self.library_health = LibraryHealth(self.library)
         data_dir = data_dir or Path(os.environ.get("XDG_DATA_HOME", str(Path.home()/".local/share"))) / "piano-teacher"
@@ -1280,17 +1279,11 @@ class PracticeEngine:
                          if unit["start_beat"] == decision.restart_beat and unit["end_beat"] == decision.end_beat), None)
             if unit is not None:
                 tempo_map = self._active_tempo_map()
-                if tempo_map is not None:
-                    assessed = assess_timed_window(
-                        phrase, self.plan.hand, tempo_map,
-                        self.recorder.presses if self.recorder else [],
-                        from_beat=self.play_from_beat,
-                        end_beat=decision.end_beat)
-                else:
-                    assessed = evaluate(Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
-                        phrase.start+self.play_from_beat, phrase.end,
-                        tuple(note for note in phrase.notes if note.start >= phrase.start+self.play_from_beat)),
-                        self.plan.hand, self.plan.bpm, self.recorder.presses if self.recorder else [])
+                assessed = self.assessment_policies.select(tempo_map).grade(
+                    phrase, hand=self.plan.hand, bpm=self.plan.bpm,
+                    played=self.recorder.presses if self.recorder else [],
+                    from_beat=self.play_from_beat, end_beat=decision.end_beat,
+                    tempo=tempo_map)
                 # Rolling detection can include the preceding idea;
                 # saved trouble describes only this canonical unit.
                 unit_errors = [entry for entry in assessed.notes
@@ -1340,26 +1333,18 @@ class PracticeEngine:
                 self._update()
             return
         tempo_map = self._active_tempo_map()
-        if tempo_map is not None:
-            result = assess_timed_window(
-                phrase, self.plan.hand, tempo_map,
-                self.recorder.presses if self.recorder else [],
-                from_beat=self.play_from_beat, end_beat=ending)
-        else:
-            result = self.assessment.assess_take(
-                phrase, hand=self.plan.hand, bpm=self.plan.bpm,
-                played=self.recorder.presses if self.recorder else [],
-                from_beat=self.play_from_beat, end_beat=ending,
-                evaluator=evaluate)
+        result = self.assessment_policies.select(tempo_map).grade(
+            phrase, hand=self.plan.hand, bpm=self.plan.bpm,
+            played=self.recorder.presses if self.recorder else [],
+            from_beat=self.play_from_beat, end_beat=ending,
+            tempo=tempo_map)
         # Keep the just-played score visible for feedback. Curriculum changes
         # are applied only after the display interval, never mid-feedback.
         try:
-            projection = project_assessment(
-                result, phrase, self.plan.bpm, self.engraving().layout,
-                played_from_beat=self.play_from_beat,
-                elapsed_to_beat=((lambda seconds: tempo_map.beat_at(
-                    tempo_map.seconds_at(self.play_from_beat) + seconds))
-                    if tempo_map is not None else None))
+            projection = self.assessment_policies.project(
+                result, phrase, bpm=self.plan.bpm,
+                layout=self.engraving().layout,
+                from_beat=self.play_from_beat, tempo=tempo_map)
             self.feedback_marks = projection["marks"]
             self.feedback_unmapped = projection["unmapped"]
         except (ValueError, RuntimeError, KeyError) as exc:
@@ -1473,26 +1458,15 @@ class PracticeEngine:
         # previews never generate failure, assessment or mastery.
         while (self.mode == "practice" and self.review_end_beat is None and not self.preview_only
                and self.next_boundary_beat and score_beat >= self.next_boundary_beat):
-            if self.is_builtin_warmup:
-                decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
-                    self.recorder.presses if self.recorder else [],
-                    from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
-                    beats_per_bar=beats_per_bar, threshold=SETTINGS.warmup_recovery_errors,
-                    window_start_beat=chunk_start_at_end(grid,self.next_boundary_beat))
-            else:
-                tempo_map = self._active_tempo_map()
-                if tempo_map is not None:
-                    decision = timed_rolling_recovery(
-                        phrase, self.plan.hand, tempo_map,
-                        self.recorder.presses if self.recorder else [],
-                        from_beat=self.play_from_beat,
-                        end_beat=self.next_boundary_beat, grid=grid,
-                        threshold=SETTINGS.recovery_errors_in_window)
-                else:
-                    decision=check_rolling_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
-                        self.recorder.presses if self.recorder else [],
-                        from_beat=self.play_from_beat, end_beat=self.next_boundary_beat, grid=grid,
-                        threshold=SETTINGS.recovery_errors_in_window)
+            tempo_map = self._active_tempo_map()
+            decision = self.assessment_policies.select(tempo_map).recover(
+                phrase, hand=self.plan.hand, bpm=self.plan.bpm,
+                played=self.recorder.presses if self.recorder else [],
+                from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
+                grid=grid,
+                threshold=(SETTINGS.warmup_recovery_errors if self.is_builtin_warmup
+                           else SETTINGS.recovery_errors_in_window),
+                warmup=self.is_builtin_warmup, tempo=tempo_map)
             if decision is not None:
                 self._apply_rolling_recovery(decision, phrase, grid, score_beat, now)
                 return
@@ -1537,22 +1511,15 @@ class PracticeEngine:
         if engraving is None:
             return []
         tempo_map = self._active_tempo_map()
-        if tempo_map is not None:
-            try:
-                return timed_live_marks(
-                    p.active_phrase, p.hand, tempo_map,
-                    self.recorder.presses if self.recorder else [],
-                    from_beat=self.play_from_beat, elapsed_seconds=elapsed_seconds,
-                    grid=phrase_grid(p.active_phrase, p.piece.bar_boundaries),
-                    layout=engraving.layout)
-            except (ValueError, RuntimeError, KeyError):
-                return []
-        return self.assessment.live_marks(
-            phrase=p.active_phrase, hand=p.hand, bpm=p.bpm,
-            played=self.recorder.presses if self.recorder else [],
-            played_from_beat=self.play_from_beat, elapsed_seconds=elapsed_seconds,
-            bar_boundaries=p.piece.bar_boundaries,
-            layout=engraving.layout, projector=project_assessment)
+        try:
+            return self.assessment_policies.select(tempo_map).live(
+                p.active_phrase, hand=p.hand, bpm=p.bpm,
+                played=self.recorder.presses if self.recorder else [],
+                from_beat=self.play_from_beat, elapsed_seconds=elapsed_seconds,
+                bar_boundaries=p.piece.bar_boundaries,
+                layout=engraving.layout, tempo=tempo_map)
+        except (ValueError, RuntimeError, KeyError):
+            return []
 
     def state(self) -> dict:
         with self.lock:
