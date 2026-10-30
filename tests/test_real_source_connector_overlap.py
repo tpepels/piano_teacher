@@ -80,6 +80,7 @@ def overlap_native(tmp_path_factory, request):
     assert {tuple(pair) for pair in payload["assets"]["native_required_slur_pairs"]} == (
         set(slur_pairs_from_xml(payload["xml"])))
     payload["sample_beats"] = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]
+    payload["slur_ablation_at"] = 2.0  # one stationary frame, not a corpus run
     payload_path = folder/"fixture.json"
     payload_path.write_text(json.dumps(payload))
     command = [*_godot(), "--path", str(ROOT/"godot"),
@@ -122,6 +123,63 @@ def test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownersh
                      "even with explicit placement and an independent LH tie: "
                      + json.dumps(details))
     assert report["complete"], json.dumps(details)
+
+
+
+def test_each_source_slur_contributes_separate_native_ink(overlap_native):
+    """Causal framebuffer check; independent curve attachment remains a separate gate.
+
+    One native screenshot is repeated, then each production slur is omitted
+    in turn. The base/repeat/restore controls rule out transport animation;
+    a missing or fully hidden slur cannot pass simply because another
+    connector's ink happens to occupy the expected area.
+    """
+    import numpy as np
+    from PIL import Image
+
+    _case, xml, folder = overlap_native
+    report = json.loads((folder / "native-overlay-report.json").read_text())
+    controls = report["slur_difference_controls"]
+    controls_at = report["slur_difference_frames"]
+    desired = {"|".join(pair) for pair in slur_pairs_from_xml(xml)}
+    assert len(desired) == 3
+    assert len(controls_at) == 1, controls_at
+    assert len(controls) == len(desired), controls
+    assert {row["key"] for row in controls} == desired, controls
+    assert len({row["key"] for row in controls}) == len(controls)
+
+    def pixels(filename):
+        with Image.open(folder / filename) as image:
+            return np.asarray(image.convert("RGB"), dtype=np.int16)
+
+    reference = controls_at[0]
+    base = pixels(reference["baseline_file"])
+    repeat = pixels(reference["repeat_file"])
+    restored = pixels(reference["restored_file"])
+    # A changed framebuffer without a missing slur is not valid evidence.
+    assert np.max(np.abs(base - repeat)) <= 2, "Native frame drift before suppression"
+    assert np.max(np.abs(base - restored)) <= 2, "Native frame changed after restoration"
+
+    masks = []
+    footprints = []
+    for row in controls:
+        assert row["baseline_file"] == reference["baseline_file"]
+        altered = pixels(row["file"])
+        assert altered.shape == base.shape
+        mask = np.max(np.abs(base - altered), axis=2) >= 20
+        ys, xs = np.nonzero(mask)
+        masks.append(mask)
+        footprints.append(dict(key=row["key"], changed_pixels=int(mask.sum()),
+                               x_span=int(xs.max() - xs.min()) if len(xs) else 0))
+    # A narrow dot or aliasing at a shared crossing is not proof of a slur.
+    # This controls causal visibility, not complete slur contour fidelity.
+    assert all(row["changed_pixels"] >= 30 and row["x_span"] >= 35
+               for row in footprints), footprints
+    for index, mask in enumerate(masks):
+        others = np.logical_or.reduce([candidate for other, candidate in enumerate(masks)
+                                       if other != index])
+        assert int(np.count_nonzero(mask & ~others)) >= 24, footprints
+
 
 
 def test_overlap_source_independent_score_retains_sound_tie_and_both_slurs(overlap_native):
