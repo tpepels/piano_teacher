@@ -53,6 +53,7 @@ jobs:
               --junitxml="$RUNNER_TEMP/framebuffer-sample/junit.xml" \
               'tests/test_native_voice_collisions.py::test_actual_voice_columns_have_distinct_required_shafts[three-voice-neighbors]' \
               'tests/test_native_voice_collisions.py::test_erasing_one_voice_shaft_cannot_borrow_the_other[three-voice-neighbors]' \
+              'tests/test_native_voice_collisions.py::test_erased_head_cannot_be_replaced_by_the_other_voice[three-voice-neighbors]' \
               'tests/test_native_audit_ties.py::test_real_autumn_chord_ties_attach_without_borrowing_the_flag[standard]' \
               'tests/test_real_source_connector_overlap.py::test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownership[default]' \
               'tests/test_real_source_connector_overlap.py::test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownership[separated]' \

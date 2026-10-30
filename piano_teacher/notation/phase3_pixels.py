@@ -171,7 +171,22 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                         for ay,a in group for by,b in group)
                     unisons=[n for y,n in pitches if n is not note and abs(y-target)<.001]
                     displaced_group = displaced_group or any(n['voice']!=note['voice'] for n in unisons)
-                    x_search=range(-32,33) if displaced_group else range(-16,17)
+                    # Three-plus source voices with adjacent head positions
+                    # can move full voice columns by multiple authentic head
+                    # widths. The old ±16-pixel central search rejected real
+                    # readable heads outside the fixed playhead. Widen only
+                    # from independently written pitch/voice facts; actual
+                    # heads must still pass unchanged Dice/family, staff-Y
+                    # and exclusive pixel-ownership thresholds.
+                    crowded_voices = {
+                        other["voice"] for other_y,other in pitches
+                        if abs(other_y-target) <= 1.05*staves[staff].gap
+                    }
+                    width = 32 if displaced_group else 16
+                    if len(crowded_voices) >= 3:
+                        width = max(width, 16 + (len(crowded_voices)-1) *
+                            math.ceil(1.25*staves[staff].gap))
+                    x_search=range(-width,width+1)
                     def family(n):
                         return n['note_type'] if n['note_type'] in ('whole','half') else 'black'
                     # Equal compatible heads may genuinely be shared. A

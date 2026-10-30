@@ -32,3 +32,22 @@ To run again, use the workflow's manual dispatch. Do **not** run 24 shards in
 normal push CI. After checking the retained JUnit and JSON, address every
 real mismatch in a focused source-specific change, retaining corrupted-image
 controls and source identities.
+
+## Current revision sample result (2026-10-30)
+
+The first complete sample at `c345a3f2` ran actual Godot rendering and
+independent source pixel checks: **2 passed, 1 failed, 2 xfailed**. The
+three-voice test confirmed **three distinct verified physical stems** but the
+pitch-only oracle did not verify all three head contours. Actual PNG shows
+three distinct noteheads spread across approximately 90 pixels; the old
+source-pitch verifier searched only ±16 pixels around the fixed playhead.
+Both source-derived crossing slur variants remain explicitly unverified or
+mismatched, while the real Autumn flagged ties passed. The original artifact
+is preserved in GitHub Actions run `41135285306`; no old counts are reused.
+
+The follow-up bounds horizontal search using the number of adjacent written
+voice groups and the independently photographed staff gap. It does **not**
+relax contour Dice, family discrimination, staff-position, pixel exclusivity,
+or mismatch/unsupported accounting. A real erased-head mutation is also
+included in the next sample. The current revision must be re-captured to
+claim any new coverage.

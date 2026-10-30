@@ -113,6 +113,7 @@ def test_actual_voice_columns_have_distinct_required_shafts(actual_collision):
     assert len(shafts)==(3 if kind in {'unrelated-third-voice','three-voice-neighbors'} else 2),rows
     from piano_teacher.notation.phase3_pixels import verify_all_notehead_pixels
     pitches=verify_all_notehead_pixels(xml,folder,hand='right')
+    (folder/'pitch-proof.json').write_text(json.dumps(pitches,indent=2))
     onset=[r for r in pitches['measured'] if r['beat']==0]
     if kind!='same-shape-shared':
         assert all(r['status']=='verified' for r in onset),onset
