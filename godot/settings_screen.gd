@@ -12,6 +12,7 @@ signal refresh_devices_requested
 signal save_folder_requested(path: String)
 signal device_selected(name: String)
 signal tempo_requested(bpm: int)
+signal strategy_requested(strategy: String)
 signal metronome_requested(enabled: bool)
 signal volume_changed(db: float)
 signal fullscreen_requested(enabled: bool)
@@ -27,6 +28,7 @@ var folder_edit: LineEdit
 var tempo_setting: SpinBox
 var apply_tempo_button: Button
 var metronome_toggle: CheckButton
+var strategy_picker: OptionButton
 var listen_volume_slider: HSlider
 var listen_volume_label: Label
 var fullscreen_toggle: CheckButton
@@ -175,6 +177,17 @@ func _ready() -> void:
     metronome_toggle.tooltip_text = "Count-in is always audible, even when metronome is off"
     metronome_toggle.toggled.connect(func(enabled: bool): metronome_requested.emit(enabled))
     practice.add_child(metronome_toggle)
+    practice.add_child(_label("Exercise generation", 14, MUTED))
+    strategy_picker = OptionButton.new()
+    strategy_picker.custom_minimum_size = Vector2(260, 40)
+    strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    strategy_picker.tooltip_text = "Select which rule-based exercise planner to compare."
+    strategy_picker.item_selected.connect(func(index: int):
+        strategy_requested.emit(str(strategy_picker.get_item_metadata(index))))
+    practice.add_child(strategy_picker)
+    practice.add_child(_label(
+        "Changing strategy stops the current take. Each strategy keeps separate mastery credit.",
+        12, MUTED))
 
     var audio := _section("Listen audio")
     var audio_panel := _card()
@@ -230,6 +243,17 @@ func present_preferences(values: Dictionary) -> void:
     folder_edit.text = str(values.get("music_dir", ""))
     present_window_mode(bool(values.get("fullscreen", true)))
     metronome_toggle.set_pressed_no_signal(bool(values.get("metronome", true)))
+    var selected_strategy := str(values.get("exercise_strategy", "legacy"))
+    strategy_picker.clear()
+    for available in values.get("available_exercise_strategies", []):
+        if not available is Dictionary:
+            continue
+        var index := strategy_picker.item_count
+        strategy_picker.add_item(str(available.get("label", available.get("id", ""))))
+        var strategy_id := str(available.get("id", "legacy"))
+        strategy_picker.set_item_metadata(index, strategy_id)
+        if strategy_id == selected_strategy:
+            strategy_picker.select(index)
 
 func begin_editing(state: Dictionary) -> void:
     tempo_setting.set_value_no_signal(float(state.get("target_bpm", 40)))
