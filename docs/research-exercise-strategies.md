@@ -111,12 +111,18 @@ window by default. Preview/listen sessions do not create evidence.
 
 ## Live timed exercises (experimental)
 
-The Settings screen now has three independent selectors under Practice tempo:
+The Settings screen now has five independent strategy selectors:
 
 - **Exercise generation:** existing note-selection and combined strategies.
 - **Rhythm exercise:** original, dotted long–short, dotted short–long.
 - **Tempo pattern:** constant, two-phase (80% for first half, target BPM for
   second half).
+- **Error assessment:** error-family diagnosis or accuracy-only baseline.
+- **Learner recommendation:** repeated-error policy or repeat-only baseline.
+
+The two advisory policy selections are persisted and apply to new diagnostic
+recommendations without resetting the current lesson, timing or progress.
+These policies do not yet automatically route the learner to a new exercise.
 
 The active learning passage receives additional selectable stages for eligible
 rhythm and tempo drills, followed by an untouched **original** stage.
