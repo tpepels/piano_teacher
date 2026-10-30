@@ -26,3 +26,18 @@ jobs:
       - name: Focused strategies, actual MusicXML, assessment and recovery
         run: |
           timeout 65s python -m pytest -q --tb=short             tests/test_exercise_contracts.py             tests/test_exercise_strategies.py             tests/test_timing_live_integration.py             tests/test_timed_real_scores_and_recovery.py             tests/test_strategy_pipeline.py             tests/test_assessment_service.py             tests/test_rolling_recovery_transition.py             tests/test_settings_screen.py
+
+      - name: Fetch Godot 4.7.2 headless runner
+        run: |
+          curl -fL --retry 2 --max-time 55 \
+            https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip \
+            -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP"
+          chmod +x "$RUNNER_TEMP/Godot_v4.7.2-stable_linux.x86_64"
+          ln -s "$RUNNER_TEMP/Godot_v4.7.2-stable_linux.x86_64" "$RUNNER_TEMP/godot"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Godot UI parse, shaped transport clock and settings screen
+        run: |
+          timeout 20s godot --headless --path godot --check-only --script res://main.gd
+          timeout 20s godot --headless --path godot --script "$PWD/tests/godot/visual_transport_clock.gd"
+          timeout 30s python -m pytest -q --tb=short tests/test_settings_screen.py
