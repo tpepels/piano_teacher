@@ -349,7 +349,8 @@ class LearningPlan:
         self.timing_strategy = resolve_timing_strategy(timing_strategy)
         self.tempo_strategy = resolve_tempo_strategy(tempo_strategy)
         self.exercise_strategy = resolve_strategy(
-            exercise_strategy if exercise_strategy is not None else "legacy")
+            exercise_strategy if exercise_strategy is not None else "legacy",
+            piece=piece)
         self.pipeline = ExercisePipeline(self.exercise_strategy, self.timing_strategy,
                                          self.tempo_strategy)
         self.warmup = warmup
