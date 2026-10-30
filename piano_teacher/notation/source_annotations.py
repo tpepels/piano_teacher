@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections import defaultdict
 from copy import deepcopy
 from fractions import Fraction
+from .source_ties import project_authored_ties
 from xml.etree import ElementTree as ET
 
 
@@ -280,6 +281,11 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                 if (mark.get("type") == role
                         and mark.get("number", "1") == key[2]):
                     annotations.append(deepcopy(mark))
+
+    # Source notes can be sound-merged across multiple written tie segments.
+    # Reattach only explicit author-supplied attributes at matching endpoints.
+    unrendered.update(project_authored_ties(
+        source_parts, output, bindings, phrase, boundaries))
 
     # A grace note's XML ordinal is not a graded attack. Project it only
     # when its immediately following scored note is in this lesson. This
