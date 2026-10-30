@@ -91,7 +91,8 @@ def verify_scroll_pixels(xml: str, folder: Path) -> dict:
 
 def verify_all_notehead_pixels(generated_xml: str, folder: Path,
                                *, hand: str = "both",
-                               tolerance_staff_steps: float = .42) -> dict:
+                               tolerance_staff_steps: float = .42,
+                               rail_clocks: tuple[float, ...] = ()) -> dict:
     """Require all active-hand written notes to match actual image-space Y.
 
     One frame per unique written onset. The image's own recovered five-line
@@ -113,6 +114,24 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
             continue
         by_clock[round(float(symbol["beat"]),8)][staff].append(symbol)
     glyphs=reference_glyphs()
+    # On dense real-score frames a long beam may obscure the thin gray
+    # rail core in one viewport quarter. Intersect ACTUAL independent
+    # framebuffers pixel-by-pixel: the darker common ink cannot invent a
+    # staff rail absent from either frame, and the strict original five-line
+    # rail detector still decides whether the evidence is sufficient.
+    # The current image supplies the head contours, never this composite.
+    shared_rails=None
+    if rail_clocks:
+        import numpy as np
+        if len(rail_clocks)<2:
+            raise ValueError("Independent staff evidence needs two distinct current frames")
+        pixels=[]
+        for at in rail_clocks:
+            with Image.open(Path(folder)/f"native-{at:.5f}.png") as frame:
+                pixels.append(np.asarray(frame.convert("RGB"),dtype=np.uint8))
+        if len({image.shape for image in pixels}) != 1:
+            raise ValueError("Staff reference frame sizes differ")
+        shared_rails=Image.fromarray(np.minimum.reduce(pixels))
     verified=0
     failures=[]
     details=[]
@@ -131,7 +150,7 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
         with Image.open(filename) as raw:
             image=raw.convert("RGB")
         try:
-            staves=detect_staff_lines(image)
+            staves=detect_staff_lines(shared_rails if shared_rails is not None else image)
         except AssertionError as exc:
             failures.append(f"{clock}: five-line staff detection failed: {exc}")
             for notes in hands.values():
@@ -269,6 +288,9 @@ def verify_all_notehead_pixels(generated_xml: str, folder: Path,
         "passed":not failures, "written_active_noteheads":total,
         "image_pitch_verified":verified,"unique_onset_frames":len(by_clock),
         "tolerance_staff_steps":tolerance_staff_steps,
+        "staff_reference":("pixelwise-minimum-of-current-frames"
+                           if shared_rails is not None else "own-current-frame"),
+        "staff_reference_clocks":list(rail_clocks),
         "failures":failures,"measured":details,
         "complete":verified==total,
         "coverage":dict(expected=total,**{status:sum(r["status"]==status for r in details)

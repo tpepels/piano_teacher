@@ -68,7 +68,8 @@ def test_fresh_real_score_framebuffer_obligations(name, tmp_path):
     assert all((folder / f"native-{beat:.5f}.png").is_file() for beat in beats)
 
     report = (verify_all_rest_pixels(xml, folder, hand="both") if construct == "rest"
-              else verify_all_notehead_pixels(xml, folder, hand="both"))
+              else verify_all_notehead_pixels(
+                  xml, folder, hand="both", rail_clocks=tuple(beats)))
     (folder / "independent-pixel-report.json").write_text(json.dumps(report, indent=2))
     measured = [row for row in report["measured"]
                 if round(float(row["beat"]), 8) in beats]
