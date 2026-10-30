@@ -54,7 +54,7 @@ def _beat_boundaries(beats: int, beat_type: int, divisions: int,
         position for position in boundaries if 0 < position < measure_ticks)}))
 
 
-def _voice_events(measure: ET.Element) -> dict[str, list[_Event]]:
+def _voice_events(measure: ET.Element, divisions: int) -> dict[str, list[_Event]]:
     lanes: dict[str, list[_Event]] = defaultdict(list)
     cursor = previous_onset = 0
     for child in measure:
@@ -147,7 +147,7 @@ def beam_midi_measure(measure: ET.Element, beats: int, beat_type: int,
             return None
         return index
 
-    for events in _voice_events(measure).values():
+    for events in _voice_events(measure, divisions).values():
         run: list[_Event] = []
         run_cell: int | None = None
         # Hidden micro-rests represent MIDI key-release articulation, not
