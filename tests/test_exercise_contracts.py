@@ -150,6 +150,28 @@ def test_live_strategy_switch_rebuilds_plan_without_transferring_mastery(tmp_pat
         engine.db.close()
 
 
+def test_switched_strategies_keep_independent_stage_bpm_and_positions(tmp_path):
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    try:
+        engine.fingerprint = "independent-steps"
+        engine.plan = LearningPlan(simple_piece(), exercise_strategy="legacy")
+        engine.plan.increase_tempo()
+        legacy_bpm = engine.plan.bpm
+        engine._save()
+        engine.set_preferences(exercise_strategy="fukuda")
+        engine.plan.increase_tempo()
+        engine.plan.increase_tempo()
+        fukuda_bpm = engine.plan.bpm
+        engine._save()
+        assert fukuda_bpm > legacy_bpm
+        engine.set_preferences(exercise_strategy="legacy")
+        assert engine.plan.bpm == legacy_bpm
+        engine.set_preferences(exercise_strategy="fukuda")
+        assert engine.plan.bpm == fukuda_bpm
+    finally:
+        engine.db.close()
+
+
 def test_environment_no_longer_overrides_saved_selection(tmp_path, monkeypatch):
     monkeypatch.setenv("PIANO_EXERCISE_STRATEGY", "coda-part")
     piece = simple_piece()
