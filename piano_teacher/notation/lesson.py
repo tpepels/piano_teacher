@@ -656,7 +656,8 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                        key_signatures=(), clef_changes=(),
                        default_clefs: dict | None = None,
                        barlines: tuple = (), source_musicxml: str = "",
-                       fingering_sources: frozenset[str] = frozenset()) -> LessonScore:
+                       fingering_sources: frozenset[str] = frozenset(),
+                       retimed_source: bool = False) -> LessonScore:
     """Create notation from the source measure grid, not averaged bars."""
     identities = [source_note_id(note,index) for index,note in enumerate(phrase.notes)]
     if len(set(identities)) != len(identities):
@@ -789,11 +790,15 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                             hide_performance_micro_rests=not bool(source_musicxml))
             _write_accidentals(measure,active_key.fifths if active_key else 0)
             _write_tuplet_groups(measure)
-            if not source_musicxml:
+            if not source_musicxml or retimed_source:
+                # Transformed attacks require their own beam grouping;
+                # unchanged complete authored groups may override this
+                # during source annotation projection.
                 beam_midi_measure(measure, beats, beat_type, DIVISIONS,
                                   bar_end - bar_start)
             append_barline(measure,phrase.start+grid[b+1],"right")
     xml, unsupported = project_annotations(
         source_musicxml, ET.tostring(root, encoding="unicode"),
-        bindings, phrase, boundaries=boundaries, fingering_sources=fingering_sources)
+        bindings, phrase, boundaries=boundaries, fingering_sources=fingering_sources,
+        retimed_source=retimed_source)
     return LessonScore(xml, phrase, bindings, staff_clefs, unsupported)
