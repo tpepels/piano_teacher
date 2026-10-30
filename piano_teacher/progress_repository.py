@@ -49,6 +49,16 @@ class ProgressRepository:
         if p is None:
             return
         row = self.db.execute("SELECT exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind FROM sessions WHERE fingerprint=?",(fingerprint,)).fetchone()
+        # The session row is piece-wide, while mastery/tempo/history keys are
+        # strategy-specific. Never restore another strategy's session BPM
+        # or clean streak, including after changing the preference offline.
+        if row and isinstance(row[7], str) and row[7].startswith("course:"):
+            segments = row[7].split(":")
+            saved_strategy = (segments[2] if len(segments) > 2
+                              and segments[2] not in ("learn", "connect", "perform", "warmup")
+                              else "legacy")
+            if saved_strategy != p.exercise_strategy.name:
+                row = None
         legacy_exercises = None
         if row and restore_session:
             exact = next((step for step in p.lesson_steps if step.key == row[7]), None)
@@ -104,7 +114,7 @@ class ProgressRepository:
         # Preserve legacy rows, and recognize them only when the exact same
         # hand, level and source events still form an individual course stage.
         legacy_mastery = [(key, bpm) for key, bpm in p.mastered.items() if not key.startswith("course:")]
-        if legacy_mastery:
+        if legacy_mastery and restore_session and p.exercise_strategy.name == 'legacy':
             legacy_exercises = legacy_exercises or build_exercises(p.piece, consolidate=False)
             for old in legacy_exercises:
                 for hand in ("right", "left", "both"):
