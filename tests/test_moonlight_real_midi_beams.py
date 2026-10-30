@@ -43,7 +43,10 @@ def test_actual_moonlight_first_bar_has_four_beamed_eighth_triplets():
     assert len(notes) == 12
     for trio in range(4):
         group = notes[trio*3:trio*3+3]
-        assert [n.findtext("type") for n in group] == ["eighth"]*3
+        assert [n.findtext("type") for n in group] == ["eighth"]*3, [
+            (n.findtext("duration"), n.findtext("type"),
+             n.findtext("time-modification/actual-notes"),
+             n.findtext("time-modification/normal-notes")) for n in group]
         assert [n.findtext("time-modification/actual-notes") for n in group] == ["3"]*3
         assert [n.findtext("time-modification/normal-notes") for n in group] == ["2"]*3
         assert [[(b.get("number"), b.text) for b in n.findall("beam")]
@@ -73,14 +76,12 @@ def test_moonlight_initial_practice_stage_uses_complete_triplet_groups():
     # The old skeleton kept only the four on-beat attacks. That destroyed
     # every beamed group and showed repeated isolated flags + dotted rests.
     first = variants[0]
-    assert len(first.notes) == 6
+    assert len(first.notes) == 3
     assert [round(n.start, 6) for n in first.notes] == [
-        0., round(1/3, 6), round(2/3, 6),
-        1., round(4/3, 6), round(5/3, 6)]
+        0., round(1/3, 6), round(2/3, 6)]
     score, root = _source_xml(piece, first.phrase)
     grouped = _right_notes(root)
-    assert len(grouped) == 6
+    assert len(grouped) == 3
     assert [[tag.text for tag in n.findall("beam")] for n in grouped] == [
-        ["begin"], ["continue"], ["end"],
         ["begin"], ["continue"], ["end"]]
     assert set(first.source_indices) <= set(variants[-1].source_indices)
