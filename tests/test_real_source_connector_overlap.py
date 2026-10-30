@@ -96,12 +96,15 @@ def test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownersh
 
 
 def test_overlap_source_independent_score_retains_sound_tie_and_both_slurs(overlap_native):
-    xml, _ = overlap_native
-    from piano_teacher.notation.proof import read_written_score
-    written = read_written_score(xml)
+    xml, folder = overlap_native
     assert len(slur_pairs_from_xml(xml)) == 3
-    assert sum(n.get("is_attack", True) is False
-               for n in written.symbols if n.get("kind") == "note") >= 0
+    from piano_teacher.importing.musicxml import load_musicxml
+    piece = load_musicxml(folder/"source.musicxml", bpm=80)
+    assert len(piece.notes) == 15  # Sixteen written heads, one sustained pair.
+    sustained = [note for note in piece.notes
+                 if note.hand == "right" and note.pitch == 65
+                 and abs(note.start - 3) < 1e-8]
+    assert len(sustained) == 1 and sustained[0].end == 5.0
     root = ET.fromstring(xml)
     assert len(root.findall(".//notations/tied[@type='start']")) == 1
     assert len(root.findall(".//notations/tied[@type='stop']")) == 1
