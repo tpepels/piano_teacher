@@ -114,3 +114,32 @@ def test_reference_asset_manifest_and_untrusted_pickle_are_fail_closed(tmp_path)
     binary.write_bytes(raw + b"tampered")
     with pytest.raises(ValueError, match="integrity"):
         verify_git_blob(binary, sha)
+
+
+def test_bundled_authentic_folds_load_offline_and_have_provenance():
+    """Actual converted camera-ready assets, not generated fixture weights."""
+    from piano_teacher.research.rubricnet_model import RubricNetModel
+    model = RubricNetModel.bundled()
+    assert len(model.ensemble.folds) == 5
+    assert model.ensemble.folds[0].feature_names == BASIC_FEATURES
+    assert all(fold.feature_names == BASIC_FEATURES
+               for fold in model.ensemble.folds)
+    # Valid, named values are accepted; invalid descriptors never fall back to
+    # any of Piano Teacher's heuristic difficulty features.
+    inputs = {name: 1.0 for name in BASIC_FEATURES}
+    result = model.predict_descriptors(inputs)
+    assert len(result.predictions) == 5
+    assert result.source_commit == UPSTREAM_COMMIT
+    assert all(len(pred.ordinal_probabilities) == 9
+               and all(0.0 <= p <= 1.0 for p in pred.ordinal_probabilities)
+               for pred in result.predictions)
+    with pytest.raises(ValueError, match="descriptor mismatch"):
+        model.predict_descriptors({"note_count": 12})
+
+
+def test_real_fold_source_identity_is_pinned():
+    from piano_teacher.research.rubricnet_model import RubricNetModel
+    model = RubricNetModel.bundled()
+    # These authentic learned coefficients must differ between folds.
+    assert len({fold.descriptor_weights for fold in model.ensemble.folds}) == 5
+    assert len({fold.scaler_mean for fold in model.ensemble.folds}) == 5
