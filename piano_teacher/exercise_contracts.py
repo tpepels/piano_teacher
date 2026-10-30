@@ -151,6 +151,7 @@ class ChordBlockTiming:
     durations and existing chord voices are not collapsed.
     """
     name: str = "coda-chord-blocks"
+    protect_slurs: bool = True
 
     def transform(self, variant: ExerciseVariant) -> TimingPlan:
         original = OriginalTiming().transform(variant)
