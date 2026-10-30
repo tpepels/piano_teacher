@@ -12,4 +12,9 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_midi_connection.py \
   tests/test_rolling_recovery_transition.py \
   tests/test_assessment_service.py \
-  tests/test_state_projection.py
+  tests/test_state_projection.py \
+  tests/test_exercise_contracts.py \
+  tests/test_exercise_strategies.py \
+  tests/test_timing_live_integration.py \
+  tests/test_strategy_pipeline.py \
+  tests/test_timed_real_scores_and_recovery.py
