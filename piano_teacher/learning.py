@@ -410,34 +410,14 @@ class LearningPlan:
         return self._variants_cached[1]
 
     def _stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
-        # Strategy interface owns selection; legacy is the exact previous path.
-        # Warmups/bridges/final performance retain their established semantics.
-        if self.warmup or exercise.kind != "learn" or hand == "both":
-            return self._legacy_stage_variants(exercise, hand)
+        """Delegate exercise generation to a swappable research strategy."""
         groups = (self.grouping.for_phrase(exercise.phrase, hand)
                   if self.grouping is not None else ())
-        context = ExerciseContext(exercise.phrase, hand, groups,
-                                  SETTINGS.focus_max_attacks)
-        proposed = self.exercise_strategy.generate(
+        context = ExerciseContext(
+            exercise.phrase, hand, groups, SETTINGS.focus_max_attacks,
+            SETTINGS.focus_min_onsets, exercise.kind, self.warmup)
+        return self.exercise_strategy.generate(
             context, lambda: self._legacy_stage_variants(exercise, hand))
-        if not proposed or proposed[-1].level != "original":
-            raise ValueError("Exercise strategy must finish with the original source")
-        complete_onsets = len({round(n.start, 6) for n in proposed[-1].notes})
-        # Shared pedagogical/UX invariants apply to every strategy. Keep
-        # the original unbounded, but don't introduce overfull or trivial
-        # intermediate steps when enough source attacks exist to practise.
-        prepared = tuple(v for v in proposed[:-1]
-                         if (len({round(n.start, 6) for n in v.notes})
-                             <= SETTINGS.focus_max_attacks)
-                         and (complete_onsets < SETTINGS.focus_min_onsets
-                              or len({round(n.start, 6) for n in v.notes})
-                              >= SETTINGS.focus_min_onsets))
-        if (not prepared and exercise.phrase.first_bar == exercise.phrase.last_bar
-                and complete_onsets > SETTINGS.focus_max_attacks):
-            # A dense original measure needs a playable preparation even
-            # when a chosen research rule has no applicable transformation.
-            return self._legacy_stage_variants(exercise, hand)
-        return prepared + proposed[-1:]
 
     def _legacy_stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
         groups = (self.grouping.for_phrase(exercise.phrase, hand)
