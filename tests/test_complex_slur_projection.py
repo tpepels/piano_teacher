@@ -75,6 +75,12 @@ def test_simultaneous_same_number_slurs_on_two_staves_do_not_cross_pair(tmp_path
                   for n in notes for mark in n.findall("notations/slur")]
         assert actual == [(start, "start"), (stop, "stop")]
     assert len(slur_pairs_from_xml(score.musicxml)) == 2
+    from piano_teacher.musical_groups import grouping_for_piece
+    groups = [g for g in grouping_for_piece(piece).groups if g.kind == "slur"]
+    assert len(groups) == 2
+    assert sorted(g.attack_count for g in groups) == [2, 2]
+    assert {piece.notes[next(iter(g.onsets[0]))].hand for g in groups} == {
+        "left", "right"}
 
 
 def test_three_tone_chord_slur_reanchors_to_last_retained_pitch(tmp_path):

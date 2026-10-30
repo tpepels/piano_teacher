@@ -124,7 +124,11 @@ def _written_groups(piece: Piece) -> list[tuple[str, tuple[str, ...]]]:
                     open_ties[pitch_key] = source
                 elif "stop" in ties:
                     open_ties.pop(pitch_key, None)
-                timeline = voices[voice]
+                # MusicXML voice numbers may be reused on two piano
+                # staves. Keep their authored slur attack sequences apart;
+                # otherwise an interleaved foreign staff can make both
+                # phrases appear to contain notes from different hands.
+                timeline = voices[(voice, staff)]
                 timeline.append(source)
                 position = len(timeline) - 1
                 for mark in note.findall("notations/slur"):
@@ -142,7 +146,11 @@ def _written_groups(piece: Piece) -> list[tuple[str, tuple[str, ...]]]:
                                 continue
                             start_key = matches[0]
                         start = open_slurs.pop(start_key)
-                        sequences.append(("slur", tuple(timeline[start:position + 1])))
+                        if start_key[1] == staff:
+                            sequences.append(("slur", tuple(timeline[start:position + 1])))
+                        # Cross-staff source slurs still engrave authentically,
+                        # but their two staff-local practice timelines cannot
+                        # be sliced against each other without false attacks.
                 if note.find("chord") is not None:
                     continue
                 for mark in note.findall("beam"):
