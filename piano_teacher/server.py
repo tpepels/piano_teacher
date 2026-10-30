@@ -52,7 +52,7 @@ from .learner_state import guided_units, next_guided_unit, placement_candidate
 from .progress_repository import ProgressRepository
 from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
-from .exercise_contracts import AssessmentEvidence, OriginalTiming, TwoPhaseTempo
+from .exercise_contracts import AssessmentEvidence
 from .timed_assessment import assess_timed_window, timed_live_marks, timed_rolling_recovery
 from .practice_history import PracticePolicyService
 
@@ -245,18 +245,21 @@ class PracticeEngine:
                     # but carries neither its clean streak nor its stage BPM.
                     preferred_level = old.active_variant.level
                     if old.exercise.kind == "learn":
-                        preferred_levels = [
-                            self.library.settings["timing_strategy"] + "+" +
-                            self.library.settings["tempo_strategy"],
-                            self.library.settings["timing_strategy"],
-                            self.library.settings["tempo_strategy"],
-                        ]
-                        possible = {v.level for v in replacement._stage_variants(
+                        candidates = replacement._pipeline_stages(
                             replacement.exercises[
                                 min(old.index, len(replacement.exercises)-1)],
-                            old.hand)}
-                        preferred_level = next((name for name in preferred_levels
-                                                if name in possible), preferred_level)
+                            old.hand)
+                        # Prefer combined rhythm+tempo, then rhythm, then tempo.
+                        # Strategy IDs remain opaque; stage metadata drives selection.
+                        experimental = sorted(
+                            (stage for stage in candidates if
+                             stage.shaped_tempo or stage.transformed_rhythm),
+                            key=lambda stage: (
+                                stage.shaped_tempo and stage.transformed_rhythm,
+                                stage.transformed_rhythm, stage.shaped_tempo),
+                            reverse=True)
+                        if experimental:
+                            preferred_level = experimental[0].variant.level
                     replacement.restore_location(
                         kind=old.exercise.kind,
                         first_bar=old.exercise.phrase.first_bar,
@@ -279,11 +282,9 @@ class PracticeEngine:
 
     def _active_tempo_map(self):
         """The single authoritative active practice clock and grading map."""
-        if (self.plan is None or self.mode not in ("practice", "listen")
-                or "two-phase-tempo" not in self.plan.active_variant.level):
+        if self.plan is None or self.mode not in ("practice", "listen"):
             return None
-        return TwoPhaseTempo().generate(
-            OriginalTiming().transform(self.plan.active_variant), self.plan.bpm)
+        return self.plan.active_stage.tempo_map(self.plan.bpm)
 
     def _elapsed_beat(self, elapsed_seconds: float) -> float:
         tempo = self._active_tempo_map()
@@ -1677,7 +1678,8 @@ class PracticeEngine:
         p = self.plan
         return ScoreSelection(piece=p.piece, phrase=self.display_phrase(),
             hand=p.hand, stage_key=p.identity, revision=self.score_revision,
-            fingerprint=self.fingerprint)
+            fingerprint=self.fingerprint,
+            transformed_rhythm=p.active_stage.transformed_rhythm)
 
     def _source_model(self) -> dict:
         with self.lock:
