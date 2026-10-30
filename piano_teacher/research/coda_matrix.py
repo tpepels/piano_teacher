@@ -197,6 +197,15 @@ class MatrixScore:
         if self.notation_elements and authored != set(rest_ids):
             raise ValueError("Score matrix lost authored rest metadata")
         if self.original_musicxml:
+            # Repartitioning the observed inventory alone is insufficient:
+            # deleting an unvoiced dynamic/barline/note can otherwise leave
+            # the reduced part graph internally consistent. Compare against
+            # the immutable ORIGINAL source, element by element and in order.
+            expected_source = source_elements(
+                self.original_musicxml, first_bar=self.phrase.first_bar,
+                last_bar=self.phrase.last_bar, boundaries=self.boundaries)
+            if self.notation_elements != expected_source:
+                raise ValueError("Score matrix changed source notation inventory")
             rebuilt = measure_contexts(
                 self.original_musicxml, first_bar=self.phrase.first_bar,
                 last_bar=self.phrase.last_bar,

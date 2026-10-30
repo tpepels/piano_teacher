@@ -1,4 +1,5 @@
 """Real and synthetic notation-source context invariants for the Coda adapter."""
+from dataclasses import replace
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -142,3 +143,19 @@ def test_real_multi_measure_source_notation_is_not_dropped(file):
     for part in matrix.notation_parts:
         assert len(part.measures)==len(piece.bar_boundaries)-1
     matrix.verify_lossless()
+
+def test_matrix_rejects_omitted_or_rewritten_unvoiced_original_element():
+    src=Path(__file__).parent/"fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml"
+    piece=load_musicxml(src,bpm=80)
+    phrase=Phrase(1,1,len(piece.bar_boundaries)-1,
+        piece.bar_boundaries[0],piece.bar_boundaries[-1],piece.notes)
+    source=MatrixScore.from_phrase(phrase,boundaries=piece.bar_boundaries,
+                                   source_musicxml=piece.source_musicxml)
+    omitted=replace(source,notation_elements=source.notation_elements[1:])
+    with pytest.raises(ValueError,match="changed source notation inventory"):
+        omitted.verify_lossless()
+    item=source.notation_elements[-1]
+    changed=replace(item,xml=item.xml+" ")
+    rewritten=replace(source,notation_elements=(*source.notation_elements[:-1],changed))
+    with pytest.raises(ValueError,match="changed source notation inventory"):
+        rewritten.verify_lossless()
