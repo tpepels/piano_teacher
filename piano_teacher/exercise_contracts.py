@@ -355,3 +355,72 @@ class RepeatedErrorPolicy:
         actions = {"pitch": "note-isolation", "rhythm": "timing-practice",
                    "duration": "sustain-practice"}
         return PracticeRecommendation(b, actions[b], "same dominant error family in two consecutive takes")
+
+
+@dataclass(frozen=True)
+class AccuracyOnlyDiagnosis:
+    """Uninformed baseline for controlled error-diagnosis comparison."""
+    name: str = "accuracy-only"
+
+    def diagnose(self, evidence: AssessmentEvidence) -> str:
+        if not evidence.assessed or not evidence.statuses:
+            return "unassessed"
+        return "accuracy"
+
+
+@dataclass(frozen=True)
+class RepeatOnlyPolicy:
+    """Baseline policy without error-triggered intervention."""
+    name: str = "repeat-only"
+
+    def recommend(self, snapshot: LearnerSnapshot,
+                  diagnosis: AssessmentDiagnosisStrategy) -> PracticeRecommendation:
+        if snapshot.recent and snapshot.recent[-1].clean:
+            return PracticeRecommendation("none", "advance", "clean assessed take")
+        return PracticeRecommendation("accuracy", "repeat", "baseline practice policy")
+
+
+_TIMING_STRATEGIES = {
+    "original-timing": OriginalTiming,
+    "dotted-long-short": lambda: DottedPairTiming(True),
+    "dotted-short-long": lambda: DottedPairTiming(False),
+}
+_TEMPO_STRATEGIES = {
+    "constant-tempo": ConstantTempo,
+    "two-phase-tempo": TwoPhaseTempo,
+}
+_DIAGNOSIS_STRATEGIES = {
+    "error-family": ErrorFamilyDiagnosis,
+    "accuracy-only": AccuracyOnlyDiagnosis,
+}
+_LEARNER_STRATEGIES = {
+    "repeated-error": RepeatedErrorPolicy,
+    "repeat-only": RepeatOnlyPolicy,
+}
+
+
+def _resolve_strategy(spec, options: dict, method: str):
+    if isinstance(spec, str):
+        try:
+            return options[spec]()
+        except KeyError as error:
+            raise ValueError(f"Unknown strategy {spec!r}; choose from {tuple(options)}") from error
+    if not isinstance(getattr(spec, "name", None), str) or not callable(getattr(spec, method, None)):
+        raise TypeError(f"Custom strategy needs a name and {method} method")
+    return spec
+
+
+def resolve_timing_strategy(spec: str | TimingStrategy = "original-timing") -> TimingStrategy:
+    return _resolve_strategy(spec, _TIMING_STRATEGIES, "transform")
+
+
+def resolve_tempo_strategy(spec: str | TempoStrategy = "constant-tempo") -> TempoStrategy:
+    return _resolve_strategy(spec, _TEMPO_STRATEGIES, "generate")
+
+
+def resolve_diagnosis_strategy(spec: str | AssessmentDiagnosisStrategy = "error-family") -> AssessmentDiagnosisStrategy:
+    return _resolve_strategy(spec, _DIAGNOSIS_STRATEGIES, "diagnose")
+
+
+def resolve_learner_strategy(spec: str | LearnerStateStrategy = "repeated-error") -> LearnerStateStrategy:
+    return _resolve_strategy(spec, _LEARNER_STRATEGIES, "recommend")
