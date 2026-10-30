@@ -29,14 +29,18 @@ without teacher/learner evaluation.
 
 ## Selecting and comparing
 
-The app defaults to `legacy`. To try a strategy during a local practice session:
+The application defaults to `legacy`. Change the exercise strategy in **Settings → Practice tempo → Exercise generation**, without using environment variables or restarting.
 
-```bash
-PIANO_EXERCISE_STRATEGY=fukuda ./run.sh
-PIANO_EXERCISE_STRATEGY=coda-part ./run.sh
-PIANO_EXERCISE_STRATEGY=fukuda+coda-part ./run.sh
-PIANO_EXERCISE_STRATEGY=feature-gated ./run.sh
-```
+Available strategies are `legacy`, `fukuda`, `coda-part`,
+`feature-gated`, and `fukuda+coda-part`. The dropdown choices originate
+from the backend registry; the preference is persisted in local settings.
+
+Changing selection cancels the active attempt and invalidates the score.
+Every strategy maintains its own active lesson position, stage tempo, clean
+streak, mastery, and bounded assessment evidence in SQLite. A newly selected
+strategy without saved progress begins near the source bars of the previous
+selection without receiving its credit. Warm-ups and whole-piece performance
+remain intact. Strategy switches must not transfer achieved mastery.
 
 You can also inject a strategy directly into the application logic:
 
@@ -61,10 +65,83 @@ python -m pytest -q tests/test_exercise_strategies.py tests/test_exercise_genera
 Text reports list stages, hand, source bar range, note count, and attack count.
 JSON adds every retained pitch/onset/duration/source ID for independent review.
 
-Changing strategy requires restarting the backend. Legacy progress keys are
-unchanged. Nonlegacy stage keys include strategy identity to prevent earning
-mastery or transferring tempo from unrelated exercise definitions. Stage keys
-are not a measurement of pedagogical effectiveness.
+Legacy progress keys remain unchanged. Nonlegacy stage keys include strategy
+identity; the app also persists the active session separately per strategy.
+Stage keys are not a measurement of pedagogical effectiveness.
+
+The timing and adaptive-remediation contracts can be exercised independently
+of the live score:
+
+```bash
+python scripts/compare_exercise_strategies.py song.musicxml --json \
+  --timing-preview dotted-long-short --tempo-preview two-phase-tempo
+python -m pytest -q tests/test_exercise_strategies.py tests/test_exercise_contracts.py
+```
+
+`GET /exercise/diagnostics` exposes the currently selected stage's recent
+assessment category and advisory policy recommendation. It does **not**
+automatically change the learner's score, the selected exercise, or earned
+mastery.
+
+## New typed contracts and strategy registries
+
+`piano_teacher/exercise_contracts.py` defines interchangeable policies:
+
+- **TimingStrategy**: `OriginalTiming` and `DottedPairTiming` return a
+  `TimingPlan` containing exact source-index mappings and a distinct exercise
+  timeline. Dotted pairs transform only simple single-voice, nonoverlapping
+  equal-duration pairs; unsuitable material falls back to source timing.
+- **TempoStrategy**: `ConstantTempo` and `TwoPhaseTempo` produce validated,
+  contiguous `TempoMap` segments, with beat-to-second conversion.
+- **Timing-aware assessor**: `assess_timed()` grades the exercise timeline,
+  with optional tempo maps, and rebinds results to original source notes.
+- **AssessmentDiagnosisStrategy**: `ErrorFamilyDiagnosis` diagnoses pitch,
+  onset/rhythm and held-duration errors from settled take evidence;
+  `AccuracyOnlyDiagnosis` is the control.
+- **LearnerStateStrategy**: `RepeatedErrorPolicy` proposes targeted
+  remediation after two consistent error-family attempts;
+  `RepeatOnlyPolicy` is the baseline.
+
+Each has a resolver accepting a registered strategy name or an injected
+implementation. `PracticePolicyService` composes assessment and learner
+strategies and stores only fully assessed results, keyed by piece fingerprint
+and exact stage. It retains up to 64 attempts per stage and reads an eight-take
+window by default. Preview/listen sessions do not create evidence.
+
+**Integration boundary:** Retimed exercise plans and tempo shapes are
+**offline-only**. The current Godot score, transport and live note-feedback
+still assume original source beats and one current BPM. Timing-based strategies
+are intentionally excluded from the live strategy dropdown until all three
+consumers use the same transformed timeline. Enabling them sooner would display
+or grade incorrect notes.
+
+## Remaining work to complete research systems
+
+1. **Live transformed score and transport.** Teach score engraving and native
+   notation about `TimingPlan` while retaining the original source score as the
+   authoritative artifact. Make seek, count-in, scroll and Listen audio use
+   the same timing map. Ensure ties, beams, rests and fingering retain meaningful
+   notation after transformation, including across barlines.
+2. **Live timing assessment.** Route bounded retries, onset matching, release
+   grading, live feedback and error overlays through the transformed timeline.
+   Add independent source/timed mapping tests with MIDI fixtures. Only full
+   original performance should grant original mastery.
+3. **Coda techniques.** Complete chordification and general phrase-level
+   part splitting; add context-sensitive dotted rhythm and speed shaping with
+   eligibility rules. Current Coda adaptations are deliberately narrower than
+   the thesis system.
+4. **Piano Tutor remediation.** Feed the history diagnosis into a tested
+   lesson-routing policy, support targeted generated recovery exercises, and
+   handle same-pitch timing versus wrong-pitch evidence. The current policy
+   is advisory, and existing five-error recovery remains unchanged.
+5. **Fukuda and difficulty models.** Add richer difficulty analysis, hand
+   biomechanics/fingering costs, phrase semantics, and optionally RubricNet
+   model integration; retain interpretable feature-only baselines. The current
+   paper-inspired variants are partial adaptations.
+6. **Pedagogical validation.** Blind teacher ratings of produced exercises,
+   plus controlled learner studies on original-source improvement at matched
+   practice time. Existing focused tests establish software invariants, not
+   educational superiority.
 
 ## Grounding / limitations
 
