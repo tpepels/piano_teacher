@@ -56,9 +56,39 @@ algorithm requires the original MusicXML feature extractor and independent
 held-out dataset validation as well.** The current feature-gated app strategy
 is still heuristic and must not be presented as trained RubricNet.
 
-A passing test in `tests/test_rubricnet_reproduction.py` is a synthetic
-numerical-contract test and does not substitute for the above parity run.
+The official reference checkpoint-parity run **passed** on GitHub Actions:
+[run 41092489234](https://github.com/tpepels/piano_teacher/actions/runs/41092489234).
+It checked 100 vectors across 5 folds with maximum probability error 1.68e-7.
+The 5 verified parameter JSON files and upstream MIT license are now included
+under `piano_teacher/research/models/rubricnet/`, allowing offline inference:
+
+```python
+from piano_teacher.research.rubricnet_model import RubricNetModel
+model = RubricNetModel.bundled()
+# descriptors must contain the EXACT 12 original upstream feature names.
+result = model.predict_descriptors(descriptors)
+classes = result.all_classes
+```
+
+A passing test in `tests/test_rubricnet_reproduction.py` additionally
+exercises these **real bundled** model assets and strict descriptor contracts.
 
 Next: reproduce `predict.py::check_features_extractor` with
 `inven01.musicxml`, then validate the public CIPI split labels and
 reported metrics. Keep optional heavy dependencies off routine push CI.
+
+## Held-out evaluation against original CIPI data
+
+```bash
+python -m scripts.research.validate_rubricnet_cipi \
+    --download --check-published
+```
+
+This explicitly downloads two official **SHA-checked** JSON files from the
+pinned commit and evaluates each camera-ready fold only on its matching test
+split, using real precomputed symbolic descriptors. It requires no optional ML
+dependencies. It made 660 test predictions, with mean balanced accuracy
+41.3453% and mean macro MSE 1.7157 (official published ~41.4% and 1.7).
+GitHub [verification run 41093460920](https://github.com/tpepels/piano_teacher/actions/runs/41093460920)
+passed, along with the 10 model tests. These checks do not yet establish
+MusicXML descriptor-extraction parity; that remains the next gate.
