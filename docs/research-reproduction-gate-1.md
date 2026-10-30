@@ -53,7 +53,8 @@ in the above order, matching `predict.py`. This was verified by inspecting
 all five official scaler blobs without executing pickle. The training source
 also exposes a 10-feature Chiu configuration, but these camera-ready scalers
 use 12. Runtime input validation still rejects missing, extra or reordered
-features; upstream numerical prediction parity has **not** been tested yet.
+features; upstream numerical prediction parity **passed** (100 vectors,
+5 folds; run 41092489234).
 Feature scaling remains separate for each fold.
 
 **Upstream predict.py defects:** `~/PycharmProjects/Rubricnet/...`
@@ -74,18 +75,23 @@ numbers; pin the evaluation version and metric definition.
 - [x] Resolved camera-ready input ordering by direct inspection of all five
       official scaler files; documented 10- versus 12-feature training variants
       and the opt-in verified-pickle conversion requirement.
-- [ ] Run `scripts/research/export_rubricnet.py` on the pinned official
-      checkout: it verifies all ten Git blob hashes, safely loads checkpoint
-      weights, and after explicit opt-in deserializes only the authenticated
-      sklearn scalers. This exports five inert JSON fold files. The tool and
-      digests are committed, but real binary conversion has not run yet.
-- [ ] Run upstream and local CPU inference side-by-side on equal prepared
-      vectors: decoded classes, 12 descriptor scores, aggregate regression
-      and nine ordinal probabilities must match.
+- [x] Exported all five official trained checkpoints/scalers after checking
+      all ten Git blob hashes. Five inert JSON models and the upstream MIT
+      notice are bundled offline in `piano_teacher/research/models/rubricnet`.
+- [x] Reference PyTorch vs independent CPU implementation: 100 checked
+      vectors across the five real official folds. Maximum descriptor error
+      1.9013e-7, maximum ordinal-probability error 1.6837e-7.
+      Action run [41092489234](https://github.com/tpepels/piano_teacher/actions/runs/41092489234).
 - [ ] Implement/exercise the **actual upstream** 12 feature extractors on real
       MusicXML. Upstream `inven01.musicxml` and `predict.py::check_features_extractor`
       supply a reference descriptor fixture.
-- [ ] Verify dataset splits, labels, per-fold scaler input order and accuracy.
+- [x] Verified all 660 official CIPI held-out predictions using five pinned
+      split memberships and the published descriptor file (no overlap with
+      training/validation IDs). Mean balanced accuracy = 0.4134530732;
+      mean macro-MSE = 1.7156957494. The published arXiv figures are 41.4%
+      and approximately 1.7. Independent one-shot run
+      [41093460920](https://github.com/tpepels/piano_teacher/actions/runs/41093460920)
+      passed, including 10 inference/provenance tests.
 - [ ] Only then make the trained strategy selectable in the application.
 
 ## Source-to-code acceptance process
@@ -120,17 +126,34 @@ standard installation or short push CI.
 
 ### Next precise gate
 
-The explicit `scripts/research/verify_rubricnet_parity.py` now compares
-20 deterministic vectors per fold (100 total) against PyTorch inference on the
-authenticated camera-ready weights. See `scripts/research/README.md` for
-pinned checkout, export, and parity commands. **It has not yet been run against
-the real trained assets.**
+The authentic five-fold weights are packaged, reference-checked and validated
+against the official 660 held-out CIPI test predictions. **The trained
+RubricNet mathematical model is reproduced.** The remaining obstacle to
+end-to-end MusicXML inference is the exact upstream 12-descriptor extractor.
 
-1. Export authenticated real camera-ready files to five inert JSON folds.
-2. Compare the numerical predictions to upstream PyTorch on a shared set of
-   at least 20 deterministic input vectors (including pathological boundaries).
-3. Run the official `inven01.musicxml` descriptor oracle through the original
-   extractor, compare all 12 raw descriptors, and evaluate held-out examples
-   against the upstream split IDs/labels.
-4. Only after parity, expose `rubricnet-trained` in the app; do **not**
-   relabel `feature-gated` or route students via unverified predictions.
+1. Reproduce the official MusicXML descriptor extraction, first with the
+   `inven01.musicxml` fixture and all 12 reference descriptor values.
+2. Cover realistic multi-part MusicXML, invalid/absent hands, meter and tempo
+   changes with deterministic extraction errors, not heuristic fallbacks.
+3. Only after verified source-to-descriptor parity, expose trained
+   `rubricnet-trained` in app settings as a separate strategy and compare it
+   against the original heuristic on student-facing passages.
+4. Keep the held-out CIPI regression as the source-of-truth checkpoint for any
+   future changes to the model or descriptor ordering.
+
+### Camera-ready CIPI per-fold held-out metrics
+
+| Fold | N | Balanced accuracy | Macro MSE |
+| --- | ---: | ---: | ---: |
+| 0 | 132 | 40.7255% | 1.5848 |
+| 1 | 132 | 40.5221% | 2.5884 |
+| 2 | 132 | 39.6666% | 1.7198 |
+| 3 | 133 | 46.6969% | 1.1196 |
+| 4 | 131 | 39.1154% | 1.5658 |
+| **Mean** | **660 evaluations** | **41.3453%** | **1.7157** |
+
+All split labels and feature maps were fetched from official GitHub assets,
+checked against recorded blob hashes, and processed by
+`scripts/research/validate_rubricnet_cipi.py`. The models do **not** require
+Torch/scikit-learn at application runtime. Reproduction status:
+`inference-verified`, **not** `end-to-end-verified`.
