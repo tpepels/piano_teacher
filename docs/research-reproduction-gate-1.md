@@ -120,6 +120,12 @@ standard installation or short push CI.
 
 ### Next precise gate
 
+The explicit `scripts/research/verify_rubricnet_parity.py` now compares
+20 deterministic vectors per fold (100 total) against PyTorch inference on the
+authenticated camera-ready weights. See `scripts/research/README.md` for
+pinned checkout, export, and parity commands. **It has not yet been run against
+the real trained assets.**
+
 1. Export authenticated real camera-ready files to five inert JSON folds.
 2. Compare the numerical predictions to upstream PyTorch on a shared set of
    at least 20 deterministic input vectors (including pathological boundaries).
