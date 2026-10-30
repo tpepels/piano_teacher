@@ -1,4 +1,4 @@
-name: Piano Teacher (short smoke gate)
+name: Piano Teacher (fast contract gate)
 
 on:
   push:
@@ -7,40 +7,33 @@ on:
   workflow_call:
     outputs:
       revision:
-        description: Commit that passed bounded smoke checks (not comprehensive notation verification)
+        description: Commit passing quick Python contracts (not Godot or full notation)
         value: ${{ jobs.native-gate.outputs.revision }}
 
 permissions:
   contents: read
 
-# Each main update supersedes earlier quick gates; don't spend runner time
-# re-checking stale refactor commits. Release/tag and PR refs are independent.
 concurrency:
   group: native-quick-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   native-gate:
-    name: native-notation
+    name: python-contracts
     runs-on: ubuntu-latest
-    container: archlinux:latest
-    timeout-minutes: 7
+    # Hard bound including checkout, Python setup, installation and tests.
+    timeout-minutes: 2
     outputs:
       revision: ${{ steps.passed.outputs.revision }}
     steps:
-      - name: Install Python, Godot and local inference runtime
-        run: pacman -Syu --noconfirm --needed base-devel pkgconf alsa-lib git python python-pip godot cairo pango nodejs npm xorg-server-xvfb xorg-xauth
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          ref: ${{ github.sha }}
-      - name: Trust container workspace
-        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - name: Install application
-        run: |
-          python -m venv .venv
-          .venv/bin/python -m pip install -e '.[godot,test]'
-          bash scripts/setup-fingering.sh
-      - name: Run bounded smoke checks (no corpus rendering)
+          python-version: '3.12'
+          cache: pip
+      - name: Install minimal Python contracts
+        run: python -m pip install -e '.[test]'
+      - name: Run fast source and MIDI checks
         run: bash scripts/ci-smoke.sh
       - name: Record quick-check revision
         id: passed
