@@ -1,0 +1,43 @@
+# Explicit, hard-bounded reproduction of the upstream MusicXML feature oracle.
+# Never part of ordinary push CI. The original extractor is isolated under
+# a pinned source checkout, not silently injected into Piano Teacher runtime.
+name: RubricNet (upstream MusicXML descriptor oracle)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/rubricnet-features-oracle.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-extractor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install original extractor dependencies with deadlines
+        run: |
+          timeout 95s python -m pip install -q --disable-pip-version-check \
+            'torch==2.5.1+cpu' --index-url https://download.pytorch.org/whl/cpu
+          timeout 55s python -m pip install -q --disable-pip-version-check \
+            'music21>=9.1,<10' numpy scipy pandas scikit-learn \
+            sortedcontainers lxml matplotlib seaborn
+      - name: Fetch only pinned upstream extractor sources and reference score
+        run: |
+          timeout 30s git clone --quiet --depth 1 --filter=blob:none \
+            --no-checkout --branch master \
+            https://github.com/PRamoneda/rubricnet.git \
+            "$RUNNER_TEMP/rubricnet-upstream"
+          git -C "$RUNNER_TEMP/rubricnet-upstream" sparse-checkout init --cone
+          git -C "$RUNNER_TEMP/rubricnet-upstream" sparse-checkout set \
+            extractor/DifficultyFeatures/code
+          timeout 25s git -C "$RUNNER_TEMP/rubricnet-upstream" checkout \
+            3ff4a9342948b9588541a2a8524eab68045f6001
+      - name: Verify published 12 descriptors on official inven01 MusicXML
+        run: |
+          timeout 40s python -m scripts.research.verify_rubricnet_source_features \
+            --upstream "$RUNNER_TEMP/rubricnet-upstream" --check-oracle
