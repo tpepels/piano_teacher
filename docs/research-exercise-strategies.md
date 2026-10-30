@@ -133,10 +133,13 @@ performance retain original timing and do not inherit experimental mastery.
 
 Dotted drills produce real retimed note events in the native score model and
 MusicXML engraving, with unchanged pitch/source identity. Their MIDI input,
-feedback and Listen WAV use those same note events. To avoid attaching the
-wrong original slurs or rest positions to a changed rhythm, source MusicXML
-annotations are **not copied** into dotted drill engraving. The full original
-stage restores all authored notation.
+feedback and Listen WAV use those same note events. The source annotation
+projector now preserves identity-bound slurs, articulation, fingering and lyrics
+on eligible dotted stages. It reuses safe authored rests, tie-mark styling and
+unaltered tuplet marks; note-anchored directions follow their shifted attacks.
+Rhythmic beams and tuplet groupings are regenerated from the changed clock.
+The pipeline refuses retiming that would alter an authored tie-chain attack
+or a marked tuplet attack. The original stage remains unchanged.
 
 Two-phase drills use `TempoMap` as the authoritative time-to-beat map for
 backend deadlines, final MIDI assessment, Listen audio, Godot playhead
@@ -154,22 +157,25 @@ paused measure seeking keep their own absolute tempo-map origin; the Godot
 clock receives the remaining local tempo segments. All timing judgments use
 seconds, rather than pretending the passage has a single BPM.
 
-**Verification and remaining limitations:** Focused tests cover checked-in
-real MusicXML notation for 16th-note beams, tuplets, overlapping chord attacks,
-plus synthetic shaped-tempo feedback, source identities, and two-bar recovery.
-The tests are written but still require running in the user's actual runtime.
-Dotted drills reproduce note timings, clefs and barlines, but source-specific
-slurs/ties/rest spellings still require a dedicated transformed-notation
-projection. Physical MIDI, real Godot score rendering and audio synchronization
-also require hands-on verification before production use.
+**Verification and remaining limitations:** A short Step 3 GitHub gate now
+checks imported MusicXML with beamed fast notes, tuplets, slurs, authored rests,
+tied source attacks, dynamic relocation and source IDs; it also checks Listen
+PCM time positions against piecewise tempo grading and Godot 4.7.2 transport
+and audio-drift contracts. Run 41076832890 passed (66 Python tests, 1 skipped
+before Godot installation, then the Godot-dependent settings test passed).
+Complex cross-staff and multi-voice semantic notation still needs larger,
+manual real-score inspection. Physical MIDI, speakers, and visual playback of
+representative transformed scores require device verification before
+production use.
 
 
 ## Remaining work to complete research systems
 
-1. **Complete source annotation remapping.** Dotted exercise notes and
-   transport are now live, but source-authored slurs, rests, tuplets and tie
-   semantics must be explicitly projected onto transformed onsets rather than
-   discarded. Verify engraving against real MusicXML and MIDI.
+1. **Broaden transformed source annotation support.** Identity-anchored
+   slurs, note expressions, safe rests, ties and unchanged tuplets now survive
+   eligible dotted transformations. Next: complex cross-staff/overlapping
+   voices, nested and overlapping tuplets, ambiguous non-note-anchored
+   directions, and end-to-end pixel inspection on large real scores.
 2. **Prove the timing integration on actual devices.** Timed live marks,
    five-error recovery, partial retry and pause/seek are now wired to the
    tempo map. Verify their pixel placement against real Verovio/Godot
