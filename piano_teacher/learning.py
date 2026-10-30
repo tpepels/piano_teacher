@@ -2,13 +2,14 @@
 from __future__ import annotations
 from bisect import bisect_right
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import hashlib
 import json
 import math
 from .exercise_strategies import ExerciseContext, ExerciseStrategy, resolve_strategy
 from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant, generate_variants
+from .exercise_contracts import resolve_timing_strategy, resolve_tempo_strategy
 from .musical_groups import grouping_for_piece, MusicalGrouping
 from .lesson_settings import SETTINGS
 from .repeated_passages import exact_repetition_signature
@@ -340,8 +341,12 @@ class LearningPlan:
     """Adaptive, manually navigable practice sequence independent of the GUI."""
     def __init__(self, piece: Piece, *, warmup: bool = False,
                  consolidate: bool = False,
-                 exercise_strategy: str | ExerciseStrategy | None = None) -> None:
+                 exercise_strategy: str | ExerciseStrategy | None = None,
+                 timing_strategy: str = "original-timing",
+                 tempo_strategy: str = "constant-tempo") -> None:
         self.piece = piece
+        self.timing_strategy = resolve_timing_strategy(timing_strategy)
+        self.tempo_strategy = resolve_tempo_strategy(tempo_strategy)
         self.exercise_strategy = resolve_strategy(
             exercise_strategy if exercise_strategy is not None else "legacy")
         self.warmup = warmup
@@ -376,6 +381,15 @@ class LearningPlan:
         self._lesson_steps_cache: tuple[LessonStep, ...] | None = None
 
     route_version = 3
+
+    @property
+    def profile(self) -> str:
+        profile = self.exercise_strategy.name
+        if not self.warmup and self.timing_strategy.name != "original-timing":
+            profile += "~" + self.timing_strategy.name
+        if not self.warmup and self.tempo_strategy.name != "constant-tempo":
+            profile += "~" + self.tempo_strategy.name
+        return profile
 
     @property
     def start_bpm(self) -> int:
@@ -414,8 +428,30 @@ class LearningPlan:
         context = ExerciseContext(
             exercise.phrase, hand, groups, SETTINGS.focus_max_attacks,
             SETTINGS.focus_min_onsets, exercise.kind, self.warmup)
-        return self.exercise_strategy.generate(
+        baseline = self.exercise_strategy.generate(
             context, lambda: self._legacy_stage_variants(exercise, hand))
+        if self.warmup or exercise.kind != "learn" or not baseline:
+            return baseline
+        original = baseline[-1]
+        drills = []
+        if self.timing_strategy.name != "original-timing" and hand != "both":
+            plan = self.timing_strategy.transform(original)
+            if any(abs(event.exercise_start - (note.start-original.phrase.start)) > 1e-7
+                   or abs(event.exercise_end - (note.end-original.phrase.start)) > 1e-7
+                   for event, note in zip(plan.events, original.notes)):
+                offset = original.phrase.start
+                altered = tuple(replace(note, start=offset+event.exercise_start,
+                                        end=offset+event.exercise_end)
+                                for event, note in zip(plan.events, original.notes))
+                phrase = replace(original.phrase, notes=altered)
+                drills.append(ExerciseVariant(self.timing_strategy.name, phrase,
+                                              original.source_indices))
+        if self.tempo_strategy.name != "constant-tempo":
+            # Full-note tempo shaping is a distinct graded exercise stage.
+            # An original at constant tempo remains mandatory afterwards.
+            drills.append(ExerciseVariant(self.tempo_strategy.name,
+                                          original.phrase, original.source_indices))
+        return baseline[:-1] + tuple(drills) + (original,)
 
     def _legacy_stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
         groups = (self.grouping.for_phrase(exercise.phrase, hand)
@@ -463,8 +499,8 @@ class LearningPlan:
                                              separators=(",", ":")).encode()).hexdigest()[:16]
         # Legacy identifiers remain unchanged for existing saved courses.
         # Nonlegacy strategies cannot inherit unrelated completion/tempo credit.
-        profile = ("" if self.warmup or self.exercise_strategy.name == "legacy"
-                   else f":{self.exercise_strategy.name}")
+        profile = ("" if self.warmup or self.profile == "legacy"
+                   else f":{self.profile}")
         return f"course:{self.route_version}{profile}:{exercise.key}:{hand}:{variant.level}:{signature}"
 
     @property
