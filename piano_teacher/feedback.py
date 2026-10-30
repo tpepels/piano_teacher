@@ -7,10 +7,13 @@ from __future__ import annotations
 
 from .music import Phrase, note_name, source_note_id
 from .practice import Assessment
+from typing import Callable
 from .rendering.legacy.geometry import locate_beat
 
 
-def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layout: dict, *, played_from_beat: float = 0.0) -> dict:
+def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layout: dict, *,
+                       played_from_beat: float = 0.0,
+                       elapsed_to_beat: Callable[[float], float] | None = None) -> dict:
     """Return positioned note errors and leftover played notes for one attempt.
 
     Production exercises map canonical source IDs directly to their attack
@@ -65,7 +68,8 @@ def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layou
     # The extra note has no notated notehead. Use the real beat-time x
     # coordinate, with an explicit estimated-position marker near the system.
     for played in assessment.unmatched_played:
-        beat = played_from_beat + played.onset * bpm / 60
+        beat = (elapsed_to_beat(played.onset) if elapsed_to_beat is not None
+                else played_from_beat + played.onset * bpm / 60)
         if beat < 0 or beat > layout.get("beats", 0):
             unmapped += 1
             continue
