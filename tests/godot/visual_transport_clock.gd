@@ -147,5 +147,21 @@ func run() -> void:
     check(absf(shaped.now(base_ms+5500)-4.0) < .00001,
         "Pausing a shaped clock must freeze its position")
 
+    var partial = load("res://visual_transport_clock.gd").new()
+    var partial_state := {
+        "revision": 61, "transport_id": 62, "bpm": 60.0,
+        "running": true, "paused": false,
+        "play_from_beat": 4.0, "clock_beat": 0.0,
+        "clock_elapsed_seconds": 0.0,
+        "tempo_segments": [
+            {"start_beat":0.0, "end_beat":4.0, "bpm":48.0, "start_seconds":0.0},
+            {"start_beat":4.0, "end_beat":12.0, "bpm":60.0, "start_seconds":5.0},
+        ]
+    }
+    partial.accept(partial_state, base_ms, base_ms)
+    check(absf(partial.now(base_ms+5000)-4.0) < .00001,
+        "Partial shaped seek must reach its tempo transition at local beat 4")
+    check(absf(partial.now(base_ms+6000)-5.0) < .00001,
+        "Partial shaped retry must continue at the second segment's BPM")
     print("VISUAL_TRANSPORT_CLOCK_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)
