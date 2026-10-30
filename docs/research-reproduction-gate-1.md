@@ -1,6 +1,8 @@
 # Research reproduction — gate 1 source audit
 Date: 2026-10-30. Repository: tpepels/piano_teacher, main.
-Status: **source inventory started; no algorithm-reproduction gate accepted**.
+Status: **RubricNet reference inference, official held-out evaluation and
+source-to-model MusicXML oracle passed**. App-native extractor and the other
+research systems remain incomplete; no pedagogical efficacy claim.
 
 This supersedes the *research fidelity* meaning of "complete" in the Step 2–4
 engineering trackers. Those trackers still describe tested **adaptations**.
@@ -82,9 +84,14 @@ numbers; pin the evaluation version and metric definition.
       vectors across the five real official folds. Maximum descriptor error
       1.9013e-7, maximum ordinal-probability error 1.6837e-7.
       Action run [41092489234](https://github.com/tpepels/piano_teacher/actions/runs/41092489234).
-- [ ] Implement/exercise the **actual upstream** 12 feature extractors on real
-      MusicXML. Upstream `inven01.musicxml` and `predict.py::check_features_extractor`
-      supply a reference descriptor fixture.
+- [x] Ran the **actual upstream extractor** on published `inven01.musicxml`;
+      all 12 descriptors matched the explicit published 
+      `predict.py::check_features_extractor` values exactly. The isolated
+      reference pipeline then returned real five-fold predictions [2,2,2,3,3].
+      See [run 41094282081](https://github.com/tpepels/piano_teacher/actions/runs/41094282081).
+- [ ] Package and isolate the exact feature extraction for offline app-native
+      use, then verify multiple real scores and failure handling before
+      enabling trained difficulty in lesson settings.
 - [x] Verified all 660 official CIPI held-out predictions using five pinned
       split memberships and the published descriptor file (no overlap with
       training/validation IDs). Mean balanced accuracy = 0.4134530732;
@@ -128,11 +135,14 @@ standard installation or short push CI.
 
 The authentic five-fold weights are packaged, reference-checked and validated
 against the official 660 held-out CIPI test predictions. **The trained
-RubricNet mathematical model is reproduced.** The remaining obstacle to
-end-to-end MusicXML inference is the exact upstream 12-descriptor extractor.
+RubricNet mathematical model is reproduced.** Its 12 MusicXML descriptors
+were extracted from the published reference score by the original upstream
+code with exact oracle parity; an isolated source-to-model CLI is working.
+App-native extraction, broader score coverage and teacher validation remain.
 
-1. Reproduce the official MusicXML descriptor extraction, first with the
-   `inven01.musicxml` fixture and all 12 reference descriptor values.
+1. Package the pinned original extractor (or a provably equivalent port) as
+   an offline, independently testable optional worker without exposing
+   Lightning/WandB/training dependencies to the teaching process.
 2. Cover realistic multi-part MusicXML, invalid/absent hands, meter and tempo
    changes with deterministic extraction errors, not heuristic fallbacks.
 3. Only after verified source-to-descriptor parity, expose trained
@@ -155,5 +165,13 @@ end-to-end MusicXML inference is the exact upstream 12-descriptor extractor.
 All split labels and feature maps were fetched from official GitHub assets,
 checked against recorded blob hashes, and processed by
 `scripts/research/validate_rubricnet_cipi.py`. The models do **not** require
-Torch/scikit-learn at application runtime. Reproduction status:
-`inference-verified`, **not** `end-to-end-verified`.
+Torch/scikit-learn at application runtime.
+
+**Reference source-to-model parity:**
+[run 41094282081](https://github.com/tpepels/piano_teacher/actions/runs/41094282081)
+installed the original pinned extractor in a bounded, isolated worker and
+matched all 12 published `inven01.musicxml` descriptors exactly. The full
+source-to-real-fold CLI (`scripts/research/predict_rubricnet_musicxml.py`)
+returned difficulty classes **[2, 2, 2, 3, 3]**. Research-reference path:
+`end-to-end-verified on the published reference fixture`; application-level
+integration and broad MusicXML robustness remain **unverified**.
