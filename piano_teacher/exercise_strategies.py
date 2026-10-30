@@ -162,15 +162,28 @@ class CodaPartStrategy:
         for i, t in enumerate(times):
             blocks[find(i)].add(t)
         target = max(2, min(context.max_attacks, ceil(len(times) / 2)))
-        selected = set()
-        for block in sorted(blocks.values(), key=min):
-            if selected and len(selected | block) > target:
-                break
-            selected.update(block)
-            if len(selected) >= target:
-                break
-        first = {i for i in source if round(context.phrase.notes[i].start, 6) in selected}
-        return _finish(context, [("coda-part-a", first)])
+        # Advance through complete source-onset groups. Never split a
+        # simultaneous chord, beam or slur; group boundaries remain atomic.
+        ordered = sorted(blocks.values(), key=min)
+        prefix = set()
+        first = second = None
+        for block in ordered:
+            prefix.update(block)
+            if first is None and len(prefix) >= target:
+                first = prefix.copy()
+            if (first is not None and second is None
+                    and len(prefix) >= min(context.max_attacks,
+                                            ceil(len(times) * .75))
+                    and len(prefix) > len(first)):
+                second = prefix.copy()
+        proposals = []
+        for label, chosen in (("coda-part-a", first), ("coda-part-b", second)):
+            if chosen:
+                proposals.append((label, {
+                    i for i in source
+                    if round(context.phrase.notes[i].start, 6) in chosen
+                }))
+        return _finish(context, proposals)
 
 
 @dataclass(frozen=True)
