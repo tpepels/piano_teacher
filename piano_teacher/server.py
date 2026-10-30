@@ -265,7 +265,7 @@ class PracticeEngine:
     def _active_tempo_map(self):
         """The single authoritative active practice clock and grading map."""
         if (self.plan is None or self.mode not in ("practice", "listen")
-                or self.plan.active_variant.level != "two-phase-tempo"):
+                or "two-phase-tempo" not in self.plan.active_variant.level):
             return None
         return TwoPhaseTempo().generate(
             OriginalTiming().transform(self.plan.active_variant), self.plan.bpm)
