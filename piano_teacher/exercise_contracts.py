@@ -142,21 +142,112 @@ class DottedPairTiming:
 
 
 @dataclass(frozen=True)
+class TempoSegment:
+    start_beat: float
+    end_beat: float
+    bpm: float
+
+
+@dataclass(frozen=True)
+class TempoMap:
+    """Piecewise-constant tempo with exact beat-to-second conversion.
+
+    Separate from Score/Phrase timing: grading and playback must consume
+    this same map before tempo shaping becomes an interactive strategy.
+    """
+    name: str
+    segments: tuple[TempoSegment, ...]
+
+    def __post_init__(self) -> None:
+        if not self.name or not self.segments:
+            raise ValueError("Tempo map requires a name and segments")
+        previous = 0.0
+        for segment in self.segments:
+            if (not all(isfinite(n) for n in
+                        (segment.start_beat, segment.end_beat, segment.bpm))
+                    or abs(segment.start_beat - previous) > 1e-7
+                    or segment.end_beat <= segment.start_beat or segment.bpm <= 0):
+                raise ValueError("Tempo segments must be contiguous, positive and finite")
+            previous = segment.end_beat
+
+    @property
+    def duration_beats(self) -> float:
+        return self.segments[-1].end_beat
+
+    def seconds_at(self, beat: float) -> float:
+        if not isfinite(beat) or not -1e-7 <= beat <= self.duration_beats + 1e-7:
+            raise ValueError("Beat outside tempo map")
+        elapsed = 0.0
+        for segment in self.segments:
+            if beat <= segment.start_beat:
+                break
+            elapsed += (min(beat, segment.end_beat) - segment.start_beat) * 60.0 / segment.bpm
+            if beat <= segment.end_beat:
+                break
+        return elapsed
+
+
+class TempoStrategy(Protocol):
+    name: str
+    def generate(self, plan: TimingPlan, target_bpm: float) -> TempoMap: ...
+
+
+@dataclass(frozen=True)
+class ConstantTempo:
+    name: str = "constant-tempo"
+
+    def generate(self, plan: TimingPlan, target_bpm: float) -> TempoMap:
+        return TempoMap(self.name, (TempoSegment(0, plan.duration_beats, float(target_bpm)),))
+
+
+@dataclass(frozen=True)
+class TwoPhaseTempo:
+    """Deterministic Coda-inspired tempo shaping: slow half, target half."""
+    speed_fraction: float = .8
+    name: str = "two-phase-tempo"
+
+    def generate(self, plan: TimingPlan, target_bpm: float) -> TempoMap:
+        if (not isfinite(target_bpm) or target_bpm <= 0
+                or not isfinite(self.speed_fraction) or not 0 < self.speed_fraction <= 1):
+            raise ValueError("Invalid tempo-shaping parameters")
+        middle = plan.duration_beats / 2
+        return TempoMap(self.name, (
+            TempoSegment(0, middle, target_bpm*self.speed_fraction),
+            TempoSegment(middle, plan.duration_beats, target_bpm)))
+
+
+@dataclass(frozen=True)
 class TimingAssessment:
     """Assessment of the transformed target, with original note identity."""
     timing_name: str
     assessment: Assessment
     timed_notes: tuple[NoteAssessment, ...]
+    tempo_name: str = "constant-tempo"
 
 
 def assess_timed(plan: TimingPlan, hand: str, bpm: float,
-                 played: list[PlayedNote]) -> TimingAssessment:
+                 played: list[PlayedNote], *, tempo_map: TempoMap | None = None) -> TimingAssessment:
     """Assess transformed beats, then rebind annotations to original notes.
 
     This never credits source mastery by itself: the caller must distinguish
     the transformed stage from the mandatory original stage.
     """
-    timed = evaluate(plan.exercise_phrase, hand, bpm, played)
+    phrase = plan.exercise_phrase
+    if tempo_map is None:
+        timed = evaluate(phrase, hand, bpm, played)
+    else:
+        if abs(tempo_map.duration_beats - plan.duration_beats) > 1e-7:
+            raise ValueError("Tempo map must cover the whole timed exercise")
+        # The existing grading algorithm expects constant BPM. Express the
+        # complete expected phrase in seconds at 60 BPM (1 beat = 1 second)
+        # so all matching, onset and held-duration tolerances remain valid.
+        seconds_phrase = Phrase(
+            phrase.number, phrase.first_bar, phrase.last_bar, 0,
+            tempo_map.seconds_at(plan.duration_beats),
+            tuple(replace(note, start=tempo_map.seconds_at(note.start),
+                          end=tempo_map.seconds_at(note.end))
+                  for note in phrase.notes))
+        timed = evaluate(seconds_phrase, hand, 60, played)
     # Assessment only returns notes for the selected hand, in phrase order.
     originals = [n for n in plan.original.notes if hand == "both" or n.hand == hand]
     if len(timed.notes) != len(originals):
@@ -164,7 +255,8 @@ def assess_timed(plan: TimingPlan, hand: str, bpm: float,
     bound = tuple(replace(entry, note=note)
                   for entry, note in zip(timed.notes, originals))
     return TimingAssessment(plan.name, Assessment(bound, timed.extra_notes,
-                                                   timed.unmatched_played), timed.notes)
+                                                   timed.unmatched_played), timed.notes,
+                            tempo_map.name if tempo_map is not None else "constant-tempo")
 
 
 @dataclass(frozen=True)
