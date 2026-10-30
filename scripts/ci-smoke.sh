@@ -67,6 +67,7 @@ timeout 100s "$PYTHON" -m pytest -q \
   tests/test_rest_intervention_ownership.py \
   tests/test_musical_groups.py \
   tests/test_source_tie_attributes.py \
+  tests/test_hanon_boundary_smoke.py \
   tests/test_verovio_slur_fragments.py \
   tests/test_source_musicxml_preservation.py \
   tests/test_exercise_generator.py \
