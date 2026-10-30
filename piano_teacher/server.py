@@ -242,11 +242,25 @@ class PracticeEngine:
                 if not saved_strategy:
                     # A first visit starts near the previous musical location
                     # but carries neither its clean streak nor its stage BPM.
+                    preferred_level = old.active_variant.level
+                    if old.exercise.kind == "learn":
+                        preferred_levels = [
+                            self.library.settings["timing_strategy"] + "+" +
+                            self.library.settings["tempo_strategy"],
+                            self.library.settings["timing_strategy"],
+                            self.library.settings["tempo_strategy"],
+                        ]
+                        possible = {v.level for v in replacement._stage_variants(
+                            replacement.exercises[
+                                min(old.index, len(replacement.exercises)-1)],
+                            old.hand)}
+                        preferred_level = next((name for name in preferred_levels
+                                                if name in possible), preferred_level)
                     replacement.restore_location(
                         kind=old.exercise.kind,
                         first_bar=old.exercise.phrase.first_bar,
                         last_bar=old.exercise.phrase.last_bar,
-                        hand=old.hand, level=old.active_variant.level)
+                        hand=old.hand, level=preferred_level)
                     replacement.streak = 0
                     replacement.bpm = replacement._tempo_for_current_stage()
                 self.open_from_beat = 0.0
