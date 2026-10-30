@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from piano_teacher.research.rubricnet_assets import BASIC_FEATURES
-from piano_teacher.research.rubricnet_extractor import RubricNetExtractor
+from piano_teacher.research.rubricnet_extractor import RubricNetExtractor, RubricNetUnavailable
 from piano_teacher.research.rubricnet_model import RubricNetModel
 
 
@@ -18,7 +18,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "connector_pixels"
 
 
 @pytest.mark.parametrize("score_name", [
-    "beam16", "tuplets", "moonlight-rest-voices",
+    "beam16", "beams", "beam-down", "beam-chords",
 ])
 def test_offline_worker_extracts_real_two_hand_scores_and_predicts(score_name):
     score = (FIXTURES/score_name/"score.musicxml").read_text(encoding="utf-8")
@@ -30,6 +30,13 @@ def test_offline_worker_extracts_real_two_hand_scores_and_predicts(score_name):
     result = model.predict_descriptors(features)
     assert len(result.predictions) == 5
     assert all(0 <= pred.predicted_class <= 8 for pred in result.predictions)
+
+
+@pytest.mark.parametrize("score_name", ["tuplets", "moonlight-rest-voices"])
+def test_unpitched_second_hand_is_rejected_without_fabricated_features(score_name):
+    source = (FIXTURES/score_name/"score.musicxml").read_text(encoding="utf-8")
+    with pytest.raises(RubricNetUnavailable):
+        RubricNetExtractor(timeout_seconds=20).extract(source)
 
 
 def test_worker_matches_published_bach_reference_fixture():
