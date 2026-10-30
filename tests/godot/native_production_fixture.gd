@@ -28,11 +28,25 @@ func load_native_fixture(folder: String) -> String:
         folder.path_join("native.json")))
     if not payload is Dictionary:
         return "Missing engine-prepared native.json fixture"
-    revision = int(payload.model.revision)
-    requested_layout_revision = revision
+    # Drive the actual revision-aware owner. The old Main fields were
+    # removed when HTTP score loading moved into ScoreAssetSession.
+    # This offline fixture supplies responses only; native rendering is real.
     last_state = payload.state.duplicate(true)
-    _on_layout(0, 200, PackedStringArray(), JSON.stringify(payload.layout).to_utf8_buffer())
-    _on_timeline_model(0, 200, PackedStringArray(), JSON.stringify(payload.model).to_utf8_buffer())
+    last_state["loaded"] = true
+    last_state["revision"] = int(payload.model.revision)
+    last_state["piece_fingerprint"] = str(last_state.get(
+        "piece_fingerprint", "visual-production-fixture"))
+    score_session.update_context(last_state, Time.get_ticks_msec())
+    var layout_id: int = score_session.pending_id("layout")
+    if layout_id < 0:
+        return "Score session did not request authentic layout"
+    score_session.complete_response("layout", layout_id, 200,
+        JSON.stringify(payload.layout).to_utf8_buffer(), Time.get_ticks_msec())
+    var model_id: int = score_session.pending_id("model")
+    if model_id < 0:
+        return "Score session did not request semantic model after layout"
+    score_session.complete_response("model", model_id, 200,
+        JSON.stringify(payload.model).to_utf8_buffer(), Time.get_ticks_msec())
     if not has_method("_native_score_ready") or not call("_native_score_ready"):
         return "Production native score is not ready: " + str(practice_view.stage.renderer.failure_reason)
     if practice_view.stage.renderer.timeline.notes.is_empty():

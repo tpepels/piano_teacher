@@ -72,4 +72,8 @@ timeout 100s "$PYTHON" -m pytest -q \
   tests/test_learning.py \
   tests/test_midi_beaming.py \
   tests/test_source_beam_pixel_fidelity.py
+# A genuinely rendered (headless Godot) two-bar source score. This catches
+# timing-line drift and source-ink disappearance without a corpus audit.
+timeout 50s "$PYTHON" -m pytest -q \
+  'tests/test_score_motion_render.py::test_actual_score_transforms_keep_fixed_line_and_exact_downbeat[2]'
 "$PYTHON" scripts/check_godot_parse.py --godot "$GODOT" --timeout 25
