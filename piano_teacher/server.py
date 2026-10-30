@@ -353,6 +353,7 @@ class PracticeEngine:
                     running=self.running, paused=self.paused,
                     preview=self.preview_only, mode=self.mode,
                     transport_id=self.transport_id,
+                    tempo_map=self._active_tempo_map(),
                 )
             if self.mode == "learn":
                 if (self.teaching is not None and self.midi.connected

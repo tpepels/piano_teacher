@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections import deque
 
 from .music import Phrase, source_note_id
+from .exercise_contracts import TempoMap
 
 
 class LiveInputView:
@@ -29,7 +30,7 @@ class LiveInputView:
         self, *, pitch: int, is_on: bool, now: float, phrase: Phrase | None,
         hand: str, bpm: float, from_beat: float, run_at: float,
         running: bool, paused: bool, preview: bool, mode: str,
-        transport_id: int,
+        transport_id: int, tempo_map: TempoMap | None = None,
     ) -> None:
         if not 0 <= pitch <= 127:
             return
@@ -57,38 +58,43 @@ class LiveInputView:
                 # Match only plausible attacks. This onset preview cannot claim
                 # correctness of duration or override final assessment.
                 at = now - run_at
-                seconds_per_beat = 60.0 / bpm
-                window = max(0.35, 0.65 * seconds_per_beat)
-                candidates = [
-                    (abs(at - (note.start - phrase.start - from_beat) * seconds_per_beat), index, note)
-                    for index, note in enumerate(phrase.notes)
-                    if index not in self.used and note.pitch == pitch
-                    and (hand == "both" or note.hand == hand)
-                    and note.start - phrase.start >= from_beat - 1e-7
-                    and abs(at - (note.start - phrase.start - from_beat) * seconds_per_beat) <= window
-                ]
+                origin = tempo_map.seconds_at(from_beat) if tempo_map else 0.0
+
+                def expected(note):
+                    beat = note.start - phrase.start
+                    if tempo_map is not None:
+                        return (tempo_map.seconds_at(beat) - origin,
+                                60.0 / tempo_map.bpm_at(beat))
+                    return ((beat - from_beat) * 60.0 / bpm, 60.0 / bpm)
+
+                candidates = []
+                nearby = []
+                for index, note in enumerate(phrase.notes):
+                    if ((hand != "both" and note.hand != hand) or
+                            note.start - phrase.start < from_beat - 1e-7):
+                        continue
+                    expected_at, seconds_per_beat = expected(note)
+                    distance = abs(at - expected_at)
+                    if distance <= .1:
+                        nearby.append((distance, abs(pitch - note.pitch),
+                                       index, note))
+                    if (index not in self.used and note.pitch == pitch and
+                            distance <= max(0.35, .65 * seconds_per_beat)):
+                        candidates.append((distance, index, note, expected_at))
                 if candidates:
-                    distance, index, note = min(candidates, key=lambda entry: (entry[0], entry[1]))
+                    _, index, note, expected_at = min(
+                        candidates, key=lambda entry: (entry[0], entry[1]))
                     self.used.add(index)
                     source = source_note_id(note, index)
-                    expected_at = (note.start - phrase.start - from_beat) * seconds_per_beat
                     drift = at - expected_at
-                    status = "on_time" if abs(drift) <= 0.1 else "early" if drift < 0 else "late"
+                    status = "on_time" if abs(drift) <= .1 else "early" if drift < 0 else "late"
                 else:
                     status = "unexpected"
-                    # Pair only an attack close to an actual required onset.
-                    # For chords, prefer the closest pitch in the chord while
-                    # preserving the separate exact-pitch notes as unplayed.
-                    nearby = [
-                        (abs(at - (note.start - phrase.start - from_beat) * seconds_per_beat),
-                         abs(pitch - note.pitch), index, note)
-                        for index, note in enumerate(phrase.notes)
-                        if (hand == "both" or note.hand == hand)
-                        and note.start - phrase.start >= from_beat - 1e-7
-                        and abs(at - (note.start - phrase.start - from_beat) * seconds_per_beat) <= .1
-                    ]
+                    # Only exact source attacks can receive provisional
+                    # correctness; wrong pitches may reference nearby ink.
                     if nearby:
-                        _, _, index, reference = min(nearby, key=lambda entry: entry[:3])
+                        _, _, index, reference = min(
+                            nearby, key=lambda entry: entry[:3])
                         reference_source = source_note_id(reference, index)
 
         self.sequence += 1

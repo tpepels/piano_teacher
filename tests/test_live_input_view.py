@@ -1,5 +1,6 @@
 """Live MIDI previews are immediate, bounded, and never grade held duration."""
 from piano_teacher.live_input_view import LiveInputView
+from piano_teacher.exercise_contracts import TempoMap, TempoSegment
 from piano_teacher.music import Note, Phrase
 
 
@@ -128,3 +129,39 @@ def test_wrong_chord_pitch_with_both_hands_uses_closest_real_reference():
     event = _last(view, 14.03)
     assert event["status"] == "unexpected"
     assert event["reference_source_id"] == "attack-left"
+
+
+def test_provisional_midi_feedback_uses_shaped_grading_clock():
+    """A constant-BPM onset would call these late or unexpected."""
+    shaped = TempoMap("two-phase", (
+        TempoSegment(0, 2, 30),
+        TempoSegment(2, 8, 60),
+    ))
+    view = LiveInputView()
+    _send(view, 60, 14.0, tempo_map=shaped)
+    assert _last(view, 14.01)["source_id"] == "attack-c"
+    assert _last(view, 14.01)["status"] == "on_time"
+    view.reset_attempt()
+    _send(view, 60, 13.8, tempo_map=shaped)
+    assert _last(view, 13.81)["source_id"] == "attack-c"
+    assert _last(view, 13.81)["status"] == "early"
+    view.reset_attempt()
+    _send(view, 60, 14.2, tempo_map=shaped)
+    assert _last(view, 14.21)["source_id"] == "attack-c"
+    assert _last(view, 14.21)["status"] == "late"
+    view.reset_attempt()
+    _send(view, 61, 14.01, tempo_map=shaped)
+    assert _last(view, 14.02)["reference_source_id"] == "attack-c"
+    assert not view.used
+
+
+def test_provisional_tempo_mapping_respects_partial_retry_origin():
+    shaped = TempoMap("two-phase", (
+        TempoSegment(0, 2, 30),
+        TempoSegment(2, 8, 60),
+    ))
+    view = LiveInputView()
+    # A partial retry from beat 2 starts at zero elapsed seconds.
+    _send(view, 60, 10.02, from_beat=2.0, tempo_map=shaped)
+    assert _last(view, 10.03)["source_id"] == "attack-c"
+    assert _last(view, 10.03)["status"] == "on_time"
