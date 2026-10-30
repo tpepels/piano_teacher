@@ -763,7 +763,8 @@ class PracticeEngine:
             variant=self.plan.active_variant, bpm=self.plan.bpm,
             stage_key=self.plan.identity, revision=self.score_revision,
             bar_boundaries=self.plan.piece.bar_boundaries,
-            time_signatures=self.plan.piece.time_signatures))
+            time_signatures=self.plan.piece.time_signatures,
+            tempo_map=self._active_tempo_map()))
 
     def demo_audio(self, token: str) -> Path:
         with self.lock:
