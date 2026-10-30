@@ -102,17 +102,24 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
     for pi, part in enumerate(source_parts):
         for mi, measure in enumerate(part.findall("measure")):
             active = []
+            def finish_chord():
+                # Every pitch needs the FINAL chord membership. A slur on
+                # the source leader may otherwise lose a retained third tone
+                # when the first two pitches are removed in a lesson.
+                for member in active:
+                    chord_siblings[member] = tuple(active)
             for ordinal, original in enumerate(measure):
                 if original.tag != "note" or original.find("pitch") is None:
+                    finish_chord()
                     active = []
                     continue
                 sid = f"xml-p{pi}-m{mi}-e{ordinal}"
                 if original.find("chord") is None:
+                    finish_chord()
                     active = [sid]
                 else:
                     active.append(sid)
-                for member in active:
-                    chord_siblings[member] = tuple(active)
+            finish_chord()
 
     def rendered_slur_anchor(sid):
         if sid in targets:
@@ -217,18 +224,30 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                     continue
                 sid = f"xml-p{pi}-m{mi}-e{ordinal}"
                 voice = child.findtext("voice", "1")
+                staff = child.findtext("staff", "1")
                 for mark in child.findall("./notations/slur"):
-                    key = pi, voice, mark.get("number", "1")
+                    number = mark.get("number", "1")
+                    key = pi, staff, voice, number
                     if mark.get("type") == "start":
                         started[key] = sid
-                    elif mark.get("type") == "stop" and key in started:
-                        first = started.pop(key)
+                    elif mark.get("type") == "stop":
+                        actual = key
+                        if actual not in started:
+                            # A true cross-staff slur may change its staff.
+                            # Reuse it only when its voice and number identify
+                            # exactly one still-open start in this same part.
+                            matches = [item for item in started if
+                                       item[0] == pi and item[2:] == (voice, number)]
+                            if len(matches) != 1:
+                                continue
+                            actual = matches[0]
+                        first = started.pop(actual)
                         first_target = rendered_slur_anchor(first)
                         last_target = rendered_slur_anchor(sid)
                         if (first_target is not None and last_target is not None
                                 and hands[first_target] == hands[last_target]
                                 and first_target != last_target):
-                            paired_slurs.add((first, sid, key))
+                            paired_slurs.add((first, sid, actual))
 
     unrendered = set()
     for sid, dest in targets.items():
@@ -271,7 +290,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
             dest.append(deepcopy(lyric))
             unrendered.add("note:lyric")
 
-    for first, last, key in paired_slurs:
+    for first, last, key in sorted(paired_slurs):
         for sid, role in ((first, "start"), (last, "stop")):
             destination = targets[rendered_slur_anchor(sid)]
             annotations = destination.find("notations")
@@ -279,7 +298,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                 annotations = ET.SubElement(destination, "notations")
             for mark in original_notes[sid].findall("notations/slur"):
                 if (mark.get("type") == role
-                        and mark.get("number", "1") == key[2]):
+                        and mark.get("number", "1") == key[3]):
                     annotations.append(deepcopy(mark))
 
     # Source notes can be sound-merged across multiple written tie segments.
