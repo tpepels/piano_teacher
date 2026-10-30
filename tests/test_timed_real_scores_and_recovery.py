@@ -52,7 +52,7 @@ def test_real_musicxml_retains_original_notes_and_sound_duration(filename, tmp_p
 
     selected = ScoreSelection(
         piece, transformed, "both", "course:3:real:dotted-long-short:fixture", 1,
-        "real-fixture")
+        "real-fixture", transformed_rhythm=True)
     artifacts = ScoreArtifacts(PreprocessingCache(tmp_path / "preprocessed"))
     model = artifacts.source_model(selected)
     mapped = {note["id"]: note for note in model["notes"]}
