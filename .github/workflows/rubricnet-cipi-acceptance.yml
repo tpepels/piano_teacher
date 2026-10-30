@@ -1,0 +1,29 @@
+# Official CIPI camera-ready validation. Runs only on changes to this
+# workflow or manual dispatch; no heavy ML install or long corpus audit.
+name: RubricNet (published CIPI held-out results)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/rubricnet-cipi-acceptance.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reproduce-splits:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Five real folds against official SHA-pinned CIPI held-out splits
+        run: |
+          timeout 45s python -m scripts.research.validate_rubricnet_cipi \
+            --download --check-published
+      - name: Offline model and numerical invariants
+        run: |
+          timeout 20s python -m pip install -q pytest
+          timeout 20s python -m pytest -q --tb=short \
+            tests/test_rubricnet_reproduction.py
