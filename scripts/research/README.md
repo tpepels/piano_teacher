@@ -135,7 +135,7 @@ modules to the normal Piano Teacher environment:
 
 ```bash
 cd ~/Projects/piano_teacher
-./scripts/setup-rubricnet.sh
+bash scripts/setup-rubricnet.sh
 ./run.sh
 ```
 
