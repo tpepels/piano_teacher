@@ -142,3 +142,51 @@ def test_real_musicxml_source_arcs_resolve_without_changing_source_inventory():
                link.stop_source_id is None for link in arcs)
     assert matrix.notation_elements == before
     matrix.verify_lossless()
+
+def test_uncertain_connector_mark_protects_entire_voice_not_just_prior_notes():
+    xml = """<score-partwise><part id="P"><measure number="1">
+        <note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration><voice>1</voice>
+        <notations><slur type="continue" number="3"/></notations></note>
+        <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration><voice>1</voice></note>
+    </measure></part></score-partwise>"""
+    elements=source_elements(xml,first_bar=1,last_bar=1,boundaries=(0,4))
+    links=link_source_connectors(elements)
+    assert len(links) == 1
+    assert links[0].issue == "unsupported-mark:continue"
+    assert protected_connector_source_ids(elements,links) == {
+        "xml-p0-m0-e0","xml-p0-m0-e1"}
+
+
+def test_source_connector_protection_isolates_independent_voice_and_hand():
+    xml = """<score-partwise><part id="P"><measure number="1">
+        <note><pitch><step>C</step><octave>4</octave></pitch>
+          <duration>1</duration><voice>1</voice>
+          <notations><slur type="start" number="1"/></notations></note>
+        <note><pitch><step>D</step><octave>4</octave></pitch>
+          <duration>1</duration><voice>1</voice>
+          <notations><slur type="stop" number="1"/></notations></note>
+        <backup><duration>2</duration></backup>
+        <note><pitch><step>E</step><octave>3</octave></pitch>
+          <duration>1</duration><voice>2</voice></note>
+        <note><pitch><step>F</step><octave>3</octave></pitch>
+          <duration>1</duration><voice>2</voice></note>
+    </measure></part></score-partwise>"""
+    notes = (
+        Note(0,1,60,0,0,"right","xml-p0-m0-e0","xml-p0-s1-v1"),
+        Note(1,2,62,0,0,"right","xml-p0-m0-e1","xml-p0-s1-v1"),
+        Note(0,1,52,1,0,"left","xml-p0-m0-e3","xml-p0-s1-v2"),
+        Note(1,2,53,1,0,"left","xml-p0-m0-e4","xml-p0-s1-v2"))
+    variant = ExerciseVariant("original",Phrase(1,1,1,0,4,notes),
+                              tuple(range(4)))
+    matrix=MatrixScore.from_phrase(variant.phrase,boundaries=(0,4),
+                                    source_musicxml=xml)
+    assert matrix.connector_protected_source_ids() == {
+        "xml-p0-m0-e0","xml-p0-m0-e1"}
+    dotted=ResearchPolyphonicDottedRhythm().transform(
+        variant,boundaries=(0,4),source_musicxml=xml)
+    assert len(dotted.decisions) == 1
+    assert dotted.decisions[0].voice == "xml-p0-s1-v2"
+    assert dotted.timing.exercise_phrase.notes[:2] == notes[:2]
+    assert dotted.timing.exercise_phrase.notes[3].start == pytest.approx(1.5)

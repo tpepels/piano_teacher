@@ -140,3 +140,38 @@ No long-running full-corpus audits or background work were initiated.
 - Passage splitting conservatively rejects connector links spanning a cut,
   including slurs that began before the current selected phrase. Duplicate
   MusicXML tie/tied declarations are treated as one connector.
+
+## Continuation after the native-notation detour (2026-10-30)
+
+The research handoff and exact notation checkpoint are in
+`docs/automatic-lesson-generation-resume.md`. **Primary work has returned
+to Gate 2**, with Coda research correctness independent of the existing
+native engraving audits.
+
+- `coda_source_connectors.py`: explicit source-ordinal linked slur and
+  tie intervals, preserving part, staff/voice, slur number, spelled tie
+  pitch, start/end identity and partial-window endpoints. MusicXML
+  `tie` and `tied` encode one sounding arc, not two.
+- `MatrixScore.source_connectors()` and
+  `connector_protected_source_ids()` expose this graph to the Coda
+  source model. A rhythm transformation cannot silently change source
+  notes inside an authored slur or incomplete/uncertain connector;
+  unrelated voices remain independently transformable.
+- Both `PolyphonicChordifier` and `ResearchPolyphonicDottedRhythm`
+  now consume the same connector protection; `ResearchPartSplitter`
+  uses the same links to reject unsafe measure cuts. This replaces
+  duplicated ad-hoc boundary interpretation.
+- Source-span tests cover independent voices, encoded tie duplicates,
+  cross-measure intervals, partial windows, unsupported marks, interior
+  notes and an authentic MusicXML tie fixture. First commit `e55b353d`
+  passed short CI: **179 passed, 6 skipped in 3.74 seconds**.
+- **No Coda research strategy has been promoted to production**, no
+  reference-algorithm parity is claimed, and the four complete Coda
+  transformations remain research-incomplete. The full thesis still
+  cannot be retrieved from the Dartmouth endpoint (403).
+
+The next Coda gate is a complete MMR relationship and notation-preserving
+transformation contract, followed by independently validated examples for
+each of the four algorithms. Transformed notation/Listen/MIDI feedback
+already have a shared timeline for existing experimental app strategies,
+but the standalone Coda prototypes are not yet live.

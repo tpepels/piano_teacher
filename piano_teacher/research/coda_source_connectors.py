@@ -132,10 +132,14 @@ def protected_connector_source_ids(
                     or item.part_index != link.part_index
                     or item.voice_id != link.voice_id):
                 continue
-            if (link.start_beat is not None
+            # Unknown or overlapping source connector syntax has no
+            # trustworthy interval: protect the WHOLE source voice rather
+            # than treating an unsupported mark as an arc ending here.
+            ambiguous = link.issue not in (None,"unpaired-start","unpaired-stop")
+            if (not ambiguous and link.start_beat is not None
                     and item.onset < link.start_beat-1e-7):
                 continue
-            if (link.stop_beat is not None
+            if (not ambiguous and link.stop_beat is not None
                     and item.onset > link.stop_beat+1e-7):
                 continue
             protected.add(item.source_id)
