@@ -79,6 +79,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
 
     original_notes = {}
     original_onsets = {}
+    original_durations = {}
     part_staves = defaultdict(set)
     voice_hands = defaultdict(set)
     measure_voice_hands = defaultdict(set)
@@ -108,6 +109,7 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                     continue
                 sid = f"xml-p{pi}-m{mi}-e{ordinal}"
                 original_notes[sid] = child
+                original_durations[sid] = duration
                 if mi < len(boundaries):
                     original_onsets[sid] = float(
                         Fraction(str(boundaries[mi])) + onset) - phrase.start
@@ -248,6 +250,34 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                 raise ValueError("Conflicting source beam marks in generated score")
             for original_mark in original.findall("beam"):
                 dest.append(deepcopy(original_mark))
+
+    # A transformed passage can contain untouched authored tuplets in
+    # another voice or later measure. Their original bracket/number policy
+    # may override the generic generated group only if the attack and note
+    # length are unchanged, and a corresponding generated mark exists.
+    # Never copy raw tuplet marks into a shortened or regrouped passage.
+    if retimed_source:
+        for sid, dest in targets.items():
+            original = original_notes.get(sid)
+            if original is None or sid not in original_onsets:
+                continue
+            original_marks = original.findall("notations/tuplet")
+            if not original_marks:
+                continue
+            binding = bindings.get(dest.get("id"), {})
+            if (abs(binding.get("source_beat", -1e9) -
+                    original_onsets[sid]) > 1e-6 or
+                    abs(float(Fraction(dest.findtext("duration", "0")) /
+                              10080) - float(original_durations[sid])) > 1e-6):
+                continue
+            generated_marks = dest.findall("notations/tuplet")
+            for mark in original_marks:
+                matching = [candidate for candidate in generated_marks
+                            if candidate.get("type") == mark.get("type")]
+                if len(matching) != 1:
+                    continue
+                for name, value in mark.attrib.items():
+                    matching[0].set(name, value)
 
     # Slur numbers are local to the original part and voice; the same number
     # may be used simultaneously by two voices or across two staves.
