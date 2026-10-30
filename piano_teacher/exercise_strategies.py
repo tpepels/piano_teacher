@@ -12,6 +12,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from math import ceil
 from typing import Callable, Protocol
+from functools import lru_cache
 from .exercise_generator import ExerciseVariant
 from .difficulty import DifficultyEstimator, HeuristicDifficulty
 from .music import Phrase
@@ -210,6 +211,37 @@ class FeatureGatedStrategy:
 
 
 @dataclass(frozen=True)
+class RubricNetTrainedStrategy:
+    """Real RubricNet difficulty estimate; explicit rule-based drill routing.
+
+    The nine-class score-level model does not learn exercise selection. The
+    thresholds below are deliberately transparent, not published RubricNet
+    pedagogical decisions. No trained model is substituted by a heuristic.
+    """
+    prediction: object
+    name: str = "rubricnet-trained"
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
+        level = self.prediction.median_class
+        if not 0 <= level <= 8:
+            raise ValueError(f"Invalid RubricNet class: {level}")
+        if level <= 2:
+            return baseline()
+        if level <= 5:
+            return CodaPartStrategy().generate(context, baseline)
+        return CompositeStrategy((FukudaStrategy(), CodaPartStrategy())).generate(
+            context, baseline)
+
+
+@lru_cache(maxsize=8)
+def _trained_rubricnet_from_xml(source_musicxml: str) -> RubricNetTrainedStrategy:
+    from .research.rubricnet_model import RubricNetModel
+    from .research.rubricnet_extractor import RubricNetExtractor
+    descriptors = RubricNetExtractor().extract(source_musicxml)
+    return RubricNetTrainedStrategy(RubricNetModel.bundled().predict_descriptors(descriptors))
+
+
+@dataclass(frozen=True)
 class CompositeStrategy:
     parts: tuple[ExerciseStrategy, ...]
 
@@ -303,6 +335,7 @@ APP_STRATEGIES = (
     ("fukuda", "Fukuda · chord and leap simplification"),
     ("coda-part", "Coda · passage splitting"),
     ("feature-gated", "Feature-guided selection"),
+    ("rubricnet-trained", "RubricNet · trained score difficulty (optional setup)"),
     ("fukuda+coda-part", "Fukuda + Coda"),
 )
 
@@ -311,7 +344,7 @@ def available_strategies() -> tuple[dict[str, str], ...]:
     return tuple({"id": key, "label": label} for key, label in APP_STRATEGIES)
 
 
-def resolve_strategy(spec: str | ExerciseStrategy | None) -> ExerciseStrategy:
+def resolve_strategy(spec: str | ExerciseStrategy | None, *, piece=None) -> ExerciseStrategy:
     if spec is None:
         spec = "legacy"
     if not isinstance(spec, str):
@@ -319,6 +352,11 @@ def resolve_strategy(spec: str | ExerciseStrategy | None) -> ExerciseStrategy:
                 or not callable(getattr(spec, "generate", None))):
             raise TypeError("Expected a strategy with name and generate")
         return SourcePreservingAdapter(spec)
+    if spec == "rubricnet-trained":
+        if piece is None:
+            raise ValueError("RubricNet-trained requires the original score")
+        return SourcePreservingAdapter(
+            _trained_rubricnet_from_xml(piece.source_musicxml))
     names = spec.split("+")
     if not names or any(name not in _FACTORIES for name in names):
         raise ValueError(f"Unknown exercise strategy {spec!r}; choose from "
