@@ -45,7 +45,10 @@ def test_fresh_real_score_framebuffer_obligations(name, tmp_path):
     # Pinned score, explicit deterministic selection from the complete
     # independent written inventory. Two densest onsets for the Chopin case.
     beats = sorted(counts, key=lambda beat: (-counts[beat], beat))[:2]
-    assert len(beats) == 2 and all(counts[beat] >= 1 for beat in beats), counts
+    # A real-score passage with one rest onset still has one real
+    # source-bound pixel obligation; do not invent a second written rest.
+    minimum = 1 if construct == "rest" else 2
+    assert len(beats) >= minimum and all(counts[beat] >= 1 for beat in beats), counts
     if construct == "note":
         assert max(counts.values()) >= 2, "Chosen passage does not test dense simultaneous heads"
     prepared.update(sample_beats=beats, phase3_full=True)
