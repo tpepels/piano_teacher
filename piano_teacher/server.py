@@ -52,7 +52,8 @@ from .learner_state import guided_units, next_guided_unit, placement_candidate
 from .progress_repository import ProgressRepository
 from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
-from .exercise_contracts import AssessmentEvidence, OriginalTiming, TwoPhaseTempo, assess_timed
+from .exercise_contracts import AssessmentEvidence, OriginalTiming, TwoPhaseTempo
+from .timed_assessment import assess_timed_window, timed_live_marks, timed_rolling_recovery
 from .practice_history import PracticePolicyService
 
 
@@ -287,7 +288,8 @@ class PracticeEngine:
     def _elapsed_beat(self, elapsed_seconds: float) -> float:
         tempo = self._active_tempo_map()
         if tempo is not None and elapsed_seconds >= 0:
-            return tempo.beat_at(elapsed_seconds)
+            origin = tempo.seconds_at(self.play_from_beat)
+            return tempo.beat_at(origin+elapsed_seconds)-self.play_from_beat
         return elapsed_seconds * self.plan.bpm / 60.0
 
     def _elapsed_seconds(self, beat: float) -> float:
@@ -960,10 +962,7 @@ class PracticeEngine:
             phrase=self.plan.active_phrase
             position = self.open_from_beat if from_beat is None else from_beat
             self.play_from_beat=max(0.0,min(float(position),phrase.end-phrase.start-1e-6))
-            if "two-phase-tempo" in self.plan.active_variant.level:
-                # Until partial tempo-map retries are supported, shape the
-                # whole phrase and grade the original note mapping.
-                self.play_from_beat = 0.0
+
             self.visual_transport.begin_take(loop_continuation=loop_continuation)
             self.transport_id+=1
             self.live_input.reset_attempt()
@@ -1027,10 +1026,10 @@ class PracticeEngine:
         phrase = self.plan.active_phrase
         tempo_map = self._active_tempo_map()
         if tempo_map is not None and self.running and now >= self.run_at:
-            beat = tempo_map.beat_at(now-self.run_at)
+            beat = self.play_from_beat + self._elapsed_beat(now-self.run_at)
             active = next((segment for segment in tempo_map.segments
                            if beat < segment.end_beat), tempo_map.segments[-1])
-            return (self.visual_offset_beats+self.play_from_beat+beat,
+            return (self.visual_offset_beats+beat,
                     0.0 if self.paused else active.bpm/60.0,
                     self.visual_offset_beats+phrase.end-phrase.start)
         return self.visual_transport.position(
@@ -1282,10 +1281,18 @@ class PracticeEngine:
             unit = next((unit for unit in guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)
                          if unit["start_beat"] == decision.restart_beat and unit["end_beat"] == decision.end_beat), None)
             if unit is not None:
-                assessed = evaluate(Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
-                    phrase.start+self.play_from_beat, phrase.end,
-                    tuple(note for note in phrase.notes if note.start >= phrase.start+self.play_from_beat)),
-                    self.plan.hand, self.plan.bpm, self.recorder.presses if self.recorder else [])
+                tempo_map = self._active_tempo_map()
+                if tempo_map is not None:
+                    assessed = assess_timed_window(
+                        phrase, self.plan.hand, tempo_map,
+                        self.recorder.presses if self.recorder else [],
+                        from_beat=self.play_from_beat,
+                        end_beat=decision.end_beat)
+                else:
+                    assessed = evaluate(Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
+                        phrase.start+self.play_from_beat, phrase.end,
+                        tuple(note for note in phrase.notes if note.start >= phrase.start+self.play_from_beat)),
+                        self.plan.hand, self.plan.bpm, self.recorder.presses if self.recorder else [])
                 # Rolling detection can include the preceding idea;
                 # saved trouble describes only this canonical unit.
                 unit_errors = [entry for entry in assessed.notes
@@ -1336,11 +1343,10 @@ class PracticeEngine:
             return
         tempo_map = self._active_tempo_map()
         if tempo_map is not None:
-            result = assess_timed(
-                OriginalTiming().transform(self.plan.active_variant),
-                self.plan.hand, self.plan.bpm,
+            result = assess_timed_window(
+                phrase, self.plan.hand, tempo_map,
                 self.recorder.presses if self.recorder else [],
-                tempo_map=tempo_map).assessment
+                from_beat=self.play_from_beat, end_beat=ending)
         else:
             result = self.assessment.assess_take(
                 phrase, hand=self.plan.hand, bpm=self.plan.bpm,
@@ -1350,8 +1356,12 @@ class PracticeEngine:
         # Keep the just-played score visible for feedback. Curriculum changes
         # are applied only after the display interval, never mid-feedback.
         try:
-            projection = project_assessment(result, phrase, self.plan.bpm,
-                                            self.engraving().layout, played_from_beat=self.play_from_beat)
+            projection = project_assessment(
+                result, phrase, self.plan.bpm, self.engraving().layout,
+                played_from_beat=self.play_from_beat,
+                elapsed_to_beat=(lambda seconds: tempo_map.beat_at(
+                    tempo_map.seconds_at(self.play_from_beat) + seconds)
+                    if tempo_map is not None else None))
             self.feedback_marks = projection["marks"]
             self.feedback_unmapped = projection["unmapped"]
         except (ValueError, RuntimeError, KeyError) as exc:
@@ -1464,7 +1474,6 @@ class PracticeEngine:
         # Detect rolling five-error windows at the completed two-bar boundary. Silent
         # previews never generate failure, assessment or mastery.
         while (self.mode == "practice" and self.review_end_beat is None and not self.preview_only
-               and self._active_tempo_map() is None
                and self.next_boundary_beat and score_beat >= self.next_boundary_beat):
             if self.is_builtin_warmup:
                 decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
@@ -1473,10 +1482,19 @@ class PracticeEngine:
                     beats_per_bar=beats_per_bar, threshold=SETTINGS.warmup_recovery_errors,
                     window_start_beat=chunk_start_at_end(grid,self.next_boundary_beat))
             else:
-                decision=check_rolling_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
-                    self.recorder.presses if self.recorder else [],
-                    from_beat=self.play_from_beat, end_beat=self.next_boundary_beat, grid=grid,
-                    threshold=SETTINGS.recovery_errors_in_window)
+                tempo_map = self._active_tempo_map()
+                if tempo_map is not None:
+                    decision = timed_rolling_recovery(
+                        phrase, self.plan.hand, tempo_map,
+                        self.recorder.presses if self.recorder else [],
+                        from_beat=self.play_from_beat,
+                        end_beat=self.next_boundary_beat, grid=grid,
+                        threshold=SETTINGS.recovery_errors_in_window)
+                else:
+                    decision=check_rolling_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
+                        self.recorder.presses if self.recorder else [],
+                        from_beat=self.play_from_beat, end_beat=self.next_boundary_beat, grid=grid,
+                        threshold=SETTINGS.recovery_errors_in_window)
             if decision is not None:
                 self._apply_rolling_recovery(decision, phrase, grid, score_beat, now)
                 return
@@ -1515,13 +1533,22 @@ class PracticeEngine:
     def _live_feedback(self, elapsed_seconds: float) -> list[dict]:
         """Only publish source-bound live marks with a current engraved map."""
         p = self.plan
-        if p is None or self.preview_only or not self.running or self._active_tempo_map() is not None:
-            # Constant-BPM live matching would mislabel these attacks.
-            # Final grading consumes the exact piecewise tempo map.
+        if p is None or self.preview_only or not self.running:
             return []
         engraving = self.score_artifacts.cached_layout(self._score_selection())
         if engraving is None:
             return []
+        tempo_map = self._active_tempo_map()
+        if tempo_map is not None:
+            try:
+                return timed_live_marks(
+                    p.active_phrase, p.hand, tempo_map,
+                    self.recorder.presses if self.recorder else [],
+                    from_beat=self.play_from_beat, elapsed_seconds=elapsed_seconds,
+                    grid=phrase_grid(p.active_phrase, p.piece.bar_boundaries),
+                    layout=engraving.layout)
+            except (ValueError, RuntimeError, KeyError):
+                return []
         return self.assessment.live_marks(
             phrase=p.active_phrase, hand=p.hand, bpm=p.bpm,
             played=self.recorder.presses if self.recorder else [],
@@ -1603,7 +1630,8 @@ class PracticeEngine:
         tempo_map = self._active_tempo_map()
         timing = TimingSnapshot(
             sampled_at=sampled_at, now=now, run_at=self.run_at,
-            tempo_segments=tempo_map.as_segments() if tempo_map is not None else (),
+            tempo_segments=(tempo_map.from_beat(self.play_from_beat).as_segments()
+                            if tempo_map is not None else ()),
             mapped_clock_beat=(self._elapsed_beat(now-self.run_at)
                                if tempo_map is not None else None),
             running=self.running, paused=self.paused, auto=self.auto,
