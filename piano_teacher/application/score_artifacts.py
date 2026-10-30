@@ -71,8 +71,8 @@ class ScoreArtifacts:
                 barlines=piece.barlines,
                 # Source slurs/rests use the original event clock. Retimed
                 # drills must engrave their actual durations instead.
-                source_musicxml="" if selected.transformed_rhythm
-                               else piece.source_musicxml,
+                source_musicxml=piece.source_musicxml,
+                retimed_source=selected.transformed_rhythm,
                 fingering_sources=authored_projection_sources(piece.fingering_plan))
             self._notation = notation
             self._notation_identity = selected.identity
@@ -91,8 +91,7 @@ class ScoreArtifacts:
     def semantic_score(self, selected: ScoreSelection) -> dict:
         return project_model(deepcopy(self.source_model(selected)),
             selected.piece.fingering_plan,
-            source_musicxml="" if selected.transformed_rhythm
-                           else selected.piece.source_musicxml)
+            source_musicxml=selected.piece.source_musicxml)
 
     def cached_layout(self, selected: ScoreSelection) -> EngravedScore | None:
         """Feedback may read only ink belonging to this exact source selection."""
