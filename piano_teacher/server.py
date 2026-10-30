@@ -54,6 +54,7 @@ from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
 from .exercise_contracts import AssessmentEvidence
 from .practice_history import PracticePolicyService
+from .remediation import RemediationPlanner, RemedialAssignment
 
 
 class PracticeEngine:
@@ -150,6 +151,9 @@ class PracticeEngine:
             self.progress.assessment_history,
             diagnosis=self.library.settings["diagnosis_strategy"],
             learner=self.library.settings["learner_strategy"])
+        self.remediation_planner = RemediationPlanner()
+        self._remediation_pending: RemedialAssignment | None = None
+        self._remediation_active: RemedialAssignment | None = None
 
     def _midi_lost(self, reason: str = "device_disconnected") -> None:
         """Cancel session state after detachment and before closing the input."""
@@ -504,6 +508,8 @@ class PracticeEngine:
         self.review_end_beat=None
         self.review_session_complete=False
         self._guided_prepared=False
+        self._remediation_pending = None
+        self._remediation_active = None
 
     def _learner_saved(self, stage_key: str | None = None) -> dict:
         return self.learner_progress.saved(
@@ -514,7 +520,8 @@ class PracticeEngine:
             self.plan, mode=self.mode, guided_range=self.guided_range)
 
     def _save_guided_preparation(self):
-        if self._guided_prepared or self.teaching is None or self.mode != "learn":
+        if (self._guided_prepared or self._remediation_active is not None
+                or self.teaching is None or self.mode != "learn"):
             return
         snapshot = self.teaching.snapshot(now=time.monotonic())
         if not snapshot["completed"]:
@@ -635,7 +642,8 @@ class PracticeEngine:
                       tuple(n for n in phrase.notes if absolute_start-1e-7 <= n.start < absolute_end-1e-7))
 
     def _begin_learn(self, *, from_beat: float = 0.0, bump_revision: bool = True,
-                     recovery: bool = False):
+                     recovery: bool = False,
+                     remediation: RemedialAssignment | None = None):
         from .teaching import TeachingConfig, TeachingController
         if self.plan is None:
             raise ValueError("Open a piece first")
@@ -656,6 +664,7 @@ class PracticeEngine:
             raise ValueError("No note attacks in the selected fragment")
         retry_range = self.retry_range if recovery else None
         self._stop()
+        self._remediation_active = remediation
         if recovery:
             self.retry_range = retry_range
             self._guided_return = (self.plan.identity, grid[first])
@@ -670,11 +679,15 @@ class PracticeEngine:
         if self.teaching is None:
             self.teaching = TeachingController(TeachingConfig(persistent_hints=self.persistent_hints))
         self.teaching.bind(stage_key=self.plan.identity, revision=self.score_revision,
-            variant=self.plan.active_variant, fragment_start=grid[first], fragment_end=grid[end_index],
+            variant=(remediation.variant if remediation is not None
+                     else self.plan.active_variant),
+            fragment_start=grid[first], fragment_end=grid[end_index],
             now=time.monotonic(), connected=self.midi.connected)
         self.awaiting_score_revision = self.score_revision
         self.feedback = "Preparing a short idea to learn"
-        self.next_action = (f"Learn bars {self.display_phrase().first_bar}-{self.display_phrase().last_bar} "
+        self.next_action = (f"Learn the selected {remediation.focus} notes, then retry the original."
+                            if remediation is not None else
+                            f"Learn bars {self.display_phrase().first_bar}-{self.display_phrase().last_bar} "
                             "at your own pace, then retry the rhythm.")
         self._save()
 
@@ -888,12 +901,19 @@ class PracticeEngine:
         self.retry_range = None
         before = (p.identity, p.bpm)
         # Persist real graded evidence under its original stage identity.
+        recommendation = None
         if (self.fingerprint and getattr(result, "notes", None)
                 and all(hasattr(entry, "status") for entry in result.notes)):
             evidence = AssessmentEvidence.from_result(before[0], result, before[1])
-            self.practice_policy.observe(self.fingerprint, evidence)
+            recommendation = self.practice_policy.observe(self.fingerprint, evidence)
         message = p.apply_result(correct=result.correct,
                                  total=len(result.notes), extras=result.extra_notes)
+        if (recommendation is not None and not result.clean and self.auto
+                and self.mode == "practice" and not self.is_builtin_warmup
+                and p.exercise.kind == "learn" and p.identity == before[0]):
+            self._remediation_pending = self.remediation_planner.plan(
+                recommendation, result, p.active_variant,
+                stage_key=before[0], boundaries=p.piece.bar_boundaries)
         if p.identity == before[0] and p.bpm > before[1]:
             self.recovery_notice = {
                 "kind": "speedup", "errors": 0,
@@ -1218,6 +1238,12 @@ class PracticeEngine:
             message = self._commit_pending()
             self.feedback_marks=[]
             self.feedback_unmapped=0
+            assignment = self._remediation_pending
+            self._remediation_pending = None
+            if (self.auto and assignment is not None
+                    and self.plan.identity == previous_identity):
+                self._start_remedial_assignment(assignment)
+                return
             if self.auto and message != "Piece mastered":
                 if self.course_guided and self.plan.identity != previous_identity:
                     self._begin_course_stage()
@@ -1243,6 +1269,36 @@ class PracticeEngine:
                 self.auto=False
                 self.feedback = message or self.feedback
         return
+
+    def _start_remedial_assignment(self, assignment: RemedialAssignment) -> None:
+        """Enter a source-bound remedial take, with no mastery from partial work."""
+        if self.plan is None or assignment.stage_key != self.plan.identity:
+            return
+        if assignment.guided:
+            self._begin_learn(
+                from_beat=assignment.start_beat, recovery=True,
+                remediation=assignment)
+            self.feedback = "Reviewing recurring pitch mistakes"
+        else:
+            self._prepare_practice()
+            self.open_from_beat = assignment.start_beat
+            self.review_end_beat = assignment.end_beat
+            grid = phrase_grid(self.plan.active_phrase,
+                               self.plan.piece.bar_boundaries)
+            first = self.plan.active_phrase.first_bar + grid.index(
+                assignment.start_beat)
+            last = self.plan.active_phrase.first_bar + grid.index(
+                assignment.end_beat) - 1
+            self.retry_range = {
+                "start_beat": assignment.start_beat,
+                "end_beat": assignment.end_beat,
+                "first_bar": first, "last_bar": last,
+            }
+            self.awaiting_score_revision = None
+            self.feedback = f"Focused {assignment.focus} practice ready"
+            self.next_action = (
+                "Press Start to practise these measures. "
+                "This partial retry cannot award mastery.")
 
     def _apply_rolling_recovery(self, decision, phrase: Phrase, grid, score_beat: float, now: float):
         """Apply an accepted source-grid recovery decision atomically."""
@@ -1605,7 +1661,10 @@ class PracticeEngine:
                           "start_beat": self.guided_range[0], "end_beat": self.guided_range[1]},
                 phase=self._phase(now),
                 has_more_units=activity.learner["next_unit"] is not None and self._guided_return is None,
-                returning=bool(self._guided_return), required_notes=len(phrase.notes),
+                returning=bool(self._guided_return),
+                required_notes=(len(self._remediation_active.variant.notes)
+                                if self._remediation_active is not None
+                                else len(phrase.notes)),
                 duration_beats=phrase.end-phrase.start,
                 feedback_marks=self._guided_marks(teaching),
             )
