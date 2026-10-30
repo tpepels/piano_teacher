@@ -10,6 +10,7 @@ from dataclasses import dataclass, replace
 from typing import Callable
 
 from .exercise_generator import ExerciseVariant
+from .notation.rhythm_safety import rhythm_protected_source_ids
 from .exercise_strategies import ExerciseContext, ExerciseStrategy
 from .exercise_contracts import (
     OriginalTiming, TempoMap, TempoStrategy, TimingStrategy,
@@ -42,6 +43,7 @@ class ExercisePipeline:
     def build(
         self, context: ExerciseContext,
         baseline: Callable[[], tuple[ExerciseVariant, ...]],
+        *, source_musicxml: str = "",
     ) -> tuple[ExerciseStage, ...]:
         variants = self.exercise.generate(context, baseline)
         if context.warmup or context.kind != "learn" or not variants:
@@ -54,11 +56,15 @@ class ExercisePipeline:
             mapping = self.timing.transform(original)
             if len(mapping.events) != len(original.notes):
                 raise ValueError("Timing strategy must preserve note identities")
-            if any(
-                abs(event.exercise_start - (note.start-original.phrase.start)) > 1e-7
+            changed = tuple(
+                note.source_id for event, note in zip(mapping.events, original.notes)
+                if abs(event.exercise_start - (note.start-original.phrase.start)) > 1e-7
                 or abs(event.exercise_end - (note.end-original.phrase.start)) > 1e-7
-                for event, note in zip(mapping.events, original.notes)
-            ):
+            )
+            # A merged tie attack cannot be retimed independently of its
+            # written continuations. The same applies to authored tuplets.
+            protected = rhythm_protected_source_ids(source_musicxml)
+            if changed and not (set(changed) & protected):
                 offset = original.phrase.start
                 altered = tuple(replace(note, start=offset+event.exercise_start,
                                         end=offset+event.exercise_end)
