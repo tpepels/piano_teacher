@@ -59,7 +59,7 @@ class ScoreArtifacts:
 
     @staticmethod
     def _transformed_rhythm(selected: ScoreSelection) -> bool:
-        return any(f":{name}:" in selected.stage_key for name in
+        return any(f":{name}" in selected.stage_key for name in
                    ("dotted-long-short", "dotted-short-long"))
 
     def _selected_notation(self, selected: ScoreSelection) -> LessonScore:
