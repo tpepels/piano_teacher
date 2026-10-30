@@ -26,6 +26,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Check bounded test fixture syntax
+        run: python -m compileall -q tests/test_native_voice_collisions.py
       - name: Install only native framebuffer dependencies
         run: |
           sudo apt-get update -qq
@@ -36,8 +38,6 @@ jobs:
           unzip -q /tmp/godot.zip -d /tmp/godot-bin
           sudo install -m 755 /tmp/godot-bin/Godot_v4.5.1-stable_linux.x86_64 /usr/local/bin/godot
           godot --headless --version
-      - name: Check bounded test fixture syntax
-        run: python -m compileall -q tests/test_native_voice_collisions.py
       - name: Fresh independent score pixels (bounded)
         id: pixel
         continue-on-error: true

@@ -24,7 +24,7 @@ def collision_source(kind):
     # it exercises the renderer's new default selection, not overrides.
     explicit=([] if kind=='three-voice-neighbors' else
               ['up','up'] if kind=='same-direction' else
-              ['up','down','up'][:len(groups]))
+              ['up','down','up'][:len(groups)])
     tree=ET.fromstring(source(groups,explicit))
     if kind in {'mixed-chords','beamed-overlap','tuplet-overlap','unrelated-third-voice'}:
         for note in tree.findall('.//note'):
