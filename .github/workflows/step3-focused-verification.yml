@@ -1,0 +1,34 @@
+# One-shot Step 3 acceptance checks; not an always-on corpus audit.
+name: Piano Teacher (Step 3 transformed notation)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/step3-focused-verification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transformed-notation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install bounded notation dependencies
+        run: timeout 85s python -m pip install -e '.[test,godot]'
+      - name: Source annotations, transport and timing contracts
+        run: |
+          timeout 65s python -m pytest -q --tb=short \
+            tests/test_transformed_source_notation.py \
+            tests/test_timed_real_scores_and_recovery.py \
+            tests/test_timing_live_integration.py \
+            tests/test_strategy_pipeline.py \
+            tests/test_native_precise_rhythms.py \
+            tests/test_native_barlines.py \
+            tests/test_native_musicxml_hairpins.py
