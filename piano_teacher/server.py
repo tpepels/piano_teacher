@@ -264,7 +264,7 @@ class PracticeEngine:
 
     def _active_tempo_map(self):
         """The single authoritative active practice clock and grading map."""
-        if (self.plan is None or self.mode not in ("practice", "perform")
+        if (self.plan is None or self.mode not in ("practice", "listen")
                 or self.plan.active_variant.level != "two-phase-tempo"):
             return None
         return TwoPhaseTempo().generate(
@@ -328,7 +328,8 @@ class PracticeEngine:
                         and self.plan.exercise.kind != "perform"
                         and self.review_end_beat is None and (self.auto or self.preview_only)):
                     phrase = self.plan.active_phrase
-                    source_end = self.run_at + (phrase.end-phrase.start-self.play_from_beat)*60/self.plan.bpm
+                    source_end = self.run_at + (self._elapsed_seconds(phrase.end-phrase.start)
+                        - self._elapsed_seconds(self.play_from_beat))
                     due = now >= source_end + self.visual_gap_beats*60/self.plan.bpm
                 if due:
                     self._update()
@@ -934,6 +935,10 @@ class PracticeEngine:
             phrase=self.plan.active_phrase
             position = self.open_from_beat if from_beat is None else from_beat
             self.play_from_beat=max(0.0,min(float(position),phrase.end-phrase.start-1e-6))
+            if self.plan.active_variant.level == "two-phase-tempo":
+                # Until partial tempo-map retries are supported, shape the
+                # whole phrase and grade the original note mapping.
+                self.play_from_beat = 0.0
             self.visual_transport.begin_take(loop_continuation=loop_continuation)
             self.transport_id+=1
             self.live_input.reset_attempt()
@@ -1296,11 +1301,19 @@ class PracticeEngine:
             if now >= self.next_at:
                 self._update()
             return
-        result = self.assessment.assess_take(
-            phrase, hand=self.plan.hand, bpm=self.plan.bpm,
-            played=self.recorder.presses if self.recorder else [],
-            from_beat=self.play_from_beat, end_beat=ending,
-            evaluator=evaluate)
+        tempo_map = self._active_tempo_map()
+        if tempo_map is not None:
+            result = assess_timed(
+                OriginalTiming().transform(self.plan.active_variant),
+                self.plan.hand, self.plan.bpm,
+                self.recorder.presses if self.recorder else [],
+                tempo_map=tempo_map).assessment
+        else:
+            result = self.assessment.assess_take(
+                phrase, hand=self.plan.hand, bpm=self.plan.bpm,
+                played=self.recorder.presses if self.recorder else [],
+                from_beat=self.play_from_beat, end_beat=ending,
+                evaluator=evaluate)
         # Keep the just-played score visible for feedback. Curriculum changes
         # are applied only after the display interval, never mid-feedback.
         try:
@@ -1316,7 +1329,8 @@ class PracticeEngine:
             self.feedback = result.summary
         self.running=False
         self.recorder=None
-        self.performance_summary = self._performance_review(phrase, result)
+        self.performance_summary = (self._performance_review(phrase, result)
+                                    if tempo_map is None else None)
         self.review_stage_identity = self.plan.identity
         route = completion_route(self.mode, self.review_end_beat, self.play_from_beat)
         if route == "perform":
@@ -1410,13 +1424,14 @@ class PracticeEngine:
             return
         phrase=self.plan.active_phrase
         total_beats=phrase.end-phrase.start
-        elapsed_beats=max(0.0,(now-self.run_at)*self.plan.bpm/60)
+        elapsed_beats=max(0.0,self._elapsed_beat(now-self.run_at))
         score_beat=self.play_from_beat+elapsed_beats
         grid=phrase_grid(phrase,self.plan.piece.bar_boundaries)
         beats_per_bar=grid[1]-grid[0]
         # Detect rolling five-error windows at the completed two-bar boundary. Silent
         # previews never generate failure, assessment or mastery.
         while (self.mode == "practice" and self.review_end_beat is None and not self.preview_only
+               and self._active_tempo_map() is None
                and self.next_boundary_beat and score_beat >= self.next_boundary_beat):
             if self.is_builtin_warmup:
                 decision=check_two_bar_window(phrase,self.plan.hand,self.plan.bpm,
@@ -1438,7 +1453,7 @@ class PracticeEngine:
                 self.next_boundary_beat=0.0
         ending = (min(total_beats, self.review_end_beat)
                   if self.review_end_beat is not None else total_beats)
-        duration=(ending-self.play_from_beat)*60/self.plan.bpm
+        duration=self._elapsed_seconds(ending)-self._elapsed_seconds(self.play_from_beat)
         # Settlement belongs inside the musical rest, including very short
         # explicit meters. It must never extend the next attempt's deadline.
         settlement = .20
@@ -1467,7 +1482,9 @@ class PracticeEngine:
     def _live_feedback(self, elapsed_seconds: float) -> list[dict]:
         """Only publish source-bound live marks with a current engraved map."""
         p = self.plan
-        if p is None or self.preview_only or not self.running:
+        if p is None or self.preview_only or not self.running or self._active_tempo_map() is not None:
+            # Constant-BPM live matching would mislabel these attacks.
+            # Final grading consumes the exact piecewise tempo map.
             return []
         engraving = self.score_artifacts.cached_layout(self._score_selection())
         if engraving is None:
@@ -1525,7 +1542,7 @@ class PracticeEngine:
         visual_now = self.paused_at if self.paused else time.monotonic()
         visual_beat = self.play_from_beat
         if self.running and visual_now >= self.run_at and p is not None:
-            visual_beat += (visual_now-self.run_at)*p.bpm/60.0
+            visual_beat += self._elapsed_beat(visual_now-self.run_at)
         activity = replace(activity, midi_display=self.live_input.snapshot(
             now=time.monotonic(),
             phrase=p.active_phrase if p is not None else None,
