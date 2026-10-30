@@ -74,11 +74,21 @@ def _voice_events(measure: ET.Element) -> dict[str, list[_Event]]:
         if chord:
             continue
         rest = child.find("rest") is not None
-        # A nonstandard MIDI release may use an exact time-modification ratio,
-        # which should not be misrepresented as a conventional subdivision.
+        # Allow real source-backed 3:2 triplet groups (e.g. Moonlight's
+        # eighth-note arpeggios) to share beams. An arbitrary MIDI-release
+        # ratio is not a conventional tuplet and must remain un-beamed.
+        modification = child.find("time-modification")
+        conventional_triplet = (
+            modification is not None
+            and modification.findtext("actual-notes") == "3"
+            and modification.findtext("normal-notes") == "2"
+            and child.findtext("type") in LEVELS
+            and duration * 3 ==
+                (4 * divisions // (2 ** LEVELS[child.findtext("type")])) * 2
+        )
         level = LEVELS.get(child.findtext("type"), 0) if (
-            not rest and child.find("time-modification") is None
-            and not child.findall("beam")) else 0
+            not rest and not child.findall("beam")
+            and (modification is None or conventional_triplet)) else 0
         lanes[child.findtext("voice", "1")].append(_Event(
             child, onset, duration, level, rest,
             rest and child.get("print-object") == "no"))
