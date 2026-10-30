@@ -12,6 +12,7 @@ from bisect import bisect_right
 from math import isfinite
 
 from ..music import Note, Phrase, source_note_id
+from .coda_written_rests import MatrixWrittenRest, extract_written_rests
 
 
 @dataclass(frozen=True)
@@ -67,9 +68,11 @@ class MatrixScore:
     boundaries: tuple[float, ...]
     parts: tuple[MatrixPart, ...]
     index_to_source: tuple[tuple[int, str], ...]
+    written_rests: tuple[MatrixWrittenRest, ...] = ()
 
     @classmethod
-    def from_phrase(cls, phrase: Phrase, *, boundaries: tuple[float, ...] = ()):
+    def from_phrase(cls, phrase: Phrase, *, boundaries: tuple[float, ...] = (),
+                    source_musicxml: str = ""):
         if boundaries:
             grid = tuple(float(x) for x in boundaries
                          if phrase.start - 1e-7 <= x <= phrase.end + 1e-7)
@@ -117,7 +120,10 @@ class MatrixScore:
                         phrase.first_bar + measure_offset))
                 part_voices.append(MatrixVoice(track, channel, name, tuple(attacks)))
             parts.append(MatrixPart(hand, tuple(part_voices)))
-        result = cls(phrase, grid, tuple(parts), tuple(identities))
+        written_rests = extract_written_rests(
+            source_musicxml, first_bar=phrase.first_bar, last_bar=phrase.last_bar,
+            boundaries=grid) if source_musicxml else ()
+        result = cls(phrase, grid, tuple(parts), tuple(identities), written_rests)
         result.verify_lossless()
         return result
 
@@ -146,6 +152,10 @@ class MatrixScore:
     @property
     def note_count(self) -> int:
         return len(self.index_to_source)
+
+    @property
+    def written_rest_count(self) -> int:
+        return len(self.written_rests)
 
     @property
     def attack_count(self) -> int:

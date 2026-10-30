@@ -66,3 +66,21 @@ not relabeled research-complete by this work.
 
 No claim of exact Coda reproduction or verified pedagogy is justified.
 No long-running full-corpus audits or background work were initiated.
+
+## Follow-up: written-rest source sidecar
+
+- The matrix now optionally accepts original MusicXML and records authored
+  rests using immutable `MatrixWrittenRest` events. Every rest retains its
+  source XML ordinal, part/staff/voice, selected measure, onset, duration,
+  written note type, dots, visibility and whole-measure designation.
+- Backup/forward moves and MIDI release gaps never create authored rests.
+  Rest-only voices remain explicitly identified by their source XML voice;
+  no hand or synthetic MIDI attack is invented.
+- The MusicXML source must have a complete selected measure grid; invalid
+  divisions, negative cursors and rests outside that grid fail closed.
+- Tests cover mixed voices, hidden rests, a division change, measure-relative
+  extraction and real imported MusicXML.
+- **Not accepted as full MMR**: XML rest events are an explicitly separate
+  source-notation sidecar, not yet integrated into the MMR's part/voice
+  transformation rules. Other source annotations and Coda reference parity
+  remain open. No production behavior is switched on.
