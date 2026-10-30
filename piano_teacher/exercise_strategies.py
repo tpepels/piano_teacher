@@ -1,0 +1,253 @@
+"""Research-inspired, source-preserving exercise strategies.
+
+Fukuda et al. (SMC 2015): https://sap.ist.i.kyoto-u.ac.jp/EN/bib/intl/FUK-SMC15.pdf
+Tang (Coda, 2025): https://digitalcommons.dartmouth.edu/cs_senior_theses/76/
+Ramoneda et al. (ISMIR 2024): https://arxiv.org/abs/2408.00473
+
+These are adapted *rules*, not reproductions of the complete research systems.
+No notes are invented or retimed: the renderer/grader use original source IDs.
+"""
+from __future__ import annotations
+from collections import defaultdict
+from dataclasses import dataclass
+from math import ceil
+from typing import Callable, Protocol
+from .exercise_generator import ExerciseVariant
+from .music import Phrase
+
+Groups = tuple[tuple[str, tuple[frozenset[int], ...]], ...]
+Baseline = Callable[[], tuple[ExerciseVariant, ...]]
+
+
+@dataclass(frozen=True)
+class ExerciseContext:
+    phrase: Phrase
+    hand: str
+    groups: Groups = ()
+    max_attacks: int = 8
+
+    @property
+    def source_indices(self) -> tuple[int, ...]:
+        return tuple(i for i, note in enumerate(self.phrase.notes)
+                     if self.hand == "both" or note.hand == self.hand)
+
+
+class ExerciseStrategy(Protocol):
+    @property
+    def name(self) -> str: ...
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]: ...
+
+
+def _variant(context: ExerciseContext, level: str, indices: set[int]) -> ExerciseVariant:
+    valid = set(context.source_indices)
+    if not indices <= valid:
+        raise ValueError(f"{level}: notes outside the original hand/source")
+    ordered = tuple(i for i in context.source_indices if i in indices)
+    phrase = context.phrase
+    return ExerciseVariant(level, Phrase(
+        phrase.number, phrase.first_bar, phrase.last_bar, phrase.start, phrase.end,
+        tuple(phrase.notes[i] for i in ordered)), ordered)
+
+
+def _finish(context: ExerciseContext,
+            proposals: list[tuple[str, set[int]]]) -> tuple[ExerciseVariant, ...]:
+    """Deduplicate proposals; require the exact source as the final stage."""
+    complete = set(context.source_indices)
+    if not complete:
+        return ()
+    result = []
+    seen = set()
+    for level, indices in [*proposals, ("original", complete)]:
+        indices = set(indices)
+        if not indices or (indices == complete and level != "original"):
+            continue
+        if not indices <= complete:
+            raise ValueError(f"{level}: not source traceable")
+        identity = frozenset(indices)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        result.append(_variant(context, level, indices))
+    if result[-1].level != "original":
+        result.append(_variant(context, "original", complete))
+    return tuple(result)
+
+
+@dataclass(frozen=True)
+class LegacyStrategy:
+    """Adapter for the original generator and its lesson-specific filters."""
+    name: str = "legacy"
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
+        return baseline()
+
+
+@dataclass(frozen=True)
+class FukudaStrategy:
+    """Outer-voice chord thinning + conservatively isolated returning leaps."""
+    name: str = "fukuda"
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
+        available = set(context.source_indices)
+        if not available:
+            return ()
+        chords = defaultdict(list)
+        for i in available:
+            note = context.phrase.notes[i]
+            chords[(note.hand, note.track, note.voice, round(note.start, 6))].append(i)
+        outer = set()
+        for members in chords.values():
+            members.sort(key=lambda i: (context.phrase.notes[i].pitch, i))
+            outer.update((members[0], members[-1]))
+        protected = {i for _, groups in context.groups for group in groups for i in group}
+        voices = defaultdict(list)
+        for members in chords.values():
+            if len(members) == 1:
+                i = members[0]
+                n = context.phrase.notes[i]
+                voices[(n.hand, n.track, n.voice)].append(i)
+        omit = set()
+        for members in voices.values():
+            members.sort(key=lambda i: context.phrase.notes[i].start)
+            for a, b, c in zip(members, members[1:], members[2:]):
+                x, y, z = (context.phrase.notes[i] for i in (a, b, c))
+                if (b not in protected and a not in omit and c not in omit
+                    and x.start < y.start < z.start
+                    and abs(x.pitch - y.pitch) >= 12
+                    and abs(z.pitch - y.pitch) >= 12
+                    and abs(x.pitch - z.pitch) <= 7):
+                    omit.add(b)
+        return _finish(context, [
+            ("fukuda-leap-chords", outer - omit),
+            ("fukuda-outer-voices", outer),
+        ])
+
+
+@dataclass(frozen=True)
+class CodaPartStrategy:
+    """Coda-inspired part splitting; never cut an authored beam or slur."""
+    name: str = "coda-part"
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
+        source = context.source_indices
+        if len(source) <= 1:
+            return _finish(context, [])
+        times = sorted({round(context.phrase.notes[i].start, 6) for i in source})
+        if len(times) < 4:
+            return _finish(context, [])
+        parent = list(range(len(times)))
+        pos = {t: i for i, t in enumerate(times)}
+
+        def find(i: int) -> int:
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        def union(a: int, b: int) -> None:
+            parent[find(b)] = find(a)
+
+        for _, onsets in context.groups:
+            members = sorted({pos[round(context.phrase.notes[i].start, 6)]
+                              for onset in onsets for i in onset if i in source})
+            for a, b in zip(members, members[1:]):
+                union(a, b)
+
+        blocks = defaultdict(set)
+        for i, t in enumerate(times):
+            blocks[find(i)].add(t)
+        target = max(2, min(context.max_attacks, ceil(len(times) / 2)))
+        selected = set()
+        for block in sorted(blocks.values(), key=min):
+            if selected and len(selected | block) > target:
+                break
+            selected.update(block)
+            if len(selected) >= target:
+                break
+        first = {i for i in source if round(context.phrase.notes[i].start, 6) in selected}
+        return _finish(context, [("coda-part-a", first)])
+
+
+@dataclass(frozen=True)
+class FeatureGatedStrategy:
+    """Interpretable heuristic gate inspired by RubricNet descriptors; untrained."""
+    name: str = "feature-gated"
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
+        notes = [context.phrase.notes[i] for i in context.source_indices]
+        chords = defaultdict(list)
+        voices = defaultdict(list)
+        for n in notes:
+            chords[(n.hand, n.track, n.voice, round(n.start, 6))].append(n)
+            voices[(n.hand, n.track, n.voice)].append(n)
+        chords_hard = any(len(group) >= 3 for group in chords.values())
+        leaps_hard = False
+        for voice in voices.values():
+            ordered = sorted(voice, key=lambda note: note.start)
+            if any(abs(a.pitch - b.pitch) >= 12 for a, b in zip(ordered, ordered[1:])):
+                leaps_hard = True
+                break
+        if chords_hard or leaps_hard:
+            return FukudaStrategy().generate(context, baseline)
+        times = sorted({round(note.start, 6) for note in notes})
+        if sum(0 < b - a < .5 for a, b in zip(times, times[1:])) >= 3:
+            return CodaPartStrategy().generate(context, baseline)
+        return baseline()
+
+
+@dataclass(frozen=True)
+class CompositeStrategy:
+    parts: tuple[ExerciseStrategy, ...]
+
+    @property
+    def name(self) -> str:
+        return "+".join(part.name for part in self.parts)
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
+        complete = set(context.source_indices)
+        proposals = []
+        for part in self.parts:
+            for variant in part.generate(context, baseline):
+                indices = set(variant.source_indices)
+                if indices and indices != complete:
+                    proposals.append((variant.level, indices))
+        proposals.sort(key=lambda pair: (len(pair[1]), pair[0]))
+        intersection = set.intersection(*(indices for _, indices in proposals)) if proposals else set()
+        cumulative = set()
+        nested = []
+        if len(intersection) >= 2 and intersection != complete:
+            cumulative = intersection
+            nested.append(("combined-common", set(cumulative)))
+        for level, indices in proposals:
+            expanded = cumulative | indices
+            if expanded != cumulative and expanded != complete:
+                cumulative = expanded
+                nested.append((f"combined-{len(nested)+1}-{level}", set(cumulative)))
+        return _finish(context, nested)
+
+
+_FACTORIES = {
+    "legacy": LegacyStrategy,
+    "fukuda": FukudaStrategy,
+    "coda-part": CodaPartStrategy,
+    "feature-gated": FeatureGatedStrategy,
+}
+
+
+def resolve_strategy(spec: str | ExerciseStrategy | None) -> ExerciseStrategy:
+    if spec is None:
+        spec = "legacy"
+    if not isinstance(spec, str):
+        if (not isinstance(getattr(spec, "name", None), str)
+                or not callable(getattr(spec, "generate", None))):
+            raise TypeError("Expected a strategy with name and generate")
+        return spec
+    names = spec.split("+")
+    if not names or any(name not in _FACTORIES for name in names):
+        raise ValueError(f"Unknown exercise strategy {spec!r}; choose from "
+                         f"{', '.join(_FACTORIES)} or compose with +")
+    if len(set(names)) != len(names):
+        raise ValueError("A strategy cannot be composed with itself")
+    parts = tuple(_FACTORIES[name]() for name in names)
+    return parts[0] if len(parts) == 1 else CompositeStrategy(parts)
