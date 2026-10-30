@@ -128,6 +128,37 @@ def test_tempo_recovery_supports_partial_retry_after_shaping_boundary():
         grid=phrase_grid(phrase, piece.bar_boundaries), threshold=5) is None
 
 
+def test_shaped_grader_distinguishes_early_late_and_wrong_pitch():
+    _, phrase, tempo = long_phrase()
+    presses = [
+        PlayedNote(n.pitch, tempo.seconds_at(n.start),
+                   tempo.seconds_at(n.end))
+        for n in phrase.notes
+    ]
+    assert assess_timed_window(phrase, "right", tempo, presses).clean
+    delayed = list(presses)
+    delayed[11] = PlayedNote(delayed[11].pitch,
+                             delayed[11].onset+.18, delayed[11].release+.18)
+    assessed = assess_timed_window(phrase, "right", tempo, delayed)
+    assert assessed.notes[11].status == "late"
+    wrong = list(presses)
+    wrong[11] = PlayedNote(49, wrong[11].onset, wrong[11].release)
+    assessed = assess_timed_window(phrase, "right", tempo, wrong)
+    assert assessed.notes[11].status == "wrong"
+    assert assessed.extra_notes == 0
+
+
+def test_extra_key_after_last_note_invalidates_shaped_full_take():
+    _, phrase, tempo = long_phrase()
+    pressed = [PlayedNote(n.pitch, tempo.seconds_at(n.start),
+                          tempo.seconds_at(n.end)) for n in phrase.notes]
+    pressed.append(PlayedNote(15, tempo.duration_seconds+.3,
+                              tempo.duration_seconds+.5))
+    result = assess_timed_window(phrase, "right", tempo, pressed)
+    assert not result.clean
+    assert result.extra_notes == 1
+
+
 def test_shaped_live_feedback_uses_original_notehead_identity():
     piece, phrase, tempo = long_phrase()
     layout_notes = []
