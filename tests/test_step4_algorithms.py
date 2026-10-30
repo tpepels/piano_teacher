@@ -1,5 +1,5 @@
 """Step 4 contracts: explanatory difficulty, source-safe drills and remediation."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import pytest
 
@@ -60,6 +60,8 @@ def test_coda_multiple_stages_are_nested_and_preserve_original():
 
 def test_chordification_retains_source_id_and_rejects_repeated_unisons():
     p = source().phrases[0]
+    p = replace(p, notes=tuple(replace(note, end=note.start+1.0)
+                               for note in p.notes))
     source_variant = ExerciseVariant("original", p, tuple(range(len(p.notes))))
     timing = resolve_timing_strategy("coda-chord-blocks").transform(source_variant)
     assert isinstance(resolve_timing_strategy("coda-chord-blocks"), ChordBlockTiming)
