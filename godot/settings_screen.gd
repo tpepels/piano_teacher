@@ -15,6 +15,8 @@ signal tempo_requested(bpm: int)
 signal strategy_requested(strategy: String)
 signal timing_strategy_requested(strategy: String)
 signal tempo_strategy_requested(strategy: String)
+signal diagnosis_strategy_requested(strategy: String)
+signal learner_strategy_requested(strategy: String)
 signal metronome_requested(enabled: bool)
 signal volume_changed(db: float)
 signal fullscreen_requested(enabled: bool)
@@ -33,6 +35,8 @@ var metronome_toggle: CheckButton
 var strategy_picker: OptionButton
 var timing_strategy_picker: OptionButton
 var tempo_strategy_picker: OptionButton
+var diagnosis_strategy_picker: OptionButton
+var learner_strategy_picker: OptionButton
 var listen_volume_slider: HSlider
 var listen_volume_label: Label
 var fullscreen_toggle: CheckButton
@@ -203,8 +207,22 @@ func _ready() -> void:
     tempo_strategy_picker.item_selected.connect(func(index: int):
         tempo_strategy_requested.emit(str(tempo_strategy_picker.get_item_metadata(index))))
     practice.add_child(tempo_strategy_picker)
+    practice.add_child(_label("Error assessment", 14, MUTED))
+    diagnosis_strategy_picker = OptionButton.new()
+    diagnosis_strategy_picker.custom_minimum_size = Vector2(260, 40)
+    diagnosis_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    diagnosis_strategy_picker.item_selected.connect(func(index: int):
+        diagnosis_strategy_requested.emit(str(diagnosis_strategy_picker.get_item_metadata(index))))
+    practice.add_child(diagnosis_strategy_picker)
+    practice.add_child(_label("Learner recommendation", 14, MUTED))
+    learner_strategy_picker = OptionButton.new()
+    learner_strategy_picker.custom_minimum_size = Vector2(260, 40)
+    learner_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    learner_strategy_picker.item_selected.connect(func(index: int):
+        learner_strategy_requested.emit(str(learner_strategy_picker.get_item_metadata(index))))
+    practice.add_child(learner_strategy_picker)
     practice.add_child(_label(
-        "Changing strategy stops the current take. Each strategy keeps separate mastery credit.",
+        "Exercise, rhythm and tempo changes restart practice. Assessment policy changes affect future recommendations only.",
         12, MUTED))
 
     var audio := _section("Listen audio")
@@ -270,6 +288,12 @@ func present_preferences(values: Dictionary) -> void:
     _present_strategy_picker(tempo_strategy_picker,
         values.get("available_tempo_strategies", []),
         str(values.get("tempo_strategy", "constant-tempo")))
+    _present_strategy_picker(diagnosis_strategy_picker,
+        values.get("available_diagnosis_strategies", []),
+        str(values.get("diagnosis_strategy", "error-family")))
+    _present_strategy_picker(learner_strategy_picker,
+        values.get("available_learner_strategies", []),
+        str(values.get("learner_strategy", "repeated-error")))
 
 func _present_strategy_picker(picker: OptionButton, choices: Array, selected: String) -> void:
     picker.clear()
@@ -308,6 +332,8 @@ func present_busy(pending: bool) -> void:
     strategy_picker.disabled = pending
     timing_strategy_picker.disabled = pending
     tempo_strategy_picker.disabled = pending
+    diagnosis_strategy_picker.disabled = pending
+    learner_strategy_picker.disabled = pending
 
 func present_volume(db: float) -> void:
     listen_volume_slider.set_value_no_signal(db)
