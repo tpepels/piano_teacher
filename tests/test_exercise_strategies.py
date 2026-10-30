@@ -108,9 +108,9 @@ def test_legacy_default_and_explicit_have_same_stage_keys(monkeypatch):
                for s in alternative.lesson_steps)
 
 
-def test_env_selection_and_explicit_override(monkeypatch):
+def test_explicit_selection_ignores_legacy_env(monkeypatch):
     p = make_phrase([60, 64, 67, 69], [0, 0, 0, 1])
     piece = Piece("Test", 100, p.notes, (p,))
     monkeypatch.setenv("PIANO_EXERCISE_STRATEGY", "fukuda")
-    assert LearningPlan(piece).exercise_strategy.name == "fukuda"
+    assert LearningPlan(piece).exercise_strategy.name == "legacy"
     assert LearningPlan(piece, exercise_strategy="legacy").exercise_strategy.name == "legacy"
