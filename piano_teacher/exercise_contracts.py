@@ -85,6 +85,7 @@ def _events(variant: ExerciseVariant) -> tuple[TimingEvent, ...]:
 @dataclass(frozen=True)
 class OriginalTiming:
     name: str = "original-timing"
+    is_identity: bool = True
 
     def transform(self, variant: ExerciseVariant) -> TimingPlan:
         p = variant.phrase
@@ -234,6 +235,7 @@ class TempoStrategy(Protocol):
 @dataclass(frozen=True)
 class ConstantTempo:
     name: str = "constant-tempo"
+    is_identity: bool = True
 
     def generate(self, plan: TimingPlan, target_bpm: float) -> TempoMap:
         return TempoMap(self.name, (TempoSegment(0, plan.duration_beats, float(target_bpm)),))
