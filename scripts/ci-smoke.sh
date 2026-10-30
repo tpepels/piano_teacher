@@ -81,6 +81,9 @@ timeout 100s "$PYTHON" -m pytest -q \
 # timing-line drift and source-ink disappearance without a corpus audit.
 timeout 50s "$PYTHON" -m pytest -q \
   'tests/test_score_motion_render.py::test_actual_score_transforms_keep_fixed_line_and_exact_downbeat[2]'
+# One source-derived two-bar stress case: genuine overlapping slur contours,
+# a tied barline note, and independent left-hand voice. Not a corpus audit.
+timeout 85s "$PYTHON" -m pytest -q tests/test_real_source_connector_overlap.py
 # Real production UI: reject a missing Verovio atlas, retry, then publish
 # a valid semantic model. Only the default case runs here (no corpus work).
 timeout 55s "$PYTHON" -m pytest -q \
