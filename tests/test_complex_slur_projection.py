@@ -29,7 +29,7 @@ def _note(parent, step, octave, duration, staff, role, *, number="1", chord=Fals
     ET.SubElement(pitch, "octave").text = str(octave)
     ET.SubElement(node, "duration").text = str(duration)
     ET.SubElement(node, "voice").text = "1"
-    ET.SubElement(node, "type").text = "half" if duration == 8 else "quarter"
+    ET.SubElement(node, "type").text = "whole" if duration == 16 else "half" if duration == 8 else "quarter"
     ET.SubElement(node, "staff").text = str(staff)
     if role:
         marks = ET.SubElement(node, "notations")
@@ -54,12 +54,18 @@ def test_simultaneous_same_number_slurs_on_two_staves_do_not_cross_pair(tmp_path
         clef = ET.SubElement(attrs, "clef", number=str(index))
         ET.SubElement(clef, "sign").text = sign
         ET.SubElement(clef, "line").text = str(line)
-    for staff, pitches in ((1, ("C","D")), (2, ("G","A"))):
-        if staff == 2:
-            backup = ET.SubElement(bar, "backup")
-            ET.SubElement(backup, "duration").text = "16"
-        for step, role in zip(pitches, ("start","stop")):
-            _note(bar, step, 5 if staff == 1 else 3, 8, staff, role)
+    # Both slurs open in measure 1, before either closes in measure 2.
+    # The same voice and slur number are legitimate on different staves.
+    for bar_number in (1, 2):
+        if bar_number == 2:
+            bar = ET.SubElement(part, "measure", number="2")
+        for staff, step in ((1, "C" if bar_number == 1 else "D"),
+                            (2, "G" if bar_number == 1 else "A")):
+            if staff == 2:
+                backup = ET.SubElement(bar, "backup")
+                ET.SubElement(backup, "duration").text = "16"
+            _note(bar, step, 5 if staff == 1 else 3, 16, staff,
+                  "start" if bar_number == 1 else "stop")
     piece, score, generated = render(tmp_path, root)
     assert len(piece.notes) == 4
     assert not score.unrendered_expressions
