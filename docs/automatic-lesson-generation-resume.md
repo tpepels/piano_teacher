@@ -68,3 +68,23 @@ original-piece mastery contract.
 **Engineering constraints:** main only; small verified commits; short fast
 CI; no long-running corpus audits, no worktrees, no rebranding experimental
 heuristics as exact Coda.
+
+## 2026-10-30 — resumed Coda Gate 2 progress
+
+- `piano_teacher/research/coda_notation_hierarchy.py`: source part,
+  measure and voice ownership plus inherited context values from prior
+  measures, including exact XML subtrees and original source identifiers.
+- `MatrixScore`: complete original MusicXML retained, exact original
+  direct-child inventory cross-checked, inherited source context accessible,
+  and conservative mid-measure context transformation guards.
+- One pinned, non-vacuous 16-note, two-hand MusicXML sample checks all
+  four *experimental* Coda families together; transformed chord/dotted
+  plans successfully build application source notation-models with original
+  note IDs and timing intact. Further real MusicXML samples verify hierarchy.
+- These tests are **engineering invariants**, not published-algorithm
+  reproduction. Full thesis/reference example access still missing (403);
+  no research gate has been newly accepted.
+- See `docs/research-reproduction-gate-2-coda.md` for the exact remaining
+  requirements. Next: written-notation projection/reconstruction proof
+  across transformations, then published-reference matching when source
+  can be obtained. Do not return to unrelated notation corpus tasks.

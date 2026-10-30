@@ -175,3 +175,57 @@ transformation contract, followed by independently validated examples for
 each of the four algorithms. Transformed notation/Listen/MIDI feedback
 already have a shared timeline for existing experimental app strategies,
 but the standalone Coda prototypes are not yet live.
+
+## Gate 2 continuation — source MMR and four-family interoperability (2026-10-30)
+
+Research source check: the Dartmouth abstract confirms the Score–Part–Voice
+MMR and the four categories, but its published thesis download still returned
+HTTP 403 on 2026-10-30. No alternative reference source was verified. The
+following checks establish **engineering correctness, not Coda parity**:
+
+1. `coda_notation_hierarchy.py` groups all original MusicXML direct measure
+   elements by **source part → measure → original source voice**, including
+   unvoiced attributes, barlines, directions and rest-only source voices.
+   Inherited clef/key/meter/divisions and numbered/staff-specific attributes
+   from earlier measures have explicit source ordinals and XML subtrees.
+   The complete score-wide original XML is kept for source auditing.
+2. `MatrixScore.verify_lossless()` compares the *entire* selected original
+   MusicXML element inventory (including directions and other non-notes)
+   to its matrix, not merely the matrix to its own partitions. Deleting or
+   rewriting one original subtree is a failing test.
+3. `MatrixScore.context_protected_source_ids()` conservatively prevents
+   experimental chordification and dotted re-timing through a mid-measure
+   authored notation-context change. A change at a bar boundary does not
+   block otherwise eligible source voice pairs. Multiple parts/voices
+   remain independently owned.
+4. The pinned `tests/fixtures/research/coda_four_families.musicxml` includes
+   16 pitched attacks across two piano hands, two measures, a separate
+   whole-measure rest voice and a later key change. The bounded test runs
+   source-measure splitting, measure-wise tempo shaping, polyphonic
+   chordification and dotted alteration **non-vacuously** on the same
+   immutable source. It verifies reassembly, source identity, note onset and
+   duration invariants, a changed drill distinct from original mastery and
+   mapped grading. Both rhythm strategies are also passed through the
+   application's actual `ScoreArtifacts.source_model()` contract with
+   `transformed_rhythm=True`, without exposing them as completed live Coda
+   strategies.
+5. Short regression checks also cover selected later measures, inherited
+   source contexts, real multi-measure MusicXML, source-scope preservation,
+   rest-only voice ownership, and missing/rewritten annotations.
+
+This does **not** complete the original Coda MMR, whose published structure
+and detailed semantics cannot be confirmed without the thesis or code. In
+particular: full notation-aware rhythm rewriting of nested tuplets and
+articulations, score-wide directions over tempo changes, exact author
+grouping/eligibility, reference example parity, production UI integration
+and measured learning outcomes remain open.
+
+### Completion status, unchanged
+
+- Source-aware MMR: substantial research adapter; **not reference-proven**.
+- Part splitting: source-measure prototype; **not author-parity-proven**.
+- Tempo shaping: source-grid/shared-time prototype; **not author-parity-proven**.
+- Chordification: independent polyphonic prototype; **not author-parity-proven**.
+- Dotted rhythms: independent per-voice prototype; **not author-parity-proven**.
+
+Main branch only; no full corpus or long-running CI was initiated.
