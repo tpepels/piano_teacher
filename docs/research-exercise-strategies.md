@@ -8,18 +8,19 @@ or to establish pedagogical superiority. The legacy curriculum is unchanged by d
 
 All strategies operate on one existing learning passage and selected hand. They
 return `ExerciseVariant` with original `Phrase` boundaries, original `Note`
-objects, and exact `source_indices`. Pitch and beat timing are never synthesized
-or moved. The existing engraving, MIDI grading, tempo ladder, source alignment,
-and progress engine therefore remain applicable.
+objects, and exact `source_indices`. Note-selection strategies never invent
+pitches or move beats. Separate timing strategies may alter exercise note
+onsets while preserving original source identities; the original score and
+mandatory final stage remain intact.
 
 ## Adapters
 
 | Key | Concrete behavior | Research relationship |
 | --- | --- | --- |
 | `legacy` | Original skeleton/outline/original with authored-group constraints and dense one-bar fallback | Pre-existing app; experimental control |
-| `fukuda` | Drop inner pitches in chords, keep lowest/highest voice pitches; optionally omit a single isolated returning octave outlier when not covered by authored beam/slur; restore notes in stages | Adapted from Fukuda et al., *A Score-Informed Piano Tutoring System* (SMC 2015). Does **not** implement their audio transcription, DTW or general fast-passage thinning (which their evaluation found problematic) |
-| `coda-part` | Source-onset-aligned prefix practice with atomic simultaneous attacks and authored beams/slurs | Inspired by the Part Splitting category in Tang's *Coda* (2025). **Does not** implement Coda's rhythm alteration, tempo shaping, or chordification |
-| `feature-gated` | Explicit chord/large-leap/rapid-onset descriptors choose Fukuda, Coda-part, or original legacy plan | Interpretable descriptors inspired by RubricNet (Ramoneda et al., ISMIR 2024). **Not** RubricNet's trained classifier or weights |
+| `fukuda` | Source-safe outer-note chord thinning, protected authored-group notes, isolated returning-leap omission, and restoration stages | Adapted from Fukuda et al., *A Score-Informed Piano Tutoring System* (SMC 2015). Does **not** implement their audio transcription, DTW or general fast-passage thinning (which their evaluation found problematic) |
+| `coda-part` | Progressive, nested source-onset prefixes with atomic chords, beams and slurs | Inspired by Coda's part splitting; separate rhythm strategies implement restricted dotted pairs, two-phase tempo, and safe chord-block practice rather than its full exercise system |
+| `feature-gated` | Injected `DifficultyEstimator` with explainable chord size/span, melodic leaps, rapid/irregular attacks and voice overlap; chooses Fukuda, Coda or baseline | Interpretable baseline inspired by RubricNet. **No trained RubricNet weights or learned accuracy claims** |
 | `fukuda+coda-part` | Construct nested cumulative note subsets from the two proposals, optionally starting with common retained notes; end with exact source | Composition strategy, not a published algorithm |
 
 More combinations are available, e.g. `feature-gated+coda-part`. A composite
@@ -80,15 +81,19 @@ python -m pytest -q tests/test_exercise_strategies.py tests/test_exercise_contra
 ```
 
 `GET /exercise/diagnostics` exposes the currently selected stage's recent
-assessment category and advisory policy recommendation. It does **not**
-automatically change the learner's score, the selected exercise, or earned
-mastery.
+assessment category and policy recommendation. After two assessed attempts
+with the same dominant error family, `RemediationPlanner` can create a
+source-bound remedial exercise. In automatic practice it routes pitch
+errors into a targeted, untimed guided exercise, and timing/sustain errors
+into a bounded timed section review. These partial routes cannot earn
+original-stage mastery; repeat-only policy disables them.
 
 ## New typed contracts and strategy registries
 
 `piano_teacher/exercise_contracts.py` defines interchangeable policies:
 
-- **TimingStrategy**: `OriginalTiming` and `DottedPairTiming` return a
+- **TimingStrategy**: `OriginalTiming`, `DottedPairTiming`, and
+  `ChordBlockTiming` return a
   `TimingPlan` containing exact source-index mappings and a distinct exercise
   timeline. Dotted pairs transform only simple single-voice, nonoverlapping
   equal-duration pairs; unsuitable material falls back to source timing.
@@ -114,15 +119,18 @@ window by default. Preview/listen sessions do not create evidence.
 The Settings screen now has five independent strategy selectors:
 
 - **Exercise generation:** existing note-selection and combined strategies.
-- **Rhythm exercise:** original, dotted long–short, dotted short–long.
+- **Rhythm exercise:** original, dotted long–short, dotted short–long,
+  or Coda-inspired sequential note-pair chordification.
 - **Tempo pattern:** constant, two-phase (80% for first half, target BPM for
   second half).
 - **Error assessment:** error-family diagnosis or accuracy-only baseline.
 - **Learner recommendation:** repeated-error policy or repeat-only baseline.
 
-The two advisory policy selections are persisted and apply to new diagnostic
-recommendations without resetting the current lesson, timing or progress.
-These policies do not yet automatically route the learner to a new exercise.
+Diagnosis and learner policies are independently persisted without resetting
+the current lesson. With repeated-error selected, two consistent assessed
+mistakes may route automatic practice to a targeted note-isolation or timed
+section-review exercise. The repeat-only baseline leaves the current lesson
+unrouted. Partial work never grants original-score mastery.
 
 The active learning passage receives additional selectable stages for eligible
 rhythm and tempo drills, followed by an untouched **original** stage.
@@ -182,14 +190,16 @@ production use.
    renderings, physical MIDI note-on/off events, latency, Listen audio and
    the metronome at tempo boundaries. Include mixed meters, fast tuplets
    and held/tied notes as independent cases.
-3. **Coda techniques.** Complete chordification and general phrase-level
-   part splitting; add context-sensitive dotted rhythm and speed shaping with
-   eligibility rules. Current Coda adaptations are deliberately narrower than
-   the thesis system.
-4. **Piano Tutor remediation.** Feed the history diagnosis into a tested
-   lesson-routing policy, support targeted generated recovery exercises, and
-   handle same-pitch timing versus wrong-pitch evidence. The current policy
-   is advisory, and existing five-error recovery remains unchanged.
+3. **Broader Coda techniques.** Progressive source-safe part splitting,
+   restricted chord-block timing, dotted rhythm and two-phase speed shaping
+   are implemented. General chordification, cross-bar/multi-voice rewrites,
+   pedagogically optimized pattern choice and the complete thesis algorithm
+   remain unimplemented.
+4. **Broader Piano Tutor remediation.** Automatic routing now exists for
+   consecutive classified errors, with generated source-bound guided note
+   targets and bounded timed reviews. Future work: extra-note-only evidence,
+   mixed error families, interval-specific drills, personalization and
+   teacher validation. Five-error immediate rewind remains a separate policy.
 5. **Fukuda and difficulty models.** Add richer difficulty analysis, hand
    biomechanics/fingering costs, phrase semantics, and optionally RubricNet
    model integration; retain interpretable feature-only baselines. The current
@@ -213,9 +223,9 @@ production use.
 - Dannenberg et al. (1990), *An Expert System for Teaching Piano to Novices*:
   https://www.cs.cmu.edu/~rbd/papers/Piano-Tutor-JNMR-1990.pdf
 
-The CMU Piano Tutor's automatic performance-error-triggered remediation
-remains incomplete: diagnosis and bounded attempt history exist, but a
-diagnosis does not yet generate a new remedial practice stage. Coda-inspired
+The Piano Tutor-inspired adaptation now generates source-bound remedial
+exercises after repeated classified errors. It is narrower than the original
+expert system and does not use a learned student model. Coda-inspired
 dotted rhythm and tempo shaping now have interactive, separately graded
 stages and shared timing contracts, subject to the limitations above.
 
