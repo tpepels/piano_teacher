@@ -25,7 +25,7 @@ def test_chordified_real_sixteenths_keep_every_source_attack_and_grading_time():
     variant = ExerciseVariant("original", source, tuple(range(len(right))))
     timed = ChordBlockTiming().transform(variant)
     assert timed.name == "coda-chord-blocks"
-    assert len(timed.events) == len(piece.notes)
+    assert len(timed.events) == len(source.notes)
     assert any(abs(event.source_start-source.start-event.exercise_start) > 1e-6
                for event in timed.events)
     phrase = replace(source, notes=tuple(
