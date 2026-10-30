@@ -6,7 +6,6 @@ takes place in this module or the ordinary MIDI/audio engine.
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -14,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass
+from math import isfinite
 
 from .rubricnet_assets import BASIC_FEATURES, UPSTREAM_COMMIT
 
@@ -63,8 +63,8 @@ class RubricNetExtractor:
         if result.returncode:
             diagnostic = (result.stderr or result.stdout)[-1200:]
             raise RubricNetUnavailable(
-                "RubricNet source feature worker failed. Install the optional "
-                "research dependencies with scripts/setup-rubricnet.sh; "
+                "RubricNet extraction failed for this MusicXML or optional "
+                "worker dependencies. Setup: scripts/setup-rubricnet.sh. "
                 f"exit={result.returncode}; {diagnostic}")
         marker = "RUBRICNET_FEATURES="
         matches = [line[len(marker):] for line in result.stdout.splitlines()
@@ -76,6 +76,12 @@ class RubricNetExtractor:
             if (data.get("commit") != UPSTREAM_COMMIT
                     or set(data["features"]) != set(BASIC_FEATURES)):
                 raise ValueError("Unexpected descriptor names or source revision")
-            return {name: float(data["features"][name]) for name in BASIC_FEATURES}
+            values = {}
+            for name in BASIC_FEATURES:
+                raw = data["features"][name]
+                if type(raw) not in (int, float) or not isfinite(raw):
+                    raise ValueError(f"Nonfinite/invalid feature {name}")
+                values[name] = float(raw)
+            return values
         except (ValueError, TypeError, KeyError) as exc:
             raise RubricNetUnavailable("Invalid worker feature result") from exc
