@@ -105,6 +105,9 @@ class FukudaStrategy:
             members.sort(key=lambda i: (context.phrase.notes[i].pitch, i))
             outer.update((members[0], members[-1]))
         protected = {i for _, groups in context.groups for group in groups for i in group}
+        # A source-authored slur, beam, or tie can attach to an inner chord
+        # tone. Keep those heads instead of discarding its musical anchor.
+        outer.update(protected)
         voices = defaultdict(list)
         for members in chords.values():
             if len(members) == 1:
