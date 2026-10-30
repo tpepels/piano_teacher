@@ -252,6 +252,18 @@ class SourcePreservingAdapter:
             raise ValueError("Exercise strategy must finish with the original source")
         if proposed[-1].source_indices != context.source_indices:
             raise ValueError("Exercise strategy changed the original source")
+        levels = set()
+        for variant in proposed:
+            indices = variant.source_indices
+            if (not indices or len(set(indices)) != len(indices)
+                    or any(i not in context.source_indices for i in indices)
+                    or variant.notes != tuple(context.phrase.notes[i] for i in indices)
+                    or variant.phrase.start != context.phrase.start
+                    or variant.phrase.end != context.phrase.end):
+                raise ValueError("Strategy produced an invalid or retimed source variant")
+            if variant.level in levels:
+                raise ValueError("Strategy produced duplicate level names")
+            levels.add(variant.level)
         complete_onsets = len({round(n.start, 6) for n in proposed[-1].notes})
         def attacks(variant: ExerciseVariant) -> int:
             return len({round(n.start, 6) for n in variant.notes})
