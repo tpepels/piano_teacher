@@ -6,7 +6,6 @@ from dataclasses import dataclass
 import hashlib
 import json
 import math
-import os
 from .exercise_strategies import ExerciseContext, ExerciseStrategy, resolve_strategy
 from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant, generate_variants
@@ -344,8 +343,7 @@ class LearningPlan:
                  exercise_strategy: str | ExerciseStrategy | None = None) -> None:
         self.piece = piece
         self.exercise_strategy = resolve_strategy(
-            exercise_strategy if exercise_strategy is not None
-            else os.environ.get("PIANO_EXERCISE_STRATEGY", "legacy"))
+            exercise_strategy if exercise_strategy is not None else "legacy")
         self.warmup = warmup
         self.grouping = (None if warmup else grouping_for_piece(piece))
         if warmup:
