@@ -21,7 +21,20 @@ func preferences(view: Control) -> void:
     view.metronome_requested.connect(func(enabled: bool): echoes.append(enabled))
     view.fullscreen_requested.connect(func(enabled: bool): echoes.append(enabled))
     view.volume_changed.connect(func(db: float): echoes.append(db))
-    view.present_preferences({"music_dir":"/scores", "fullscreen":false,"metronome":false})
+    view.strategy_requested.connect(func(id: String): echoes.append(id))
+    view.present_preferences({
+        "music_dir":"/scores", "fullscreen":false, "metronome":false,
+        "exercise_strategy":"fukuda",
+        "available_exercise_strategies":[
+            {"id":"legacy", "label":"Original progression"},
+            {"id":"fukuda", "label":"Fukuda"}
+        ]})
+    check(view.strategy_picker.item_count == 2
+        and view.strategy_picker.selected == 1,
+        "Backend strategy options and current selection are presented")
+    view.strategy_picker.item_selected.emit(0)
+    check(echoes == ["legacy"], "Changing the picker emits the selected strategy identifier")
+    echoes.clear()
     view.present_volume(-3.0)
     check(view.folder_edit.text == "/scores" and not view.fullscreen_toggle.button_pressed
         and not view.metronome_toggle.button_pressed, "Preference snapshots present their values")
