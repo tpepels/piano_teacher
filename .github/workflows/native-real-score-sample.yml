@@ -36,6 +36,8 @@ jobs:
           unzip -q /tmp/godot.zip -d /tmp/godot-bin
           sudo install -m 755 /tmp/godot-bin/Godot_v4.5.1-stable_linux.x86_64 /usr/local/bin/godot
           godot --headless --version
+      # Corruption controls delete the real rest suppression or one genuine
+      # photographed staff rail and must lose verification, not gain a waiver.
       # Dense written voices retain the original strict staff detector,
       # using only the intersection of two actual current score frames to
       # eliminate moving, visually occluding notation ink.

@@ -38,6 +38,8 @@ jobs:
           unzip -q /tmp/godot.zip -d /tmp/godot-bin
           sudo install -m 755 /tmp/godot-bin/Godot_v4.5.1-stable_linux.x86_64 /usr/local/bin/godot
           godot --headless --version
+      # Current renderer paints playhead below engraving. Recapture actual
+      # overlapping-slur controls at this revision; old PNGs cannot pass.
       - name: Fresh independent score pixels (bounded)
         id: pixel
         continue-on-error: true

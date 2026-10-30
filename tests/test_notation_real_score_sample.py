@@ -98,3 +98,49 @@ def test_fresh_real_score_framebuffer_obligations(name, tmp_path):
     if construct == "rest":
         assert all(row["placement_evidence"]["status"] == "verified"
                    for row in measured), evidence
+
+    # Mutate the retained actual framebuffer, never its source description
+    # or the verifier's answer. The same independent oracle must reject it.
+    bad = tmp_path / (name+"-corrupted-control")
+    bad.mkdir()
+    for beat in beats:
+        img = folder / f"native-{beat:.5f}.png"
+        shutil.copyfile(img, bad / img.name)
+    if construct == "rest":
+        manifest = json.loads((folder / "native-overlay-report.json").read_text())
+        (bad / "native-overlay-report.json").write_text(json.dumps(manifest))
+        for item in manifest["rest_difference_frames"]:
+            for key in ("repeat_file", "restored_file"):
+                shutil.copyfile(folder / item[key], bad / item[key])
+        # An unchanged suppression image cannot prove an eighth-rest body.
+        for control in manifest["rest_difference_controls"]:
+            shutil.copyfile(folder / f"native-{float(control['clock']):.5f}.png",
+                            bad / control["file"])
+        damaged = verify_all_rest_pixels(xml, bad, hand="both")
+    else:
+        import numpy as np
+        from PIL import Image, ImageDraw
+        from piano_teacher.notation.pixel_proof import detect_staff_lines
+        pictures=[]
+        for beat in beats:
+            with Image.open(folder / f"native-{beat:.5f}.png") as image:
+                pictures.append(np.asarray(image.convert("RGB"), dtype=np.uint8))
+        rails = detect_staff_lines(Image.fromarray(np.minimum.reduce(pictures)))
+        line = round(rails["right"].lines[2])
+        changed = bad / f"native-{beats[0]:.5f}.png"
+        with Image.open(changed) as image:
+            erased = image.convert("RGB")
+        ImageDraw.Draw(erased).rectangle((0,line-3,erased.width-1,line+3),
+                                         fill=erased.getpixel((0,0)))
+        erased.save(changed)
+        damaged = verify_all_notehead_pixels(
+            xml, bad, hand="both", rail_clocks=tuple(beats))
+    damaged_rows = [row for row in damaged["measured"]
+                    if round(float(row["beat"]),8) in beats]
+    assert len(damaged_rows) == selected_expected
+    failures = Counter(row["status"] for row in damaged_rows)
+    (bad / "negative-control-result.json").write_text(json.dumps({
+        "case":name,"source_revision":os.getenv("GITHUB_SHA"),
+        "expected":selected_expected,"statuses":dict(failures),
+        "same_verifier_rejected_mutation":failures["verified"] < selected_expected},indent=2))
+    assert failures["verified"] < selected_expected, "Corrupted framebuffer received full pixel credit"
