@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from collections import deque
-from dataclasses import replace
 from typing import Sequence
 
 from .exercise_contracts import TempoMap
@@ -58,8 +57,14 @@ def assess_timed_window(phrase: Phrase, hand: str, tempo: TempoMap,
     times = expected_seconds(phrase, tempo, from_beat)
     since = tempo.seconds_at(start) - tempo.seconds_at(from_beat)
     until = tempo.seconds_at(end) - tempo.seconds_at(from_beat)
-    scoped = [note for note in played
-              if since-.15 <= note.onset < until+.15]
+    # Full assessed takes must retain every recorded extra key, including
+    # one pressed after the last expected note. Only recovery windows
+    # restrict played events to an adjacent interval.
+    full_take = (abs(start-from_beat) <= 1e-7
+                 and abs(end-(phrase.end-phrase.start)) <= 1e-7)
+    scoped = (list(played) if full_take else
+              [note for note in played
+               if since-.15 <= note.onset < until+.15])
     return evaluate(selected, hand, 60, scoped, expected_seconds=times)
 
 
