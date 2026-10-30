@@ -51,7 +51,8 @@ def _native_direction(element: ET.Element) -> bool:
 
 def project_annotations(source_musicxml: str, lesson_xml: str,
                         bindings: dict, phrase, *, boundaries: tuple[float, ...],
-                        fingering_sources: frozenset[str] = frozenset()
+                        fingering_sources: frozenset[str] = frozenset(),
+                        retimed_source: bool = False
                         ) -> tuple[str, tuple[str, ...]]:
     if not source_musicxml:
         return lesson_xml, ()
@@ -77,17 +78,39 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
         hands[sid] = binding["hand"]
 
     original_notes = {}
+    original_onsets = {}
     part_staves = defaultdict(set)
     voice_hands = defaultdict(set)
     measure_voice_hands = defaultdict(set)
     source_parts = source.findall("part")
     for pi, part in enumerate(source_parts):
+        divisions = Fraction(1)
         for mi, measure in enumerate(part.findall("measure")):
+            cursor = previous = Fraction(0)
             for ordinal, child in enumerate(measure):
-                if child.tag != "note" or child.find("pitch") is None:
+                if child.tag == "attributes":
+                    divisions_tag = child.findtext("divisions")
+                    if divisions_tag:
+                        divisions = Fraction(divisions_tag)
+                    continue
+                if child.tag in ("backup", "forward"):
+                    delta = Fraction(child.findtext("duration")) / divisions
+                    cursor += delta if child.tag == "forward" else -delta
+                    continue
+                if child.tag != "note" or child.find("grace") is not None:
+                    continue
+                duration = Fraction(child.findtext("duration", "0")) / divisions
+                onset = previous if child.find("chord") is not None else cursor
+                if child.find("chord") is None:
+                    previous = cursor
+                    cursor += duration
+                if child.find("pitch") is None:
                     continue
                 sid = f"xml-p{pi}-m{mi}-e{ordinal}"
                 original_notes[sid] = child
+                if mi < len(boundaries):
+                    original_onsets[sid] = float(
+                        Fraction(str(boundaries[mi])) + onset) - phrase.start
                 if sid in targets:
                     hand = hands[sid]
                     voice = child.findtext("voice", "1")
@@ -175,6 +198,14 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                     or dest.find("chord") is not None
                     or original.findtext("type") != dest.findtext("type")):
                 break
+            if retimed_source:
+                binding = bindings.get(dest.get("id"), {})
+                if (sid not in original_onsets or
+                        abs(binding.get("source_beat", -1e9) -
+                            original_onsets[sid]) > 1e-6):
+                    # The attack moved. Source beams refer to its old
+                    # grouping; the generated rhythm owns the new beams.
+                    break
             # Never attach source beams to an attack whose exercise rhythm
             # changed during simplification/quantization.
             original_duration = original.findtext("duration")
@@ -206,6 +237,11 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                 valid = False
                 break
         if not valid:
+            continue
+        if retimed_source and any(dest.findall("beam")
+                                  for dest, _source, _sid in translated):
+            # Auto-beaming already owns this transformed measure. Do not
+            # splice a potentially different source group into its middle.
             continue
         for dest, original, _sid in translated:
             if dest.findall("beam"):
