@@ -806,6 +806,18 @@ def verify_connector_pixels(xml: str, folder: Path, *, hand='both', constructs=(
                     break
         except (OSError, ValueError, KeyError, AssertionError) as exc:
             row['evidence']['reason'] = str(exc)
+    # Crossing slurs can merge into one composite contour. Only an actual
+    # stable, source-specific suppression capture may separate their physical
+    # ownership. No renderer coordinate or atlas geometry can grant credit.
+    if 'slur' in constructs:
+        from .connector_difference_pixels import measure_slur_interventions
+        causal = measure_slur_interventions(xml,written,pairs,folder)
+        for pair,row in zip(pairs,observations):
+            if row['construct'] != 'slur' or pair.get('reason'):
+                continue
+            key = "|".join(n.get('id') or n['source']['id'] for n in pair['notes'])
+            if key in causal:
+                row.update(status='verified',evidence=causal[key])
     # One physical contour cannot certify two distinct source pairs.
     used = {}
     for index, row in enumerate(observations):

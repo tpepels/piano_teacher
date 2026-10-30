@@ -112,18 +112,40 @@ def test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownersh
          row.get("evidence", {}).get("reason"))
         for row in report["observations"]]
     print("OVERLAP_CONNECTOR_STATUS=" + json.dumps(details))
-    # Never credit a crossing slur solely from its Verovio atlas or from
-    # another curve. Until each RH shape has exclusive pixel ownership,
-    # retain the observed partial result as an explicit expected failure.
-    assert report["coverage"]["verified"] >= 2, details
-    assert report["observations"][0]["status"] == "verified", details
-    assert report["observations"][-1]["status"] == "verified", details
-    if not report["complete"]:
-        pytest.xfail("Crossing RH slur pixels lack unique source ownership "
-                     "even with explicit placement and an independent LH tie: "
-                     + json.dumps(details))
-    assert report["complete"], json.dumps(details)
+    # Competing whole-frame curves cannot lend one another ink. The
+    # independent causal oracle must prove each source with its own actual
+    # rendered suppression, endpoint contours, curvature and exclusive pixels.
+    assert report["coverage"]["expected"] == report["coverage"]["verified"] == 4, details
+    assert report["complete"], details
+    assert sum(row["evidence"].get("method") == "causal-framebuffer-difference"
+               for row in report["observations"]) == 3, details
+    assert report["observations"][0]["evidence"].get("method") != "causal-framebuffer-difference"
 
+
+
+@pytest.mark.parametrize("damage", ["missing", "unchanged-control", "drifting-repeat"])
+def test_intervention_cannot_authorize_missing_or_fake_slur(overlap_native, tmp_path, damage):
+    import shutil
+    _case, xml, folder = overlap_native
+    for item in folder.glob("*.png"):
+        shutil.copyfile(item, tmp_path/item.name)
+    manifest = json.loads((folder/"native-overlay-report.json").read_text())
+    (tmp_path/"native-overlay-report.json").write_text(json.dumps(manifest))
+    if damage == "missing":
+        (tmp_path/manifest["slur_difference_controls"][1]["file"]).unlink()
+    elif damage == "unchanged-control":
+        control = manifest["slur_difference_controls"][1]
+        shutil.copyfile(folder/control["baseline_file"],tmp_path/control["file"])
+    else:
+        from PIL import Image, ImageDraw
+        path = tmp_path/manifest["slur_difference_frames"][0]["repeat_file"]
+        with Image.open(path) as image:
+            changed = image.convert("RGB")
+        ImageDraw.Draw(changed).rectangle((5,5,70,70),fill="white")
+        changed.save(path)
+    result = verify_connector_pixels(xml,tmp_path,hand="both",constructs=("slur","tie"))
+    assert not result["complete"], (damage,result["observations"])
+    assert result["coverage"]["verified"] < result["coverage"]["expected"]
 
 
 def test_each_source_slur_contributes_separate_native_ink(overlap_native):
