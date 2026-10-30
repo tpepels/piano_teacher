@@ -1,0 +1,28 @@
+# One-shot Step 2 verification; the normal quick push gate remains unchanged.
+# Trigger only when this workflow definition changes, not on every code push.
+name: Piano Teacher (Step 2 focused verification)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/step2-focused-verification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-and-real-scores:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install focused test and notation dependencies
+        run: timeout 85s python -m pip install -e '.[test,godot]'
+      - name: Focused strategies, actual MusicXML, assessment and recovery
+        run: |
+          timeout 65s python -m pytest -q --tb=short             tests/test_exercise_contracts.py             tests/test_exercise_strategies.py             tests/test_timing_live_integration.py             tests/test_timed_real_scores_and_recovery.py             tests/test_strategy_pipeline.py             tests/test_assessment_service.py             tests/test_rolling_recovery_transition.py             tests/test_settings_screen.py
