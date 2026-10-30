@@ -6,6 +6,8 @@ from dataclasses import dataclass
 import hashlib
 import json
 import math
+import os
+from .exercise_strategies import ExerciseContext, ExerciseStrategy, resolve_strategy
 from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant, generate_variants
 from .musical_groups import grouping_for_piece, MusicalGrouping
@@ -338,8 +340,12 @@ class LessonStep:
 class LearningPlan:
     """Adaptive, manually navigable practice sequence independent of the GUI."""
     def __init__(self, piece: Piece, *, warmup: bool = False,
-                 consolidate: bool = False) -> None:
+                 consolidate: bool = False,
+                 exercise_strategy: str | ExerciseStrategy | None = None) -> None:
         self.piece = piece
+        self.exercise_strategy = resolve_strategy(
+            exercise_strategy if exercise_strategy is not None
+            else os.environ.get("PIANO_EXERCISE_STRATEGY", "legacy"))
         self.warmup = warmup
         self.grouping = (None if warmup else grouping_for_piece(piece))
         if warmup:
@@ -404,6 +410,18 @@ class LearningPlan:
         return self._variants_cached[1]
 
     def _stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
+        # Strategy interface owns selection; legacy is the exact previous path.
+        # Warmups/bridges/final performance retain their established semantics.
+        if self.warmup or exercise.kind != "learn" or hand == "both":
+            return self._legacy_stage_variants(exercise, hand)
+        groups = (self.grouping.for_phrase(exercise.phrase, hand)
+                  if self.grouping is not None else ())
+        context = ExerciseContext(exercise.phrase, hand, groups,
+                                  SETTINGS.focus_max_attacks)
+        return self.exercise_strategy.generate(
+            context, lambda: self._legacy_stage_variants(exercise, hand))
+
+    def _legacy_stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
         groups = (self.grouping.for_phrase(exercise.phrase, hand)
                   if self.grouping is not None else ())
         variants = generate_variants(exercise.phrase, hand, groups=groups,
@@ -441,14 +459,17 @@ class LearningPlan:
                    and all(abs(n.start * 2 - round(n.start * 2)) < .05 for n in notes))
         return variants[-1:] if trivial else variants
 
-    @classmethod
-    def _stage_key(cls, exercise: Exercise, hand: str, variant: ExerciseVariant) -> str:
+    def _stage_key(self, exercise: Exercise, hand: str, variant: ExerciseVariant) -> str:
         phrase = variant.phrase
         events = [(n.start - phrase.start, n.end - phrase.start, n.pitch, n.track, n.channel, n.hand)
                   for n in phrase.notes]
         signature = hashlib.sha256(json.dumps((phrase.end - phrase.start, events),
                                              separators=(",", ":")).encode()).hexdigest()[:16]
-        return f"course:{cls.route_version}:{exercise.key}:{hand}:{variant.level}:{signature}"
+        # Legacy identifiers remain unchanged for existing saved courses.
+        # Nonlegacy strategies cannot inherit unrelated completion/tempo credit.
+        profile = ("" if self.exercise_strategy.name == "legacy"
+                   else f":{self.exercise_strategy.name}")
+        return f"course:{self.route_version}{profile}:{exercise.key}:{hand}:{variant.level}:{signature}"
 
     @property
     def lesson_steps(self) -> tuple[LessonStep, ...]:
