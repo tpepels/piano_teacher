@@ -12,7 +12,8 @@ import tempfile
 
 from .warmups import catalog as built_in_warmups, is_warmup, materialize
 from .exercise_strategies import available_strategies
-from .exercise_contracts import resolve_timing_strategy, resolve_tempo_strategy
+from .exercise_contracts import (resolve_timing_strategy, resolve_tempo_strategy,
+                                 resolve_diagnosis_strategy, resolve_learner_strategy)
 
 FORMATS = {'.mid', '.midi', '.musicxml', '.xml', '.mxl'}
 MAX_FILES = 5000
@@ -35,7 +36,9 @@ class ScoreLibrary:
         self.settings = {'music_dir': str(default_music_dir()), 'fullscreen': True,
                          'last_piece': '', 'midi_device': '', 'metronome': True,
                          'exercise_strategy': 'legacy', 'timing_strategy': 'original-timing',
-                         'tempo_strategy': 'constant-tempo'}
+                         'tempo_strategy': 'constant-tempo',
+                         'diagnosis_strategy': 'error-family',
+                         'learner_strategy': 'repeated-error'}
         if self.settings_path.exists():
             try:
                 stored = json.loads(self.settings_path.read_text(encoding='utf-8'))
@@ -53,7 +56,9 @@ class ScoreLibrary:
             self.settings['exercise_strategy'] = 'legacy'
         for key, valid, fallback in (
                 ("timing_strategy", {"original-timing", "dotted-long-short", "dotted-short-long"}, "original-timing"),
-                ("tempo_strategy", {"constant-tempo", "two-phase-tempo"}, "constant-tempo")):
+                ("tempo_strategy", {"constant-tempo", "two-phase-tempo"}, "constant-tempo"),
+                ("diagnosis_strategy", {"error-family", "accuracy-only"}, "error-family"),
+                ("learner_strategy", {"repeated-error", "repeat-only"}, "repeated-error")):
             if self.settings[key] not in valid:
                 self.settings[key] = fallback
         self._folder = self._normalize_folder(self.settings['music_dir'], require_exists=False)
@@ -71,7 +76,7 @@ class ScoreLibrary:
         return path
 
     def update(self, **changes) -> dict:
-        allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome', 'exercise_strategy', 'timing_strategy', 'tempo_strategy'}
+        allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome', 'exercise_strategy', 'timing_strategy', 'tempo_strategy', 'diagnosis_strategy', 'learner_strategy'}
         unknown = set(changes) - allowed
         if unknown:
             raise ValueError('Unknown preference: ' + ', '.join(sorted(unknown)))
@@ -99,7 +104,9 @@ class ScoreLibrary:
                 raise ValueError('Unknown exercise strategy')
             new['exercise_strategy'] = selected
         for key, resolver in (("timing_strategy", resolve_timing_strategy),
-                              ("tempo_strategy", resolve_tempo_strategy)):
+                              ("tempo_strategy", resolve_tempo_strategy),
+                              ("diagnosis_strategy", resolve_diagnosis_strategy),
+                              ("learner_strategy", resolve_learner_strategy)):
             if key in changes:
                 value = changes[key]
                 if type(value) is not str:
@@ -120,7 +127,13 @@ class ScoreLibrary:
                     {'id': 'dotted-short-long', 'label': 'Dotted · short then long'}],
                 'available_tempo_strategies': [
                     {'id': 'constant-tempo', 'label': 'Constant tempo'},
-                    {'id': 'two-phase-tempo', 'label': 'Two-phase · slower then target'}]}
+                    {'id': 'two-phase-tempo', 'label': 'Two-phase · slower then target'}],
+                'available_diagnosis_strategies': [
+                    {'id': 'error-family', 'label': 'Pitch, rhythm and duration errors'},
+                    {'id': 'accuracy-only', 'label': 'Overall accuracy baseline'}],
+                'available_learner_strategies': [
+                    {'id': 'repeated-error', 'label': 'Repeated-error recommendation'},
+                    {'id': 'repeat-only', 'label': 'Repeat-only baseline'}]}
 
     def save(self) -> None:
         self.config_dir.mkdir(parents=True, exist_ok=True)
