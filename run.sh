@@ -25,6 +25,12 @@ fi
 # A few Python/Arch editable-install combinations omit the project from sys.path.
 # Explicitly select this checkout and its venv; do not start a disconnected GUI.
 export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
+
+# Enable the independently installed, offline RubricNet extractor only when
+# explicitly selected. No optional imports happen during normal startup.
+if [[ -x "$PWD/.rubricnet-venv/bin/python" ]]; then
+  export PIANO_TEACHER_RUBRICNET_PYTHON="$PWD/.rubricnet-venv/bin/python"
+fi
 PYTHON="$PWD/.venv/bin/python"
 if [[ ! -x "$PYTHON" ]]; then
   PYTHON="$(command -v python)"
