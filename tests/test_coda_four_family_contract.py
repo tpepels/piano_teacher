@@ -99,3 +99,40 @@ def test_four_family_fixture_retains_all_original_source_notation():
     assert len(root.findall(".//backup"))==1
     assert len(root.findall(".//rest"))==1
     assert len(root.findall(".//attributes/key"))==2
+
+
+def test_polyphonic_rhythm_research_uses_production_notation_source_ids(tmp_path):
+    """A lab-generated stage can be drawn and graded without source-ID drift.
+
+    This calls the same SCORE MODEL construction as live learning, without
+    enabling research prototypes as user-facing production strategies.
+    """
+    from piano_teacher.application.score_artifacts import ScoreArtifacts, ScoreSelection
+    from piano_teacher.preprocessing_cache import PreprocessingCache
+
+    piece, original = scenario()
+    producers = {
+        "research-chords": PolyphonicChordifier().transform(
+            original,boundaries=piece.bar_boundaries,
+            source_musicxml=piece.source_musicxml).timing,
+        "research-dotted": ResearchPolyphonicDottedRhythm().transform(
+            original,boundaries=piece.bar_boundaries,
+            source_musicxml=piece.source_musicxml).timing,
+    }
+    artifacts = ScoreArtifacts(PreprocessingCache(tmp_path/"coda-score-cache"))
+    for name, plan in producers.items():
+        # The original article may use additional non-equivalent rules.
+        # This validates application input semantics, not author parity.
+        selection = ScoreSelection(
+            piece, plan.exercise_phrase, "both", name, 1,
+            name+"-source-v1", transformed_rhythm=True)
+        model = artifacts.source_model(selection)
+        by_id = {entry["id"]:entry for entry in model["notes"]}
+        assert len(by_id) == len(original.notes) == 16
+        assert set(by_id) == {note.source_id for note in original.notes}
+        for note in plan.exercise_phrase.notes:
+            assert by_id[note.source_id]["onset_beats"] == pytest.approx(
+                note.start - plan.exercise_phrase.start)
+            assert by_id[note.source_id]["duration_beats"] == pytest.approx(
+                note.end-note.start)
+        assert plan.exercise_phrase.notes != original.phrase.notes
