@@ -16,12 +16,26 @@ def main() -> None:
         raise SystemExit("Usage: rubicnet_worker.py SOURCE.musicxml")
 
     from music21.tempo import MetronomeMark
+    from extractor.DifficultyFeatures.code import difficulty_calculators
     from extractor.DifficultyFeatures.code.difficulty_calculators import (
         INSTRUMENT_DIFFICULTY_CALCULATORS,
     )
     from extractor.DifficultyFeatures.code.raw_data_extractors import (
         CIPIFeatureExtractor, convert_offsets,
     )
+
+    # The published calculator also computes a *non-model* diagnostic,
+    # displacement_stuff, whose implementation indexes pitch_sets[1] even
+    # for a perfectly valid one-note hand. For that undefined case alone,
+    # return neutral diagnostic 0. The trained input feature
+    # 'lh_displacement_rate' / 'rh_displacement_rate' is computed by a
+    # distinct unchanged function. We keep all vendored source byte-identical.
+    original_displacement_stuff = difficulty_calculators.displacement_stuff
+    def sparse_hand_safe(pitch_sets):
+        if len(pitch_sets) < 2:
+            return 0
+        return original_displacement_stuff(pitch_sets)
+    difficulty_calculators.displacement_stuff = sparse_hand_safe
 
     warnings = set()
     raw = CIPIFeatureExtractor().extract_raw_data_map(
