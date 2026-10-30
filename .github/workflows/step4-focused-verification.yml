@@ -1,0 +1,57 @@
+# One-shot Step 4 acceptance checks; not an always-on corpus audit.
+# Includes original-source notation and full-source nonmastery remediation checks.
+name: Piano Teacher (Step 4 adaptive exercises)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/step4-focused-verification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adaptive-exercises:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install bounded notation dependencies
+        run: timeout 85s python -m pip install -e '.[test,godot]'
+      - name: Coda, Fukuda, difficulty, evidence-driven remediation and source notation
+        run: |
+          timeout 65s python -m pytest -q --tb=short \
+            tests/test_step4_algorithms.py \
+            tests/test_step4_real_scores.py \
+            tests/test_exercise_strategies.py \
+            tests/test_exercise_contracts.py \
+            tests/test_transformed_source_notation.py \
+            tests/test_timed_real_scores_and_recovery.py \
+            tests/test_timing_live_integration.py \
+            tests/test_strategy_pipeline.py \
+            tests/test_native_precise_rhythms.py \
+            tests/test_native_barlines.py \
+            tests/test_native_musicxml_hairpins.py \
+            tests/test_transformed_transport.py \
+            tests/test_listen_session.py \
+            tests/test_listen_sync.py
+      - name: Fetch Godot 4.7.2 headless runner
+        run: |
+          curl -fL --retry 2 --max-time 55 \
+            https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip \
+            -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP"
+          chmod +x "$RUNNER_TEMP/Godot_v4.7.2-stable_linux.x86_64"
+          ln -s "$RUNNER_TEMP/Godot_v4.7.2-stable_linux.x86_64" "$RUNNER_TEMP/godot"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - name: Godot parse, variable tempo clock, Listen drift and settings
+        run: |
+          timeout 20s godot --headless --path godot --check-only --script res://main.gd
+          timeout 20s godot --headless --path godot --script "$PWD/tests/godot/visual_transport_clock.gd"
+          timeout 20s godot --headless --path godot --script "$PWD/tests/godot/listen_sync.gd"
+          timeout 30s python -m pytest -q --tb=short tests/test_settings_screen.py
