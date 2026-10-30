@@ -14,6 +14,8 @@ import uuid
 
 from ..demo import DemoAudioCache
 from ..exercise_generator import ExerciseVariant
+from ..exercise_contracts import TempoMap
+from dataclasses import replace as dataclass_replace
 from ..lesson_timing import lead_in_beats, preparation_meter
 from ..measure_grid import phrase_grid
 from ..music import source_note_id
@@ -27,6 +29,7 @@ class ListenSelection:
     revision: int
     bar_boundaries: tuple[float, ...]
     time_signatures: tuple[tuple[float, int, int], ...]
+    tempo_map: TempoMap | None = None
 
 
 @dataclass(frozen=True)
@@ -67,7 +70,9 @@ class ListenSession:
             self._info = {
                 "token": token, "url": "", "audio_available": False,
                 "instrument": "Preparing piano audio",
-                "duration_seconds": (audio_end-variant.phrase.start)*60/selected.bpm,
+                "duration_seconds": (selected.tempo_map.duration_seconds
+                                     if selected.tempo_map is not None
+                                     else (audio_end-variant.phrase.start)*60/selected.bpm),
                 "ready": False, "stage_key": selected.stage_key,
                 "source_ids": [f"{selected.stage_key}:{index}" for index in variant.source_indices],
                 "canonical_source_ids": [source_note_id(note, index)
@@ -80,7 +85,20 @@ class ListenSession:
 
     def _render(self, cache, selected: ListenSelection, token: str) -> None:
         try:
-            audio = cache.render(selected.variant, selected.bpm)
+            variant = selected.variant
+            if selected.tempo_map is not None:
+                tempo_map = selected.tempo_map
+                offset = variant.phrase.start
+                # Audio synthesis takes fixed-BPM notes. Warp note positions
+                # through the exact tempo map while retaining source IDs.
+                warped_notes = tuple(dataclass_replace(note,
+                    start=offset+tempo_map.seconds_at(note.start-offset)*selected.bpm/60,
+                    end=offset+tempo_map.seconds_at(note.end-offset)*selected.bpm/60)
+                    for note in variant.notes)
+                warped = dataclass_replace(variant.phrase, notes=warped_notes,
+                    end=offset+tempo_map.duration_seconds*selected.bpm/60)
+                variant = dataclass_replace(variant, phrase=warped)
+            audio = cache.render(variant, selected.bpm)
         except Exception as exc:
             with self._lock:
                 if self._info is not None and self._info["token"] == token:
