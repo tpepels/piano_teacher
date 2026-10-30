@@ -6,6 +6,7 @@ extends RefCounted
 # transition. Backend and frontend use the same machine's monotonic time;
 # chasing poll phase error introduces audible/visible tempo modulation.
 const DISCONTINUITY_BEATS := 0.8
+const TempoTimeline := preload("res://tempo_timeline.gd")
 
 var initialized := false
 var transport_id := -1
@@ -15,19 +16,8 @@ var tempo_segments: Array = []
 var timeline_elapsed_seconds := 0.0
 
 func _beat_at_seconds(seconds: float, segments: Array) -> float:
-    if segments.is_empty() or seconds <= 0.0:
-        return seconds * bpm / 60.0
-    var elapsed := 0.0
-    for segment in segments:
-        var first: float = float(segment.get("start_beat", 0.0))
-        var last: float = float(segment.get("end_beat", first))
-        var segment_bpm: float = maxf(1.0, float(segment.get("bpm", bpm)))
-        var duration: float = (last-first)*60.0/segment_bpm
-        if seconds <= elapsed+duration:
-            return first+(seconds-elapsed)*segment_bpm/60.0
-        elapsed += duration
-    var final: Dictionary = segments.back()
-    return float(final.get("end_beat", 0.0)) + (seconds-elapsed)*float(final.get("bpm", bpm))/60.0
+    return TempoTimeline.beat_at_seconds(seconds, bpm, segments)
+
 var active := false
 var beat := 0.0
 var last_ms := 0

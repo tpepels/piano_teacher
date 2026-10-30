@@ -26,4 +26,5 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_coda_matrix_research.py \
   tests/test_coda_written_rests_research.py \
   tests/test_coda_source_metadata.py \
-  tests/test_coda_research_strategies.py
+  tests/test_coda_research_strategies.py \
+  tests/test_shared_tempo_timeline.py

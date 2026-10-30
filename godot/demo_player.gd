@@ -3,6 +3,7 @@ extends Node
 signal prepared(token: String, revision: int)
 signal failed(message: String)
 const ListenSync := preload("res://listen_sync.gd")
+const TempoTimeline := preload("res://tempo_timeline.gd")
 var sync_monitor = ListenSync.new()
 var last_sync_probe_ms := 0
 var last_start_offset_s := 0.0
@@ -85,7 +86,7 @@ func synchronize(state: Dictionary, visual_beat: float = NAN) -> void:
         if bool(state.get("paused", false)):
             sync_monitor.reset_pending()
         else:
-            keep_synchronized(beat, bpm)
+            keep_synchronized(beat, bpm, state.get("tempo_segments", []))
     elif started:
         player.stop()
         started = false
@@ -94,7 +95,7 @@ func synchronize(state: Dictionary, visual_beat: float = NAN) -> void:
 # Sample the *audible* software play position, excluding the output-device
 # buffer estimated by Godot. It is not a piano or speaker latency meter.
 # Inspect at most five times per second and correct only persistent drift.
-func keep_synchronized(visual_beat: float, bpm: float) -> void:
+func keep_synchronized(visual_beat: float, bpm: float, segments: Array = []) -> void:
     if not loaded or not started or player == null or not player.playing \
             or player.stream_paused or not is_finite(visual_beat) or bpm <= .0:
         return
@@ -103,7 +104,7 @@ func keep_synchronized(visual_beat: float, bpm: float) -> void:
         return
     last_sync_probe_ms = now_ms
     var duration_s: float = player.stream.get_length()
-    var target_s: float = maxf(0.0, visual_beat * 60.0 / bpm)
+    var target_s: float = maxf(0.0, TempoTimeline.seconds_at_beat(visual_beat, bpm, segments))
     var audible_s: float = maxf(0.0, player.get_playback_position() +
         AudioServer.get_time_since_last_mix() - AudioServer.get_output_latency())
     if sync_monitor.evaluate(target_s, audible_s, duration_s, now_ms):

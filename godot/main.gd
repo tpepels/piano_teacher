@@ -14,6 +14,7 @@ const GameBackdrop := preload("res://game_backdrop.gd")
 const UI := preload("res://ui_factory.gd")
 const LibraryScreen := preload("res://library_screen.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
+const TempoTimeline := preload("res://tempo_timeline.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 const SourceMeasurePicker := preload("res://source_measure_picker.gd")
 const SettingsScreen := preload("res://settings_screen.gd")
@@ -264,7 +265,13 @@ func _transport_beat_now() -> float:
     var beat: float = float(last_state.get("clock_beat", 0.0))
     if bool(last_state.get("running", false)) and not bool(last_state.get("paused", false)):
         var elapsed: float = maxf(0.0, float(Time.get_ticks_msec() - last_state_tick) / 1000.0)
-        beat += elapsed * float(last_state.get("bpm", 60.0)) / 60.0
+        var segments: Array = last_state.get("tempo_segments", [])
+        if segments.is_empty():
+            beat += elapsed * float(last_state.get("bpm", 60.0)) / 60.0
+        else:
+            beat = TempoTimeline.beat_at_seconds(
+                float(last_state.get("clock_elapsed_seconds", 0.0)) + elapsed,
+                float(last_state.get("bpm", 60.0)), segments)
     return beat
 
 # Projection only: never change the backend's local MIDI grading clock.
@@ -765,7 +772,8 @@ func _process(_delta: float) -> void:
             and bool(last_state.get("running", false)) \
             and not bool(last_state.get("paused", false)):
         demo_player.keep_synchronized(_transport_beat_now(),
-            maxf(1.0, float(last_state.get("bpm", 60.0))))
+            maxf(1.0, float(last_state.get("bpm", 60.0))),
+            last_state.get("tempo_segments", []))
         if listen_sync_diagnostics and ticks - last_listen_sync_report_ms >= 1000:
             last_listen_sync_report_ms = ticks
             print("PHASE8B_LISTEN_SOFTWARE_SYNC:",
