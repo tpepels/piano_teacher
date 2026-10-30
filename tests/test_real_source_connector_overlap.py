@@ -24,11 +24,7 @@ def _mark(note, kind, *, slur=None):
         ET.SubElement(notations, "slur", type=kind, number=str(slur))
 
 
-@pytest.fixture(scope="module", params=[
-    pytest.param("default", marks=pytest.mark.xfail(
-        strict=True, reason="Overlapping RH slur ink not yet uniquely owned by independent pixel proof")),
-    "separated",
-])
+@pytest.fixture(scope="module", params=["default", "separated"])
 def overlap_native(tmp_path_factory, request):
     from scripts.check_native_verovio_overlay import AuditCase, fixture
     from test_native_fingering import _godot, _run_godot
@@ -84,11 +80,11 @@ def overlap_native(tmp_path_factory, request):
     stdout = run.stdout + run.stderr
     assert run.returncode == 0 and "NATIVE_VEROVIO_OVERLAY_FAILURES:0" in stdout, stdout[-4000:]
     assert "SCRIPT ERROR" not in stdout, stdout[-4000:]
-    return payload["xml"], folder
+    return request.param, payload["xml"], folder
 
 
 def test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownership(overlap_native):
-    xml, folder = overlap_native
+    case, xml, folder = overlap_native
     from piano_teacher.notation.proof import read_written_score
     written = read_written_score(xml)
     from piano_teacher.notation.symbol_pixel_proof import _connector_pairs
@@ -105,11 +101,18 @@ def test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownersh
          row.get("evidence", {}).get("reason"))
         for row in report["observations"]]
     print("OVERLAP_CONNECTOR_STATUS=" + json.dumps(details))
+    if case == "default":
+        assert report["coverage"]["verified"] == 2, details
+        assert report["coverage"]["mismatch"] == 2, details
+        assert [row["status"] for row in report["observations"]] == [
+            "verified", "mismatch", "mismatch", "verified"], details
+        pytest.xfail("Default crossing right-hand slurs still lack independently "
+                     "verified curve attachment; the failure stays in scope.")
     assert report["complete"], json.dumps(details)
 
 
 def test_overlap_source_independent_score_retains_sound_tie_and_both_slurs(overlap_native):
-    xml, folder = overlap_native
+    _case, xml, folder = overlap_native
     assert len(slur_pairs_from_xml(xml)) == 3
     from piano_teacher.importing.musicxml import load_musicxml
     piece = load_musicxml(folder/"source.musicxml", bpm=80)
