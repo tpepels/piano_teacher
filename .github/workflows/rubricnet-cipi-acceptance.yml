@@ -1,6 +1,6 @@
 # Official CIPI camera-ready validation. Runs only on changes to this
 # workflow or manual dispatch; no heavy ML install or long corpus audit.
-# Re-run after source integrity diagnostic update.
+# Re-run after correcting the full 40-character pinned CIPI blob hash.
 name: RubricNet (published CIPI held-out results)
 on:
   push:
