@@ -29,8 +29,11 @@ def verified_reference_data() -> tuple[list[dict], dict]:
                + UPSTREAM_COMMIT + "/" + path)
         with urlopen(url, timeout=15) as response:
             raw = response.read(1_000_000)
-        if git_blob_sha(raw) != expected_sha:
-            raise ValueError(f"CIPI source checksum mismatch: {path}")
+        observed_sha = git_blob_sha(raw)
+        if observed_sha != expected_sha:
+            raise ValueError(
+                f"CIPI source checksum mismatch: {path}: expected {expected_sha}, "
+                f"got {observed_sha}, bytes={len(raw)}, first={raw[:80]!r}")
         data[path] = json.loads(raw)
     return (data["features/cipi-features-ISMIR24.json"],
             data["rubricnet/cipi_splits.json"])
