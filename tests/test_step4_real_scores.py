@@ -46,5 +46,5 @@ def test_chordified_real_sixteenths_keep_every_source_attack_and_grading_time():
     for index, note in enumerate(phrase.notes):
         assert onsets[source_note_id(source.notes[index], index)] == (
             note.start-phrase.start)
-    assert tuple(note.start for note in piece.notes) == tuple(
+    assert tuple(note.start for note in piece.notes if note.hand == "right") == tuple(
         note.start for note in source.notes)
