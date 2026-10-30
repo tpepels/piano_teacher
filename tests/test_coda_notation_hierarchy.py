@@ -6,8 +6,11 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from piano_teacher.importing.musicxml import load_musicxml
-from piano_teacher.music import Phrase
+from piano_teacher.music import Phrase, Note
 from piano_teacher.research.coda_matrix import MatrixScore
+from piano_teacher.exercise_generator import ExerciseVariant
+from piano_teacher.research.coda_polyphony import PolyphonicChordifier
+from piano_teacher.research.coda_research_strategies import ResearchPolyphonicDottedRhythm
 from piano_teacher.research.coda_notation_hierarchy import (
     measure_contexts, notation_parts)
 from piano_teacher.research.coda_source_metadata import source_elements
@@ -159,3 +162,41 @@ def test_matrix_rejects_omitted_or_rewritten_unvoiced_original_element():
     rewritten=replace(source,notation_elements=(*source.notation_elements[:-1],changed))
     with pytest.raises(ValueError,match="changed source notation inventory"):
         rewritten.verify_lossless()
+
+
+def test_mid_measure_key_change_protects_both_sides_of_retimed_pair():
+    xml = """<score-partwise><part id="P"><measure number="1">
+      <attributes><divisions>1</divisions><key><fifths>0</fifths></key>
+        </attributes>
+      <note><pitch><step>C</step><octave>4</octave></pitch>
+        <duration>1</duration><voice>1</voice></note>
+      <attributes><key><fifths>1</fifths></key></attributes>
+      <note><pitch><step>D</step><octave>4</octave></pitch>
+        <duration>1</duration><voice>1</voice></note>
+    </measure></part></score-partwise>"""
+    notes=(
+        Note(0,1,60,0,0,"right","xml-p0-m0-e1","xml-p0-s1-v1"),
+        Note(1,2,62,0,0,"right","xml-p0-m0-e3","xml-p0-s1-v1"))
+    variant=ExerciseVariant("original",Phrase(1,1,1,0,4,notes),(0,1))
+    source=MatrixScore.from_phrase(variant.phrase,boundaries=(0,4),
+                                   source_musicxml=xml)
+    assert source.context_protected_source_ids() == {
+        "xml-p0-m0-e1","xml-p0-m0-e3"}
+    assert not PolyphonicChordifier().transform(
+        variant,boundaries=(0,4),source_musicxml=xml).decisions
+    assert not ResearchPolyphonicDottedRhythm().transform(
+        variant,boundaries=(0,4),source_musicxml=xml).decisions
+    source.verify_lossless()
+
+
+def test_barline_key_change_does_not_block_independent_transformations():
+    fixture=Path(__file__).parent/"fixtures/research/coda_four_families.musicxml"
+    piece=load_musicxml(fixture,bpm=80)
+    phrase=Phrase(1,1,2,0,8,piece.notes)
+    source=MatrixScore.from_phrase(phrase,boundaries=piece.bar_boundaries,
+                                   source_musicxml=piece.source_musicxml)
+    assert not source.context_protected_source_ids()
+    variant=ExerciseVariant("original",phrase,tuple(range(len(phrase.notes))))
+    result=PolyphonicChordifier().transform(
+        variant,boundaries=piece.bar_boundaries,source_musicxml=piece.source_musicxml)
+    assert result.decisions

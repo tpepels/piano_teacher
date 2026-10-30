@@ -159,7 +159,8 @@ class ResearchPolyphonicDottedRhythm:
         protected = _source_protection(source_musicxml)
         # Authored slurs/ties also protect *interior* source notes. Endpoint
         # guards alone can silently alter a middle phrase under one curve.
-        protected = protected | matrix.connector_protected_source_ids()
+        protected = (protected | matrix.connector_protected_source_ids()
+                     | matrix.context_protected_source_ids())
         # Unprojected expressive notation would not survive arbitrary
         # retiming. Treat its source attacks as ineligible too.
         for source in matrix.notation_elements:
