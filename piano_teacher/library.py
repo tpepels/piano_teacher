@@ -55,7 +55,7 @@ class ScoreLibrary:
         if self.settings['exercise_strategy'] not in {x['id'] for x in available_strategies()}:
             self.settings['exercise_strategy'] = 'legacy'
         for key, valid, fallback in (
-                ("timing_strategy", {"original-timing", "dotted-long-short", "dotted-short-long"}, "original-timing"),
+                ("timing_strategy", {"original-timing", "dotted-long-short", "dotted-short-long", "coda-chord-blocks"}, "original-timing"),
                 ("tempo_strategy", {"constant-tempo", "two-phase-tempo"}, "constant-tempo"),
                 ("diagnosis_strategy", {"error-family", "accuracy-only"}, "error-family"),
                 ("learner_strategy", {"repeated-error", "repeat-only"}, "repeated-error")):
@@ -124,7 +124,8 @@ class ScoreLibrary:
                 'available_timing_strategies': [
                     {'id': 'original-timing', 'label': 'Original rhythm'},
                     {'id': 'dotted-long-short', 'label': 'Dotted · long then short'},
-                    {'id': 'dotted-short-long', 'label': 'Dotted · short then long'}],
+                    {'id': 'dotted-short-long', 'label': 'Dotted · short then long'},
+                    {'id': 'coda-chord-blocks', 'label': 'Coda · source chord blocks'}],
                 'available_tempo_strategies': [
                     {'id': 'constant-tempo', 'label': 'Constant tempo'},
                     {'id': 'two-phase-tempo', 'label': 'Two-phase · slower then target'}],
