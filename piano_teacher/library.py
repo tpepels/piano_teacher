@@ -11,6 +11,7 @@ from pathlib import Path
 import tempfile
 
 from .warmups import catalog as built_in_warmups, is_warmup, materialize
+from .exercise_strategies import available_strategies
 
 FORMATS = {'.mid', '.midi', '.musicxml', '.xml', '.mxl'}
 MAX_FILES = 5000
@@ -31,7 +32,8 @@ class ScoreLibrary:
         self.config_dir = Path(config_dir) if config_dir is not None else default_config_dir()
         self.settings_path = self.config_dir / 'settings.json'
         self.settings = {'music_dir': str(default_music_dir()), 'fullscreen': True,
-                         'last_piece': '', 'midi_device': '', 'metronome': True}
+                         'last_piece': '', 'midi_device': '', 'metronome': True,
+                         'exercise_strategy': 'legacy'}
         if self.settings_path.exists():
             try:
                 stored = json.loads(self.settings_path.read_text(encoding='utf-8'))
@@ -45,6 +47,8 @@ class ScoreLibrary:
         if config_dir is None and not self.settings_path.exists():
             # First run: create a predictable folder that the user can fill.
             default_music_dir().mkdir(parents=True, exist_ok=True)
+        if self.settings['exercise_strategy'] not in {x['id'] for x in available_strategies()}:
+            self.settings['exercise_strategy'] = 'legacy'
         self._folder = self._normalize_folder(self.settings['music_dir'], require_exists=False)
         self.settings['music_dir'] = str(self._folder)
 
@@ -60,7 +64,7 @@ class ScoreLibrary:
         return path
 
     def update(self, **changes) -> dict:
-        allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome'}
+        allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome', 'exercise_strategy'}
         unknown = set(changes) - allowed
         if unknown:
             raise ValueError('Unknown preference: ' + ', '.join(sorted(unknown)))
@@ -82,13 +86,18 @@ class ScoreLibrary:
             if not isinstance(changes['metronome'], bool):
                 raise ValueError('Metronome must be true or false')
             new['metronome'] = changes['metronome']
+        if 'exercise_strategy' in changes:
+            selected = changes['exercise_strategy']
+            if type(selected) is not str or selected not in {x['id'] for x in available_strategies()}:
+                raise ValueError('Unknown exercise strategy')
+            new['exercise_strategy'] = selected
         self.settings = new
         self._folder = Path(new['music_dir'])
         self.save()
         return self.public_settings()
 
     def public_settings(self) -> dict:
-        return self.settings.copy()
+        return {**self.settings, 'available_exercise_strategies': list(available_strategies())}
 
     def save(self) -> None:
         self.config_dir.mkdir(parents=True, exist_ok=True)
