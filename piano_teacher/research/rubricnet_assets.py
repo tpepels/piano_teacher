@@ -32,7 +32,7 @@ CHIU_FEATURES = BASIC_FEATURES[2:]
 # examples as held-out samples. These are official upstream Git blob SHA-1s.
 OFFICIAL_EVALUATION = {
     "features/cipi-features-ISMIR24.json":
-        "c6e19f674c122032a85eb3597f685d5",
+        "c6e19f674c122032a85eb3597f6b8ce679f685d5",
     "rubricnet/cipi_splits.json":
         "015239412e5a497806e2dfaf559f78c41fbf0a1a",
 }
