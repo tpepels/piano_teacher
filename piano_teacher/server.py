@@ -40,6 +40,7 @@ from .state_projection import (
 )
 from .assessment_service import AssessmentService
 from .application.practice_assessment import PracticeAssessmentPolicies
+from .application.strategy_session import restored_strategy_plan
 from .application.lesson_snapshot import build_lesson_snapshot
 from .application.control_dispatch import ControlDispatcher
 from .application.practice_transitions import run_before_assessment
@@ -237,43 +238,10 @@ class PracticeEngine:
                 self._stop()
                 self._save()
                 self._reset_trouble()
-                replacement = LearningPlan(old.piece, warmup=self.is_builtin_warmup,
-                    exercise_strategy=self.library.settings['exercise_strategy'],
-                    timing_strategy=self.library.settings['timing_strategy'],
-                    tempo_strategy=self.library.settings['tempo_strategy'])
-                replacement.target_bpm = old.target_bpm
-                self.plan = replacement
-                saved_strategy = self.progress.has_strategy_session(
-                    self.fingerprint, replacement.profile)
-                self.progress.restore(replacement, self.fingerprint,
-                                      restore_session=saved_strategy)
-                if not saved_strategy:
-                    # A first visit starts near the previous musical location
-                    # but carries neither its clean streak nor its stage BPM.
-                    preferred_level = old.active_variant.level
-                    if old.exercise.kind == "learn":
-                        candidates = replacement._pipeline_stages(
-                            replacement.exercises[
-                                min(old.index, len(replacement.exercises)-1)],
-                            old.hand)
-                        # Prefer combined rhythm+tempo, then rhythm, then tempo.
-                        # Strategy IDs remain opaque; stage metadata drives selection.
-                        experimental = sorted(
-                            (stage for stage in candidates if
-                             stage.shaped_tempo or stage.transformed_rhythm),
-                            key=lambda stage: (
-                                stage.shaped_tempo and stage.transformed_rhythm,
-                                stage.transformed_rhythm, stage.shaped_tempo),
-                            reverse=True)
-                        if experimental:
-                            preferred_level = experimental[0].variant.level
-                    replacement.restore_location(
-                        kind=old.exercise.kind,
-                        first_bar=old.exercise.phrase.first_bar,
-                        last_bar=old.exercise.phrase.last_bar,
-                        hand=old.hand, level=preferred_level)
-                    replacement.streak = 0
-                    replacement.bpm = replacement._tempo_for_current_stage()
+                self.plan = restored_strategy_plan(
+                    old, settings=self.library.settings,
+                    progress=self.progress, fingerprint=self.fingerprint,
+                    warmup=self.is_builtin_warmup)
                 self.open_from_beat = 0.0
                 self.mode = "practice"
                 self.course_guided = False
