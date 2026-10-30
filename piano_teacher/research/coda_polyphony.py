@@ -56,6 +56,7 @@ class PolyphonicChordifier:
         source = MatrixScore.from_phrase(
             variant.phrase, boundaries=boundaries,
             source_musicxml=source_musicxml)
+        protected_ids = protected_ids | source.connector_protected_source_ids()
         original = OriginalTiming().transform(variant)
         events = list(original.events)
         actions = []

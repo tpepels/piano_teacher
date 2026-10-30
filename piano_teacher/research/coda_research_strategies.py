@@ -35,45 +35,10 @@ def _is_safe_cut(matrix: MatrixScore, beat: float) -> bool:
     if any(note.start < beat - 1e-7 and note.end > beat + 1e-7
            for note in matrix.phrase.notes):
         return False
-    # Source slur/tie arcs have their own semantics. A simple passage
-    # subdivision must not create two independent fragments of an arc.
-    opened: dict[tuple, float] = {}
-    for item in matrix.notation_elements:
-        if item.kind != "note":
-            continue
-        element = ET.fromstring(item.xml)
-        if element.find("{*}rest") is not None:
-            continue
-        for tag in ("slur", "tied"):
-            marks = element.findall("{*}notations/{*}"+tag)
-            if tag == "tied":
-                marks += element.findall("{*}tie")
-            # MusicXML often supplies both <tie> and <notations><tied>.
-            # They describe one link, not two independent arcs.
-            identifiers = {(mark.get("type"), mark.get("number", "1"))
-                           for mark in marks}
-            for kind, number in sorted(identifiers):
-                key: tuple = (item.part_index, item.voice_id or "", tag, number)
-                if tag == "tied":
-                    pitch = element.find("{*}pitch")
-                    if pitch is not None:
-                        key += (ET.tostring(pitch, encoding="unicode"),)
-                if kind == "stop":
-                    start = opened.pop(key, None)
-                    # A stop with no visible start may refer to an arc
-                    # beginning *before* this selected phrase. Fail closed
-                    # when it could cross our proposed split.
-                    if start is None:
-                        if item.onset >= beat - 1e-7:
-                            return False
-                    elif start < beat - 1e-7 and item.onset >= beat - 1e-7:
-                        return False
-                elif kind == "start":
-                    opened[key] = item.onset
-                else:
-                    # Unknown connector types have no safe cut semantics.
-                    return False
-    return not any(start < beat - 1e-7 for start in opened.values())
+    # Distinct source voice/pitch/part arcs (and unresolved partial
+    # windows) decide whether a MusicXML measure boundary is cuttable.
+    # Do not infer links from nearest pitched attacks or native engraving.
+    return not any(link.crosses(beat) for link in matrix.source_connectors())
 
 @dataclass(frozen=True)
 class ResearchPassage:
@@ -192,6 +157,9 @@ class ResearchPolyphonicDottedRhythm:
             raise ValueError("Incomplete source measure grid")
         original = OriginalTiming().transform(variant)
         protected = _source_protection(source_musicxml)
+        # Authored slurs/ties also protect *interior* source notes. Endpoint
+        # guards alone can silently alter a middle phrase under one curve.
+        protected = protected | matrix.connector_protected_source_ids()
         # Unprojected expressive notation would not survive arbitrary
         # retiming. Treat its source attacks as ineligible too.
         for source in matrix.notation_elements:

@@ -189,6 +189,17 @@ class MatrixScore:
         if self.notation_elements and authored != set(rest_ids):
             raise ValueError("Score matrix lost authored rest metadata")
 
+    def source_connectors(self):
+        """Explicit written slurs/ties, with unresolved partial-window arcs."""
+        from .coda_source_connectors import link_source_connectors
+        return link_source_connectors(self.notation_elements)
+
+    def connector_protected_source_ids(self) -> frozenset[str]:
+        """Every note under an authored source arc is ineligible for retiming."""
+        from .coda_source_connectors import protected_connector_source_ids
+        return protected_connector_source_ids(
+            self.notation_elements, self.source_connectors())
+
     def source_voice_elements(self, name: str) -> tuple[MatrixSourceElement, ...]:
         return tuple(item for item in self.notation_elements
                      if item.voice_id == name)
