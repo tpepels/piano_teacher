@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from math import ceil
 from typing import Callable, Protocol
 from .exercise_generator import ExerciseVariant
+from .difficulty import DifficultyEstimator, HeuristicDifficulty
 from .music import Phrase
 
 Groups = tuple[tuple[str, tuple[frozenset[int], ...]], ...]
@@ -174,27 +175,20 @@ class CodaPartStrategy:
 
 @dataclass(frozen=True)
 class FeatureGatedStrategy:
-    """Interpretable heuristic gate inspired by RubricNet descriptors; untrained."""
+    """Feature-guided strategy selection; no pretrained RubricNet model."""
+
+    estimator: DifficultyEstimator = HeuristicDifficulty()
     name: str = "feature-gated"
 
     def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
-        notes = [context.phrase.notes[i] for i in context.source_indices]
-        chords = defaultdict(list)
-        voices = defaultdict(list)
-        for n in notes:
-            chords[(n.hand, n.track, n.voice, round(n.start, 6))].append(n)
-            voices[(n.hand, n.track, n.voice)].append(n)
-        chords_hard = any(len(group) >= 3 for group in chords.values())
-        leaps_hard = False
-        for voice in voices.values():
-            ordered = sorted(voice, key=lambda note: note.start)
-            if any(abs(a.pitch - b.pitch) >= 12 for a, b in zip(ordered, ordered[1:])):
-                leaps_hard = True
-                break
-        if chords_hard or leaps_hard:
+        notes = tuple(context.phrase.notes[i] for i in context.source_indices)
+        estimate = self.estimator.estimate(
+            notes, context.phrase.end - context.phrase.start)
+        if estimate.level != "challenging":
+            return baseline()
+        if estimate.focus in ("chords", "leaps"):
             return FukudaStrategy().generate(context, baseline)
-        times = sorted({round(note.start, 6) for note in notes})
-        if sum(0 < b - a < .5 for a, b in zip(times, times[1:])) >= 3:
+        if estimate.focus == "rhythm":
             return CodaPartStrategy().generate(context, baseline)
         return baseline()
 
