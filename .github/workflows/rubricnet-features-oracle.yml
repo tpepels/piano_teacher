@@ -25,7 +25,7 @@ jobs:
             'torch==2.5.1+cpu' --index-url https://download.pytorch.org/whl/cpu
           timeout 55s python -m pip install -q --disable-pip-version-check \
             'music21>=9.1,<10' numpy scipy pandas scikit-learn \
-            sortedcontainers lxml matplotlib seaborn
+            sortedcontainers lxml matplotlib seaborn pytest
       - name: Fetch only pinned upstream extractor sources and reference score
         run: |
           timeout 30s git clone --quiet --depth 1 --filter=blob:none \
@@ -41,6 +41,10 @@ jobs:
         run: |
           timeout 40s python -m scripts.research.verify_rubricnet_source_features \
             --upstream "$RUNNER_TEMP/rubricnet-upstream" --check-oracle
+      - name: Vendored offline worker on three representative real scores
+        run: |
+          timeout 65s python -m pytest -q --tb=short \
+            tests/test_rubricnet_real_scores.py
       - name: Evaluate official Bach MusicXML through source extractor and real folds
         run: |
           timeout 40s python -m scripts.research.predict_rubricnet_musicxml \
