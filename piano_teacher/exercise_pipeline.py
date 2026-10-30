@@ -10,7 +10,9 @@ from dataclasses import dataclass, replace
 from typing import Callable
 
 from .exercise_generator import ExerciseVariant
-from .notation.rhythm_safety import rhythm_protected_source_ids
+from .notation.rhythm_safety import (
+    rhythm_protected_source_ids, slur_endpoint_source_ids,
+)
 from .exercise_strategies import ExerciseContext, ExerciseStrategy
 from .exercise_contracts import (
     OriginalTiming, TempoMap, TempoStrategy, TimingStrategy,
@@ -64,6 +66,8 @@ class ExercisePipeline:
             # A merged tie attack cannot be retimed independently of its
             # written continuations. The same applies to authored tuplets.
             protected = rhythm_protected_source_ids(source_musicxml)
+            if getattr(self.timing, "protect_slurs", False):
+                protected = protected | slur_endpoint_source_ids(source_musicxml)
             if changed and not (set(changed) & protected):
                 offset = original.phrase.start
                 altered = tuple(replace(note, start=offset+event.exercise_start,
