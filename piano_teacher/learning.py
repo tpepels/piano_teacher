@@ -463,7 +463,7 @@ class LearningPlan:
                                              separators=(",", ":")).encode()).hexdigest()[:16]
         # Legacy identifiers remain unchanged for existing saved courses.
         # Nonlegacy strategies cannot inherit unrelated completion/tempo credit.
-        profile = ("" if self.exercise_strategy.name == "legacy"
+        profile = ("" if self.warmup or self.exercise_strategy.name == "legacy"
                    else f":{self.exercise_strategy.name}")
         return f"course:{self.route_version}{profile}:{exercise.key}:{hand}:{variant.level}:{signature}"
 
