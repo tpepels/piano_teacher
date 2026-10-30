@@ -20,7 +20,7 @@ from piano_teacher.timed_assessment import assess_timed_window
 
 def source():
     notes = tuple(
-        Note(float(i), float(i)+.5, 65+i, 0, 0, "right",
+        Note(float(i), float(i)+1.0, 65+i, 0, 0, "right",
              f"source-{i}", "voice-1")
         for i in range(4))
     return Piece("Strategy integration", 80, notes,
@@ -68,6 +68,7 @@ def test_unregistered_tempo_policy_operates_in_live_engine_without_engine_change
     piece = source()
     plan = LearningPlan(piece, tempo_strategy=CustomTempo())
     select_level(plan, "my-unregistered-shape")
+    plan.bpm = 60
     assert plan.active_stage.shaped_tempo
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
