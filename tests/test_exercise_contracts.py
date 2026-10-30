@@ -6,7 +6,8 @@ import pytest
 from piano_teacher.exercise_contracts import (
     AssessmentEvidence, DottedPairTiming, ErrorFamilyDiagnosis,
     LearnerSnapshot, OriginalTiming, RepeatedErrorPolicy, TwoPhaseTempo,
-    TempoMap, TempoSegment, assess_timed,
+    TempoMap, TempoSegment, assess_timed, resolve_timing_strategy,
+    resolve_tempo_strategy, resolve_diagnosis_strategy, resolve_learner_strategy,
 )
 from piano_teacher.exercise_generator import ExerciseVariant
 from piano_teacher.library import ScoreLibrary
@@ -83,6 +84,26 @@ def test_timing_contract_rejects_unmapped_source_events():
     plan = OriginalTiming().transform(variant())
     with pytest.raises(ValueError, match="source mapping"):
         replace(plan, events=(replace(plan.events[0], source_index=99), *plan.events[1:]))
+
+
+def test_all_research_axes_are_injectable_by_strategy_name():
+    assert resolve_timing_strategy("dotted-short-long").name == "dotted-short-long"
+    assert resolve_tempo_strategy("two-phase-tempo").name == "two-phase-tempo"
+    assert resolve_diagnosis_strategy("accuracy-only").name == "accuracy-only"
+    assert resolve_learner_strategy("repeat-only").name == "repeat-only"
+    with pytest.raises(ValueError):
+        resolve_timing_strategy("unknown")
+
+
+def test_builtin_warmups_keep_shared_original_stage_keys():
+    notes = (
+        Note(0, 1, 60, 0, 0, "right", "r", "v"),
+        Note(0, 1, 48, 1, 0, "left", "l", "v"),
+    )
+    piece = Piece("Warmup", 60, notes, (Phrase(1, 1, 1, 0, 4, notes),))
+    legacy = LearningPlan(piece, warmup=True, exercise_strategy="legacy")
+    fukuda = LearningPlan(piece, warmup=True, exercise_strategy="fukuda")
+    assert legacy.identity == fukuda.identity
 
 
 def test_history_is_persistent_scoped_and_bounded(tmp_path):
