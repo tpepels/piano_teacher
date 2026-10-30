@@ -52,7 +52,7 @@ from .learner_state import guided_units, next_guided_unit, placement_candidate
 from .progress_repository import ProgressRepository
 from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
-from .exercise_contracts import AssessmentEvidence
+from .exercise_contracts import AssessmentEvidence, OriginalTiming, TwoPhaseTempo, assess_timed
 from .practice_history import PracticePolicyService
 
 
@@ -217,22 +217,26 @@ class PracticeEngine:
     def set_preferences(self, **changes) -> dict:
         with self.lock:
             before = self.library.settings['music_dir']
-            old_strategy = self.library.settings['exercise_strategy']
+            old_strategy = tuple(self.library.settings[key] for key in
+                                 ("exercise_strategy", "timing_strategy", "tempo_strategy"))
             updated = self.library.update(**changes)
             if before != self.library.settings['music_dir']:
                 self.library_health.reset()
-            if (old_strategy != self.library.settings['exercise_strategy']
+            if (old_strategy != tuple(self.library.settings[key] for key in
+                        ("exercise_strategy", "timing_strategy", "tempo_strategy"))
                     and self.plan is not None):
                 old = self.plan
                 self._stop()
                 self._save()
                 self._reset_trouble()
                 replacement = LearningPlan(old.piece, warmup=self.is_builtin_warmup,
-                    exercise_strategy=self.library.settings['exercise_strategy'])
+                    exercise_strategy=self.library.settings['exercise_strategy'],
+                    timing_strategy=self.library.settings['timing_strategy'],
+                    tempo_strategy=self.library.settings['tempo_strategy'])
                 replacement.target_bpm = old.target_bpm
                 self.plan = replacement
                 saved_strategy = self.progress.has_strategy_session(
-                    self.fingerprint, replacement.exercise_strategy.name)
+                    self.fingerprint, replacement.profile)
                 self.progress.restore(replacement, self.fingerprint,
                                       restore_session=saved_strategy)
                 if not saved_strategy:
@@ -257,6 +261,26 @@ class PracticeEngine:
                 self.next_action = "Review the new exercise before starting."
                 self._save()
             return updated
+
+    def _active_tempo_map(self):
+        """The single authoritative active practice clock and grading map."""
+        if (self.plan is None or self.mode not in ("practice", "perform")
+                or self.plan.active_variant.level != "two-phase-tempo"):
+            return None
+        return TwoPhaseTempo().generate(
+            OriginalTiming().transform(self.plan.active_variant), self.plan.bpm)
+
+    def _elapsed_beat(self, elapsed_seconds: float) -> float:
+        tempo = self._active_tempo_map()
+        if tempo is not None:
+            return tempo.beat_at(elapsed_seconds)
+        return elapsed_seconds * self.plan.bpm / 60.0
+
+    def _elapsed_seconds(self, beat: float) -> float:
+        tempo = self._active_tempo_map()
+        if tempo is not None:
+            return tempo.seconds_at(beat)
+        return beat * 60.0 / self.plan.bpm
 
     def exercise_diagnostics(self) -> dict:
         with self.lock:
@@ -354,7 +378,9 @@ class PracticeEngine:
                 self._piece_generation += 1
                 self.score_artifacts.invalidate()
                 self.plan = LearningPlan(piece, warmup=warmup,
-                    exercise_strategy=self.library.settings['exercise_strategy'])
+                    exercise_strategy=self.library.settings['exercise_strategy'],
+                    timing_strategy=self.library.settings['timing_strategy'],
+                    tempo_strategy=self.library.settings['tempo_strategy'])
                 self.mode = "practice"
                 self.teaching = None
                 self.guided_range = None
@@ -436,7 +462,9 @@ class PracticeEngine:
         self._stop()
         self._reset_trouble()
         self.plan = LearningPlan(piece, warmup=warmup,
-                    exercise_strategy=self.library.settings['exercise_strategy'])
+                    exercise_strategy=self.library.settings['exercise_strategy'],
+                    timing_strategy=self.library.settings['timing_strategy'],
+                    tempo_strategy=self.library.settings['tempo_strategy'])
         self.open_from_beat = 0.0
         self.course_guided = False
         self.mode = "practice"
