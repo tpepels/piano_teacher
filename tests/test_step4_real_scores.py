@@ -19,9 +19,10 @@ FIXTURE = (Path(__file__).parent / "fixtures" / "connector_pixels" /
 
 def test_chordified_real_sixteenths_keep_every_source_attack_and_grading_time():
     piece = load_musicxml(FIXTURE, bpm=80)
+    right = tuple(note for note in piece.notes if note.hand == "right")
     source = Phrase(1, 1, len(piece.bar_boundaries)-1,
-                    piece.bar_boundaries[0], piece.bar_boundaries[-1], piece.notes)
-    variant = ExerciseVariant("original", source, tuple(range(len(piece.notes))))
+                    piece.bar_boundaries[0], piece.bar_boundaries[-1], right)
+    variant = ExerciseVariant("original", source, tuple(range(len(right))))
     timed = ChordBlockTiming().transform(variant)
     assert timed.name == "coda-chord-blocks"
     assert len(timed.events) == len(piece.notes)
