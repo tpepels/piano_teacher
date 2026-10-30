@@ -1,7 +1,8 @@
 """Experimental polyphonic chordification over immutable Coda-style voices.
 
 This is an independently testable extension, *not* a claim of exact Coda
-reference implementation. It never crosses a source measure or combines
+reference implementation. Original MusicXML rests are attached per voice;
+the candidate block is refused if it overlaps an authored rest. It never crosses a source measure or combines
 different voices, hands or original repeated pitches. Untouched source notes
 retain their exact IDs and timing; exercise beat changes are explicitly
 reversible in TimingPlan. Original-source mastery remains separate.
@@ -12,7 +13,7 @@ from dataclasses import dataclass, replace
 
 from ..exercise_contracts import OriginalTiming, TimingPlan
 from ..exercise_generator import ExerciseVariant
-from .coda_matrix import MatrixAttack, MatrixScore
+from .coda_matrix import MatrixAttack, MatrixScore, MatrixVoice
 
 
 @dataclass(frozen=True)
@@ -52,7 +53,9 @@ class PolyphonicChordifier:
                 rhythm_protected_source_ids(source_musicxml),
                 slur_endpoint_source_ids(source_musicxml),
                 beamed_source_ids(source_musicxml))
-        source = MatrixScore.from_phrase(variant.phrase, boundaries=boundaries)
+        source = MatrixScore.from_phrase(
+            variant.phrase, boundaries=boundaries,
+            source_musicxml=source_musicxml)
         original = OriginalTiming().transform(variant)
         events = list(original.events)
         actions = []
@@ -62,7 +65,7 @@ class PolyphonicChordifier:
                 attacks = voice.attacks
                 for i in range(0, len(attacks) - 1, 2):
                     first, second = attacks[i], attacks[i + 1]
-                    if not self._eligible(first, second, source,
+                    if not self._eligible(first, second, source, voice,
                                           protected_ids):
                         continue
                     new_beat = first.onset - origin
@@ -81,7 +84,7 @@ class PolyphonicChordifier:
 
     @staticmethod
     def _eligible(a: MatrixAttack, b: MatrixAttack, matrix: MatrixScore,
-                  protected: frozenset[str]) -> bool:
+                  voice: MatrixVoice, protected: frozenset[str]) -> bool:
         if (a.measure != b.measure
                 or any(identifier in protected for identifier
                        in (*a.source_ids, *b.source_ids))
@@ -95,6 +98,13 @@ class PolyphonicChordifier:
         if not durations or max(durations)-min(durations) > 1e-6:
             return False
         duration = durations[0]
+        # Authored rests have their own voice identity and remain at their
+        # original beats. A block chord may not cover or retime one in the
+        # same source voice. Independent rest-only voices are unaffected.
+        if any(rest.onset < b.onset + duration - 1e-7
+               and rest.end > a.onset + 1e-7
+               for rest in voice.written_rests):
+            return False
         if abs(b.onset-a.onset-duration) > 1e-6:
             return False
         bar = a.measure-matrix.phrase.first_bar

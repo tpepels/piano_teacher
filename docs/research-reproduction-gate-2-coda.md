@@ -84,3 +84,21 @@ No long-running full-corpus audits or background work were initiated.
   source-notation sidecar, not yet integrated into the MMR's part/voice
   transformation rules. Other source annotations and Coda reference parity
   remain open. No production behavior is switched on.
+
+
+## Follow-up: written rests become voice-owned transformation constraints
+
+- Pitch-bearing `MatrixVoice` objects now attach exact authored rests
+  by imported source part/staff/voice identity; `rest_only_voices` groups
+  remaining rests without inventing hand ownership or MIDI attacks.
+- `verify_lossless()` checks that every authored rest appears exactly once
+  across attached and rest-only voice groups, alongside pitched attacks.
+- The experimental `PolyphonicChordifier` now passes original MusicXML
+  to the matrix and refuses pairing when an authored rest in that same voice
+  overlaps the candidate block. Unrelated rests in other voices and later
+  rests do not inhibit eligible note pairs. The rest sidecar never changes.
+- Fast tests cover cross-voice isolation, rest-only provenance,
+  conflicting same-voice intervals, and a real MusicXML fixture.
+- These are **conservative engineering guards**, not yet a reproduction
+  of Coda's published rhythm-transformation rules. Production remains
+  unchanged, and the full symbolic metadata graph remains incomplete.

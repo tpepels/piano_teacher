@@ -3,7 +3,9 @@
 A source-backed symbolic adapter, *not* a reproduction of Coda's complete
 MMR. Notes remain attached to their original attack IDs, track/channel,
 voice and measure; source events are never rewritten in this representation.
-Authored rests/ornaments/notations require independent MusicXML semantics.
+Authored rests are associated with source voices where possible, and
+rest-only voices retain original source ownership without a guessed hand.
+Other ornaments/notations still require independent MusicXML semantics.
 """
 from __future__ import annotations
 
@@ -41,10 +43,21 @@ class MatrixVoice:
     channel: int
     name: str
     attacks: tuple[MatrixAttack, ...]
+    written_rests: tuple[MatrixWrittenRest, ...] = ()
 
     def __post_init__(self):
         if not all(a.onset <= b.onset for a, b in zip(self.attacks, self.attacks[1:])):
             raise ValueError("Voice attacks not chronologically ordered")
+        if any(rest.voice_id != self.name for rest in self.written_rests):
+            raise ValueError("Written rest belongs to another source voice")
+
+
+@dataclass(frozen=True)
+class MatrixRestOnlyVoice:
+    """Authored rests without a selected pitched voice; hand is intentionally unknown."""
+
+    name: str
+    written_rests: tuple[MatrixWrittenRest, ...]
 
 
 @dataclass(frozen=True)
@@ -85,6 +98,12 @@ class MatrixScore:
         if (len(grid) < 2 or any(not isfinite(x) for x in grid)
                 or any(b <= a for a, b in zip(grid, grid[1:]))):
             raise ValueError("Invalid measure grid")
+        written_rests = extract_written_rests(
+            source_musicxml, first_bar=phrase.first_bar, last_bar=phrase.last_bar,
+            boundaries=grid) if source_musicxml else ()
+        rests_by_voice: dict[str, list[MatrixWrittenRest]] = {}
+        for rest in written_rests:
+            rests_by_voice.setdefault(rest.voice_id, []).append(rest)
         voices: dict[tuple[str, int, int, str], dict[float, list[tuple[int, Note]]]] = {}
         seen_ids: set[str] = set()
         identities = []
@@ -118,11 +137,10 @@ class MatrixScore:
                         tuple(n.pitch for _, n in members),
                         tuple(n.end for _, n in members),
                         phrase.first_bar + measure_offset))
-                part_voices.append(MatrixVoice(track, channel, name, tuple(attacks)))
+                part_voices.append(MatrixVoice(
+                    track, channel, name, tuple(attacks),
+                    tuple(rests_by_voice.get(name, ()))))
             parts.append(MatrixPart(hand, tuple(part_voices)))
-        written_rests = extract_written_rests(
-            source_musicxml, first_bar=phrase.first_bar, last_bar=phrase.last_bar,
-            boundaries=grid) if source_musicxml else ()
         result = cls(phrase, grid, tuple(parts), tuple(identities), written_rests)
         result.verify_lossless()
         return result
@@ -148,6 +166,27 @@ class MatrixScore:
                         observed.append(index)
         if sorted(observed) != sorted(expected):
             raise ValueError("Score matrix lost or duplicated source events")
+        rest_ids = tuple(rest.source_id for rest in self.written_rests)
+        if len(rest_ids) != len(set(rest_ids)):
+            raise ValueError("Score matrix duplicated written-rest identities")
+        voice_rests = tuple(
+            rest.source_id for part in self.parts for voice in part.voices
+            for rest in voice.written_rests)
+        rest_only = tuple(rest.source_id for voice in self.rest_only_voices
+                          for rest in voice.written_rests)
+        if sorted((*voice_rests, *rest_only)) != sorted(rest_ids):
+            raise ValueError("Score matrix lost or duplicated written rests")
+
+    @property
+    def rest_only_voices(self) -> tuple[MatrixRestOnlyVoice, ...]:
+        """Source voices absent from the selected pitch events, without guessed hands."""
+        sounding = {voice.name for part in self.parts for voice in part.voices}
+        missing: dict[str, list[MatrixWrittenRest]] = {}
+        for rest in self.written_rests:
+            if rest.voice_id not in sounding:
+                missing.setdefault(rest.voice_id, []).append(rest)
+        return tuple(MatrixRestOnlyVoice(name, tuple(missing[name]))
+                     for name in sorted(missing))
 
     @property
     def note_count(self) -> int:
