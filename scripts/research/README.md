@@ -121,3 +121,47 @@ A separate three-minute, one-shot GitHub Actions check runs the original source
 oracle with these optional dependencies. The resulting source-to-model command
 is **not** yet an app-native difficulty strategy: packaging/porting the exact
 extractor, input-score parity and classroom/device acceptance remain open.
+
+## Offline application strategy (optional)
+
+The full published extractor's 14 required original Python modules are
+vendored **byte-for-byte** under
+`piano_teacher/research/_upstream_rubricnet/`, including the MIT license.
+The trained five-fold model is already bundled separately. The program
+requires **no internet access when using RubricNet** after one-time setup.
+
+To install optional extractor requirements without adding Torch or training
+modules to the normal Piano Teacher environment:
+
+```bash
+cd ~/Projects/piano_teacher
+./scripts/setup-rubricnet.sh
+./run.sh
+```
+
+`run.sh` uses `.rubricnet-venv/bin/python` for the isolated optional worker.
+The trainer, checkpoint loader and full research checkout are **not**
+imported into the practice service. If launching the backend manually,
+set `PIANO_TEACHER_RUBRICNET_PYTHON` to that interpreter path.
+
+In Godot Settings → Practice, select **RubricNet · trained score difficulty
+(optional setup)**. This sets an independent `rubricnet-trained` profile;
+the default `legacy` strategy and existing `feature-gated` heuristic
+remain unchanged. Switching an open score validates trained extraction before
+saving the selection and stopping the current session.
+
+The actual source MusicXML is passed to the original extractor, which returns
+12 named descriptors. The five authentic trained models predict whole-piece
+difficulty. **Exercise selection after prediction is our explicit heuristic
+rule, not a learned RubricNet policy:** classes 0–2 use the baseline path,
+3–5 Coda part-splitting, 6–8 combined Fukuda+Coda source-preserving drills.
+
+The upstream extractor assumes a conventional two-hand score. Short,
+rest-only, sparsely pitched, or otherwise unsupported scores can produce
+undefined features; those are refused with an error and **no surrogate
+difficulty**. Broader positive/negative fixture acceptance is tracked in
+`tests/test_rubricnet_real_scores.py`. Only the optional research test job
+imports Torch/scientific packages. Ordinary CI stays short.
+
+The trained difficulty class is not calibrated to the learner's skill and
+does not establish that the selected exercise improves learning.
