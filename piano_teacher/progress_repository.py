@@ -13,6 +13,7 @@ from .learning import LearningPlan, build_exercises
 from .exercise_generator import generate_variants
 from .lesson_settings import SETTINGS
 from .learner_state import LearnerStateStore
+from .practice_history import AssessmentHistoryStore
 
 
 class ProgressRepository:
@@ -40,14 +41,16 @@ class ProgressRepository:
         self.db.commit()
         # One owner initializes both progress and learner-state tables.
         self.learner_store = LearnerStateStore(self.db)
+        self.assessment_history = AssessmentHistoryStore(self.db)
 
-    def restore(self, plan: LearningPlan | None, fingerprint: str) -> None:
+    def restore(self, plan: LearningPlan | None, fingerprint: str, *,
+                restore_session: bool = True) -> None:
         p = plan
         if p is None:
             return
         row = self.db.execute("SELECT exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind FROM sessions WHERE fingerprint=?",(fingerprint,)).fetchone()
         legacy_exercises = None
-        if row:
+        if row and restore_session:
             exact = next((step for step in p.lesson_steps if step.key == row[7]), None)
             if exact is not None:
                 p.restore_location(kind=exact.kind, first_bar=exact.first_bar, last_bar=exact.last_bar,
@@ -94,7 +97,7 @@ class ProgressRepository:
                 p.transferable_tempos.add(key)
         # A current session may predate per-stage tempos; retain its exact
         # judged tempo, but only when the stage can be identified reliably.
-        if row is not None:
+        if row is not None and restore_session:
             p.stage_tempos[p.identity] = p.bpm
         for key,bpm in self.db.execute("SELECT exercise,bpm FROM mastery WHERE fingerprint=?",(fingerprint,)):
             p.mastered[key]=bpm
@@ -146,7 +149,7 @@ class ProgressRepository:
     def reset_piece(self, fingerprint: str) -> None:
         """Delete one piece's saved path and learner records transactionally."""
         with self.db:
-            for table in ("learner_units", "learner_stages", "repeat_tempo_credit",
+            for table in ("practice_evidence", "learner_units", "learner_stages", "repeat_tempo_credit",
                           "stage_tempos", "mastery", "sessions"):
                 self.db.execute(f"DELETE FROM {table} WHERE fingerprint=?", (fingerprint,))
 
