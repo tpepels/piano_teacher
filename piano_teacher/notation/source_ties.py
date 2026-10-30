@@ -31,7 +31,7 @@ def project_authored_ties(source_parts: list[ET.Element],
         if not binding:
             continue
         start = phrase.start + float(binding["display_beat"])
-        duration = float(Fraction(note.findtext("duration", "0"), 10080))
+        duration = float(Fraction(int(note.findtext("duration", "0")), 10080))
         candidates[binding["source_id"]].append((start, start + duration, note))
 
     unsupported = set()
