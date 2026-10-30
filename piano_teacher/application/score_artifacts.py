@@ -57,6 +57,11 @@ class ScoreArtifacts:
         self._layout_key: str | None = None
         self._png: dict[tuple[int, int], bytes] = {}
 
+    @staticmethod
+    def _transformed_rhythm(selected: ScoreSelection) -> bool:
+        return any(f":{name}:" in selected.stage_key for name in
+                   ("dotted-long-short", "dotted-short-long"))
+
     def _selected_notation(self, selected: ScoreSelection) -> LessonScore:
         if selected.identity != self._notation_identity or self._notation is None:
             piece = selected.piece
@@ -66,7 +71,11 @@ class ScoreArtifacts:
                 key_signatures=piece.key_signatures,
                 clef_changes=piece.clef_changes,
                 default_clefs=infer_piece_clefs(piece.notes),
-                barlines=piece.barlines, source_musicxml=piece.source_musicxml,
+                barlines=piece.barlines,
+                # Source slurs/rests use the original event clock. Retimed
+                # drills must engrave their actual durations instead.
+                source_musicxml="" if self._transformed_rhythm(selected)
+                               else piece.source_musicxml,
                 fingering_sources=authored_projection_sources(piece.fingering_plan))
             self._notation = notation
             self._notation_identity = selected.identity
@@ -85,7 +94,8 @@ class ScoreArtifacts:
     def semantic_score(self, selected: ScoreSelection) -> dict:
         return project_model(deepcopy(self.source_model(selected)),
             selected.piece.fingering_plan,
-            source_musicxml=selected.piece.source_musicxml)
+            source_musicxml="" if self._transformed_rhythm(selected)
+                           else selected.piece.source_musicxml)
 
     def cached_layout(self, selected: ScoreSelection) -> EngravedScore | None:
         """Feedback may read only ink belonging to this exact source selection."""
