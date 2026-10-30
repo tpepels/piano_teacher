@@ -246,7 +246,7 @@ func present_preferences(values: Dictionary) -> void:
     var selected_strategy := str(values.get("exercise_strategy", "legacy"))
     strategy_picker.clear()
     for available in values.get("available_exercise_strategies", []):
-        if not available is Dictionary:
+        if typeof(available) != TYPE_DICTIONARY:
             continue
         var index := strategy_picker.item_count
         strategy_picker.add_item(str(available.get("label", available.get("id", ""))))
@@ -277,6 +277,7 @@ func present_practice(state: Dictionary, editing: bool = false) -> void:
 
 func present_busy(pending: bool) -> void:
     apply_tempo_button.disabled = pending
+    strategy_picker.disabled = pending
 
 func present_volume(db: float) -> void:
     listen_volume_slider.set_value_no_signal(db)
