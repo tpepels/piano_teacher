@@ -142,6 +142,42 @@ class DottedPairTiming:
 
 
 @dataclass(frozen=True)
+class ChordBlockTiming:
+    """Coda-inspired two-note chord blocks for eligible sequential attacks.
+
+    Each pair of original consecutive notes is practised together at its
+    first source onset. The sounding pitches are unchanged; later space
+    becomes an intentional rest. Polyphony, repeated unisons, unequal
+    durations and existing chord voices are not collapsed.
+    """
+    name: str = "coda-chord-blocks"
+
+    def transform(self, variant: ExerciseVariant) -> TimingPlan:
+        original = OriginalTiming().transform(variant)
+        notes = variant.notes
+        if len(notes) < 2 or len({n.hand for n in notes}) != 1:
+            return original
+        order = sorted(range(len(notes)), key=lambda i: (notes[i].start, i))
+        # A source containing independent voices/overlaps is outside this
+        # strict chordification strategy's applicability.
+        if any(notes[b].start < notes[a].end - 1e-7
+               for a, b in zip(order, order[1:])):
+            return original
+        events = list(original.events)
+        for left, right in zip(order[::2], order[1::2]):
+            a, b = notes[left], notes[right]
+            duration = a.end - a.start
+            if (a.pitch == b.pitch or a.voice != b.voice or a.track != b.track
+                    or abs((b.end-b.start) - duration) > 1e-6
+                    or abs((b.start-a.start) - duration) > 1e-6):
+                continue
+            events[right] = replace(events[right],
+                                    exercise_start=events[left].exercise_start,
+                                    exercise_end=events[left].exercise_end)
+        return TimingPlan(self.name, variant, tuple(events), original.duration_beats)
+
+
+@dataclass(frozen=True)
 class TempoSegment:
     start_beat: float
     end_beat: float
@@ -297,6 +333,7 @@ _TIMING_STRATEGIES = {
     "original-timing": OriginalTiming,
     "dotted-long-short": lambda: DottedPairTiming(True),
     "dotted-short-long": lambda: DottedPairTiming(False),
+    "coda-chord-blocks": ChordBlockTiming,
 }
 _TEMPO_STRATEGIES = {
     "constant-tempo": ConstantTempo,
