@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "tested_revision": "701f28447fa827059d724039959799dc6bb636ce",
+  "verified_at": "2026-10-30",
+  "renderer": {
+    "godot": "4.5.1",
+    "environment": "GitHub Linux Xvfb software GL",
+    "hardware_midi": false
+  },
+  "source_control_proof": {
+    "run_id": 41137661038,
+    "run_url": "https://github.com/tpepels/piano_teacher/actions/runs/41137661038",
+    "artifact_id": 13016074993,
+    "passed": 14,
+    "failed": 0,
+    "xfailed": 0,
+    "seconds": 40.63,
+    "slurs_verified_per_variant": 3,
+    "ties_verified_per_variant": 1
+  },
+  "real_score_proof": {
+    "run_id": 41137661023,
+    "run_url": "https://github.com/tpepels/piano_teacher/actions/runs/41137661023",
+    "artifact_id": 13016718888,
+    "tests_passed": 2,
+    "tests_failed": 0,
+    "seconds": 15.21,
+    "scores": [
+      {
+        "source": "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi",
+        "measures": [
+          1,
+          2
+        ],
+        "construct": "eighth_rest",
+        "source_events_total": 1,
+        "sampled": 1,
+        "verified": 1,
+        "placement_verified": 1,
+        "corrupted_control_unverified": 1
+      },
+      {
+        "source": "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi",
+        "measures": [
+          5,
+          6
+        ],
+        "construct": "notehead",
+        "source_events_total": 77,
+        "sampled": 8,
+        "verified": 8,
+        "unsampled": 69,
+        "source_beats": [
+          1,
+          5.5
+        ],
+        "contour_score_range": [
+          0.88,
+          0.949
+        ],
+        "corrupted_staff_unverified": 8
+      }
+    ]
+  },
+  "fast_ci": {
+    "run_id": 41137661060,
+    "url": "https://github.com/tpepels/piano_teacher/actions/runs/41137661060",
+    "status": "success"
+  },
+  "full_corpus_visual_complete": false,
+  "historical_results_reused": false,
+  "uncertainties": [
+    "Godot 4.7.2",
+    "unsampled genuine scores and notes",
+    "Liszt learn-0065",
+    "comprehensive rest and connector coverage"
+  ]
+}

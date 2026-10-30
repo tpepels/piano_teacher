@@ -83,3 +83,31 @@ claim any new coverage.
 Machine-readable provenance and per-construct counts are in
 `docs/evidence/native-framebuffer-2026-10-30/summary.json`. All sample
 capture bytes and complete reports are in the GitHub Actions artifact.
+
+## Superseding current-revision source pixel evidence: `701f2844`
+
+The default and separated overlapping RH slurs now have source-bound causal
+proof using stable, unmodified and singly-suppressed **production Godot
+framebuffers**. The previous `2/4` slur-and-tie connector results were the
+uncorrected full-frame oracle's ambiguity; this is now resolved for these
+specimens by demanding an independently registered source-pair head/stem
+attachment, an authentic curved stroke, at least 24 source-exclusive changed
+pixels, and stable repeat/restoration images. No global contour threshold
+was relaxed; an absent, unchanged, or drifting control is not accepted.
+
+- Run: https://github.com/tpepels/piano_teacher/actions/runs/41137661038
+- Revision: `701f28447fa827059d724039959799dc6bb636ce`.
+- Result: **14 passed, 0 xfail, 0 failed**, 40.63s focused test execution.
+- Artifact: `13016074993` (original source and generated XML,
+  actual Verovio references, native and suppressed/restored PNGs,
+  independent pixel reports and negative controls).
+- Scope includes 3 source slurs and 1 tie per overlap variant, an actual
+  Bill Evans flagged-tie passage and the three-voice notehead/stem
+  specimen. The mutated suppression controls fail closed.
+
+The source-derived crossing-slur fixture deliberately adds authored
+slur marks to a retained test score. These counts **must not** be promoted
+to full real-score or full-corpus coverage. This run also recaptured the
+samples after moving the playhead beneath score ink; earlier frame
+evidence stays historical. See `docs/native-real-score-sample.md` for
+separately captured genuine MIDI performances and denominators.
