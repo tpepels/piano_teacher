@@ -285,8 +285,15 @@ class PracticeEngine:
     def exercise_diagnostics(self) -> dict:
         with self.lock:
             if self.plan is None:
-                return {"loaded": False, "exercise_strategy": self.library.settings['exercise_strategy']}
+                return {"loaded": False,
+                        "exercise_strategy": self.library.settings['exercise_strategy'],
+                        "timing_strategy": self.library.settings['timing_strategy'],
+                        "tempo_strategy": self.library.settings['tempo_strategy']}
             return {"loaded": True, "exercise_strategy": self.plan.exercise_strategy.name,
+                    "timing_strategy": self.plan.timing_strategy.name,
+                    "tempo_strategy": self.plan.tempo_strategy.name,
+                    "tempo_segments": (self._active_tempo_map().as_segments()
+                                       if self._active_tempo_map() is not None else ()),
                     "stage_key": self.plan.identity,
                     **self.practice_policy.inspect(self.fingerprint, self.plan.identity)}
 
