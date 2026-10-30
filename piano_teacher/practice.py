@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Literal
+from typing import Callable, Literal
 from .music import Note, Phrase, Piece
 from .lesson_settings import SETTINGS
 
@@ -50,7 +50,8 @@ class Assessment:
         return f"{self.correct}/{len(self.notes)} correct · {details}"
 
 
-def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote]) -> Assessment:
+def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
+             expected_seconds: Callable[[Note], tuple[float, float, float]] | None = None) -> Assessment:
     """Score pitch, start timing, and held duration independently.
 
     Matching uses the nearest unused same-pitch onset in a generous window;
@@ -61,11 +62,16 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote]) ->
     unused = set(range(len(played)))
     assessments: list[NoteAssessment] = []
     onset_tolerance = SETTINGS.grading_onset_tolerance_seconds
-    search_window = max(SETTINGS.grading_match_window_min_seconds,
-                        SETTINGS.grading_match_window_beats * seconds_per_beat)
     for note in expected:
-        start = (note.start - phrase.start) * seconds_per_beat
-        duration = (min(note.end, phrase.end) - note.start) * seconds_per_beat
+        if expected_seconds is None:
+            start = (note.start - phrase.start) * seconds_per_beat
+            duration = (min(note.end, phrase.end) - note.start) * seconds_per_beat
+            local_seconds_per_beat = seconds_per_beat
+        else:
+            start, release, local_seconds_per_beat = expected_seconds(note)
+            duration = release - start
+        search_window = max(SETTINGS.grading_match_window_min_seconds,
+                            SETTINGS.grading_match_window_beats * local_seconds_per_beat)
         options = [(abs(played[i].onset - start), i) for i in unused
                    if played[i].pitch == note.pitch and abs(played[i].onset - start) <= search_window]
         if not options:
@@ -99,7 +105,8 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote]) ->
     for i, entry in enumerate(assessments):
         if entry.status != "missed":
             continue
-        expected_onset = (entry.note.start - phrase.start) * seconds_per_beat
+        expected_onset = ((entry.note.start - phrase.start) * seconds_per_beat
+                          if expected_seconds is None else expected_seconds(entry.note)[0])
         candidates = [(abs(played[j].onset - expected_onset), j)
                       for j in unused
                       if abs(played[j].onset - expected_onset) <= onset_tolerance]
