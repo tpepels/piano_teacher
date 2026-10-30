@@ -582,6 +582,8 @@ func _build_settings_screen() -> void:
     settings_view.device_selected.connect(_choose_device)
     settings_view.tempo_requested.connect(func(bpm: int):
         _send_action({"action": "tempo", "bpm": bpm}))
+    settings_view.strategy_requested.connect(func(strategy: String):
+        _send_post("/settings", {"exercise_strategy": strategy}))
     settings_view.metronome_requested.connect(func(enabled: bool):
         _send_post("/settings", {"metronome": enabled}))
     settings_view.volume_changed.connect(_on_listen_volume_changed)
