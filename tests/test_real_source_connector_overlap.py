@@ -127,15 +127,20 @@ def test_source_derived_overlapping_slurs_and_tie_keep_independent_pixel_ownersh
 
 
 def test_each_source_slur_contributes_separate_native_ink(overlap_native):
-    """Causal framebuffer check; independent curve attachment remains a separate gate.
+    """Source-bound causal evidence for slurs the generic overlap oracle cannot isolate.
 
-    One native screenshot is repeated, then each production slur is omitted
-    in turn. The base/repeat/restore controls rule out transport animation;
-    a missing or fully hidden slur cannot pass simply because another
-    connector's ink happens to occupy the expected area.
+    One stable production screenshot is re-rendered with exactly one slur
+    suppressed each time. The resulting stroke must retain continuous curved
+    ink, independent source-head or stem attachments, and unique pixels.
+    It does not grant a pass to the generic unsuppressed-frame oracle.
     """
     import numpy as np
     from PIL import Image
+    from piano_teacher.notation.pixel_ink import bright
+    from piano_teacher.notation.proof import read_written_score
+    from piano_teacher.notation.symbol_pixel_proof import (
+        PLAYHEAD, _connector_head, _connector_pairs, _connector_shift,
+    )
 
     _case, xml, folder = overlap_native
     report = json.loads((folder / "native-overlay-report.json").read_text())
@@ -148,6 +153,11 @@ def test_each_source_slur_contributes_separate_native_ink(overlap_native):
     assert {row["key"] for row in controls} == desired, controls
     assert len({row["key"] for row in controls}) == len(controls)
 
+    written = read_written_score(xml)
+    source_pairs = _connector_pairs(xml, written, ("slur",), "both")
+    keyed = {"|".join(n["id"] for n in pair["notes"]): pair for pair in source_pairs}
+    assert len(keyed) == len(desired) and set(keyed) == desired
+
     def pixels(filename):
         with Image.open(folder / filename) as image:
             return np.asarray(image.convert("RGB"), dtype=np.int16)
@@ -156,30 +166,85 @@ def test_each_source_slur_contributes_separate_native_ink(overlap_native):
     base = pixels(reference["baseline_file"])
     repeat = pixels(reference["repeat_file"])
     restored = pixels(reference["restored_file"])
-    # A changed framebuffer without a missing slur is not valid evidence.
-    assert np.max(np.abs(base - repeat)) <= 2, "Native frame drift before suppression"
-    assert np.max(np.abs(base - restored)) <= 2, "Native frame changed after restoration"
+    assert np.max(np.abs(base-repeat)) <= 2, "Native frame drift before suppression"
+    assert np.max(np.abs(base-restored)) <= 2, "Native frame changed after restoration"
 
-    masks = []
-    footprints = []
+    # All note positions are recovered from real PNG contours and pixel-only
+    # frame registration. Never use the renderer's head positions or slur atlas.
+    registered, shift_cache = {}, {}
+    with Image.open(folder / reference["baseline_file"]) as image:
+        base_image = image.convert("RGB")
+    luminance = bright(base_image)
+
+    def source_head(note):
+        identity = note["source"]["id"]
+        if identity not in registered:
+            beat = float(note["beat"])
+            with Image.open(folder / f"native-{beat:.2f}.png") as frame:
+                onset_image = frame.convert("RGB")
+            anchor = _connector_head(onset_image, written, note,
+                                     onset_image.width * PLAYHEAD)
+            assert anchor is not None, identity
+            if beat not in shift_cache:
+                shift_cache[beat] = (
+                    {"shift": 0} if abs(beat-2.0) < 1e-8 else
+                    _connector_shift(base_image, onset_image)
+                )
+            offset = shift_cache[beat]
+            assert offset is not None, (identity, beat)
+            observed = _connector_head(
+                base_image, written, note, anchor["x"]+offset["shift"])
+            assert observed is not None, identity
+            registered[identity] = observed
+            onset_image.close()
+        return registered[identity]
+
+    masks, footprints = [], []
     for row in controls:
         assert row["baseline_file"] == reference["baseline_file"]
         altered = pixels(row["file"])
         assert altered.shape == base.shape
-        mask = np.max(np.abs(base - altered), axis=2) >= 20
-        ys, xs = np.nonzero(mask)
+        mask = np.max(np.abs(base-altered), axis=2) >= 20
         masks.append(mask)
+        ys, xs = np.nonzero(mask)
+        assert len(xs) >= 30, row["key"]
+        columns = np.flatnonzero(mask.any(axis=0))
+        assert columns[-1]-columns[0] >= 35, row["key"]
+        assert int(np.diff(columns).max()) <= 3, row["key"]
+        centers = np.array([np.median(np.flatnonzero(mask[:, x]))
+                            for x in columns])
+        chord = np.linspace(centers[0], centers[-1], len(centers))
+        sag = float(np.max(np.abs(centers-chord)))
+
+        heads = [source_head(note) for note in keyed[row["key"]]["notes"]]
+        gap = min(head["gap"] for head in heads)
+        assert sag >= .20*gap, (row["key"], sag)
+        assert max(int(mask[:, x].sum()) for x in columns) <= .65*gap, row["key"]
+        endpoints = ((int(columns[0]), float(centers[0])),
+                     (int(columns[-1]), float(centers[-1])))
+        for (x, y), head in zip(endpoints, heads):
+            assert abs(x-head["x"]) <= .8*gap, (row["key"], x, head)
+            l, t, r, b = head["bbox"]
+            distance = float(np.hypot(max(l-x, 0, x-r), max(t-y, 0, y-b)))
+            if distance > 1.2*gap:
+                # Authored slurs may end beside the vertical stem rather
+                # than the head. Require a real stem extending to that end.
+                first, last = sorted((round(y), round(head["y"])))
+                assert last-first >= .9*gap, row["key"]
+                stem = any(
+                    abs(column-x) < .65*gap and
+                    float(np.mean(luminance[first:last+1, column])) >= .88
+                    for column in range(max(0, int(l)-8),
+                                        min(luminance.shape[1], int(r)+8))
+                )
+                assert stem, (row["key"], (x,y), head, distance/gap)
         footprints.append(dict(key=row["key"], changed_pixels=int(mask.sum()),
-                               x_span=int(xs.max() - xs.min()) if len(xs) else 0))
-    # A narrow dot or aliasing at a shared crossing is not proof of a slur.
-    # This controls causal visibility, not complete slur contour fidelity.
-    assert all(row["changed_pixels"] >= 30 and row["x_span"] >= 35
-               for row in footprints), footprints
+                               curvature_spaces=round(sag/gap, 3)))
     for index, mask in enumerate(masks):
         others = np.logical_or.reduce([candidate for other, candidate in enumerate(masks)
                                        if other != index])
         assert int(np.count_nonzero(mask & ~others)) >= 24, footprints
-
+    base_image.close()
 
 
 def test_overlap_source_independent_score_retains_sound_tie_and_both_slurs(overlap_native):
