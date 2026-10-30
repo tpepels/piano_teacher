@@ -468,6 +468,14 @@ func _draw() -> void:
             var y: float = center+(float(line_index)-2.0)*gap
             draw_line(Vector2(0,y),Vector2(size.x,y),
                 Color(ink,.34),1.3,true)
+    # Keep the fixed playhead visible but BEHIND source ink. At exact
+    # onset a foreground cursor previously covered small eighth-rest dots,
+    # flagged stems and noteheads, preventing independent contour recovery.
+    # Engraving is always painted later; the transport clock is unchanged.
+    if transport_overlay_enabled:
+        draw_line(Vector2(playhead_x,layout.staff_center("right")-gap*3.8),
+            Vector2(playhead_x,layout.staff_center("left")+gap*3.7),
+            PREVIEW_LIGHT,2.0,true)
     # The count-in runs on the same clock, but its leading boundary is
     # intentionally NOT a printed barline: it sits before the clef/header
     # and used to look like an orphaned vertical rule in the score.
@@ -528,10 +536,6 @@ func _draw() -> void:
             context_painter.paint_preparation_measure(self,_new_paint_frame(clock_beat,playhead_x,gap,0,0.0),item["measure"],item["previous"],gap,playhead_x,item["opening"])
     else:
         _paint_source_pass(camera_clock,playhead_x,gap)
-    if transport_overlay_enabled:
-        draw_line(Vector2(playhead_x,layout.staff_center("right")-gap*3.8),
-            Vector2(playhead_x,layout.staff_center("left")+gap*3.7),
-            PREVIEW_LIGHT,2.0,true)
     # Instructional ink has its own compositor phase. It cannot change
     # canonical music or be erased by the transport cursor during scrolling.
     for annotation_pass in fingering_pass_clocks:
