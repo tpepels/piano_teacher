@@ -108,24 +108,58 @@ strategies and stores only fully assessed results, keyed by piece fingerprint
 and exact stage. It retains up to 64 attempts per stage and reads an eight-take
 window by default. Preview/listen sessions do not create evidence.
 
-**Integration boundary:** Retimed exercise plans and tempo shapes are
-**offline-only**. The current Godot score, transport and live note-feedback
-still assume original source beats and one current BPM. Timing-based strategies
-are intentionally excluded from the live strategy dropdown until all three
-consumers use the same transformed timeline. Enabling them sooner would display
-or grade incorrect notes.
+## Live timed exercises (experimental)
+
+The Settings screen now has three independent selectors under Practice tempo:
+
+- **Exercise generation:** existing note-selection and combined strategies.
+- **Rhythm exercise:** original, dotted long–short, dotted short–long.
+- **Tempo pattern:** constant, two-phase (80% for first half, target BPM for
+  second half).
+
+The active learning passage receives additional selectable stages for eligible
+rhythm and tempo drills, followed by an untouched **original** stage.
+When both axes are enabled, an additional combined dotted-plus-tempo stage
+is available. A rhythm rule that cannot safely transform the passage does not
+create a duplicate drill. Built-in warm-ups, connections, and full-piece
+performance retain original timing and do not inherit experimental mastery.
+
+Dotted drills produce real retimed note events in the native score model and
+MusicXML engraving, with unchanged pitch/source identity. Their MIDI input,
+feedback and Listen WAV use those same note events. To avoid attaching the
+wrong original slurs or rest positions to a changed rhythm, source MusicXML
+annotations are **not copied** into dotted drill engraving. The full original
+stage restores all authored notation.
+
+Two-phase drills use `TempoMap` as the authoritative time-to-beat map for
+backend deadlines, final MIDI assessment, Listen audio, Godot playhead
+extrapolation and metronome ticks. Count-in uses the normal initial BPM, then
+the shaped tempo begins at the first note. Stage-scoped progress keys and
+independent saved sessions prevent transformed drills from granting completion
+of the original stage.
+
+**Remaining limitations:** Two-phase drills currently assess the completed
+take, but suppress constant-tempo-derived *live* note-error overlays and
+rolling two-bar failure recovery; using those unmodified would mark correctly
+timed notes wrong. Tempo-shaped partial seeks/retries are normalized to start
+at the beginning of the current exercise. Dotted drills reproduce notes,
+durations, clefs and barlines, but source-specific slurs/ties/rest spellings
+require a dedicated transformed-notation projection before they can be
+faithfully retained. Physical MIDI, full Godot and real-score verification are
+still required before this can be treated as production-quality.
+
 
 ## Remaining work to complete research systems
 
-1. **Live transformed score and transport.** Teach score engraving and native
-   notation about `TimingPlan` while retaining the original source score as the
-   authoritative artifact. Make seek, count-in, scroll and Listen audio use
-   the same timing map. Ensure ties, beams, rests and fingering retain meaningful
-   notation after transformation, including across barlines.
-2. **Live timing assessment.** Route bounded retries, onset matching, release
-   grading, live feedback and error overlays through the transformed timeline.
-   Add independent source/timed mapping tests with MIDI fixtures. Only full
-   original performance should grant original mastery.
+1. **Complete source annotation remapping.** Dotted exercise notes and
+   transport are now live, but source-authored slurs, rests, tuplets and tie
+   semantics must be explicitly projected onto transformed onsets rather than
+   discarded. Verify engraving against real MusicXML and MIDI.
+2. **Complete shaped real-time assessment and navigation.** The final timed
+   grading and piecewise clock are integrated; rolling error windows, live
+   pitch/timing overlays, partial retries and seek need timing-map-aware
+   versions instead of the current conservative fallback. Verify actual MIDI
+   input and hardware metronome synchronization.
 3. **Coda techniques.** Complete chordification and general phrase-level
    part splitting; add context-sensitive dotted rhythm and speed shaping with
    eligibility rules. Current Coda adaptations are deliberately narrower than
@@ -157,12 +191,11 @@ or grade incorrect notes.
 - Dannenberg et al. (1990), *An Expert System for Teaching Piano to Novices*:
   https://www.cs.cmu.edu/~rbd/papers/Piano-Tutor-JNMR-1990.pdf
 
-The CMU Piano Tutor's *performance-error-triggered remediation* is a distinct
-strategy axis requiring an assessment-history and retry adapter; it is not part
-of this source-note-selection implementation. Similarly, Coda's dotted-rhythm
-transformation and tempo shaping require introducing explicitly authored
-exercise event timings and a corresponding score/grader contract. Pretending
-those were implemented by simply deleting source notes would be misleading.
+The CMU Piano Tutor's automatic performance-error-triggered remediation
+remains incomplete: diagnosis and bounded attempt history exist, but a
+diagnosis does not yet generate a new remedial practice stage. Coda-inspired
+dotted rhythm and tempo shaping now have interactive, separately graded
+stages and shared timing contracts, subject to the limitations above.
 
 For manual assessment, evaluate teacher-rated musical coherence, technical
 relevance, attack/source coverage, complexity progression and, ultimately,
