@@ -16,6 +16,9 @@ from math import isfinite
 from ..music import Note, Phrase, source_note_id
 from .coda_written_rests import MatrixWrittenRest, extract_written_rests
 from .coda_source_metadata import MatrixSourceElement, source_elements
+from .coda_notation_hierarchy import (
+    MatrixMeasureContext, MatrixNotationPart, measure_contexts, notation_parts,
+)
 
 
 @dataclass(frozen=True)
@@ -84,6 +87,8 @@ class MatrixScore:
     index_to_source: tuple[tuple[int, str], ...]
     written_rests: tuple[MatrixWrittenRest, ...] = ()
     notation_elements: tuple[MatrixSourceElement, ...] = ()
+    source_contexts: tuple[MatrixMeasureContext, ...] = ()
+    original_musicxml: str = ""
 
     @classmethod
     def from_phrase(cls, phrase: Phrase, *, boundaries: tuple[float, ...] = (),
@@ -146,8 +151,11 @@ class MatrixScore:
         notations = source_elements(
             source_musicxml, first_bar=phrase.first_bar, last_bar=phrase.last_bar,
             boundaries=grid) if source_musicxml else ()
+        contexts = measure_contexts(
+            source_musicxml, first_bar=phrase.first_bar, last_bar=phrase.last_bar,
+            notation_elements=notations) if source_musicxml else ()
         result = cls(phrase, grid, tuple(parts), tuple(identities),
-                     written_rests, notations)
+                     written_rests, notations, contexts, source_musicxml)
         result.verify_lossless()
         return result
 
@@ -188,6 +196,32 @@ class MatrixScore:
         authored = {item.source_id for item in self.notation_elements if item.is_rest}
         if self.notation_elements and authored != set(rest_ids):
             raise ValueError("Score matrix lost authored rest metadata")
+        if self.original_musicxml:
+            rebuilt = measure_contexts(
+                self.original_musicxml, first_bar=self.phrase.first_bar,
+                last_bar=self.phrase.last_bar,
+                notation_elements=self.notation_elements)
+            if rebuilt != self.source_contexts:
+                raise ValueError("Score matrix lost source notation context")
+            parts = self.notation_parts
+            if len(parts) != len({context.part_index for context in self.source_contexts}):
+                raise ValueError("Score matrix lost a source part")
+            if sum(len(m.elements) for part in parts for m in part.measures) != len(self.notation_elements):
+                raise ValueError("Score matrix lost source notation children")
+        elif self.source_contexts or self.notation_elements:
+            raise ValueError("Source notation has no original MusicXML")
+
+    @property
+    def notation_parts(self) -> tuple[MatrixNotationPart, ...]:
+        """Source Part→Measure/Voice hierarchy, including unvoiced annotations."""
+        return notation_parts(self.notation_elements, self.source_contexts)
+
+    def context_at_measure(self, part_index: int, measure: int) -> MatrixMeasureContext:
+        matches = [context for context in self.source_contexts
+                   if (context.part_index, context.measure) == (part_index, measure)]
+        if len(matches) != 1:
+            raise ValueError("No unique original source measure context")
+        return matches[0]
 
     def source_connectors(self):
         """Explicit written slurs/ties, with unresolved partial-window arcs."""
