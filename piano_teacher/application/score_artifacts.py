@@ -28,11 +28,13 @@ class ScoreSelection:
     stage_key: str
     revision: int
     fingerprint: str
+    transformed_rhythm: bool = False
 
     @property
     def identity(self) -> tuple:
         phrase = self.phrase
-        return (id(self.piece), self.fingerprint, self.stage_key, self.hand, self.revision,
+        return (id(self.piece), self.fingerprint, self.stage_key, self.hand,
+                self.transformed_rhythm, self.revision,
                 phrase.first_bar, phrase.last_bar, phrase.start, phrase.end)
 
 
@@ -57,11 +59,6 @@ class ScoreArtifacts:
         self._layout_key: str | None = None
         self._png: dict[tuple[int, int], bytes] = {}
 
-    @staticmethod
-    def _transformed_rhythm(selected: ScoreSelection) -> bool:
-        return any(f":{name}" in selected.stage_key for name in
-                   ("dotted-long-short", "dotted-short-long"))
-
     def _selected_notation(self, selected: ScoreSelection) -> LessonScore:
         if selected.identity != self._notation_identity or self._notation is None:
             piece = selected.piece
@@ -74,7 +71,7 @@ class ScoreArtifacts:
                 barlines=piece.barlines,
                 # Source slurs/rests use the original event clock. Retimed
                 # drills must engrave their actual durations instead.
-                source_musicxml="" if self._transformed_rhythm(selected)
+                source_musicxml="" if selected.transformed_rhythm
                                else piece.source_musicxml,
                 fingering_sources=authored_projection_sources(piece.fingering_plan))
             self._notation = notation
@@ -94,7 +91,7 @@ class ScoreArtifacts:
     def semantic_score(self, selected: ScoreSelection) -> dict:
         return project_model(deepcopy(self.source_model(selected)),
             selected.piece.fingering_plan,
-            source_musicxml="" if self._transformed_rhythm(selected)
+            source_musicxml="" if selected.transformed_rhythm
                            else selected.piece.source_musicxml)
 
     def cached_layout(self, selected: ScoreSelection) -> EngravedScore | None:
