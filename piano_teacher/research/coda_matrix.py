@@ -15,6 +15,7 @@ from math import isfinite
 
 from ..music import Note, Phrase, source_note_id
 from .coda_written_rests import MatrixWrittenRest, extract_written_rests
+from .coda_source_metadata import MatrixSourceElement, source_elements
 
 
 @dataclass(frozen=True)
@@ -82,6 +83,7 @@ class MatrixScore:
     parts: tuple[MatrixPart, ...]
     index_to_source: tuple[tuple[int, str], ...]
     written_rests: tuple[MatrixWrittenRest, ...] = ()
+    notation_elements: tuple[MatrixSourceElement, ...] = ()
 
     @classmethod
     def from_phrase(cls, phrase: Phrase, *, boundaries: tuple[float, ...] = (),
@@ -141,7 +143,11 @@ class MatrixScore:
                     track, channel, name, tuple(attacks),
                     tuple(rests_by_voice.get(name, ()))))
             parts.append(MatrixPart(hand, tuple(part_voices)))
-        result = cls(phrase, grid, tuple(parts), tuple(identities), written_rests)
+        notations = source_elements(
+            source_musicxml, first_bar=phrase.first_bar, last_bar=phrase.last_bar,
+            boundaries=grid) if source_musicxml else ()
+        result = cls(phrase, grid, tuple(parts), tuple(identities),
+                     written_rests, notations)
         result.verify_lossless()
         return result
 
@@ -176,6 +182,16 @@ class MatrixScore:
                           for rest in voice.written_rests)
         if sorted((*voice_rests, *rest_only)) != sorted(rest_ids):
             raise ValueError("Score matrix lost or duplicated written rests")
+        ids = [item.source_id for item in self.notation_elements]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Score matrix has duplicate source XML elements")
+        authored = {item.source_id for item in self.notation_elements if item.is_rest}
+        if self.notation_elements and authored != set(rest_ids):
+            raise ValueError("Score matrix lost authored rest metadata")
+
+    def source_voice_elements(self, name: str) -> tuple[MatrixSourceElement, ...]:
+        return tuple(item for item in self.notation_elements
+                     if item.voice_id == name)
 
     @property
     def rest_only_voices(self) -> tuple[MatrixRestOnlyVoice, ...]:

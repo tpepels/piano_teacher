@@ -102,3 +102,19 @@ No long-running full-corpus audits or background work were initiated.
 - These are **conservative engineering guards**, not yet a reproduction
   of Coda's published rhythm-transformation rules. Production remains
   unchanged, and the full symbolic metadata graph remains incomplete.
+
+## Source-notation inventory (research-only)
+
+- New `coda_source_metadata.py` records **every direct MusicXML measure
+  element** by original part/measure/ordinal ID, ordered source position,
+  voice when explicitly knowable, and complete XML subtree. This retains
+  source key/meter/clef changes, directions, articulations, slurs, ties,
+  beams, tuplets, lyrics and unknown markup without reinterpreting them.
+- Selected later measures inherit divisions; chord timing and backup/forward
+  cursor behavior are retained. The score matrix validates rest identities
+  against the independent written-rest ledger.
+- This is a source-aware **inventory**, not a transformed score or full MMR:
+  linked slur/tie graphs, expressive offsets, score-wide global metadata,
+  cross-staff routing and arbitrary MusicXML playback semantics still require
+  independent verification. No new annotation is silently applied to a
+  transformed exercise.
