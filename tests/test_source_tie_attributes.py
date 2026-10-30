@@ -52,7 +52,7 @@ def test_both_tie_endpoints_retain_authored_placement_across_barline(tmp_path):
     assert len(marks) == 6
     assert all(len(m) == 1 and any(x[0] == "placement" for x in m[0])
                for m in marks)
-    assert "note:tied" not in score.unsupported_expressions
+    assert "note:tied" not in score.unrendered_expressions
     assert len(piece.notes) == 3  # A sounded tie is one graded attack.
 
 
@@ -64,12 +64,13 @@ def test_complex_authored_tie_style_is_preserved_but_not_claimed_native(tmp_path
     tags = root.findall(".//notations/tied")
     assert any(tag.get("line-type") == "dashed" for tag in tags)
     assert any(tag.get("color") == "#ff0000" for tag in tags)
-    assert "note:tied" in score.unsupported_expressions
+    assert "note:tied" in score.unrendered_expressions
 
 
 def test_no_authored_tie_style_is_invented_for_sound_only_source(tmp_path):
     source = load_musicxml(SOURCE, bpm=80)
     _, model, score = _render(source)
-    assert all(all(sorted(m)==[["type", m[0][1]]] for m in e["tied_marks"])
+    assert all(all(len(mark) == 1 and mark[0][0] == "type"
+                   for mark in e["tied_marks"])
                for e in model["notation_events"] if e["tied_marks"])
-    assert "note:tied" not in score.unsupported_expressions
+    assert "note:tied" not in score.unrendered_expressions
