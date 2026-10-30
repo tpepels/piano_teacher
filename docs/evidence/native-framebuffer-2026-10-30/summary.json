@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "tested_revision": "39770ccd6760b33c4eded52b89962b78029a92a3",
+  "workflow_run": 41135723434,
+  "workflow_url": "https://github.com/tpepels/piano_teacher/actions/runs/41135723434",
+  "artifact_id": 13016956247,
+  "artifact_url": "https://github.com/tpepels/piano_teacher/actions/runs/41135723434/artifacts/13016956247",
+  "capture_backend": "Godot 4.5.1, Xvfb, llvmpipe OpenGL compatibility",
+  "test_results": {
+    "passed": 4,
+    "expected_failures": 2,
+    "failures": 0,
+    "duration_seconds": 29.98
+  },
+  "scopes": [
+    {
+      "name": "source_three_voice_neighbors",
+      "source_musicxml_sha256": "50655771d71ded3d026cd8cb511711aa0825737c88af105ee08eaa08c3ba22a3",
+      "actual_native_frame_count": 1,
+      "independent_noteheads": {
+        "expected": 3,
+        "verified": 3
+      },
+      "independent_stems": {
+        "expected": 3,
+        "verified": 3,
+        "distinct_shafts": 3
+      },
+      "erased_stem_control": "passed",
+      "erased_head_control": "passed"
+    },
+    {
+      "name": "original_autumn_leaves_bars_37_40_both",
+      "generated_musicxml_sha256": "88fee902f465866b219df6b71eb4533d3e84390468a17c7e22669135f705f826",
+      "actual_native_frame_count": 4,
+      "independent_tie_connections": {
+        "expected": 8,
+        "verified": 8,
+        "unverified": 0,
+        "mismatch": 0
+      }
+    },
+    {
+      "name": "overlapping_slur_tie_default",
+      "original_musicxml_sha256": "94de9974ea536486e1699dbd50fdf7e38fb898d8a5731dabc3ff5f4719c61fe2",
+      "actual_native_frame_count": 6,
+      "independent_connectors": {
+        "expected": 4,
+        "verified": 2,
+        "unverified": 0,
+        "mismatch": 2
+      },
+      "result": "expected_failure"
+    },
+    {
+      "name": "overlapping_slur_tie_separated",
+      "original_musicxml_sha256": "c9d749cc6ba08b3a841cbee5919d0fb5a0763238344b2e7a9fbb29303d940f3c",
+      "actual_native_frame_count": 6,
+      "independent_connectors": {
+        "expected": 4,
+        "verified": 2,
+        "unverified": 1,
+        "mismatch": 1
+      },
+      "result": "expected_failure"
+    }
+  ],
+  "not_claimed": [
+    "full-library visual coverage",
+    "native release ready",
+    "independent physical MIDI timing",
+    "unselected notation constructs"
+  ],
+  "historical_results_reused": false
+}

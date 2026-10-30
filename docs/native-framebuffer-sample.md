@@ -51,3 +51,35 @@ relax contour Dice, family discrimination, staff-position, pixel exclusivity,
 or mismatch/unsupported accounting. A real erased-head mutation is also
 included in the next sample. The current revision must be re-captured to
 claim any new coverage.
+
+## Fresh independent run: 30 October 2026
+
+- Tested source revision: `39770ccd6760b33c4eded52b89962b78029a92a3`.
+- GitHub Actions run: https://github.com/tpepels/piano_teacher/actions/runs/41135723434
+- Source-bound PNGs, original/generated scores, actual Verovio SVGs,
+  JUnit, and independent pixel reports: artifact `13016956247`.
+- Exact selected result: **4 passed, 2 xfailed, 0 failed** (29.98 s).
+  `xfail` is an **unverified/mismatched** source connector case, **not**
+  a pixel-verified score or a release pass.
+- Three-voice adjacent C5/D5/E5 specimen: **3/3 independently registered
+  heads**, **3/3 physical stems**, three distinct shaft owners. The
+  established erased-head and erased-shaft controls **both passed**.
+  Prior `c345a3f2` showed those stems but failed head verification because
+  the source-pitch oracle's central horizontal search missed voice columns
+  outside its ±16-pixel interval. The revised oracle widens the *candidate
+  location* only for source-confirmed three-or-more crowded voices. Pixel
+  ownership, contour quality, pitch and staff tolerances are unchanged.
+- Real Bill Evans *Autumn Leaves*, bars 37–40, standard viewport:
+  **8/8 tie connections independently verified** against actual Godot
+  frames, including the two formerly flag-obstructed chord ties.
+- Two source-derived overlapping RH-slur/LH-tie cases: each **2/4
+  connector obligations verified**; default has **2 mismatches**,
+  separated has **1 mismatch and 1 unverified**. Both retain an
+  expected-failure test result; the case is **not accepted** for release.
+- The current release decision still blocks unsupported and unverified
+  whole-score notation. No claim about the full MIDI/MusicXML corpus,
+  REST clearance or dense Liszt passages follows from this sample.
+
+Machine-readable provenance and per-construct counts are in
+`docs/evidence/native-framebuffer-2026-10-30/summary.json`. All sample
+capture bytes and complete reports are in the GitHub Actions artifact.
