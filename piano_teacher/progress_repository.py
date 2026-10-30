@@ -30,6 +30,13 @@ class ProgressRepository:
                                     ("level", "TEXT"), ("exercise_kind", "TEXT")):
             if column not in columns:
                 self.db.execute(f"ALTER TABLE sessions ADD COLUMN {column} {declaration}")
+        self.db.execute("""CREATE TABLE IF NOT EXISTS strategy_sessions (
+            fingerprint TEXT NOT NULL, strategy TEXT NOT NULL,
+            exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER,
+            target_bpm INTEGER, variant_index INTEGER, route_version INTEGER,
+            step_key TEXT, first_bar INTEGER, last_bar INTEGER, level TEXT,
+            exercise_kind TEXT,
+            PRIMARY KEY (fingerprint, strategy))""")
         self.db.execute("CREATE TABLE IF NOT EXISTS mastery (fingerprint TEXT, exercise TEXT, bpm INTEGER, PRIMARY KEY (fingerprint, exercise))")
         self.db.execute("""CREATE TABLE IF NOT EXISTS stage_tempos (
             fingerprint TEXT NOT NULL, stage_key TEXT NOT NULL,
@@ -48,7 +55,13 @@ class ProgressRepository:
         p = plan
         if p is None:
             return
-        row = self.db.execute("SELECT exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind FROM sessions WHERE fingerprint=?",(fingerprint,)).fetchone()
+        row = self.db.execute("""SELECT exercise,hand,bpm,streak,target_bpm,
+                      variant_index,route_version,step_key,first_bar,last_bar,
+                      level,exercise_kind FROM strategy_sessions
+                      WHERE fingerprint=? AND strategy=?""",
+                      (fingerprint, p.exercise_strategy.name)).fetchone()
+        if row is None:
+            row = self.db.execute("SELECT exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind FROM sessions WHERE fingerprint=?",(fingerprint,)).fetchone()
         # The session row is piece-wide, while mastery/tempo/history keys are
         # strategy-specific. Never restore another strategy's session BPM
         # or clean streak, including after changing the preference offline.
@@ -58,6 +71,11 @@ class ProgressRepository:
                               and segments[2] not in ("learn", "connect", "perform", "warmup")
                               else "legacy")
             if saved_strategy != p.exercise_strategy.name:
+                # Target tempo belongs to the piece, not the chosen exercise
+                # generator. Do not inherit position, BPM or clean streak.
+                if row[4] is not None:
+                    p.target_bpm = max(SETTINGS.minimum_bpm,
+                        min(SETTINGS.maximum_bpm, int(row[4])))
                 row = None
         legacy_exercises = None
         if row and restore_session:
@@ -127,6 +145,11 @@ class ProgressRepository:
                             p.mastered[new_key] = p.mastered[legacy_key]
 
 
+    def has_strategy_session(self, fingerprint: str, strategy: str) -> bool:
+        return self.db.execute(
+            "SELECT 1 FROM strategy_sessions WHERE fingerprint=? AND strategy=?",
+            (fingerprint, strategy)).fetchone() is not None
+
     def save(self, plan: LearningPlan | None, fingerprint: str) -> None:
         p=plan
         if p is None:
@@ -140,10 +163,21 @@ class ProgressRepository:
                             (fingerprint,))
             self.db.execute("DELETE FROM repeat_tempo_credit WHERE fingerprint=?",
                             (fingerprint,))
+            # Old per-strategy BPM/streak targets cannot be revived after
+            # changing the piece-wide target tempo.
+            self.db.execute("DELETE FROM strategy_sessions WHERE fingerprint=?",
+                            (fingerprint,))
         self.db.execute("INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm,p.variant_index,
                          p.route_version,p.identity,p.exercise.phrase.first_bar,p.exercise.phrase.last_bar,
                          p.active_variant.level,p.exercise.kind))
+        self.db.execute("""INSERT OR REPLACE INTO strategy_sessions
+            (fingerprint,strategy,exercise,hand,bpm,streak,target_bpm,
+             variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (fingerprint,p.exercise_strategy.name,p.index,p.hand,p.bpm,p.streak,p.target_bpm,
+             p.variant_index,p.route_version,p.identity,p.exercise.phrase.first_bar,
+             p.exercise.phrase.last_bar,p.active_variant.level,p.exercise.kind))
         p.stage_tempos[p.identity] = p.bpm
         for key, bpm in p.stage_tempos.items():
             self.db.execute("INSERT OR REPLACE INTO stage_tempos VALUES (?,?,?)",
@@ -159,7 +193,7 @@ class ProgressRepository:
     def reset_piece(self, fingerprint: str) -> None:
         """Delete one piece's saved path and learner records transactionally."""
         with self.db:
-            for table in ("practice_evidence", "learner_units", "learner_stages", "repeat_tempo_credit",
+            for table in ("practice_evidence", "strategy_sessions", "learner_units", "learner_stages", "repeat_tempo_credit",
                           "stage_tempos", "mastery", "sessions"):
                 self.db.execute(f"DELETE FROM {table} WHERE fingerprint=?", (fingerprint,))
 
