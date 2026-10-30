@@ -100,6 +100,8 @@ func _audit() -> void:
         "rest_difference_controls": [],
         "rest_difference_protocol": 2,
         "rest_difference_frames": [],
+        "slur_difference_controls": [],
+        "slur_difference_frames": [],
     }
     var schedule: Dictionary = _capture_schedule(fixture, renderer.timeline.pixels_per_beat)
     var samples: Array = schedule["samples"]
@@ -129,6 +131,55 @@ func _audit() -> void:
             else "native-%.2f.png") % at
         if frame.is_empty() or frame.save_png(folder.path_join(filename)) != OK:
             failures.append("Cannot capture " + filename)
+
+        # Opt-in diagnostic only. Suppress exactly one slur in the production
+        # painter, retaining all other score events, assets, and camera state.
+        # Independent Python image differences test whether each source-bound
+        # slur contributes its own visible pixels in a genuine native frame.
+        if fixture.has("slur_ablation_at") and \
+                absf(at-float(fixture["slur_ablation_at"])) < 0.000001:
+            var original_slurs: Array = renderer.layout.slur_pairs.duplicate(true)
+            if original_slurs.is_empty():
+                failures.append("Requested slur ablation but score has no slurs")
+            else:
+                await process_frame
+                await RenderingServer.frame_post_draw
+                var slur_repeat_file := "slur-repeat-%.5f.png" % at
+                if view.get_texture().get_image().save_png(
+                        folder.path_join(slur_repeat_file)) != OK:
+                    failures.append("Cannot capture stable slur control")
+                for slur_index in range(original_slurs.size()):
+                    var retained_slurs: Array = []
+                    for other_index in range(original_slurs.size()):
+                        if other_index != slur_index:
+                            retained_slurs.append(original_slurs[other_index])
+                    renderer.layout.slur_pairs = retained_slurs
+                    renderer.queue_redraw()
+                    await process_frame
+                    await process_frame
+                    await RenderingServer.frame_post_draw
+                    var slur_file := "slur-without-%d-%.5f.png" % [slur_index,at]
+                    if view.get_texture().get_image().save_png(
+                            folder.path_join(slur_file)) != OK:
+                        failures.append("Cannot capture suppressed slur "+slur_file)
+                    result["slur_difference_controls"].append({
+                        "key":str(original_slurs[slur_index].get("key","")),
+                        "clock":at, "baseline_file":filename, "file":slur_file
+                    })
+                renderer.layout.slur_pairs = original_slurs
+                renderer.queue_redraw()
+                await process_frame
+                await process_frame
+                await RenderingServer.frame_post_draw
+                var slur_restored_file := "slur-restored-%.5f.png" % at
+                if view.get_texture().get_image().save_png(
+                        folder.path_join(slur_restored_file)) != OK:
+                    failures.append("Cannot capture restored slur control")
+                result["slur_difference_frames"].append({
+                    "clock":at, "baseline_file":filename,
+                    "repeat_file":slur_repeat_file,
+                    "restored_file":slur_restored_file
+                })
         # Phase 3 controlled pixel experiment: capture a second rendering
         # with exactly ONE written rest hidden, leaving the actual score,
         # staff, noteheads, voice lanes and camera position unchanged.
