@@ -186,6 +186,29 @@ class TempoMap:
                 break
         return elapsed
 
+    @property
+    def duration_seconds(self) -> float:
+        return self.seconds_at(self.duration_beats)
+
+    def beat_at(self, seconds: float) -> float:
+        """Exact inverse of seconds_at; clamp during feedback and count-in."""
+        if not isfinite(seconds):
+            raise ValueError("Time must be finite")
+        if seconds <= 0:
+            return seconds * self.segments[0].bpm / 60.0
+        elapsed = 0.0
+        for segment in self.segments:
+            end = elapsed + (segment.end_beat-segment.start_beat)*60/segment.bpm
+            if seconds <= end:
+                return segment.start_beat + (seconds-elapsed)*segment.bpm/60
+            elapsed = end
+        return self.duration_beats + (seconds-elapsed)*self.segments[-1].bpm/60.0
+
+    def as_segments(self) -> tuple[dict, ...]:
+        return tuple({"start_beat": s.start_beat, "end_beat": s.end_beat,
+                      "bpm": s.bpm, "start_seconds": self.seconds_at(s.start_beat)}
+                     for s in self.segments)
+
 
 class TempoStrategy(Protocol):
     name: str
