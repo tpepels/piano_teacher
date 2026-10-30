@@ -279,16 +279,10 @@ def assess_timed(plan: TimingPlan, hand: str, bpm: float,
     else:
         if abs(tempo_map.duration_beats - plan.duration_beats) > 1e-7:
             raise ValueError("Tempo map must cover the whole timed exercise")
-        # The existing grading algorithm expects constant BPM. Express the
-        # complete expected phrase in seconds at 60 BPM (1 beat = 1 second)
-        # so all matching, onset and held-duration tolerances remain valid.
-        seconds_phrase = Phrase(
-            phrase.number, phrase.first_bar, phrase.last_bar, 0,
-            tempo_map.seconds_at(plan.duration_beats),
-            tuple(replace(note, start=tempo_map.seconds_at(note.start),
-                          end=tempo_map.seconds_at(note.end))
-                  for note in phrase.notes))
-        timed = evaluate(seconds_phrase, hand, 60, played)
+        from .assessment_clock import expected_note_seconds
+        timed = evaluate(
+            phrase, hand, bpm, played,
+            expected_seconds=expected_note_seconds(phrase, tempo_map))
     # Assessment only returns notes for the selected hand, in phrase order.
     originals = [n for n in plan.original.notes if hand == "both" or n.hand == hand]
     if len(timed.notes) != len(originals):
