@@ -20,4 +20,5 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_timed_real_scores_and_recovery.py \
   tests/test_step4_algorithms.py \
   tests/test_step4_real_scores.py \
-  tests/test_rubricnet_reproduction.py
+  tests/test_rubricnet_reproduction.py \
+  tests/test_rubricnet_offline_integration.py
