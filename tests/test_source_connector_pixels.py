@@ -181,6 +181,32 @@ def test_tie_continuation_is_two_written_pairs_not_one_collapsed_attack(tmp_path
     assert result['coverage']['expected'] == 2 and not result['complete']
 
 
+def test_same_slur_number_on_two_staves_pairs_by_part_staff_and_voice():
+    from xml.etree import ElementTree as ET
+    from pathlib import Path
+    from piano_teacher.notation.proof import read_written_score
+    source = Path(__file__).parent / "fixtures/musical_fidelity/xml_grandstaff_voices.musicxml"
+    root = ET.parse(source).getroot()
+    part = root.find("part")
+    first = part.find("measure")
+    second = ET.fromstring(ET.tostring(first))
+    second.set("number", "2")
+    part.append(second)
+    for index, measure in enumerate(part.findall("measure")):
+        for note in measure.findall("note"):
+            staff = note.findtext("staff", "1")
+            note.set("id", f"{staff}-{index}")
+            marks = ET.SubElement(note, "notations")
+            ET.SubElement(marks, "slur", type="start" if index == 0 else "stop", number="1")
+    xml = ET.tostring(root, encoding="unicode")
+    written = read_written_score(xml)
+    rows = proof._connector_pairs(xml, written, ("slur",), "both")
+    assert len(rows) == 2
+    assert sorted((r["notes"][0]["id"], r["notes"][1]["id"]) for r in rows) == [
+        ("1-0", "1-1"), ("2-0", "2-1")]
+    assert all(not row["reason"] for row in rows)
+
+
 def test_reused_slur_number_cannot_pair_across_parts(tmp_path):
     pictures(tmp_path)
     xml = score(construct='slur')

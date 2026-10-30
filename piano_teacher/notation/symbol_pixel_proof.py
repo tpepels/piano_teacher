@@ -425,14 +425,28 @@ def _connector_pairs(xml, written, constructs, hand):
                                         part.get('id') == 'LH' or pi > 0 else 'right')
                             emit('slur', stub, reason='Untimed or unsupported source slur endpoint')
                             continue
-                        key = (pi, mark.get('number', '1'))
+                        # MusicXML slur numbers are scoped by part,
+                        # staff and voice. Reused numbers in independent
+                        # voices are NOT overlapping marks on one melody.
+                        staff = node.findtext('staff', n.get('raw_staff','1'))
+                        voice = node.findtext('voice', n.get('voice','1'))
+                        number = mark.get('number', '1')
+                        key = (pi, staff, voice, number)
                         kind = mark.get('type')
                         if kind == 'start':
                             if key in opened:
                                 emit('slur', opened[key][0], reason='Overlapping source slur numbers are ambiguous')
                             opened[key] = (n, mark)
                         elif kind == 'stop':
-                            previous = opened.pop(key, None)
+                            actual = key
+                            if actual not in opened:
+                                # One cross-staff source slur is allowed only
+                                # when the voice/number has a unique open mark.
+                                matches = [item for item in opened if item[0] == pi
+                                           and item[2:] == (voice, number)]
+                                if len(matches) == 1:
+                                    actual = matches[0]
+                            previous = opened.pop(actual, None)
                             if previous is None:
                                 emit('slur', n, reason='Unpaired source slur stop, possibly outside the source window')
                             else:
@@ -441,7 +455,7 @@ def _connector_pairs(xml, written, constructs, hand):
                                 reason = (None if style == 'solid' and
                                           start.get('print-object') != 'no' and mark.get('print-object') != 'no'
                                           else 'Noncontinuous or hidden source slur style is not verified')
-                                emit('slur', a, n, reason=reason, number=mark.get('number', '1'),
+                                emit('slur', a, n, reason=reason, number=number,
                                      placement=start.get('placement') or mark.get('placement'))
                         else:
                             emit('slur', n, reason='Source slur continuation needs separate boundary evidence')
