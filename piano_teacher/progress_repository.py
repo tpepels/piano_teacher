@@ -59,7 +59,7 @@ class ProgressRepository:
                       variant_index,route_version,step_key,first_bar,last_bar,
                       level,exercise_kind FROM strategy_sessions
                       WHERE fingerprint=? AND strategy=?""",
-                      (fingerprint, p.exercise_strategy.name)).fetchone()
+                      (fingerprint, p.profile)).fetchone()
         if row is None:
             row = self.db.execute("SELECT exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind FROM sessions WHERE fingerprint=?",(fingerprint,)).fetchone()
         # The session row is piece-wide, while mastery/tempo/history keys are
@@ -70,7 +70,7 @@ class ProgressRepository:
             saved_strategy = (segments[2] if len(segments) > 2
                               and segments[2] not in ("learn", "connect", "perform", "warmup")
                               else "legacy")
-            if saved_strategy != p.exercise_strategy.name and not p.warmup:
+            if saved_strategy != p.profile and not p.warmup:
                 # Target tempo belongs to the piece, not the chosen exercise
                 # generator. Do not inherit position, BPM or clean streak.
                 if row[4] is not None:
@@ -132,7 +132,7 @@ class ProgressRepository:
         # Preserve legacy rows, and recognize them only when the exact same
         # hand, level and source events still form an individual course stage.
         legacy_mastery = [(key, bpm) for key, bpm in p.mastered.items() if not key.startswith("course:")]
-        if legacy_mastery and restore_session and p.exercise_strategy.name == 'legacy':
+        if legacy_mastery and restore_session and p.profile == 'legacy':
             legacy_exercises = legacy_exercises or build_exercises(p.piece, consolidate=False)
             for old in legacy_exercises:
                 for hand in ("right", "left", "both"):
@@ -175,7 +175,7 @@ class ProgressRepository:
             (fingerprint,strategy,exercise,hand,bpm,streak,target_bpm,
              variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind)
              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (fingerprint,p.exercise_strategy.name,p.index,p.hand,p.bpm,p.streak,p.target_bpm,
+            (fingerprint,p.profile,p.index,p.hand,p.bpm,p.streak,p.target_bpm,
              p.variant_index,p.route_version,p.identity,p.exercise.phrase.first_bar,
              p.exercise.phrase.last_bar,p.active_variant.level,p.exercise.kind))
         p.stage_tempos[p.identity] = p.bpm
