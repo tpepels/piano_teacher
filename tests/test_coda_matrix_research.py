@@ -121,3 +121,21 @@ def test_matrix_rejects_duplicate_or_outside_source_attack():
     with pytest.raises(ValueError, match="measure grid"):
         MatrixScore.from_phrase(Phrase(1, 1, 1, 0, 4, notes[:1]),
                                 boundaries=(0, 0, 4))
+
+
+def test_authored_midi_replacement_does_not_chordify_written_beams():
+    from piano_teacher.notation.rhythm_safety import beamed_source_ids
+    path = Path(__file__).parent / "fixtures" / "connector_pixels" / "beam16" / "score.musicxml"
+    piece = load_musicxml(path, bpm=80)
+    protected = beamed_source_ids(piece.source_musicxml)
+    assert protected, "The authored beam fixture must exercise protection"
+    phrase = piece.phrases[0]
+    source = ExerciseVariant("original", phrase, tuple(range(len(phrase.notes))))
+    transformed = PolyphonicChordifier().transform(
+        source, boundaries=piece.bar_boundaries,
+        source_musicxml=piece.source_musicxml)
+    for event in transformed.timing.events:
+        note = phrase.notes[source.source_indices.index(event.source_index)]
+        if note.source_id in protected:
+            assert event.exercise_start == pytest.approx(note.start - phrase.start)
+            assert event.exercise_end == pytest.approx(note.end - phrase.start)
