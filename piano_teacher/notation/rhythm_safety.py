@@ -63,3 +63,23 @@ def slur_endpoint_source_ids(source_musicxml: str) -> frozenset[str]:
                         and node.findall("{*}notations/{*}slur")):
                     protected.add(f"xml-p{pi}-m{mi}-e{ordinal}")
     return frozenset(protected)
+
+
+def beamed_source_ids(source_musicxml: str) -> frozenset[str]:
+    """Return note IDs with explicitly authored beam instructions.
+
+    A chordification exercise must not quietly rewrite a written beam group
+    as consecutive block chords while presenting it as preserved notation.
+    """
+    if not source_musicxml:
+        return frozenset()
+    root = ET.fromstring(source_musicxml)
+    protected = set()
+    for pi, part in enumerate(root.findall(".//{*}part")):
+        for mi, measure in enumerate(part.findall("{*}measure")):
+            for ordinal, node in enumerate(measure):
+                if (node.tag.rsplit("}", 1)[-1] == "note"
+                        and node.find("{*}pitch") is not None
+                        and node.findall("{*}beam")):
+                    protected.add(f"xml-p{pi}-m{mi}-e{ordinal}")
+    return frozenset(protected)
