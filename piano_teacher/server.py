@@ -231,16 +231,20 @@ class PracticeEngine:
                     exercise_strategy=self.library.settings['exercise_strategy'])
                 replacement.target_bpm = old.target_bpm
                 self.plan = replacement
-                # Only matching stage histories: never copy streak/BPM from
-                # an unrelated selection in the single active-session row.
-                self.progress.restore(replacement, self.fingerprint, restore_session=False)
-                replacement.restore_location(
-                    kind=old.exercise.kind,
-                    first_bar=old.exercise.phrase.first_bar,
-                    last_bar=old.exercise.phrase.last_bar,
-                    hand=old.hand, level=old.active_variant.level)
-                replacement.streak = 0
-                replacement.bpm = replacement._tempo_for_current_stage()
+                saved_strategy = self.progress.has_strategy_session(
+                    self.fingerprint, replacement.exercise_strategy.name)
+                self.progress.restore(replacement, self.fingerprint,
+                                      restore_session=saved_strategy)
+                if not saved_strategy:
+                    # A first visit starts near the previous musical location
+                    # but carries neither its clean streak nor its stage BPM.
+                    replacement.restore_location(
+                        kind=old.exercise.kind,
+                        first_bar=old.exercise.phrase.first_bar,
+                        last_bar=old.exercise.phrase.last_bar,
+                        hand=old.hand, level=old.active_variant.level)
+                    replacement.streak = 0
+                    replacement.bpm = replacement._tempo_for_current_stage()
                 self.open_from_beat = 0.0
                 self.mode = "practice"
                 self.course_guided = False
