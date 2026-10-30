@@ -181,3 +181,30 @@ def test_source_tie_chain_remains_immutable_when_dotted_stage_is_available(tmp_p
         source_note.start, source_note.end)
     assert source_note.source_id in rhythm_protected_source_ids(
         piece.source_musicxml)
+
+
+def test_unchanged_source_tuplets_preserve_authored_bracket_and_numbering(tmp_path):
+    source = Path(__file__).parent / "fixtures/connector_pixels/tuplets/score.musicxml"
+    xml = source.read_text(encoding="utf-8")
+    assert 'bracket="yes" show-number="actual"' in xml
+    altered = xml.replace('bracket="yes" show-number="actual"',
+                          'bracket="no" show-number="both"')
+    filename = tmp_path / "tuplets.musicxml"
+    filename.write_text(altered, encoding="utf-8")
+    piece = load_musicxml(filename, bpm=80)
+    phrase = Phrase(1, 1, len(piece.bar_boundaries)-1,
+                    piece.bar_boundaries[0], piece.bar_boundaries[-1], piece.notes)
+    # The rhythm of this tuplet group is unchanged even if another voice
+    # elsewhere in the score was dotted: preserve authored group style.
+    score = build_lesson_score(
+        phrase, boundaries=piece.bar_boundaries,
+        time_signatures=piece.time_signatures,
+        source_musicxml=piece.source_musicxml, retimed_source=True)
+    root = ET.fromstring(score.musicxml)
+    marks = root.findall(".//notations/tuplet")
+    assert any(mark.get("type") == "start"
+               and mark.get("bracket") == "no"
+               and mark.get("show-number") == "both" for mark in marks)
+    assert any(mark.get("type") == "stop" for mark in marks)
+    model = build_score_model(score, boundaries=piece.bar_boundaries)
+    assert any(event["tuplet_marks"] for event in model["notation_events"])
