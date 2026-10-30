@@ -36,6 +36,9 @@ jobs:
           unzip -q /tmp/godot.zip -d /tmp/godot-bin
           sudo install -m 755 /tmp/godot-bin/Godot_v4.5.1-stable_linux.x86_64 /usr/local/bin/godot
           godot --headless --version
+      # A single authored rest onset still counts as one physical sample.
+      # The dense Chopin case deliberately stays red until the independent
+      # staff-rail/contour proof can verify its selected source obligations.
       - name: Capture independent rest and dense-head samples
         id: sample
         continue-on-error: true
