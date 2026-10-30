@@ -75,7 +75,8 @@ of the live score:
 ```bash
 python scripts/compare_exercise_strategies.py song.musicxml --json \
   --timing-preview dotted-long-short --tempo-preview two-phase-tempo
-python -m pytest -q tests/test_exercise_strategies.py tests/test_exercise_contracts.py
+python -m pytest -q tests/test_exercise_strategies.py tests/test_exercise_contracts.py \
+  tests/test_timing_live_integration.py tests/test_timed_real_scores_and_recovery.py
 ```
 
 `GET /exercise/diagnostics` exposes the currently selected stage's recent
@@ -138,15 +139,23 @@ the shaped tempo begins at the first note. Stage-scoped progress keys and
 independent saved sessions prevent transformed drills from granting completion
 of the original stage.
 
-**Remaining limitations:** Two-phase drills currently assess the completed
-take, but suppress constant-tempo-derived *live* note-error overlays and
-rolling two-bar failure recovery; using those unmodified would mark correctly
-timed notes wrong. Tempo-shaped partial seeks/retries are normalized to start
-at the beginning of the current exercise. Dotted drills reproduce notes,
-durations, clefs and barlines, but source-specific slurs/ties/rest spellings
-require a dedicated transformed-notation projection before they can be
-faithfully retained. Physical MIDI, full Godot and real-score verification are
-still required before this can be treated as production-quality.
+**Live tempo-aware feedback and recovery:** The `timed_assessment`
+adapter now shares exact per-note onset and release times with the final
+grader. Shaped practice displays settled notes and expired misses against the
+source-bound noteheads and applies the same five-wrong/missed-notes rolling
+recovery threshold over authentic two-measure windows. Partial retries and
+paused measure seeking keep their own absolute tempo-map origin; the Godot
+clock receives the remaining local tempo segments. All timing judgments use
+seconds, rather than pretending the passage has a single BPM.
+
+**Verification and remaining limitations:** Focused tests cover checked-in
+real MusicXML notation for 16th-note beams, tuplets, overlapping chord attacks,
+plus synthetic shaped-tempo feedback, source identities, and two-bar recovery.
+The tests are written but still require running in the user's actual runtime.
+Dotted drills reproduce note timings, clefs and barlines, but source-specific
+slurs/ties/rest spellings still require a dedicated transformed-notation
+projection. Physical MIDI, real Godot score rendering and audio synchronization
+also require hands-on verification before production use.
 
 
 ## Remaining work to complete research systems
@@ -155,11 +164,12 @@ still required before this can be treated as production-quality.
    transport are now live, but source-authored slurs, rests, tuplets and tie
    semantics must be explicitly projected onto transformed onsets rather than
    discarded. Verify engraving against real MusicXML and MIDI.
-2. **Complete shaped real-time assessment and navigation.** The final timed
-   grading and piecewise clock are integrated; rolling error windows, live
-   pitch/timing overlays, partial retries and seek need timing-map-aware
-   versions instead of the current conservative fallback. Verify actual MIDI
-   input and hardware metronome synchronization.
+2. **Prove the timing integration on actual devices.** Timed live marks,
+   five-error recovery, partial retry and pause/seek are now wired to the
+   tempo map. Verify their pixel placement against real Verovio/Godot
+   renderings, physical MIDI note-on/off events, latency, Listen audio and
+   the metronome at tempo boundaries. Include mixed meters, fast tuplets
+   and held/tied notes as independent cases.
 3. **Coda techniques.** Complete chordification and general phrase-level
    part splitting; add context-sensitive dotted rhythm and speed shaping with
    eligibility rules. Current Coda adaptations are deliberately narrower than
