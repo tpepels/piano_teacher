@@ -11,6 +11,23 @@ var initialized := false
 var transport_id := -1
 var revision := -1
 var bpm := 60.0
+var tempo_segments: Array = []
+var timeline_elapsed_seconds := 0.0
+
+func _beat_at_seconds(seconds: float, segments: Array) -> float:
+    if segments.is_empty() or seconds <= 0.0:
+        return seconds * bpm / 60.0
+    var elapsed := 0.0
+    for segment in segments:
+        var first: float = float(segment.get("start_beat", 0.0))
+        var last: float = float(segment.get("end_beat", first))
+        var segment_bpm: float = maxf(1.0, float(segment.get("bpm", bpm)))
+        var duration: float = (last-first)*60.0/segment_bpm
+        if seconds <= elapsed+duration:
+            return first+(seconds-elapsed)*segment_bpm/60.0
+        elapsed += duration
+    var final: Dictionary = segments.back()
+    return float(final.get("end_beat", 0.0)) + (seconds-elapsed)*float(final.get("bpm", bpm))/60.0
 var active := false
 var beat := 0.0
 var last_ms := 0
@@ -30,7 +47,11 @@ func now(now_ms: int) -> float:
     var elapsed: float = maxf(0.0, float(now_ms - last_ms) / 1000.0)
     if elapsed <= 0.0:
         return beat
-    beat += elapsed * bpm / 60.0
+    if tempo_segments.is_empty():
+        beat += elapsed * bpm / 60.0
+    else:
+        timeline_elapsed_seconds += elapsed
+        beat = _beat_at_seconds(timeline_elapsed_seconds, tempo_segments)
     last_ms = now_ms
     return beat
 
@@ -39,6 +60,7 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
     var next_active: bool = bool(state.get("running", false)) and not bool(state.get("paused", false))
     var next_id: int = int(state.get("transport_id", 0))
     var next_revision: int = int(state.get("revision", -1))
+    var next_segments: Array = state.get("tempo_segments", [])
     var captured_ms: int = mini(measured_ms, received_ms)
     if state.has("clock_sampled_at_ms"):
         var backend_ms: float = float(state.clock_sampled_at_ms)
@@ -52,10 +74,21 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
             has_backend_offset = true
         captured_ms = mini(roundi(backend_ms + backend_offset_ms), received_ms)
     var observed: float = float(state.get("clock_beat", 0.0))
+    var next_elapsed: float = float(state.get("clock_elapsed_seconds", 0.0))
     if next_active:
-        observed += float(received_ms - captured_ms) * next_bpm / 60000.0
+        if next_segments.is_empty():
+            observed += float(received_ms - captured_ms) * next_bpm / 60000.0
+        else:
+            # Backend sends the same tempo segments and sampled elapsed
+            # seconds. Extrapolate through the segment boundary, not at one BPM.
+            var old_bpm := bpm
+            bpm = next_bpm
+            observed = _beat_at_seconds(next_elapsed+
+                float(received_ms-captured_ms)/1000.0, next_segments)
+            bpm = old_bpm
     var new_session: bool = (not initialized or transport_id != next_id
-        or revision != next_revision or active != next_active or absf(bpm - next_bpm) >= 0.001)
+        or revision != next_revision or active != next_active
+        or tempo_segments != next_segments or absf(bpm - next_bpm) >= 0.001)
     if not new_session:
         now(received_ms)
     var error: float = observed - beat
@@ -63,11 +96,14 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
     # Huge differences are also explicit seeks, not network jitter.
     if new_session or absf(error) > DISCONTINUITY_BEATS:
         beat = observed
+        timeline_elapsed_seconds = (next_elapsed+
+            float(received_ms-captured_ms)/1000.0 if next_active else next_elapsed)
     elif not next_active:
         beat = observed
     initialized = true
     transport_id = next_id
     revision = next_revision
     bpm = next_bpm
+    tempo_segments = next_segments.duplicate(true)
     active = next_active
     last_ms = received_ms
