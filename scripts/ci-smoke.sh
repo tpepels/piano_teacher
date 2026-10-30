@@ -36,6 +36,7 @@ timeout 105s "$PYTHON" -m pytest -q \
   tests/test_home_screen.py \
   tests/test_lesson_ownership.py \
   tests/test_midi_connection.py \
+  tests/test_midi_reconnect.py \
   tests/test_source_svg_ownership.py \
   tests/test_native_score_layout.py \
   tests/test_native_ink_geometry.py \
@@ -76,4 +77,8 @@ timeout 100s "$PYTHON" -m pytest -q \
 # timing-line drift and source-ink disappearance without a corpus audit.
 timeout 50s "$PYTHON" -m pytest -q \
   'tests/test_score_motion_render.py::test_actual_score_transforms_keep_fixed_line_and_exact_downbeat[2]'
+# Real production UI: reject a missing Verovio atlas, retry, then publish
+# a valid semantic model. Only the default case runs here (no corpus work).
+timeout 55s "$PYTHON" -m pytest -q \
+  'tests/test_native_production.py::test_native_production_readiness_and_failure_gate[default]'
 "$PYTHON" scripts/check_godot_parse.py --godot "$GODOT" --timeout 25

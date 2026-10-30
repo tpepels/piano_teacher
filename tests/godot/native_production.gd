@@ -6,9 +6,15 @@ class FixtureApp extends "res://main.gd":
     var commands: Array = []
 
     func _ready() -> void:
-        super._ready()
+        _build_interface()
+        _navigate("practice")
+        _update_responsive_layout()
         set_process(false)
-        state_poll_timer.stop()
+        # Test drives the real ScoreAssetSession without contacting HTTP.
+        score_session.request_requested.connect(func(kind: String,
+                _id: int, _path: String, _seconds: float):
+            if kind == "layout":
+                layout_requests += 1)
 
     func _poll() -> void:
         pass
@@ -41,14 +47,26 @@ func check(ok: bool, message: String) -> void:
 func _initialize() -> void:
     call_deferred("run")
 
+func activate(app: Control, revision: int, phase: String = "loading") -> void:
+    var state := {"loaded":true, "revision":revision, "phase":phase,
+        "mode":"practice", "awaiting_score_revision":revision,
+        "piece_fingerprint":"native-production-test"}
+    app.last_state = state
+    app.score_session.update_context(state, Time.get_ticks_msec())
+
 func deliver_layout(app: Control, layout: Dictionary) -> void:
-    app.requested_layout_revision = app.revision
-    app._on_layout(0, 200, PackedStringArray(), JSON.stringify(layout).to_utf8_buffer())
-    app.timeline_model_request.cancel_request()
-    app.timeline_model_pending = false
+    var request_id: int = app.score_session.pending_id("layout")
+    check(request_id > 0, "An actual layout request precedes the response")
+    if request_id > 0:
+        app.score_session.complete_response("layout", request_id, 200,
+            JSON.stringify(layout).to_utf8_buffer(), Time.get_ticks_msec())
 
 func deliver_model(app: Control, model: Dictionary) -> void:
-    app._on_timeline_model(0, 200, PackedStringArray(), JSON.stringify(model).to_utf8_buffer())
+    var request_id: int = app.score_session.pending_id("model")
+    check(request_id > 0, "An actual semantic request precedes the response")
+    if request_id > 0:
+        app.score_session.complete_response("model", request_id, 200,
+            JSON.stringify(model).to_utf8_buffer(), Time.get_ticks_msec())
 
 func run() -> void:
     var payload: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(
@@ -68,8 +86,7 @@ func run() -> void:
         print("NATIVE_PRODUCTION_FAILURES:", failures.size())
         quit(1)
         return
-    app.revision = int(payload.model.revision)
-    app.last_state = {"loaded":true,"phase":"loading", "awaiting_score_revision":app.revision}
+    activate(app, int(payload.model.revision))
     # Missing authentic assets must fail visibly, without requesting page ink.
     var broken_assets: Dictionary = payload.layout.duplicate(true)
     broken_assets["native_glyphs"] = {}
@@ -80,7 +97,8 @@ func run() -> void:
         "Rejected assets cannot enable Play or complete readiness")
     check(app.commands.is_empty() and app.raster_requests == 0,
         "Rejected assets never acknowledge readiness or fall back to PNG pages")
-    var failed_state := {"loaded":true,"revision":app.revision,"phase":"ready","mode":"practice"}
+    var failed_state := {"loaded":true,"revision":app.revision,"phase":"ready",
+        "mode":"practice","piece_fingerprint":"native-production-test"}
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(failed_state).to_utf8_buffer())
     check(not app.score_error.is_empty() and app.practice_view.stage.score_status_panel.visible
         and app.practice_view.stage.score_retry_button.visible and app.practice_view.stage.score_status_label.text.contains(app.score_error),
@@ -101,6 +119,8 @@ func run() -> void:
     deliver_model(app, stale)
     check(app.commands.is_empty() and app.rendered_revision != app.revision,
         "A newer model cannot complete the current revision")
+    check(app.score_session.request_model(),
+        "Invalid semantic revision permits requesting the correct model")
     deliver_model(app, payload.model)
     check(app.practice_view.stage.renderer.native_ready and app.practice_view.stage.renderer.visible,
         "Valid source model and authentic Verovio assets prepare the production native view")
@@ -114,6 +134,8 @@ func run() -> void:
     app.commands.clear()
     var unsupported: Dictionary = payload.model.duplicate(true)
     unsupported["notation_events"][0]["note_type"] = "unrenderable"
+    check(app.score_session.request_model(),
+        "A new model request is needed before a replacement response")
     deliver_model(app, unsupported)
     check(not app.score_error.is_empty() and app.practice_view.stage.score_status_panel.visible,
         "Rejected notation exposes the native preparation failure")
@@ -134,12 +156,14 @@ func run() -> void:
     app._toggle_playing()
     check(app.commands == [{"action":"resume"}], "A paused loading transition can resume while assets prepare")
     app.commands.clear()
+    app._retry_score()
     deliver_layout(app, payload.layout)
     deliver_model(app, payload.model)
     check(app.practice_view.stage.renderer.native_ready and not app.practice_view.start_button.disabled
         and app.score_error.is_empty(), "Valid native preparation recovers from failure")
     app.commands.clear()
-    var changed := {"loaded":true,"revision":app.revision+1,"phase":"ready","mode":"practice"}
+    var changed := {"loaded":true,"revision":app.revision+1,"phase":"ready",
+        "mode":"practice","piece_fingerprint":"native-production-test"}
     app._on_state(0, 200, PackedStringArray(), JSON.stringify(changed).to_utf8_buffer())
     check(not app.practice_view.stage.renderer.native_ready and not app.practice_view.stage.renderer.visible
         and app.practice_view.start_button.disabled and app.practice_view.practice_retry_button.disabled,
