@@ -435,7 +435,8 @@ class LearningPlan:
             exercise.phrase, hand, groups, SETTINGS.focus_max_attacks,
             SETTINGS.focus_min_onsets, exercise.kind, self.warmup)
         return self.pipeline.build(
-            context, lambda: self._legacy_stage_variants(exercise, hand))
+            context, lambda: self._legacy_stage_variants(exercise, hand),
+            source_musicxml=self.piece.source_musicxml)
 
     def _stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
         """Compatibility with existing curriculum and persisted stage keys."""
