@@ -68,6 +68,7 @@ timeout 100s "$PYTHON" -m pytest -q \
   tests/test_musical_groups.py \
   tests/test_source_tie_attributes.py \
   tests/test_complex_slur_projection.py \
+  tests/test_source_connector_pixels.py::test_same_slur_number_on_two_staves_pairs_by_part_staff_and_voice \
   tests/test_hanon_boundary_smoke.py \
   tests/test_native_chord_flag_ties.py \
   tests/test_verovio_slur_fragments.py \
