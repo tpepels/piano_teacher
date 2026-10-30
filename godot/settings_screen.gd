@@ -13,6 +13,8 @@ signal save_folder_requested(path: String)
 signal device_selected(name: String)
 signal tempo_requested(bpm: int)
 signal strategy_requested(strategy: String)
+signal timing_strategy_requested(strategy: String)
+signal tempo_strategy_requested(strategy: String)
 signal metronome_requested(enabled: bool)
 signal volume_changed(db: float)
 signal fullscreen_requested(enabled: bool)
@@ -29,6 +31,8 @@ var tempo_setting: SpinBox
 var apply_tempo_button: Button
 var metronome_toggle: CheckButton
 var strategy_picker: OptionButton
+var timing_strategy_picker: OptionButton
+var tempo_strategy_picker: OptionButton
 var listen_volume_slider: HSlider
 var listen_volume_label: Label
 var fullscreen_toggle: CheckButton
@@ -185,6 +189,20 @@ func _ready() -> void:
     strategy_picker.item_selected.connect(func(index: int):
         strategy_requested.emit(str(strategy_picker.get_item_metadata(index))))
     practice.add_child(strategy_picker)
+    practice.add_child(_label("Rhythm exercise", 14, MUTED))
+    timing_strategy_picker = OptionButton.new()
+    timing_strategy_picker.custom_minimum_size = Vector2(260, 40)
+    timing_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    timing_strategy_picker.item_selected.connect(func(index: int):
+        timing_strategy_requested.emit(str(timing_strategy_picker.get_item_metadata(index))))
+    practice.add_child(timing_strategy_picker)
+    practice.add_child(_label("Tempo pattern", 14, MUTED))
+    tempo_strategy_picker = OptionButton.new()
+    tempo_strategy_picker.custom_minimum_size = Vector2(260, 40)
+    tempo_strategy_picker.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    tempo_strategy_picker.item_selected.connect(func(index: int):
+        tempo_strategy_requested.emit(str(tempo_strategy_picker.get_item_metadata(index))))
+    practice.add_child(tempo_strategy_picker)
     practice.add_child(_label(
         "Changing strategy stops the current take. Each strategy keeps separate mastery credit.",
         12, MUTED))
@@ -243,17 +261,27 @@ func present_preferences(values: Dictionary) -> void:
     folder_edit.text = str(values.get("music_dir", ""))
     present_window_mode(bool(values.get("fullscreen", true)))
     metronome_toggle.set_pressed_no_signal(bool(values.get("metronome", true)))
-    var selected_strategy := str(values.get("exercise_strategy", "legacy"))
-    strategy_picker.clear()
-    for available in values.get("available_exercise_strategies", []):
+    _present_strategy_picker(strategy_picker,
+        values.get("available_exercise_strategies", []),
+        str(values.get("exercise_strategy", "legacy")))
+    _present_strategy_picker(timing_strategy_picker,
+        values.get("available_timing_strategies", []),
+        str(values.get("timing_strategy", "original-timing")))
+    _present_strategy_picker(tempo_strategy_picker,
+        values.get("available_tempo_strategies", []),
+        str(values.get("tempo_strategy", "constant-tempo")))
+
+func _present_strategy_picker(picker: OptionButton, choices: Array, selected: String) -> void:
+    picker.clear()
+    for available in choices:
         if typeof(available) != TYPE_DICTIONARY:
             continue
-        var index := strategy_picker.item_count
-        strategy_picker.add_item(str(available.get("label", available.get("id", ""))))
-        var strategy_id := str(available.get("id", "legacy"))
-        strategy_picker.set_item_metadata(index, strategy_id)
-        if strategy_id == selected_strategy:
-            strategy_picker.select(index)
+        var index := picker.item_count
+        picker.add_item(str(available.get("label", available.get("id", ""))))
+        var strategy_id := str(available.get("id", ""))
+        picker.set_item_metadata(index, strategy_id)
+        if strategy_id == selected:
+            picker.select(index)
 
 func begin_editing(state: Dictionary) -> void:
     tempo_setting.set_value_no_signal(float(state.get("target_bpm", 40)))
@@ -278,6 +306,8 @@ func present_practice(state: Dictionary, editing: bool = false) -> void:
 func present_busy(pending: bool) -> void:
     apply_tempo_button.disabled = pending
     strategy_picker.disabled = pending
+    timing_strategy_picker.disabled = pending
+    tempo_strategy_picker.disabled = pending
 
 func present_volume(db: float) -> void:
     listen_volume_slider.set_value_no_signal(db)
