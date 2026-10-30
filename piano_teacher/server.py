@@ -1000,6 +1000,14 @@ class PracticeEngine:
     def _visual_motion(self, now: float) -> tuple[float, float, float]:
         """Project the current transport snapshot without changing any clocks."""
         phrase = self.plan.active_phrase
+        tempo_map = self._active_tempo_map()
+        if tempo_map is not None and self.running and now >= self.run_at:
+            beat = tempo_map.beat_at(now-self.run_at)
+            active = next((segment for segment in tempo_map.segments
+                           if beat < segment.end_beat), tempo_map.segments[-1])
+            return (self.visual_offset_beats+self.play_from_beat+beat,
+                    0.0 if self.paused else active.bpm/60.0,
+                    self.visual_offset_beats+phrase.end-phrase.start)
         return self.visual_transport.position(
             now, phrase_length=phrase.end-phrase.start, bpm=self.plan.bpm,
             running=self.running,
@@ -1567,8 +1575,12 @@ class PracticeEngine:
         lesson = build_lesson_snapshot(
             p, ex, variant, fingerprint=self.fingerprint,
             warmup=self.is_builtin_warmup, lesson_steps=lesson_steps)
+        tempo_map = self._active_tempo_map()
         timing = TimingSnapshot(
             sampled_at=sampled_at, now=now, run_at=self.run_at,
+            tempo_segments=tempo_map.as_segments() if tempo_map is not None else (),
+            mapped_clock_beat=(self._elapsed_beat(now-self.run_at)
+                               if tempo_map is not None else None),
             running=self.running, paused=self.paused, auto=self.auto,
             preview_only=self.preview_only, play_from_beat=self.play_from_beat,
             open_from_beat=self.open_from_beat, pending_rewind=self.pending_rewind,
