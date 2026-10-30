@@ -6,6 +6,7 @@ The entire original extractor code remains unmodified and is run offline.
 from __future__ import annotations
 
 import json
+from math import isfinite
 import sys
 
 from .rubricnet_assets import BASIC_FEATURES, UPSTREAM_COMMIT
@@ -48,6 +49,11 @@ def main() -> None:
         "commit": UPSTREAM_COMMIT,
         "features": {name: float(values[name]) for name in BASIC_FEATURES},
     }
+    if any(not isfinite(value) for value in output["features"].values()):
+        raise ValueError(
+            "RubricNet's source descriptors are undefined for this MusicXML. "
+            "The published model requires two adequately pitched piano parts; "
+            "sparse or rest-only hands are unsupported (no heuristic fallback).")
     print("RUBRICNET_FEATURES=" + json.dumps(output, allow_nan=False))
 
 
