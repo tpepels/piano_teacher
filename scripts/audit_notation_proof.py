@@ -7,6 +7,7 @@ Run:
 from __future__ import annotations
 
 import argparse
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from piano_teacher.notation.proof import (
     verify_generated_engraving, verify_original_musicxml,
 )
 from piano_teacher.score import import_piece
+from scripts.notation_release_provenance import current_provenance
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +45,8 @@ def audit_source(path: Path) -> dict:
     native = build_score_model(score, boundaries=piece.bar_boundaries)
     original = verify_original_musicxml(path.read_text(encoding="utf-8"), native)
     generated = verify_generated_engraving(score.musicxml, native)
-    return {"name": path.name, "original_source": original,
+    return {"name": path.name, "source_sha256": sha256(path.read_bytes()).hexdigest(),
+            "original_source": original,
             "verovio_native_contract": generated,
             "passed": original["passed"] and generated["passed"]}
 
@@ -57,10 +60,36 @@ def main() -> int:
         try:
             records.append(audit_source(CORPUS / name))
         except Exception as exc:
+            path = CORPUS / name
             records.append({"name": name, "passed": False,
+                            "source_sha256": sha256(path.read_bytes()).hexdigest()
+                                if path.is_file() else None,
                             "errors": [f"{type(exc).__name__}: {exc}"]})
+    provenance = current_provenance()
+    exact_inventory = (len(records) == len(SOURCES) and
+        len({row["name"] for row in records}) == len(SOURCES) and
+        {row["name"] for row in records} == set(SOURCES) and
+        all(row["source_sha256"] is not None for row in records))
     report = {
-        "phase": 1, "passed": all(r["passed"] for r in records),
+        "schema_version": 2,
+        "phase": 1,
+        "provenance": provenance,
+        "pinned_manifest_sha256": sha256(
+            (CORPUS / "manifest.json").read_bytes()).hexdigest(),
+        "expected_source_names": list(SOURCES),
+        "source_coverage": {"expected": len(SOURCES),
+            "attempted": len(records),
+            "semantically_passed": sum(bool(row["passed"]) for row in records),
+            "missing_or_unreadable": sorted(
+                row["name"] for row in records if row["source_sha256"] is None)},
+        "visual_evidence": {"status": "not_run",
+            "current_revision_framebuffers": 0,
+            "verified_glyphs": None,
+            "unverified_glyphs": None,
+            "reason": "This runner never opens Godot or compares actual pixels"},
+        "passed": bool(exact_inventory and provenance.get("clean")
+                       and provenance.get("revision")
+                       and all(row["passed"] for row in records)),
         "scope": "original MusicXML semantic facts and generated XML/native event inventory",
         "not_verified": [
             "native pixel/shape/placement fidelity",
@@ -79,7 +108,8 @@ def main() -> int:
     }
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
-    print(f"Phase 1: {sum(r['passed'] for r in records)}/{len(records)} scores; "
+    print(f"Phase 1 @ {provenance.get('revision')}: "
+          f"{sum(r['passed'] for r in records)}/{len(records)} scores; "
           f"{report['source_attacks_checked']} original attacks; "
           f"{report['native_symbols_checked']} native events")
     for record in records:

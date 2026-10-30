@@ -21,7 +21,8 @@ jobs:
   native-gate:
     name: python-contracts
     runs-on: ubuntu-latest
-    # Hard bound including checkout, Python setup, installation and tests.
+    # Short checks plus one complete small MusicXML semantic fixture manifest.
+    # No Godot screenshot sweep, MIDI library iteration or long CI.
     timeout-minutes: 2
     outputs:
       revision: ${{ steps.passed.outputs.revision }}
@@ -35,6 +36,18 @@ jobs:
         run: python -m pip install -e '.[test]'
       - name: Run fast source and MIDI checks
         run: bash scripts/ci-smoke.sh
+      - name: Independent supported-MusicXML semantic coverage
+        # This is not a native framebuffer proof. A failed source or
+        # insufficient provenance leaves a non-green status and a report.
+        run: timeout 30s python scripts/audit_notation_proof.py --out "$RUNNER_TEMP/notation-semantic-current.json"
+      - name: Retain current-revision semantic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: notation-semantic-${{ github.sha }}
+          path: ${{ runner.temp }}/notation-semantic-current.json
+          if-no-files-found: warn
+          retention-days: 7
       - name: Record quick-check revision
         id: passed
         env:
