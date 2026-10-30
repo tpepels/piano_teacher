@@ -175,3 +175,40 @@ source-to-real-fold CLI (`scripts/research/predict_rubricnet_musicxml.py`)
 returned difficulty classes **[2, 2, 2, 3, 3]**. Research-reference path:
 `end-to-end-verified on the published reference fixture`; application-level
 integration and broad MusicXML robustness remain **unverified**.
+
+## App-native RubricNet integration (2026-10-30)
+
+- The original MIT-licensed extractor source is bundled verbatim under
+  `piano_teacher/research/_upstream_rubricnet/`. Its 14 original modules
+  retain their exact upstream Git blob SHA-1s (short CI checks each file).
+  The original MIT license is included beside the sources.
+- `piano_teacher/research/rubricnet_extractor.py` launches the original
+  source in a *separate local Python worker*, with no network access,
+  explicit 35-second timeout, strictly named 12-descriptor output, and
+  fail-closed exceptions. The default app never imports the optional
+  PyTorch/scientific modules.
+- `scripts/setup-rubricnet.sh` creates a separate Python 3.12 environment
+  (`.rubricnet-venv`), installing original required libraries once.
+  `run.sh` automatically points the worker at that environment when present;
+  all subsequent inference is offline.
+- `rubricnet-trained` is a **distinct** selectable exercise strategy,
+  retaining the trained camera-ready five-fold class prediction. The
+  difficulty-class-to-exercise mapping remains an **explicit rule**:
+  classes 0–2 use the original plan, 3–5 use Coda part splitting, 6–8 use
+  combined Fukuda+Coda. This routing is **not trained by RubricNet**.
+- The old `feature-gated` heuristic and `legacy` remain unchanged; the
+  default is still `legacy`. The trained policy retains independent
+  stage keys and progress profiles. Switching an already loaded piece
+  checks optional worker availability *before* mutating saved settings.
+- `tests/test_rubricnet_offline_integration.py` verifies exact upstream
+  source bytes, isolated worker validation, settings rollback, and
+  distinct trained/heuristic selection. Its tests require no optional
+  scientific packages.
+- `tests/test_rubricnet_real_scores.py` checks independent two-staff
+  MusicXML fixture types in the isolated optional acceptance job;
+  the broad fixture gate remains subject to its final result.
+
+This does not imply RubricNet learned how to select teaching strategies.
+The only learned output is **whole-score difficulty**. Using it for
+piecewise remediation is an application-designed policy, not part of
+the published model or a pedagogically validated intervention.
