@@ -68,7 +68,7 @@ reimplementations of the published systems.
 - [ ] Physical MIDI/device and audible Listen verification, and real-time
       visual placement for Coda chordification and remedial sessions.
 - [ ] More advanced Coda transformations, learned RubricNet inference,
-      complex Funkuda/audio-following components, and broader Piano Tutor
+      complex Fukuda/audio-following components, and broader Piano Tutor
       student modeling are **not** implemented. These require model assets,
       independent benchmarks and validated algorithm designs.
 - [ ] Teacher/learner comparison: verify whether any transformed or targeted
