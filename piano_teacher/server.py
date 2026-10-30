@@ -52,6 +52,8 @@ from .learner_state import guided_units, next_guided_unit, placement_candidate
 from .progress_repository import ProgressRepository
 from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
+from .exercise_contracts import AssessmentEvidence
+from .practice_history import PracticePolicyService
 
 
 class PracticeEngine:
@@ -143,6 +145,7 @@ class PracticeEngine:
         self.db = self.progress.db
         self.learner_store = self.progress.learner_store
         self.learner_progress = LearnerProgress(self.learner_store)
+        self.practice_policy = PracticePolicyService(self.progress.assessment_history)
 
     def _midi_lost(self, reason: str = "device_disconnected") -> None:
         """Cancel session state after detachment and before closing the input."""
@@ -214,10 +217,50 @@ class PracticeEngine:
     def set_preferences(self, **changes) -> dict:
         with self.lock:
             before = self.library.settings['music_dir']
+            old_strategy = self.library.settings['exercise_strategy']
             updated = self.library.update(**changes)
             if before != self.library.settings['music_dir']:
                 self.library_health.reset()
+            if (old_strategy != self.library.settings['exercise_strategy']
+                    and self.plan is not None):
+                old = self.plan
+                self._stop()
+                self._save()
+                self._reset_trouble()
+                replacement = LearningPlan(old.piece, warmup=self.is_builtin_warmup,
+                    exercise_strategy=self.library.settings['exercise_strategy'])
+                replacement.target_bpm = old.target_bpm
+                self.plan = replacement
+                # Only matching stage histories: never copy streak/BPM from
+                # an unrelated selection in the single active-session row.
+                self.progress.restore(replacement, self.fingerprint, restore_session=False)
+                replacement.restore_location(
+                    kind=old.exercise.kind,
+                    first_bar=old.exercise.phrase.first_bar,
+                    last_bar=old.exercise.phrase.last_bar,
+                    hand=old.hand, level=old.active_variant.level)
+                replacement.streak = 0
+                replacement.bpm = replacement._tempo_for_current_stage()
+                self.open_from_beat = 0.0
+                self.mode = "practice"
+                self.course_guided = False
+                self.guided_range = None
+                self.teaching = None
+                self.score_artifacts.invalidate()
+                self.score_revision += 1
+                self.awaiting_score_revision = None
+                self.feedback = "Exercise strategy changed"
+                self.next_action = "Review the new exercise before starting."
+                self._save()
             return updated
+
+    def exercise_diagnostics(self) -> dict:
+        with self.lock:
+            if self.plan is None:
+                return {"loaded": False, "exercise_strategy": self.library.settings['exercise_strategy']}
+            return {"loaded": True, "exercise_strategy": self.plan.exercise_strategy.name,
+                    "stage_key": self.plan.identity,
+                    **self.practice_policy.inspect(self.fingerprint, self.plan.identity)}
 
     def load_library(self, identifier: str) -> None:
         with self.lock:
@@ -306,7 +349,8 @@ class PracticeEngine:
                 self.fingerprint = fingerprint
                 self._piece_generation += 1
                 self.score_artifacts.invalidate()
-                self.plan = LearningPlan(piece, warmup=warmup)
+                self.plan = LearningPlan(piece, warmup=warmup,
+                    exercise_strategy=self.library.settings['exercise_strategy'])
                 self.mode = "practice"
                 self.teaching = None
                 self.guided_range = None
@@ -387,7 +431,8 @@ class PracticeEngine:
         self.progress.reset_piece(fingerprint)
         self._stop()
         self._reset_trouble()
-        self.plan = LearningPlan(piece, warmup=warmup)
+        self.plan = LearningPlan(piece, warmup=warmup,
+                    exercise_strategy=self.library.settings['exercise_strategy'])
         self.open_from_beat = 0.0
         self.course_guided = False
         self.mode = "practice"
@@ -809,6 +854,11 @@ class PracticeEngine:
                 self.learner_store.resolve_trouble(self.fingerprint, p.identity)
         self.retry_range = None
         before = (p.identity, p.bpm)
+        # Persist real graded evidence under its original stage identity.
+        if (self.fingerprint and getattr(result, "notes", None)
+                and all(hasattr(entry, "status") for entry in result.notes)):
+            evidence = AssessmentEvidence.from_result(before[0], result, before[1])
+            self.practice_policy.observe(self.fingerprint, evidence)
         message = p.apply_result(correct=result.correct,
                                  total=len(result.notes), extras=result.extra_notes)
         if p.identity == before[0] and p.bpm > before[1]:
