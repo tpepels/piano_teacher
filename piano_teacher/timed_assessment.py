@@ -11,29 +11,13 @@ from collections import deque
 from typing import Sequence
 
 from .exercise_contracts import TempoMap
+from .assessment_clock import expected_note_seconds as expected_seconds
 from .feedback import project_assessment
 from .lesson_settings import SETTINGS
 from .measure_grid import chunk_start_at_end
 from .music import Phrase
 from .practice import Assessment, NoteAssessment, PlayedNote, evaluate
 from .recovery import RecoveryDecision
-
-
-def expected_seconds(phrase: Phrase, tempo: TempoMap, from_beat: float = 0.0):
-    """A grader callback: attack, release, and local seconds per quarter note.
-
-    PlayedNote timestamps are relative to the beginning of the *current*
-    take, not to the first beat of the imported score.
-    """
-    origin = tempo.seconds_at(from_beat)
-
-    def expected(note):
-        attack = note.start - phrase.start
-        release = min(note.end, phrase.end) - phrase.start
-        return (tempo.seconds_at(attack) - origin,
-                tempo.seconds_at(release) - origin,
-                60.0 / tempo.bpm_at(attack))
-    return expected
 
 
 def assess_timed_window(phrase: Phrase, hand: str, tempo: TempoMap,
