@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 from .exercise_strategies import ExerciseContext, ExerciseStrategy, resolve_strategy
+from .exercise_pipeline import ExercisePipeline, ExerciseStage
 from .music import Phrase, Piece
 from .exercise_generator import ExerciseVariant, generate_variants
 from .exercise_contracts import resolve_timing_strategy, resolve_tempo_strategy
@@ -349,6 +350,8 @@ class LearningPlan:
         self.tempo_strategy = resolve_tempo_strategy(tempo_strategy)
         self.exercise_strategy = resolve_strategy(
             exercise_strategy if exercise_strategy is not None else "legacy")
+        self.pipeline = ExercisePipeline(self.exercise_strategy, self.timing_strategy,
+                                         self.tempo_strategy)
         self.warmup = warmup
         self.grouping = (None if warmup else grouping_for_piece(piece))
         if warmup:
@@ -415,49 +418,28 @@ class LearningPlan:
         return self.hands[self.hand_index]
 
     @property
-    def variants(self) -> tuple[ExerciseVariant, ...]:
+    def stages(self) -> tuple[ExerciseStage, ...]:
         key = (self.index, self.hand)
         if self._variants_cached is None or self._variants_cached[0] != key:
-            self._variants_cached = (key, self._stage_variants(self.exercise, self.hand))
+            self._variants_cached = (key, self._pipeline_stages(self.exercise, self.hand))
         return self._variants_cached[1]
 
-    def _stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
-        """Delegate exercise generation to a swappable research strategy."""
+    @property
+    def variants(self) -> tuple[ExerciseVariant, ...]:
+        return tuple(stage.variant for stage in self.stages)
+
+    def _pipeline_stages(self, exercise: Exercise, hand: str) -> tuple[ExerciseStage, ...]:
         groups = (self.grouping.for_phrase(exercise.phrase, hand)
                   if self.grouping is not None else ())
         context = ExerciseContext(
             exercise.phrase, hand, groups, SETTINGS.focus_max_attacks,
             SETTINGS.focus_min_onsets, exercise.kind, self.warmup)
-        baseline = self.exercise_strategy.generate(
+        return self.pipeline.build(
             context, lambda: self._legacy_stage_variants(exercise, hand))
-        if self.warmup or exercise.kind != "learn" or not baseline:
-            return baseline
-        original = baseline[-1]
-        drills = []
-        if self.timing_strategy.name != "original-timing" and hand != "both":
-            plan = self.timing_strategy.transform(original)
-            if any(abs(event.exercise_start - (note.start-original.phrase.start)) > 1e-7
-                   or abs(event.exercise_end - (note.end-original.phrase.start)) > 1e-7
-                   for event, note in zip(plan.events, original.notes)):
-                offset = original.phrase.start
-                altered = tuple(replace(note, start=offset+event.exercise_start,
-                                        end=offset+event.exercise_end)
-                                for event, note in zip(plan.events, original.notes))
-                phrase = replace(original.phrase, notes=altered)
-                drills.append(ExerciseVariant(self.timing_strategy.name, phrase,
-                                              original.source_indices))
-        if self.tempo_strategy.name != "constant-tempo":
-            # Full-note tempo shaping is a distinct graded exercise stage.
-            # The optional combined stage uses the dotted score and its own
-            # variable tempo map; original constant-tempo remains mandatory.
-            drills.append(ExerciseVariant(self.tempo_strategy.name,
-                                          original.phrase, original.source_indices))
-            if drills and drills[0].level == self.timing_strategy.name:
-                shaped = drills[0]
-                drills.append(ExerciseVariant(
-                    self.timing_strategy.name + "+" + self.tempo_strategy.name,
-                    shaped.phrase, shaped.source_indices))
-        return baseline[:-1] + tuple(drills) + (original,)
+
+    def _stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
+        """Compatibility with existing curriculum and persisted stage keys."""
+        return tuple(stage.variant for stage in self._pipeline_stages(exercise, hand))
 
     def _legacy_stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
         groups = (self.grouping.for_phrase(exercise.phrase, hand)
@@ -540,8 +522,12 @@ class LearningPlan:
         return sum(step.key in self.mastered for step in self.lesson_steps)
 
     @property
+    def active_stage(self) -> ExerciseStage:
+        return self.stages[self.variant_index]
+
+    @property
     def active_variant(self) -> ExerciseVariant:
-        return self.variants[self.variant_index]
+        return self.active_stage.variant
 
     @property
     def active_phrase(self) -> Phrase:
