@@ -638,6 +638,34 @@ def _phrase_lanes(phrase, hand, grid=(), *, from_source_musicxml=False):
                 end = min(rounded,_ticks(phrase.end-phrase.start),
                           lane[i+1][0] if i+1 < len(lane)
                           else _ticks(phrase.end-phrase.start))
+            # MIDI note-off is commonly just before a notated triplet's
+            # next onset. Moonlight Sonata I has eighth-triplet attacks at
+            # 0, 1/3, 2/3 beat but physical releases 0.01875 beat early.
+            # Complete source-backed triplet runs must display the full
+            # written 3:2 eighth duration: otherwise Verovio engraves
+            # isolated irregular-ratio flags instead of a triple beam group.
+            # Only display length changes; source-note timing and grading do
+            # not. The onset grid, following source onset (or a completed
+            # triplet beat), and tiny release gap must all independently fit.
+            if not from_source_musicxml:
+                third = DIVISIONS // 3
+                target = start + third
+                next_start = lane[i+1][0] if i+1 < len(lane) else None
+                beat_start = start // DIVISIONS * DIVISIONS
+                in_triplet = ((start-beat_start) in (0, third, 2*third)
+                              and end < target
+                              and 0 < target-end <= _ticks(.025)
+                              and target <= _ticks(phrase.end-phrase.start)
+                              and (next_start is None or next_start >= target)
+                              and not any(end <= _ticks(boundary) < target
+                                          for boundary in grid))
+                preceding_pair = (
+                    (start-beat_start) == 2*third
+                    and i >= 2
+                    and lane[i-2][0] == beat_start
+                    and lane[i-1][0] == beat_start+third)
+                if in_triplet and (next_start == target or preceding_pair):
+                    end = target
             if i+1 < len(lane):
                 following = lane[i+1][0]
                 # Tiny key-release gaps in performance MIDI are articulation,
