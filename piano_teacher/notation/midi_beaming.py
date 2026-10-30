@@ -84,7 +84,7 @@ def _voice_events(measure: ET.Element) -> dict[str, list[_Event]]:
             and modification.findtext("normal-notes") == "2"
             and child.findtext("type") in LEVELS
             and duration * 3 ==
-                (4 * divisions // (2 ** LEVELS[child.findtext("type")])) * 2
+                (divisions // (2 ** LEVELS[child.findtext("type")])) * 2
         )
         level = LEVELS.get(child.findtext("type"), 0) if (
             not rest and not child.findall("beam")
