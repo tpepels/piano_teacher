@@ -121,5 +121,31 @@ func run() -> void:
     check(absf(clock.now(now_ms + 4200) + 1.0) < .0001,
         "Explicit tempo change must reset the projection, not accelerate into it")
     check(clock.matches(state), "Clock must recognize the latest authoritative transport")
+    # Shaped clock must cross a tempo boundary without assuming one BPM.
+    var shaped = load("res://visual_transport_clock.gd").new()
+    var shaped_state := {
+        "revision": 50, "transport_id": 52, "bpm": 60.0,
+        "running": true, "paused": false,
+        "clock_beat": 0.0, "clock_elapsed_seconds": 0.0,
+        "tempo_segments": [
+            {"start_beat":0.0, "end_beat":2.0, "bpm":48.0, "start_seconds":0.0},
+            {"start_beat":2.0, "end_beat":4.0, "bpm":60.0, "start_seconds":2.5},
+        ]
+    }
+    shaped.accept(shaped_state, base_ms, base_ms)
+    check(absf(shaped.now(base_ms+2500)-2.0) < .00001,
+        "Two-phase clock must reach second segment exactly at its boundary")
+    check(absf(shaped.now(base_ms+3500)-3.0) < .00001,
+        "Two-phase clock must use the target tempo after the boundary")
+    check(absf(shaped.now(base_ms+4500)-4.0) < .00001,
+        "Shaped score and MIDI deadlines must agree on phrase duration")
+    shaped_state.running = false
+    shaped_state.paused = true
+    shaped_state.clock_beat = 4.0
+    shaped_state.clock_elapsed_seconds = 4.5
+    shaped.accept(shaped_state, base_ms+4500, base_ms+4500)
+    check(absf(shaped.now(base_ms+5500)-4.0) < .00001,
+        "Pausing a shaped clock must freeze its position")
+
     print("VISUAL_TRANSPORT_CLOCK_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)
