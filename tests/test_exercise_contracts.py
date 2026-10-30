@@ -5,7 +5,8 @@ import pytest
 
 from piano_teacher.exercise_contracts import (
     AssessmentEvidence, DottedPairTiming, ErrorFamilyDiagnosis,
-    LearnerSnapshot, OriginalTiming, RepeatedErrorPolicy, assess_timed,
+    LearnerSnapshot, OriginalTiming, RepeatedErrorPolicy, TwoPhaseTempo,
+    TempoMap, TempoSegment, assess_timed,
 )
 from piano_teacher.exercise_generator import ExerciseVariant
 from piano_teacher.library import ScoreLibrary
@@ -53,6 +54,20 @@ def test_timed_grading_uses_transformed_onsets_but_reports_original_notes():
     played[1] = PlayedNote(played[1].pitch, 1.0, 2.0)
     incorrect = assess_timed(plan, "right", 60, played)
     assert not incorrect.assessment.clean
+
+
+def test_tempo_shaping_converts_expected_beats_to_seconds():
+    plan = OriginalTiming().transform(variant())
+    tempo = TwoPhaseTempo(speed_fraction=.5).generate(plan, 60)
+    assert tempo.seconds_at(2) == 4.0
+    assert tempo.seconds_at(4) == 6.0
+    played = [PlayedNote(n.pitch, tempo.seconds_at(n.start), tempo.seconds_at(n.end))
+              for n in plan.exercise_phrase.notes]
+    grade = assess_timed(plan, "right", 60, played, tempo_map=tempo)
+    assert grade.assessment.clean
+    assert grade.tempo_name == "two-phase-tempo"
+    with pytest.raises(ValueError, match="contiguous"):
+        TempoMap("invalid", (TempoSegment(1, 2, 80),))
 
 
 def test_polyphonic_material_is_not_retimed():
