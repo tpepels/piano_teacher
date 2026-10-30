@@ -3,11 +3,14 @@ extends SceneTree
 # Render-clock acceptance independent of HTTP, sound-card and live MIDI.
 # The camera itself still uses the true engraved notehead coordinates.
 var failures: Array[String] = []
+var failure_count := 0
 
 func check(ok: bool, explanation: String) -> void:
     if not ok:
-        failures.append(explanation)
-        print("VISUAL_CLOCK_FAIL: ", explanation)
+        failure_count += 1
+        if failure_count <= 10:
+            failures.append(explanation)
+            print("VISUAL_CLOCK_FAIL: ", explanation)
 
 func _initialize() -> void:
     call_deferred("run")
@@ -34,7 +37,7 @@ func run() -> void:
         var observed_rate: float = (current - previous) / .016
         check(current >= previous, "Rendered music jumped backwards at frame %d" % tick)
         check(observed_rate >= beat_rate * 0.979 and observed_rate <= beat_rate * 1.021,
-            "Rendered score accelerated outside 2% rate bound at frame %d" % tick)
+            "Rendered score accelerated outside 2%% rate bound at frame %d" % tick)
         previous = current
     check(absf(previous - (-3.0 + 4.8 * beat_rate)) < .025,
         "A clean 68 BPM source clock should not noticeably drift")
@@ -56,7 +59,7 @@ func run() -> void:
         var current: float = jitter_clock.now(at)
         var observed_rate: float = (current - last_beat) / .016
         check(observed_rate >= beat_rate * .979 and observed_rate <= beat_rate * 1.021,
-            "Timestamp jitter changed the tempo beyond 2% at frame %d" % tick)
+            "Timestamp jitter changed the tempo beyond 2%% at frame %d" % tick)
         check(current >= last_beat, "Timestamp jitter moved the score backwards")
         last_beat = current
     check(absf(last_beat - (-3.0 + 9.6 * beat_rate)) < .06,
@@ -163,5 +166,5 @@ func run() -> void:
         "Partial shaped seek must reach its tempo transition at local beat 4")
     check(absf(partial.now(base_ms+6000)-5.0) < .00001,
         "Partial shaped retry must continue at the second segment's BPM")
-    print("VISUAL_TRANSPORT_CLOCK_FAILURES:", failures.size())
-    quit(0 if failures.is_empty() else 1)
+    print("VISUAL_TRANSPORT_CLOCK_FAILURES:", failure_count)
+    quit(0 if failure_count == 0 else 1)
