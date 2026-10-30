@@ -108,11 +108,15 @@ func run() -> void:
     check(app.commands.is_empty(), "Keyboard Play cannot start Learn before native readiness")
     app.commands.clear()
     app._retry_score()
-    check(app.score_error.is_empty() and app.layout_requests == 1
+    check(app.score_error.is_empty() and app.layout_requests == 2
         and app.layout_revision == -1 and app.rendered_revision == -1
         and not app.practice_view.stage.renderer.native_ready and not app.practice_view.stage.score_retry_button.visible,
         "Retry clears failed preparation and requests fresh native assets")
-    app.last_state = {"loaded":true,"phase":"loading", "awaiting_score_revision":app.revision}
+    var loading_state := failed_state.duplicate(true)
+    loading_state["phase"] = "loading"
+    loading_state["awaiting_score_revision"] = app.revision
+    app.last_state = loading_state
+    app.score_session.update_context(loading_state, Time.get_ticks_msec())
     deliver_layout(app, payload.layout)
     var stale: Dictionary = payload.model.duplicate(true)
     stale["revision"] = app.revision + 1
