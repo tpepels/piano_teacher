@@ -47,7 +47,7 @@ def project_authored_ties(source_parts: list[ET.Element],
                         divisions = Fraction(note.findtext("divisions"))
                     continue
                 if note.tag in ("backup", "forward"):
-                    delta = Fraction(note.findtext("duration", "0"), 1)
+                    delta = Fraction(int(note.findtext("duration", "0")), 1) / divisions
                     cursor += (-delta if note.tag == "backup" else delta)
                     previous = cursor
                     continue
