@@ -588,6 +588,10 @@ func _build_settings_screen() -> void:
         _send_post("/settings", {"timing_strategy": strategy}))
     settings_view.tempo_strategy_requested.connect(func(strategy: String):
         _send_post("/settings", {"tempo_strategy": strategy}))
+    settings_view.diagnosis_strategy_requested.connect(func(strategy: String):
+        _send_post("/settings", {"diagnosis_strategy": strategy}))
+    settings_view.learner_strategy_requested.connect(func(strategy: String):
+        _send_post("/settings", {"learner_strategy": strategy}))
     settings_view.metronome_requested.connect(func(enabled: bool):
         _send_post("/settings", {"metronome": enabled}))
     settings_view.volume_changed.connect(_on_listen_volume_changed)
