@@ -118,3 +118,19 @@ No long-running full-corpus audits or background work were initiated.
   cross-staff routing and arbitrary MusicXML playback semantics still require
   independent verification. No new annotation is silently applied to a
   transformed exercise.
+
+## Research-only transformation contracts (not reference parity)
+
+- `coda_research_strategies.py` includes deterministic source-measure
+  splitting with source-index reassembly and conservative held-note/slur/tie
+  boundary rejection. Rest-only measures remain represented.
+- Measure-wise tempo steps generate an existing shared `TempoMap` so
+  `assess_timed` can consume the *same* beat-to-second conversion used
+  for demonstration. Playback/Listen GUI integration is still pending.
+- Independent voice-level 3:1/1:3 dotted timing supports chords and
+  polyphonic voices without changing source identity; written rests,
+  authored beams, ties, tuplets and expressive note marks are guarded.
+- Focused synthetic and MusicXML contracts cover source partitions,
+  tempo conversion/grading, polyphony and protected annotations.
+- These are **new research prototypes only**. No production strategy is
+  enabled or described as a faithful Coda implementation.
