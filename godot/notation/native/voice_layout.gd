@@ -18,8 +18,14 @@ static func stem_directions(ordered_events: Array, chord_members: Dictionary,
         onsets[key].append(event)
     var directions: Dictionary = {}
     for leaders in onsets.values():
-        if leaders.size() != 2 or \
-                str(leaders[0].get("voice","1")) == str(leaders[1].get("voice","1")):
+        if leaders.size() < 2:
+            continue
+        var distinct_voices: Dictionary = {}
+        for leader in leaders:
+            distinct_voices[str(leader.get("voice","1"))] = true
+        if distinct_voices.size() != leaders.size():
+            # There is no unambiguous voice-level stem decision here.
+            # Existing source stems and beam directions retain priority.
             continue
         leaders.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
             return str(a.get("voice","1")).naturalnocasecmp_to(str(b.get("voice","1"))) < 0)
@@ -33,6 +39,29 @@ static func stem_directions(ordered_events: Array, chord_members: Dictionary,
                 low = minf(low,y)
                 high = maxf(high,y)
             ranges.append(Vector2(low,high))
+        if leaders.size() > 2:
+            # Previously this entire onset silently fell back to single-
+            # voice defaults. Order the actual source voice ranges top to
+            # bottom (smaller screen Y means higher pitch), breaking exact
+            # pitch ties by source voice order. Assign both directions and
+            # leave same-direction unisons to column_offsets() to separate.
+            var by_height: Array[int] = []
+            for index in range(leaders.size()):
+                by_height.append(index)
+            by_height.sort_custom(func(a: int, b: int) -> bool:
+                var first: float = (ranges[a].x+ranges[a].y)*.5
+                var second: float = (ranges[b].x+ranges[b].y)*.5
+                if absf(first-second) < .001:
+                    return a < b
+                return first < second)
+            var upper_count: int = ceili(float(by_height.size())/2.0)
+            for rank in range(by_height.size()):
+                var leader_index: int = by_height[rank]
+                var members: Array = chord_members.get(
+                    str(leaders[leader_index].get("id","")),[leaders[leader_index]])
+                for member in members:
+                    directions[str(member.get("id",""))] = rank < upper_count
+            continue
         var upper: int = -1
         if ranges[0].y < ranges[1].x:
             upper = 0
