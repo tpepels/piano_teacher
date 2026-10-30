@@ -1,0 +1,45 @@
+# One-shot, short wheel-content acceptance; avoids any optional ML installation.
+name: RubricNet (offline wheel packaging)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/rubricnet-wheel-package.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  wheel-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build wheel without downloading application dependencies
+        run: |
+          timeout 50s python -m pip wheel --no-deps . --wheel-dir "$RUNNER_TEMP/wheels"
+      - name: Check original extractor sources and authentic fold assets are included
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          wheels = list((Path(os.environ["RUNNER_TEMP"])/"wheels").glob("*.whl"))
+          assert len(wheels) == 1, wheels
+          with ZipFile(wheels[0]) as wheel:
+              paths = set(wheel.namelist())
+          prefix = "piano_teacher/research/"
+          code = prefix + "_upstream_rubricnet/extractor/DifficultyFeatures/code/"
+          assert code+"raw_data_extractors.py" in paths
+          assert code+"difficulty_calculators.py" in paths
+          assert code+"piano_fingering_argnn/compute_embeddings.py" in paths
+          assert prefix+"_upstream_rubricnet/LICENSE" in paths
+          for i in range(5):
+              assert prefix+f"models/rubricnet/fold_{i}.json" in paths
+          assert prefix+"rubricnet_worker.py" in paths
+          assert prefix+"rubricnet_extractor.py" in paths
+          print("RUBRICNET_OFFLINE_WHEEL_CONTENTS:PASS")
+          PY
