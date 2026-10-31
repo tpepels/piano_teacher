@@ -319,5 +319,35 @@ func run() -> void:
         .1*64.0/60.0)<.000001,
         "Grading clock and camera use the same tempo-mapped epoch")
 
+    # Recovery has its own explicit scheduled reverse and forward intervals.
+    # Every timestamp is an absolute backend monotonic epoch, regardless of
+    # how late the first recovery state arrives.
+    var recovery_clock = load("res://visual_transport_clock.gd").new()
+    recovery_clock.accept(shaped_idle,base_ms,base_ms)
+    var recovery_state := {"revision":31, "transport_id":40,
+        "phase":"recovering", "running":false, "paused":false,
+        "bpm":80.0,"auto":true,
+        "clock_sampled_at_ms":1002000.0,
+        "visual_run_at_ms":1000000.0,"visual_tempo_segments":[],
+        "visual_scroll_beat":6.0,"visual_scroll_speed":-4.0,
+        "visual_offset_beats":0.0,"play_from_beat":0.0,
+        "practice_preparation":{"phase":"reverse","measure":{
+            "start_beat":4.0,"end_beat":8.0}},
+        "visual_preparation_schedule":{
+            "reverse_at_ms":1001500.0,"prepare_at_ms":1002500.0,
+            "deadline_at_ms":1005500.0,
+            "from_beat":8.0,"to_beat":4.0}}
+    recovery_clock.accept(recovery_state,base_ms+2000,base_ms+2200)
+    check(recovery_clock.retry_active,
+        "Absolute recovery schedule must be accepted without a new camera")
+    check(absf(recovery_clock.visual_beat(base_ms+2200)-5.2)<.000001,
+        "Delayed recovery snapshot does not shift rewind origin")
+    check(absf(recovery_clock.visual_beat(base_ms+2500)-4.0)<.000001,
+        "Rewind reaches the exact scheduled preparation onset")
+    check(absf(recovery_clock.visual_beat(base_ms+4000)-6.0)<.000001,
+        "Preparation rest advances at scheduled practice tempo")
+    check(absf(recovery_clock.visual_beat(base_ms+5500)-8.0)<.000001,
+        "Retry rest meets the MIDI deadline without a visual hold")
+
     print("VISUAL_TRANSPORT_CLOCK_FAILURES:", failure_count)
     quit(0 if failure_count == 0 else 1)
