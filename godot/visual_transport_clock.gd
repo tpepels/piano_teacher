@@ -18,14 +18,6 @@ var timeline_elapsed_seconds := 0.0
 func _beat_at_seconds(seconds: float, segments: Array) -> float:
     return TempoTimeline.beat_at_seconds(seconds, bpm, segments)
 
-func _uniform_tempo(segments: Array, nominal: float) -> bool:
-    # Constant-BPM maps still contain one or more explicit source segments.
-    # They remain compatible with the same epoch through the appended rest.
-    for entry in segments:
-        if absf(float(entry.get("bpm", nominal)) - nominal) > 0.001:
-            return false
-    return true
-
 var active := false
 var beat := 0.0
 var last_ms := 0
@@ -208,22 +200,17 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
             best_round_trip_ms = round_trip
             has_backend_offset = true
         captured_ms = mini(roundi(backend_ms + backend_offset_ms), received_ms)
-    # The explicit forward visual map contains authored tempo changes and
-    # the appended silent measure at practice BPM. This is the exact same
-    # run_at timeline used to grade MIDI; the rest is no special clock state.
-    # Old snapshots lacking the field retain the strictly limited fallback.
-    var has_visual_map: bool = state.has("visual_tempo_segments")
+    # Active playback and automatic silence use one mandatory source-plus-
+    # rest segment list. No nominal-BPM interpolation switch at the boundary.
     visual_epoch_enabled = (state.has("visual_run_at_ms") and
-        has_backend_offset and (has_visual_map or next_active or
-            _uniform_tempo(next_segments, next_bpm)))
+        state.has("visual_tempo_segments") and has_backend_offset)
     if visual_epoch_enabled:
         visual_epoch_backend_ms = float(state.get("visual_run_at_ms", 0.0))
         visual_epoch_offset_beats = active_visual_offset + active_play_from
         visual_epoch_bpm = next_bpm
         # Active graded time includes source tempo changes. Automatic gap
         # transport uses the same source-time mapping until its next take.
-        visual_epoch_segments = state.get("visual_tempo_segments",
-            next_segments).duplicate(true)
+        visual_epoch_segments = state["visual_tempo_segments"].duplicate(true)
     var observed: float = float(state.get("clock_beat", 0.0))
     var next_elapsed: float = float(state.get("clock_elapsed_seconds", 0.0))
     if next_active:
