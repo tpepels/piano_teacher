@@ -24,6 +24,7 @@ var last_ms := 0
 var backend_offset_ms := 0.0
 var best_round_trip_ms := INF
 var has_backend_offset := false
+var transport_ever_started := false
 
 # Exactly one presentation owner for all transport phases. Reversal,
 # preparation, and playback are different segments of this same clock.
@@ -194,14 +195,16 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
         # Calibrate clock epochs on the lowest-latency idle sample, before
         # the attempt. A delayed first active response then cannot shift its
         # origin. Freeze this offset while moving; never alter musical speed.
-        if not has_backend_offset or (not next_active and
-                absf(idle_visual_speed) < 0.000001 and
+        if not has_backend_offset or (not transport_ever_started and
+                not next_active and absf(idle_visual_speed) < 0.000001 and
                 not retry_active and round_trip < best_round_trip_ms):
             backend_offset_ms = float(captured_ms) - backend_ms
             best_round_trip_ms = round_trip
             has_backend_offset = true
         captured_ms = mini(roundi(backend_ms + backend_offset_ms), received_ms)
     _accept_retry(state)
+    if next_active:
+        transport_ever_started = true
     # Active playback and automatic silence use one mandatory source-plus-
     # rest segment list. No nominal-BPM interpolation switch at the boundary.
     visual_epoch_enabled = (state.has("visual_run_at_ms") and
