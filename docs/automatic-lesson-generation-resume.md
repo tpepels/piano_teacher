@@ -182,3 +182,17 @@ explicitly unsupported. Next: complete authorship-aware tuplet and
 expressive-direction time projection with new real-source examples,
 then broaden production/native MIDI proof. Do not return to
 unrelated pixel-audit work.
+
+## 2026-10-31 — tuplets and mixed-meter Coda research checkpoint
+
+At SHA `42ec373a`: bounded real Verovio tests **12/12**
+(source-authored full 3:2 eighth triplet while other voice
+changes, authored 3/4→2/4 score slowed x2/x4, original
+rest and key timing preserved), artifact `13040688876`,
+run `41197917233`. At SHA `8939fa0e`: **232
+passed / 6 skipped** fast regression, including generated-
+XML bracket/ratio corruption controls, run `41198028760`.
+Original music and production stage selection unchanged.
+This covers strict unchanged triplet groups and complete-bar
+mixed-meter slowdown, not general tuplet retiming nor
+physical MIDI/Godot verification. See the Gate 2 tracker.

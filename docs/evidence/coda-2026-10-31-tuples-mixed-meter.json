@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-31",
+  "engraving_code_revision": "42ec373a599ba305ba6dad6ef110d2b6cb3aefaa",
+  "tested_fast_revision": "8939fa0e8a4b45708e909851fa334fa3349ca907",
+  "source_fixtures": [
+    "tests/fixtures/research/coda_authored_triplet.musicxml",
+    "tests/fixtures/research/coda_mixed_meter.musicxml"
+  ],
+  "supported_tuplets": "complete unchanged source-owned three-eighth-note 3:2 group; other voice may change",
+  "supported_mixed_meter": "source-complete 3/4 to 2/4 written slowdown x2 and x4",
+  "mixed_meter_grid_x2": [
+    0,
+    3,
+    6,
+    8,
+    10
+  ],
+  "mixed_meter_grid_x4": [
+    0,
+    3,
+    6,
+    9,
+    12,
+    14,
+    16,
+    18,
+    20
+  ],
+  "rest_coverage_x2": [
+    4,
+    6
+  ],
+  "rest_coverage_x4": [
+    8,
+    12
+  ],
+  "verovio_run": "https://github.com/tpepels/piano_teacher/actions/runs/41197917233",
+  "verovio_artifact_id": 13040688876,
+  "real_verovio_tests_passed": 12,
+  "fast_ci_run": "https://github.com/tpepels/piano_teacher/actions/runs/41198028760",
+  "fast_ci_passed": 232,
+  "fast_ci_skipped": 6,
+  "corruption_controls": [
+    "generated bracket mismatch rejected",
+    "generated time-modification ratio mismatch rejected",
+    "partial source tuplet rejected",
+    "retimed source tuplet rejected",
+    "source score grid mismatch rejected"
+  ],
+  "unchanged_original": true,
+  "production_enabled": false,
+  "reference_differential_for_new_cases": false,
+  "native_godot_checked": false,
+  "physical_midi_checked": false,
+  "gate_2_complete": false
+}

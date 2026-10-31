@@ -568,3 +568,81 @@ MIDI remain untested in this revision. General tuplets, arbitrary
 directions, altered annotation timing and mixed-meter written slowdown
 require distinct explicit semantic transformations and tests.
 **Gate 2 remains partial.**
+
+## Coda Gate 2 — source tuplets and mixed meter (2026-10-31)
+
+Implementation runs **only in the research-only Coda score projection**;
+no production curriculum or mastery settings were changed.
+
+### Complete authored 3:2 eighth-note triplets
+
+The strict `coda_source_tuplets.py` adapter now accepts exactly one
+**complete, unchanged** 3:2 eighth-note triplet per group. It checks
+the original XML's part, measure, source voice and source note identities,
+the three contiguous 1/3-quarter durations, the source group start/stop
+bracket attributes and all three recorded timing events. The independent
+other hand/voice may undergo Coda dotted-rhythm transformation. Original
+triplet members retain their source IDs and note durations. The
+canonical `build_lesson_score` output must contain the same 3:2
+`time-modification`, eighth-note values, group boundaries and every
+explicit authored bracket attribute. Malformed ratios, partial groups,
+overlapping/nested groups, unvoiced, rest-containing and retimed
+tuplets all fail closed. This is *not* generic tuplets support; the
+existing native renderer already supports broader ratios separately.
+
+A bounded `tests/fixtures/research/coda_authored_triplet.musicxml`
+source fixture was imported, exercised with dotted rhythm in a
+different voice, engraved with **actual Verovio SVG**, source-identified
+and graded against the transformed clock. Explicit output-corruption
+controls changed the source bracket and 3:2 ratio in the generated
+MusicXML and verified that both cause rejection.
+
+### Source-driven mixed-meter slowdown
+
+The prior uniform-meter x2/x4 restriction was removed for complete
+source bars. `_original_metadata` now repeats **each** original
+measure's own duration `factor` times and shifts original time, key
+and clef changes by the exact same source-beat factor. A source
+3/4 → 2/4 change at beat 3 becomes a change at beat 6 (x2)
+or beat 12 (x4) with correct repeated meter grids:
+
+- x2: `(0, 3, 6, 8, 10)`
+- x4: `(0, 3, 6, 9, 12, 14, 16, 18, 20)`
+
+The source-authored LH quarter rest at beat 2..3 projects to
+beat 4..6 at x2 and 8..12 at x4; when x4 crosses a newly
+introduced barline, the corresponding printed rests are
+split without losing their occupied time. Both new sources
+feed production `ScoreArtifacts`/Verovio and the same
+`TimingPlan`/MIDI grading clock. Original `Piece` metadata
+and original MusicXML are immutable.
+
+This deliberately still **rejects** pickup/partial bars,
+mid-bar time-signature changes, arbitrary authored directions,
+styled ties, changed or incomplete source tuplets, tempo
+markings requiring cross-meter reattachment, and unprojectable
+barline/repeat semantics. The thesis-backend source reference
+was not differentially executed on this mixed-meter/tuplet
+subset, so do not call these two expansions author-parity
+verified.
+
+### Bounded verification
+
+- Tested engraving revision: `42ec373a599ba305ba6dad6ef110d2b6cb3aefaa`
+- Real Verovio/Listen/feedback gate: **12 passed**, run
+  https://github.com/tpepels/piano_teacher/actions/runs/41197917233,
+  artifact `13040688876`; includes actual new mixed-meter x2/x4
+  and complete source-triplet SVG outputs
+- Final fast contract at revision
+  `8939fa0e8a4b45708e909851fa334fa3349ca907`:
+  **232 passed, 6 skipped**, run
+  https://github.com/tpepels/piano_teacher/actions/runs/41198028760
+  and still **10/10** established separate semantic source scores
+- Both generated-XML corruption controls and malformed
+  source-XML/retimed tuplet controls must raise; no xfails added
+
+**Still incomplete:** general tuplets (5:4, 7:4, nested, rest-bearing,
+cross-measure), actual time-warping of slurs/ties and expressive
+directions, tuplets with Coda source operations changing those notes,
+true repertoire-wide research parity, native Godot on these transformed
+scores, physical keyboard MIDI and teaching effectiveness.
