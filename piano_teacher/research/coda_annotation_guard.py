@@ -10,6 +10,9 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from xml.etree import ElementTree as ET
+from fractions import Fraction
+
+from .coda_source_metadata import source_elements
 
 from ..exercise_contracts import TimingPlan
 from ..music import Piece
@@ -38,9 +41,11 @@ class SourceBarTie:
 
 @dataclass(frozen=True)
 class SourceDynamic:
+    source_id: str
     hand: str
     measure: int
     symbol: str
+    offset_beats: float
 
 
 @dataclass(frozen=True)
@@ -66,6 +71,10 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
 
     marks = []
     dynamics = []
+    facts = {item.source_id: item for item in source_elements(
+        piece.source_musicxml,first_bar=1,
+        last_bar=len(piece.bar_boundaries)-1,
+        boundaries=piece.bar_boundaries) if item.kind=="direction"}
     has_source_ties = False
     for pi, part in enumerate(source.findall("{*}part")):
         for mi, measure in enumerate(part.findall("{*}measure")):
@@ -73,7 +82,7 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
             for ordinal, child in enumerate(measure):
                 tag = _tag(child)
                 if tag == "direction":
-                    if factor != 1 or saw_note:
+                    if factor != 1:
                         raise ValueError("Coda cannot safely retime source directions")
                     types = child.findall("{*}direction-type")
                     if len(types) != 1 or len(types[0]) != 1 or (
@@ -83,15 +92,26 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
                     if len(names) != 1 or _tag(names[0]) not in {
                             "p","pp","ppp","mp","mf","f","ff","fff"}:
                         raise ValueError("Unsupported Coda source dynamics")
-                    if child.find("{*}offset") is not None:
-                        raise ValueError("Coda cannot move an offset source direction")
                     staff=child.findtext("{*}staff","1")
-                    owners={n.hand for n in timing.original.notes
-                            if n.voice.startswith(f"xml-p{pi}-s{staff}-")}
-                    if len(owners)!=1:
-                        raise ValueError("Ambiguous source dynamic staff/hand ownership")
-                    dynamics.append(SourceDynamic(next(iter(owners)),mi+1,
-                                                  _tag(names[0])))
+                    direction_id=f"xml-p{pi}-m{mi}-e{ordinal}"
+                    authored=facts.get(direction_id)
+                    if authored is None:
+                        raise ValueError("Coda source direction has no position")
+                    voice=child.findtext("{*}voice")
+                    candidates=[n for n in timing.original.notes
+                        if n.voice.startswith(f"xml-p{pi}-s{staff}-")
+                        and (voice is None or n.voice.endswith("-v"+voice))
+                        and abs(n.start-authored.onset)<1e-7]
+                    if len(candidates)!=1:
+                        raise ValueError("Coda direction lacks one exact source attack anchor")
+                    anchored=candidates[0]
+                    moved=exercises[anchored.source_id][0]
+                    left,right=piece.bar_boundaries[mi:mi+2]
+                    if not left-1e-7<=moved<right-1e-7:
+                        raise ValueError("Coda direction moved outside original source measure")
+                    dynamics.append(SourceDynamic(
+                        direction_id,anchored.hand,mi+1,_tag(names[0]),
+                        round(moved-left,8)))
                 if tag != "note":
                     continue
                 saw_note = True
@@ -330,8 +350,56 @@ def verify_annotation_projection(obligations: AnnotationObligations,
             for direction in measure.findall("{*}direction"):
                 for m in direction.findall("{*}direction-type/{*}dynamics/*"):
                     offset=direction.findtext("{*}offset","0")
-                    if abs(float(offset))>1e-7:
-                        raise ValueError("Coda changed an anchored source dynamic offset")
-                    actual_dynamics.append(SourceDynamic(hand,number,_tag(m)))
-    if Counter(actual_dynamics)!=Counter(obligations.dynamics):
-        raise ValueError("Coda projected source dynamics into another hand or measure")
+                    actual_dynamics.append((
+                        hand,number,_tag(m),round(float(offset)/10080,8)))
+    expected_dynamics=[(item.hand,item.measure,item.symbol,item.offset_beats)
+                       for item in obligations.dynamics]
+    if Counter(actual_dynamics)!=Counter(expected_dynamics):
+        raise ValueError("Coda projected source dynamics into another hand, beat or measure")
+
+
+def project_coda_source_directions(source_musicxml: str,
+                                   dynamics: tuple[SourceDynamic, ...],
+                                   boundaries: tuple[float, ...]) -> str:
+    """Move only note-anchored dynamics in a PRIVATE source XML copy.
+
+    Offsets are relative to the original MusicXML cursor. The source
+    note elements and their ordinal IDs are never rearranged; the normal
+    annotation projector subsequently attaches the direction to its
+    intended beat in the generated score.
+    """
+    if not dynamics:
+        return source_musicxml
+    root=ET.fromstring(source_musicxml)
+    facts={item.source_id: item for item in source_elements(
+        source_musicxml,first_bar=1,last_bar=len(boundaries)-1,
+        boundaries=boundaries) if item.kind=="direction"}
+    wanted={mark.source_id:mark for mark in dynamics}
+    located=set()
+    for pi,part in enumerate(root.findall("{*}part")):
+        divisions=Fraction(1)
+        for mi,measure in enumerate(part.findall("{*}measure")):
+            for ordinal,node in enumerate(measure):
+                if _tag(node)=="attributes":
+                    value=node.findtext("{*}divisions")
+                    if value:
+                        divisions=Fraction(value)
+                identifier=f"xml-p{pi}-m{mi}-e{ordinal}"
+                mark=wanted.get(identifier)
+                if mark is None:
+                    continue
+                fact=facts.get(identifier)
+                if fact is None or divisions<=0:
+                    raise ValueError("Coda direction cannot locate its source cursor")
+                original=Fraction(node.findtext("{*}offset","0"))
+                target=boundaries[mi]+mark.offset_beats
+                correction=Fraction(str(target-fact.onset))*divisions
+                delta=original+correction
+                offset=node.find("{*}offset")
+                if offset is None:
+                    offset=ET.SubElement(node,"offset")
+                offset.text=str(float(delta)) if delta.denominator!=1 else str(delta.numerator)
+                located.add(identifier)
+    if located!=set(wanted):
+        raise ValueError("Coda direction projection dropped a source anchor")
+    return ET.tostring(root,encoding="unicode")

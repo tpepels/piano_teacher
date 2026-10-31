@@ -27,6 +27,7 @@ from .coda_source_tuplets import (
 from ..notation.lesson import build_lesson_score, infer_piece_clefs
 from .coda_annotation_guard import (
     source_annotation_obligations, verify_annotation_projection,
+    project_coda_source_directions,
 )
 
 
@@ -224,7 +225,9 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
            for note in new_phrase.notes):
         raise ValueError("Transformed note exceeds the written score")
     source_xml=(_scaled_original(piece.source_musicxml,factor)
-                if factor>1 else piece.source_musicxml)
+                if factor>1 else project_coda_source_directions(
+                    piece.source_musicxml,obligations.dynamics,
+                    piece.bar_boundaries))
     bars=tuple(piece.barlines)
     if factor>1 and bars:
         raise ValueError("Slowdown cannot yet preserve source repeat/barline semantics")
