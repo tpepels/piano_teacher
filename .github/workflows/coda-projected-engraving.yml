@@ -1,6 +1,6 @@
 name: Coda selected-exercise real engraving
 
-# Small explicit Verovio check, now including author beam-group continuity. No corpus or long Godot audits.
+# Small Verovio Coda test for original beams, slurs, and separate tied voices.
 on:
   workflow_dispatch:
   push:

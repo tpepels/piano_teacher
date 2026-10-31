@@ -209,3 +209,29 @@ def test_unchanged_authored_slur_and_staccato_are_actual_verovio_ink(tmp_path):
              node.get("class","").split()}
     assert "slur" in classes
     (tmp_path/"authored-arc.svg").write_text(rendered.pages[0])
+
+
+def test_real_parallel_voice_source_ties_have_independent_verovio_connector_ink(tmp_path):
+    """Original source barline ties in two separate voices, no inferred ties."""
+    from piano_teacher.exercise_contracts import OriginalTiming
+
+    source=Path(__file__).parent/"fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml"
+    piece=load_musicxml(source,bpm=80)
+    original=ExerciseVariant(
+        "original",Phrase(1,1,len(piece.bar_boundaries)-1,0,
+                           piece.bar_boundaries[-1],piece.notes),
+        tuple(range(len(piece.notes))))
+    plan=OriginalTiming().transform(original)
+    stage=project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"parallel-ties"))
+    xml=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    assert len(xml.findall(".//tie[@type='start']"))>=2
+    assert len(xml.findall(".//tie[@type='stop']"))>=2
+    score=artifacts.engraving(stage.selection)
+    assert set(score.layout["attack_map"])=={
+        n.source_id for n in piece.notes}
+    roots=[ET.fromstring(page) for page in score.pages]
+    tie_groups=[node for root in roots for node in root.iter()
+                if "tie" in node.get("class","").split()]
+    assert len(tie_groups)>=2
+    (tmp_path/"parallel-voices.svg").write_text(score.pages[0])
