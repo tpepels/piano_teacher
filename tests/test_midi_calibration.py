@@ -45,7 +45,7 @@ def test_calibration_does_not_start_without_midi_and_applies_only_on_confirmatio
         cal.snapshot(cal.start_at+8*cal.period+.1)
         app.control("calibration_apply")
         assert app.library.settings["midi_offset_ms"] == 80
-        assert ScoreLibrary(tmp_path).settings["midi_offset_ms"] == 80
+        assert ScoreLibrary(tmp_path / 'config').settings["midi_offset_ms"] == 80
         app.control("calibration_reset")
         assert app.library.settings["midi_offset_ms"] == 0
     finally:

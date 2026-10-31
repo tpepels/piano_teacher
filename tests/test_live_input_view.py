@@ -50,7 +50,7 @@ def test_early_late_and_wrong_notes_are_separate_from_final_grading():
     _send(view, 60, 9.8)  # count-in is visible, never claims success
     assert _last(view, 9.81)["status"] == "count_in"
     _send(view, 60, 10.25)
-    assert _last(view, 10.21)["status"] == "late"
+    assert _last(view, 10.26)["status"] == "late"
     _send(view, 61, 10.25)
     assert _last(view, 10.26)["status"] == "unexpected"
     _send(view, 60, 11.65)
@@ -147,7 +147,7 @@ def test_provisional_midi_feedback_uses_shaped_grading_clock():
     assert _last(view, 13.81)["status"] == "early"
     view.reset_attempt()
     _send(view, 60, 14.35, tempo_map=shaped)
-    assert _last(view, 14.21)["source_id"] == "attack-c"
+    assert _last(view, 14.36)["source_id"] == "attack-c"
     assert _last(view, 14.21)["status"] == "late"
     view.reset_attempt()
     _send(view, 61, 14.01, tempo_map=shaped)

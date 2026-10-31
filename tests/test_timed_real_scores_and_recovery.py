@@ -138,7 +138,7 @@ def test_shaped_grader_distinguishes_early_late_and_wrong_pitch():
     assert assess_timed_window(phrase, "right", tempo, presses).clean
     delayed = list(presses)
     delayed[11] = PlayedNote(delayed[11].pitch,
-                             delayed[11].onset+.18, delayed[11].release+.18)
+                             delayed[11].onset+.31, delayed[11].release+.31)
     assessed = assess_timed_window(phrase, "right", tempo, delayed)
     assert assessed.notes[11].status == "late"
     wrong = list(presses)

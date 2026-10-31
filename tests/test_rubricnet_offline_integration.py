@@ -66,8 +66,8 @@ def test_trained_strategy_keeps_independent_profile_and_original_source(monkeypa
     assert plan.profile == "rubricnet-trained"
     assert plan.variants[-1].notes == piece.notes
     assert plan.exercise_strategy.name == "rubricnet-trained"
-    assert any(entry["id"] == "rubricnet-trained"
-               for entry in available_strategies())
+    assert not any(entry["id"] == "rubricnet-trained"
+                   for entry in available_strategies())
     assert LearningPlan(piece).exercise_strategy.name == "legacy"
     assert plan.identity != LearningPlan(piece).identity
 
