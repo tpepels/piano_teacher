@@ -111,6 +111,11 @@ func _accept_retry(state: Dictionary) -> void:
     retry_active = true
 
 func visual_beat(at_ms: int) -> float:
+    # After a scheduled rewind the new take must switch to its authored
+    # (possibly variable) tempo map. Preparation BPM is only for the rest.
+    if retry_active and source_phase == "playing" and \
+            retry_playing_transport >= 0 and visual_epoch_enabled:
+        return _visual_from_epoch(at_ms)
     if retry_active and source_phase in ["feedback", "recovering", "playing"]:
         if float(at_ms) < retry_preparation_ms:
             return clampf(retry_from_beat +
