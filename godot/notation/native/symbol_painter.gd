@@ -239,9 +239,22 @@ func paint_ties(canvas, frame: RenderPass, playhead_x: float, clock: float, gap:
             clock,playhead_x,frame.play_from_beat)
         if x1 < -20.0 or x0 > score_layout.size.x+20.0:
             continue
-        var place: Dictionary = connector_geometry.tie_placement(previous,event,x0,x1,gap)
-        if not place.is_empty():
-            paint_tie_contour(canvas,frame,previous,event,place,gap)
+        # The tie's authentic shape and flagged-head clearance were
+        # prepared when the score loaded. Only its translated X changes.
+        var shift_x: float = playhead_x-(
+            clock+frame.play_from_beat)*score_layout.timeline.pixels_per_beat
+        var cached: Dictionary = connector_geometry.prepared_tie(previous,event,shift_x)
+        if not cached.is_empty():
+            var texture: Texture2D = score_layout.glyphs.tie_textures.get(
+                str(cached["direction"]))
+            if texture != null:
+                canvas.draw_texture_rect(texture,cached["rect"],false,
+                    frame.event_ink(score_layout,event))
+        else:
+            var place: Dictionary = connector_geometry.tie_placement(
+                previous,event,x0,x1,gap)
+            if not place.is_empty():
+                paint_tie_contour(canvas,frame,previous,event,place,gap)
 
 
 func paint_tie_contour(canvas, frame: RenderPass, first: Dictionary, last: Dictionary,
