@@ -105,6 +105,7 @@ var retained_first_once
 var retained_first_loop
 var retained_repeat_segments: Array = []
 var retained_rest_segments: Array = []
+var retained_all_segments: Array = []
 var retained_recovery_sources: Dictionary = {}
 var retained_recovery_rests: Dictionary = {}
 var retained_annotations: Node2D
@@ -339,11 +340,13 @@ func _clear_retained_segments() -> void:
             segment.queue_free()
     retained_recovery_sources.clear()
     retained_recovery_rests.clear()
+    retained_all_segments.clear()
 
 func _new_retained_segment(kind: String, variant: String,
         context: Dictionary = {}):
     var segment = RetainedSegment.new()
     add_child(segment)
+    retained_all_segments.append(segment)
     segment.call("configure",self,kind,variant,context)
     return segment
 
@@ -380,6 +383,8 @@ func _resize_retained_pool() -> void:
     while retained_repeat_segments.size() > required:
         var last_source = retained_repeat_segments.pop_back()
         var last_rest = retained_rest_segments.pop_back()
+        retained_all_segments.erase(last_source)
+        retained_all_segments.erase(last_rest)
         remove_child(last_source)
         remove_child(last_rest)
         last_source.queue_free()
@@ -406,34 +411,17 @@ func retained_segment_compiled() -> void:
         call_deferred("emit_signal","retained_ink_compiled")
 
 func _hide_retained_segments() -> void:
-    # Newly installed segments compile their draw-command buffers offscreen
-    # before their first appearance in a scrolling measure. Once compiled,
-    # normal visibility culling no longer causes source reconstruction.
-    for segment in [retained_first_once,retained_first_loop]:
-        if segment != null:
+    # Newly installed segments compile before first entering the viewport.
+    for segment in retained_all_segments:
+        if segment.visible != not segment.compiled:
             segment.visible = not segment.compiled
-            if not segment.compiled:
-                segment.position = Vector2(-1000000.0,0.0)
-    for segment in retained_repeat_segments + retained_rest_segments:
-        segment.visible = not segment.compiled
-        if not segment.compiled:
-            segment.position = Vector2(-1000000.0,0.0)
-    for segment in retained_recovery_sources.values()+retained_recovery_rests.values():
-        segment.visible = not segment.compiled
         if not segment.compiled:
             segment.position = Vector2(-1000000.0,0.0)
 
-func _sync_retained_visibility(active: Array) -> void:
-    # CanvasItems keep their draw lists when merely translated. Do not
-    # toggle visibility off/on every frame; it invalidates scene batching.
-    var all_segments: Array = [retained_first_once,retained_first_loop]
-    all_segments.append_array(retained_repeat_segments)
-    all_segments.append_array(retained_rest_segments)
-    all_segments.append_array(retained_recovery_sources.values())
-    all_segments.append_array(retained_recovery_rests.values())
-    for segment in all_segments:
-        if segment == null:
-            continue
+func _sync_retained_visibility(active: Dictionary) -> void:
+    # Active lookups are O(1) and the stable pool list is never constructed
+    # inside the animation loop. Transform-only motion retains draw commands.
+    for segment in retained_all_segments:
         var warming: bool = not segment.compiled
         var selected: bool = active.has(segment)
         var should_show: bool = selected or warming
@@ -557,6 +545,7 @@ func _visible_events(left: float, right: float, frame: RenderPass = null) -> Arr
 func _clear_recovery_ink() -> void:
     for segment in retained_recovery_sources.values()+retained_recovery_rests.values():
         if is_instance_valid(segment):
+            retained_all_segments.erase(segment)
             remove_child(segment)
             segment.queue_free()
     retained_recovery_sources.clear()
@@ -764,12 +753,12 @@ func _source_overlaps_preparation(pass_start: float) -> bool:
 func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -> void:
     if retained_first_once == null:
         return
-    var active_segments: Array = []
+    var active_segments: Dictionary = {}
     var density: float = timeline.pixels_per_beat
     if not score_loop_enabled:
         var shift: float = playhead_x-(camera_clock+play_from_beat)*density
         _project_retained_source(retained_first_once,shift,camera_clock,0,0.0)
-        active_segments.append(retained_first_once)
+        active_segments[retained_first_once] = true
         _sync_retained_visibility(active_segments)
         return
     var stride: float = float(practice_timeline["stride_beats"])
@@ -801,7 +790,7 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
             continue
         _project_retained_source(segment,source_shift,source_clock,
             pass_index,pass_start)
-        active_segments.append(segment)
+        active_segments[segment] = true
         var silence: Dictionary = practice_timeline["gap"].duplicate(true)
         silence["start_beat"] = pass_start+float(silence["start_beat"])
         silence["end_beat"] = pass_start+float(silence["end_beat"])
@@ -815,7 +804,7 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
             rest_slot += 1
             rest.position = Vector2(playhead_x+(
                 pass_start+timeline.duration_beats-visual_scroll_beat)*density,0.0)
-            active_segments.append(rest)
+            active_segments[rest] = true
     # Exceptional recovery measures are retained too; their visibility
     # variant is built when the backend publishes the preparation.
     for owner in preparation_history:
@@ -829,7 +818,7 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
             continue
         recovery_rest.position = Vector2(playhead_x+(
             float(replaced_rest["start_beat"])-visual_scroll_beat)*density,0.0)
-        active_segments.append(recovery_rest)
+        active_segments[recovery_rest] = true
     _sync_retained_visibility(active_segments)
 
 func _draw() -> void:
