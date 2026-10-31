@@ -194,24 +194,14 @@ func paint_hairpins(canvas, frame: RenderPass, left: float, right: float, clock:
     # Wedge lines are structural ink, like pedal lines and volta brackets.
     # Original endpoints stay on the score's fixed beat score_layout.timeline, and a
     # clipped screen viewport displays the exact same interpolated slope.
-    var pending: Dictionary = {}
-    for mark in score_layout.source_expressions:
-        if str(mark.get("kind", "")) != "hairpin":
+    for span in score_layout.prepared_hairpins:
+        var start: Dictionary = span["first"]
+        var stop: Dictionary = span["last"]
+        if not frame.span_visible(start,stop):
             continue
-        var hand: String = score_layout.display_staff(mark)
-        var key: String = hand+"|"+str(mark.get("number", "1"))
-        var kind: String = str(mark.get("value", ""))
-        if kind in ["crescendo", "diminuendo"]:
-            pending[key] = mark
-            continue
-        if kind != "stop" or not pending.has(key):
-            continue
-        var start: Dictionary = pending[key]
-        pending.erase(key)
-        if not frame.span_visible(start,mark):
-            continue
-        var begin: float = float(start.get("beat", 0.0))
-        var end: float = float(mark.get("beat", 0.0))
+        var hand: String = str(span["hand"])
+        var begin: float = float(span["begin"])
+        var end: float = float(span["end"])
         if end <= begin or begin > right+.5 or end < left-.5:
             continue
         var first_x: float = score_layout.timeline.screen_x(
@@ -240,32 +230,9 @@ func paint_volta_endings(canvas, frame: RenderPass, left: float, right: float, c
         playhead_x: float, gap: float) -> void:
     # Volta brackets are structural rule lines with an engraved text label;
     # neither the repeat marks nor the transport clock causes an auto-repeat.
-    var pending: Dictionary = {}
-    var ends: Array = []
-    for measure in score_layout.timeline.measures:
-        for location in ["left", "right"]:
-            var mark: Variant = measure.get(location+"_barline")
-            if not mark is Dictionary:
-                continue
-            var ending: Variant = mark.get("ending")
-            if not ending is Dictionary:
-                continue
-            var number: String = str(ending.get("number", ""))
-            var kind: String = str(ending.get("type", ""))
-            var beat: float = float(measure.get(
-                "start_beat" if location == "left" else "end_beat", 0.0))
-            if kind == "start":
-                pending[number] = beat
-            elif kind in ["stop", "discontinue"] and pending.has(number):
-                ends.append({"start": float(pending[number]), "end": beat,
-                    "number": number, "closed": kind == "stop"})
-                pending.erase(number)
-    # A source excerpt may end inside an open volta. Never silently lose it.
-    for number in pending:
-        ends.append({"start": float(pending[number]),
-            "end": score_layout.timeline.duration_beats, "number": str(number), "closed": false})
+    # Matching and open-ending resolution are score preparation work.
     var y: float = score_layout.staff_center("right")-gap*5.05
-    for ending in ends:
+    for ending in score_layout.prepared_voltas:
         var first: float = float(ending["start"])
         var last: float = float(ending["end"])
         if first > right+.5 or last < left-.5 or last <= first:
