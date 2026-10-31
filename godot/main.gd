@@ -29,6 +29,7 @@ const ScoreAssetQueue := preload("res://score_asset_queue.gd")
 const InProcessBus := preload("res://inprocess_bus.gd")
 const PracticeFrameCoordinator := preload("res://practice_frame_coordinator.gd")
 const PracticeStatePresenter := preload("res://practice_state_presenter.gd")
+const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -152,6 +153,7 @@ var device_pending: bool:
 var demo_player: Node
 var ui_scale := 1.0
 var last_seen_midi_visual_sequence := 0
+var live_midi_feedback = LiveMidiFeedback.new()
 var state_poll_timer: Timer
 var inprocess_bus: Node
 var native_started := false
@@ -709,6 +711,7 @@ func _on_score_asset_failure(message: String) -> void:
     practice_view.present_message(message)
 
 func _on_score_assets_invalidated(_new_revision: int) -> void:
+    live_midi_feedback.clear()
     living_chords.clear()
     score_effects.marks.clear()
     score_effects.hit_pulses.clear()
@@ -717,6 +720,7 @@ func _on_score_assets_invalidated(_new_revision: int) -> void:
 
 func _on_score_layout_published(_published_revision: int, values: Dictionary) -> void:
     living_chords = LivingScore.prepare(values)
+    live_midi_feedback.bind_layout(values, _published_revision)
 
 func _on_score_published(published_revision: int) -> void:
     if phase0_smoke_mode:
@@ -935,72 +939,10 @@ func _clear_assessed_effects_in_ungraded_mode(state: Dictionary) -> void:
 
 
 func _consume_live_piano_hits(state: Dictionary) -> void:
-    var events: Array = state.get("midi_visual_events", [])
-    var mapping: Dictionary = score_layout.get("attack_map", {})
-    var notes: Array = score_layout.get("notes", [])
-    for event in events:
-        if not event is Dictionary:
-            continue
-        var sequence: int = int(event.get("sequence", 0))
-        if sequence <= last_seen_midi_visual_sequence:
-            continue
-        last_seen_midi_visual_sequence = sequence
-        # Even if an old MIDI event survived a mode transition, Listen
-        # and keyboard-free preview must never display a success burst.
-        if bool(state.get("preview_only", false)) or str(state.get("mode", "")) == "listen":
-            continue
-        if str(state.get("phase", "")) != "playing" or layout_revision != revision:
-            continue
-        if int(event.get("transport_id", -1)) != int(state.get("transport_id", -2)):
-            continue
-        var status: String = str(event.get("status", ""))
-        var age: float = float(event.get("age", 99.0))
-        if age > 1.05:
-            continue
-        var source: String = str(event.get("source_id", ""))
-        if status == "unexpected":
-            var reference: String = str(event.get("reference_source_id", ""))
-            var reference_id: String = str(mapping.get(reference, ""))
-            if reference_id.is_empty():
-                continue
-            for note in notes:
-                if str(note.get("id", "")) != reference_id:
-                    continue
-                var remaining: int = maxi(1, 420 - int(age * 1000.0))
-                score_effects.wrong_ghosts.append({
-                    "page": int(note.get("page", 0)),
-                    "x": float(note.get("x", 0.0)),
-                    "y": float(note.get("y", 0.0)),
-                    "duration_ms": 420,
-                    "until_ms": Time.get_ticks_msec() + remaining
-                })
-                if score_effects.wrong_ghosts.size() > 32:
-                    score_effects.wrong_ghosts.pop_front()
-                practice_view.stage.effects.react("unexpected")
-                practice_view.stage.impact_callout.call("react", "unexpected")
-                break
-            continue
-        if status not in ["on_time", "early", "late"] or age > .22:
-            continue
-        var note_id: String = str(mapping.get(source, ""))
-        if note_id.is_empty():
-            continue
-        for note in notes:
-            if str(note.get("id", "")) == note_id:
-                score_effects.hit_pulses.append({
-                    "page": int(note.get("page", 0)),
-                    "x": float(note.get("x", 0.0)),
-                    "y": float(note.get("y", 0.0)),
-                    "status": status,
-                    "note_id": note_id,
-                    "duration_ms": 220,
-                    "until_ms": Time.get_ticks_msec() + maxi(1, 220 - int(age * 1000.0))
-                })
-                if score_effects.hit_pulses.size() > 32:
-                    score_effects.hit_pulses.pop_front()
-                practice_view.stage.effects.react(status)
-                practice_view.stage.impact_callout.call("react", status)
-                break
+    last_seen_midi_visual_sequence = live_midi_feedback.consume(
+        state, score_effects, practice_view.stage,
+        last_seen_midi_visual_sequence,
+        layout_revision if layout_revision == revision else -1)
 
 
 func _request_layout() -> void:
