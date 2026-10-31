@@ -100,8 +100,8 @@ var frame_visible_beam_groups := 0
 # The small reusable source/silence CanvasItems retain Godot's actual
 # draw command buffers. A transport frame translates them; it never repaints
 # MusicXML structures.
-var retained_first_once: Node2D
-var retained_first_loop: Node2D
+var retained_first_once
+var retained_first_loop
 var retained_repeat_segments: Array = []
 var retained_rest_segments: Array = []
 var retained_recovery_sources: Dictionary = {}
@@ -339,8 +339,8 @@ func _clear_retained_segments() -> void:
     retained_recovery_rests.clear()
 
 func _new_retained_segment(kind: String, variant: String,
-        context: Dictionary = {}) -> Node2D:
-    var segment: Node2D = RetainedSegment.new()
+        context: Dictionary = {}):
+    var segment = RetainedSegment.new()
     add_child(segment)
     segment.call("configure",self,kind,variant,context)
     return segment
@@ -784,7 +784,7 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
             continue
         var source_clock: float = visual_scroll_beat-pass_start-play_from_beat
         var source_shift: float = playhead_x+(pass_start-visual_scroll_beat)*density
-        var segment: Node2D
+        var segment
         if _source_overlaps_preparation(pass_start):
             segment = retained_recovery_sources.get(pass_start)
             if segment == null:
