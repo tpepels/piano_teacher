@@ -345,13 +345,23 @@ func _practice_context_before(at: float, stride: float) -> Dictionary:
         at, stride, timeline.measures, practice_timeline["gap"])
 
 func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
-        pass_index: int = 0, pass_start: float = 0.0) -> void:
+        pass_index: int = 0, pass_start: float = 0.0,
+        canvas: CanvasItem = null, retained_width: float = 0.0,
+        retained_variant: String = "") -> RenderPass:
+    var target: CanvasItem = canvas if canvas != null else self
     var frame: RenderPass = _new_paint_frame(camera_clock,playhead_x,gap,pass_index,pass_start)
+    if not retained_variant.is_empty():
+        # Source-space compilation is independent of today's scroll, copies,
+        # preparations, and frontend state polling.
+        frame.score_loop_enabled = retained_variant != "once"
+        frame.preparation_history = {}
+        frame.current_preparation = {}
+        layout.set_viewport(Vector2(retained_width,size.y))
     var current_preparation: Dictionary = frame.current_preparation
     var font: Font = ThemeDB.fallback_font
     var current: float = timeline.musical_beat(camera_clock,play_from_beat)
     var left: float = current-playhead_x/timeline.pixels_per_beat
-    var right: float = left+size.x/timeline.pixels_per_beat
+    var right: float = left+(retained_width if retained_width>0.0 else size.x)/timeline.pixels_per_beat
     var previous_measure: Dictionary = {}
     if pass_index>0:
         previous_measure = _practice_context_before(pass_start,float(practice_timeline["stride_beats"]))
@@ -378,16 +388,16 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
         if not target_boundary and not (first and pass_index>0):
             var barline: Dictionary = layout.barline_geometry(measure,camera_clock,playhead_x,gap,play_from_beat)
             if not barline.is_empty() and float(barline["x"])>=-gap*2.0 and float(barline["x"])<=size.x+gap*2.0:
-                context_painter.paint_barline(self,frame,barline,gap)
+                context_painter.paint_barline(target,frame,barline,gap)
         var meter_right_limit := INF
         if target_boundary or (first and pass_index>0):
             var incoming: Variant = current_preparation["measure"].get("right_barline") if target_boundary else measure.get("left_barline")
             var mark: Dictionary = incoming if incoming is Dictionary else {"style":"regular","repeat":""}
             meter_right_limit = context_painter.barline_left_limit(
                 BarlineLayout.project(at,timeline,camera_clock,playhead_x,play_from_beat,gap),mark,gap)
-        var crowded_meter: bool = context_painter.paint_context(self,frame,measure,previous_measure,x,gap,opening,meter_right_limit)
+        var crowded_meter: bool = context_painter.paint_context(target,frame,measure,previous_measure,x,gap,opening,meter_right_limit)
         if not first and not crowded_meter and x>=0.0 and x<=size.x:
-            draw_string(font,Vector2(x+gap*.4,layout.staff_center("right")-gap*4.3),
+            target.draw_string(font,Vector2(x+gap*.4,layout.staff_center("right")-gap*4.3),
                 str(int(measure.get("number",0))),HORIZONTAL_ALIGNMENT_LEFT,-1,11,DIM_INK)
         previous_measure = measure
     # The actual ending of the last measure has its own terminal barline.
@@ -396,13 +406,14 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
         camera_clock,playhead_x,gap,play_from_beat)
     if not score_loop_enabled and not terminal.is_empty() and float(terminal["x"]) >= -gap*2.0 and \
             float(terminal["x"]) <= size.x+gap*2.0:
-        context_painter.paint_barline(self,frame,terminal,gap)
-    context_painter.paint_volta_endings(self,frame,left,right,camera_clock,playhead_x,gap)
+        context_painter.paint_barline(target,frame,terminal,gap)
+    context_painter.paint_volta_endings(target,frame,left,right,camera_clock,playhead_x,gap)
     # Source geometry must already exist before this frame. Rebuilding
     # glyph spacing during a scroll is forbidden: it stalls the musical UI.
     if layout.cached_offsets_gap < 0.0 or absf(layout.cached_offsets_gap-gap) > .001:
         push_error("Static engraving cache is stale; reprepare before playback")
-        return
+        layout.set_viewport(size)
+        return frame
     var head_offsets: Dictionary = layout.cached_head_offsets
     var beam_data: Dictionary = beam_plan(gap, camera_clock,
         playhead_x, head_offsets,frame)
@@ -417,28 +428,31 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
         var staff: String = str(event.get("staff","right"))
         var ink: Color = frame.event_ink(layout,event)
         if str(event.get("kind","")) == "note":
-            var members: Array = symbols.paint_engraved_chord(self,frame,event,x,gap,ink,
+            var members: Array = symbols.paint_engraved_chord(target,frame,event,x,gap,ink,
                 beam_stems.get(str(event.get("id","")), {}))
             if not members.is_empty():
                 for id in members:
                     compound_ids[id] = true
                 frame.visible_symbols += members.size()
                 continue
-            symbols.paint_note(self,frame,event,x,gap,ink,
+            symbols.paint_note(target,frame,event,x,gap,ink,
                 beam_stems.get(str(event.get("id", "")), {}),
                 float(head_offsets.get(str(event.get("id", "")), 0.0)))
         else:
-            symbols.paint_rest(self,frame,x,layout.rest_y(event,gap),
+            symbols.paint_rest(target,frame,x,layout.rest_y(event,gap),
                 str(event.get("note_type","quarter")),
                 int(event.get("dots",0)),ink,gap)
         frame.visible_symbols += 1
-    symbols.paint_beams(self,frame,beam_data, gap)
-    symbols.paint_ties(self,frame,playhead_x,camera_clock,gap)
-    symbols.paint_slurs(self,frame,playhead_x,camera_clock,gap)
-    symbols.paint_tuplet_brackets(self,frame,camera_clock,playhead_x,gap)
-    context_painter.paint_expressions(self,frame,left,right,camera_clock,playhead_x,gap)
-    context_painter.paint_hairpins(self,frame,left,right,camera_clock,playhead_x,gap)
-    symbols.paint_grace_notes(self,frame,gap)
+    symbols.paint_beams(target,frame,beam_data, gap)
+    symbols.paint_ties(target,frame,playhead_x,camera_clock,gap)
+    symbols.paint_slurs(target,frame,playhead_x,camera_clock,gap)
+    symbols.paint_tuplet_brackets(target,frame,camera_clock,playhead_x,gap)
+    context_painter.paint_expressions(target,frame,left,right,camera_clock,playhead_x,gap)
+    context_painter.paint_hairpins(target,frame,left,right,camera_clock,playhead_x,gap)
+    symbols.paint_grace_notes(target,frame,gap)
+    if not retained_variant.is_empty():
+        layout.set_viewport(size)
+        return frame
     drawn_note_instances.append_array(frame.drawn_note_instances)
     # Across repeated source copies, feedback follows the nearest painted
     # instance of each source identity. Per-copy heads stay in RenderPass.
@@ -450,6 +464,7 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
     frame_scanned_events = frame.scanned_events
     frame_visible_beam_groups = frame.visible_beam_groups
     fingering_pass_clocks.append({"clock":camera_clock,"pass_index":pass_index,"pass_start":pass_start})
+    return frame
 
 func _draw() -> void:
     layout.set_viewport(size)
