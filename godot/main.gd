@@ -175,6 +175,11 @@ func _ready() -> void:
     if use_inprocess:
         inprocess_bus = InProcessBus.new()
         add_child(inprocess_bus)
+        var native_error: String = str(inprocess_bus.get("ready_error"))
+        if not native_error.is_empty():
+            printerr("Embedded Piano Teacher cannot start: " + native_error)
+            get_tree().quit(1)
+            return
     # Apply one device-independent Window scale before creating the controls.
     # Do not enlarge fonts and controls a second time in the layouts.
     _configure_ui_scaling()
@@ -890,6 +895,12 @@ func _poll() -> void:
             state_pending = false
 
 func _process(_delta: float) -> void:
+    if use_inprocess and not native_started and inprocess_bus != null:
+        var native_error: String = str(inprocess_bus.get("ready_error"))
+        if not native_error.is_empty():
+            printerr("Embedded Piano Teacher stopped: " + native_error)
+            get_tree().quit(1)
+            return
     if use_inprocess and not native_started and inprocess_bus != null and inprocess_bus.is_ready():
         native_started = true
         _poll()
