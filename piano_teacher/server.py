@@ -1074,13 +1074,28 @@ class PracticeEngine:
         """Project the current transport snapshot without changing any clocks."""
         phrase = self.plan.active_phrase
         tempo_map = self._active_tempo_map()
-        if tempo_map is not None and self.running and now >= self.run_at:
-            beat = self.play_from_beat + self._elapsed_beat(now-self.run_at)
-            active = next((segment for segment in tempo_map.segments
-                           if beat < segment.end_beat), tempo_map.segments[-1])
+        # The score and its appended automatic rest share a single
+        # run_at-based piecewise clock. After the last authored beat the
+        # semantic preparation measure advances at the selected practice BPM;
+        # never restart nominal-tempo interpolation from the last state poll.
+        forward_gap = (self._preview_loop_pending or
+                       (self.pending_result is not None and self.auto and
+                        self.pending_rewind is None))
+        if tempo_map is not None and now >= self.run_at and (self.running or forward_gap):
+            source_end = phrase.end-phrase.start
+            source_seconds = (self._elapsed_seconds(source_end) -
+                              self._elapsed_seconds(self.play_from_beat))
+            elapsed = now-self.run_at
+            if elapsed <= source_seconds:
+                beat = self.play_from_beat+self._elapsed_beat(elapsed)
+                rate = tempo_map.bpm_at(min(beat, source_end-1e-8))/60.0
+            else:
+                beat = source_end+(elapsed-source_seconds)*self.plan.bpm/60.0
+                rate = self.plan.bpm/60.0
             return (self.visual_offset_beats+beat,
-                    0.0 if self.paused else active.bpm/60.0,
-                    self.visual_offset_beats+phrase.end-phrase.start)
+                    0.0 if self.paused else rate,
+                    self.visual_offset_beats+source_end+
+                    (self.visual_gap_beats if forward_gap else 0.0))
         return self.visual_transport.position(
             now, phrase_length=phrase.end-phrase.start, bpm=self.plan.bpm,
             running=self.running,
@@ -1705,10 +1720,23 @@ class PracticeEngine:
             p, ex, variant, fingerprint=self.fingerprint,
             warmup=self.is_builtin_warmup, lesson_steps=lesson_steps)
         tempo_map = self._active_tempo_map()
+        # Local-zero source timing followed by the explicit practice-BPM
+        # silence. These exact segments are sent to Godot and retained
+        # through the automatic-rest phase with the same run_at timestamp.
+        visual_segments = ()
+        if tempo_map is not None:
+            local_map = tempo_map.from_beat(self.play_from_beat)
+            visual_segments = (*local_map.as_segments(), {
+                "start_beat": local_map.duration_beats,
+                "end_beat": local_map.duration_beats+self.visual_gap_beats,
+                "bpm": float(p.bpm),
+                "start_seconds": local_map.duration_seconds,
+            })
         timing = TimingSnapshot(
             sampled_at=sampled_at, now=now, run_at=self.run_at,
             tempo_segments=(tempo_map.from_beat(self.play_from_beat).as_segments()
                             if tempo_map is not None else ()),
+            visual_tempo_segments=visual_segments,
             mapped_clock_beat=(self._elapsed_beat(now-self.run_at)
                                if tempo_map is not None else None),
             running=self.running, paused=self.paused, auto=self.auto,
