@@ -681,3 +681,91 @@ def test_source_dynamic_cannot_move_to_another_measure(tmp_path):
     plan=TimingPlan("bad-direction-crossbar",original,tuple(events),8)
     with pytest.raises(ValueError,match="direction moved outside original source measure"):
         project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
+
+
+def test_coda_source_triplet_with_one_interior_rest_survives_other_hand_retime(tmp_path):
+    from piano_teacher.research.coda_source_tuplets import (
+        source_tuplet_groups,verify_projected_tuplets)
+    source=ET.fromstring((Path(__file__).parent/
+        "fixtures/research/coda_authored_triplet.musicxml").read_text())
+    rh=source.findall("./part")[0]
+    middle=[note for note in rh.findall("./measure/note")
+            if note.find("time-modification") is not None][1]
+    pitch=middle.find("pitch")
+    assert pitch is not None
+    middle.remove(pitch)
+    middle.insert(0,ET.Element("rest"))
+    fixture=tmp_path/"triplet-with-rest.musicxml"
+    fixture.write_text(ET.tostring(source,encoding="unicode"))
+    piece=load_musicxml(fixture,bpm=80)
+    original=ExerciseVariant("original",Phrase(1,1,1,0,4,piece.notes),
+                             tuple(range(len(piece.notes))))
+    assert len(original.notes)==9
+    transformed=CodaReferenceDotted(True).transform(
+        original,boundaries=piece.bar_boundaries,quantization=12,
+        source_musicxml=piece.source_musicxml)
+    groups=source_tuplet_groups(piece,transformed.timing,factor=1)
+    assert len(groups)==1
+    assert len(groups[0].rests)==1
+    assert groups[0].rests[0].onset==pytest.approx(1/3)
+    assert groups[0].rests[0].end==pytest.approx(2/3)
+    assert transformed.changed_sources
+    assert set(groups[0].source_ids).isdisjoint(transformed.changed_sources)
+    stage=project_coda_score(
+        piece,transformed.timing,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"rest-tuplet"))
+    xml=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    assert len(xml.findall(".//tuplet[@type='start']"))==1
+    assert len(xml.findall(".//tuplet[@type='stop']"))==1
+    with_rest=[n for n in xml.findall(".//note")
+               if n.find("rest") is not None and
+               n.find("time-modification") is not None]
+    assert any(n.findtext("time-modification/actual-notes")=="3"
+               and n.findtext("time-modification/normal-notes")=="2"
+               for n in with_rest)
+    model=artifacts.source_model(stage.selection)
+    assert len(model["notes"])==9
+    assert any(e["kind"]=="rest" and abs(e["beat"]-1/3)<1e-6
+               for e in model["notation_events"])
+    performed=[PlayedNote(n.pitch,stage.tempo_map.seconds_at(n.start),
+                          stage.tempo_map.seconds_at(n.end))
+               for n in stage.variant.notes]
+    assert stage.grade(performed).assessment.clean
+
+
+def test_coda_rest_tuplet_rejects_generated_wrong_rest_voice(tmp_path):
+    from piano_teacher.notation.lesson import build_lesson_score,infer_piece_clefs
+    from piano_teacher.research.coda_source_tuplets import (
+        source_tuplet_groups,verify_projected_tuplets)
+    root=ET.fromstring((Path(__file__).parent/
+        "fixtures/research/coda_authored_triplet.musicxml").read_text())
+    middle=[n for n in root.findall("./part")[0].findall("./measure/note")
+            if n.find("time-modification") is not None][1]
+    middle.remove(middle.find("pitch"))
+    middle.insert(0,ET.Element("rest"))
+    path=tmp_path/"marked-rest.musicxml"
+    path.write_text(ET.tostring(root,encoding="unicode"))
+    piece=load_musicxml(path,bpm=80)
+    variant=ExerciseVariant("original",Phrase(1,1,1,0,4,piece.notes),
+                             tuple(range(len(piece.notes))))
+    plan=OriginalTiming().transform(variant)
+    stage=project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
+    built=build_lesson_score(
+        stage.variant.phrase,boundaries=stage.piece.bar_boundaries,
+        time_signatures=stage.piece.time_signatures,
+        key_signatures=stage.piece.key_signatures,
+        clef_changes=stage.piece.clef_changes,
+        default_clefs=infer_piece_clefs(stage.piece.notes),
+        source_musicxml=stage.piece.source_musicxml,
+        retimed_source=True)
+    groups=source_tuplet_groups(piece,plan,factor=1)
+    root=ET.fromstring(built.musicxml)
+    candidates=[n for n in root.findall(".//note") if
+                n.find("rest") is not None and
+                n.find("time-modification/actual-notes") is not None]
+    assert len(candidates)>=1
+    candidates[0].find("voice").text="999"
+    with pytest.raises(ValueError,match="lost authored tuplet rest timing or voice"):
+        verify_projected_tuplets(
+            groups,ET.tostring(root,encoding="unicode"),
+            built.note_bindings,boundaries=piece.bar_boundaries)
