@@ -38,7 +38,8 @@ func _initialize() -> void:
     check(absf(clock.beat_at(3100)-1.1) < .001, "poll jitter cannot shift rest clock")
     clock.accept({"phase": "playing", "revision": 1, "transport_id": 8}, 6100)
     check(absf(clock.beat_at(6100)-4.1) < .001, "playing keeps the retry clock")
-    clock.accept({"phase": "ready", "revision": 1, "transport_id": 8}, 6200)
-    check(not clock.active, "manual stop cancels the anchor")
+    # Unrelated manual Play must not consume a stale recovery trajectory.
+    clock.accept({"phase": "playing", "revision": 1, "transport_id": 42}, 6200)
+    check(not clock.active, "unrelated transport releases previous retry clock")
     print("RETRY_CAMERA_FAILURES:", failures.size())
     quit(0 if failures.is_empty() else 1)

@@ -35,11 +35,13 @@ func accept(state: Dictionary, sampled_ms: int) -> void:
              or playing_transport >= 0)):
         # A later failed take starts an entirely new, fixed retry trajectory.
         reset()
-    elif not retry_phase and phase != "playing":
+    elif not retry_phase:
+        # Unrelated transport starts (manual Play, seek, another score) must
+        # never inherit the previous retry camera.
         reset()
     var preparation: Variant = state.get("practice_preparation")
     if not retry_phase or not preparation is Dictionary \
-            or not str(preparation.get("phase", "")) in ["reverse", "preparing"]:
+            or not (str(preparation.get("phase", "")) in ["reverse", "preparing"]):
         return
     if active:
         return
