@@ -32,7 +32,12 @@ def reference_quantization(shortest_quarter_length: float, time_numerator: int) 
 def _tick(relative_beat: float, quantization: int) -> int:
     ticks = relative_beat * quantization
     nearest = round(ticks)
-    if not isfinite(ticks) or abs(ticks-nearest) > 1e-7 or nearest < 0:
+    # MatrixScore stores source onsets to eight decimal places.
+    # A genuine 2/7-quarter note is therefore 0.28571429 and yields
+    # a ~3e-7 tick discrepancy at quantization=70. Compare in beat
+    # units at the source's 1e-8 precision; never round a genuinely
+    # off-grid event to an unrelated tick.
+    if not isfinite(ticks) or abs(ticks-nearest)/quantization > 1e-8 or nearest < 0:
         raise ValueError("Source onset/release is not exactly representable on Coda grid")
     return nearest
 
