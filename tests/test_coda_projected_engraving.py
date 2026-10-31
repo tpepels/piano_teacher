@@ -346,3 +346,42 @@ def test_retimed_slur_keeps_its_real_verovio_curve(tmp_path):
              for token in elem.get("class","").split()}
     assert "slur" in classes
     (tmp_path/"retimed-source-slur.svg").write_text(score.pages[0])
+
+
+def test_retimed_source_dynamic_renders_at_new_attack_in_real_svg(tmp_path):
+    from dataclasses import replace
+    from piano_teacher.exercise_contracts import OriginalTiming,TimingPlan
+
+    root=ET.fromstring(SOURCE.read_text())
+    bar=root.findall("./part")[0].findall("./measure")[0]
+    notes=[n for n in bar.findall("note") if n.find("pitch") is not None]
+    direction=ET.Element("direction",placement="below")
+    parent=ET.SubElement(direction,"direction-type")
+    ET.SubElement(ET.SubElement(parent,"dynamics"),"mf")
+    bar.insert(list(bar).index(notes[1]),direction)
+    source=tmp_path/"moving-dynamic.musicxml"
+    source.write_text(ET.tostring(root,encoding="unicode"))
+    piece=load_musicxml(source,bpm=80)
+    original=ExerciseVariant(
+        "original",Phrase(1,1,2,0,8,piece.notes),
+        tuple(range(len(piece.notes))))
+    base=OriginalTiming().transform(original)
+    events=list(base.events)
+    idx=next(i for i,n in enumerate(original.notes)
+             if n.hand=="right" and n.start==1)
+    events[idx]=replace(events[idx],exercise_start=1.5,exercise_end=2)
+    transformed=TimingPlan("moved-dynamic",original,tuple(events),8)
+    stage=project_coda_score(piece,transformed,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"dynamic-model"))
+    written=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    assert written.find(".//direction/direction-type/dynamics/mf") is not None
+    assert int(written.find(".//direction/offset").text)==15120
+    rendered=artifacts.engraving(stage.selection)
+    assert set(rendered.layout["attack_map"])=={
+        n.source_id for n in original.notes}
+    assert rendered.pages
+    svg=ET.fromstring(rendered.pages[0])
+    classes={token for element in svg.iter()
+             for token in element.get("class","").split()}
+    assert "dynam" in classes
+    (tmp_path/"relocated-mf.svg").write_text(rendered.pages[0])

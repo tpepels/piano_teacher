@@ -1,6 +1,6 @@
 name: Coda selected-exercise real engraving
 
-# Short Verovio proof for retimed slurs, authored tuplets, meters, ties and beams.
+# Short Verovio proof for relocated dynamics, retimed slurs, tuplets and source ties.
 on:
   workflow_dispatch:
   push:
