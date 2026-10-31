@@ -37,6 +37,18 @@ CASES=(
         (0,1,(60,64)),(1,1,(62,65)),(2,1,(64,67)),(3,1,(65,69)))),
     ("mixed-with-gap", "parity", (
         (0,.5,(60,)),(.5,.5,(62,)),(2,1,(64,)),(3,1,(65,)))),
+    # Research diagnostics, never counted as proven author parity. The
+    # original backend's quantization formula may round these rhythms.
+    ("sixteenth-runs", "diagnostic", (
+        (0,.25,(60,)),(.25,.25,(62,)),(.5,.25,(64,)),
+        (.75,.25,(65,)),(1,.5,(67,)),(1.5,.5,(69,)),
+        (2,1,(71,)),(3,1,(72,)))),
+    ("quintuplet-spacing", "diagnostic",
+     tuple((2*i/5,2/5,(60+i,)) for i in range(5))
+     + ((2,1,(67,)),(3,1,(69,)))),
+    ("septuplet-spacing", "diagnostic",
+     tuple((2*i/7,2/7,(60+i,)) for i in range(7))
+     + ((2,1,(67,)),(3,1,(69,)))),
 )
 
 
