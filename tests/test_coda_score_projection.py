@@ -336,7 +336,7 @@ def test_coda_rejects_unverified_authored_tuplet_marks(tmp_path):
     ET.SubElement(ratio,"actual-notes").text="3"
     ET.SubElement(ratio,"normal-notes").text="2"
     decorated=replace(piece,source_musicxml=ET.tostring(root,encoding="unicode"))
-    with pytest.raises(ValueError,match="expressive/tuplet/tied"):
+    with pytest.raises(ValueError,match="incomplete or has unowned ratio notes"):
         project_coda_score(decorated,OriginalTiming().transform(variant),
                            reference_family="dotted-rhythms",bpm=80)
 
@@ -410,3 +410,72 @@ def test_coda_slowdown_rejects_partial_source_bar_even_with_meter():
     changed=replace(original,bar_boundaries=(0,3,8))
     with pytest.raises(ValueError,match="incomplete source measures"):
         project_coda_score(changed,result.timing,reference_family="tempo-shaping",bpm=80)
+
+
+def test_coda_complete_source_triplet_survives_independent_voice_transformation(tmp_path):
+    path=Path(__file__).parent/"fixtures/research/coda_authored_triplet.musicxml"
+    piece=load_musicxml(path,bpm=80)
+    assert piece.bar_boundaries==(0,4)
+    original=ExerciseVariant("original",Phrase(1,1,1,0,4,piece.notes),
+                             tuple(range(len(piece.notes))))
+    assert len(original.notes)==10
+    plan=CodaReferenceDotted(True).transform(
+        original,boundaries=piece.bar_boundaries,quantization=12,
+        source_musicxml=piece.source_musicxml)
+    triplet_ids={n.source_id for n in original.notes
+                 if n.hand=="right" and n.start<1-1e-7}
+    assert len(triplet_ids)==3
+    assert not triplet_ids.intersection(plan.changed_sources)
+    assert plan.changed_sources  # a different original voice actually changes
+    stage=project_coda_score(
+        piece,plan.timing,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"tuplets"))
+    score=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    assert len(score.findall(".//time-modification"))>=3
+    starts=score.findall(".//notations/tuplet[@type='start']")
+    stops=score.findall(".//notations/tuplet[@type='stop']")
+    assert len(starts)==1
+    assert len(stops)==1
+    assert starts[0].get("bracket")=="yes"
+    assert starts[0].get("show-number")=="actual"
+    model=artifacts.source_model(stage.selection)
+    assert len(model["notes"])==10
+    for symbol in model["notation_events"]:
+        if symbol["source_id"] in triplet_ids and symbol["is_attack"]:
+            assert symbol["time_modification"]=={"actual":3,"normal":2}
+            assert symbol["note_type"]=="eighth"
+    assert {n["id"] for n in model["notes"]}=={
+        note.source_id for note in piece.notes}
+    performed=[PlayedNote(n.pitch,stage.tempo_map.seconds_at(n.start),
+                          stage.tempo_map.seconds_at(n.end))
+               for n in stage.variant.notes]
+    assert stage.grade(performed).assessment.clean
+
+
+def test_coda_rejects_partial_or_retimed_authored_triplet(tmp_path):
+    path=Path(__file__).parent/"fixtures/research/coda_authored_triplet.musicxml"
+    piece=load_musicxml(path,bpm=80)
+    original=ExerciseVariant("original",Phrase(1,1,1,0,4,piece.notes),
+                             tuple(range(len(piece.notes))))
+    plan=OriginalTiming().transform(original)
+    root=ET.fromstring(piece.source_musicxml)
+    last=root.find(".//tuplet[@type='stop']")
+    assert last is not None
+    for parent in root.iter():
+        if last in parent:
+            parent.remove(last)
+            break
+    partial=replace(piece,source_musicxml=ET.tostring(root,encoding="unicode"))
+    with pytest.raises(ValueError,match="incomplete or has unowned ratio notes"):
+        project_coda_score(partial,plan,reference_family="dotted-rhythms",bpm=80)
+    moved=list(plan.events)
+    idx=next(i for i,n in enumerate(original.notes)
+             if n.hand=="right" and abs(n.start-1/3)<1e-7)
+    moved[idx]=replace(moved[idx],exercise_start=moved[idx].exercise_start+.05)
+    from piano_teacher.exercise_contracts import TimingPlan
+    unsafe=TimingPlan("shift-tuplet",original,tuple(moved),4)
+    with pytest.raises(ValueError,match="cannot remap a source tuplet"):
+        project_coda_score(piece,unsafe,reference_family="dotted-rhythms",bpm=80)
+    with pytest.raises(ValueError,match="cannot remap a source tuplet"):
+        project_coda_score(piece,CodaReferenceSlowdown(2).transform(original).timing,
+                           reference_family="tempo-shaping",bpm=80)
