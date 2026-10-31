@@ -218,3 +218,40 @@ segments is a key open mismatch. Unhandled source rests in tuplets,
 nested/cross-measure tuplets, advanced directions and physical
 Godot/MIDI remain open. All work direct on main, research-only,
 short CI jobs; source and original mastery unchanged.
+
+## 2026-10-31 — source written tie vs sounding MIDI attack checkpoint
+
+New `coda_written_tie_segments.py`: a separate source written
+segment graph and source-owned sounding attack timeline, verified
+against every actual generated notehead. In the checked-in
+parallel tie fixture the two same-pitch source voices remain
+distinct; one may safely shorten a continuation without another
+graded attack. A corrupted tie endpoint or false MIDI reattack
+fails. Research-only.
+
+One authored **interior rest** can be retained within an unchanged
+3:2/5:4/7:4 eighth-note group with independent same-voice
+generated MusicXML rest timing validation. Unsupported multiple
+or boundary rests remain fail-closed. Other voices can be
+transformed.
+
+Bounded actual Verovio suite **20/20**:
+https://github.com/tpepels/piano_teacher/actions/runs/41202109324;
+SVG artifact `13042897860`. Dedicated Coda contracts
+**111 passed**: run `41202193428`.
+General fast CI became MIDI-only in a separate workflow
+change; do not revert it to restore research tests.
+New independent short Coda path-scoped CI workflow runs
+these tests.
+
+Pinned unmodified author backend on six MusicXML score samples
+now has 12/12 exact source MMR voices but only 23/60 exact
+raw exercise event sequences; 33 mismatches and four
+upstream-none. Explicit reference report artifact
+`13042587409`, run `41201534395`. Crucial: author
+`music21` written-event output and one source sounding MIDI
+attack are different representations, so raw tuple differences
+are not automatically equivalent nor accepted. Next research
+work should distinguish written segmentation vs sounding
+playback on upstream outputs before applying algorithm
+parity labels. Gate 2 incomplete; no production enable.

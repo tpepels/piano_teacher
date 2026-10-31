@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-31",
+  "research_only": true,
+  "author_revision": "a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
+  "original_score_immutable": true,
+  "tie_contract": {
+    "source_fixture": "tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml",
+    "voices": 2,
+    "source_pitch": 60,
+    "source_written_segments": 4,
+    "sounding_source_attacks": 2,
+    "first_voice_source": [
+      [
+        0,
+        4
+      ],
+      [
+        4,
+        6
+      ]
+    ],
+    "first_voice_shortened": [
+      [
+        0,
+        4
+      ],
+      [
+        4,
+        5.5
+      ]
+    ],
+    "second_voice": [
+      [
+        2,
+        4
+      ],
+      [
+        4,
+        5
+      ]
+    ],
+    "failed_corruption_controls": [
+      "second engraved notehead marked MIDI attack",
+      "wrong continuation tied role",
+      "missing sounding owner"
+    ]
+  },
+  "rest_tuplets": {
+    "supported_ratios": [
+      "3:2",
+      "5:4",
+      "7:4"
+    ],
+    "scope": "one unchanged interior authored rest per complete same-voice eighth-note group",
+    "real_source_fixtures": [
+      "tests/fixtures/research/coda_triplet_interior_rest.musicxml",
+      "tests/fixtures/research/coda_group_5_4_interior_rest.musicxml",
+      "tests/fixtures/research/coda_group_7_4_interior_rest.musicxml"
+    ],
+    "unsupported": [
+      "first or last rest in group",
+      "two or more group rests",
+      "nested or time-changed groups"
+    ],
+    "preserves_sound_attack_count": true
+  },
+  "reference": {
+    "six_source_cases": 6,
+    "source_voice_mmr_exact": 12,
+    "source_voice_mmr_total": 12,
+    "algorithm_compared": 60,
+    "algorithm_exact": 23,
+    "algorithm_mismatch": 33,
+    "upstream_none": 4,
+    "case_status": "diagnostic-only",
+    "comparison_basis": "author music21 written events versus adapter sounding events",
+    "run": "https://github.com/tpepels/piano_teacher/actions/runs/41201534395",
+    "artifact_id": 13042587409
+  },
+  "real_engraving": {
+    "passed": 20,
+    "run": "https://github.com/tpepels/piano_teacher/actions/runs/41202109324",
+    "artifact_id": 13042897860
+  },
+  "coda_contract": {
+    "passed": 111,
+    "run": "https://github.com/tpepels/piano_teacher/actions/runs/41202193428",
+    "separate_workflow": ".github/workflows/coda-research-contract-smoke.yml"
+  },
+  "unverified": [
+    "three or more segment ties",
+    "arbitrary source tuplets",
+    "physical MIDI",
+    "native Godot on selected Coda exercise",
+    "reference parity on real scores",
+    "pedagogical effectiveness"
+  ],
+  "gate_2_complete": false
+}

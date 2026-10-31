@@ -757,3 +757,116 @@ text/pedal/hairpin directions, or full MusicXML/music21 tie-event
 equivalence. Native Godot physical framebuffer and physical MIDI
 verification of these new research projections are also outstanding.
 **Coda Gate 2 remains incomplete and research-only.**
+
+## Separate written tie segments, rest-bearing tuplets and broader author diagnostic — 2026-10-31
+
+### An explicit two-clock tie contract
+
+`piano_teacher/research/coda_written_tie_segments.py` establishes
+`WrittenTieSegment` and `WrittenTieChain` as immutable research
+data. Each written MusicXML note segment has its own original XML
+source ID, interval, voice and tie start/stop role. The **one**
+imported/graded sounding source ID belongs to the beginning of
+the chain. A generated `CodaProjectedStage.written_ties` retains
+both **original** and **projected** written segments for verification
+without introducing a new MIDI event.
+
+The real independent parallel-tie fixture has two voices on the
+same pitch C4. Original voice 1 has written segments 0..4 and 4..6
+for one sounding 0..6 attack. Original voice 2 has written segments
+2..4 and 4..5 for a different sounding 2..5 attack. A safely
+shortened voice-1 continuation becomes 4..5.5 while its first
+0..4 segment and sounding attack remain unchanged. Generated
+MusicXML must have exactly the expected segments, written
+durations/pitches, tie/tied roles and the correct `is_attack`
+boolean on each glyph; a false second attack or changed tie
+stop fails validation. The source piece remains immutable.
+
+The contract deliberately supports only complete two-segment ties
+over one original internal measure boundary with an unchanged
+start and unstyled source connectors. It does not reinterpret
+the author's duplicated/off-grid written note events as correct
+MIDI playback. Source tie continuations are *not* independent
+MIDI attacks.
+
+### Authored rests inside tuplets
+
+The strict Coda tuplets adapter now supports **one interior
+written rest** in complete, unchanged eighth-note 3:2, 5:4
+and 7:4 groups. The original rest is independent of the pitched
+attack set; its source XML remains a written rest and it never
+becomes a graded note. The generated MusicXML must preserve
+its beat, duration, ratio and **the same generated voice as the
+group's source-owned noteheads**. Explicit notehead, time-
+modification, tuplet start/stop and original bracket attribute
+checks remain in force. Other voices may undergo Coda rhythm
+rewriting. Missing or misvoiced rests fail; endpoints with
+rest marks, multiple interior rests, nested groups and retimed
+tuplet members remain rejected.
+
+Real Verovio exercised source-authored middle rests for all
+three supported ratios, in addition to the earlier tie/slur/
+dynamic source notation and WAV/feedback samples.
+
+### Six genuine MusicXML fixtures compared against original Coda
+
+The bounded original backend still uses the exact pinned
+`annieetang/coda_backend@a4eb85dfc2bd418818ca9ff775c0a11ccccb3530`.
+`scripts/probe_coda_upstream_scores.py` compares the actual
+three 128-pitch MMR arrays for each source voice and tries five
+reference operations for each of these six source samples:
+
+1. Two parallel tied voices
+2. Authored source beams
+3. First two bars of a longer multipage source score
+4. Complete source triplet score
+5. Source triplet with interior rest
+6. Authored 3/4 → 2/4 changing-meter source
+
+**12/12 sampled source-voice MMRs matched exactly.**
+Of 60 attempted author-versus-adapter output sequences,
+**23 exact matches**, **33 different sequences**, and **4
+upstream-none**. The report records, for tied notes, the
+distinct source written segments and sounding attack IDs.
+For this sample, reference event tuples are `music21`
+*written* events, whereas the research adapter reports
+canonical *sounding MIDI attacks*. Raw disagreement in
+those event representations does **not** by itself explain
+whether two musical performances are equivalent.
+No differing output was waived as a parity success.
+
+The four simple, declared reference parity cases remain
+green. The more complex source scores are diagnostics only,
+not passed reference cases. The initial 3-score reference
+comparison had 9/30 exact; this expanded 6-score report has
+23/60 exact. The expanded denominator must not be
+misrepresented as a software regression.
+
+### Bounded checks and evidence
+
+- **Written tie, source rest and projection contracts:** 
+  `111 passed`, dedicated Coda gate
+  https://github.com/tpepels/piano_teacher/actions/runs/41202193428
+  (under 3 seconds for tests).
+- **Actual Coda SVG/WAV/live-feedback tests:**
+  `20 passed` at
+  https://github.com/tpepels/piano_teacher/actions/runs/41202109324,
+  retained artifact `13042897860`. This includes written
+  parallel-tie reduction and rest-bearing 3:2/5:4/7:4 groups.
+- **Original author six-score differential:**
+  https://github.com/tpepels/piano_teacher/actions/runs/41201534395,
+  retained artifact `13042587409`.
+- After a separate commit changed general fast CI to a
+  desktop/MIDI-only scope, the short
+  `.github/workflows/coda-research-contract-smoke.yml`
+  was added instead of undoing that independent change.
+  Coda source/timeline tests still run on Coda paths, and
+  the real Verovio test remains a bounded separate job.
+
+**Open:** arbitrary/three-plus-segment ties, written note
+reduction by the original author backend, rest-bearing tuplet
+endpoints/multiple rests, nested/retimed tuplets, arbitrary
+directions, physical MIDI/native Godot results for this
+research stage, wide repertoire and real teaching outcomes.
+No production Coda lesson family was enabled. Gate 2 is
+**not complete**.
