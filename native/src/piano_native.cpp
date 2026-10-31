@@ -7,7 +7,14 @@
 #include <godot_cpp/godot.hpp>
 #include <cstring>
 #include <cstdlib>
+#include <dlfcn.h>
 #include <utility>
+
+#define PIANO_STRINGIFY2(x) #x
+#define PIANO_STRINGIFY(x) PIANO_STRINGIFY2(x)
+static constexpr const char *PYTHON_SHARED_OBJECT =
+    "libpython" PIANO_STRINGIFY(PY_MAJOR_VERSION) "."
+    PIANO_STRINGIFY(PY_MINOR_VERSION) ".so.1.0";
 
 using namespace godot;
 
@@ -63,6 +70,27 @@ String PianoNative::failure_message() {
 }
 
 void PianoNative::initialize_python() {
+    // Godot loads GDExtensions with dlopen(RTLD_LOCAL). A linked libpython
+    // therefore is not visible to Python's extension modules (math, rtmidi,
+    // etc.), which fail with undefined symbols such as PyFloat_Type.
+    // Promote the already loaded CPython SONAME into the global symbol scope
+    // before Py_InitializeFromConfig imports any extension modules.
+    // Keep the handle for the lifetime of the process.
+    static void *python_global_handle = nullptr;
+    if (python_global_handle == nullptr) {
+        python_global_handle = dlopen(PYTHON_SHARED_OBJECT,
+                                     RTLD_NOW | RTLD_GLOBAL | RTLD_NOLOAD);
+        if (python_global_handle == nullptr)
+            python_global_handle = dlopen(PYTHON_SHARED_OBJECT,
+                                         RTLD_NOW | RTLD_GLOBAL);
+        if (python_global_handle == nullptr) {
+            const char *details = dlerror();
+            std::lock_guard<std::mutex> guard(mutex_);
+            failure_ = std::string("Cannot publish embedded CPython symbols: ") +
+                       (details ? details : PYTHON_SHARED_OBJECT);
+            return;
+        }
+    }
     if (!Py_IsInitialized()) {
         PyConfig config;
         PyConfig_InitPythonConfig(&config);

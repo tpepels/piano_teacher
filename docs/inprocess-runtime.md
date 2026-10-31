@@ -73,6 +73,13 @@ repeats this preflight automatically when the binary or manifest changes.
 An unregistered extension must fail visibly at startup rather than
 display an empty MIDI library.
 
+Godot loads GDExtensions with local dynamic-symbol visibility. Embedded
+CPython must promote its shared library to `RTLD_GLOBAL` before importing
+Python modules such as `math`, `rtmidi`, or `verovio` that link against
+`Py*` symbols. Otherwise the class registers but `/library` fails during
+Python initialization with undefined-symbol errors. The native bridge now
+performs that promotion explicitly.
+
 If the Godot extension class is missing after a successful C++ build,
 run `bash scripts/verify-native-bridge.sh`. The diagnostic distinguishes
 a missing manifest, a dynamic-loader error (including `libpython`

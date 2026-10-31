@@ -28,6 +28,9 @@ def test_embedded_worker_queue_has_no_socket_or_server_dependencies():
     assert "std::deque<Reply>" in header
     assert "Py_InitializeFromConfig" in cpp
     assert "PyGILState_Ensure" in cpp
+    # GDExtension uses RTLD_LOCAL; CPython .so modules need Py* symbols globally.
+    assert "RTLD_GLOBAL" in cpp and "RTLD_NOLOAD" in cpp
+    assert "PYTHON_SHARED_OBJECT" in cpp
     assert "ClassDB::register_class<PianoNative>" in cpp
     assert not any(word in cpp for word in ("socket(", "sendto(", "recvfrom(", "HTTPClient", "listen("))
 
