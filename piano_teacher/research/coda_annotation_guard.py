@@ -37,9 +37,16 @@ class SourceBarTie:
 
 
 @dataclass(frozen=True)
+class SourceDynamic:
+    hand: str
+    measure: int
+    symbol: str
+
+
+@dataclass(frozen=True)
 class AnnotationObligations:
     notes: tuple[SourceNoteMarks, ...]
-    dynamics: tuple[str, ...]
+    dynamics: tuple[SourceDynamic, ...]
     ties: tuple[SourceBarTie, ...]
 
 
@@ -78,7 +85,13 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
                         raise ValueError("Unsupported Coda source dynamics")
                     if child.find("{*}offset") is not None:
                         raise ValueError("Coda cannot move an offset source direction")
-                    dynamics.append(_tag(names[0]))
+                    staff=child.findtext("{*}staff","1")
+                    owners={n.hand for n in timing.original.notes
+                            if n.voice.startswith(f"xml-p{pi}-s{staff}-")}
+                    if len(owners)!=1:
+                        raise ValueError("Ambiguous source dynamic staff/hand ownership")
+                    dynamics.append(SourceDynamic(next(iter(owners)),mi+1,
+                                                  _tag(names[0])))
                 if tag != "note":
                     continue
                 saw_note = True
@@ -253,7 +266,16 @@ def verify_annotation_projection(obligations: AnnotationObligations,
                         raise ValueError("Coda beam group has an unmarked middle")
                 if opened:
                     raise ValueError("Coda beam group has no ending")
-    actual_dynamics=tuple(_tag(m) for m in
-        generated.findall(".//direction/direction-type/dynamics/*"))
+    actual_dynamics=[]
+    for part in generated.findall("{*}part"):
+        hand={"RH":"right","LH":"left"}.get(part.get("id"))
+        for measure in part.findall("{*}measure"):
+            number=int(measure.get("number"))
+            for direction in measure.findall("{*}direction"):
+                for m in direction.findall("{*}direction-type/{*}dynamics/*"):
+                    offset=direction.findtext("{*}offset","0")
+                    if abs(float(offset))>1e-7:
+                        raise ValueError("Coda changed an anchored source dynamic offset")
+                    actual_dynamics.append(SourceDynamic(hand,number,_tag(m)))
     if Counter(actual_dynamics)!=Counter(obligations.dynamics):
-        raise ValueError("Coda projected source dynamics inconsistently")
+        raise ValueError("Coda projected source dynamics into another hand or measure")
