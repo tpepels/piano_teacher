@@ -25,6 +25,10 @@ def test_timeline_moves_at_exact_tempo_even_without_piano(tmp_path, monkeypatch)
         assert engine.state()["phase"] == "count_in"
         assert engine.state()["beat"] == 0
         assert engine.state()["count_in_beats"] == pytest.approx(2.5)
+        # Godot and MIDI assessment receive the same absolute monotonic
+        # run_at. No state response is permitted to re-zero the display.
+        state = engine.state()
+        assert state["visual_run_at_ms"] == pytest.approx(engine.run_at * 1000.0)
         downbeat = engine.run_at
         assert downbeat-t[0] <= 4.0
         t[0] = downbeat - .1
