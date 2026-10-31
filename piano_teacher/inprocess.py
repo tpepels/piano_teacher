@@ -20,6 +20,14 @@ class EngineCommands:
         self.engine = engine if engine is not None else PracticeEngine()
         self.owned = engine is None
 
+    def tick(self) -> int:
+        """Existing native worker advances the engine on an independent timer.
+
+        Return milliseconds until its next wakeup. Nothing here accesses
+        Godot or creates another thread/transport.
+        """
+        return self.engine.advance_clock()
+
     @staticmethod
     def _reply(status: int, value: object) -> tuple[int, bytes]:
         return status, json.dumps(value, separators=(",", ":")).encode("utf-8")
