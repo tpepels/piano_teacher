@@ -62,3 +62,25 @@ def test_shaped_tempo_then_full_rest_has_no_new_time_origin(tmp_path, monkeypatc
         assert replay["play_from_beat"] == 0
     finally:
         engine.db.close()
+
+def test_failed_shaped_take_rewinds_from_the_true_visual_position(tmp_path, monkeypatch):
+    clock = [100.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
+    notes = tuple(Note(i, i+.25, 60+i, 0, 0, "right") for i in (0, 2, 4, 6))
+    phrase = Phrase(1, 1, 2, 0, 8, notes)
+    piece = Piece("Shaped failed take", 80, notes, (phrase,),
+                  bar_boundaries=(0, 4, 8),
+                  time_signatures=((0, 4, 4),))
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    engine.plan = LearningPlan(piece, tempo_strategy="two-phase-tempo")
+    engine.plan.bpm = 80
+    engine.midi.port = object()  # Exercise grading without physical MIDI events.
+    try:
+        engine.start()
+        assert not engine.preview_only
+        clock[0] = engine.run_at + 6.75 + .25
+        result = engine.state()
+        assert result["phase"] == "recovering"
+        assert engine._visual_rewind_from == pytest.approx(8+.25*80/60)
+    finally:
+        engine.db.close()
