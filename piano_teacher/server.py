@@ -18,7 +18,7 @@ from .exercise_strategies import resolve_strategy
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection, validate_png_width
 from .application.midi_connection import MidiConnection, MidiNotice
 from .application.listen_session import ListenSelection, ListenSession
-from .practice import Recorder, evaluate
+from .practice import Recorder
 from .importing.pieces import import_piece
 from .rendering.legacy.engraving import EngravedScore
 from .fingering import FingeringService
@@ -29,8 +29,7 @@ from .warmups import is_warmup
 from .application.rolling_recovery import plan_rolling_recovery
 from .music import Phrase, source_note_id
 from .notation.practice_timeline import preparation_measure_descriptor
-from .lesson_timing import lead_in_beats, preparation_meter
-from .measure_grid import phrase_grid, next_chunk_end, chunk_start_at_end, bar_number_at
+from .measure_grid import phrase_grid
 from .course_navigation import locate_course_section
 from .state_projection import (
     ActivitySnapshot, GuidedSnapshot, PhaseSnapshot,
