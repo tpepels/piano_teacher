@@ -20,6 +20,14 @@ def _name(element: ET.Element) -> str:
 
 
 @dataclass(frozen=True)
+class CodaTupletRest:
+    source_id: str
+    onset: float
+    end: float
+    measure: int
+
+
+@dataclass(frozen=True)
 class CodaTupletGroup:
     source_ids: tuple[str, ...]
     actual: int
@@ -27,6 +35,7 @@ class CodaTupletGroup:
     number: str
     start_attrs: tuple[tuple[str, str], ...]
     stop_attrs: tuple[tuple[str, str], ...]
+    rests: tuple[CodaTupletRest, ...] = ()
 
 
 def source_tuplet_groups(piece: Piece, timing: TimingPlan, *,
@@ -53,10 +62,11 @@ def source_tuplet_groups(piece: Piece, timing: TimingPlan, *,
         marks=note.findall("{*}notations/{*}tuplet")
         ratio=note.find("{*}time-modification")
         if ratio is not None or marks:
-            if (item.is_rest or factor!=1 or item.source_id not in source
-                    or any(abs(a-b)>1e-7 for a,b in (
+            if (factor!=1 or (not item.is_rest and (
+                    item.source_id not in source or
+                    any(abs(a-b)>1e-7 for a,b in (
                         (source[item.source_id].start,exercise[item.source_id].start),
-                        (source[item.source_id].end,exercise[item.source_id].end)))):
+                        (source[item.source_id].end,exercise[item.source_id].end))))):
                 raise ValueError("Coda cannot remap a source tuplet's timed event")
             actual=int(ratio.findtext("{*}actual-notes","0")) if ratio is not None else 0
             normal=int(ratio.findtext("{*}normal-notes","0")) if ratio is not None else 0
