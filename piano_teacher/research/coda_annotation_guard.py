@@ -113,6 +113,10 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
                                     or set(mark.attrib)-{"number","type","placement"}):
                                 raise ValueError("Unsupported source slur markup")
                             slurs.append(tuple(sorted(mark.attrib.items())))
+                        elif _tag(mark)=="tuplet":
+                            # The separate strict Coda source-tuplet gate
+                            # verifies complete groups and generated marks.
+                            continue
                         elif _tag(mark)=="tied":
                             # Sounding tie chains are verified as one
                             # original source attack below, not as separate

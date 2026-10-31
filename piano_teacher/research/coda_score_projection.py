@@ -21,6 +21,9 @@ from ..exercise_contracts import ConstantTempo, TempoMap, TimingPlan, assess_tim
 from ..exercise_generator import ExerciseVariant
 from ..music import Piece, Phrase
 from ..practice import PlayedNote
+from .coda_source_tuplets import (
+    source_tuplet_groups, verify_projected_tuplets,
+)
 from ..notation.lesson import build_lesson_score, infer_piece_clefs
 from .coda_annotation_guard import (
     source_annotation_obligations, verify_annotation_projection,
@@ -32,7 +35,7 @@ _ALLOWED_MEASURE = frozenset({
 })
 _ALLOWED_NOTE = frozenset({
     "pitch", "rest", "duration", "voice", "type", "dot", "staff", "chord",
-    "accidental", "stem", "notations", "beam", "tie",
+    "accidental", "stem", "notations", "beam", "tie", "time-modification",
 })
 _ALLOWED_ATTRIBUTES = frozenset({
     "divisions", "key", "time", "clef", "staves",
@@ -211,6 +214,7 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
     else:
         factor=1
     obligations = source_annotation_obligations(piece,timing,factor=factor)
+    tuplet_groups = source_tuplet_groups(piece,timing,factor=factor)
     grid,meters,keys,clefs=_original_metadata(piece,original,timing,factor)
     new_phrase=timing.exercise_phrase
     new_phrase=replace(new_phrase,first_bar=1,last_bar=len(grid)-1)
@@ -229,7 +233,7 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
         bar_boundaries=grid,time_signatures=meters,key_signatures=keys,
         clef_changes=clefs,barlines=bars,source_musicxml=source_xml,
         fingering_plan=None)
-    if obligations.notes or obligations.dynamics:
+    if obligations.notes or obligations.dynamics or obligations.ties or tuplet_groups:
         preview = build_lesson_score(
             new_phrase,boundaries=projected_piece.bar_boundaries,
             time_signatures=projected_piece.time_signatures,
@@ -241,6 +245,8 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
             retimed_source=True)
         verify_annotation_projection(obligations,preview.musicxml,
                                      preview.note_bindings)
+        verify_projected_tuplets(tuplet_groups,preview.musicxml,
+                                 preview.note_bindings)
     variant=ExerciseVariant(
         timing.name,new_phrase,timing.original.source_indices)
     digest=sha256((piece.source_musicxml+timing.name+
