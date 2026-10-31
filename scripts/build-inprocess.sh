@@ -34,4 +34,11 @@ echo "Building with CPython ABI $PYTHON_VERSION"
 test -s godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
 cp native/piano_bridge.gdextension.in godot/native/piano_bridge.gdextension
 printf '%s\n' "$PYTHON_VERSION" > godot/native/python-abi.txt
-echo "Built Godot/CPython extension. Now run: ./run-inprocess.sh"
+# Local developer builds must validate runtime registration, not just link.
+# CI's compile-only environment has no Godot executable; its separate runtime
+# smoke job verifies the produced artifact with Godot 4.7.
+if [[ "${PIANO_SKIP_NATIVE_SMOKE:-0}" != "1" ]] && \
+  { command -v godot >/dev/null 2>&1 || command -v godot4 >/dev/null 2>&1; }; then
+  bash scripts/verify-native-bridge.sh
+fi
+echo "Built and prepared Godot/CPython extension. Run: ./run-inprocess.sh"

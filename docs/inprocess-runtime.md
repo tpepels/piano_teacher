@@ -65,8 +65,22 @@ bash scripts/build-inprocess.sh
 ```
 
 The build script compiles the extension and generates the manifest only
-after a successful native compile. The existing Godot project will not
-attempt to load an absent binary.
+after a successful native compile. On a developer machine with Godot, it
+also imports the project and runs `scripts/verify-native-bridge.sh`.
+That check must register `PianoNative`, initialize embedded CPython,
+and return `/library` successfully before the UI opens. The launcher
+repeats this preflight automatically when the binary or manifest changes.
+An unregistered extension must fail visibly at startup rather than
+display an empty MIDI library.
+
+If the Godot extension class is missing after a successful C++ build,
+run `bash scripts/verify-native-bridge.sh`. The diagnostic distinguishes
+a missing manifest, a dynamic-loader error (including `libpython`
+dependencies), an unregistered class, and a Python engine initialization
+or library error. The initial `godot --headless --editor --import`
+step is required when a generated `.gdextension` has not yet entered
+Godot's resource index. `./run.sh` remains the fallback until the
+new runtime passes a physical MIDI session.
 
 Release assembly requires a self-contained Python distribution with
 all project runtime wheels installed, a matching Godot binary and Node

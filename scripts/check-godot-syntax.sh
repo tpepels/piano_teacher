@@ -15,6 +15,7 @@ fi
 for script in \
   res://main.gd \
   res://inprocess_bus.gd \
+  res://native_bridge_smoke.gd \
   res://inprocess_request.gd \
   res://score_asset_http.gd \
   res://demo_player.gd \

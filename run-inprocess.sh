@@ -30,4 +30,18 @@ if [[ -n "$PY_LIB" ]]; then
 fi
 export PIANO_TEACHER_PYTHON_HOME="$PY_BASE"
 export PYTHONPATH="$PWD:$PY_SITE${PYTHONPATH:+:$PYTHONPATH}"
+# The .gdextension is generated after checkout, so Godot may have a stale
+# extension index even though both files exist. Verify once per native build
+# before opening the UI; never show an empty library as a "working" app.
+stamp=godot/.godot/piano-native-verified
+binary=godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
+manifest=godot/native/piano_bridge.gdextension
+if [[ ! -f "$stamp" || "$binary" -nt "$stamp" || "$manifest" -nt "$stamp" || \
+      godot/native_bridge_smoke.gd -nt "$stamp" ]]; then
+  if ! GODOT_BIN="$GODOT" bash scripts/verify-native-bridge.sh; then
+    echo "Embedded Piano Teacher failed its startup/library check." >&2
+    echo "The existing ./run.sh remains available while this is repaired." >&2
+    exit 1
+  fi
+fi
 exec "$GODOT" --path godot -- --in-process "$@"
