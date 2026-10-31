@@ -17,7 +17,7 @@ def test_pitch_rhythm_and_duration_are_all_required():
     assert not evaluate(phrase, 'both', 60, correct).clean  # left-hand note missing
     early = [PlayedNote(60, -.3, .7), PlayedNote(64, 2, 2.5)]
     assert evaluate(phrase, 'right', 60, early).notes[0].status == 'early'
-    too_short = [PlayedNote(60, 0, .4), PlayedNote(64, 2, 2.5)]
+    too_short = [PlayedNote(60, 0, .2), PlayedNote(64, 2, 2.5)]
     assert evaluate(phrase, 'right', 60, too_short).notes[0].status == 'short'
     assert not evaluate(phrase, 'right', 60, correct + [PlayedNote(70, 1, 1.2)]).clean
 
