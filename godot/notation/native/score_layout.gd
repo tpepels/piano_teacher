@@ -29,6 +29,10 @@ var cached_accidental_offsets: Dictionary = {}
 var rest_lane_offsets: Dictionary = {}
 var unavoidable_rest_overlaps := 0
 var cached_offsets_gap := -1.0
+var prepared_geometry_gap := -1.0
+var prepared_event_y: Dictionary = {}
+var prepared_event_steps: Dictionary = {}
+var prepared_rest_y: Dictionary = {}
 
 func _init(axis, atlas) -> void:
     timeline = axis
@@ -38,6 +42,10 @@ func set_viewport(value: Vector2) -> void:
     if absf(size.y-value.y) > .001:
         cached_staff_gap = -1.0
         cached_gap_height = -1.0
+        prepared_geometry_gap = -1.0
+        prepared_event_y.clear()
+        prepared_event_steps.clear()
+        prepared_rest_y.clear()
     size = value
 
 func clear() -> void:
@@ -62,6 +70,10 @@ func clear() -> void:
     rest_lane_offsets.clear()
     unavoidable_rest_overlaps = 0
     cached_offsets_gap = -1.0
+    prepared_geometry_gap = -1.0
+    prepared_event_y.clear()
+    prepared_event_steps.clear()
+    prepared_rest_y.clear()
 
 func rebuild_index() -> void:
     var index: Dictionary = ScoreIndex.build(timeline.model, glyphs)
@@ -94,7 +106,41 @@ func measure_for(event: Dictionary) -> Dictionary:
     var number: int = int(event.get("measure", -1))
     return measure_by_number.get(number, timeline.measures[0])
 
+func prepare_event_positions(gap: float) -> void:
+    # Pitch spelling, clef and voice rest lanes are score/viewport properties.
+    # Their absolute Y coordinates never depend on the scrolling camera.
+    prepared_geometry_gap = -1.0
+    prepared_event_y.clear()
+    prepared_event_steps.clear()
+    prepared_rest_y.clear()
+    for event in ordered_events:
+        var ident: String = str(event.get("id",""))
+        if ident.is_empty():
+            continue
+        if str(event.get("kind","")) == "note":
+            var staff: String = str(event.get("staff","right"))
+            var clef: Dictionary = clef_for(staff,measure_for(event))
+            var step: int = Geometry.staff_step(event.get("spelling",{}),clef)
+            prepared_event_steps[ident] = step
+            prepared_event_y[ident] = Geometry.note_y(
+                step,staff_center(staff)+2.0*gap,gap)
+        elif str(event.get("kind","")) == "rest":
+            prepared_rest_y[ident] = rest_y(event,gap)
+    prepared_geometry_gap = gap
+
+func prepared_step(event: Dictionary, gap: float) -> int:
+    var ident: String = str(event.get("id",""))
+    if absf(prepared_geometry_gap-gap)<.001 and prepared_event_steps.has(ident):
+        return int(prepared_event_steps[ident])
+    var staff: String = str(event.get("staff","right"))
+    return Geometry.staff_step(event.get("spelling",{}),
+        clef_for(staff,measure_for(event)))
+
 func event_y(event: Dictionary, gap: float) -> float:
+    var ident: String = str(event.get("id",""))
+    if str(event.get("kind","")) == "note" and \
+            absf(prepared_geometry_gap-gap)<.001 and prepared_event_y.has(ident):
+        return float(prepared_event_y[ident])
     var staff: String = str(event.get("staff", "right"))
     var measure: Dictionary = measure_for(event)
     var clef: Dictionary = clef_for(staff, measure)
@@ -116,6 +162,10 @@ func display_staff(event: Dictionary) -> String:
     return str(owner.get("staff",owner.get("hand","right")))
 
 func rest_y(event: Dictionary, gap: float) -> float:
+    var ident: String = str(event.get("id",""))
+    if str(event.get("kind","")) == "rest" and \
+            absf(prepared_geometry_gap-gap)<.001 and prepared_rest_y.has(ident):
+        return float(prepared_rest_y[ident])
     # The Verovio source glyph is positioned by its staff-line origin.
     # Multi-voice offsets are extra staff spaces, never arbitrary pixels.
     return staff_center(str(event.get("staff","right"))) + gap * (
