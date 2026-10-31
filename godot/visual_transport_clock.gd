@@ -18,6 +18,14 @@ var timeline_elapsed_seconds := 0.0
 func _beat_at_seconds(seconds: float, segments: Array) -> float:
     return TempoTimeline.beat_at_seconds(seconds, bpm, segments)
 
+func _uniform_tempo(segments: Array, nominal: float) -> bool:
+    # Constant-BPM maps still contain one or more explicit source segments.
+    # They remain compatible with the same epoch through the appended rest.
+    for entry in segments:
+        if absf(float(entry.get("bpm", nominal)) - nominal) > 0.001:
+            return false
+    return true
+
 var active := false
 var beat := 0.0
 var last_ms := 0
@@ -205,7 +213,8 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
     # Keep that gap on the sampled projection until the backend supplies
     # one tempo map covering the rest as well.
     visual_epoch_enabled = (state.has("visual_run_at_ms") and
-        has_backend_offset and (next_active or next_segments.is_empty()))
+        has_backend_offset and (next_active or
+            _uniform_tempo(next_segments, next_bpm)))
     if visual_epoch_enabled:
         visual_epoch_backend_ms = float(state.get("visual_run_at_ms", 0.0))
         visual_epoch_offset_beats = active_visual_offset + active_play_from
