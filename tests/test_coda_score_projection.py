@@ -479,3 +479,45 @@ def test_coda_rejects_partial_or_retimed_authored_triplet(tmp_path):
     with pytest.raises(ValueError,match="cannot remap a source tuplet"):
         project_coda_score(piece,CodaReferenceSlowdown(2).transform(original).timing,
                            reference_family="tempo-shaping",bpm=80)
+
+
+def test_coda_tuplet_proof_rejects_changed_generated_bracket_and_ratio(tmp_path):
+    """Negative control: source parity must fail on altered *output* XML."""
+    from piano_teacher.notation.lesson import build_lesson_score, infer_piece_clefs
+    from piano_teacher.research.coda_source_tuplets import (
+        source_tuplet_groups, verify_projected_tuplets)
+
+    path=Path(__file__).parent/"fixtures/research/coda_authored_triplet.musicxml"
+    piece=load_musicxml(path,bpm=80)
+    original=ExerciseVariant("original",Phrase(1,1,1,0,4,piece.notes),
+                             tuple(range(len(piece.notes))))
+    timing=CodaReferenceDotted(True).transform(
+        original,boundaries=piece.bar_boundaries,quantization=12,
+        source_musicxml=piece.source_musicxml).timing
+    stage=project_coda_score(piece,timing,reference_family="dotted-rhythms",bpm=80)
+    score=build_lesson_score(
+        stage.variant.phrase,boundaries=stage.piece.bar_boundaries,
+        time_signatures=stage.piece.time_signatures,
+        key_signatures=stage.piece.key_signatures,
+        clef_changes=stage.piece.clef_changes,
+        default_clefs=infer_piece_clefs(stage.piece.notes),
+        source_musicxml=stage.piece.source_musicxml,retimed_source=True)
+    groups=source_tuplet_groups(piece,timing,factor=1)
+    assert len(groups)==1
+    verify_projected_tuplets(groups,score.musicxml,score.note_bindings)
+
+    wrong_bracket=ET.fromstring(score.musicxml)
+    first=wrong_bracket.find(".//tuplet[@type='start']")
+    assert first is not None
+    first.set("bracket","no")
+    with pytest.raises(ValueError,match="changed source tuplet group styling"):
+        verify_projected_tuplets(groups,ET.tostring(wrong_bracket,encoding="unicode"),
+                                 score.note_bindings)
+
+    wrong_ratio=ET.fromstring(score.musicxml)
+    ratio=wrong_ratio.find(".//time-modification/actual-notes")
+    assert ratio is not None
+    ratio.text="5"
+    with pytest.raises(ValueError,match="changed an authored 3:2 tuplet ratio"):
+        verify_projected_tuplets(groups,ET.tostring(wrong_ratio,encoding="unicode"),
+                                 score.note_bindings)
