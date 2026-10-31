@@ -47,6 +47,8 @@ var _requests: Dictionary = {}
 func _init(renderer, native_feedback = null) -> void:
     _renderer = renderer
     _feedback = native_feedback
+    if is_instance_valid(renderer) and renderer.has_signal("retained_ink_compiled"):
+        renderer.connect("retained_ink_compiled",_finish_native_score)
 
 func update_context(state: Dictionary, _now_ms: int) -> void:
     var loaded: bool = bool(state.get("loaded",false))
@@ -72,6 +74,7 @@ func layout_snapshot() -> Dictionary:
 
 func is_ready() -> bool:
     return _loaded and is_instance_valid(_renderer) and bool(_renderer.native_ready) and \
+        (not _renderer.has_method("retained_ready") or _renderer.retained_ready()) and \
         layout_revision == revision and timeline_model_revision == revision and \
         rendered_revision == revision
 
@@ -224,6 +227,13 @@ func _complete_model(code: int, body: PackedByteArray, now_ms: int) -> void:
 func _finish_native_score() -> void:
     if layout_revision != revision or timeline_model_revision != revision or \
             not is_instance_valid(_renderer) or not bool(_renderer.native_ready):
+        return
+    # Publishing now would let the engine start while a future source copy
+    # is still waiting to record its CanvasItem command buffer. All basic
+    # source and silence segments must exist before score_ready is sent.
+    if _renderer.has_method("retained_ready") and not _renderer.retained_ready():
+        return
+    if rendered_revision == revision:
         return
     rendered_revision = revision
     score_error = ""
