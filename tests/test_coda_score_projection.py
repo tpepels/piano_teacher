@@ -265,11 +265,38 @@ def test_coda_rejects_unpaired_source_slur_instead_of_silent_omission(tmp_path):
         project_coda_score(changed,plan,reference_family="dotted-rhythms",bpm=80)
 
 
-def test_coda_real_score_source_tie_stays_fail_closed():
+def test_coda_real_score_plain_parallel_voice_ties_keep_barline_connectors(tmp_path):
     path=Path(__file__).parent/"fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml"
     piece=load_musicxml(path,bpm=80)
     variant=ExerciseVariant("original",Phrase(1,1,len(piece.bar_boundaries)-1,
             0,piece.bar_boundaries[-1],piece.notes),tuple(range(len(piece.notes))))
     plan=OriginalTiming().transform(variant)
-    with pytest.raises(ValueError,match="source ties need a separate continuation proof"):
-        project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
+    stage=project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"tied"))
+    score=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    assert len(score.findall(".//tie[@type='start']"))>=2
+    assert len(score.findall(".//tie[@type='stop']"))>=2
+    assert len(score.findall(".//tied[@type='start']"))>=2
+    assert len(score.findall(".//tied[@type='stop']"))>=2
+    model=artifacts.source_model(stage.selection)
+    assert len(model["notes"])==len(variant.notes)
+    assert {n["id"] for n in model["notes"]}=={
+        n.source_id for n in variant.notes}
+
+
+def test_coda_rejects_incomplete_parallel_voice_source_tie(tmp_path):
+    path=Path(__file__).parent/"fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml"
+    piece=load_musicxml(path,bpm=80)
+    variant=ExerciseVariant("original",Phrase(1,1,len(piece.bar_boundaries)-1,
+            0,piece.bar_boundaries[-1],piece.notes),tuple(range(len(piece.notes))))
+    xml=ET.fromstring(piece.source_musicxml)
+    first=xml.find(".//tie[@type='start']")
+    assert first is not None
+    for parent in xml.iter():
+        if first in parent:
+            parent.remove(first)
+            break
+    changed=replace(piece,source_musicxml=ET.tostring(xml,encoding="unicode"))
+    with pytest.raises(ValueError,match="incomplete source ties"):
+        project_coda_score(changed,OriginalTiming().transform(variant),
+                           reference_family="dotted-rhythms",bpm=80)
