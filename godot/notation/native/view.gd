@@ -478,6 +478,7 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
     if old_hand != active_hand:
         _invalidate_retained_segments()
     if score_loop_enabled:
+        _prune_preparation_history()
         _remember_preparation()
 
 # MusicXML determines each boundary's structure. The first measure has
@@ -538,9 +539,29 @@ func _rebuild_recovery_ink() -> void:
                     "source","recovery",{"pass_index":index,"pass_start":start})
     _hide_retained_segments()
 
+func _prune_preparation_history() -> void:
+    if preparation_history.is_empty() or practice_timeline.is_empty():
+        return
+    var stride: float = float(practice_timeline["stride_beats"])
+    var left: float = visual_scroll_beat-size.x*PLAYHEAD_FRACTION/\
+        timeline.pixels_per_beat
+    var changed := false
+    for owner in preparation_history.keys():
+        if float(owner)+2.0*stride < left:
+            preparation_history.erase(owner)
+            changed = true
+    if changed:
+        _rebuild_recovery_ink()
+
 func _remember_preparation() -> void:
     if practice_preparation.is_empty():
         return
+    if not practice_timeline.is_empty():
+        var stride: float = float(practice_timeline["stride_beats"])
+        var left: float = visual_scroll_beat-size.x*PLAYHEAD_FRACTION/\
+            timeline.pixels_per_beat
+        if float(practice_preparation["measure"]["end_beat"])+stride < left:
+            return
     var owner: float = float(practice_preparation["pass_start_beat"])
     if preparation_history.get(owner,{}) == practice_preparation:
         return
