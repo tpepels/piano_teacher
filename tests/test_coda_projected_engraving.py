@@ -140,3 +140,33 @@ def test_actual_coda_wav_live_input_and_missed_note_use_svg_clock(tmp_path):
     assert missed
     assert missed[0]["note_id"]==engraving.layout["attack_map"][target.source_id]
     assert stage.original_piece.notes==piece.notes
+
+
+def test_real_authored_eighth_beam_groups_survive_selected_coda_stage(tmp_path):
+    """Use the checked-in independent beam MusicXML, not a generated example."""
+    source=Path(__file__).parent/"fixtures/connector_pixels/beams/score.musicxml"
+    piece=load_musicxml(source,bpm=80)
+    phrase=Phrase(1,1,len(piece.bar_boundaries)-1,0,
+                  piece.bar_boundaries[-1],piece.notes)
+    original=ExerciseVariant("original",phrase,tuple(range(len(phrase.notes))))
+    plan=CodaReferenceDotted(True).transform(
+        original,boundaries=piece.bar_boundaries,
+        quantization=8,source_musicxml=piece.source_musicxml).timing
+    # Beams protect all original attacks in this intentionally beamed voice.
+    assert plan.exercise_phrase.notes==original.notes
+    stage=project_coda_score(
+        piece,plan,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"beam"))
+    xml=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    actual=[(n.findtext("pitch/step"),[b.text for b in n.findall("beam")])
+            for n in xml.findall("./part[@id='RH']/measure/note")
+            if n.find("pitch") is not None]
+    authored=ET.fromstring(piece.source_musicxml)
+    expected=[(n.findtext("pitch/step"),[b.text for b in n.findall("beam")])
+              for n in authored.findall("./part[@id='RH']/measure/note")
+              if n.find("pitch") is not None]
+    assert actual==expected
+    score=artifacts.engraving(stage.selection)
+    assert set(score.layout["attack_map"])=={
+        n.source_id for n in piece.notes}
+    assert score.pages and len(score.pages)<=2

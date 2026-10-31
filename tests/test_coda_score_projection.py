@@ -147,7 +147,7 @@ def test_coda_score_rejects_unsupported_annotations_without_silent_omission():
                            result.timing,reference_family="dotted-rhythms",bpm=80)
     augmented=original.source_musicxml.replace(
         "</measure>","<direction><direction-type><words>dolce</words></direction-type></direction></measure>",1)
-    with pytest.raises(ValueError,match="cannot preserve direction"):
+    with pytest.raises(ValueError,match="cannot safely retime source directions"):
         project_coda_score(replace(original,source_musicxml=augmented),
                            result.timing,reference_family="dotted-rhythms",bpm=80)
 

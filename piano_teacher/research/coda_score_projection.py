@@ -68,11 +68,11 @@ def _safe_xml(source: str, *, slowdown: bool) -> ET.Element:
                             raise ValueError("Unsupported original staff attribute")
                 elif tag == "note":
                     seen_note = True
+                    if item.find("{*}tie") is not None:
+                        raise ValueError("Coda source ties need a separate continuation proof")
                     if item.find("{*}grace") is not None or (
                             set(map(_tag,item)) - _ALLOWED_NOTE):
                         raise ValueError("Coda projection cannot remap expressive/tuplet/tied notes")
-                    if item.find("{*}tie") is not None:
-                        raise ValueError("Coda source ties need a separate continuation proof")
                     if item.find("{*}chord") is not None and slowdown:
                         # The original note groups are still source-owned,
                         # but sync of a chord's original XML cursor is not
