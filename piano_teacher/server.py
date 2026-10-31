@@ -1248,7 +1248,8 @@ class PracticeEngine:
             assignment = self._remediation_pending
             self._remediation_pending = None
             if (self.auto and assignment is not None
-                    and self.plan.identity == previous_identity):
+                    and self.plan.identity == previous_identity
+                    and self.plan.exercise_strategy.name != "coda-part"):
                 self._start_remedial_assignment(assignment)
                 return
             if self.auto and message != "Piece mastered":
@@ -1335,7 +1336,8 @@ class PracticeEngine:
         transition = plan_rolling_recovery(
             decision, identity=self.plan.identity, bpm=self.plan.bpm,
             previous_key=self._trouble_key, previous_count=self._trouble_count,
-            grid=grid, first_bar=phrase.first_bar, now=now)
+            grid=grid, first_bar=phrase.first_bar, now=now,
+            allow_guided=self.plan.exercise_strategy.name != "coda-part")
         self.plan.streak=0
         self.plan.failures+=1
         self.plan.bpm=transition.bpm
@@ -1493,9 +1495,12 @@ class PracticeEngine:
         score_beat=self.play_from_beat+elapsed_beats
         grid=phrase_grid(phrase,self.plan.piece.bar_boundaries)
         beats_per_bar=grid[1]-grid[0]
-        # Detect rolling five-error windows at the completed two-bar boundary. Silent
-        # previews never generate failure, assessment or mastery.
+        # Coda practice must not jump backwards halfway through a passage.
+        # Inspect its rolling errors only when the complete source finishes;
+        # manual Learn remains available for any passage.
         while (self.mode == "practice" and self.review_end_beat is None and not self.preview_only
+               and (self.plan.exercise_strategy.name != "coda-part"
+                    or score_beat >= total_beats - 1e-7)
                and self.next_boundary_beat and score_beat >= self.next_boundary_beat):
             tempo_map = self._active_tempo_map()
             decision = self.assessment_policies.select(tempo_map).recover(

@@ -1,4 +1,5 @@
 extends RefCounted
+const InkSpacing := preload("res://notation/native/ink_spacing.gd")
 ## Choose one authentic staff scale and one density for the entire source.
 ## No canvas, clock or tempo ownership. The caller installs the returned density.
 const MAX_STAFF_GAP := 22.0
@@ -6,7 +7,10 @@ const MIN_LOOKAHEAD_BEATS := 1.75
 const MIN_READABLE_STAFF_GAP := 14.0
 
 static func choose(score, ink_geometry, preferred: float, playhead_fraction: float) -> Dictionary:
-    var density: float = preferred
+    # Maintain at least 36px between repeated quick attacks. The existing
+    # authentic-ink collision solver may raise this floor as necessary.
+    var density: float = InkSpacing.readable_density(
+        score.timeline.model.get("notes", []), preferred)
     var ink_density: float = density
     var staff_gap_limit: float = MAX_STAFF_GAP
     var selected_density_witness: Dictionary = {}

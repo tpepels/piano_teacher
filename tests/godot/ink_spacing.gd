@@ -68,5 +68,32 @@ func _initialize() -> void:
     if InkSpacing.minimum_density(outgoing,96.0,10.0,boundaries)["density"] != 96.0:
         failures += 1
 
+    # Repeated quick MIDI attacks need more air even without literal ink
+    # collision; a single grace/rolled attack must not stretch everything.
+    var sixteenths: Array = [
+        {"onset_beats":0.0}, {"onset_beats":0.25},
+        {"onset_beats":0.5}, {"onset_beats":0.75}]
+    if absf(InkSpacing.readable_density(sixteenths,96.0)-144.0) > .001:
+        failures += 1
+    var eighths: Array = [
+        {"onset_beats":0.0}, {"onset_beats":0.5},
+        {"onset_beats":1.0}, {"onset_beats":1.5}]
+    if InkSpacing.readable_density(eighths,96.0) != 96.0:
+        failures += 1
+    var rolled: Array = [
+        {"onset_beats":0.0}, {"onset_beats":0.15},
+        {"onset_beats":1.0}, {"onset_beats":2.0}]
+    if InkSpacing.readable_density(rolled,96.0) != 96.0:
+        failures += 1
+    var thirty_seconds: Array = [
+        {"onset_beats":0.0}, {"onset_beats":0.125},
+        {"onset_beats":0.25}, {"onset_beats":0.375}]
+    if absf(InkSpacing.readable_density(thirty_seconds,96.0)-288.0) > .001:
+        failures += 1
+    # Chord heads on the same beat are still one onset.
+    sixteenths.append({"onset_beats":0.5})
+    if absf(InkSpacing.readable_density(sixteenths,96.0)-144.0) > .001:
+        failures += 1
+
     print("INK_SPACING_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

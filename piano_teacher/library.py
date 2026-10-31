@@ -35,7 +35,7 @@ class ScoreLibrary:
         self.settings_path = self.config_dir / 'settings.json'
         self.settings = {'music_dir': str(default_music_dir()), 'fullscreen': True,
                          'last_piece': '', 'midi_device': '', 'metronome': True,
-                         'exercise_strategy': 'legacy', 'timing_strategy': 'original-timing',
+                         'exercise_strategy': 'coda-part', 'timing_strategy': 'original-timing',
                          'tempo_strategy': 'constant-tempo',
                          'diagnosis_strategy': 'error-family',
                          'learner_strategy': 'repeated-error'}
@@ -53,7 +53,7 @@ class ScoreLibrary:
             # First run: create a predictable folder that the user can fill.
             default_music_dir().mkdir(parents=True, exist_ok=True)
         if self.settings['exercise_strategy'] not in {x['id'] for x in available_strategies()}:
-            self.settings['exercise_strategy'] = 'legacy'
+            self.settings['exercise_strategy'] = 'coda-part'
         for key, valid, fallback in (
                 ("timing_strategy", {"original-timing", "dotted-long-short", "dotted-short-long", "coda-chord-blocks"}, "original-timing"),
                 ("tempo_strategy", {"constant-tempo", "two-phase-tempo"}, "constant-tempo"),

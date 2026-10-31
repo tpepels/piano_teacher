@@ -3,6 +3,33 @@ extends RefCounted
 # ink from the engraving engine; no rendering, camera or tempo state enters here.
 # A single returned density applies to the ENTIRE loaded exercise.
 
+
+# Readability floor beyond exact ink collision prevention. A sequence of 16th
+# note attacks needs more than 24px at the former 96px/beat, even when glyph
+# contours technically do not overlap. Avoid treating a single rolled/grace
+# MIDI attack as a dense passage. Return a whole-score linear density; do not
+# retime events, move individual noteheads or distort notation.
+static func readable_density(notes: Array, preferred: float) -> float:
+    var unique: Dictionary = {}
+    for note in notes:
+        if not note is Dictionary:
+            continue
+        var beat: float = float(note.get("onset_beats", NAN))
+        if is_finite(beat):
+            unique[snappedf(beat, 0.000001)] = true
+    var onsets: Array = unique.keys()
+    onsets.sort()
+    var quick: Array = []
+    for i in range(1, onsets.size()):
+        var distance: float = float(onsets[i])-float(onsets[i-1])
+        if distance >= 0.12 and distance < 0.5 - 0.000001:
+            quick.append(distance)
+    if quick.size() < 2:
+        return preferred
+    quick.sort()
+    var interval: float = float(quick[maxi(1, quick.size()/4)])
+    return maxf(preferred, minf(320.0, 36.0/interval))
+
 static func minimum_density(items: Array, preferred: float, gap: float,
         boundaries: Array = []) -> Dictionary:
     var staves: Dictionary = {"right":{}, "left":{}}

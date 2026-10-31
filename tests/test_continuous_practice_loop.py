@@ -1147,3 +1147,25 @@ def test_clean_handoff_derivative_preserves_deadline_and_source_model(
     assert app.plan.active_phrase.notes == source_notes
     assert recorder.presses == presses  # Original attack/release seconds stay untouched.
     assert app.recorder is not recorder and not app.recorder.presses
+
+
+def test_coda_practice_finishes_before_adaptive_retry_or_guided_switch(clocked_engine):
+    app, now = clocked_engine(grid=(0, 4, 8, 12, 16), connected=True, dense=True)
+    app.plan = LearningPlan(app.plan.piece, consolidate=True, exercise_strategy="coda-part")
+    original = next(i for i, step in enumerate(app.plan.lesson_steps, 1)
+                    if step.hand == "right" and step.level == "original")
+    app.plan.select_step(original)
+    app.plan.set_bpm(80)
+    app.start()
+    transport = app.transport_id
+    now[0] = app.run_at + 8*60/80 + .03
+    halfway = app.state()
+    assert halfway["phase"] == "playing"
+    assert halfway["running"] and app.pending_rewind is None
+    assert app.transport_id == transport and halfway["mode"] == "practice"
+    now[0] = app.run_at + 16*60/80 + .03
+    finished = app.state()
+    assert finished["phase"] == "recovering"
+    assert not finished["guided_recovery"]
+    assert finished["mode"] == "practice"
+    assert "Retry bars" in finished["next_action"]

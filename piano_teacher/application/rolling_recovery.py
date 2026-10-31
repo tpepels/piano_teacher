@@ -25,12 +25,13 @@ class RollingRecoveryTransition:
 def plan_rolling_recovery(decision: RecoveryDecision, *, identity: str,
                           bpm: int, previous_key: tuple | None,
                           previous_count: int, grid: Sequence[float],
-                          first_bar: int, now: float) -> RollingRecoveryTransition:
+                          first_bar: int, now: float,
+                          allow_guided: bool = True) -> RollingRecoveryTransition:
     new_bpm = max(SETTINGS.minimum_bpm,
                   round(bpm * SETTINGS.recovery_tempo_multiplier))
     key = identity, decision.restart_beat, decision.end_beat
     count = previous_count + 1 if key == previous_key else 1
-    guided = count >= SETTINGS.guided_recovery_after_failures
+    guided = allow_guided and count >= SETTINGS.guided_recovery_after_failures
     display = recovery_display(
         decision, grid=grid, first_bar=first_bar,
         before_bpm=bpm, after_bpm=new_bpm, now=now, guided=guided)

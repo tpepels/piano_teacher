@@ -14,6 +14,7 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_library.py \
   tests/test_midi_connection.py \
   tests/test_rolling_recovery_transition.py \
+  tests/test_continuous_practice_loop.py::test_coda_practice_finishes_before_adaptive_retry_or_guided_switch \
   tests/test_assessment_service.py \
   tests/test_state_projection.py \
   tests/test_exercise_contracts.py \

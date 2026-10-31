@@ -12,6 +12,16 @@ notes are green, early/late or short/long notes yellow, and wrong/missed
 notes red. Repeated notes are matched to the closest actual MIDI attack.
 This does not calibrate physical keyboard or audio latency.
 
+**Current lesson defaults and recovery:** New installations select the
+Coda-inspired `coda-part` strategy. Existing saved strategy preferences remain
+unchanged. Coda's full original-algorithm parity (Gate 2) is still research
+incomplete. For `coda-part` timed practice, automatic recovery waits for the
+end of the current passage and repeats at a lower tempo, without switching
+into untimed Learn or requiring an unexpected piano keypress. Use Learn
+explicitly when desired. The native score gives consecutive fast notes at
+least 36 screen pixels between attack times (when the MIDI has sustained fast
+rhythm), preserving the shared linear score clock and real glyph shapes.
+
 **MIDI-only product contract:** Personal music requires only `.mid` or `.midi`.
 The app derives readable notation from MIDI note events, tracks and available
 meter/key metadata; it may generate MusicXML **internally** as a rendering

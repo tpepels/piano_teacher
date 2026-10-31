@@ -112,3 +112,12 @@ def test_obsolete_musicxml_recent_is_not_restored(tmp_path):
     assert restored.scan()['last_piece'] == ''
     assert [item['id'] for item in restored.scan()['pieces']] == [
         'Bach.mid', 'Etudes/Chopin.midi']
+
+
+def test_coda_is_new_install_default_but_explicit_legacy_choice_persists(tmp_path):
+    library = ScoreLibrary(config_dir=tmp_path / "fresh")
+    assert library.settings["exercise_strategy"] == "coda-part"
+    assert library.public_settings()["exercise_strategy"] == "coda-part"
+    library.update(exercise_strategy="legacy")
+    again = ScoreLibrary(config_dir=tmp_path / "fresh")
+    assert again.settings["exercise_strategy"] == "legacy"
