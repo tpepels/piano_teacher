@@ -28,6 +28,7 @@ const ScoreAssetSession := preload("res://score_asset_session.gd")
 const ScoreAssetQueue := preload("res://score_asset_queue.gd")
 const InProcessBus := preload("res://inprocess_bus.gd")
 const PracticeFrameCoordinator := preload("res://practice_frame_coordinator.gd")
+const PracticeStatePresenter := preload("res://practice_state_presenter.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -886,52 +887,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if practice_view.is_source_picker_open():
         practice_view.suppress_piano_input(parsed)
         return
-    last_state = parsed
-    _present_fingering_status(parsed.get("fingering",{}))
-    lesson_view.present_context(parsed, action_pending)
-    settings_view.present_calibration(
-        parsed.get("midi_calibration", {}), int(parsed.get("midi_offset_ms", 0)))
-    lesson_session.update_context(parsed, Time.get_ticks_msec())
-    _update_visual_frame_rate(parsed)
-    _clear_assessed_effects_in_ungraded_mode(parsed)
-    # Low-latency local polling only while playing from a connected piano.
-    # The backend remains authoritative; Godot never guesses note scoring.
-    if state_poll_timer != null:
-        var live_rate := (current_screen == "practice"
-            and not str(parsed.get("device", "")).is_empty())
-        # Note-on cues arrive via loopback datagrams within the next frame;
-        # full-state projections can now poll slightly less often.
-        var interval := 0.08 if live_rate else 0.15
-        if absf(state_poll_timer.wait_time - interval) > 0.001:
-            state_poll_timer.wait_time = interval
-    settings_view.present_practice(parsed, current_screen == "settings")
-    # The backend sampled the clock during this round trip. Estimate
-    # that sample at the midpoint so music never waits for the poll interval.
-    var started_ms: int = state_request_started_ms if sample_started_ms < 0 else sample_started_ms
-    var received_ms: int = Time.get_ticks_msec()
-    last_state_tick = int((started_ms + received_ms) / 2.0)
-    visual_transport_clock.accept(parsed, last_state_tick, received_ms)
-    if demo_player != null and bool(parsed.get("loaded",false)):
-        demo_player.synchronize(parsed, _transport_beat_now())
-    # ScoreAssetSession owns revision invalidation and the score_ready handshake.
-    score_session.update_context(parsed, received_ms)
-    practice_view.present(parsed, _native_score_ready(), action_pending,
-        demo_player != null and bool(demo_player.get("audio_error")))
-    if not bool(parsed.get("loaded",false)):
-        _refresh_score_status()
-        return
-    var phase: String = str(parsed.get("phase","ready"))
-    if phase0_smoke_mode and phase != phase0_last_phase:
-        phase0_last_phase = phase
-        print("PHASE0_PHASE:",phase)
-    score_effects.marks = []
-    for marker in parsed.get("feedback_marks", []):
-        score_effects.marks.append(marker)
-    _consume_live_piano_hits(parsed)
-
-    practice_view.present_busy(action_pending)
-    practice_view.consider_piano_start(sample_started_ms < 0, current_screen == "practice")
-    _refresh_score_status()
+    PracticeStatePresenter.present(self, parsed, sample_started_ms)
 
 func _preview_note_arrivals(groups: Array) -> void:
     # Demonstrate musical energy when there is no keyboard, but in blue
