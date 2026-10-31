@@ -33,9 +33,37 @@ func _initialize() -> void:
         failures += 1
     if not connector.tie_placement(first,last,100,103,20).is_empty():
         failures += 1
+    # Prepared tie masks translate without any texture readback.
+    connector.prepared_ties["first|last"] = {
+        "direction":"up","rect":Rect2(98,180,55,15)}
+    var shifted_tie: Dictionary = connector.prepared_tie(first,last,42.0)
+    if shifted_tie["rect"] != Rect2(140,180,55,15) or shifted_tie["direction"] != "up":
+        failures += 1
+    # Prepared beam members use canonical source X, not the previous frame's
+    # camera X. This path must work with no atlas image or chord calculation.
+    score.beam_stem_up_by_note["first"] = true
+    score.beam_groups = [[first,last]]
+    var canonical: Dictionary = {"art_key":"first|last", "up":true,
+        "members":[
+            {"id":"first","x":0.0,"head_x":0.0,"tip_y":120.0},
+            {"id":"last","x":96.0,"head_x":96.0,"tip_y":125.0}
+        ],"source_stem_offsets":[],"anchor_y":100.0,"staff":"right",
+        "hand":"right"}
+    connector.prepared_beams["first|last"] = canonical
+    var projected: Dictionary = connector.beam_layout(
+        20.0,1.0,150.0,score.cached_head_offsets,0.0,score.beam_groups)
+    var group: Dictionary = projected["groups"][0]
+    if absf(float(group["members"][0]["x"])-54.0)>.000001 or \
+            absf(float(group["members"][1]["x"])-150.0)>.000001 or \
+            absf(float(projected["stems"]["first"]["x"])-54.0)>.000001:
+        failures += 1
+    if canonical["members"][0]["x"]!=0.0:
+        failures += 1  # Moving the camera must not mutate the cached source.
     connector.flag_clearances["obsolete"] = 2.0
     connector.clear_cache()
-    if not connector.flag_clearances.is_empty():
+    if not connector.flag_clearances.is_empty() or \
+            not connector.prepared_ties.is_empty() or \
+            not connector.prepared_beams.is_empty():
         failures += 1
     # Replacing an owned geometry policy must preserve the current viewport.
     var view = load("res://notation/native/view.gd").new()
