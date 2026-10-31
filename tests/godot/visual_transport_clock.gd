@@ -348,6 +348,22 @@ func run() -> void:
         "Preparation rest advances at scheduled practice tempo")
     check(absf(recovery_clock.visual_beat(base_ms+5500)-8.0)<.000001,
         "Retry rest meets the MIDI deadline without a visual hold")
+    var resumed_shaped := recovery_state.duplicate(true)
+    resumed_shaped["transport_id"] = 41
+    resumed_shaped["phase"] = "playing"
+    resumed_shaped["running"] = true
+    resumed_shaped["visual_offset_beats"] = 8.0
+    resumed_shaped["visual_run_at_ms"] = 1005500.0
+    resumed_shaped["clock_sampled_at_ms"] = 1006500.0
+    resumed_shaped["clock_beat"] = 64.0/60.0
+    resumed_shaped["visual_tempo_segments"] = visual_map
+    resumed_shaped["tempo_segments"] = visual_map.slice(0,2)
+    recovery_clock.accept(resumed_shaped,base_ms+6500,base_ms+6500)
+    check(absf(recovery_clock.visual_beat(base_ms+6500)-(
+        8.0+64.0/60.0))<.000001,
+        "Recovery playback must switch from preparation BPM to source tempo")
+    check(absf(recovery_clock.score_beat(base_ms+6500)-64.0/60.0)<.000001,
+        "Recovery visual clock must match the new MIDI assessment clock")
 
     # Once music starts, later pause/feedback polling cannot re-calibrate
     # the monotonic epoch and shift an already scheduled retry.
