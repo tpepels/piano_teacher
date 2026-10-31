@@ -14,7 +14,6 @@ const GameBackdrop := preload("res://game_backdrop.gd")
 const UI := preload("res://ui_factory.gd")
 const LibraryScreen := preload("res://library_screen.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
-const RetryCameraClock := preload("res://retry_camera_clock.gd")
 const TempoTimeline := preload("res://tempo_timeline.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 const SourceMeasurePicker := preload("res://source_measure_picker.gd")
@@ -63,7 +62,6 @@ var library_resume_requested := false
 var startup_last_music_checked := false
 var calibration_tick_index := -999
 var recovery_click_tick := -999
-var retry_camera_clock = RetryCameraClock.new()
 var retry_first_click_sent := false
 var last_post_path := ""
 var last_control_action := ""
@@ -278,7 +276,7 @@ func _transport_beat_now() -> float:
     # Keep the score's musical clock phase-locked across uneven HTTP replies.
     # The Python engine remains authoritative for note timing and assessment.
     if visual_transport_clock.matches(last_state):
-        return visual_transport_clock.now(Time.get_ticks_msec())
+        return visual_transport_clock.score_beat(Time.get_ticks_msec())
     # Direct-state smoke fixtures, before any network snapshot is received.
     var beat: float = float(last_state.get("clock_beat", 0.0))
     if bool(last_state.get("running", false)) and not bool(last_state.get("paused", false)):
@@ -297,24 +295,13 @@ func _transport_beat_now() -> float:
 # visual axis. During feedback/recovery the server supplies the desired scroll
 # direction; extrapolate its last snapshot between HTTP state polls.
 func _unrolled_score_beat(transport_clock: float) -> float:
+    # One presentation clock owns scrolling, reversal, retry count-in
+    # and resumed playback; there is no independent retry camera.
+    if visual_transport_clock.initialized and last_state.has("visual_offset_beats"):
+        return visual_transport_clock.visual_beat(Time.get_ticks_msec())
     if not last_state.has("visual_offset_beats"):
         return NAN
-    # Once a retry is prepared, a single monotonic deadline determines
-    # reversal, count-in and the first forward note. No HTTP poll correction.
-    if retry_camera_clock.active and not bool(last_state.get("paused", false)) \
-            and str(last_state.get("phase", "")) in ["feedback", "recovering", "playing"]:
-        return retry_camera_clock.beat_at(Time.get_ticks_msec())
-    if bool(last_state.get("running", false)):
-        return float(last_state.get("visual_offset_beats", 0.0)) \
-            + float(last_state.get("play_from_beat", 0.0)) + transport_clock
-    var observed: float = float(last_state.get("visual_scroll_beat", 0.0))
-    if bool(last_state.get("paused", false)):
-        return observed
-    var speed: float = float(last_state.get("visual_scroll_speed", 0.0))
-    var age: float = maxf(0.0, float(Time.get_ticks_msec()-last_state_tick)/1000.0)
-    var target: float = float(last_state.get("visual_target_beat", observed))
-    return minf(target, observed + speed * age) if speed > 0.0 \
-        else maxf(target, observed + speed * age)
+    return float(last_state.get("visual_scroll_beat", transport_clock))
 
 
 func _raw_click(accent: bool) -> void:
@@ -352,10 +339,10 @@ func _update_count_in() -> void:
         settings_view.animate_calibration_beat(-1.0, false)
 
     if (str(last_state.get("phase", "")) in ["feedback", "recovering"]
-            and retry_camera_clock.active
-            and retry_camera_clock.is_preparing(now_ms)
+            and visual_transport_clock.retry_active
+            and visual_transport_clock.retry_preparing(now_ms)
             and not bool(last_state.get("paused", false))):
-        var count_beat: float = retry_camera_clock.count_in_beat(now_ms)
+        var count_beat: float = visual_transport_clock.retry_count_in_beat(now_ms)
         var bar := maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4)))))
         practice_view.stage.count_in.present(count_beat, bar, true, false)
         var tick := floori(count_beat + .00001)
@@ -1004,7 +991,6 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var received_ms: int = Time.get_ticks_msec()
     last_state_tick = int((started_ms + received_ms) / 2.0)
     visual_transport_clock.accept(parsed, last_state_tick, received_ms)
-    retry_camera_clock.accept(parsed, last_state_tick)
     if demo_player != null and bool(parsed.get("loaded",false)):
         demo_player.synchronize(parsed, _transport_beat_now())
     # ScoreAssetSession owns revision invalidation and the score_ready handshake.
