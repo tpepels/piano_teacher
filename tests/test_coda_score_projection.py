@@ -339,3 +339,60 @@ def test_coda_rejects_unverified_authored_tuplet_marks(tmp_path):
     with pytest.raises(ValueError,match="expressive/tuplet/tied"):
         project_coda_score(decorated,OriginalTiming().transform(variant),
                            reference_family="dotted-rhythms",bpm=80)
+
+
+@pytest.mark.parametrize("factor,grid,change_beat",[
+    (2,(0,3,6,8,10),6),
+    (4,(0,3,6,9,12,14,16,18,20),12),
+])
+def test_coda_mixed_meter_slowdown_projects_authored_bars_and_rests(
+        factor,grid,change_beat,tmp_path):
+    fixture=Path(__file__).parent/"fixtures/research/coda_mixed_meter.musicxml"
+    piece=load_musicxml(fixture,bpm=80)
+    assert piece.bar_boundaries==(0,3,5)
+    original=ExerciseVariant(
+        "original",Phrase(1,1,2,0,5,piece.notes),
+        tuple(range(len(piece.notes))))
+    plan=CodaReferenceSlowdown(factor).transform(original).timing
+    stage=project_coda_score(piece,plan,reference_family="tempo-shaping",bpm=80)
+    assert stage.piece.bar_boundaries==grid
+    assert stage.piece.time_signatures == (
+        (0,3,4),(change_beat,2,4))
+    assert any(key.beat==change_beat and key.fifths==-1
+               for key in stage.piece.key_signatures)
+    assert stage.piece.source_musicxml!=piece.source_musicxml
+    assert piece.bar_boundaries==(0,3,5)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"mixed"))
+    generated=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    for part in generated.findall("./part"):
+        assert len(part.findall("./measure"))==2*factor
+        measures=part.findall("./measure")
+        first=measures[0].find("./attributes/time")
+        second=measures[factor].find("./attributes/time")
+        assert (first.findtext("beats"),first.findtext("beat-type"))==("3","4")
+        assert (second.findtext("beats"),second.findtext("beat-type"))==("2","4")
+        assert all(m.get("implicit")!="yes" for m in measures)
+    model=artifacts.source_model(stage.selection)
+    assert model["duration_beats"]==factor*5
+    assert len(model["notes"])==len(piece.notes)==8
+    assert {n["id"] for n in model["notes"]}=={
+        n.source_id for n in piece.notes}
+    rest_events=[e for e in model["notation_events"]
+                 if e["kind"]=="rest"]
+    assert rest_events
+    assert any(abs(e["onset_beats"]-2*factor)<1e-7
+               and abs(e["duration_beats"]-factor)<1e-7
+               for e in rest_events)
+    played=[PlayedNote(note.pitch,stage.tempo_map.seconds_at(note.start),
+                       stage.tempo_map.seconds_at(note.end))
+            for note in stage.variant.notes]
+    assert stage.grade(played).assessment.clean
+
+
+def test_coda_slowdown_rejects_partial_source_bar_even_with_meter():
+    original,variant=context()
+    result=CodaReferenceSlowdown(2).transform(variant)
+    # A pickup or partial measure needs an authored grouping policy.
+    changed=replace(original,bar_boundaries=(0,3,8))
+    with pytest.raises(ValueError,match="incomplete source measures"):
+        project_coda_score(changed,result.timing,reference_family="tempo-shaping",bpm=80)
