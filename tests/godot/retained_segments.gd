@@ -78,5 +78,20 @@ func _exercise() -> void:
     if service.rendered_revision != 3 or not service.is_ready():
         failures += 1
     view.free()
+    # Pool capacity grows with screen horizon and shrinks for long excerpts,
+    # rather than hard-coding five copies regardless of score length.
+    var renderer = load("res://notation/native/view.gd").new()
+    renderer.size = Vector2(800,400)
+    renderer.practice_timeline = {"stride_beats":8.0}
+    var long_passage_capacity: int = renderer._required_repeat_copies()
+    renderer.practice_timeline = {"stride_beats":1.0}
+    var short_passage_capacity: int = renderer._required_repeat_copies()
+    renderer.size = Vector2(1400,400)
+    var wider_capacity: int = renderer._required_repeat_copies()
+    if long_passage_capacity >= short_passage_capacity or \
+            wider_capacity <= short_passage_capacity or \
+            long_passage_capacity < 1:
+        failures += 1
+    renderer.free()
     print("RETAINED_SEGMENT_FAILURES:",failures)
     quit(0 if failures==0 else 1)
