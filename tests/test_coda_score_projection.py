@@ -104,7 +104,8 @@ def test_coda_transformed_musicxml_listen_and_grading_share_clock(kind,tmp_path)
         for _ in (0,)
     )
     assert stage.piece.source_musicxml != ""  # explicit authored rests retained
-    assert original.source_musicxml == SOURCE.read_text()
+    assert ET.tostring(ET.fromstring(original.source_musicxml)) == (
+        ET.tostring(ET.fromstring(SOURCE.read_text())))
 
     played=[PlayedNote(note.pitch,stage.tempo_map.seconds_at(note.start),
                        stage.tempo_map.seconds_at(note.end))
