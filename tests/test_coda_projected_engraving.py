@@ -385,3 +385,62 @@ def test_retimed_source_dynamic_renders_at_new_attack_in_real_svg(tmp_path):
              for token in element.get("class","").split()}
     assert "dynam" in classes
     (tmp_path/"relocated-mf.svg").write_text(rendered.pages[0])
+
+
+def test_source_authored_rest_inside_triplet_has_real_verovio_rest_ink(tmp_path):
+    """Source-written middle rest remains in the original 3:2 bracket."""
+    source=Path(__file__).parent/"fixtures/research/coda_triplet_interior_rest.musicxml"
+    piece=load_musicxml(source,bpm=80)
+    variant=ExerciseVariant("original",Phrase(1,1,1,0,4,piece.notes),
+                            tuple(range(len(piece.notes))))
+    result=CodaReferenceDotted(True).transform(
+        variant,boundaries=piece.bar_boundaries,
+        quantization=12,source_musicxml=piece.source_musicxml)
+    assert result.changed_sources
+    stage=project_coda_score(
+        piece,result.timing,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"rest-ink"))
+    xml=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    assert len(xml.findall(".//notations/tuplet[@type='start']"))==1
+    assert len(xml.findall(".//notations/tuplet[@type='stop']"))==1
+    rest=[n for n in xml.findall(".//note") if
+          n.find("rest") is not None and
+          n.findtext("time-modification/actual-notes")=="3"]
+    assert len(rest)==1
+    score=artifacts.engraving(stage.selection)
+    assert set(score.layout["attack_map"])=={
+        n.source_id for n in variant.notes}
+    classes={token for svg in score.pages for node in ET.fromstring(svg).iter()
+             for token in node.get("class","").split()}
+    assert "tuplet" in classes
+    assert "rest" in classes
+    for i,svg in enumerate(score.pages):
+        (tmp_path/f"rest-bearing-triplet-{i}.svg").write_text(svg)
+
+
+def test_shortened_parallel_written_ties_retain_two_real_verovio_arcs(tmp_path):
+    """Written continuation shortens, sounding identity still one per voice."""
+    from dataclasses import replace
+    from piano_teacher.exercise_contracts import OriginalTiming,TimingPlan
+
+    source=Path(__file__).parent/"fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml"
+    piece=load_musicxml(source,bpm=80)
+    variant=ExerciseVariant("original",Phrase(1,1,2,0,8,piece.notes),
+                             tuple(range(len(piece.notes))))
+    baseline=OriginalTiming().transform(variant)
+    events=list(baseline.events)
+    idx=next(i for i,n in enumerate(variant.notes)
+             if n.start==0 and n.voice.endswith("-v1"))
+    events[idx]=replace(events[idx],exercise_end=5.5)
+    plan=TimingPlan("shorter-tie",variant,tuple(events),8)
+    stage=project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
+    assert len(stage.written_ties)==2
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"short-tie-ink"))
+    rendered=artifacts.engraving(stage.selection)
+    assert set(rendered.layout["attack_map"])=={
+        n.source_id for n in variant.notes}
+    arcs=[node for svg in rendered.pages for node in ET.fromstring(svg).iter()
+          if "tie" in node.get("class","").split()]
+    assert len(arcs)>=2
+    for i,svg in enumerate(rendered.pages):
+        (tmp_path/f"retimed-parallel-tie-{i}.svg").write_text(svg)
