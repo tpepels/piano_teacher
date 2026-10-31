@@ -20,6 +20,10 @@ class FakeEngine:
         self.loaded = None
         self.library_id = None
 
+    def advance_clock(self):
+        self.ticks = getattr(self, "ticks", 0) + 1
+        return 20
+
     def state(self):
         return {"phase": "ready", "revision": 17, "source": self.library_id}
 
@@ -116,3 +120,15 @@ def test_real_embedded_engine_does_not_create_network_visual_publisher(tmp_path)
         assert _decode(bridge.request("GET", "/midi/live?since=-1"))[0] == 400
     finally:
         engine.db.close()
+
+
+def test_native_worker_tick_is_independent_of_state_requests():
+    engine = FakeEngine()
+    bridge = EngineCommands(engine=engine)
+    assert bridge.tick() == 20
+    assert bridge.tick() == 20
+    assert engine.ticks == 2
+    # The state route is presentation only; the native worker can advance
+    # musical deadlines without making any such request.
+    assert _decode(bridge.request("GET", "/state"))[0] == 200
+    assert engine.ticks == 2
