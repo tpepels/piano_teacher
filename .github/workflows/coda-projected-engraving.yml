@@ -1,0 +1,52 @@
+name: Coda selected-exercise real engraving
+
+# Small explicit Verovio check. Never run full corpus or long Godot audits.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/coda-projected-engraving.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  five-coda-exercises:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install only engraving and research dependencies
+        run: |
+          python -m pip install -e '.[test,coda-research,godot]'
+          python -m compileall -q tests/test_coda_projected_engraving.py
+      - name: Render and verify five actual Coda MusicXML variants
+        id: proof
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/coda-score"
+          echo "${{ github.sha }}" > "$RUNNER_TEMP/coda-score/revision.txt"
+          set -o pipefail
+          timeout 115s python -m pytest -q -rx --tb=short \
+            --basetemp="$RUNNER_TEMP/coda-score/artifacts" \
+            --junitxml="$RUNNER_TEMP/coda-score/junit.xml" \
+            tests/test_coda_projected_engraving.py \
+            | tee "$RUNNER_TEMP/coda-score/output.txt"
+      - name: Save revision-bound MusicXML and real SVG
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coda-projected-svg-${{ github.sha }}
+          path: ${{ runner.temp }}/coda-score/
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Fail closed if any source note lacks actual ink
+        if: steps.proof.outcome != 'success'
+        run: exit 1
