@@ -263,5 +263,59 @@ func run() -> void:
         check(absf(inside.score_beat(at) - quarter * .25) < .000001,
             "Internal rest/bar boundary diverged from grading time at %d" % quarter)
 
+    # Variable source tempo, then one full silent measure at practice BPM.
+    # The same absolute run_at is retained even when the feedback snapshot
+    # arrives after the source has ended.
+    var shaped_rest_clock = load("res://visual_transport_clock.gd").new()
+    var shaped_idle := {"revision": 21, "transport_id": 19,
+        "phase": "ready", "running": false, "paused": false,
+        "clock_sampled_at_ms": 1000000.0, "bpm": 80.0,
+        "visual_scroll_speed": 0.0}
+    shaped_rest_clock.accept(shaped_idle,base_ms,base_ms)
+    var visual_map: Array = [
+        {"start_beat":0.0, "end_beat":4.0, "bpm":64.0},
+        {"start_beat":4.0, "end_beat":8.0, "bpm":80.0},
+        {"start_beat":8.0, "end_beat":12.0, "bpm":80.0}
+    ]
+    var shaped_play := {"revision":21, "transport_id":20,
+        "phase":"playing", "running":true, "paused":false,
+        "bpm":80.0, "clock_beat":0.0, "clock_elapsed_seconds":0.0,
+        "visual_offset_beats":0.0, "play_from_beat":0.0,
+        "visual_run_at_ms":1000000.0,
+        "clock_sampled_at_ms":1000000.0,
+        "visual_tempo_segments":visual_map,
+        "tempo_segments":visual_map.slice(0,2)}
+    shaped_rest_clock.accept(shaped_play,base_ms,base_ms)
+    check(absf(shaped_rest_clock.visual_beat(base_ms+3750)-4.0)<.000001,
+        "Shaped source reaches the tempo change at the MIDI deadline")
+    check(absf(shaped_rest_clock.visual_beat(base_ms+6750)-8.0)<.000001,
+        "Shaped source arrives at the appended measure without stalling")
+    var shaped_gap := shaped_play.duplicate(true)
+    shaped_gap["phase"] = "preview_gap"
+    shaped_gap["running"] = false
+    shaped_gap["preview_only"] = true
+    shaped_gap["visual_scroll_beat"] = 8.0+(.25*80.0/60.0)
+    shaped_gap["visual_scroll_speed"] = 80.0/60.0
+    shaped_gap["clock_sampled_at_ms"] = 1007000.0
+    shaped_rest_clock.accept(shaped_gap,base_ms+7000,base_ms+7150)
+    check(absf(shaped_rest_clock.visual_beat(base_ms+7150)-(
+        8.0+(.40*80.0/60.0)))<.000001,
+        "Delayed shaped-tempo feedback cannot reanchor the score")
+    check(absf(shaped_rest_clock.visual_beat(base_ms+9750)-12.0)<.000001,
+        "Variable-tempo rest finishes at the exact next downbeat")
+    var shaped_next := shaped_play.duplicate(true)
+    shaped_next["transport_id"] = 21
+    shaped_next["visual_offset_beats"] = 12.0
+    shaped_next["visual_run_at_ms"] = 1009750.0
+    shaped_next["clock_sampled_at_ms"] = 1009850.0
+    shaped_next["clock_beat"] = .1*64.0/60.0
+    shaped_rest_clock.accept(shaped_next,base_ms+9850,base_ms+9850)
+    check(absf(shaped_rest_clock.visual_beat(base_ms+9850)-(
+        12.0+.1*64.0/60.0))<.000001,
+        "Shaped-tempo next attempt preserves camera position")
+    check(absf(shaped_rest_clock.score_beat(base_ms+9850)-
+        .1*64.0/60.0)<.000001,
+        "Grading clock and camera use the same tempo-mapped epoch")
+
     print("VISUAL_TRANSPORT_CLOCK_FAILURES:", failure_count)
     quit(0 if failure_count == 0 else 1)
