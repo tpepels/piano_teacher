@@ -282,3 +282,67 @@ def test_real_mixed_meter_coda_written_slowdown_svg(factor,tmp_path):
         root=ET.fromstring(svg)
         assert root.tag.endswith("svg")
         (tmp_path/f"mixed-meter-x{factor}-{i}.svg").write_text(svg)
+
+
+@pytest.mark.parametrize("actual,normal",[(5,4),(7,4)])
+def test_source_authored_quintuplet_septuplet_produces_real_svg(
+        actual,normal,tmp_path):
+    source=Path(__file__).parent / "fixtures/research" / f"coda_group_{actual}_{normal}.musicxml"
+    piece=load_musicxml(source,bpm=80)
+    original=ExerciseVariant("original",Phrase(1,1,1,0,4,piece.notes),
+                             tuple(range(len(piece.notes))))
+    # Original quintuplet/septuplet remains intact; LH can change.
+    plan=CodaReferenceDotted(True).transform(
+        original,boundaries=piece.bar_boundaries,
+        quantization=20 if actual==5 else 70,
+        source_musicxml=piece.source_musicxml).timing
+    stage=project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"coda-ratio"))
+    rendered=artifacts.engraving(stage.selection)
+    assert set(rendered.layout["attack_map"])=={
+        n.source_id for n in original.notes}
+    classes={token for svg in rendered.pages for elem in ET.fromstring(svg).iter()
+             for token in elem.get("class","").split()}
+    assert "tuplet" in classes
+    assert rendered.pages
+    for i,svg in enumerate(rendered.pages):
+        (tmp_path/f"coda-{actual}-{normal}-{i}.svg").write_text(svg)
+
+
+def test_retimed_slur_keeps_its_real_verovio_curve(tmp_path):
+    from dataclasses import replace
+    from piano_teacher.exercise_contracts import OriginalTiming,TimingPlan
+
+    root=ET.fromstring(SOURCE.read_text())
+    right=[n for n in root.findall("./part")[0].findall("./measure")[0].findall("note")
+           if n.find("pitch") is not None]
+    a=ET.SubElement(right[0],"notations")
+    ET.SubElement(a,"slur",type="start",number="1")
+    b=ET.SubElement(right[-1],"notations")
+    ET.SubElement(b,"slur",type="stop",number="1")
+    filename=tmp_path/"retimed-slur.musicxml"
+    filename.write_text(ET.tostring(root,encoding="unicode"))
+    piece=load_musicxml(filename,bpm=80)
+    original=ExerciseVariant(
+        "original",Phrase(1,1,2,0,8,piece.notes),
+        tuple(range(len(piece.notes))))
+    default=OriginalTiming().transform(original)
+    events=list(default.events)
+    for n in original.notes:
+        if n.hand!="right" or n.start>=4:
+            continue
+        idx=next(i for i,x in enumerate(original.notes) if x.source_id==n.source_id)
+        start=(0,1.5,2,3.5)[int(n.start)]
+        duration=(1.5,.5,1.5,.5)[int(n.start)]
+        events[idx]=replace(events[idx],exercise_start=start,
+                            exercise_end=start+duration)
+    transformed=TimingPlan("retimed-slur",original,tuple(events),8)
+    stage=project_coda_score(
+        piece,transformed,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"slur-model"))
+    score=artifacts.engraving(stage.selection)
+    assert set(score.layout["attack_map"])=={n.source_id for n in original.notes}
+    classes={token for svg in score.pages for elem in ET.fromstring(svg).iter()
+             for token in elem.get("class","").split()}
+    assert "slur" in classes
+    (tmp_path/"retimed-source-slur.svg").write_text(score.pages[0])
