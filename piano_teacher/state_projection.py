@@ -173,6 +173,7 @@ class TimingSnapshot(_Snapshot):
     feedback_unmapped: int = 0
     scoring_available: bool = False
     tempo_segments: tuple[Mapping, ...] = ()
+    visual_tempo_segments: tuple[Mapping, ...] = ()
     mapped_clock_beat: float | None = None
 
 
@@ -298,6 +299,7 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
         "clock_beat": active_beat if timing.running else 0.0,
         "clock_elapsed_seconds": elapsed if timing.running else 0.0,
         "tempo_segments": _payload(timing.tempo_segments),
+        "visual_tempo_segments": _payload(timing.visual_tempo_segments),
         "visual_offset_beats": timing.visual_offset_beats,
         "visual_scroll_beat": timing.visual_motion[0], "visual_target_beat": timing.visual_motion[2],
         "visual_scroll_speed": timing.visual_motion[1], "visual_gap_beats": timing.visual_gap_beats,
