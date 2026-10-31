@@ -61,3 +61,36 @@ def test_single_clock_sample_reaches_visual_consumers():
     output = run.stdout + run.stderr
     assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
     assert "PRACTICE_FRAME_COORDINATOR_FAILURES:0" in output, output
+
+
+def test_snapshot_assembly_and_live_hit_mapping_have_one_owner():
+    server = (ROOT / "piano_teacher/server.py").read_text()
+    assert "return capture_session_snapshot(self)" in server
+    assert "ActivitySnapshot(" not in server
+    assert "TimingSnapshot(" not in server
+    builder = (ROOT / "piano_teacher/application/session_snapshot_builder.py").read_text()
+    assert "ActivitySnapshot(" in builder and "TimingSnapshot(" in builder
+    assert "return SessionSnapshot(" in builder
+
+    main = (ROOT / "godot/main.gd").read_text()
+    handler = main.split("func _consume_live_piano_hits(", 1)[1].split(
+        "\nfunc ", 1)[0]
+    assert "live_midi_feedback.consume(" in handler
+    assert "for note in notes:" not in handler
+    assert "live_midi_feedback.bind_layout(values, _published_revision)" in main
+    index = (ROOT / "godot/live_midi_feedback.gd").read_text()
+    assert "note_by_id[str(note.get(" in index
+    assert "note_by_id.get(note_id, {})" in index
+
+
+@pytest.mark.skipif(not (shutil.which("godot") or shutil.which("godot4")),
+                    reason="Godot is not installed")
+def test_live_midi_hits_use_revision_bound_score_index():
+    binary = shutil.which("godot") or shutil.which("godot4")
+    run = subprocess.run(
+        [binary, "--headless", "--path", str(ROOT / "godot"),
+         "--script", str(ROOT / "tests/godot/live_midi_feedback.gd")],
+        capture_output=True, text=True, timeout=20)
+    output = run.stdout + run.stderr
+    assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
+    assert "LIVE_MIDI_FEEDBACK_FAILURES:0" in output, output
