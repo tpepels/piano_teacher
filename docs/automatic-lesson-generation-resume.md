@@ -196,3 +196,25 @@ Original music and production stage selection unchanged.
 This covers strict unchanged triplet groups and complete-bar
 mixed-meter slowdown, not general tuplet retiming nor
 physical MIDI/Godot verification. See the Gate 2 tracker.
+
+## 2026-10-31 — Coda retimed expressive marks, more ratios, author score diff
+
+Current research projection now supports same-voice, noncrossing,
+same-measure retimed source slurs; safe shortened continuation of
+plain existing cross-bar ties; unambiguously note-anchored source
+dynamics relocated to the new written beat in private XML; complete,
+unchanged source 5:4 and 7:4 eighth-note tuplets (alongside 3:2).
+Real Verovio/WAV proof: 16/16 tests at run `41199395502`,
+artifact `13041668228`. Fast regressions: **238 passed,
+6 skipped** at run `41199689519`.
+
+New pinned author differential on existing source MusicXML:
+6/6 voice MMR arrays match; algorithm exercise outputs on these
+three more varied source samples: 9 exact matches, 17 mismatches,
+4 upstream-none. Source report artifact `13042256100`
+(run `41199689501`). Never claim complete parity.
+Source-authored tie handling vs the author's multiple written
+segments is a key open mismatch. Unhandled source rests in tuplets,
+nested/cross-measure tuplets, advanced directions and physical
+Godot/MIDI remain open. All work direct on main, research-only,
+short CI jobs; source and original mastery unchanged.

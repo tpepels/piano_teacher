@@ -646,3 +646,103 @@ cross-measure), actual time-warping of slurs/ties and expressive
 directions, tuplets with Coda source operations changing those notes,
 true repertoire-wide research parity, native Godot on these transformed
 scores, physical keyboard MIDI and teaching effectiveness.
+
+## Retimed expressive marks and expanded author differential — 2026-10-31
+
+### Research-only supported source transformations
+
+- Authored **slurs** can follow source attacks retimed inside their
+  original measure, in the same source voice and hand, only if all
+  attacks remain present, strictly ordered and nonoverlapping. The
+  renderer attaches the original paired slur by source identity, and
+  the research adapter compares each explicit authored endpoint
+  against the actual generated XML. A reversed/overlapping
+  intervention fails. Real Verovio curves were verified.
+- Plain **cross-bar ties** may shorten their final sounding note,
+  provided the attack and original tie boundary remain unchanged,
+  the note still ends *after* the boundary, and the shortened tail
+  does not overlap the source voice's authored rests. The generated
+  notation retains its original tie endpoints and the grader still
+  owns **one sounding attack**, not two. Retiming a tie before its
+  boundary, styling it or moving its start remains unsupported.
+- The original **dynamic** `p/pp/ppp/mp/mf/f/ff/fff` can follow
+  a *single exact source attack* inside the same source measure,
+  including a changed beat, using a private source XML copy with a
+  new cursor-relative `offset`. The original score is immutable.
+  The generated music must carry the same hand, measure, symbol and
+  newly mapped beat (verified at 10080 ticks per quarter).
+  A representative `mf` moved from source beat 1 to exercise beat
+  1.5; the real generated Verovio SVG contains the corresponding
+  dynamic glyph. Ambiguous attacks, moving across a barline, arbitrary
+  source words/wedges or unsupported directions fail closed.
+- Source-owned **5:4 quintuplets and 7:4 septuplets** now join
+  3:2 triplets in the supported unchanged eighth-note group subset.
+  The adapter validates complete groups, actual:normal ratio,
+  original source IDs, contiguous durations, start/stop bracket
+  policy and actual generated MusicXML values. Another voice may
+  undergo the Coda rhythm transformation independently.
+  Source time is stored to eight decimal places; strict MMR tick
+  comparisons account for that known representation resolution
+  without accepting genuinely off-grid attacks.
+
+The new source tests and output corruption controls run in fast CI.
+The real Verovio workflow also checks all three tuplet ratios,
+retimed slur and note-anchored dynamic, earlier parallel-voice
+ties, rest and beam cases, and actual Listen WAV/MIDI feedback.
+
+### Reproducible validation
+
+- Revision `1260b601669d8f4cafb3d6c64b4c05ab520a10a9`:
+  https://github.com/tpepels/piano_teacher/actions/runs/41199395502
+  **16 selected real Verovio/WAV/feedback tests passed**;
+  retained SVG and source files artifact `13041668228`.
+- Current semantic regression on `3d5c4abd211866b61d842c07d136d368154c4479`:
+  https://github.com/tpepels/piano_teacher/actions/runs/41199689519
+  **238 passed / 6 skipped**, separate 10/10 established source
+  semantic fixtures (261 original attacks, 288 native events).
+- Source and author differential on the same code revision:
+  https://github.com/tpepels/piano_teacher/actions/runs/41199689501
+  artifact `13042256100`.
+
+### Additional pinned original-Coda comparison (never blanket parity)
+
+The pinned original backend
+`annieetang/coda_backend@a4eb85dfc2bd418818ca9ff775c0a11ccccb3530`
+was executed unchanged on a bounded selection of actual checked-in
+MusicXML. The first two bars only were selected from the longer
+multipage source. Each selected reference voice's three
+`128 × T` MMR arrays was compared elementwise to our original
+unmodified source MMR:
+
+| Sample | Exact original MMR voices | Exact algorithm sequences | Different outputs | Author returns no output |
+|---|---:|---:|---:|---:|
+| Parallel-voice ties | 2/2 | 0 | 8 | 2 |
+| Authored beams | 2/2 | 4 | 5 | 1 |
+| Multipage first two bars | 2/2 | 5 | 4 | 1 |
+| **Total** | **6/6** | **9** | **17** | **4** |
+
+Every source-voice MMR matched exactly, but **only 9 of 30 author
+exercise output cases matched exactly**. Those nine are individual
+fixture/parameter observations, **not complete reference parity**.
+The original backend sometimes emits multiple written notes at the
+same onset where this project retains one sustained source MIDI
+identity, including in tied voices; this must be reconciled at the
+notation *and* performance levels instead of silently equating their
+raw event sequences. The author also returns no exercise for
+several requested chordification levels. These 21 outstanding cases
+remain recorded in the revision-bound JSON.
+
+The four earlier pinned simple-source parity cases remain green.
+New standalone research diagnostics for sixteenth-note runs matched,
+while quintuplet and septuplet spacings hit upstream matrix errors.
+Those two are explicitly *unverified* author-parity cases.
+
+### Still blocked
+
+This increment does **not** implement nested/cross-measure tuplets,
+tuplets containing source rests, remapped tuplet member attacks,
+retimed and styled tie starts, cross-measure slur reshaping, arbitrary
+text/pedal/hairpin directions, or full MusicXML/music21 tie-event
+equivalence. Native Godot physical framebuffer and physical MIDI
+verification of these new research projections are also outstanding.
+**Coda Gate 2 remains incomplete and research-only.**

@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-31",
+  "current_checked_code_revision": "3d5c4abd211866b61d842c07d136d368154c4479",
+  "source_fidelity": {
+    "retimed_slur": "same voice/hand, same measure, source notes preserved and ordered without overlap",
+    "retimed_tie": "plain unchanged attack and boundary, safely shortened final sounding continuation",
+    "retimed_dynamic": "simple exact note-anchored symbol with beat-accurate private XML offset",
+    "tuplet_ratios": [
+      "3:2",
+      "5:4",
+      "7:4"
+    ],
+    "tuplet_scope": "complete unchanged eighth-note groups, another voice may transform"
+  },
+  "svg_evidence": {
+    "run": "https://github.com/tpepels/piano_teacher/actions/runs/41199395502",
+    "artifact_id": 13041668228,
+    "passed": 16
+  },
+  "fast_evidence": {
+    "run": "https://github.com/tpepels/piano_teacher/actions/runs/41199689519",
+    "passed": 238,
+    "skipped": 6
+  },
+  "upstream_differential": {
+    "revision": "a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
+    "run": "https://github.com/tpepels/piano_teacher/actions/runs/41199689501",
+    "artifact_id": 13042256100,
+    "source_samples": [
+      "source-parallel-ties",
+      "source-authored-beams",
+      "long-multipage-first-two-bars"
+    ],
+    "exact_mmr_voice_matches": 6,
+    "mmr_voice_denominator": 6,
+    "algorithm_cases": 30,
+    "exact_algorithm_matches": 9,
+    "algorithm_mismatches": 17,
+    "upstream_none": 4,
+    "complete_parity": false,
+    "additional_diagnostics": {
+      "sixteenth_note_runs": "match",
+      "quintuplet": "upstream-matrix-error",
+      "septuplet": "upstream-matrix-error"
+    }
+  },
+  "remaining": [
+    "nested/rest-bearing tuplets",
+    "retimed triplet members",
+    "general direction marks",
+    "styled and retimed tie starts",
+    "cross-measure slur transformations",
+    "native Godot framebuffer",
+    "physical MIDI",
+    "full author-algorithm parity"
+  ],
+  "production_enabled": false,
+  "gate2_complete": false
+}
