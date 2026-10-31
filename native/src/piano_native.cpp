@@ -213,3 +213,23 @@ Array PianoNative::take_responses() {
     return result;
 }
 
+
+void initialize_piano_bridge(ModuleInitializationLevel level) {
+    if (level == MODULE_INITIALIZATION_LEVEL_SCENE)
+        ClassDB::register_class<PianoNative>();
+}
+
+void uninitialize_piano_bridge(ModuleInitializationLevel) {}
+
+extern "C" {
+GDExtensionBool GDE_EXPORT piano_bridge_library_init(
+        GDExtensionInterfaceGetProcAddress get_proc_address,
+        GDExtensionClassLibraryPtr library,
+        GDExtensionInitialization *initialization) {
+    GDExtensionBinding::InitObject init(get_proc_address, library, initialization);
+    init.register_initializer(initialize_piano_bridge);
+    init.register_terminator(uninitialize_piano_bridge);
+    init.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
+    return init.init();
+}
+}
