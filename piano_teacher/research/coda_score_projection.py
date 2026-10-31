@@ -24,6 +24,9 @@ from ..practice import PlayedNote
 from .coda_source_tuplets import (
     source_tuplet_groups, verify_projected_tuplets,
 )
+from .coda_written_tie_segments import (
+    WrittenTieChain, tie_segment_chains, verify_written_tie_projection,
+)
 from ..notation.lesson import build_lesson_score, infer_piece_clefs
 from .coda_annotation_guard import (
     source_annotation_obligations, verify_annotation_projection,
@@ -165,6 +168,7 @@ class CodaProjectedStage:
     tempo_map: TempoMap
     reference_family: str
     original_source_sha256: str
+    written_ties: tuple[WrittenTieChain, ...] = ()
 
     def listen_selection(self) -> ListenSelection:
         return ListenSelection(
@@ -216,6 +220,7 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
         factor=1
     obligations = source_annotation_obligations(piece,timing,factor=factor)
     tuplet_groups = source_tuplet_groups(piece,timing,factor=factor)
+    written_ties = tie_segment_chains(piece,timing) if obligations.ties else ()
     grid,meters,keys,clefs=_original_metadata(piece,original,timing,factor)
     new_phrase=timing.exercise_phrase
     new_phrase=replace(new_phrase,first_bar=1,last_bar=len(grid)-1)
@@ -236,7 +241,7 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
         bar_boundaries=grid,time_signatures=meters,key_signatures=keys,
         clef_changes=clefs,barlines=bars,source_musicxml=source_xml,
         fingering_plan=None)
-    if obligations.notes or obligations.dynamics or obligations.ties or tuplet_groups:
+    if obligations.notes or obligations.dynamics or obligations.ties or tuplet_groups or written_ties:
         preview = build_lesson_score(
             new_phrase,boundaries=projected_piece.bar_boundaries,
             time_signatures=projected_piece.time_signatures,
@@ -250,6 +255,7 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
                                      preview.note_bindings)
         verify_projected_tuplets(tuplet_groups,preview.musicxml,
                                  preview.note_bindings)
+        verify_written_tie_projection(written_ties,preview)
     variant=ExerciseVariant(
         timing.name,new_phrase,timing.original.source_indices)
     digest=sha256((piece.source_musicxml+timing.name+
@@ -261,4 +267,5 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
     tempo=ConstantTempo().generate(timing,bpm)
     return CodaProjectedStage(piece,timing,projected_piece,variant,selection,
                               tempo,reference_family,
-                              sha256(piece.source_musicxml.encode()).hexdigest())
+                              sha256(piece.source_musicxml.encode()).hexdigest(),
+                              written_ties)
