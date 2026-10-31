@@ -18,8 +18,13 @@ func _initialize() -> void:
     score.measure_by_number = {1:measure}
     score.ordered_events = [first,last]
     score.cached_head_offsets = {"first":-3.0,"last":4.0}
+    score.prepare_event_positions(20.0)
     var connector := Connectors.new(score)
     var failures := 0
+    if not score.prepared_event_y.has("first") or \
+            score.prepared_step(first,20.0) != 0 or \
+            absf(score.event_y(first,20.0)-220.0)>.000001:
+        failures += 1
     var place: Dictionary = connector.tie_placement(first,last,100,200,20)
     if place["x0"]!=97.0 or place["x1"]!=204.0 or place["y"]!=220.0 or not place["down"]:
         failures += 1
