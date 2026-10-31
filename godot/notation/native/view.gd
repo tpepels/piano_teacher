@@ -339,7 +339,7 @@ func _new_retained_segment(kind: String, variant: String,
         context: Dictionary = {}) -> Node2D:
     var segment: Node2D = RetainedSegment.new()
     add_child(segment)
-    segment.configure(self,kind,variant,context)
+    segment.call("configure",self,kind,variant,context)
     return segment
 
 func _install_retained_segments() -> void:
@@ -351,7 +351,7 @@ func _install_retained_segments() -> void:
         retained_repeat_segments.append(_new_retained_segment("source","repeat"))
         retained_rest_segments.append(_new_retained_segment("rest","normal"))
     retained_annotations = RetainedAnnotationOverlay.new()
-    retained_annotations.owner_view = self
+    retained_annotations.set("owner_view",self)
     retained_annotations.z_index = 5
     add_child(retained_annotations)
     _hide_retained_segments()
@@ -658,7 +658,7 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
     fingering_pass_clocks.append({"clock":camera_clock,"pass_index":pass_index,"pass_start":pass_start})
     return frame
 
-func _project_retained_source(segment: Node2D, shift_x: float,
+func _project_retained_source(segment, shift_x: float,
         camera_clock: float, pass_index: int, pass_start: float) -> void:
     segment.position = Vector2(shift_x,0.0)
     segment.visible = true
