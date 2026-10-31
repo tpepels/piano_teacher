@@ -22,6 +22,8 @@ from piano_teacher.research.coda_reference_exercises import (
 )
 from piano_teacher.music import Phrase
 from piano_teacher.research.coda_matrix import MatrixScore
+from piano_teacher.exercise_contracts import OriginalTiming
+from piano_teacher.research.coda_written_tie_segments import tie_segment_chains
 from piano_teacher.research.coda_reference_matrix import (
     reference_quantization,score_voice_matrices,
 )
@@ -34,6 +36,12 @@ CASES=(
      "tests/fixtures/connector_pixels/beams/score.musicxml",1),
     ("long-multipage-first-two-bars",
      "tests/fixtures/musical_fidelity/xml_long_multipage.musicxml",2),
+    ("authored-triplet",
+     "tests/fixtures/research/coda_authored_triplet.musicxml",1),
+    ("rest-bearing-triplet",
+     "tests/fixtures/research/coda_triplet_interior_rest.musicxml",1),
+    ("changing-meter",
+     "tests/fixtures/research/coda_mixed_meter.musicxml",2),
 )
 
 
@@ -76,6 +84,14 @@ def _case(name: str, filename: str, bars: int, converter, meter, key,
         generated=score_voice_matrices(matrix,quantization=q)
         row.update(source_attacks=len(notes),source_part_voices=len(generated),
                    quantization=q,source_duration_beats=end)
+        if len(piece.bar_boundaries)==bars+1:
+            chains=tie_segment_chains(
+                piece,OriginalTiming().transform(variant))
+            row["source_written_tie_chains"]=len(chains)
+            row["distinct_sounding_attacks_in_ties"]=len({
+                c.sounding_id for c in chains})
+        else:
+            row["source_written_tie_chains"]=None
         reference=converter.parse(str(ROOT/filename))
         candidates=[]
         for part in reference.parts:
