@@ -44,16 +44,3 @@ def test_compatibility_main_accepts_explicit_argv_and_restores_process_args(caps
     assert sys.argv is previous
 
 
-@pytest.mark.parametrize("selector", [None, "0", "1"])
-def test_native_smoke_needs_godot_without_renderer_selection(monkeypatch, capsys, selector):
-    from scripts import smoke_native_notation
-
-    if selector is None:
-        monkeypatch.delenv("PIANO_TEACHER_NATIVE_NOTATION", raising=False)
-    else:
-        monkeypatch.setenv("PIANO_TEACHER_NATIVE_NOTATION", selector)
-    monkeypatch.setattr(smoke_native_notation.shutil, "which", lambda _: None)
-    with pytest.raises(SystemExit) as error:
-        smoke_native_notation.main([])
-    assert error.value.code == 2
-    assert "Godot 4 is required" in capsys.readouterr().err

@@ -35,7 +35,8 @@ def test_no_midi_mode_cannot_award_mastery(tmp_path):
         assert engine.state()["phase"] == "playing"
         engine.run_at = time.monotonic() - 50
         result = engine.state()
-        assert not result["running"]
+        # Hands-free preview can begin its next take; no MIDI must never
+        # produce graded mastery regardless of the loop phase.
         assert result["mastered"] == 0
         assert engine.plan.failures == 0
     finally:
