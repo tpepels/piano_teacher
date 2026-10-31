@@ -3,18 +3,23 @@ extends RefCounted
 ## Owns only authentic tie/flag contour cache; event geometry belongs to ScoreLayout.
 var score
 var flag_clearances: Dictionary = {}
+var prepared_ties: Dictionary = {}
+var prepared_beams: Dictionary = {}
 
 func _init(score_layout) -> void:
     score = score_layout
 
 func clear_cache() -> void:
     flag_clearances.clear()
+    prepared_ties.clear()
+    prepared_beams.clear()
 
 # Flag/tie intersection uses CPU pixel scans and texture.get_image().
 # Every tie has a camera-invariant head-to-head distance, so calculate its
 # clearance once when the score is installed, before playback can start.
 # Painting a later measure may only look up the existing result.
 func prewarm_tie_clearances(gap: float) -> void:
+    prepared_ties.clear()
     for pair in score.tie_pairs:
         var first: Dictionary = pair["first"]
         var last: Dictionary = pair["last"]
@@ -22,7 +27,30 @@ func prewarm_tie_clearances(gap: float) -> void:
         var last_x: float = score.timeline.x_at_beat(float(last.get("beat", 0.0)))
         var placement: Dictionary = tie_placement(first, last, first_x, last_x, gap)
         if not placement.is_empty():
-            tie_contour_rect(first, last, placement, gap)
+            var rect: Rect2 = tie_contour_rect(first, last, placement, gap)
+            if rect.has_area():
+                var key: String = str(first.get("id",""))+"|"+str(last.get("id",""))
+                prepared_ties[key] = {
+                    "direction":tie_template_key(first,last,placement,gap),
+                    "rect":rect}
+
+func prepared_tie(first: Dictionary, last: Dictionary, shift_x: float) -> Dictionary:
+    var key: String = str(first.get("id",""))+"|"+str(last.get("id",""))
+    if not prepared_ties.has(key):
+        return {}
+    var cached: Dictionary = prepared_ties[key]
+    var base: Rect2 = cached["rect"]
+    return {"direction":cached["direction"],
+        "rect":Rect2(base.position+Vector2(shift_x,0.0),base.size)}
+
+func prewarm_beam_layout(gap: float, head_offsets: Dictionary) -> void:
+    # Build every beam with source X coordinates once, without viewport
+    # clipping. Playback only translates those prebuilt members.
+    prepared_beams.clear()
+    var all: Dictionary = beam_layout(
+        gap,0.0,0.0,head_offsets,0.0,score.beam_groups,true)
+    for item in all["groups"]:
+        prepared_beams[str(item["art_key"])] = item
 
 func tie_placement(first: Dictionary, last: Dictionary,
         x0: float, x1: float, gap: float) -> Dictionary:
@@ -217,7 +245,8 @@ func tie_clear_flag(event: Dictionary, direction: String, left: float,
 # to what the pianist can actually see, not to the whole imported MIDI.
 
 func beam_layout(gap: float, clock: float, playhead_x: float,
-        head_offsets: Dictionary, play_from_beat: float, visible_groups: Array) -> Dictionary:
+        head_offsets: Dictionary, play_from_beat: float, visible_groups: Array,
+        include_offscreen: bool = false) -> Dictionary:
     # Beam position is derived from the real notehead Y coordinates.
     # All horizontal positions still come from the one musical-time axis.
     var stems: Dictionary = {}
@@ -230,7 +259,7 @@ func beam_layout(gap: float, clock: float, playhead_x: float,
             float(group[0].get("beat", 0.0)), clock, playhead_x, play_from_beat)
         var last_x: float = score.timeline.screen_x(
             float(group[-1].get("beat", 0.0)), clock, playhead_x, play_from_beat)
-        if last_x < -60.0 or first_x > score.size.x + 60.0:
+        if not include_offscreen and (last_x < -60.0 or first_x > score.size.x + 60.0):
             continue
         visible_count += 1
         var up: bool = bool(score.beam_stem_up_by_note[str(group[0].get("id",""))])
@@ -238,6 +267,22 @@ func beam_layout(gap: float, clock: float, playhead_x: float,
         for event in group:
             group_ids.append(str(event.get("id","")))
         var source_key: String = "|".join(group_ids)
+        if not include_offscreen and prepared_beams.has(source_key):
+            var canonical: Dictionary = prepared_beams[source_key]
+            var shift_x: float = playhead_x-(
+                clock+play_from_beat)*score.timeline.pixels_per_beat
+            var projected_members: Array = []
+            for source_member in canonical["members"]:
+                var shifted: Dictionary = source_member.duplicate(false)
+                shifted["x"] = float(source_member["x"])+shift_x
+                shifted["head_x"] = float(source_member["head_x"])+shift_x
+                projected_members.append(shifted)
+                stems[str(shifted["id"])] = {"up":canonical["up"],
+                    "tip_y":shifted["tip_y"],"x":shifted["x"]}
+            var painted: Dictionary = canonical.duplicate(false)
+            painted["members"] = projected_members
+            drawn_groups.append(painted)
+            continue
         var members: Array = []
         var source_stems: Array = []
         var source_heads: Array = score.glyphs.beam_metadata[source_key]["head_offsets"]
