@@ -208,12 +208,13 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
             best_round_trip_ms = round_trip
             has_backend_offset = true
         captured_ms = mini(roundi(backend_ms + backend_offset_ms), received_ms)
-    # Tempo-mapped source playback is epoch-based; the current backend
-    # still projects automatic shaped-tempo gaps using its nominal BPM.
-    # Keep that gap on the sampled projection until the backend supplies
-    # one tempo map covering the rest as well.
+    # The explicit forward visual map contains authored tempo changes and
+    # the appended silent measure at practice BPM. This is the exact same
+    # run_at timeline used to grade MIDI; the rest is no special clock state.
+    # Old snapshots lacking the field retain the strictly limited fallback.
+    var has_visual_map: bool = state.has("visual_tempo_segments")
     visual_epoch_enabled = (state.has("visual_run_at_ms") and
-        has_backend_offset and (next_active or
+        has_backend_offset and (has_visual_map or next_active or
             _uniform_tempo(next_segments, next_bpm)))
     if visual_epoch_enabled:
         visual_epoch_backend_ms = float(state.get("visual_run_at_ms", 0.0))
@@ -221,7 +222,8 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
         visual_epoch_bpm = next_bpm
         # Active graded time includes source tempo changes. Automatic gap
         # transport uses the same source-time mapping until its next take.
-        visual_epoch_segments = next_segments.duplicate(true)
+        visual_epoch_segments = state.get("visual_tempo_segments",
+            next_segments).duplicate(true)
     var observed: float = float(state.get("clock_beat", 0.0))
     var next_elapsed: float = float(state.get("clock_elapsed_seconds", 0.0))
     if next_active:
