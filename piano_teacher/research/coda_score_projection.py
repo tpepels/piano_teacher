@@ -21,12 +21,18 @@ from ..exercise_contracts import ConstantTempo, TempoMap, TimingPlan, assess_tim
 from ..exercise_generator import ExerciseVariant
 from ..music import Piece, Phrase
 from ..practice import PlayedNote
+from ..notation.lesson import build_lesson_score, infer_piece_clefs
+from .coda_annotation_guard import (
+    source_annotation_obligations, verify_annotation_projection,
+)
 
 
-_ALLOWED_MEASURE = frozenset({"attributes", "note", "backup", "forward"})
+_ALLOWED_MEASURE = frozenset({
+    "attributes", "note", "backup", "forward", "direction",
+})
 _ALLOWED_NOTE = frozenset({
     "pitch", "rest", "duration", "voice", "type", "dot", "staff", "chord",
-    "accidental", "stem",
+    "accidental", "stem", "notations", "beam",
 })
 _ALLOWED_ATTRIBUTES = frozenset({
     "divisions", "key", "time", "clef", "staves",
@@ -52,6 +58,8 @@ def _safe_xml(source: str, *, slowdown: bool) -> ET.Element:
                 tag = _tag(item)
                 if tag not in _ALLOWED_MEASURE:
                     raise ValueError(f"Coda notation projection cannot preserve {tag}")
+                if slowdown and tag == "direction":
+                    raise ValueError("Coda slowdown cannot yet preserve source directions")
                 if tag == "attributes":
                     if seen_note:
                         raise ValueError("Coda projection rejects mid-measure attribute changes")
@@ -63,6 +71,8 @@ def _safe_xml(source: str, *, slowdown: bool) -> ET.Element:
                     if item.find("{*}grace") is not None or (
                             set(map(_tag,item)) - _ALLOWED_NOTE):
                         raise ValueError("Coda projection cannot remap expressive/tuplet/tied notes")
+                    if item.find("{*}tie") is not None:
+                        raise ValueError("Coda source ties need a separate continuation proof")
                     if item.find("{*}chord") is not None and slowdown:
                         # The original note groups are still source-owned,
                         # but sync of a chord's original XML cursor is not
@@ -185,6 +195,7 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
             raise ValueError("Slowdown must scale the complete original source timeline")
     else:
         factor=1
+    obligations = source_annotation_obligations(piece,timing,factor=factor)
     grid,meters,keys,clefs=_original_metadata(piece,original,timing,factor)
     new_phrase=timing.exercise_phrase
     new_phrase=replace(new_phrase,first_bar=1,last_bar=len(grid)-1)
@@ -203,6 +214,18 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
         bar_boundaries=grid,time_signatures=meters,key_signatures=keys,
         clef_changes=clefs,barlines=bars,source_musicxml=source_xml,
         fingering_plan=None)
+    if obligations.notes or obligations.dynamics:
+        preview = build_lesson_score(
+            new_phrase,boundaries=projected_piece.bar_boundaries,
+            time_signatures=projected_piece.time_signatures,
+            key_signatures=projected_piece.key_signatures,
+            clef_changes=projected_piece.clef_changes,
+            default_clefs=infer_piece_clefs(projected_piece.notes),
+            barlines=projected_piece.barlines,
+            source_musicxml=projected_piece.source_musicxml,
+            retimed_source=True)
+        verify_annotation_projection(obligations,preview.musicxml,
+                                     preview.note_bindings)
     variant=ExerciseVariant(
         timing.name,new_phrase,timing.original.source_indices)
     digest=sha256((piece.source_musicxml+timing.name+
