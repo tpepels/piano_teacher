@@ -3,8 +3,8 @@ signal catalog_loaded(values: Dictionary)
 
 # Own the library catalogue and health-poll lifecycle; application navigation
 # and the /library/open transport command remain with the main controller.
-var catalog_request: HTTPRequest
-var health_request: HTTPRequest
+var catalog_request
+var health_request
 var pending := false
 var health_pending := false
 var health_running := false
@@ -24,7 +24,7 @@ func configure(url: String, library_view, home_view,
     _failure = failure
     _send_post = send_post
 
-func attach_requests(catalog: HTTPRequest, health: HTTPRequest) -> void:
+func attach_requests(catalog, health) -> void:
     catalog_request = catalog
     health_request = health
 

@@ -27,6 +27,7 @@ const LibraryCatalogCoordinator := preload("res://library_catalog_coordinator.gd
 const MidiDeviceCoordinator := preload("res://midi_device_coordinator.gd")
 const ScoreAssetSession := preload("res://score_asset_session.gd")
 const ScoreAssetHttp := preload("res://score_asset_http.gd")
+const InProcessBus := preload("res://inprocess_bus.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -38,7 +39,7 @@ var lesson_view: LessonScreen
 var lesson_session := LessonSession.new()
 var screens: Dictionary = {}
 var library_catalog = LibraryCatalogCoordinator.new()
-var settings_request: HTTPRequest
+var settings_request
 var library_view: LibraryScreen
 var settings_pending := false
 var preferences: Dictionary = {}
@@ -67,11 +68,11 @@ var last_post_path := ""
 var last_control_action := ""
 var pending_transport_action := ""
 var action_request_started_ms := 0
-var state_request: HTTPRequest
-var layout_request: HTTPRequest
-var action_request: HTTPRequest
+var state_request
+var layout_request
+var action_request
 var midi_devices = MidiDeviceCoordinator.new()
-var device_request: HTTPRequest  # Existing request callback wiring.
+var device_request  # Existing request callback wiring.
 var device_menu_requested: bool:
     get:
         return midi_devices.picker_requested
@@ -116,7 +117,7 @@ var last_playhead_strike_beat := -INF
 var last_playhead_strike_transport := -1
 var visual_transport_clock = VisualTransportClock.new()
 # The native compositor is the sole production score view.
-var timeline_model_request: HTTPRequest
+var timeline_model_request
 var timeline_model_pending: bool:
     get:
         return score_session.timeline_model_pending if score_session != null else false
@@ -138,7 +139,7 @@ var frame_meter = FrameMeter.new()
 var phase0_last_phase := ""
 var phase0_last_cursor_tick := -1
 var phase0_last_lead_tick := -999
-var lesson_request: HTTPRequest
+var lesson_request
 var device_pending: bool:
     get:
         return midi_devices.pending
@@ -150,10 +151,13 @@ var last_seen_midi_visual_sequence := 0
 var state_poll_timer: Timer
 var live_udp := PacketPeerUDP.new()
 var live_udp_port := 0
-var live_subscribe_request: HTTPRequest
+var live_subscribe_request
 var live_subscribed := false
 var live_subscribe_pending := false
 var live_subscribe_retry_ms := 0
+var use_inprocess := false
+var inprocess_bus
+var native_started := false
 
 func _ready() -> void:
     # On 120/144 Hz laptops Godot otherwise renders the entire translucent
@@ -167,12 +171,18 @@ func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
+    use_inprocess = OS.get_cmdline_user_args().has("--in-process")
+    if use_inprocess:
+        inprocess_bus = InProcessBus.new()
+        add_child(inprocess_bus)
     # Apply one device-independent Window scale before creating the controls.
     # Do not enlarge fonts and controls a second time in the layouts.
     _configure_ui_scaling()
     ui_scale = _readable_ui_scale()
     _build_interface()
     demo_player = preload("res://demo_player.gd").new()
+    if use_inprocess:
+        demo_player.call("set_inprocess_bus", inprocess_bus)
     add_child(demo_player)
     settings_view.present_volume(float(demo_player.get("listen_volume_db")))
     demo_player.prepared.connect(func(token: String, ready_revision: int):
@@ -189,13 +199,14 @@ func _ready() -> void:
     if not get_window().size_changed.is_connected(_update_responsive_layout):
         get_window().size_changed.connect(_update_responsive_layout)
     _update_responsive_layout()
-    if live_udp.bind(0, "127.0.0.1") == OK:
-        live_udp_port = live_udp.get_local_port()
-    else:
-        push_warning("MIDI live datagrams unavailable; using HTTP events")
+    if not use_inprocess:
+        if live_udp.bind(0, "127.0.0.1") == OK:
+            live_udp_port = live_udp.get_local_port()
+        else:
+            push_warning("MIDI live datagrams unavailable; using HTTP events")
     live_subscribe_request = _new_request(_on_live_subscribe)
     state_request = _new_request(_on_state)
-    score_http.attach(self, score_session, URL)
+    score_http.attach(self, score_session, URL, inprocess_bus)
     layout_request = score_http.layout_request
     timeline_model_request = score_http.model_request
 
@@ -213,11 +224,12 @@ func _ready() -> void:
     state_poll_timer.autostart = true
     state_poll_timer.timeout.connect(_poll)
     add_child(state_poll_timer)
-    _subscribe_live_udp()
-    _poll()
-    _request_devices()
-    _request_settings()
-    _request_library()
+    if not use_inprocess:
+        _subscribe_live_udp()
+        _poll()
+        _request_devices()
+        _request_settings()
+        _request_library()
     var scan_timer := Timer.new()
     scan_timer.wait_time = 5.0
     scan_timer.autostart = true
@@ -399,8 +411,13 @@ func _visible_score_noteheads() -> int:
     return visible
 
 
-func _new_request(callback: Callable) -> HTTPRequest:
-    var req := HTTPRequest.new()
+func _new_request(callback: Callable):
+    var req
+    if use_inprocess:
+        req = preload("res://inprocess_request.gd").new()
+        req.configure(inprocess_bus)
+    else:
+        req = HTTPRequest.new()
     req.timeout = 5.0
     add_child(req)
     req.request_completed.connect(callback)
@@ -809,6 +826,8 @@ func _toggle_fullscreen() -> void:
     _on_fullscreen_toggle(enabled)
 
 func _subscribe_live_udp() -> void:
+    if use_inprocess:
+        return
     if live_udp_port == 0 or live_subscribed or live_subscribe_pending:
         return
     var now := Time.get_ticks_msec()
@@ -827,6 +846,19 @@ func _on_live_subscribe(_result: int, code: int, _headers: PackedStringArray,
     live_subscribed = code == 200
 
 func _read_live_midi() -> void:
+    if use_inprocess:
+        if inprocess_bus == null or not inprocess_bus.is_ready():
+            return
+        for message in inprocess_bus.poll_midi(last_seen_midi_visual_sequence):
+            if not message is Dictionary:
+                continue
+            var event: Dictionary = message
+            event["age"] = 0.0
+            practice_view.stage.feedback.accept_live_event(event, last_state)
+            var display_state: Dictionary = last_state.duplicate(false)
+            display_state["midi_visual_events"] = [event]
+            _consume_live_piano_hits(display_state)
+        return
     if live_udp_port == 0:
         return
     # Bound per-frame work. UDP delivery is untrusted presentation input,
@@ -856,6 +888,12 @@ func _poll() -> void:
             state_pending = false
 
 func _process(_delta: float) -> void:
+    if use_inprocess and not native_started and inprocess_bus != null and inprocess_bus.is_ready():
+        native_started = true
+        _poll()
+        _request_devices()
+        _request_settings()
+        _request_library()
     # On-device frame intervals, opt-in only. _delta is never fed back into
     # the backend tempo or score assessment; tests may call _process(0).
     if frame_diagnostics and current_screen == "practice":
@@ -981,7 +1019,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             and not str(parsed.get("device", "")).is_empty())
         # Note-on cues arrive via loopback datagrams within the next frame;
         # full-state projections can now poll slightly less often.
-        var interval := (0.08 if live_subscribed else 0.05) if live_rate else 0.15
+        var interval := (0.08 if use_inprocess or live_subscribed else 0.05) if live_rate else 0.15
         if absf(state_poll_timer.wait_time - interval) > 0.001:
             state_poll_timer.wait_time = interval
     settings_view.present_practice(parsed, current_screen == "settings")

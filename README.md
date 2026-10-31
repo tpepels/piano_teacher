@@ -99,6 +99,17 @@ godot --headless --path godot --script "$PWD/tests/godot/ink_spacing.gd"
 godot --headless --path godot --script "$PWD/tests/godot/retry_camera_clock.gd"
 ```
 
+**Experimental single-process desktop runtime:** The source tree now
+contains an in-memory Godot GDExtension queue embedding CPython, an
+in-process dispatcher for score/lesson/control/audio requests, a direct
+MIDI event ring, and bundling scripts. No TCP/UDP or background server
+is used in this native mode. The developer opt-in is
+`bash scripts/build-inprocess.sh && ./run-inprocess.sh`; the existing
+`./run.sh` is intentionally unchanged until the native extension is
+compiled and physically tested. A prebuilt self-contained release has
+**not** been produced or verified. See
+[In-process desktop runtime](docs/inprocess-runtime.md).
+
 **MIDI-only product contract:** Personal music requires only `.mid` or `.midi`.
 The app derives readable notation from MIDI note events, tracks and available
 meter/key metadata; it may generate MusicXML **internally** as a rendering

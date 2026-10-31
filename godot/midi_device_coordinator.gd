@@ -2,7 +2,7 @@ extends RefCounted
 
 # Owns MIDI-input discovery requests and picker state. The main controller
 # retains backend /device transport actions and navigation, passed as callbacks.
-var request: HTTPRequest
+var request
 var pending := false
 var picker_requested := false
 var names: Array = []
@@ -20,7 +20,7 @@ func configure(url: String, settings, decode: Callable,
     _failure = failure
     _send_post = send_post
 
-func attach_request(value: HTTPRequest) -> void:
+func attach_request(value) -> void:
     request = value
 
 func discover() -> void:

@@ -81,7 +81,8 @@ class PracticeEngine:
     _preparation_at = TransportField("_preparation_at")
     visual_gap_beats = TransportField("visual_gap_beats")
 
-    def __init__(self, data_dir: Path | None = None, enable_midi: bool = True):
+    def __init__(self, data_dir: Path | None = None, enable_midi: bool = True,
+                 visual_publisher=None):
         self.lock = threading.RLock()
         # Whole-source inference must never block MIDI or state polling.
         # Serialize source loads and durable corrections separately instead.
@@ -99,7 +100,8 @@ class PracticeEngine:
         self.next_boundary_beat = 0.0
         self.feedback_seconds = SETTINGS.feedback_seconds
         self.midi_calibration = MidiTapCalibration()
-        self.midi_visual_publisher = MidiVisualPublisher()
+        self.midi_visual_publisher = (visual_publisher if visual_publisher is not None
+                                      else MidiVisualPublisher())
         self.runtime_timings = RuntimeTimings()
         self.recovery_notice: dict | None = None
         self.pause_context: str | None = None

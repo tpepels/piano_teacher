@@ -8,7 +8,8 @@ var sync_monitor = ListenSync.new()
 var last_sync_probe_ms := 0
 var last_start_offset_s := 0.0
 var player: AudioStreamPlayer
-var request: HTTPRequest
+var request
+var inprocess_bus: Node
 var token := ""
 var revision := -1
 var audio_path := ""
@@ -20,6 +21,9 @@ var audio_error := false
 # Independent local gain for the recorded piano; no MIDI output changes.
 var listen_volume_db := 6.0
 
+func set_inprocess_bus(bus: Node) -> void:
+    inprocess_bus = bus
+
 func _ready() -> void:
     player = AudioStreamPlayer.new()
     var config := ConfigFile.new()
@@ -27,7 +31,11 @@ func _ready() -> void:
         listen_volume_db = clampf(float(config.get_value("audio", "listen_volume_db", 6.0)), -12.0, 12.0)
     player.volume_db = listen_volume_db
     add_child(player)
-    request = HTTPRequest.new()
+    if inprocess_bus != null:
+        request = preload("res://inprocess_request.gd").new()
+        request.configure(inprocess_bus)
+    else:
+        request = HTTPRequest.new()
     request.timeout = 120.0
     request.request_completed.connect(_downloaded)
     add_child(request)

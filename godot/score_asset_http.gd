@@ -3,17 +3,25 @@ extends RefCounted
 # Thin HTTP transport for the independent ScoreAssetSession. Each callback
 # returns the exact request ID granted by its owner; aborting an in-flight
 # old HTTP request cannot accidentally publish that revision's score.
-var layout_request: HTTPRequest
-var model_request: HTTPRequest
+var layout_request
+var model_request
 var _owner
 var _base_url := ""
+var _inprocess_bus: Node
 var _request_ids := {"layout":-1, "model":-1}
 
-func attach(host: Node, owner, base_url: String) -> void:
+func attach(host: Node, owner, base_url: String, bus: Node = null) -> void:
     _owner = owner
     _base_url = base_url
-    layout_request = HTTPRequest.new()
-    model_request = HTTPRequest.new()
+    _inprocess_bus = bus
+    if bus != null:
+        layout_request = preload("res://inprocess_request.gd").new()
+        model_request = preload("res://inprocess_request.gd").new()
+        layout_request.configure(bus)
+        model_request.configure(bus)
+    else:
+        layout_request = HTTPRequest.new()
+        model_request = HTTPRequest.new()
     layout_request.timeout = 90.0
     model_request.timeout = 5.0
     host.add_child(layout_request)
@@ -30,7 +38,7 @@ func attach(host: Node, owner, base_url: String) -> void:
 
 func start(kind: String, request_id: int, path: String,
         timeout_seconds: float) -> void:
-    var request: HTTPRequest = (layout_request if kind == "layout" else model_request)
+    var request = layout_request if kind == "layout" else model_request
     if request == null:
         _owner.request_start_result(kind, request_id, ERR_UNAVAILABLE,
             Time.get_ticks_msec())

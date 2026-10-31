@@ -1,0 +1,22 @@
+"""Linux Godot 4.7 GDExtension embedding the exact build-time CPython ABI.
+
+Build-time requirements (compiler, SCons, godot-cpp, Python headers) never
+become user/runtime package installation requirements. The native release
+ships the extension with the matching Python runtime and wheel dependencies.
+"""
+import os
+import sysconfig
+
+env = SConscript("godot-cpp/SConstruct", {"api_version": "4.7"})
+env.Append(CPPPATH=["src", sysconfig.get_path("include")])
+env.Append(CXXFLAGS=["-std=c++17", "-pthread", "-O2"])
+env.Append(LIBPATH=[sysconfig.get_config_var("LIBDIR")])
+env.Append(LIBS=["python"+sysconfig.get_config_var("LDVERSION")])
+env.Append(LINKFLAGS=["-pthread"])
+# Relative resolution is handled by the bundled launcher setting
+# LD_LIBRARY_PATH; no system Python is needed in a published runtime.
+target = env.get("target", "template_debug")
+arch = env.get("arch", "x86_64")
+dest = "../godot/native/bin/libpiano_bridge.linux."+target+"."+arch
+library = env.SharedLibrary(target=dest, source=["src/piano_native.cpp"])
+Default(library)
