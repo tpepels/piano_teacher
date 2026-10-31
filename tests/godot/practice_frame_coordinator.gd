@@ -27,8 +27,11 @@ class Stage:
     var effects = Effects.new()
 
 class Practice:
-    extends Busy
+    extends RefCounted
     var stage = Stage.new()
+    var calls := 0
+    func present_busy(_busy: bool) -> void:
+        calls += 1
 
 class Pulses:
     extends RefCounted
