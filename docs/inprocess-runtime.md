@@ -10,9 +10,14 @@ runtime, HTTP service, UDP listener or port binding.
   audio. Static Verovio beam texture slices, slur polygons, tie contours,
   chord order, note positions and expression/endings spans are prepared when
   the score/viewport changes. Frames only translate these prepared structures
-  and draw visible marks. The entire note/context compositor is not yet a
-  retained CanvasItem layer: it still dispatches visible glyph drawing each
-  frame, so the frame-time target still needs measured verification.
+  and draw visible marks. Source notation and automatic silence now live
+  in retained `CanvasItem` command buffers. Repeated copies reuse pooled
+  source/rest nodes positioned by transforms; recovery creates precompiled
+  source/rest variants when its authored context changes. Fingering and
+  transport effects remain on separate overlays. Score publication waits
+  until all ordinary retained source/rest buffers have compiled. Current
+  segments cover whole passages, so unusually long scores may still need
+  finer spatial tiling and GPU/frame-time benchmarking.
 - `PianoNative` owns one worker thread and an in-memory command/response
   queue, with completion callbacks delivered on Godot's main thread.
   Its condition-variable wait has a bounded monotonic wakeup: the same worker
@@ -82,8 +87,11 @@ Use the in-process `/diagnostics/performance` command for MIDI
 callback and state-projection processing times. The bounded local checks
 `tests/test_inprocess_scheduler.py` and
 `tests/test_prepared_sprite_plans.py` cover poll-independent loop progression
-and immutable authored-ink geometry. Actual Godot drawing and physical MIDI
-timing still require a local runtime run. Compiling Python
+and immutable authored-ink geometry.
+`tests/test_retained_score_pipeline.py` checks the retained frame contract
+and exercises transform-only movement under headless Godot. Actual visual
+parity, full-score GPU performance, and physical MIDI synchronization still
+require a local runtime run. Compiling Python
 bytecode or adding multiprocessing is not useful without measured
 CPU-bound bottlenecks. The primary optimization is the eliminated
 network/service boundary and the pre-indexed active passage.
