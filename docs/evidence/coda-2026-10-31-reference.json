@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-31",
+  "current_code_revision": "20b7ba9f954dfe08a176042c02d46e2cc44051f5",
+  "reference_repository": "annieetang/coda_backend",
+  "reference_revision": "a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
+  "reference_execution": "original music/exercise.py unmodified; MongoDB initializer stubbed",
+  "differential_run_url": "https://github.com/tpepels/piano_teacher/actions/runs/41192215147",
+  "differential_artifact_id": 13039805435,
+  "fixture": "tests/fixtures/research/coda_four_families.musicxml",
+  "voices": 2,
+  "notation_events": 16,
+  "matrix_arrays_compared": 6,
+  "algorithm_event_sequences_compared": 10,
+  "algorithms": [
+    "slowdown x2",
+    "slowdown x4",
+    "dotted [1.5,0.5]",
+    "dotted [0.5,1.5]",
+    "chordification level 8"
+  ],
+  "exact_match": true,
+  "fast_ci_run": "https://github.com/tpepels/piano_teacher/actions/runs/41192215134",
+  "fast_ci_tests_passed": 207,
+  "fast_ci_skipped": 6,
+  "complete_research_parity": false,
+  "not_verified": [
+    "mixed duration passages",
+    "source chords",
+    "multi-voice slurs/ties",
+    "source rests through transformations",
+    "odd-length dotted runs",
+    "other meter or quantization",
+    "generalized chordification levels",
+    "transformed notation/audio/hardware",
+    "pedagogical outcomes"
+  ]
+}

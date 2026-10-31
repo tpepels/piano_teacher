@@ -111,3 +111,14 @@ fail-closed guards. Existing production remains untouched.
 See `docs/research-reproduction-gate-2-coda.md` for the thesis
 and source comparison, known upstream limitations and remaining
 reference-run parity work. No full notation audit or long CI.
+
+## Reference parity checkpoint — 2026-10-31
+
+Explicit short original-backend differential run `41192215147`
+against author SHA `a4eb85df...` PASSED: all 6
+128-pitch MMR array comparisons and 10 output exercise
+event comparisons on the source-backed two-hand uniform
+example. Current repo revision `20b7ba9f`, fast CI
+`207 passed, 6 skipped`. See the Gate 2 report for the
+exact tested scope and exclusions. Run is explicit-only, so
+ordinary CI remains short.

@@ -307,10 +307,58 @@ grouping widths. This is a **specification-derived test set**;
 the author's functions have not yet been executed against
 the same fixture, and no production source stage is switched on.
 
-The next non-vacuous gate is to run these exact small reference
-input scores through the *pinned upstream backend* and compare
-part/voice output and per-voice matrices and generated MusicXML,
-while explicitly recording cases where the upstream fails or
-changes source identities. Follow that with offline transformed
-notation and Listen/MIDI/grade integration. No full corpus audit
+One exact pinned-backend differential sample has now PASSED as detailed
+below. Remaining: broaden to mixed rhythms/voice cases and exact source
+exercises beyond the trivial uniform fixture; account for reference
+errors without claiming invented parity. Follow with offline transformed
+notation and Listen/MIDI/grade integration. No full-corpus audit
 is warranted for this gate.
+
+## Executable author-source differential, 2026-10-31
+
+**First constrained reference parity demonstrated** on current
+`main` at `20b7ba9f954dfe08a176042c02d46e2cc44051f5`.
+The separate, explicit-only GitHub workflow
+`.github/workflows/coda-upstream-parity.yml`
+uses a short, isolated runner and obtains the author's public,
+unmodified checkout at SHA
+`a4eb85dfc2bd418818ca9ff775c0a11ccccb3530`.
+Only the database service initializer unused by the symbolic
+generation is stubbed; the author's actual `ExerciseLine`,
+`_create_matrices`, `generate_slowed_down_exercise`,
+`generate_dotted_exercise` and `generate_chordify_exercise`
+execute.
+
+Run: https://github.com/tpepels/piano_teacher/actions/runs/41192215147
+
+Result **PASS**. On the pinned 2-measure, 2-part,
+16-note `coda_four_families.musicxml` fixture, all three
+`128 × T` arrays match the original code in both voices
+(**6 exact array comparisons**). All **10** nontrivial
+output event sequences match (2 hands × 5 algorithms):
+written slowdown ×2 and ×4, dotted ×(1.5,.5),
+dotted ×(.5,1.5) and chordification level=8.
+Events are independently normalized from the actual
+music21-generated `Part` as
+`(onset in quarter beats, MIDI pitch, written duration in beats)`,
+not compared using this project's own transformations on both sides.
+The original code's return values are neither mocked nor substituted.
+
+Current-revision retained artifact: `13039805435`;
+revision-bound fast contract gate:
+https://github.com/tpepels/piano_teacher/actions/runs/41192215134
+(**207 passed, 6 skipped**).
+
+**Limit of evidence:** this is parity on one deliberately small,
+representable, straight-quarter-note fixture using 4/4, one
+pitch-bearing voice per hand. It does not cover source beaming,
+ties, rests interacting with transformed rhythms, odd-length
+runs, multiple simultaneous source chord notes, multiple
+time signatures, unusual quantization, varied grouping levels,
+the author's optional UI/pipeline variations, or generated
+MusicXML visual appearance. Never generalize the above
+6+10 comparisons to those cases. The published implementation
+itself has open TODOs for ties/rests.
+
+All four Coda strategies remain opt-in research code, not
+completed production exercises. Gate 2 is still **partial**.
