@@ -7,9 +7,19 @@ runtime, HTTP service, UDP listener or port binding.
 ## Ownership
 
 - Godot owns score painting, user actions, animation, metronome and Listen
-  audio.
+  audio. Static Verovio beam texture slices, slur polygons, tie contours,
+  chord order, note positions and expression/endings spans are prepared when
+  the score/viewport changes. Frames only translate these prepared structures
+  and draw visible marks. The entire note/context compositor is not yet a
+  retained CanvasItem layer: it still dispatches visible glyph drawing each
+  frame, so the frame-time target still needs measured verification.
 - `PianoNative` owns one worker thread and an in-memory command/response
   queue, with completion callbacks delivered on Godot's main thread.
+  Its condition-variable wait has a bounded monotonic wakeup: the same worker
+  calls `EngineCommands.tick()` to advance automatic attempts, recovery and
+  other musical deadlines even when the UI does not request `/state`.
+  Writes re-evaluate the wakeup cadence immediately. No second clock or
+  Python scheduler thread is created.
 - `piano_teacher.inprocess.EngineCommands` dispatches typed engine
   operations. `PracticeEngine` remains authoritative for musical time,
   grading, adaptive lessons, library state and MIDI input.
@@ -69,7 +79,11 @@ native smoke runs on the developer machine at build/start and in the
 bounded GitHub native workflow.
 
 Use the in-process `/diagnostics/performance` command for MIDI
-callback and state-projection processing times. Compiling Python
+callback and state-projection processing times. The bounded local checks
+`tests/test_inprocess_scheduler.py` and
+`tests/test_prepared_sprite_plans.py` cover poll-independent loop progression
+and immutable authored-ink geometry. Actual Godot drawing and physical MIDI
+timing still require a local runtime run. Compiling Python
 bytecode or adding multiprocessing is not useful without measured
 CPU-bound bottlenecks. The primary optimization is the eliminated
 network/service boundary and the pre-indexed active passage.
