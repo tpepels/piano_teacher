@@ -47,15 +47,15 @@ func consume(state: Dictionary, effects, stage, last_sequence: int,
             continue
         if status == "unexpected":
             var reference: String = str(event.get("reference_source_id", ""))
-            var note_id: String = str(attack_map.get(reference, ""))
-            var note: Dictionary = note_by_id.get(note_id, {})
-            if note.is_empty():
+            var reference_note_id: String = str(attack_map.get(reference, ""))
+            var missed_note: Dictionary = note_by_id.get(reference_note_id, {})
+            if missed_note.is_empty():
                 continue
             var remaining: int = maxi(1, 420 - int(age * 1000.0))
             effects.wrong_ghosts.append({
-                "page": int(note.get("page", 0)),
-                "x": float(note.get("x", 0.0)),
-                "y": float(note.get("y", 0.0)),
+                "page": int(missed_note.get("page", 0)),
+                "x": float(missed_note.get("x", 0.0)),
+                "y": float(missed_note.get("y", 0.0)),
                 "duration_ms": 420,
                 "until_ms": Time.get_ticks_msec() + remaining
             })
@@ -68,13 +68,13 @@ func consume(state: Dictionary, effects, stage, last_sequence: int,
             continue
         var source: String = str(event.get("source_id", ""))
         var note_id: String = str(attack_map.get(source, ""))
-        var note: Dictionary = note_by_id.get(note_id, {})
-        if note.is_empty():
+        var hit_note: Dictionary = note_by_id.get(note_id, {})
+        if hit_note.is_empty():
             continue
         effects.hit_pulses.append({
-            "page": int(note.get("page", 0)),
-            "x": float(note.get("x", 0.0)),
-            "y": float(note.get("y", 0.0)),
+            "page": int(hit_note.get("page", 0)),
+            "x": float(hit_note.get("x", 0.0)),
+            "y": float(hit_note.get("y", 0.0)),
             "status": status,
             "note_id": note_id,
             "duration_ms": 220,
