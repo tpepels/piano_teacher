@@ -79,6 +79,10 @@ class ScoreArtifacts:
             self._model = None
         return self._notation
 
+    def notation_musicxml(self, selected: ScoreSelection) -> str:
+        """The exact selected lesson XML, shared with model and engraving."""
+        return self._selected_notation(selected).musicxml
+
     def source_model(self, selected: ScoreSelection) -> dict:
         """Internal source contract; HTTP callers use the isolated semantic response."""
         notation = self._selected_notation(selected)
