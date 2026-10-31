@@ -218,12 +218,21 @@ func paint_beams(canvas, frame: RenderPass, data: Dictionary, gap: float) -> voi
         if float(last["head_x"]) < -40.0 or \
                 float(first["head_x"]) > score_layout.size.x+40.0:
             continue
-        var anchors: Array = []
-        for member in members:
-            anchors.append(float(member["x"]))
-        score_layout.glyphs.paint_beam(canvas,str(group["art_key"]),anchors,
-            float(group["anchor_y"]),gap,
-            frame.event_ink(score_layout,group),group["source_stem_offsets"])
+        # Regions were cut from the authentic Verovio beam at score load.
+        # The frame path only changes one canvas translation and the hand ink.
+        var regions: Array = group.get("regions",[])
+        if regions.is_empty():
+            continue
+        var beam_texture: Texture2D = score_layout.glyphs.beam_textures.get(
+            str(group["art_key"]))
+        if beam_texture == null:
+            continue
+        canvas.draw_set_transform(Vector2(float(group.get("source_shift_x",0.0)),0.0))
+        var ink: Color = frame.event_ink(score_layout,group)
+        for region in regions:
+            canvas.draw_texture_rect_region(beam_texture,region["dest"],
+                region["source"],ink)
+        canvas.draw_set_transform(Vector2.ZERO)
 
 
 func paint_ties(canvas, frame: RenderPass, playhead_x: float, clock: float, gap: float) -> void:
