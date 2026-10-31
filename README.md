@@ -6,7 +6,7 @@ passages into a complete performance. All progress stays local.
 
 **MIDI practice grading:** Starting tempos now reflect consecutive MIDI note
 attacks: sixteenth-note passages can start near 30 BPM rather than the
-ordinary 40 BPM. At low speeds a wider onset window (225 ms at 40 BPM)
+ordinary 40 BPM. At low speeds a wider onset window (300 ms at 40 BPM)
 and more forgiving key-release lengths help beginning practice. Accepted
 notes are green, early/late or short/long notes yellow, and wrong/missed
 notes red. Repeated notes are matched to the closest actual MIDI attack.
@@ -21,6 +21,26 @@ into untimed Learn or requiring an unexpected piano keypress. Use Learn
 explicitly when desired. The native score gives consecutive fast notes at
 least 36 screen pixels between attack times (when the MIDI has sustained fast
 rhythm), preserving the shared linear score clock and real glyph shapes.
+
+**Bluetooth/MIDI input calibration:** Open **Settings → MIDI input →
+Calibrate MIDI timing**, then tap any piano key with each of the eight audible
+clicks. The app measures the median deviation between its reference click
+clock and incoming MIDI note-on timestamps and displays tap-to-tap variation.
+If enough taps agree, select **Apply offset** to save the correction for
+subsequent practice (up to 250 ms). **Reset offset** returns to zero.
+No device or direct audio loopback is involved: the estimate also includes
+human response and speaker/output latency, so it is *not* a precise measurement
+of Bluetooth transport latency. Inconsistent samples cannot be applied.
+The source score clock stays unchanged; only incoming attack timestamps are
+adjusted. New sessions reopen the last opened MIDI score at its saved lesson
+position without automatically starting playback.
+
+In timed Coda practice, a failed passage is allowed to finish before
+automatic recovery. The reversing score camera is smoothed for poll jitter
+and the preparation bar now supplies audible countdown ticks without extending
+the pause. RubricNet trained-score generation remains available only to
+research scripts; its original-MusicXML-dependent option is hidden from
+the MIDI-only application.
 
 **MIDI-only product contract:** Personal music requires only `.mid` or `.midi`.
 The app derives readable notation from MIDI note events, tracks and available

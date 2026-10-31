@@ -147,6 +147,19 @@ func run() -> void:
             check(image.get_width() >= keyboard.position.x + keyboard.size.x
                 and image.get_height() >= keyboard.position.y + keyboard.size.y,
                 "all rendered registers fit the actual viewport at width %d" % (width + 48))
+    # MIDI note numbers cannot choose enharmonic labels. The actual score
+    # signature must determine the physical key caption.
+    keyboard.set_key_fifths(-4)
+    check(keyboard._pitch_name(56) == "Ab3",
+        "four flats label MIDI pitch 56 A-flat, not G-sharp")
+    check(keyboard._pitch_name(58) == "Bb3",
+        "four flats label MIDI pitch 58 B-flat")
+    keyboard.set_key_fifths(-7)
+    check(keyboard._pitch_name(59) == "Cb4",
+        "seven flats preserve C-flat instead of B-natural")
+    keyboard.set_key_fifths(0)
+    check(keyboard._pitch_name(56) == "G#3",
+        "without a key signature the chromatic label falls back to sharps")
     keyboard.update_state(state([], [60]))
     check(not keyboard.visible, "no target hides a stale hint immediately")
     var complete := state([target(60)])
