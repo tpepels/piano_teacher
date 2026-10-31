@@ -233,6 +233,15 @@ func load_score(candidate: Dictionary) -> bool:
     layout.cached_offsets_gap = -1.0
     layout.cached_head_offsets.clear()
     layout.cached_accidental_offsets.clear()
+    # All event head offsets and flagged-tie pixel clearances belong to this
+    # immutable score layout. Never compute them on the first frame in which
+    # a previously invisible measure crosses the playhead.
+    var prepared_gap: float = staff_gap()
+    layout.cached_head_offsets = layout.engraved_head_offsets(prepared_gap)
+    layout.cached_accidental_offsets = Geometry.accidental_offsets(
+        layout.ordered_events, prepared_gap, layout.cached_head_offsets, glyphs.bounds)
+    layout.cached_offsets_gap = prepared_gap
+    connector_geometry.prewarm_tie_clearances(prepared_gap)
     failure_reason = ""
     native_ready = true
     queue_redraw()
