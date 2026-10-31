@@ -628,7 +628,7 @@ func _source_overlaps_preparation(pass_start: float) -> bool:
             return true
     return false
 
-func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -> void:
+func _place_retained_score(playhead_x: float, camera_clock: float) -> void:
     if retained_first_once == null:
         return
     var active_segments: Dictionary = {}
@@ -773,7 +773,7 @@ func _draw() -> void:
             HORIZONTAL_ALIGNMENT_LEFT,-1,15,NOTE_INK)
         _hide_retained_segments()
         return
-    _place_retained_score(playhead_x,camera_clock,gap)
+    _place_retained_score(playhead_x,camera_clock)
     if retained_annotations != null:
         retained_annotations.queue_redraw()
     # Never put engineering telemetry on top of the actual lesson.
