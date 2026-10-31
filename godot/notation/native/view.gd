@@ -667,15 +667,28 @@ func _project_retained_source(segment, shift_x: float,
     segment.visible = true
     if not segment.compiled:
         return
-    visible_symbols += segment.symbols_drawn
     frame_visible_beam_groups += segment.beam_groups_drawn
     fingering_pass_clocks.append({"clock":camera_clock,
         "pass_index":pass_index,"pass_start":pass_start})
     var playhead_x: float = size.x*PLAYHEAD_FRACTION
-    for source_note in segment.note_instances:
-        var screen: Vector2 = source_note["position"]+Vector2(shift_x,0.0)
-        if screen.x < -60.0 or screen.x > size.x+60.0:
-            continue
+    var notes: Array = segment.note_instances
+    var minimum: float = -60.0-shift_x
+    var maximum: float = size.x+60.0-shift_x
+    var low := 0
+    var high: int = notes.size()
+    while low < high:
+        var midpoint: int = (low+high)>>1
+        if float(notes[midpoint]["position"].x) < minimum:
+            low = midpoint+1
+        else:
+            high = midpoint
+    for index in range(low,notes.size()):
+        var source_note: Dictionary = notes[index]
+        var source_point: Vector2 = source_note["position"]
+        if source_point.x > maximum:
+            break
+        var screen: Vector2 = source_point+Vector2(shift_x,0.0)
+        visible_symbols += 1
         var current: Dictionary = source_note.duplicate(false)
         var ident: String = str(source_note["event_id"])
         current["position"] = screen
