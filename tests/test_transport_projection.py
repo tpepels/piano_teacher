@@ -3,6 +3,7 @@ from dataclasses import replace
 
 import pytest
 
+from piano_teacher.exercise_contracts import TempoMap, TempoSegment
 from piano_teacher.transport_projection import (
     VisualMotionSnapshot, project_visual_motion,
 )
@@ -81,3 +82,47 @@ def test_active_preparation_and_rewind_require_valid_targets(snapshot):
                                      preparation_at=0), 100)
     with pytest.raises(ValueError, match="target"):
         project_visual_motion(replace(snapshot, rewind_from=2), 100)
+
+
+def test_shaped_forward_projection_is_continuous_through_rest_and_repeat(snapshot):
+    tempo = TempoMap("test", (
+        TempoSegment(0, 4, 48),
+        TempoSegment(4, 8, 60),
+    ))
+    moving = replace(snapshot, phrase_length=8.0, visual_offset=12.0,
+                     bpm=80.0, run_at=100.0, running=True)
+    # Authored passage: four beats at 48 BPM, then four at 60 BPM.
+    # Appended rest: four beats at the practice BPM of 80.
+    first = project_visual_motion(moving, 105.0, tempo_map=tempo)
+    assert first == pytest.approx((16.0, 1.0, 20.0))
+    end = project_visual_motion(moving, 109.0, tempo_map=tempo)
+    assert end == pytest.approx((20.0, 80/60, 20.0))
+    resting = replace(moving, running=False, pending_auto_result=True)
+    assert project_visual_motion(resting, 109.0, tempo_map=tempo) == pytest.approx(
+        (20.0, 80/60, 24.0))
+    assert project_visual_motion(resting, 110.5, tempo_map=tempo) == pytest.approx(
+        (22.0, 80/60, 24.0))
+    # The backend may update late; rendering remains time-indexed.
+    assert project_visual_motion(resting, 112.25, tempo_map=tempo)[0] == pytest.approx(24.3333333333)
+    repeated = replace(moving, visual_offset=24.0, run_at=112.0)
+    assert project_visual_motion(repeated, 112.25, tempo_map=tempo)[0] == pytest.approx(
+        24.0+.25*48/60)
+
+
+def test_shaped_seek_and_pause_keep_same_source_epoch(snapshot):
+    tempo = TempoMap("test", (
+        TempoSegment(0, 4, 48),
+        TempoSegment(4, 8, 60),
+    ))
+    partial = replace(snapshot, phrase_length=8.0, visual_offset=16.0,
+                      play_from_beat=4.0, bpm=80.0, run_at=100.0, running=True)
+    at = project_visual_motion(partial, 102.0, tempo_map=tempo)
+    assert at[0] == pytest.approx(22.0)  # source beat 6
+    assert at[1] == pytest.approx(1.0)
+    paused = replace(partial, paused=True)
+    frozen = project_visual_motion(paused, 102.0, tempo_map=tempo)
+    assert frozen[0] == at[0] and frozen[1] == 0.0
+    assert project_visual_motion(paused, 102.0, tempo_map=tempo) == frozen
+    with pytest.raises(ValueError, match="duration"):
+        project_visual_motion(replace(partial, phrase_length=7.0), 102.0,
+                              tempo_map=tempo)
