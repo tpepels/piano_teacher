@@ -61,6 +61,12 @@ HTTP event history is the fallback if the UDP listener is unavailable.
 During connected practice, heavyweight state snapshots poll at 80ms
 instead of 50ms when UDP is subscribed.
 
+**MIDI callback CPU optimization:** The active phrase's MIDI attacks are
+indexed once before Start. Live note matching uses a bounded, near-beat
+binary search instead of scanning every score note on each key-down.
+For long MIDI files this removes work from the input callback, without
+changing source-note IDs or final grading. No multiprocessing is used.
+
 **Local performance diagnostics:** GET
 `http://127.0.0.1:8765/diagnostics/performance` after playing to
 inspect a bounded sample of Python MIDI-callback and full-state

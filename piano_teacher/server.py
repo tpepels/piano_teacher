@@ -1019,6 +1019,8 @@ class PracticeEngine:
             self.visual_transport.begin_take(loop_continuation=loop_continuation)
             self.transport_id+=1
             self.live_input.reset_attempt()
+            # Keep large-score attack indexing off the physical MIDI callback.
+            self.live_input.prepare(phrase)
             self.running=True
             self.auto=mode == "practice" and not self.preview_only
             self.awaiting_score_revision=None

@@ -6,6 +6,7 @@ belongs to practice.evaluate and the authoritative musical clock.
 from __future__ import annotations
 
 from collections import deque
+from bisect import bisect_left, bisect_right
 
 from .music import Phrase, source_note_id
 from .exercise_contracts import TempoMap
@@ -19,6 +20,23 @@ class LiveInputView:
         self.events: deque[dict] = deque(maxlen=32)
         self.sequence = 0
         self.used: set[int] = set()
+        self._indexed_phrase: Phrase | None = None
+        self._onset_beats: list[float] = []
+        self._ordered_notes: list[tuple[int, object]] = []
+
+    def prepare(self, phrase: Phrase) -> None:
+        """Build the MIDI attack index before the performance starts.
+
+        A physical MIDI callback should not sort an entire score or scan
+        thousands of unrelated noteheads on each keystroke.
+        """
+        if self._indexed_phrase is phrase:
+            return
+        self._indexed_phrase = phrase
+        ordered = sorted(enumerate(phrase.notes),
+                         key=lambda item: (item[1].start, item[0]))
+        self._ordered_notes = ordered
+        self._onset_beats = [note.start - phrase.start for _, note in ordered]
 
     def reset_attempt(self) -> None:
         self.used.clear()
@@ -71,7 +89,16 @@ class LiveInputView:
 
                 candidates = []
                 nearby = []
-                for index, note in enumerate(phrase.notes):
+                self.prepare(phrase)
+                beat = (tempo_map.beat_at(origin + at) if tempo_map is not None
+                        else from_beat + at * bpm / 60.0)
+                # All matching windows are under ~2 beats at allowed tempos.
+                # A buffer handles tempo changes at the boundary.
+                search_radius = max(2.0, 0.5 * max(
+                    bpm, tempo_map.bpm_at(beat) if tempo_map is not None else bpm)/60.0)
+                left = bisect_left(self._onset_beats, beat - search_radius)
+                right = bisect_right(self._onset_beats, beat + search_radius)
+                for index, note in self._ordered_notes[left:right]:
                     if ((hand != "both" and note.hand != hand) or
                             note.start - phrase.start < from_beat - 1e-7):
                         continue
