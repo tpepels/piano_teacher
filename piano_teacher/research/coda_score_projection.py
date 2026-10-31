@@ -114,17 +114,34 @@ def _original_metadata(piece:Piece, old:Phrase, plan:TimingPlan, factor:int):
         return original_grid, piece.time_signatures, piece.key_signatures, piece.clef_changes
     if factor not in (2,4):
         raise ValueError("Only published Coda written slowdown x2/x4 is supported")
-    if len({round(right-left,7) for left,right in zip(
-            original_grid, original_grid[1:])})!=1:
-        raise ValueError("Source slowdown cannot yet rebar mixed meter lengths")
-    if len({(n,d) for _,n,d in piece.time_signatures})>1:
-        raise ValueError("Source slowdown cannot yet rebar changing meters")
-    bar=original_grid[1]-original_grid[0]
+    # Expand EACH authored bar independently. A 3/4 bar followed by 2/4
+    # becomes 3/4,3/4,2/4,2/4 at x2, rather than inventing a single
+    # common bar length or leaving the change midway through a bar.
+    # Do not rebar pickups, partial measures or a mid-bar meter change:
+    # their source-level semantics need their own notation projection.
+    signatures=sorted(piece.time_signatures)
+    if any(not any(abs(beat-start)<1e-7 for start in original_grid[:-1])
+           for beat,_,_ in signatures):
+        raise ValueError("Coda slowdown cannot project a mid-measure meter change")
+    lengths=[]
+    for left,right in zip(original_grid,original_grid[1:]):
+        length=right-left
+        active=next(((n,d) for beat,n,d in reversed(signatures)
+                     if beat <= left+1e-7),None)
+        if active is not None and not isclose(
+                length,active[0]*4/active[1],abs_tol=1e-7):
+            raise ValueError("Coda slowdown cannot rebar incomplete source measures")
+        if length<=0:
+            raise ValueError("Coda slowdown requires positive original measure lengths")
+        lengths.append(length)
+    grid=[0.0]
+    for length in lengths:
+        for _ in range(factor):
+            grid.append(round(grid[-1]+length,8))
+    new_grid=tuple(grid)
     total=plan.duration_beats
-    count=round(total/bar)
-    if count <= 0 or not isclose(count*bar,total,abs_tol=1e-7):
-        raise ValueError("Slowdown does not occupy complete source-meter bars")
-    new_grid=tuple(round(i*bar,8) for i in range(count+1))
+    if not isclose(new_grid[-1],total,abs_tol=1e-7):
+        raise ValueError("Coda slowdown does not cover the original source grid")
     shift=lambda beat: round(beat*factor,8)
     keys=tuple(replace(v,beat=shift(v.beat)) for v in piece.key_signatures)
     clefs=tuple(replace(v,beat=shift(v.beat)) for v in piece.clef_changes)
