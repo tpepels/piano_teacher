@@ -144,8 +144,7 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
                 # members receive a separate entire-voice interval proof.
                 if factor != 1 or ((beams or stem) and not unchanged(source_id)):
                     raise ValueError("Coda annotations cannot follow a retimed source attack")
-                if (not unchanged(source_id) and not slurs
-                        and not articulations):
+                if not unchanged(source_id) and not slurs:
                     raise ValueError("Coda annotations cannot follow a retimed source attack")
                 marks.append(SourceNoteMarks(source_id,tuple(slurs),
                             tuple(articulations),beams,stem))
@@ -192,12 +191,12 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
                         for note,successor in zip(members,members[1:])):
                     raise ValueError("Coda cannot retime ambiguous polyphonic slurs")
                 for note in members:
-                    changed=exercise.get(note.source_id)
+                    changed=exercises.get(note.source_id)
                     if changed is None or not (
                             bar[0]-1e-7<=changed[0]<changed[1]<=bar[1]+1e-7):
                         raise ValueError("Coda slur moved an attack across source measure")
-                if any(exercise[first.source_id][1]>
-                       exercise[second.source_id][0]+1e-7
+                if any(exercises[first.source_id][1]>
+                       exercises[second.source_id][0]+1e-7
                        for first,second in zip(members,members[1:])):
                     raise ValueError("Coda cannot retime an overlapping or reordered slur")
             # A slur may share endpoints with a differently numbered
