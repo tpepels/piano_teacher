@@ -1716,6 +1716,7 @@ class PracticeEngine:
             tempo_segments=(tempo_map.from_beat(self.play_from_beat).as_segments()
                             if tempo_map is not None else ()),
             visual_tempo_segments=visual_segments,
+            visual_preparation_schedule=self.visual_transport.preparation_schedule(),
             mapped_clock_beat=(self._elapsed_beat(now-self.run_at)
                                if tempo_map is not None else None),
             running=self.running, paused=self.paused, auto=self.auto,
