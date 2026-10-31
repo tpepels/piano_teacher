@@ -267,7 +267,11 @@ func beam_layout(gap: float, clock: float, playhead_x: float,
         for event in group:
             group_ids.append(str(event.get("id","")))
         var source_key: String = "|".join(group_ids)
-        if not include_offscreen and prepared_beams.has(source_key):
+        if not include_offscreen:
+            # Live painting has no geometry-construction fallback: source
+            # beams were all prepared on score installation or resize.
+            if not prepared_beams.has(source_key):
+                continue
             var canonical: Dictionary = prepared_beams[source_key]
             var shift_x: float = playhead_x-(
                 clock+play_from_beat)*score.timeline.pixels_per_beat
