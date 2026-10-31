@@ -108,13 +108,14 @@ var retained_recovery_sources: Dictionary = {}
 var retained_recovery_rests: Dictionary = {}
 var retained_annotations: Node2D
 var retained_ink_published := false
-const RETAINED_POOL_SIZE := 5
+# Repeat copies are sized to the visible musical horizon, never a fixed five.
 
 func _init() -> void:
     resized.connect(func():
         layout.set_viewport(size)
         if native_ready and size.y >= 100.0:
             _prepare_static_geometry()
+            _resize_retained_pool()
             _invalidate_retained_segments()
     )
     annotations.fingering_change_requested.connect(func(source_id, finger):
@@ -351,14 +352,37 @@ func _install_retained_segments() -> void:
     retained_ink_published = false
     retained_first_once = _new_retained_segment("source","once")
     retained_first_loop = _new_retained_segment("source","first")
-    for i in range(RETAINED_POOL_SIZE):
-        retained_repeat_segments.append(_new_retained_segment("source","repeat"))
-        retained_rest_segments.append(_new_retained_segment("rest","normal"))
+    _resize_retained_pool()
     retained_annotations = RetainedAnnotationOverlay.new()
     retained_annotations.set("owner_view",self)
     retained_annotations.z_index = 5
     add_child(retained_annotations)
     _hide_retained_segments()
+
+func _required_repeat_copies() -> int:
+    # At most ceil(viewport/stride) source copies intersect the screen
+    # plus two possible partially visible neighbours and a boundary margin.
+    # A fixed pool wasted 5 full-score command buffers on long excerpts
+    # while silently dropping copies for very short passages.
+    var stride: float = float(practice_timeline.get("stride_beats",0.0))
+    if stride <= 0.0 or timeline.pixels_per_beat <= 0.0:
+        return 1
+    return maxi(1,ceili(size.x/(timeline.pixels_per_beat*stride))+3)
+
+func _resize_retained_pool() -> void:
+    if retained_first_loop == null:
+        return
+    var required: int = _required_repeat_copies()
+    while retained_repeat_segments.size() < required:
+        retained_repeat_segments.append(_new_retained_segment("source","repeat"))
+        retained_rest_segments.append(_new_retained_segment("rest","normal"))
+    while retained_repeat_segments.size() > required:
+        var last_source = retained_repeat_segments.pop_back()
+        var last_rest = retained_rest_segments.pop_back()
+        remove_child(last_source)
+        remove_child(last_rest)
+        last_source.queue_free()
+        last_rest.queue_free()
 
 func retained_ready() -> bool:
     if not native_ready or size.x < 100.0 or size.y < 100.0 or \
@@ -770,7 +794,6 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
         active_segments.append(retained_first_once)
         _sync_retained_visibility(active_segments)
         return
-    _remember_preparation()
     var stride: float = float(practice_timeline["stride_beats"])
     var virtual_left: float = visual_scroll_beat-playhead_x/density
     var virtual_right: float = virtual_left+size.x/density
