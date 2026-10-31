@@ -96,17 +96,17 @@ def test_changing_rhythm_resets_active_path_and_restores_previous_profile(tmp_pa
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
         engine.fingerprint = "timing-fixture"
-        engine.plan = LearningPlan(score())
-        legacy_key = engine.plan.identity
+        engine.plan = LearningPlan(score(), exercise_strategy="coda-part")
+        baseline_key = engine.plan.identity
         engine._save()
         engine.set_preferences(timing_strategy="dotted-long-short")
-        assert engine.plan.profile == "legacy~dotted-long-short"
+        assert engine.plan.profile == "coda-part~dotted-long-short"
         stage(engine.plan, "dotted-long-short")
         transformed_key = engine.plan.identity
         engine.plan.bpm = 55
         engine._save()
         engine.set_preferences(timing_strategy="original-timing")
-        assert engine.plan.identity == legacy_key
+        assert engine.plan.identity == baseline_key
         engine.set_preferences(timing_strategy="dotted-long-short")
         assert engine.plan.identity == transformed_key
         assert engine.plan.bpm == 55

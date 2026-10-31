@@ -129,7 +129,7 @@ def test_failed_trained_selection_cannot_change_persisted_settings_or_progress(
         monkeypatch.setattr(strategies, "_trained_rubricnet_from_xml", unavailable)
         with pytest.raises(RubricNetUnavailable):
             engine.set_preferences(exercise_strategy="rubricnet-trained")
-        assert engine.library.settings["exercise_strategy"] == "legacy"
+        assert engine.library.settings["exercise_strategy"] == "coda-part"
         assert engine.plan.identity == before
         assert engine.plan.mastered == {}
         assert engine.library.settings["exercise_strategy"] != "rubricnet-trained"
