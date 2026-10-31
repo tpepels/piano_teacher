@@ -25,6 +25,101 @@ var backend_offset_ms := 0.0
 var best_round_trip_ms := INF
 var has_backend_offset := false
 
+# Exactly one presentation owner for all transport phases. Reversal,
+# preparation, and playback are different segments of this same clock.
+# The backend alone controls MIDI assessment, source BPM and the deadline.
+var retry_active := false
+var retry_revision := -1
+var retry_transport := -1
+var retry_playing_transport := -1
+var retry_start_ms := 0.0
+var retry_preparation_ms := 0.0
+var retry_deadline_ms := 0.0
+var retry_from_beat := 0.0
+var retry_start_beat := 0.0
+var retry_velocity := 0.0
+var retry_bpm := 60.0
+var retry_visual_offset := 0.0
+var retry_play_from := 0.0
+var idle_visual_beat := 0.0
+var idle_visual_speed := 0.0
+var idle_visual_target := 0.0
+var idle_visual_sample_ms := 0
+var active_visual_offset := 0.0
+var active_play_from := 0.0
+var source_phase := ""
+
+func _accept_retry(state: Dictionary, sampled_ms: int) -> void:
+    var phase := str(state.get("phase", ""))
+    var ident := int(state.get("transport_id", -1))
+    var rev := int(state.get("revision", -1))
+    var in_recovery := phase in ["feedback", "recovering"]
+    if retry_active and phase == "playing" and rev == retry_revision \
+            and (ident == retry_transport + 1 or ident == retry_playing_transport):
+        retry_playing_transport = ident
+        retry_visual_offset = float(state.get("visual_offset_beats", retry_visual_offset))
+        retry_play_from = float(state.get("play_from_beat", retry_play_from))
+        return
+    if not in_recovery or (retry_active and
+            (rev != retry_revision or ident != retry_transport or retry_playing_transport >= 0)):
+        retry_active = false
+    if not in_recovery or retry_active:
+        return
+    var preparation: Variant = state.get("practice_preparation")
+    if not preparation is Dictionary or not (str(preparation.get("phase", "")) in ["reverse", "preparing"]):
+        return
+    var measure: Variant = preparation.get("measure")
+    if not measure is Dictionary:
+        return
+    var remaining := float(state.get("transition_in_seconds", 0.0))
+    if remaining <= 0.0:
+        return
+    retry_revision = rev
+    retry_transport = ident
+    retry_playing_transport = -1
+    retry_start_ms = float(sampled_ms)
+    retry_deadline_ms = retry_start_ms + remaining * 1000.0
+    retry_bpm = maxf(1.0, float(state.get("bpm", 60.0)))
+    retry_start_beat = float(measure.get("start_beat", 0.0))
+    var destination: float = float(measure.get("end_beat", 0.0))
+    retry_preparation_ms = retry_deadline_ms - (destination-retry_start_beat)*60000.0/retry_bpm
+    retry_from_beat = float(state.get("visual_scroll_beat", 0.0))
+    var rewind_duration: float = retry_preparation_ms - retry_start_ms
+    retry_velocity = ((retry_start_beat-retry_from_beat)*1000.0/rewind_duration
+        if rewind_duration > 1.0 else 0.0)
+    retry_visual_offset = float(state.get("visual_offset_beats", 0.0))
+    retry_play_from = float(state.get("play_from_beat", 0.0))
+    retry_active = true
+
+func visual_beat(at_ms: int) -> float:
+    if retry_active and source_phase in ["feedback", "recovering", "playing"]:
+        if float(at_ms) < retry_preparation_ms:
+            return clampf(retry_from_beat +
+                (float(at_ms)-retry_start_ms)/1000.0 * retry_velocity,
+                minf(retry_from_beat, retry_start_beat),
+                maxf(retry_from_beat, retry_start_beat))
+        return retry_start_beat + (float(at_ms)-retry_preparation_ms)/60000.0 * retry_bpm
+    if active:
+        return active_visual_offset + active_play_from + now(at_ms)
+    return minf(idle_visual_target, idle_visual_beat + idle_visual_speed *
+        maxf(0.0,float(at_ms-idle_visual_sample_ms)/1000.0)) if idle_visual_speed > 0.0 \
+        else maxf(idle_visual_target, idle_visual_beat + idle_visual_speed *
+        maxf(0.0,float(at_ms-idle_visual_sample_ms)/1000.0))
+
+func retry_count_in_beat(at_ms: int) -> float:
+    return (float(at_ms)-retry_deadline_ms)/60000.0*retry_bpm
+
+func retry_preparing(at_ms: int) -> bool:
+    return retry_active and float(at_ms) >= retry_preparation_ms \
+        and float(at_ms) < retry_deadline_ms
+
+func score_beat(at_ms: int) -> float:
+    # Both the scrolling score and its fixed playhead use this same epoch.
+    if retry_active and source_phase == "playing":
+        return visual_beat(at_ms) - retry_visual_offset - retry_play_from
+    return now(at_ms)
+
+
 func matches(state: Dictionary) -> bool:
     return initialized and transport_id == int(state.get("transport_id", 0)) \
         and revision == int(state.get("revision", -1)) \
@@ -46,6 +141,15 @@ func now(now_ms: int) -> float:
     return beat
 
 func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
+    source_phase = str(state.get("phase", ""))
+    active_visual_offset = float(state.get("visual_offset_beats", 0.0))
+    active_play_from = float(state.get("play_from_beat", 0.0))
+    idle_visual_beat = float(state.get("visual_scroll_beat",
+        active_visual_offset+active_play_from))
+    idle_visual_speed = float(state.get("visual_scroll_speed", 0.0))
+    idle_visual_target = float(state.get("visual_target_beat",idle_visual_beat))
+    idle_visual_sample_ms = measured_ms
+    _accept_retry(state, measured_ms)
     var next_bpm: float = maxf(1.0, float(state.get("bpm", 60.0)))
     var next_active: bool = bool(state.get("running", false)) and not bool(state.get("paused", false))
     var next_id: int = int(state.get("transport_id", 0))

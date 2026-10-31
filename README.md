@@ -43,12 +43,33 @@ ladder without a failed rewind. At least half amber attacks, a wrong
 pitch, a missed pitch, or an extra pitch causes a retry. Simultaneous
 chord heads count as one attack when evaluating the amber fraction.
 
-**Retry presentation:** The retry camera now anchors a single visual
-timeline to the scheduled transition deadline, and projects the reverse,
-one-measure preparation, and forward movement from it. Poll response
-jitter does not resynchronize its position immediately before the
-first attack. Metronome ticks and the preparation count-in are driven
-by this same deadline. The backend's grading clock remains unchanged.
+**Unified presentation timeline:** Godot's `visual_transport_clock.gd`
+is the **only** stateful presentation clock. Its source-clock, reverse
+segment, one-measure retry count-in and resumed playback all derive from
+the same backend-owned transport deadline. The former separate retry
+clock is removed. Repeated HTTP snapshots cannot re-anchor the bar
+mid-retry, and the fixed playhead, score, count-in and metronome read
+this shared presentation timeline. The backend owns MIDI grading time.
+
+**Immediate MIDI acknowledgement:** The Python MIDI callback now sends
+a tiny provisional note-on event over **loopback UDP** (no new process)
+to Godot. The stage paints a 230ms mint pulse directly on the fixed
+playhead on the following graphical frame when an onset matches. Final
+timing/hold assessment still happens after the note settles; green
+here means *registered onset*, not a final duration grade. The existing
+HTTP event history is the fallback if the UDP listener is unavailable.
+During connected practice, heavyweight state snapshots poll at 80ms
+instead of 50ms when UDP is subscribed.
+
+**Local performance diagnostics:** GET
+`http://127.0.0.1:8765/diagnostics/performance` after playing to
+inspect a bounded sample of Python MIDI-callback and full-state
+median/p95/max processing times. These are instrumented **local**
+processing times, not claimed measurements of Bluetooth transport,
+HTTP network latency or GPU frame rendering. The backend uses a
+threaded HTTP server, without multiprocessing. For Godot frame
+intervals run the application with its `--frame-diagnostics` flag;
+no heavy CI profiling is required.
 
 **Local headless Godot tests:** Test scripts are outside the Godot
 project directory, so pass their **absolute** paths:

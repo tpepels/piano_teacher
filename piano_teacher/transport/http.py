@@ -49,6 +49,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200,{"devices":self.engine.ports()})
             elif route=="/diagnostics/hardware":
                 self._json(200,self.engine.hardware_diagnostics())
+            elif route=="/diagnostics/performance":
+                self._json(200,self.engine.performance_diagnostics())
             elif route=="/demo.wav":
                 from urllib.parse import parse_qs
                 token = parse_qs(urlsplit(self.path).query).get("token", [""])[0]
@@ -125,6 +127,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             elif route=="/control":
                 self.engine.control(**args)
+            elif route=="/midi/live/subscribe":
+                self.engine.subscribe_midi_visual(args.get("port"))
+                self._json(200, {"subscribed": True})
+                return
             else:
                 self._json(404,{"error":"Not found"})
                 return

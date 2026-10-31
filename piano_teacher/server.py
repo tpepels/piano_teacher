@@ -48,6 +48,8 @@ from .application.practice_transitions import run_before_assessment
 from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
 from .midi_calibration import MidiTapCalibration
+from .midi_visual_publisher import MidiVisualPublisher
+from .runtime_timings import RuntimeTimings
 from .live_input_view import LiveInputView
 from .instruction import next_full_attempt
 from .learner_state import guided_units, next_guided_unit, placement_candidate
@@ -97,6 +99,8 @@ class PracticeEngine:
         self.next_boundary_beat = 0.0
         self.feedback_seconds = SETTINGS.feedback_seconds
         self.midi_calibration = MidiTapCalibration()
+        self.midi_visual_publisher = MidiVisualPublisher()
+        self.runtime_timings = RuntimeTimings()
         self.recovery_notice: dict | None = None
         self.pause_context: str | None = None
         self._deferred_score_ack: int | None = None
@@ -342,7 +346,23 @@ class PracticeEngine:
                 self._save()
             self.library.mark_opened(identifier)
 
+    def subscribe_midi_visual(self, port: int) -> None:
+        # The web API is loopback-only. A forged event never changes scoring.
+        with self.lock:
+            self.midi_visual_publisher.subscribe(port)
+
+    def performance_diagnostics(self) -> dict:
+        return self.runtime_timings.snapshot()
+
     def _receive(self, message):
+        began = time.perf_counter()
+        try:
+            self._receive_message(message)
+        finally:
+            self.runtime_timings.midi_ms.append(
+                (time.perf_counter()-began)*1000.0)
+
+    def _receive_message(self, message):
         # Timestamp in the hardware input callback, not on the rendering thread.
         now = time.monotonic()
         with self.lock:
@@ -384,6 +404,8 @@ class PracticeEngine:
                     transport_id=self.transport_id,
                     tempo_map=self._active_tempo_map(),
                 )
+                if is_on and self.live_input.events:
+                    self.midi_visual_publisher.publish(self.live_input.events[-1])
             if self.mode == "learn":
                 if (self.teaching is not None and self.midi.connected
                         and message.type in ("note_on", "note_off")):
@@ -1597,6 +1619,14 @@ class PracticeEngine:
             return []
 
     def state(self) -> dict:
+        began = time.perf_counter()
+        try:
+            return self._state_snapshot()
+        finally:
+            self.runtime_timings.state_ms.append(
+                (time.perf_counter()-began)*1000.0)
+
+    def _state_snapshot(self) -> dict:
         with self.lock:
             self._update()
             state = project_session_state(self._capture_session_snapshot())

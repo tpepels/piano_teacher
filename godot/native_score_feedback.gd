@@ -10,6 +10,8 @@ var markers: Dictionary = {}
 var pulses: Array = []
 var last_sequence := 0
 var moving := false
+var acknowledged_until_ms := 0
+var acknowledged_sequence := 0
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -24,6 +26,8 @@ func bind_score(renderer: Control, revision: int) -> void:
     source_to_id.clear()
     markers.clear()
     pulses.clear()
+    acknowledged_until_ms = 0
+    acknowledged_sequence = 0
     for event in renderer.layout.ordered_events:
         if bool(event.get("is_attack", false)) and event.get("source_id") != null:
             source_to_id[str(event.source_id)] = str(event.id)
@@ -34,6 +38,32 @@ func _score_repainted() -> void:
     # markers. Follow actual compositor redraws rather than idle HTTP polls.
     if not markers.is_empty() or not pulses.is_empty():
         queue_redraw()
+
+func accept_live_event(event: Dictionary, state: Dictionary) -> void:
+    # Called on the next Godot frame after a physical note-on, bypassing
+    # heavyweight /state polling. This is an acknowledgement, not a grade.
+    var sequence := int(event.get("sequence", 0))
+    if sequence <= last_sequence or not is_instance_valid(score):
+        return
+    last_sequence = sequence
+    if (bool(state.get("preview_only", false)) or
+            str(state.get("phase", "")) != "playing" or
+            str(state.get("mode", "")) == "listen" or
+            int(state.get("revision", -2)) != score_revision or
+            int(event.get("transport_id", -1)) != int(state.get("transport_id", -2))):
+        return
+    var status := str(event.get("status", ""))
+    if status != "on_time":
+        return
+    acknowledged_sequence = sequence
+    acknowledged_until_ms = Time.get_ticks_msec() + 230
+    var id := str(source_to_id.get(str(event.get("source_id", "")), ""))
+    if not id.is_empty():
+        pulses.append({"id": id, "status": "on_time", "until": acknowledged_until_ms})
+        if pulses.size() > MAX_PULSES:
+            pulses.pop_front()
+    set_process(true)
+    queue_redraw()
 
 func present(state: Dictionary) -> void:
     var ungraded: bool = bool(state.get("preview_only", false)) or \
@@ -46,6 +76,7 @@ func present(state: Dictionary) -> void:
         for event in state.get("midi_visual_events", []):
             last_sequence = maxi(last_sequence, int(event.get("sequence", 0)))
         pulses.clear()
+        acknowledged_until_ms = 0
         moving = false
         set_process(false)
         if not previous_markers.is_empty() or had_pulses:
@@ -81,7 +112,7 @@ func present(state: Dictionary) -> void:
         fresh_pulse = true
         if pulses.size() > MAX_PULSES:
             pulses.pop_front()
-    set_process((moving and not markers.is_empty()) or not pulses.is_empty())
+    set_process((moving and not markers.is_empty()) or not pulses.is_empty() or acknowledged_until_ms > now)
     # HTTP timestamps and consumed MIDI sequences keep changing while idle;
     # only changed ink or a moving score needs another feedback repaint.
     if markers != previous_markers or moving != previous_moving or fresh_pulse:
@@ -98,7 +129,7 @@ func _process(_delta: float) -> void:
         if int(pulses[index].until) <= now:
             pulses.remove_at(index)
     queue_redraw()
-    if (not moving or markers.is_empty()) and pulses.is_empty():
+    if (not moving or markers.is_empty()) and pulses.is_empty() and acknowledged_until_ms <= now:
         set_process(false)
 
 func _tone(status: String) -> Color:
@@ -110,6 +141,17 @@ func _draw() -> void:
     if not is_instance_valid(score) or not score.is_visible_in_tree():
         return
     var gap: float = score.staff_gap()
+    # The fixed playhead itself acknowledges accepted MIDI attacks in mint.
+    # The cue is immediate and provisional; held-duration grading is later.
+    var ack_left: int = acknowledged_until_ms - Time.get_ticks_msec()
+    if ack_left > 0:
+        var life := clampf(float(ack_left)/230.0, 0.0, 1.0)
+        var cursor_x := size.x * .42
+        draw_line(Vector2(cursor_x, size.y*.16),
+            Vector2(cursor_x, size.y*.83),
+            Color(Design.MINT, .85*life), 4.0, true)
+        draw_circle(Vector2(cursor_x, size.y*.16), 5.0+life*3.0,
+            Color(Design.MINT, life))
     # Bound work to the compositor's visible window, even on long lessons.
     for id in score.drawn_noteheads:
         if not markers.has(id):

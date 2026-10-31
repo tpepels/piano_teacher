@@ -150,6 +150,12 @@ var demo_player: Node
 var ui_scale := 1.0
 var last_seen_midi_visual_sequence := 0
 var state_poll_timer: Timer
+var live_udp := PacketPeerUDP.new()
+var live_udp_port := 0
+var live_subscribe_request: HTTPRequest
+var live_subscribed := false
+var live_subscribe_pending := false
+var live_subscribe_retry_ms := 0
 
 func _ready() -> void:
     # On 120/144 Hz laptops Godot otherwise renders the entire translucent
@@ -185,6 +191,11 @@ func _ready() -> void:
     if not get_window().size_changed.is_connected(_update_responsive_layout):
         get_window().size_changed.connect(_update_responsive_layout)
     _update_responsive_layout()
+    if live_udp.bind(0, "127.0.0.1") == OK:
+        live_udp_port = live_udp.get_local_port()
+    else:
+        push_warning("MIDI live datagrams unavailable; using HTTP events")
+    live_subscribe_request = _new_request(_on_live_subscribe)
     state_request = _new_request(_on_state)
     score_http.attach(self, score_session, URL)
     layout_request = score_http.layout_request
@@ -204,6 +215,7 @@ func _ready() -> void:
     state_poll_timer.autostart = true
     state_poll_timer.timeout.connect(_poll)
     add_child(state_poll_timer)
+    _subscribe_live_udp()
     _poll()
     _request_devices()
     _request_settings()
@@ -804,7 +816,44 @@ func _toggle_fullscreen() -> void:
     settings_view.present_window_mode(enabled)
     _on_fullscreen_toggle(enabled)
 
+func _subscribe_live_udp() -> void:
+    if live_udp_port == 0 or live_subscribed or live_subscribe_pending:
+        return
+    var now := Time.get_ticks_msec()
+    if now < live_subscribe_retry_ms:
+        return
+    live_subscribe_retry_ms = now + 5000
+    live_subscribe_pending = true
+    if live_subscribe_request.request(URL + "/midi/live/subscribe",
+            ["Content-Type: application/json"], HTTPClient.METHOD_POST,
+            JSON.stringify({"port": live_udp_port})) != OK:
+        live_subscribe_pending = false
+
+func _on_live_subscribe(_result: int, code: int, _headers: PackedStringArray,
+        _body: PackedByteArray) -> void:
+    live_subscribe_pending = false
+    live_subscribed = code == 200
+
+func _read_live_midi() -> void:
+    if live_udp_port == 0:
+        return
+    # Bound per-frame work. UDP delivery is untrusted presentation input,
+    # and actual grading still comes only from the Python recorder.
+    var packets := mini(32, live_udp.get_available_packet_count())
+    for _index in range(packets):
+        var parsed: Variant = JSON.parse_string(
+            live_udp.get_packet().get_string_from_utf8())
+        if not parsed is Dictionary:
+            continue
+        var event: Dictionary = parsed
+        event["age"] = 0.0
+        practice_view.stage.feedback.accept_live_event(event, last_state)
+        var display_state: Dictionary = last_state.duplicate(false)
+        display_state["midi_visual_events"] = [event]
+        _consume_live_piano_hits(display_state)
+
 func _poll() -> void:
+    _subscribe_live_udp()
     if score_session != null and not practice_view.is_source_picker_open():
         score_session.poll(Time.get_ticks_msec())
 
@@ -827,6 +876,7 @@ func _process(_delta: float) -> void:
     # Animate short-lived hit pulses between HTTP state samples.
     var ticks: int = Time.get_ticks_msec()
     score_effects.prune_expired(ticks)
+    _read_live_midi()
     settings_view.present_busy(action_pending)
     practice_view.present_busy(action_pending)
     lesson_view.present_busy(action_pending)
@@ -937,7 +987,9 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if state_poll_timer != null:
         var live_rate := (current_screen == "practice"
             and not str(parsed.get("device", "")).is_empty())
-        var interval := 0.05 if live_rate else 0.15
+        # Note-on cues arrive via loopback datagrams within the next frame;
+        # full-state projections can now poll slightly less often.
+        var interval := (0.08 if live_subscribed else 0.05) if live_rate else 0.15
         if absf(state_poll_timer.wait_time - interval) > 0.001:
             state_poll_timer.wait_time = interval
     settings_view.present_practice(parsed, current_screen == "settings")
