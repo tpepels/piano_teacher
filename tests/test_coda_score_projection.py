@@ -311,10 +311,12 @@ def test_coda_rejects_retimed_or_styled_source_tie(tmp_path):
 
     from piano_teacher.exercise_contracts import TimingPlan
     events=list(original.events)
-    events[0]=replace(events[0],exercise_end=events[0].exercise_end-.25)
+    idx=next(i for i,n in enumerate(variant.notes)
+             if n.voice.endswith("-v1") and n.start==0)
+    events[idx]=replace(events[idx],exercise_end=3.75)
     changed=TimingPlan("invalid-retimed-tie",variant,tuple(events),
                         original.duration_beats)
-    with pytest.raises(ValueError,match="unchanged ties"):
+    with pytest.raises(ValueError,match="safe shortened continuation"):
         project_coda_score(piece,changed,reference_family="dotted-rhythms",bpm=80)
 
     root=ET.fromstring(piece.source_musicxml)
@@ -580,3 +582,33 @@ def test_complete_source_quintuplet_and_septuplet_keep_original_ink(
     assert len(model["notes"])==len(original.notes)
     assert {n["id"] for n in model["notes"]}=={
         n.source_id for n in original.notes}
+
+
+def test_retimed_source_bar_tie_shortens_after_boundary_without_retrigger(tmp_path):
+    from piano_teacher.exercise_contracts import TimingPlan
+    path=Path(__file__).parent/"fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml"
+    piece=load_musicxml(path,bpm=80)
+    original=ExerciseVariant(
+        "original",Phrase(1,1,2,0,8,piece.notes),
+        tuple(range(len(piece.notes))))
+    base=OriginalTiming().transform(original)
+    events=list(base.events)
+    index=next(i for i,n in enumerate(original.notes)
+               if n.start==0 and n.voice.endswith("-v1"))
+    events[index]=replace(events[index],exercise_end=5.5)
+    plan=TimingPlan("shorter-source-tie",original,tuple(events),8)
+    stage=project_coda_score(
+        piece,plan,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"short-tie"))
+    root=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    assert len(root.findall(".//tie[@type='start']"))>=2
+    assert len(root.findall(".//tie[@type='stop']"))>=2
+    model=artifacts.source_model(stage.selection)
+    selected=next(n for n in model["notes"]
+                  if n["id"]==original.notes[index].source_id)
+    assert selected["duration_beats"]==pytest.approx(5.5)
+    assert len(model["notes"])==len(original.notes)  # no second attack
+    performed=[PlayedNote(n.pitch,stage.tempo_map.seconds_at(n.start),
+                          stage.tempo_map.seconds_at(n.end))
+               for n in stage.variant.notes]
+    assert stage.grade(performed).assessment.clean
