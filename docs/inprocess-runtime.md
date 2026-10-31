@@ -44,6 +44,12 @@ Godot uses one `inprocess_request.gd` adapter for commands and one
 `score_asset_queue.gd` adapter for score layout and model requests.
 No source code should instantiate `HTTPRequest` or `PacketPeerUDP`.
 
+## Presentation and progression boundaries
+
+- `PracticeEngine.start()` and `_update()` use `AttemptProgression` for timed attempt setup, source measure grids, rolling recovery checks, and completion deadlines. The engine retains its lock and musical clock.
+- `practice_state_presenter.gd` distributes accepted backend state snapshots. `practice_frame_coordinator.gd` drives Listen, notation, and stage effects using one sampled beat per frame. `main.gd` keeps request ordering and app navigation.
+- Focused tests: `tests/test_attempt_progression.py` and `tests/test_coordination_boundaries.py`. These do not establish physical MIDI latency or GPU timing.
+
 ## Building
 
 Arch developer machine:
