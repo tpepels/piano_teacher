@@ -1,0 +1,54 @@
+name: Coda author reference differential smoke
+
+# Run once at creation and then only by explicit manual dispatch.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/coda-upstream-parity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependencies and syntax
+        run: |
+          python -m pip install -e '.[test,coda-research]' 'music21>=9.1,<10'
+          python -m compileall -q scripts/compare_coda_upstream.py
+      - name: Checkout exactly published author backend SHA
+        run: |
+          git clone -q --depth 1 https://github.com/annieetang/coda_backend.git "$RUNNER_TEMP/upstream"
+          test "$(git -C "$RUNNER_TEMP/upstream" rev-parse HEAD)" = 'a4eb85dfc2bd418818ca9ff775c0a11ccccb3530'
+      - name: Real author code versus current MMR and generated notes
+        id: proof
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/coda-diff"
+          echo "${{ github.sha }}" > "$RUNNER_TEMP/coda-diff/our-revision.txt"
+          timeout 95s python scripts/compare_coda_upstream.py \
+            --upstream "$RUNNER_TEMP/upstream" \
+            --report "$RUNNER_TEMP/coda-diff/report.json" \
+            > "$RUNNER_TEMP/coda-diff/output.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/coda-diff/output.txt"
+              exit 1
+            }
+          cat "$RUNNER_TEMP/coda-diff/report.json"
+      - name: Retain exact-source evidence and failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coda-author-${{ github.sha }}
+          path: ${{ runner.temp }}/coda-diff/
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Reject a mismatch
+        if: steps.proof.outcome != 'success'
+        run: exit 1
