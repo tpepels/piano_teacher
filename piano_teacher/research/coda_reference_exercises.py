@@ -232,9 +232,16 @@ class CodaReferenceChordification:
                     if len(source_durations)!=1:
                         continue
                     n=next(iter(source_durations))
-                    if attacks[0]!=group_start or attacks[-1]+n!=end:
+                    # The author's equal-length range ends at the NEXT
+                    # different duration, which may be separated by silence.
+                    # A grouping is valid if its source notes are contiguous;
+                    # padding after the last attack remains a real rest.
+                    if attacks[0]!=group_start:
                         continue
                     if any(b-a !=n for a,b in zip(attacks,attacks[1:])):
+                        continue
+                    actual_end=attacks[-1]+n
+                    if actual_end>end or sum(flat[t] for t in attacks)!=actual_end-group_start:
                         continue
                     group_entries=[(pitch,t,index,source)
                                    for pitch,t,index,source in matrix.owners
@@ -246,7 +253,7 @@ class CodaReferenceChordification:
                             max(distinct)-min(distinct)>12):
                         continue
                     origin=score.phrase.start+group_start/quantization
-                    target_end=score.phrase.start+end/quantization
+                    target_end=score.phrase.start+actual_end/quantization
                     if not _safe_group(score,voice,(),guarded,origin,target_end):
                         continue
                     for pitch,t,index,source in group_entries:

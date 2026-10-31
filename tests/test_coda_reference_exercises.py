@@ -119,3 +119,24 @@ def test_reference_notation_id_owns_unchanged_original_mastery():
         assert result.timing.original==variant
         assert tuple(e.source_index for e in result.timing.events)==variant.source_indices
     assert variant.notes==algorithms[0].timing.original.notes
+
+
+def test_reference_chordification_keeps_silent_tail_after_equal_note_run():
+    # Author Coda groups the two .5-beat notes into a 1-beat chord and
+    # leaves beat [1,2) silent. A padded equal-duration range must not
+    # be dropped because the NEXT duration is at beat 2.
+    notes=(
+        Note(0,.5,60,0,0,"right","a","v"),
+        Note(.5,1,62,0,0,"right","b","v"),
+        Note(2,3,64,0,0,"right","c","v"),
+        Note(3,4,65,0,0,"right","d","v"))
+    v=ExerciseVariant("original",Phrase(1,1,1,0,4,notes),(0,1,2,3))
+    result=CodaReferenceChordification(16).transform(
+        v,boundaries=(0,4),quantization=8)
+    assert result.groups==(("a","b"),("c","d"))
+    assert [(e.exercise_start,e.exercise_end)
+            for e in result.timing.events]==[
+        (0,1),(0,1),(2,4),(2,4)]
+    assert result.changed_sources==("a","b","c","d")
+    assert result.timing.duration_beats==4
+    assert result.timing.original.notes==notes
