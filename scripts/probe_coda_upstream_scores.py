@@ -88,8 +88,11 @@ def _case(name: str, filename: str, bars: int, converter, meter, key,
             chains=tie_segment_chains(
                 piece,OriginalTiming().transform(variant))
             row["source_written_tie_chains"]=len(chains)
+            row["source_written_tie_segments"]=sum(
+                len(c.source_segments) for c in chains)
             row["distinct_sounding_attacks_in_ties"]=len({
                 c.sounding_id for c in chains})
+            row["written_vs_sounding_warning"]=bool(chains)
         else:
             row["source_written_tie_chains"]=None
         reference=converter.parse(str(ROOT/filename))
@@ -152,10 +155,15 @@ def _case(name: str, filename: str, bars: int, converter, meter, key,
                                 continue
                             observed=_music21_events(upstream)
                             expected=_coda_events(ours_fn(),owners)
+                            reference_pairs=[(at,pitch)
+                                             for at,pitch,duration in observed]
                             result["algorithms"][name]={
                                 "status":"match" if observed==expected else "mismatch",
+                                "compared": "raw music21 written notes versus one sounding MIDI attack",
                                 "source_note_count":len(expected),
-                                "reference_note_count":len(observed)}
+                                "reference_note_count":len(observed),
+                                "reference_colliding_pitch_onsets":
+                                    len(reference_pairs)-len(set(reference_pairs))}
                             if observed!=expected:
                                 result["algorithms"][name].update(
                                     author_first=observed[:6],ours_first=expected[:6])
@@ -199,9 +207,22 @@ def main():
 
     rows=[_case(*case,converter,meter,key,ExerciseLine,MusicMatrixRepresentation)
           for case in CASES]
+    statuses=[result["status"] for row in rows for voice in row.get("voices",())
+              for result in voice.get("algorithms",{}).values()]
     result={"upstream_revision":"a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
-            "status":"diagnostic-only",
-            "author_parity_proven":False,"cases":rows}
+            "status":"diagnostic-only","comparison_basis":
+                "Music21 author written events and adapter sounding MIDI events are distinct",
+            "author_parity_proven":False,
+            "reference_mmr_exact_voices":sum(row.get("exactly_matched_voices",0)
+                                              for row in rows),
+            "reference_mmr_sampled_voices":sum(row.get("reference_voices",0)
+                                                for row in rows),
+            "algorithm_total":len(statuses),
+            "algorithm_exact":statuses.count("match"),
+            "algorithm_mismatches":statuses.count("mismatch"),
+            "algorithm_upstream_none":statuses.count("upstream-none"),
+            "algorithm_exceptions":statuses.count("exception"),
+            "cases":rows}
     args.report.parent.mkdir(parents=True,exist_ok=True)
     args.report.write_text(json.dumps(result,indent=2)+"\n")
     print(json.dumps({"cases":len(rows),
