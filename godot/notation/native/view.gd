@@ -361,8 +361,9 @@ func _install_retained_segments() -> void:
     _hide_retained_segments()
 
 func retained_ready() -> bool:
-    if not native_ready or retained_first_once == null or \
-            retained_first_loop == null or retained_annotations == null:
+    if not native_ready or size.x < 100.0 or size.y < 100.0 or \
+            retained_first_once == null or retained_first_loop == null or \
+            retained_annotations == null:
         return false
     for segment in [retained_first_once,retained_first_loop]:
         if not segment.compiled:
