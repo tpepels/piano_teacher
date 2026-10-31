@@ -21,6 +21,14 @@ var _registers: Array[Dictionary] = []
 var _keys: Dictionary = {}
 var _presentation: Dictionary = {}
 var ui_scale := 1.0
+var _key_fifths := 0
+
+func set_key_fifths(value: int) -> void:
+    var selected := clampi(value, -7, 7)
+    if _key_fifths != selected:
+        _key_fifths = selected
+        _presentation.clear()
+        queue_redraw()
 
 func _init() -> void:
     mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -79,7 +87,7 @@ func update_state(teaching: Dictionary) -> void:
         if pitch < 21 or pitch > 108:
             continue
         var name := str(note.get("label", ""))
-        _expected[pitch] = name if not name.is_empty() else _pitch_name(pitch)
+        _expected[pitch] = _pitch_name(pitch) if _key_fifths != 0 else (name if not name.is_empty() else _pitch_name(pitch))
     for value in teaching.get("heard_pitches", []):
         var pitch := int(value)
         if pitch >= 0 and pitch <= 127:
@@ -196,8 +204,21 @@ func update_live(expected_pitches: Array, held_pitches: Array, events: Array, co
 
 
 func _pitch_name(pitch: int) -> String:
-    return ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"][pitch % 12] \
-        + str(pitch / 12 - 1)
+    var names := ["C", "D", "E", "F", "G", "A", "B"]
+    var semitones := [0, 2, 4, 5, 7, 9, 11]
+    var changes: Dictionary = {}
+    var order := ["B", "E", "A", "D", "G", "C", "F"] if _key_fifths < 0 else ["F", "C", "G", "D", "A", "E", "B"]
+    for i in range(absi(_key_fifths)):
+        changes[order[i]] = -1 if _key_fifths < 0 else 1
+    for i in range(names.size()):
+        var alter: int = int(changes.get(names[i], 0))
+        if posmod(semitones[i] + alter, 12) == posmod(pitch, 12):
+            var octave := floori(float(pitch - semitones[i] - alter) / 12.0) - 1
+            return names[i] + ("b" if alter < 0 else "#" if alter > 0 else "") + str(octave)
+    var fallback := (["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
+        if _key_fifths < 0 else
+        ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"])
+    return fallback[posmod(pitch, 12)] + str(floori(float(pitch) / 12.0) - 1)
 
 func _black(pitch: int) -> bool:
     return pitch % 12 in [1, 3, 6, 8, 10]

@@ -47,6 +47,7 @@ from .application.control_dispatch import ControlDispatcher
 from .application.practice_transitions import run_before_assessment
 from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
+from .midi_calibration import MidiTapCalibration
 from .live_input_view import LiveInputView
 from .instruction import next_full_attempt
 from .learner_state import guided_units, next_guided_unit, placement_candidate
@@ -95,6 +96,7 @@ class PracticeEngine:
         self.open_from_beat = 0.0  # Explicit opening measure; never an inferred clock
         self.next_boundary_beat = 0.0
         self.feedback_seconds = SETTINGS.feedback_seconds
+        self.midi_calibration = MidiTapCalibration()
         self.recovery_notice: dict | None = None
         self.pause_context: str | None = None
         self._deferred_score_ack: int | None = None
@@ -219,6 +221,28 @@ class PracticeEngine:
     def start_library_health(self) -> dict:
         return self.library_health.start()
 
+    def midi_calibration_action(self, action: str) -> None:
+        with self.lock:
+            if action == "calibration_start":
+                if not self.midi.connected:
+                    raise ValueError("Connect the MIDI keyboard before calibrating")
+                self._stop()
+                self.midi_calibration.start(time.monotonic())
+                self.feedback = "Tap any key in time with eight clicks"
+            elif action == "calibration_cancel":
+                self.midi_calibration.cancel()
+            elif action == "calibration_apply":
+                result = self.midi_calibration.snapshot(time.monotonic())["result"]
+                if not result or not result.get("reliable"):
+                    raise ValueError("Finish a consistent calibration before applying it")
+                self.library.update(midi_offset_ms=max(0, min(250, result["estimate_ms"])))
+            elif action == "calibration_reset":
+                self.midi_calibration.cancel()
+                self.midi_calibration.result = None
+                self.library.update(midi_offset_ms=0)
+            else:
+                raise ValueError("Unsupported calibration command")
+
     def preferences(self) -> dict:
         with self.lock:
             return self.library.public_settings()
@@ -323,6 +347,11 @@ class PracticeEngine:
         now = time.monotonic()
         with self.lock:
             self.midi.observe(message, now=now)
+            if self.midi_calibration.active:
+                if message.type == "note_on" and message.velocity > 0:
+                    self.midi_calibration.observe(now)
+                return
+            corrected_at = now - self.library.settings["midi_offset_ms"] / 1000.0
             # A key can reach the next attempt's musical deadline before the
             # next HTTP state poll, even if no poll observed the source ending.
             # Settle only a due handoff; retain the hardware timestamp above.
@@ -345,7 +374,7 @@ class PracticeEngine:
             if message.type in ("note_on", "note_off"):
                 is_on = message.type == "note_on" and message.velocity > 0
                 self.live_input.receive(
-                    pitch=message.note, is_on=is_on, now=now,
+                    pitch=message.note, is_on=is_on, now=corrected_at,
                     phrase=self.plan.active_phrase if self.plan is not None else None,
                     hand=self.plan.hand if self.plan is not None else "both",
                     bpm=self.plan.bpm if self.plan is not None else 60.0,
@@ -367,9 +396,9 @@ class PracticeEngine:
                 return
             if self.running and not self.paused and now >= self.run_at and self.recorder:
                 if message.type == "note_on":
-                    self.recorder.add(message.note, message.velocity > 0, now - self.run_at)
+                    self.recorder.add(message.note, message.velocity > 0, corrected_at - self.run_at)
                 elif message.type == "note_off":
-                    self.recorder.add(message.note, False, now - self.run_at)
+                    self.recorder.add(message.note, False, corrected_at - self.run_at)
 
     def load(self, path: str, *, warmup: bool = False):
         with self._fingering_lock:
@@ -1568,7 +1597,18 @@ class PracticeEngine:
     def state(self) -> dict:
         with self.lock:
             self._update()
-            return project_session_state(self._capture_session_snapshot())
+            state = project_session_state(self._capture_session_snapshot())
+            if self.plan is not None:
+                beat = self.plan.active_phrase.start + self.play_from_beat
+                if self.running and time.monotonic() >= self.run_at:
+                    beat += self._elapsed_beat(time.monotonic() - self.run_at)
+                keys = [key for key in self.plan.piece.key_signatures
+                        if key.beat <= beat + 1e-7
+                        and key.hand in ("both", self.plan.hand)]
+                state["key_fifths"] = keys[-1].fifths if keys else 0
+            state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
+            state["midi_calibration"] = self.midi_calibration.snapshot(time.monotonic())
+            return state
 
     def _capture_session_snapshot(self) -> SessionSnapshot:
         """Capture values under the session lock, including stateful read adapters.

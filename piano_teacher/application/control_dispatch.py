@@ -14,6 +14,10 @@ class ControlDispatcher:
     def dispatch(engine, action: str, kwargs: dict) -> None:
         # Explicit navigation, Stop and Restart abandon the current attempt.
         # Only the timed feedback lifecycle commits an assessment.
+        if action in ("calibration_start", "calibration_cancel",
+                      "calibration_apply", "calibration_reset"):
+            engine.midi_calibration_action(action)
+            return
         if action == "reset_path":
             engine._reset_current_path(
                 fingerprint=kwargs.get("fingerprint"),

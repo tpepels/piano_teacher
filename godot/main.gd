@@ -59,6 +59,11 @@ var score_error: String:
 var pending_library_piece := ""
 var pending_library_resume := false
 var library_resume_requested := false
+var startup_last_music_checked := false
+var calibration_tick_index := -999
+var recovery_click_tick := -999
+var recovery_camera_beat := NAN
+var recovery_camera_tick := -1
 var last_post_path := ""
 var last_control_action := ""
 var pending_transport_action := ""
@@ -282,6 +287,8 @@ func _unrolled_score_beat(transport_clock: float) -> float:
     if not last_state.has("visual_offset_beats"):
         return NAN
     if bool(last_state.get("running", false)):
+        recovery_camera_beat = NAN
+        recovery_camera_tick = -1
         return float(last_state.get("visual_offset_beats", 0.0)) \
             + float(last_state.get("play_from_beat", 0.0)) + transport_clock
     var observed: float = float(last_state.get("visual_scroll_beat", 0.0))
@@ -289,19 +296,76 @@ func _unrolled_score_beat(transport_clock: float) -> float:
         return observed
     var speed: float = float(last_state.get("visual_scroll_speed", 0.0))
     if absf(speed) < .000001:
+        recovery_camera_beat = NAN
+        recovery_camera_tick = -1
         return observed
     var age: float = maxf(0.0, float(Time.get_ticks_msec() - last_state_tick) / 1000.0)
     var target: float = float(last_state.get("visual_target_beat", observed))
-    return minf(target, observed + speed * age) if speed > 0.0 \
+    var desired: float = minf(target, observed + speed * age) if speed > 0.0 \
         else maxf(target, observed + speed * age)
+    if str(last_state.get("phase", "")) != "recovering":
+        recovery_camera_beat = NAN
+        recovery_camera_tick = -1
+        return desired
+    # Do not snap the reversing camera to each jittery HTTP snapshot.
+    # Preserve its direction and correct at most a small visual distance
+    # per frame. The MIDI/tempo clock and source notation stay untouched.
+    var now_tick := Time.get_ticks_msec()
+    if not is_finite(recovery_camera_beat) or recovery_camera_tick < 0:
+        recovery_camera_beat = desired
+    else:
+        var elapsed := minf(.1, maxf(0.0, float(now_tick-recovery_camera_tick)/1000.0))
+        var predicted: float = recovery_camera_beat + speed * elapsed
+        recovery_camera_beat = predicted + clampf(desired-predicted, -.08, .08)
+        recovery_camera_beat = minf(target, recovery_camera_beat) if speed > 0.0 \
+            else maxf(target, recovery_camera_beat)
+    recovery_camera_tick = now_tick
+    return recovery_camera_beat
 
+
+func _raw_click(accent: bool) -> void:
+    # Calibration and retry preparation are audible even if practice
+    # metronome is disabled. No MIDI clock is changed.
+    click_player.stream = click_high if accent else click_low
+    click_player.play()
 
 func _update_count_in() -> void:
+    var calibration: Dictionary = last_state.get("midi_calibration", {})
+    if bool(calibration.get("active", false)):
+        recovery_click_tick = -999
+        var beat: float = float(calibration.get("beat", -2.0))
+        beat += maxf(0.0, float(Time.get_ticks_msec()-last_state_tick)/1000.0)             * float(calibration.get("bpm", 80.0))/60.0
+        if beat >= 0.0 and beat < float(calibration.get("ticks", 8)):
+            var index := floori(beat + 0.00001)
+            if index != calibration_tick_index:
+                calibration_tick_index = index
+                _raw_click(index % 4 == 0)
+        return
+    calibration_tick_index = -999
     if last_state.is_empty() or not bool(last_state.get("running", false)):
+        var preparation: Variant = last_state.get("practice_preparation")
+        if str(last_state.get("phase", "")) == "recovering"                 and preparation is Dictionary                 and str(preparation.get("phase", "")) == "preparing"                 and not bool(last_state.get("paused", false)):
+            var remaining := maxf(0.0,
+                float(last_state.get("transition_in_seconds", 0.0)) -
+                maxf(0.0, float(Time.get_ticks_msec()-last_state_tick)/1000.0))
+            var bpm: float = maxf(1.0, float(last_state.get("bpm", 60.0)))
+            var count_beat := -remaining*bpm/60.0
+            var bar_beats := maxi(1, int(round(
+                float(last_state.get("count_in_bar_beats", 4)))))
+            practice_view.stage.count_in.present(count_beat, bar_beats, true, false)
+            var tick := floori(count_beat+0.00001)
+            if recovery_click_tick == -999:
+                recovery_click_tick = tick
+            elif tick > recovery_click_tick and count_beat < 0.0:
+                recovery_click_tick = tick
+                _raw_click(posmod(tick, bar_beats) == 0)
+            return
+        recovery_click_tick = -999
         practice_view.stage.count_in.present(0.0, 4, false, false)
         count_tick_index = -999
         play_tick_index = -1
         return
+    recovery_click_tick = -999
     var beat: float = _transport_beat_now()
     var paused: bool = bool(last_state.get("paused", false))
     practice_view.stage.count_in.present(beat,
@@ -437,6 +501,9 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
         or absf(float(state.get("visual_scroll_speed", 0.0))) > .000001) \
         and not bool(state.get("paused", false)) \
         and current_screen == "practice"
+    var calibrating := current_screen == "settings" and bool(
+        state.get("midi_calibration", {}).get("active", false))
+    active = active or calibrating
     var target_fps: int = 60 if active else 30
     # Interactive transport retains its full 60 FPS camera. Idle score,
     # settings and library redraw only on user input or changed content.
@@ -504,6 +571,7 @@ func _build_interface() -> void:
     _build_practice_screen()
     library_catalog.configure(URL, library_view, home_view,
         _decode_json, _http_failure, _send_post)
+    library_catalog.catalog_loaded.connect(_resume_last_music_on_start)
     midi_devices.configure(URL, settings_view,
         _decode_json, _http_failure, _send_post)
     score_session = ScoreAssetSession.new(
@@ -601,6 +669,8 @@ func _build_settings_screen() -> void:
         _send_post("/settings", {"learner_strategy": strategy}))
     settings_view.metronome_requested.connect(func(enabled: bool):
         _send_post("/settings", {"metronome": enabled}))
+    settings_view.calibration_requested.connect(func(action: String):
+        _send_action({"action": action}))
     settings_view.volume_changed.connect(_on_listen_volume_changed)
     settings_view.fullscreen_requested.connect(_on_fullscreen_toggle)
     settings_view.exit_requested.connect(_exit_app)
@@ -659,6 +729,18 @@ func _on_score_published(published_revision: int) -> void:
 func _retry_score() -> void:
     if score_session != null:
         score_session.retry(Time.get_ticks_msec())
+
+func _resume_last_music_on_start(catalog: Dictionary) -> void:
+    if startup_last_music_checked:
+        return
+    startup_last_music_checked = true
+    var identifier := str(catalog.get("last_piece", ""))
+    if identifier.is_empty():
+        return
+    for entry in catalog.get("pieces", []):
+        if entry is Dictionary and str(entry.get("id", "")) == identifier:
+            call_deferred("_open_library_piece", identifier, true)
+            return
 
 func _request_library() -> void:
     library_catalog.request_catalog()
@@ -853,6 +935,8 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     last_state = parsed
     _present_fingering_status(parsed.get("fingering",{}))
     lesson_view.present_context(parsed, action_pending)
+    settings_view.present_calibration(
+        parsed.get("midi_calibration", {}), int(parsed.get("midi_offset_ms", 0)))
     lesson_session.update_context(parsed, Time.get_ticks_msec())
     _update_visual_frame_rate(parsed)
     _clear_assessed_effects_in_ungraded_mode(parsed)
@@ -1128,6 +1212,8 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     elif path == "/control":
         if completed_action == "reset_path":
             lesson_session.invalidate()
+        if completed_action in ["calibration_apply", "calibration_reset"]:
+            _request_settings()
         _on_state(_result, code, _headers, body, action_request_started_ms)
         if completed_action in ["skip_stage", "place_original", "revisit_trouble"]:
             _navigate("practice")

@@ -203,6 +203,7 @@ func present(state: Dictionary, busy: bool) -> void:
     _update_hand_stages(state)
     # Mapped feedback belongs on actual native noteheads; never overlay it.
     practice_note_feedback_panel.visible = false
+    keyboard.set_key_fifths(int(state.get("key_fifths", 0)))
     if str(state.get("mode","practice")) == "learn":
         keyboard.update_state(state.get("teaching",{}) if state.get("teaching") is Dictionary else {})
     else:

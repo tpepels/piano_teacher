@@ -1,4 +1,5 @@
 extends RefCounted
+signal catalog_loaded(values: Dictionary)
 
 # Own the library catalogue and health-poll lifecycle; application navigation
 # and the /library/open transport command remain with the main controller.
@@ -46,6 +47,7 @@ func on_catalog(_result: int, code: int,
         return
     _library_view.present_catalog(parsed)
     _home_view.present_catalog(parsed)
+    catalog_loaded.emit(parsed)
     request_health()
 
 func request_health() -> void:

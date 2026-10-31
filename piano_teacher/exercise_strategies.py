@@ -335,7 +335,6 @@ APP_STRATEGIES = (
     ("fukuda", "Fukuda · chord and leap simplification"),
     ("coda-part", "Coda · passage splitting"),
     ("feature-gated", "Feature-guided selection"),
-    ("rubricnet-trained", "RubricNet · trained score difficulty (optional setup)"),
     ("fukuda+coda-part", "Fukuda + Coda"),
 )
 
@@ -346,7 +345,7 @@ def available_strategies() -> tuple[dict[str, str], ...]:
 
 def resolve_strategy(spec: str | ExerciseStrategy | None, *, piece=None) -> ExerciseStrategy:
     if spec is None:
-        spec = "legacy"
+        spec = "coda-part"
     if not isinstance(spec, str):
         if (not isinstance(getattr(spec, "name", None), str)
                 or not callable(getattr(spec, "generate", None))):

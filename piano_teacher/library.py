@@ -35,6 +35,7 @@ class ScoreLibrary:
         self.settings_path = self.config_dir / 'settings.json'
         self.settings = {'music_dir': str(default_music_dir()), 'fullscreen': True,
                          'last_piece': '', 'midi_device': '', 'metronome': True,
+                         'midi_offset_ms': 0,
                          'exercise_strategy': 'coda-part', 'timing_strategy': 'original-timing',
                          'tempo_strategy': 'constant-tempo',
                          'diagnosis_strategy': 'error-family',
@@ -81,7 +82,7 @@ class ScoreLibrary:
         return path
 
     def update(self, **changes) -> dict:
-        allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome', 'exercise_strategy', 'timing_strategy', 'tempo_strategy', 'diagnosis_strategy', 'learner_strategy'}
+        allowed = {'music_dir', 'fullscreen', 'midi_device', 'metronome', 'midi_offset_ms', 'exercise_strategy', 'timing_strategy', 'tempo_strategy', 'diagnosis_strategy', 'learner_strategy'}
         unknown = set(changes) - allowed
         if unknown:
             raise ValueError('Unknown preference: ' + ', '.join(sorted(unknown)))
@@ -103,6 +104,11 @@ class ScoreLibrary:
             if not isinstance(changes['metronome'], bool):
                 raise ValueError('Metronome must be true or false')
             new['metronome'] = changes['metronome']
+        if 'midi_offset_ms' in changes:
+            offset = changes['midi_offset_ms']
+            if type(offset) is not int or not 0 <= offset <= 250:
+                raise ValueError('MIDI offset must be 0–250 milliseconds')
+            new['midi_offset_ms'] = offset
         if 'exercise_strategy' in changes:
             selected = changes['exercise_strategy']
             if type(selected) is not str or selected not in {x['id'] for x in available_strategies()}:

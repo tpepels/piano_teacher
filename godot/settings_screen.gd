@@ -18,6 +18,7 @@ signal tempo_strategy_requested(strategy: String)
 signal diagnosis_strategy_requested(strategy: String)
 signal learner_strategy_requested(strategy: String)
 signal metronome_requested(enabled: bool)
+signal calibration_requested(action: String)
 signal volume_changed(db: float)
 signal fullscreen_requested(enabled: bool)
 signal exit_requested
@@ -27,6 +28,8 @@ var default_font: Font
 var settings_grid: GridContainer
 var device_button: Button
 var input_activity_label: Label
+var calibration_label: Label
+var calibration_apply_button: Button
 var folder_controls: VBoxContainer
 var folder_edit: LineEdit
 var tempo_setting: SpinBox
@@ -131,6 +134,21 @@ func _ready() -> void:
     device_row.add_child(_button("Refresh devices", func(): refresh_devices_requested.emit(), false, "utility"))
     input_activity_label = _label("Connect your piano, then play a note to check input.", 14, MUTED)
     midi.add_child(input_activity_label)
+    var calibration_row := HFlowContainer.new()
+    calibration_row.add_theme_constant_override("h_separation", 8)
+    midi.add_child(calibration_row)
+    calibration_row.add_child(_button("Calibrate MIDI timing", func():
+        calibration_requested.emit("calibration_start"), false, "settings"))
+    calibration_apply_button = _button("Apply offset", func():
+        calibration_requested.emit("calibration_apply"), false, "settings")
+    calibration_apply_button.disabled = true
+    calibration_row.add_child(calibration_apply_button)
+    calibration_row.add_child(_button("Reset offset", func():
+        calibration_requested.emit("calibration_reset"), false, "utility"))
+    calibration_row.add_child(_button("Cancel", func():
+        calibration_requested.emit("calibration_cancel"), false, "utility"))
+    calibration_label = _label("No correction · tap in time with 8 clicks to estimate MIDI timing offset.", 14, MUTED)
+    midi.add_child(calibration_label)
 
     var music := _section("Music library")
     var music_panel := _card()
@@ -275,13 +293,32 @@ func _ready() -> void:
     device_menu.id_pressed.connect(_device_chosen)
     add_child(device_menu)
 
+func present_calibration(state: Dictionary, offset_ms: int) -> void:
+    if calibration_label == null:
+        return
+    var result: Variant = state.get("result")
+    var status := "Applied MIDI offset: %d ms." % offset_ms
+    if bool(state.get("active", false)):
+        status += " Tap any key with the clicks · %d/%d captured." % [
+            int(state.get("samples", 0)), int(state.get("ticks", 8))]
+    elif result is Dictionary:
+        var measurement: Dictionary = result
+        if bool(measurement.get("reliable", false)):
+            status += " Estimated tap delay: %d ms, variation: %d ms. Apply to compensate." % [
+                int(measurement.get("estimate_ms", 0)), int(measurement.get("jitter_ms", 0))]
+        else:
+            status += " Inconsistent taps; retry calibration."
+    calibration_label.text = status
+    calibration_label.tooltip_text = "Tap timing includes human reaction and audio output delay, not only Bluetooth MIDI latency."
+    calibration_apply_button.disabled = not (result is Dictionary and bool(result.get("reliable", false)))
+
 func present_preferences(values: Dictionary) -> void:
     folder_edit.text = str(values.get("music_dir", ""))
     present_window_mode(bool(values.get("fullscreen", true)))
     metronome_toggle.set_pressed_no_signal(bool(values.get("metronome", true)))
     _present_strategy_picker(strategy_picker,
         values.get("available_exercise_strategies", []),
-        str(values.get("exercise_strategy", "legacy")))
+        str(values.get("exercise_strategy", "coda-part")))
     _present_strategy_picker(timing_strategy_picker,
         values.get("available_timing_strategies", []),
         str(values.get("timing_strategy", "original-timing")))

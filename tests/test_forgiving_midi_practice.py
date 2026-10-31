@@ -49,9 +49,9 @@ def test_per_stage_start_and_manual_tempo_survive_navigation():
 
 def test_slow_practice_tolerates_drift_and_approximate_hold():
     phrase = Phrase(1, 1, 1, 0, 4, (Note(0, 1, 60, 0, 0, "right"),))
-    assert onset_tolerance(1.5) == pytest.approx(.225)
+    assert onset_tolerance(1.5) == pytest.approx(.30)
     assert evaluate(phrase, "right", 40, [PlayedNote(60, .2, 1.1)]).clean
-    assert evaluate(phrase, "right", 40, [PlayedNote(60, .3, 1.6)]).notes[0].status == "late"
+    assert evaluate(phrase, "right", 40, [PlayedNote(60, .4, 1.7)]).notes[0].status == "late"
     assert not evaluate(phrase, "right", 40, [PlayedNote(61, 0, 1)]).clean
     assert evaluate(phrase, "right", 120, [PlayedNote(60, .15, .65)]).notes[0].status == "late"
 
