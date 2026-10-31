@@ -134,7 +134,8 @@ def source_tuplet_groups(piece: Piece, timing: TimingPlan, *,
 
 
 def verify_projected_tuplets(groups: tuple[CodaTupletGroup, ...],
-                             xml: str, bindings: dict) -> None:
+                             xml: str, bindings: dict, *,
+                             boundaries: tuple[float, ...] = ()) -> None:
     """Check generated ratio, eighth glyph type and authored bracket endpoints."""
     if not groups:
         return
@@ -146,10 +147,35 @@ def verify_projected_tuplets(groups: tuple[CodaTupletGroup, ...],
             if info["source_id"] in by_source:
                 raise ValueError("Coda tuplet has duplicated attack glyph ownership")
             by_source[info["source_id"]]=element
+    projected_rests=()
+    if any(group.rests for group in groups):
+        if not boundaries:
+            raise ValueError("Coda cannot verify rest tuplets without a projected measure grid")
+        projected_rests=source_elements(
+            xml,first_bar=1,last_bar=len(boundaries)-1,boundaries=boundaries)
     for group in groups:
         for index,source_id in enumerate(group.source_ids):
             note=by_source.get(source_id)
-            if note is None:
+            rest=next((r for r in group.rests if r.source_id==source_id),None)
+            if rest is not None:
+                first=by_source.get(group.source_ids[0])
+                if first is None:
+                    raise ValueError("Coda lost the first pitched tuplet attack")
+                owner_part=next((pi for pi,part in enumerate(generated.findall("{*}part"))
+                                 if first in tuple(part.iter())),None)
+                voice=first.findtext("{*}voice","1")
+                matches=[item for item in projected_rests
+                    if item.kind=="note" and item.is_rest
+                    and item.part_index==owner_part
+                    and item.measure==rest.measure
+                    and item.voice_id==f"xml-p{owner_part}-s1-v{voice}"
+                    and abs(item.onset-rest.onset)<1e-7
+                    and item.end is not None
+                    and abs(item.end-rest.end)<1e-7]
+                if len(matches)!=1:
+                    raise ValueError("Coda lost authored tuplet rest timing or voice")
+                note=ET.fromstring(matches[0].xml)
+            elif note is None:
                 raise ValueError("Coda tuplet lost a source notehead")
             ratio=note.find("{*}time-modification")
             if (ratio is None or
