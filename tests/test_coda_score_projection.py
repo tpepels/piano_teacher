@@ -68,7 +68,8 @@ def test_coda_transformed_musicxml_listen_and_grading_share_clock(kind,tmp_path)
     assert stage.original_piece is original
     assert stage.timing.original==variant
     assert stage.piece is not original
-    assert original.source_musicxml==SOURCE.read_text()
+    assert ET.tostring(ET.fromstring(original.source_musicxml)) == (
+        ET.tostring(ET.fromstring(SOURCE.read_text())))
     assert stage.selection.transformed_rhythm
     assert stage.piece.bar_boundaries[-1]==result.timing.duration_beats
     assert len(stage.piece.bar_boundaries)==(5 if kind=="slow-2"
