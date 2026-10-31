@@ -1,6 +1,7 @@
 extends RefCounted
 ## Source-bound connector plans, independent of paint and transport ownership.
 ## Owns only authentic tie/flag contour cache; event geometry belongs to ScoreLayout.
+const BeamSpritePlan := preload("res://notation/native/beam_sprite_plan.gd")
 var score
 var flag_clearances: Dictionary = {}
 var prepared_ties: Dictionary = {}
@@ -50,6 +51,16 @@ func prewarm_beam_layout(gap: float, head_offsets: Dictionary) -> void:
     var all: Dictionary = beam_layout(
         gap,0.0,0.0,head_offsets,0.0,score.beam_groups,true)
     for item in all["groups"]:
+        var anchors: Array = []
+        for member in item["members"]:
+            anchors.append(float(member["x"]))
+        var regions: Array = BeamSpritePlan.build(score.glyphs,
+            str(item["art_key"]),anchors,float(item["anchor_y"]),gap,
+            item["source_stem_offsets"])
+        if regions.is_empty():
+            push_error("Missing prepared Verovio beam geometry: "+str(item["art_key"]))
+            continue
+        item["regions"] = regions
         prepared_beams[str(item["art_key"])] = item
 
 func tie_placement(first: Dictionary, last: Dictionary,
@@ -285,6 +296,7 @@ func beam_layout(gap: float, clock: float, playhead_x: float,
                     "tip_y":shifted["tip_y"],"x":shifted["x"]}
             var painted: Dictionary = canonical.duplicate(false)
             painted["members"] = projected_members
+            painted["source_shift_x"] = shift_x
             drawn_groups.append(painted)
             continue
         var members: Array = []
