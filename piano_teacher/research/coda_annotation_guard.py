@@ -138,7 +138,14 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
                 stem=child.findtext("{*}stem")
                 if not (slurs or articulations or beams or stem):
                     continue
-                if factor != 1 or not unchanged(source_id):
+                # Source slurs and note articulations follow their original
+                # source attack. Beam patterns and authored stem direction
+                # still require unchanged written rhythm. Retimed slur
+                # members receive a separate entire-voice interval proof.
+                if factor != 1 or ((beams or stem) and not unchanged(source_id)):
+                    raise ValueError("Coda annotations cannot follow a retimed source attack")
+                if (not unchanged(source_id) and not slurs
+                        and not articulations):
                     raise ValueError("Coda annotations cannot follow a retimed source attack")
                 marks.append(SourceNoteMarks(source_id,tuple(slurs),
                             tuple(articulations),beams,stem))
@@ -154,10 +161,48 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
                                 link.start_source_id not in index or
                                 link.stop_source_id not in index for link in slurs):
                 raise ValueError("Unpaired or unsupported source slur cannot be preserved")
-            if any(not unchanged(sid)
-                   for sid in matrix.connector_protected_source_ids()
-                   if sid in index):
-                raise ValueError("Coda cannot retime a note inside an authored slur")
+            for link in slurs:
+                begin=index.get(link.start_source_id)
+                finish=index.get(link.stop_source_id)
+                if begin is None or finish is None:
+                    raise ValueError("Coda source slur endpoints were omitted")
+                source_start=index[link.start_source_id][0]
+                source_stop=index[link.stop_source_id][0]
+                if source_stop<=source_start+1e-7:
+                    raise ValueError("Coda source slur has non-increasing endpoints")
+                first_note=next((note for note in timing.original.notes
+                    if note.source_id==link.start_source_id),None)
+                last_note=next((note for note in timing.original.notes
+                    if note.source_id==link.stop_source_id),None)
+                if (first_note is None or last_note is None
+                        or first_note.voice != last_note.voice
+                        or first_note.hand != last_note.hand):
+                    raise ValueError("Coda slur changed source voice ownership")
+                bar=next(((a,b) for a,b in zip(piece.bar_boundaries,
+                        piece.bar_boundaries[1:])
+                        if a-1e-7<=source_start<b-1e-7),None)
+                if bar is None or source_stop>=bar[1]-1e-7:
+                    raise ValueError("Coda cannot retime a cross-measure slur")
+                members=sorted((note for note in timing.original.notes
+                    if note.voice==first_note.voice and
+                    source_start-1e-7<=note.start<=source_stop+1e-7),
+                    key=lambda note:(note.start,note.pitch))
+                if len(members)<2 or any(
+                        note.start>=successor.start-1e-7
+                        for note,successor in zip(members,members[1:])):
+                    raise ValueError("Coda cannot retime ambiguous polyphonic slurs")
+                for note in members:
+                    changed=exercise.get(note.source_id)
+                    if changed is None or not (
+                            bar[0]-1e-7<=changed[0]<changed[1]<=bar[1]+1e-7):
+                        raise ValueError("Coda slur moved an attack across source measure")
+                if any(exercise[first.source_id][1]>
+                       exercise[second.source_id][0]+1e-7
+                       for first,second in zip(members,members[1:])):
+                    raise ValueError("Coda cannot retime an overlapping or reordered slur")
+            # A slur may share endpoints with a differently numbered
+            # independent curve. Every pair is checked, never waived.
+
         if has_source_ties:
             arcs=[link for link in links if link.kind=="tie"]
             source_by_id={item.source_id:item for item in matrix.notation_elements}
