@@ -30,6 +30,10 @@ func _draw() -> void:
         if frame == null:
             return
         note_instances = frame.drawn_note_instances.duplicate(true)
+        # Screen projection selects a small contiguous interval by binary
+        # search. Do not scan a whole score every 60 Hz frame.
+        note_instances.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+            return a["position"].x < b["position"].x)
         symbols_drawn = frame.visible_symbols
         beam_groups_drawn = frame.visible_beam_groups
     else:
