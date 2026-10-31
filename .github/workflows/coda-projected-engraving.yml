@@ -1,6 +1,6 @@
 name: Coda selected-exercise real engraving
 
-# Small Verovio Coda test for original beams, slurs, and separate tied voices.
+# Short source-revision-bound Verovio proof: Coda beams, slurs, ties and one-hand feedback.
 on:
   workflow_dispatch:
   push:
