@@ -42,3 +42,4 @@ func _draw() -> void:
     # The parent may already have projected this frame before our first draw.
     # Update notehead hit regions on the next frame, once, without rebuilding ink.
     owner_view.queue_redraw()
+    owner_view.retained_segment_compiled()
