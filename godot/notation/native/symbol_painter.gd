@@ -261,17 +261,6 @@ func paint_ties(canvas, frame: RenderPass, playhead_x: float, clock: float, gap:
                 frame.event_ink(score_layout,event))
 
 
-func paint_tie_contour(canvas, frame: RenderPass, first: Dictionary, last: Dictionary,
-        place: Dictionary, gap: float) -> void:
-    var direction: String = connector_geometry.tie_template_key(first,last,place,gap)
-    var texture: Texture2D = score_layout.glyphs.tie_textures.get(direction)
-    if texture == null:
-        return
-    var rect: Rect2 = connector_geometry.tie_contour_rect(first,last,place,gap)
-    if rect.has_area():
-        canvas.draw_texture_rect(texture,rect,false,frame.event_ink(score_layout,last))
-
-
 func paint_slurs(canvas, frame: RenderPass, playhead_x: float,clock: float,gap: float) -> void:
     for pair in score_layout.slur_pairs:
         var first: Dictionary = pair["first"]
