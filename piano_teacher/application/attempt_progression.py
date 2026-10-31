@@ -5,6 +5,8 @@ clock, grading policy, transport, or durable session state. A phrase's source
 measure grid is immutable during its attempt and is built only once.
 """
 from __future__ import annotations
+
+from bisect import bisect_right
 import time
 
 from ..practice import Recorder
@@ -40,9 +42,10 @@ class AttemptProgression:
         # A user must be able to watch the time-driven score without a
         # connected instrument. Only actual MIDI input enables assessment.
         engine.preview_only = not engine.midi.connected
-        phrase=engine.plan.active_phrase
+        phrase = engine.plan.active_phrase
         position = engine.open_from_beat if from_beat is None else from_beat
-        engine.play_from_beat=max(0.0,min(float(position),phrase.end-phrase.start-1e-6))
+        engine.play_from_beat = max(0.0, min(float(position),
+                                           phrase.end - phrase.start - 1e-6))
 
         engine.visual_transport.begin_take(loop_continuation=loop_continuation)
         engine.transport_id+=1
@@ -56,10 +59,9 @@ class AttemptProgression:
         engine.feedback_marks=[]
         engine.feedback_unmapped=0
         engine.recorder=Recorder()
-        grid=engine.attempt_progression.grid_for(
-            phrase,engine.plan.piece.bar_boundaries)
-        active_bar = max(0, min(len(grid)-2,
-            next((i for i in range(len(grid)-1) if grid[i] <= engine.play_from_beat < grid[i+1]), len(grid)-2)))
+        grid = self.grid_for(phrase, engine.plan.piece.bar_boundaries)
+        active_bar = max(0, min(len(grid) - 2,
+                                bisect_right(grid, engine.play_from_beat) - 1))
         engine.count_in_bar_beats = grid[active_bar + 1] - grid[active_bar]
         engine.count_in_meter = [max(1, round(engine.count_in_bar_beats)), 4]
         source_beat = phrase.start + engine.play_from_beat
