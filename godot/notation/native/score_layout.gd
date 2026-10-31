@@ -13,6 +13,7 @@ var beamed_note_ids: Dictionary = {}
 var beam_stem_up_by_note: Dictionary = {}
 var voice_stem_up_by_note: Dictionary = {}
 var chord_members: Dictionary = {}
+var sorted_chord_members: Dictionary = {}
 var notation_tuplets: Array = []
 var measure_by_number: Dictionary = {}
 var ordered_events: Array = []
@@ -54,6 +55,7 @@ func clear() -> void:
     beam_stem_up_by_note.clear()
     voice_stem_up_by_note.clear()
     chord_members.clear()
+    sorted_chord_members.clear()
     notation_tuplets.clear()
     measure_by_number.clear()
     ordered_events.clear()
@@ -90,6 +92,13 @@ func rebuild_index() -> void:
         if str(source_event.get("kind", "")) == "note":
             expression_note_index[str(source_event.get("id", ""))] = source_event
     chord_members = index["chord_members"]
+    sorted_chord_members.clear()
+    for leader_id in chord_members:
+        var ordered: Array = chord_members[leader_id].duplicate()
+        ordered.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+            return Geometry.diatonic_index(a.get("spelling",{})) <
+                Geometry.diatonic_index(b.get("spelling",{})))
+        sorted_chord_members[leader_id] = ordered
     voice_stem_up_by_note = polyphonic_stem_directions()
     previous_attack_before_measure = index["previous_attack_before_measure"]
     tie_pairs = index["tie_pairs"]
