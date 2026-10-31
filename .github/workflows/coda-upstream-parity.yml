@@ -41,6 +41,8 @@ jobs:
               exit 1
             }
           cat "$RUNNER_TEMP/coda-diff/report.json"
+      # Four source-backed cases now gate equality, while future novel
+      # inputs must first be reported without incorrectly claiming parity.
       - name: Compare mixed durations and record known/unknown divergences
         id: edges
         continue-on-error: true
