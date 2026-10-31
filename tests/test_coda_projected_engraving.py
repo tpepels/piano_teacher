@@ -69,3 +69,73 @@ def test_coda_real_engraving_retains_identical_note_ids_and_beat_clock(kind,tmp_
     ink={glyph["source_id"] for glyph in score.layout["notes"]
          if glyph.get("is_attack")}
     assert ink==expected
+
+
+def test_actual_coda_wav_live_input_and_missed_note_use_svg_clock(tmp_path):
+    """No mock renderer/audio/grading: one dotted stage, real Verovio/WAV."""
+    import wave
+
+    from piano_teacher.application.listen_session import ListenSession
+    from piano_teacher.demo import DemoAudioCache
+    from piano_teacher.live_input_view import LiveInputView
+    from piano_teacher.measure_grid import phrase_grid
+    from piano_teacher.practice import PlayedNote
+    from piano_teacher.timed_assessment import timed_live_marks
+
+    piece=load_musicxml(SOURCE,bpm=80)
+    original=ExerciseVariant(
+        "original",Phrase(1,1,2,0,8,piece.notes),
+        tuple(range(len(piece.notes))))
+    plan=CodaReferenceDotted(True).transform(
+        original,boundaries=piece.bar_boundaries,quantization=4,
+        source_musicxml=piece.source_musicxml).timing
+    stage=project_coda_score(piece,plan,reference_family="dotted-rhythms",
+                             bpm=80,revision=9)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"preproc"))
+    engraving=artifacts.engraving(stage.selection)
+    canonical={n.source_id:n for n in stage.variant.notes}
+    assert set(engraving.layout["attack_map"])==set(canonical)
+
+    # The application's actual sample/synthesis cache renders the same
+    # selected exercise that the score and MIDI grader consume.
+    cache=DemoAudioCache(tmp_path/"actual-audio",sample_rate=8000)
+    session=ListenSession(tmp_path/"actual-audio",cache=cache)
+    token=session.prepare(stage.listen_selection())
+    session.thread.join(timeout=8)
+    assert not session.thread.is_alive()
+    assert session.take_failure() is None
+    snapshot=session.snapshot()
+    assert snapshot["audio_available"]
+    assert snapshot["duration_seconds"]==pytest.approx(stage.tempo_map.duration_seconds)
+    with wave.open(str(session.audio_path(token)),"rb") as wav:
+        assert wav.getframerate()==8000
+        assert wav.getnframes()/8000==pytest.approx(
+            stage.tempo_map.duration_seconds,abs=.00013)
+        assert any(wav.readframes(1600))
+
+    target=next(note for note in stage.variant.notes
+                if note.hand=="right" and note.pitch==64)
+    # Reuse the actual transformed stage clock for a physical MIDI onset.
+    view=LiveInputView()
+    view.receive(
+        pitch=target.pitch,is_on=True,
+        now=100+stage.tempo_map.seconds_at(target.start),
+        phrase=stage.variant.phrase,hand="right",bpm=80,from_beat=0,
+        run_at=100,running=True,paused=False,preview=False,mode="practice",
+        transport_id=11,tempo_map=stage.tempo_map)
+    assert view.events[-1]["source_id"]==target.source_id
+    assert view.events[-1]["status"]=="on_time"
+
+    played=[PlayedNote(n.pitch,stage.tempo_map.seconds_at(n.start),
+                       stage.tempo_map.seconds_at(n.end))
+            for n in stage.variant.notes if n.source_id!=target.source_id]
+    marks=timed_live_marks(
+        stage.variant.phrase,"right",stage.tempo_map,played,
+        from_beat=0,elapsed_seconds=stage.tempo_map.duration_seconds,
+        grid=phrase_grid(stage.variant.phrase,stage.piece.bar_boundaries),
+        layout=engraving.layout)
+    missed=[m for m in marks if m["source_id"]==target.source_id
+            and m["status"]=="missed"]
+    assert missed
+    assert missed[0]["note_id"]==engraving.layout["attack_map"][target.source_id]
+    assert stage.original_piece.notes==piece.notes
