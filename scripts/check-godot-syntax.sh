@@ -14,6 +14,8 @@ else
 fi
 for script in \
   res://main.gd \
+  res://practice_frame_coordinator.gd \
+  res://practice_state_presenter.gd \
   res://notation/native/view.gd \
   res://inprocess_bus.gd \
   res://native_bridge_smoke.gd \
