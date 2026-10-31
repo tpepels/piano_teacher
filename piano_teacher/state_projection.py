@@ -260,6 +260,9 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
     result.update({
         "loaded": True, "title": lesson.title, "kind": lesson.kind,
         "clock_sampled_at_ms": timing.sampled_at*1000.0,
+        # Exact backend monotonic origin shared by MIDI assessment and scrolling.
+        # The frontend projects this epoch; state polling cannot define tempo.
+        "visual_run_at_ms": timing.run_at*1000.0,
         "first_bar": lesson.first_bar, "last_bar": lesson.last_bar,
         "current_bar": bar_number_at(lesson.measure_boundaries,
             exercise_beat if timing.running else timing.play_from_beat, lesson.first_bar),
