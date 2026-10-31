@@ -1522,8 +1522,10 @@ class PracticeEngine:
             # instead of teleporting to beat zero or appending failed copies.
             self._retry_previous_pass = True
             self._schedule_preparation(self.play_from_beat, now=now,
-                from_visual=self.visual_offset_beats + self.play_from_beat
-                    + (now-self.run_at)*self.plan.bpm/60,
+                # Use the same authored-tempo source+rest projection as the
+                # camera. Nominal BPM multiplication jumps at failure after
+                # a shaped passage, especially near its last bar.
+                from_visual=self._visual_motion(now)[0],
                 reverse_seconds=max(self.feedback_seconds,
                     min(4.0, total_beats * 60.0 / self.plan.bpm / 3.0)))
         if not getattr(result, "passed", result.clean):
