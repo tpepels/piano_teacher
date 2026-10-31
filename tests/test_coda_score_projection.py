@@ -380,9 +380,23 @@ def test_coda_mixed_meter_slowdown_projects_authored_bars_and_rests(
     rest_events=[e for e in model["notation_events"]
                  if e["kind"]=="rest"]
     assert rest_events
-    assert any(abs(e["beat"]-2*factor)<1e-7
-               and abs(e["duration_beats"]-factor)<1e-7
-               for e in rest_events)
+    # One written rest may legitimately split across the new barline.
+    # x4 maps the source 2..3 quarter-rest into [8,12), crossing the
+    # repeated 3/4 bar boundary at beat 9.
+    rest_start,rest_end=2*factor,3*factor
+    spans=sorted({(e["beat"],e["beat"]+e["duration_beats"])
+                  for e in rest_events if e["staff"]=="left"
+                  and rest_start-1e-7<=e["beat"]<rest_end-1e-7
+                  and e["beat"]+e["duration_beats"]<=rest_end+1e-7})
+    cursor=rest_start
+    for first,last in spans:
+        if first<cursor-1e-7:
+            continue  # A separately padded voice may also contain rests.
+        assert abs(first-cursor)<1e-7
+        cursor=last
+        if cursor>=rest_end-1e-7:
+            break
+    assert abs(cursor-rest_end)<1e-7
     played=[PlayedNote(note.pitch,stage.tempo_map.seconds_at(note.start),
                        stage.tempo_map.seconds_at(note.end))
             for note in stage.variant.notes]
