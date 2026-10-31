@@ -319,8 +319,8 @@ func _ready() -> void:
 func animate_calibration_beat(beat: float, active: bool,
         round_beats: int = 12, preparation: int = 4) -> void:
     if calibration_beat_pulse != null:
-        calibration_beat_pulse.present_beat(
-            beat, active, round_beats, preparation)
+        calibration_beat_pulse.call(
+            "present_beat", beat, active, round_beats, preparation)
 
 func present_calibration(state: Dictionary, offset_ms: int) -> void:
     if calibration_label == null:
