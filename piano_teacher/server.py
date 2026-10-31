@@ -997,57 +997,9 @@ class PracticeEngine:
             if self.mode == "learn":
                 self._prepare_practice()
                 return
-            self.mode = mode
-            self.teaching = None
-            self.guided_range = None
-            self._guided_return = None
-            self.performance_summary = None
-            self.review_stage_identity = None
-            self.review_session_complete = False
-            # A user must be able to watch the time-driven score without a
-            # connected instrument. Only actual MIDI input enables assessment.
-            self.preview_only = not self.midi.connected
-            phrase=self.plan.active_phrase
-            position = self.open_from_beat if from_beat is None else from_beat
-            self.play_from_beat=max(0.0,min(float(position),phrase.end-phrase.start-1e-6))
-
-            self.visual_transport.begin_take(loop_continuation=loop_continuation)
-            self.transport_id+=1
-            self.live_input.reset_attempt()
-            # Keep large-score attack indexing off the physical MIDI callback.
-            self.live_input.prepare(phrase)
-            self.running=True
-            self.auto=mode == "practice" and not self.preview_only
-            self.awaiting_score_revision=None
-            self.pending_result=None
-            self.feedback_marks=[]
-            self.feedback_unmapped=0
-            self.recorder=Recorder()
-            grid=self.attempt_progression.grid_for(
-                phrase,self.plan.piece.bar_boundaries)
-            active_bar = max(0, min(len(grid)-2,
-                next((i for i in range(len(grid)-1) if grid[i] <= self.play_from_beat < grid[i+1]), len(grid)-2)))
-            self.count_in_bar_beats = grid[active_bar + 1] - grid[active_bar]
-            self.count_in_meter = [max(1, round(self.count_in_bar_beats)), 4]
-            source_beat = phrase.start + self.play_from_beat
-            meter = next(((numerator, denominator) for beat, numerator, denominator
-                          in sorted(self.plan.piece.time_signatures, reverse=True)
-                          if beat <= source_beat + 1e-7), None)
-            meter = preparation_meter(
-                meter, self.plan.piece.time_signatures, source_beat)
-            if meter is not None:
-                self.count_in_meter = list(meter)
-                self.count_in_bar_beats = meter[0] * 4 / meter[1]
-            # The empty staff measure BETWEEN loops already provides the
-            # preparation interval. Do not prepend another count-in measure.
-            self.visual_gap_beats = self._source_model()["practice_timeline"]["gap"]["duration_beats"]
-            self.count_in_beats = (0.0 if loop_continuation else
-                lead_in_beats(self.count_in_bar_beats, self.plan.bpm))
-            self.next_boundary_beat=next_chunk_end(grid,self.play_from_beat)
-            self.run_at=time.monotonic()+self.count_in_beats*60/self.plan.bpm
-            self.feedback="Count in, then play"
-            self.next_action = ("Watch the moving score; connect a piano for feedback." if self.preview_only
-                else f"Play from bar {bar_number_at(grid,self.play_from_beat,phrase.first_bar)} at {self.plan.bpm} BPM.")
+            self.attempt_progression.begin(
+                self, from_beat=from_beat, mode=mode,
+                loop_continuation=loop_continuation)
 
     def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Retain polling overshoot instead of moving the musical deadline."""
