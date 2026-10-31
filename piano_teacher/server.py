@@ -42,6 +42,7 @@ from .application.strategy_session import restored_strategy_plan
 from .application.lesson_snapshot import build_lesson_snapshot
 from .application.control_dispatch import ControlDispatcher
 from .application.attempt_progression import AttemptProgression
+from .application.session_snapshot_builder import capture as capture_session_snapshot
 from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
 from .midi_calibration import MidiTapCalibration
@@ -1565,133 +1566,8 @@ class PracticeEngine:
             return state
 
     def _capture_session_snapshot(self) -> SessionSnapshot:
-        """Capture values under the session lock, including stateful read adapters.
-
-        Clock reads retain their original order and purpose. Teaching snapshots
-        may tick the controller; all such work finishes before pure projection.
-        """
-        p = self.plan
-        seek_grid = self._seek_grid()
-        activity = ActivitySnapshot(
-            sampled_at=time.monotonic(),
-            learner=self._learner_snapshot() if p is not None else None,
-            placement_available=(not self.is_builtin_warmup and placement_candidate(p) is not None) if p is not None else False,
-            skip_available=(not self.is_builtin_warmup and p.lesson_step_number < len(p.lesson_steps)) if p is not None else False,
-            seek_available=self.paused and seek_grid is not None,
-            seek_range=({"first_bar": p.active_phrase.first_bar, "last_bar": p.active_phrase.last_bar}
-                        if seek_grid is not None else None),
-            next_action=self.next_action,
-            transition_now=((self.paused_at if self.paused else time.monotonic())
-                if self.next_at and (self.pending_result is not None or self.pending_rewind is not None) else 0.0),
-            next_at=self.next_at,
-            pending_transition=self.pending_result is not None or self.pending_rewind is not None,
-            retry_range=self.retry_range,
-            notice_now=time.monotonic() if self.recovery_notice is not None else 0.0,
-            recovery_notice=self.recovery_notice,
-            guided_recovery=self._guided_recovery_pending or self._guided_return is not None,
-            pause_context=self.pause_context,
-            demo=self.listen.snapshot(),
-            performance_summary=self.performance_summary,
-            review_pending=self.review_end_beat is not None,
-            midi_input_count=self.midi.input_count,
-            midi_input_note=self.midi.input_note,
-            midi_now=time.monotonic() if self.midi.input_at is not None else 0.0,
-            midi_input_at=self.midi.input_at,
-            metronome=self.library.settings["metronome"],
-            hints_enabled=self.persistent_hints,
-            fingering=p.piece.fingering_plan.summary()
-                if p is not None and p.piece.fingering_plan is not None else None,
-        )
-        visual_now = self.paused_at if self.paused else time.monotonic()
-        visual_beat = self.play_from_beat
-        if self.running and visual_now >= self.run_at and p is not None:
-            visual_beat += self._elapsed_beat(visual_now-self.run_at)
-        activity = replace(activity, midi_display=self.live_input.snapshot(
-            now=time.monotonic(),
-            phrase=p.active_phrase if p is not None else None,
-            hand=p.hand if p is not None else "both", beat=visual_beat,
-            playing=(p is not None and self.mode in ("practice", "perform")
-                     and (self.running or self._phase(visual_now) == "ready")),
-        ))
-        if p is None:
-            return SessionSnapshot(mode=self.mode, feedback=self.feedback,
-                device=self.midi.device, revision=self.score_revision,
-                transport_id=self.transport_id, activity=activity)
-        practice_timeline = self._source_model()["practice_timeline"]
-        self.visual_gap_beats = practice_timeline["gap"]["duration_beats"]
-        ex, variant = p.exercise, p.active_variant
-        lesson_steps = tuple((step.exercise_index, step.hand, step.key) for step in p.lesson_steps)
-        sampled_at = time.monotonic()
-        now = self.paused_at if self.paused else sampled_at
-        elapsed = now-self.run_at
-        phase = self._phase(now)
-        live_marks = self._live_feedback(elapsed) if phase == "playing" else []
-        visual_motion = self._visual_motion(now)
-        lesson = build_lesson_snapshot(
-            p, ex, variant, fingerprint=self.fingerprint,
-            warmup=self.is_builtin_warmup, lesson_steps=lesson_steps)
-        tempo_map = self._active_tempo_map()
-        # Local-zero source timing followed by the explicit practice-BPM
-        # silence. These exact segments are sent to Godot and retained
-        # through the automatic-rest phase with the same run_at timestamp.
-        visual_segments = ()
-        if tempo_map is not None:
-            local_map = tempo_map.from_beat(self.play_from_beat)
-            visual_segments = (*local_map.as_segments(), {
-                "start_beat": local_map.duration_beats,
-                "end_beat": local_map.duration_beats+self.visual_gap_beats,
-                "bpm": float(p.bpm),
-                "start_seconds": local_map.duration_seconds,
-            })
-        timing = TimingSnapshot(
-            sampled_at=sampled_at, now=now, run_at=self.run_at,
-            tempo_segments=(tempo_map.from_beat(self.play_from_beat).as_segments()
-                            if tempo_map is not None else ()),
-            visual_tempo_segments=visual_segments,
-            visual_preparation_schedule=self.visual_transport.preparation_schedule(),
-            mapped_clock_beat=(self._elapsed_beat(now-self.run_at)
-                               if tempo_map is not None else None),
-            running=self.running, paused=self.paused, auto=self.auto,
-            preview_only=self.preview_only, play_from_beat=self.play_from_beat,
-            open_from_beat=self.open_from_beat, pending_rewind=self.pending_rewind,
-            review_end_beat=self.review_end_beat,
-            awaiting_score_revision=self.awaiting_score_revision,
-            count_in_beats=self.count_in_beats,
-            count_in_bar_beats=self.count_in_bar_beats, count_in_meter=self.count_in_meter,
-            midi_notes=len(self.recorder.presses) if self.recorder is not None else 0,
-            visual_offset_beats=self.visual_offset_beats,
-            visual_gap_beats=self.visual_gap_beats, visual_motion=visual_motion,
-            practice_timeline=practice_timeline, practice_preparation=self.practice_preparation,
-            take_result=({"clean": bool(self.pending_result.clean),
-                          "correct": self.pending_result.correct,
-                          "total": len(self.pending_result.notes)}
-                         if self.mode == "practice" and self.pending_result is not None else None),
-            feedback_marks=self.feedback_marks, live_marks=live_marks,
-            feedback_unmapped=self.feedback_unmapped,
-            scoring_available=(not self.preview_only and self.midi.connected
-                               and self.mode in ("practice", "perform")),
-        )
-        guided = None
-        if self.mode == "learn" and self.teaching is not None:
-            teaching = self.teaching.snapshot(now=time.monotonic())
-            phrase = self.display_phrase()
-            guided = GuidedSnapshot(
-                teaching=teaching,
-                fragment={"first_bar": phrase.first_bar, "last_bar": phrase.last_bar,
-                          "start_beat": self.guided_range[0], "end_beat": self.guided_range[1]},
-                phase=self._phase(now),
-                has_more_units=activity.learner["next_unit"] is not None and self._guided_return is None,
-                returning=bool(self._guided_return),
-                required_notes=(len(self._remediation_active.variant.notes)
-                                if self._remediation_active is not None
-                                else len(phrase.notes)),
-                duration_beats=phrase.end-phrase.start,
-                feedback_marks=self._guided_marks(teaching),
-            )
-        return SessionSnapshot(mode=self.mode, feedback=self.feedback,
-            device=self.midi.device, revision=self.score_revision,
-            transport_id=self.transport_id, phase=phase, activity=activity,
-            lesson=lesson, timing=timing, guided=guided)
+        """Capture a coherent snapshot while holding the application lock."""
+        return capture_session_snapshot(self)
 
     def _score_selection(self) -> ScoreSelection:
         """Capture the selected source under the application lock."""
