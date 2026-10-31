@@ -807,3 +807,27 @@ def test_coda_quintuplet_septuplet_interior_source_rest_keeps_clock_and_voice(
                        stage.tempo_map.seconds_at(n.end))
             for n in stage.variant.notes]
     assert stage.grade(played).assessment.clean
+
+
+@pytest.mark.parametrize("rest_indices",[(0,1),(1,2)])
+def test_coda_tuplet_rejects_endpoint_or_multiple_source_rests(
+        rest_indices,tmp_path):
+    from piano_teacher.research.coda_source_tuplets import source_tuplet_groups
+
+    root=ET.fromstring((Path(__file__).parent/"fixtures/research"/
+        "coda_group_5_4.musicxml").read_text())
+    members=[n for n in root.findall("./part")[0].findall("./measure/note")
+             if n.find("time-modification") is not None]
+    assert len(members)==5
+    for i in rest_indices:
+        pitch=members[i].find("pitch")
+        assert pitch is not None
+        members[i].remove(pitch)
+        members[i].insert(0,ET.Element("rest"))
+    filename=tmp_path/"unsupported-tuplet-rests.musicxml"
+    filename.write_text(ET.tostring(root,encoding="unicode"))
+    piece=load_musicxml(filename,bpm=80)
+    variant=ExerciseVariant("original",Phrase(1,1,1,0,4,piece.notes),
+                             tuple(range(len(piece.notes))))
+    with pytest.raises(ValueError,match="only supports one interior tuplet rest"):
+        source_tuplet_groups(piece,OriginalTiming().transform(variant),factor=1)
