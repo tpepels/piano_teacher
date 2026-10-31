@@ -23,7 +23,8 @@ func configure(view: Control, segment_kind: String, segment_variant: String,
 func _draw() -> void:
     compiled = false
     note_instances.clear()
-    if owner_view == null or not owner_view.native_ready:
+    if owner_view == null or not owner_view.native_ready or \
+            owner_view.size.x < 100.0 or owner_view.size.y < 100.0:
         return
     if kind == "source":
         var frame = owner_view.paint_retained_source(self,variant,recovery_context)
