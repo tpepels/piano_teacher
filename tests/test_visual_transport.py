@@ -93,3 +93,27 @@ def test_transport_engine_alias_has_exactly_one_state_owner(tmp_path):
         assert engine.visual_gap_beats == 7
     finally:
         engine.db.close()
+
+
+def test_retry_epochs_are_absolute_and_shift_together_on_resume():
+    t = VisualTransport(visual_offset_beats=8)
+    t.schedule_preparation({"duration_beats": 4}, source_from_beat=2,
+                           from_visual=15, now=100, reverse_seconds=2, bpm=60)
+    schedule = t.preparation_schedule()
+    assert schedule == {
+        "reverse_at_ms": 100000.0,
+        "prepare_at_ms": 102000.0,
+        "deadline_at_ms": 106000.0,
+        "from_beat": 15,
+        "to_beat": 6,
+    }
+    t.pause(at=101)
+    t.resume(now=111, shift_run_at=False)
+    after = t.preparation_schedule()
+    assert after["reverse_at_ms"] == pytest.approx(110000)
+    assert after["prepare_at_ms"] == pytest.approx(112000)
+    assert after["deadline_at_ms"] == pytest.approx(116000)
+    assert after["from_beat"] == schedule["from_beat"]
+    assert after["to_beat"] == schedule["to_beat"]
+    t.begin_take(loop_continuation=True)
+    assert t.preparation_schedule() is None
