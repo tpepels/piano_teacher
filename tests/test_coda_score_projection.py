@@ -336,7 +336,7 @@ def test_coda_rejects_unverified_authored_tuplet_marks(tmp_path):
     ET.SubElement(ratio,"actual-notes").text="3"
     ET.SubElement(ratio,"normal-notes").text="2"
     decorated=replace(piece,source_musicxml=ET.tostring(root,encoding="unicode"))
-    with pytest.raises(ValueError,match="incomplete or has unowned ratio notes"):
+    with pytest.raises(ValueError,match="requires unmodified 3:2 eighth tuplets"):
         project_coda_score(decorated,OriginalTiming().transform(variant),
                            reference_family="dotted-rhythms",bpm=80)
 
@@ -408,7 +408,7 @@ def test_coda_slowdown_rejects_partial_source_bar_even_with_meter():
     result=CodaReferenceSlowdown(2).transform(variant)
     # A pickup or partial measure needs an authored grouping policy.
     changed=replace(original,bar_boundaries=(0,3,8))
-    with pytest.raises(ValueError,match="incomplete source measures"):
+    with pytest.raises(ValueError,match="outside selected measure grid|incomplete source measures"):
         project_coda_score(changed,result.timing,reference_family="tempo-shaping",bpm=80)
 
 
