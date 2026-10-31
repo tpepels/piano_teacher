@@ -198,6 +198,44 @@ class CodaReferenceDotted:
                                 exercise_start=(a+parts[0])/quantization,
                                 exercise_end=(a+2*n)/quantization)
                     decisions.append(sources)
+                # The pinned backend applies the next multiplier to the
+                # final event of an odd-length run (not merely to pairs).
+                # That may extend a note past a score boundary or through
+                # a new attack; retain reference behavior ONLY when that
+                # complete transformed duration remains representable.
+                if len(attacks)%2:
+                    a=attacks[-1]
+                    n=flat[a]
+                    length=n*self.pattern[0]
+                    if length>0 and abs(round(length)-length)<=1e-8:
+                        onset=score.phrase.start+a/quantization
+                        old_end=score.phrase.start+(a+n)/quantization
+                        new_end=score.phrase.start+(a+length)/quantization
+                        next_ticks=[tick for tick in range(a+1,matrix.steps)
+                                    if flat[tick]>0]
+                        next_onset=(score.phrase.start+next_ticks[0]/quantization
+                                    if next_ticks else float("inf"))
+                        containing_bar=next((right for left,right in
+                            zip(score.boundaries,score.boundaries[1:])
+                            if left-1e-7<=onset<right-1e-7),None)
+                        rest_conflict=any(
+                            rest.onset < new_end-1e-7 and
+                            rest.end > old_end+1e-7
+                            for rest in voice.written_rests)
+                        if (containing_bar is not None and
+                                new_end<=containing_bar+1e-7 and
+                                new_end<=next_onset+1e-7 and
+                                not rest_conflict and
+                                _safe_group(score,voice,(),guarded,onset,old_end)):
+                            owners=tuple((pitch,index,source)
+                                         for pitch,tick,index,source in matrix.owners
+                                         if tick==a)
+                            if owners:
+                                for pitch,index,source in owners:
+                                    events[index]=replace(
+                                        events[index],
+                                        exercise_end=(a+length)/quantization)
+                                decisions.append(tuple(source for _,_,source in owners))
         plan=TimingPlan(
             "coda-reference-dotted-"+("long-short" if self.long_first else "short-long"),
             variant,tuple(events),duration)
@@ -259,7 +297,7 @@ class CodaReferenceChordification:
                     for pitch,t,index,source in group_entries:
                         events[index]=replace(events[index],
                             exercise_start=group_start/quantization,
-                            exercise_end=end/quantization)
+                            exercise_end=actual_end/quantization)
                     groups.append(tuple(e[3] for e in group_entries))
         plan=TimingPlan(
             "coda-reference-chordified-"+str(self.chord_level),

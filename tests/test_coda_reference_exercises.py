@@ -140,3 +140,32 @@ def test_reference_chordification_keeps_silent_tail_after_equal_note_run():
     assert result.changed_sources==("a","b","c","d")
     assert result.timing.duration_beats==4
     assert result.timing.original.notes==notes
+
+
+@pytest.mark.parametrize("long_first,last_duration",[(True,1.5),(False,.5)])
+def test_reference_dotted_odd_tail_matches_author_when_note_is_safe(
+        long_first,last_duration):
+    notes=tuple(Note(float(i),float(i+1),60+i,0,0,"right",
+                     f"odd-{i}","v") for i in range(3))
+    variant=ExerciseVariant("original",Phrase(1,1,1,0,4,notes),(0,1,2))
+    result=CodaReferenceDotted(long_first).transform(
+        variant,boundaries=(0,4),quantization=4)
+    assert len(result.changed_sources)==3
+    assert result.groups[-1]==("odd-2",)
+    events=result.timing.events
+    assert events[-1].exercise_start==2
+    assert events[-1].exercise_end-events[-1].exercise_start==pytest.approx(last_duration)
+    assert result.timing.duration_beats==4
+    assert result.timing.original.notes==notes
+
+
+def test_reference_dotted_cannot_extend_odd_tail_past_original_measure():
+    notes=tuple(Note(float(i),float(i+1),60+i,0,0,"right",
+                     f"end-{i}","v") for i in (1,2,3))
+    variant=ExerciseVariant("original",Phrase(1,1,1,0,4,notes),(0,1,2))
+    result=CodaReferenceDotted(True).transform(
+        variant,boundaries=(0,4),quantization=4)
+    assert result.timing.events[-1].exercise_start==3
+    assert result.timing.events[-1].exercise_end==4
+    assert "end-3" not in result.changed_sources
+    assert all(e.exercise_end<=4 for e in result.timing.events)
