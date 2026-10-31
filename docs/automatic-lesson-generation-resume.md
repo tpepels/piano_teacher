@@ -122,3 +122,21 @@ example. Current repo revision `20b7ba9f`, fast CI
 `207 passed, 6 skipped`. See the Gate 2 report for the
 exact tested scope and exclusions. Run is explicit-only, so
 ordinary CI remains short.
+
+## 2026-10-31 Coda Gate 2 mixed-rhythm reproduction checkpoint
+
+New bounded `probe_coda_upstream_edges.py` executed the actual
+pinned author backend on four different input scores:
+mixed note durations, a three-note dotted run, simultaneous
+source chords and a run with trailing silence. At code SHA
+`7026db23`: **4/4 cases**, **12/12 matrix arrays** and
+**20/20 exercise output sequences** exact against original
+`music21` results. An earlier failed parity run found a
+real padded-window bug; source chord duration was corrected.
+The final unmatched dotted event now matches upstream when
+the altered length stays in the source grid and avoids
+authored rest/next-onset overlap. Tests **211 passed, 6
+skipped**. See `docs/research-reproduction-gate-2-coda.md`
+for caveats. The remaining objective is full notation-preserving
+source-to-exercise projection and wider pinned author parity,
+not unrelated native rendering.

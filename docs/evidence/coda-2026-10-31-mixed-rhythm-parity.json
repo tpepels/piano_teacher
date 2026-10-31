@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "code_revision": "7026db235c5916f2c68e6fedfc899a9bc028d3f9",
+  "reference_revision": "a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
+  "timestamp": "2026-10-31",
+  "run": "https://github.com/tpepels/piano_teacher/actions/runs/41193216063",
+  "artifact_id": 13039732356,
+  "edge_cases": [
+    "even-mixed",
+    "odd-equal-run",
+    "block-chords",
+    "mixed-with-gap"
+  ],
+  "tested_voices": 4,
+  "exact_array_comparisons": 12,
+  "exact_algorithm_sequences": 20,
+  "all_edge_cases_matched": true,
+  "original_uniform_fixture": {
+    "exact_array_comparisons": 6,
+    "exact_algorithm_sequences": 10
+  },
+  "combined": {
+    "exact_array_comparisons": 18,
+    "exact_algorithm_sequences": 30
+  },
+  "ci": {
+    "url": "https://github.com/tpepels/piano_teacher/actions/runs/41193216091",
+    "passed": 211,
+    "skipped": 6
+  },
+  "deliberate_guards": [
+    "reject odd tail extending beyond source measure",
+    "reject odd tail crossing a later source attack or authored rest",
+    "reject source notes not representable on author quantization grid",
+    "reject overlapping repeated pitch identities"
+  ],
+  "release_research_gate_complete": false
+}
