@@ -28,6 +28,7 @@ jobs:
           python -m pip install -e '.[test,coda-research,godot]'
           python -m compileall -q tests/test_coda_projected_engraving.py
       # Verify source-authored slur, articulation and beam ink as well as WAV and MIDI.
+      # Include rest-bearing quintuplets and septuplets.
       - name: Render and verify five actual Coda MusicXML variants
         id: proof
         continue-on-error: true

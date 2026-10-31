@@ -444,3 +444,33 @@ def test_shortened_parallel_written_ties_retain_two_real_verovio_arcs(tmp_path):
     assert len(arcs)>=2
     for i,svg in enumerate(rendered.pages):
         (tmp_path/f"retimed-parallel-tie-{i}.svg").write_text(svg)
+
+
+@pytest.mark.parametrize("actual,normal,quantization",[(5,4,20),(7,4,70)])
+def test_real_source_rest_quintuplet_septuplet_verovio_ink(
+        actual,normal,quantization,tmp_path):
+    """Genuine source rests retain their original non-triplet tuplet ink."""
+    path=(Path(__file__).parent/"fixtures/research"/
+          f"coda_group_{actual}_{normal}_interior_rest.musicxml")
+    piece=load_musicxml(path,bpm=80)
+    original=ExerciseVariant("original",Phrase(1,1,1,0,4,piece.notes),
+                             tuple(range(len(piece.notes))))
+    plan=CodaReferenceDotted(True).transform(
+        original,boundaries=piece.bar_boundaries,
+        quantization=quantization,source_musicxml=piece.source_musicxml).timing
+    stage=project_coda_score(
+        piece,plan,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/f"rest-{actual}"))
+    root=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    authored=[n for n in root.findall(".//note") if
+              n.find("rest") is not None and
+              n.findtext("time-modification/actual-notes")==str(actual)]
+    assert len(authored)==1
+    score=artifacts.engraving(stage.selection)
+    assert set(score.layout["attack_map"])=={
+        note.source_id for note in original.notes}
+    classes={name for svg in score.pages for element in ET.fromstring(svg).iter()
+             for name in element.get("class","").split()}
+    assert {"tuplet","rest"}.issubset(classes)
+    for i,svg in enumerate(score.pages):
+        (tmp_path/f"coda-rest-{actual}-{normal}-{i}.svg").write_text(svg)
