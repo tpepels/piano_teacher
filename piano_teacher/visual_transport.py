@@ -88,6 +88,22 @@ class VisualTransport:
         self._preview_loop_pending = False
         return self.next_at
 
+    def preparation_schedule(self) -> dict | None:
+        """Absolute monotonic endpoints for the same rewind/preparation clock.
+
+        Python MIDI transitions and Godot's rendering use these deadlines.
+        Poll latency must never become another animation origin.
+        """
+        if not self._preparation_pending or self._visual_rewind_from is None:
+            return None
+        return {
+            "reverse_at_ms": self._visual_rewind_at * 1000.0,
+            "prepare_at_ms": self._preparation_at * 1000.0,
+            "deadline_at_ms": self.next_at * 1000.0,
+            "from_beat": self._visual_rewind_from,
+            "to_beat": self._visual_rewind_to,
+        }
+
     def pause(self, *, at: float) -> None:
         """Freeze the presentation clock at one sampled instant."""
         if self.paused:
