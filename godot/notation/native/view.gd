@@ -445,11 +445,15 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
 func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
     if state.get("phase","") == "ready" and state.get("practice_preparation") == null and \
             absf(float(state.get("visual_offset_beats",0.0)))<.00001:
-        preparation_history.clear()
+        if not preparation_history.is_empty():
+            preparation_history.clear()
+            _clear_recovery_ink()
     var old_hand: String = active_hand
     super.present(state,transport_beat,visual_beat)
     if old_hand != active_hand:
         _invalidate_retained_segments()
+    if score_loop_enabled:
+        _remember_preparation()
 
 # MusicXML determines each boundary's structure. The first measure has
 # no moving barline unless it explicitly opens with a repeat sign. At later
@@ -477,17 +481,52 @@ func _visible_events(left: float, right: float, frame: RenderPass = null) -> Arr
     frame.scanned_events = frame_scanned_events
     return results
 
+func _clear_recovery_ink() -> void:
+    for segment in retained_recovery_sources.values()+retained_recovery_rests.values():
+        if is_instance_valid(segment):
+            remove_child(segment)
+            segment.queue_free()
+    retained_recovery_sources.clear()
+    retained_recovery_rests.clear()
+
+func _rebuild_recovery_ink() -> void:
+    _clear_recovery_ink()
+    if retained_first_loop == null or practice_timeline.is_empty():
+        return
+    var stride: float = float(practice_timeline["stride_beats"])
+    for owner in preparation_history:
+        var item: Dictionary = preparation_history[owner]
+        var measure: Dictionary = item["measure"]
+        var previous: Dictionary = _practice_context_before(
+            float(measure["start_beat"]),stride)
+        var rest: Node2D = _new_retained_segment("rest","recovery",{
+            "measure":measure,"previous":previous})
+        retained_recovery_rests[owner] = rest
+        var first_index: int = maxi(0,floori(float(measure["start_beat"])/stride)-1)
+        var last_index: int = maxi(first_index,
+            ceili(float(measure["end_beat"])/stride)+1)
+        for index in range(first_index,last_index+1):
+            var start: float = float(index)*stride
+            if _source_overlaps_preparation(start) and \
+                    not retained_recovery_sources.has(start):
+                retained_recovery_sources[start] = _new_retained_segment(
+                    "source","recovery",{"pass_index":index,"pass_start":start})
+    _hide_retained_segments()
+
 func _remember_preparation() -> void:
     if practice_preparation.is_empty():
         return
     var owner: float = float(practice_preparation["pass_start_beat"])
-    # A new recovery may cross its source-copy boundary. The latest full
-    # preparation replaces any earlier intersecting preparation as a whole.
+    if preparation_history.get(owner,{}) == practice_preparation:
+        return
+    # A new recovery may cross its source-copy boundary. All affected
+    # CanvasItems are compiled once from the updated visibility contract.
     for previous in preparation_history.keys():
         if float(previous)!=owner and SourceVisibility.intervals_overlap(
                 preparation_history[previous]["measure"],practice_preparation["measure"]):
             preparation_history.erase(previous)
     preparation_history[owner] = practice_preparation.duplicate(true)
+    _rebuild_recovery_ink()
 
 func _practice_context_before(at: float, stride: float) -> Dictionary:
     return SourceVisibility.practice_context_before(
@@ -676,23 +715,22 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
             continue
         var source_clock: float = visual_scroll_beat-pass_start-play_from_beat
         var source_shift: float = playhead_x+(pass_start-visual_scroll_beat)*density
+        var segment: Node2D
         if _source_overlaps_preparation(pass_start):
-            # Recovered measures have altered source context. Until a specific
-            # recovery variant has been compiled, preserve exact authored
-            # notation with the existing exception-only painter.
-            _paint_source_pass(source_clock,playhead_x,gap,pass_index,pass_start)
-        else:
-            var segment: Node2D
-            if pass_index == 0:
-                segment = retained_first_loop
-            elif source_slot < retained_repeat_segments.size():
-                segment = retained_repeat_segments[source_slot]
-                source_slot += 1
-            else:
-                push_error("Retained source segment pool exhausted")
+            segment = retained_recovery_sources.get(pass_start)
+            if segment == null:
+                push_error("Recovery source cache was not prepared")
                 continue
-            _project_retained_source(segment,source_shift,source_clock,
-                pass_index,pass_start)
+        elif pass_index == 0:
+            segment = retained_first_loop
+        elif source_slot < retained_repeat_segments.size():
+            segment = retained_repeat_segments[source_slot]
+            source_slot += 1
+        else:
+            push_error("Retained source segment pool exhausted")
+            continue
+        _project_retained_source(segment,source_shift,source_clock,
+            pass_index,pass_start)
         var silence: Dictionary = practice_timeline["gap"].duplicate(true)
         silence["start_beat"] = pass_start+float(silence["start_beat"])
         silence["end_beat"] = pass_start+float(silence["end_beat"])
@@ -707,19 +745,20 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
             rest.position = Vector2(playhead_x+(
                 pass_start+timeline.duration_beats-visual_scroll_beat)*density,0.0)
             rest.visible = true
-    # Recovery intervals can replace arbitrary source measures or ordinary
-    # silence. Render those exceptional contexts at their exact source beats.
+    # Exceptional recovery measures are retained too; their visibility
+    # variant is built when the backend publishes the preparation.
     for owner in preparation_history:
         var item: Dictionary = preparation_history[owner]
         var replaced_rest: Dictionary = item["measure"]
         if float(replaced_rest["end_beat"])<virtual_left-.7 or \
                 float(replaced_rest["start_beat"])>virtual_right+.7:
             continue
-        var previous: Dictionary = _practice_context_before(
-            float(replaced_rest["start_beat"]),stride)
-        context_painter.paint_preparation_measure(
-            self,_new_paint_frame(clock_beat,playhead_x,gap,0,0.0),
-            replaced_rest,previous,gap,playhead_x,previous.is_empty())
+        var recovery_rest: Node2D = retained_recovery_rests.get(owner)
+        if recovery_rest == null:
+            continue
+        recovery_rest.position = Vector2(playhead_x+(
+            float(replaced_rest["start_beat"])-visual_scroll_beat)*density,0.0)
+        recovery_rest.visible = true
 
 func _draw() -> void:
     layout.set_viewport(size)
