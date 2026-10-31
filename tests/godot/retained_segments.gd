@@ -3,7 +3,11 @@ const Segment := preload("res://notation/native/retained_segment.gd")
 const RenderPass := preload("res://notation/native/render_pass.gd")
 
 class FakeView extends Control:
+    signal retained_ink_compiled
     var native_ready := true
+    var allow_publication := false
+    func retained_ready() -> bool:
+        return allow_publication
     var source_draws := 0
     var rest_draws := 0
     var finished := 0
@@ -58,6 +62,20 @@ func _exercise() -> void:
     await process_frame
     await process_frame
     if view.source_draws!=2 or view.rest_draws!=1:
+        failures += 1
+    # The score service cannot publish a loaded revision before the
+    # renderer confirms its retained source/silence buffers are recorded.
+    var service = load("res://score_asset_session.gd").new(view)
+    service.revision = 3
+    service.layout_revision = 3
+    service.timeline_model_revision = 3
+    service._loaded = true
+    service.finish_native_score()
+    if service.rendered_revision == 3:
+        failures += 1
+    view.allow_publication = true
+    view.retained_ink_compiled.emit()
+    if service.rendered_revision != 3 or not service.is_ready():
         failures += 1
     view.free()
     print("RETAINED_SEGMENT_FAILURES:",failures)
