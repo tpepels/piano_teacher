@@ -1,25 +1,19 @@
 #!/usr/bin/env python3
-"""Real Phase 0 smoke: MIDI/MusicXML -> Verovio -> PNG -> HTTP -> count-in.
-
-Run: python scripts/smoke_phase0.py [--file /path/to/score.mid]
-"""
+"""Real Phase 0 MIDI -> Verovio -> PNG -> in-memory commands -> count-in."""
 from __future__ import annotations
+
 import argparse
-from contextlib import contextmanager
 from io import BytesIO
 import json
 from pathlib import Path
 import sys
 import tempfile
-import threading
 import time
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import mido
-from piano_teacher.server import Handler, PracticeEngine, ThreadingHTTPServer
-
+from piano_teacher.server import PracticeEngine
+from piano_teacher.inprocess import EngineCommands
 
 def make_fixture(path: Path) -> None:
     midi = mido.MidiFile(ticks_per_beat=480)
@@ -46,18 +40,16 @@ def make_fixture(path: Path) -> None:
     midi.save(path)
 
 
-def query(url: str, path: str, data: dict | None = None):
-    content = json.dumps(data).encode() if data is not None else None
-    headers = {"Content-Type": "application/json"} if content else {}
-    try:
-        with urlopen(Request(url + path, data=content, headers=headers), timeout=90) as r:
-            return r.headers.get_content_type(), r.read()
-    except HTTPError as exc:
+def query(commands: EngineCommands, path: str, data: dict | None = None):
+    method = "POST" if data is not None else "GET"
+    status, response = commands.request(
+        method, path, json.dumps(data) if data is not None else "")
+    if status != 200:
         if path == "/library/open" and data == {"id": "../outside.mid"}:
-            if exc.code != 400 or "error" not in json.loads(exc.read()):
-                raise AssertionError("Unsafe library request did not give a JSON error")
-            return "application/json", b'{"error":"expected rejection"}'
-        raise RuntimeError(f"{path}: HTTP {exc.code}: {exc.read().decode()}") from exc
+            assert status == 400 and "error" in json.loads(response)
+            return "application/json", response
+        raise RuntimeError(f"{path}: command {status}: {response.decode()}")
+    return ("image/png" if path.startswith("/score.png") else "application/json"), response
 
 
 def check(path: Path | None = None):
@@ -72,57 +64,50 @@ def check(path: Path | None = None):
         else:
             make_fixture(target)
         engine = PracticeEngine(temp / "data", enable_midi=False)
-        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        Handler.engine = engine
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        root = f"http://127.0.0.1:{server.server_port}"
+        commands = EngineCommands(engine=engine)
         try:
-            query(root, "/settings", {"music_dir": str(library)})
-            _, data = query(root, "/library")
+            query(commands, "/settings", {"music_dir": str(library)})
+            _, data = query(commands, "/library")
             items = json.loads(data)["pieces"]
             assert len(items) == 1, "Generated/imported score missing from library"
-            _, data = query(root, "/library/open", {"id": items[0]["id"]})
+            _, data = query(commands, "/library/open", {"id": items[0]["id"]})
             state = json.loads(data)
             assert state["loaded"] and state["exercise_count"] >= 1
             print(f"PASS import: {state['title']}, {state['exercise_count']} exercise(s)", flush=True)
-            _, data = query(root, "/score/layout")
+            _, data = query(commands, "/score/layout")
             layout = json.loads(data)
             assert layout["pages"] > 0 and layout["anchors"], "Engraving has no note coordinates"
             print(f"PASS engraving: {layout['pages']} page(s), {len(layout['anchors'])} anchors", flush=True)
-            mime, image = query(root, "/score.png?page=0")
+            mime, image = query(commands, "/score.png?page=0")
             assert mime == "image/png" and image.startswith(b"\\x89PNG\\r\\n\\x1a\\n".decode("unicode_escape").encode("latin1"))
             with Image.open(BytesIO(image)) as png:
                 png.verify()
                 assert png.width >= 600 and png.height >= 30
             print("PASS rendered score: valid PNG pixels", flush=True)
-            _, data = query(root, "/control", {"action": "start"})
+            _, data = query(commands, "/control", {"action": "start"})
             beginning = json.loads(data)
             assert beginning["phase"] == "count_in" and beginning["preview_only"]
-            _, paused_raw = query(root, "/control", {"action": "pause"})
+            _, paused_raw = query(commands, "/control", {"action": "pause"})
             paused = json.loads(paused_raw)
             assert paused["phase"] == "paused" and paused["clock_beat"] < 0
-            _, resumed_raw = query(root, "/control", {"action": "resume"})
+            _, resumed_raw = query(commands, "/control", {"action": "resume"})
             resumed = json.loads(resumed_raw)
             assert resumed["phase"] == "count_in"
             assert resumed["transport_id"] == beginning["transport_id"]
-            _, restarted_raw = query(root, "/control", {"action": "restart"})
+            _, restarted_raw = query(commands, "/control", {"action": "restart"})
             restarted = json.loads(restarted_raw)
             assert restarted["phase"] == "count_in"
             assert restarted["transport_id"] > beginning["transport_id"]
             engine.run_at = time.monotonic() - .25
-            assert json.loads(query(root, "/state")[1])["phase"] == "playing"
+            assert json.loads(query(commands, "/state")[1])["phase"] == "playing"
             engine.run_at = time.monotonic() - beginning["duration"] - 1
-            ending = json.loads(query(root, "/state")[1])
+            ending = json.loads(query(commands, "/state")[1])
             assert not ending["running"] and ending["mastered"] == 0
-            query(root, "/library/open", {"id": "../outside.mid"})
-            print("PASS HTTP practice clock, device-free preview and error handling", flush=True)
+            query(commands, "/library/open", {"id": "../outside.mid"})
+            print("PASS in-process practice clock, preview and command handling", flush=True)
         finally:
-            server.shutdown()
-            server.server_close()
-            thread.join(timeout=5)
             engine.db.close()
-    print("PHASE 0 BACKEND SMOKE PASSED", flush=True)
+    print("PHASE 0 EMBEDDED ENGINE SMOKE PASSED", flush=True)
 
 
 def main() -> int:
