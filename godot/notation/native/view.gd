@@ -71,6 +71,8 @@ var annotations = FingeringAnnotations.new(layout,connector_geometry)
 const RenderPass := preload("res://notation/native/render_pass.gd")
 const SymbolPainter := preload("res://notation/native/symbol_painter.gd")
 const ContextPainter := preload("res://notation/native/context_painter.gd")
+const RetainedSegment := preload("res://notation/native/retained_segment.gd")
+const RetainedAnnotationOverlay := preload("res://notation/native/retained_annotation_overlay.gd")
 var symbols = SymbolPainter.new(layout,connector_geometry)
 var context_painter = ContextPainter.new(layout,symbols)
 
@@ -94,12 +96,22 @@ var beam_extraction_complete := true
 # Per-rest displacements measured in staff spaces; fixed for one score revision.
 var frame_scanned_events := 0
 var frame_visible_beam_groups := 0
+# The small reusable source/silence CanvasItems retain Godot's actual
+# draw command buffers. A transport frame translates them; it never repaints
+# MusicXML structures.
+var retained_first_once: Node2D
+var retained_first_loop: Node2D
+var retained_repeat_segments: Array = []
+var retained_rest_segments: Array = []
+var retained_annotations: Node2D
+const RETAINED_POOL_SIZE := 5
 
 func _init() -> void:
     resized.connect(func():
         layout.set_viewport(size)
         if native_ready and size.y >= 100.0:
             _prepare_static_geometry()
+            _invalidate_retained_segments()
     )
     annotations.fingering_change_requested.connect(func(source_id, finger):
         fingering_change_requested.emit(source_id,finger))
@@ -114,6 +126,7 @@ func clear_score() -> void:
     staff_gap_limit = MAX_STAFF_GAP
     native_ready = false
     failure_reason = ""
+    _clear_retained_segments()
     layout.clear()
 
 func set_density(value: float) -> bool:
@@ -121,8 +134,9 @@ func set_density(value: float) -> bool:
         return false
     configured_density = value
     if native_ready:
-        # Source-space X changed; prepared beams and tie spans must follow.
+        # Source-space X changed; both geometry and CanvasItem ink are stale.
         _prepare_static_geometry()
+        _invalidate_retained_segments()
     return true
 
 func set_density_from_env() -> bool:
@@ -175,6 +189,7 @@ func load_score(candidate: Dictionary) -> bool:
     preparation_history.clear()
     drawn_note_instances.clear()
     native_ready = false
+    _clear_retained_segments()
     if not glyphs.ready() or not glyphs.note_ready() or not glyphs.ties_ready():
         failure_reason = "Authentic Verovio symbol, note or tie atlas is not loaded"
         notice = failure_reason
@@ -245,6 +260,7 @@ func load_score(candidate: Dictionary) -> bool:
     _prepare_static_geometry()
     failure_reason = ""
     native_ready = true
+    _install_retained_segments()
     queue_redraw()
     return true
 
@@ -296,11 +312,116 @@ func _prepare_static_geometry() -> void:
     connector_geometry.prewarm_beam_layout(prepared_gap,layout.cached_head_offsets)
     connector_geometry.prewarm_slur_geometry(prepared_gap)
 
+func _clear_retained_segments() -> void:
+    for segment in [retained_first_once,retained_first_loop,retained_annotations]:
+        if segment != null and is_instance_valid(segment):
+            remove_child(segment)
+            segment.queue_free()
+    for segment in retained_repeat_segments + retained_rest_segments:
+        if segment != null and is_instance_valid(segment):
+            remove_child(segment)
+            segment.queue_free()
+    retained_first_once = null
+    retained_first_loop = null
+    retained_annotations = null
+    retained_repeat_segments.clear()
+    retained_rest_segments.clear()
+
+func _new_retained_segment(kind: String, variant: String) -> Node2D:
+    var segment: Node2D = RetainedSegment.new()
+    add_child(segment)
+    segment.configure(self,kind,variant)
+    return segment
+
+func _install_retained_segments() -> void:
+    _clear_retained_segments()
+    clip_contents = true
+    retained_first_once = _new_retained_segment("source","once")
+    retained_first_loop = _new_retained_segment("source","first")
+    for i in range(RETAINED_POOL_SIZE):
+        retained_repeat_segments.append(_new_retained_segment("source","repeat"))
+        retained_rest_segments.append(_new_retained_segment("rest","normal"))
+    retained_annotations = RetainedAnnotationOverlay.new()
+    retained_annotations.owner_view = self
+    retained_annotations.z_index = 5
+    add_child(retained_annotations)
+    _hide_retained_segments()
+
+func _hide_retained_segments() -> void:
+    for segment in [retained_first_once,retained_first_loop]:
+        if segment != null:
+            segment.visible = false
+    for segment in retained_repeat_segments + retained_rest_segments:
+        segment.visible = false
+
+func _invalidate_retained_segments() -> void:
+    # Score density, viewport height and the selected hand affect ink, not
+    # playback time. Rebuild only on these genuine structural changes.
+    for segment in [retained_first_once,retained_first_loop]:
+        if segment != null:
+            segment.queue_redraw()
+    for segment in retained_repeat_segments + retained_rest_segments:
+        segment.queue_redraw()
+
+func paint_retained_source(canvas: CanvasItem, variant: String) -> RenderPass:
+    var gap: float = staff_gap()
+    var stride: float = float(practice_timeline.get("stride_beats",0.0))
+    var repeated: bool = variant == "repeat"
+    var pass_index: int = 1 if repeated else 0
+    var pass_start: float = stride if repeated else 0.0
+    var width: float = maxf(size.x,
+        (timeline.duration_beats+1.0)*timeline.pixels_per_beat+size.x)
+    # camera_clock cancels play_from_beat so every source note uses
+    # x=source_beat*pixels_per_beat, independent of playback or seeking.
+    return _paint_source_pass(-play_from_beat,0.0,gap,
+        pass_index,pass_start,canvas,width,variant)
+
+func paint_retained_rest(canvas: CanvasItem) -> void:
+    if practice_timeline.is_empty() or timeline.measures.is_empty():
+        return
+    var gap: float = staff_gap()
+    var silence: Dictionary = practice_timeline["gap"].duplicate(true)
+    silence["left_barline"] = timeline.measures[-1].get("right_barline",{})
+    var incoming: Variant = timeline.measures[0].get("left_barline")
+    if incoming is Dictionary:
+        silence["right_barline"] = incoming
+    var frame: RenderPass = _new_paint_frame(0.0,0.0,gap,0,0.0)
+    frame.visual_scroll_beat = float(silence["start_beat"])
+    var previous: Dictionary = timeline.measures[-1]
+    context_painter.paint_preparation_measure(canvas,frame,
+        silence,previous,gap,0.0,false)
+
+func paint_retained_annotations(canvas: CanvasItem) -> void:
+    if not native_ready:
+        return
+    var gap: float = staff_gap()
+    var playhead_x: float = size.x*PLAYHEAD_FRACTION
+    for annotation_pass in fingering_pass_clocks:
+        annotations.paint(canvas,float(annotation_pass["clock"]),playhead_x,gap,
+            int(annotation_pass["pass_index"]),float(annotation_pass["pass_start"]),{
+                "active_hand":active_hand,"play_from_beat":play_from_beat,
+                "score_loop_enabled":score_loop_enabled,
+                "preparation_history":preparation_history})
+    # The genuine Verovio brace belongs ABOVE scrolling source ink at the
+    # fixed left-hand edge, not inside the translated source segments.
+    var staff_top: float = layout.staff_center("right")-2.0*gap
+    var staff_bottom: float = layout.staff_center("left")+2.0*gap
+    canvas.draw_rect(Rect2(0,staff_top-gap,29,
+        staff_bottom-staff_top+gap*2),Design.STAGE)
+    if glyphs.textures.has("brace"):
+        canvas.draw_texture_rect(glyphs.textures["brace"],
+            Rect2(6,staff_top-2,18,staff_bottom-staff_top+4),false,NOTE_INK)
+    canvas.draw_line(Vector2(29,staff_top),Vector2(29,staff_bottom),
+        Color(NOTE_INK,.50),1.2,true)
+
 func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
     if state.get("phase","") == "ready" and state.get("practice_preparation") == null and \
             absf(float(state.get("visual_offset_beats",0.0)))<.00001:
         preparation_history.clear()
+    var old_hand: String = active_hand
     super.present(state,transport_beat,visual_beat)
+    if old_hand != active_hand:
+        _invalidate_retained_segments()
 
 # MusicXML determines each boundary's structure. The first measure has
 # no moving barline unless it explicitly opens with a repeat sign. At later
