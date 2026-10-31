@@ -22,6 +22,7 @@ const MAX_STAFF_GAP := ViewportFit.MAX_STAFF_GAP
 const FingeringPlacement := preload("res://notation/native/fingering_placement.gd")
 
 signal fingering_change_requested(source_id: String, finger: Variant)
+signal retained_ink_compiled
 
 # Annotation cells live on the same immutable score axis as the note ink.
 # Cache once per score/vertical size; scrolling only translates their X.
@@ -106,6 +107,7 @@ var retained_rest_segments: Array = []
 var retained_recovery_sources: Dictionary = {}
 var retained_recovery_rests: Dictionary = {}
 var retained_annotations: Node2D
+var retained_ink_published := false
 const RETAINED_POOL_SIZE := 5
 
 func _init() -> void:
@@ -326,6 +328,7 @@ func _clear_retained_segments() -> void:
     retained_first_once = null
     retained_first_loop = null
     retained_annotations = null
+    retained_ink_published = false
     retained_repeat_segments.clear()
     retained_rest_segments.clear()
     for segment in retained_recovery_sources.values()+retained_recovery_rests.values():
@@ -345,6 +348,7 @@ func _new_retained_segment(kind: String, variant: String,
 func _install_retained_segments() -> void:
     _clear_retained_segments()
     clip_contents = true
+    retained_ink_published = false
     retained_first_once = _new_retained_segment("source","once")
     retained_first_loop = _new_retained_segment("source","first")
     for i in range(RETAINED_POOL_SIZE):
@@ -355,6 +359,23 @@ func _install_retained_segments() -> void:
     retained_annotations.z_index = 5
     add_child(retained_annotations)
     _hide_retained_segments()
+
+func retained_ready() -> bool:
+    if not native_ready or retained_first_once == null or \
+            retained_first_loop == null or retained_annotations == null:
+        return false
+    for segment in [retained_first_once,retained_first_loop]:
+        if not segment.compiled:
+            return false
+    for segment in retained_repeat_segments + retained_rest_segments:
+        if not segment.compiled:
+            return false
+    return true
+
+func retained_segment_compiled() -> void:
+    if retained_ready() and not retained_ink_published:
+        retained_ink_published = true
+        retained_ink_compiled.emit()
 
 func _hide_retained_segments() -> void:
     # Newly installed segments compile their draw-command buffers offscreen
@@ -375,6 +396,7 @@ func _hide_retained_segments() -> void:
             segment.position = Vector2(-1000000.0,0.0)
 
 func _invalidate_retained_segments() -> void:
+    retained_ink_published = false
     # Structural changes invalidate cached ink. Unused pool entries recompile
     # offscreen now rather than when a later measure comes into view.
     for segment in [retained_first_once,retained_first_loop]:
