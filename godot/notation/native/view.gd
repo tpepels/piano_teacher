@@ -73,6 +73,7 @@ const RenderPass := preload("res://notation/native/render_pass.gd")
 const SymbolPainter := preload("res://notation/native/symbol_painter.gd")
 const ContextPainter := preload("res://notation/native/context_painter.gd")
 const RetainedSegment := preload("res://notation/native/retained_segment.gd")
+const RetainedNoteProjection := preload("res://notation/native/retained_note_projection.gd")
 const RetainedAnnotationOverlay := preload("res://notation/native/retained_annotation_overlay.gd")
 var symbols = SymbolPainter.new(layout,connector_geometry)
 var context_painter = ContextPainter.new(layout,symbols)
@@ -745,34 +746,11 @@ func _project_retained_source(segment, shift_x: float,
     fingering_pass_clocks.append({"clock":camera_clock,
         "pass_index":pass_index,"pass_start":pass_start})
     var playhead_x: float = size.x*PLAYHEAD_FRACTION
-    var notes: Array = segment.note_instances
-    var minimum: float = -60.0-shift_x
-    var maximum: float = size.x+60.0-shift_x
-    var low := 0
-    var high: int = notes.size()
-    while low < high:
-        var midpoint: int = (low+high)>>1
-        if float(notes[midpoint]["position"].x) < minimum:
-            low = midpoint+1
-        else:
-            high = midpoint
-    for index in range(low,notes.size()):
-        var source_note: Dictionary = notes[index]
-        var source_point: Vector2 = source_note["position"]
-        if source_point.x > maximum:
-            break
-        var screen: Vector2 = source_point+Vector2(shift_x,0.0)
-        visible_symbols += 1
-        frame_scanned_events += 1
-        var current: Dictionary = source_note.duplicate(false)
-        var ident: String = str(source_note["event_id"])
-        current["position"] = screen
-        current["pass_index"] = pass_index
-        current["instance_id"] = "%d:%s" % [pass_index,ident]
-        drawn_note_instances.append(current)
-        if not drawn_noteheads.has(ident) or \
-                absf(screen.x-playhead_x)<absf(drawn_noteheads[ident].x-playhead_x):
-            drawn_noteheads[ident] = screen
+    var count: int = RetainedNoteProjection.append_visible(
+        segment.note_instances,shift_x,size.x,playhead_x,pass_index,
+        drawn_note_instances,drawn_noteheads)
+    visible_symbols += count
+    frame_scanned_events += count
 
 func _source_overlaps_preparation(pass_start: float) -> bool:
     var interval := {"start_beat":pass_start,
