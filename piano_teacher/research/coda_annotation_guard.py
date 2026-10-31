@@ -221,8 +221,16 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
                                    for b in piece.bar_boundaries[1:-1])
                         or abs(start.onset-expected[0])>1e-7
                         or abs(stop.end-expected[1])>1e-7
-                        or not unchanged(arc.start_source_id)):
-                    raise ValueError("Coda only supports complete unchanged ties at source barlines")
+                        or abs(exercises[arc.start_source_id][0]-expected[0])>1e-7
+                        or not (boundary+1e-7 <
+                                exercises[arc.start_source_id][1] <=
+                                expected[1]+1e-7)
+                        or any(rest.voice_id==start.voice_id
+                               and rest.onset <
+                                   exercises[arc.start_source_id][1]-1e-7
+                               and rest.end>boundary+1e-7
+                               for rest in matrix.written_rests)):
+                    raise ValueError("Coda only supports complete source-bar ties with unchanged start and safe shortened continuation")
                 seen.add(arc.start_source_id)
                 ties.append(SourceBarTie(arc.start_source_id,boundary,stop.end))
     return AnnotationObligations(tuple(marks),tuple(dynamics),tuple(ties))
