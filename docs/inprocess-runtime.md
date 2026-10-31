@@ -18,6 +18,12 @@ runtime, HTTP service, UDP listener or port binding.
   until all ordinary retained source/rest buffers have compiled. Current
   segments cover whole passages, so unusually long scores may still need
   finer spatial tiling and GPU/frame-time benchmarking.
+  `source_pass_painter.gd` owns one-time authored composition;
+  `retained_note_projection.gd` owns visible notehead indexing, and
+  `view.gd` owns scene lifecycle and camera transforms. The source-copy pool
+  is sized from the viewport and semantic stride rather than a fixed clone
+  count. Fingering labels are sorted during layout and binary-searched by
+  their visible source-space interval each frame.
 - `PianoNative` owns one worker thread and an in-memory command/response
   queue, with completion callbacks delivered on Godot's main thread.
   Its condition-variable wait has a bounded monotonic wakeup: the same worker
