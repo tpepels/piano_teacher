@@ -290,7 +290,7 @@ func _unrolled_score_beat(transport_clock: float) -> float:
     # Once a retry is prepared, a single monotonic deadline determines
     # reversal, count-in and the first forward note. No HTTP poll correction.
     if retry_camera_clock.active and not bool(last_state.get("paused", false)) \
-            and str(last_state.get("phase", "")) in ["recovering", "playing"]:
+            and str(last_state.get("phase", "")) in ["feedback", "recovering", "playing"]:
         return retry_camera_clock.beat_at(Time.get_ticks_msec())
     if bool(last_state.get("running", false)):
         return float(last_state.get("visual_offset_beats", 0.0)) \
@@ -334,7 +334,7 @@ func _update_count_in() -> void:
         return
     calibration_tick_index = -999
 
-    if (str(last_state.get("phase", "")) == "recovering"
+    if (str(last_state.get("phase", "")) in ["feedback", "recovering"]
             and retry_camera_clock.active
             and retry_camera_clock.is_preparing(now_ms)
             and not bool(last_state.get("paused", false))):

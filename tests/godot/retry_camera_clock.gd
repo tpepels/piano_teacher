@@ -16,14 +16,14 @@ func _initialize() -> void:
         return
     var clock = Clock.new()
     var recovering := {
-        "phase": "recovering", "revision": 1, "transport_id": 7,
+        "phase": "feedback", "revision": 1, "transport_id": 7,
         "visual_scroll_beat": 3.0, "transition_in_seconds": 5.0,
         "bpm": 60,
         "practice_preparation": {"phase": "reverse", "measure": {
             "start_beat": 0.0, "end_beat": 4.0, "duration_beats": 4.0}}
     }
     clock.accept(recovering, 1000)
-    check(clock.active, "first recovery precomputes clock")
+    check(clock.active, "feedback-phase auto-retry precomputes clock")
     check(absf(clock.beat_at(1000)-3.0) < .001, "reverse starts at captured beat")
     check(absf(clock.beat_at(1500)-1.5) < .001, "reverse speed is uniform")
     check(absf(clock.beat_at(2000)) < .001, "reverse ends at rest start")

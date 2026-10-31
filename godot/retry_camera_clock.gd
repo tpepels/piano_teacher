@@ -22,6 +22,7 @@ func reset() -> void:
 
 func accept(state: Dictionary, sampled_ms: int) -> void:
     var phase := str(state.get("phase", ""))
+    var retry_phase := phase in ["feedback", "recovering"]
     var next_revision := int(state.get("revision", -1))
     var next_transport := int(state.get("transport_id", -1))
     if active and next_revision == revision and phase == "playing" \
@@ -29,15 +30,15 @@ func accept(state: Dictionary, sampled_ms: int) -> void:
                  next_transport == playing_transport):
         playing_transport = next_transport
         return
-    if (active and phase == "recovering" and
+    if (active and retry_phase and
             (next_revision != revision or next_transport != source_transport
              or playing_transport >= 0)):
         # A later failed take starts an entirely new, fixed retry trajectory.
         reset()
-    elif phase != "recovering" and phase != "playing":
+    elif not retry_phase and phase != "playing":
         reset()
     var preparation: Variant = state.get("practice_preparation")
-    if phase != "recovering" or not preparation is Dictionary \
+    if not retry_phase or not preparation is Dictionary \
             or not str(preparation.get("phase", "")) in ["reverse", "preparing"]:
         return
     if active:
