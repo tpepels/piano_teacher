@@ -17,7 +17,7 @@ for script in \
   res://inprocess_bus.gd \
   res://native_bridge_smoke.gd \
   res://inprocess_request.gd \
-  res://score_asset_http.gd \
+  res://score_asset_queue.gd \
   res://demo_player.gd \
   res://library_catalog_coordinator.gd \
   res://midi_device_coordinator.gd; do

@@ -1,7 +1,6 @@
 extends Control
 
 # Lightweight Godot presentation. Python owns MIDI timestamps, tempo and grading.
-const URL := "http://127.0.0.1:8765"
 const Design := preload("res://practice_theme.gd")
 const INK := Design.STONE
 const MUTED := Design.SECONDARY_INK
@@ -26,7 +25,7 @@ const NavigationDrawer := preload("res://navigation_drawer.gd")
 const LibraryCatalogCoordinator := preload("res://library_catalog_coordinator.gd")
 const MidiDeviceCoordinator := preload("res://midi_device_coordinator.gd")
 const ScoreAssetSession := preload("res://score_asset_session.gd")
-const ScoreAssetHttp := preload("res://score_asset_http.gd")
+const ScoreAssetQueue := preload("res://score_asset_queue.gd")
 const InProcessBus := preload("res://inprocess_bus.gd")
 
 var current_screen := "practice"
@@ -46,7 +45,7 @@ var preferences: Dictionary = {}
 var page_margins: Array[MarginContainer] = []
 var fingering_save_error := ""
 var score_session
-var score_http = ScoreAssetHttp.new()
+var score_queue = ScoreAssetQueue.new()
 var native_score_piece_fingerprint: String:
     get:
         return score_session.native_score_piece_fingerprint if score_session != null else ""
@@ -149,14 +148,7 @@ var demo_player: Node
 var ui_scale := 1.0
 var last_seen_midi_visual_sequence := 0
 var state_poll_timer: Timer
-var live_udp
-var live_udp_port := 0
-var live_subscribe_request
-var live_subscribed := false
-var live_subscribe_pending := false
-var live_subscribe_retry_ms := 0
-var use_inprocess := false
-var inprocess_bus
+var inprocess_bus: Node
 var native_started := false
 
 func _ready() -> void:
@@ -171,23 +163,20 @@ func _ready() -> void:
     phase0_smoke_mode = OS.get_cmdline_user_args().has("--phase0-smoke")
     listen_sync_diagnostics = OS.get_cmdline_user_args().has("--listen-sync-diagnostics")
     frame_diagnostics = OS.get_cmdline_user_args().has("--frame-diagnostics")
-    use_inprocess = OS.get_cmdline_user_args().has("--in-process")
-    if use_inprocess:
-        inprocess_bus = InProcessBus.new()
-        add_child(inprocess_bus)
-        var native_error: String = str(inprocess_bus.get("ready_error"))
-        if not native_error.is_empty():
-            printerr("Embedded Piano Teacher cannot start: " + native_error)
-            get_tree().quit(1)
-            return
+    inprocess_bus = InProcessBus.new()
+    add_child(inprocess_bus)
+    var native_error: String = str(inprocess_bus.get("ready_error"))
+    if not native_error.is_empty():
+        printerr("Embedded Piano Teacher cannot start: " + native_error)
+        get_tree().quit(1)
+        return
     # Apply one device-independent Window scale before creating the controls.
     # Do not enlarge fonts and controls a second time in the layouts.
     _configure_ui_scaling()
     ui_scale = _readable_ui_scale()
     _build_interface()
     demo_player = preload("res://demo_player.gd").new()
-    if use_inprocess:
-        demo_player.call("set_inprocess_bus", inprocess_bus)
+    demo_player.call("configure", inprocess_bus)
     add_child(demo_player)
     settings_view.present_volume(float(demo_player.get("listen_volume_db")))
     demo_player.prepared.connect(func(token: String, ready_revision: int):
@@ -204,18 +193,10 @@ func _ready() -> void:
     if not get_window().size_changed.is_connected(_update_responsive_layout):
         get_window().size_changed.connect(_update_responsive_layout)
     _update_responsive_layout()
-    if not use_inprocess:
-        live_udp = PacketPeerUDP.new()
-        if live_udp.bind(0, "127.0.0.1") == OK:
-            live_udp_port = live_udp.get_local_port()
-        else:
-            push_warning("MIDI live datagrams unavailable; using HTTP events")
-    if not use_inprocess:
-        live_subscribe_request = _new_request(_on_live_subscribe)
     state_request = _new_request(_on_state)
-    score_http.attach(self, score_session, URL, inprocess_bus)
-    layout_request = score_http.layout_request
-    timeline_model_request = score_http.model_request
+    score_queue.attach(self, score_session, inprocess_bus)
+    layout_request = score_queue.layout_request
+    timeline_model_request = score_queue.model_request
 
     action_request = _new_request(_on_action)
     action_request.timeout = 90.0
@@ -231,12 +212,6 @@ func _ready() -> void:
     state_poll_timer.autostart = true
     state_poll_timer.timeout.connect(_poll)
     add_child(state_poll_timer)
-    if not use_inprocess:
-        _subscribe_live_udp()
-        _poll()
-        _request_devices()
-        _request_settings()
-        _request_library()
     var scan_timer := Timer.new()
     scan_timer.wait_time = 5.0
     scan_timer.autostart = true
@@ -292,7 +267,7 @@ func _count_tick(accent: bool) -> void:
         print("PHASE0_CLICK:", str(last_state.get("phase", "")))
 
 func _transport_beat_now() -> float:
-    # Keep the score's musical clock phase-locked across uneven HTTP replies.
+    # Keep the score's musical clock phase-locked across uneven replies.
     # The Python engine remains authoritative for note timing and assessment.
     if visual_transport_clock.matches(last_state):
         return visual_transport_clock.score_beat(Time.get_ticks_msec())
@@ -312,7 +287,7 @@ func _transport_beat_now() -> float:
 # Projection only: never change the backend's local MIDI grading clock.
 # Across repeats the model is drawn at consecutive positions on one infinite
 # visual axis. During feedback/recovery the server supplies the desired scroll
-# direction; extrapolate its last snapshot between HTTP state polls.
+# direction; extrapolate its last snapshot between state polls.
 func _unrolled_score_beat(transport_clock: float) -> float:
     # One presentation clock owns scrolling, reversal, retry count-in
     # and resumed playback; there is no independent retry camera.
@@ -419,20 +394,16 @@ func _visible_score_noteheads() -> int:
 
 
 func _new_request(callback: Callable):
-    var req
-    if use_inprocess:
-        req = preload("res://inprocess_request.gd").new()
-        req.configure(inprocess_bus)
-    else:
-        req = HTTPRequest.new()
+    var req = preload("res://inprocess_request.gd").new()
+    req.configure(inprocess_bus)
     req.timeout = 5.0
     add_child(req)
     req.request_completed.connect(callback)
     return req
 
 func _decode_json(body: PackedByteArray) -> Variant:
-    # HTTPRequest can complete with an empty body when the Python service is
-    # unavailable. JSON.parse_string() logs a parser error in that case.
+    # An engine command can return an empty payload on failure.
+    # Avoid parsing empty JSON.
     if body.is_empty():
         return null
     var document := JSON.new()
@@ -440,13 +411,11 @@ func _decode_json(body: PackedByteArray) -> Variant:
         return null
     return document.data
 
-func _http_failure(code: int, body: PackedByteArray) -> String:
+func _command_failure(code: int, body: PackedByteArray) -> String:
     var response = _decode_json(body)
     if typeof(response) == TYPE_DICTIONARY:
-        return str(response.get("error", "Request failed (HTTP %d)" % code))
-    if code == 0:
-        return "Practice engine unavailable. Start Piano Teacher with ./run.sh"
-    return "Practice engine request failed (HTTP %d)" % code
+        return str(response.get("error", "Command failed (status %d)" % code))
+    return "Embedded practice engine unavailable (status %d)" % code
 
 func _configure_ui_scaling() -> void:
     # Godot must scale the *whole* interface once: text, drawing, music,
@@ -589,11 +558,11 @@ func _build_interface() -> void:
     _build_library_screen()
     _build_settings_screen()
     _build_practice_screen()
-    library_catalog.configure(URL, library_view, home_view,
-        _decode_json, _http_failure, _send_post)
+    library_catalog.configure(library_view, home_view,
+        _decode_json, _command_failure, _send_command)
     library_catalog.catalog_loaded.connect(_resume_last_music_on_start)
-    midi_devices.configure(URL, settings_view,
-        _decode_json, _http_failure, _send_post)
+    midi_devices.configure(settings_view,
+        _decode_json, _command_failure, _send_command)
     score_session = ScoreAssetSession.new(
         practice_view.stage.renderer, practice_view.stage.feedback)
     score_session.assets_invalidated.connect(_on_score_assets_invalidated)
@@ -673,22 +642,22 @@ func _build_settings_screen() -> void:
     settings_view.choose_devices_requested.connect(_show_devices)
     settings_view.refresh_devices_requested.connect(_request_devices)
     settings_view.save_folder_requested.connect(func(path: String):
-        _send_post("/settings", {"music_dir": path}))
+        _send_command("/settings", {"music_dir": path}))
     settings_view.device_selected.connect(_choose_device)
     settings_view.tempo_requested.connect(func(bpm: int):
         _send_action({"action": "tempo", "bpm": bpm}))
     settings_view.strategy_requested.connect(func(strategy: String):
-        _send_post("/settings", {"exercise_strategy": strategy}))
+        _send_command("/settings", {"exercise_strategy": strategy}))
     settings_view.timing_strategy_requested.connect(func(strategy: String):
-        _send_post("/settings", {"timing_strategy": strategy}))
+        _send_command("/settings", {"timing_strategy": strategy}))
     settings_view.tempo_strategy_requested.connect(func(strategy: String):
-        _send_post("/settings", {"tempo_strategy": strategy}))
+        _send_command("/settings", {"tempo_strategy": strategy}))
     settings_view.diagnosis_strategy_requested.connect(func(strategy: String):
-        _send_post("/settings", {"diagnosis_strategy": strategy}))
+        _send_command("/settings", {"diagnosis_strategy": strategy}))
     settings_view.learner_strategy_requested.connect(func(strategy: String):
-        _send_post("/settings", {"learner_strategy": strategy}))
+        _send_command("/settings", {"learner_strategy": strategy}))
     settings_view.metronome_requested.connect(func(enabled: bool):
-        _send_post("/settings", {"metronome": enabled}))
+        _send_command("/settings", {"metronome": enabled}))
     settings_view.calibration_requested.connect(func(action: String):
         _send_action({"action": action}))
     settings_view.volume_changed.connect(_on_listen_volume_changed)
@@ -709,12 +678,12 @@ func _build_lesson_screen() -> void:
     lesson_session.request_failed.connect(lesson_view.present_error)
 
 func _request_lesson() -> void:
-    if lesson_request == null or lesson_request.request(URL + "/lesson") != OK:
+    if lesson_request == null or lesson_request.request("/lesson") != OK:
         lesson_session.complete_response(null, "Cannot request lesson overview", Time.get_ticks_msec())
 
 func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     lesson_session.complete_response(_decode_json(body) if code == 200 else null,
-        "" if code == 200 else _http_failure(code, body), Time.get_ticks_msec())
+        "" if code == 200 else _command_failure(code, body), Time.get_ticks_msec())
 
 func _refresh_score_status(_status: Dictionary = {}) -> void:
     if practice_view != null:
@@ -792,20 +761,20 @@ func _open_library_piece(identifier: String, resume_saved := false) -> void:
         return
     library_view.present_open_status("Opening score…")
     library_resume_requested = resume_saved
-    _send_post("/library/open", {"id": identifier})
+    _send_command("/library/open", {"id": identifier})
 
 
 func _request_settings() -> void:
     if settings_pending or settings_request == null:
         return
     settings_pending = true
-    if settings_request.request(URL + "/settings") != OK:
+    if settings_request.request("/settings") != OK:
         settings_pending = false
 
 func _on_settings(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
     settings_pending = false
     if code != 200:
-        settings_view.present_message(_http_failure(code, body))
+        settings_view.present_message(_command_failure(code, body))
         return
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
@@ -825,58 +794,20 @@ func _apply_window_mode(fullscreen: bool) -> void:
 
 func _on_fullscreen_toggle(enabled: bool) -> void:
     _apply_window_mode(enabled)
-    _send_post("/settings", {"fullscreen": enabled})
+    _send_command("/settings", {"fullscreen": enabled})
 
 func _toggle_fullscreen() -> void:
     var enabled := get_window().mode != Window.MODE_FULLSCREEN
     settings_view.present_window_mode(enabled)
     _on_fullscreen_toggle(enabled)
 
-func _subscribe_live_udp() -> void:
-    if use_inprocess:
-        return
-    if live_udp_port == 0 or live_subscribed or live_subscribe_pending:
-        return
-    var now := Time.get_ticks_msec()
-    if now < live_subscribe_retry_ms:
-        return
-    live_subscribe_retry_ms = now + 5000
-    live_subscribe_pending = true
-    if live_subscribe_request.request(URL + "/midi/live/subscribe",
-            ["Content-Type: application/json"], HTTPClient.METHOD_POST,
-            JSON.stringify({"port": live_udp_port})) != OK:
-        live_subscribe_pending = false
-
-func _on_live_subscribe(_result: int, code: int, _headers: PackedStringArray,
-        _body: PackedByteArray) -> void:
-    live_subscribe_pending = false
-    live_subscribed = code == 200
-
 func _read_live_midi() -> void:
-    if use_inprocess:
-        if inprocess_bus == null or not inprocess_bus.is_ready():
-            return
-        for message in inprocess_bus.poll_midi(last_seen_midi_visual_sequence):
-            if not message is Dictionary:
-                continue
-            var event: Dictionary = message
-            event["age"] = 0.0
-            practice_view.stage.feedback.accept_live_event(event, last_state)
-            var display_state: Dictionary = last_state.duplicate(false)
-            display_state["midi_visual_events"] = [event]
-            _consume_live_piano_hits(display_state)
+    if inprocess_bus == null or not inprocess_bus.is_ready():
         return
-    if live_udp_port == 0:
-        return
-    # Bound per-frame work. UDP delivery is untrusted presentation input,
-    # and actual grading still comes only from the Python recorder.
-    var packets := mini(32, live_udp.get_available_packet_count())
-    for _index in range(packets):
-        var parsed: Variant = JSON.parse_string(
-            live_udp.get_packet().get_string_from_utf8())
-        if not parsed is Dictionary:
+    for message in inprocess_bus.poll_midi(last_seen_midi_visual_sequence):
+        if not message is Dictionary:
             continue
-        var event: Dictionary = parsed
+        var event: Dictionary = message
         event["age"] = 0.0
         practice_view.stage.feedback.accept_live_event(event, last_state)
         var display_state: Dictionary = last_state.duplicate(false)
@@ -884,24 +815,23 @@ func _read_live_midi() -> void:
         _consume_live_piano_hits(display_state)
 
 func _poll() -> void:
-    _subscribe_live_udp()
     if score_session != null and not practice_view.is_source_picker_open():
         score_session.poll(Time.get_ticks_msec())
 
     if not state_pending and not action_pending:
         state_pending = true
         state_request_started_ms = Time.get_ticks_msec()
-        if state_request.request(URL + "/state") != OK:
+        if state_request.request("/state") != OK:
             state_pending = false
 
 func _process(_delta: float) -> void:
-    if use_inprocess and not native_started and inprocess_bus != null:
+    if not native_started and inprocess_bus != null:
         var native_error: String = str(inprocess_bus.get("ready_error"))
         if not native_error.is_empty():
             printerr("Embedded Piano Teacher stopped: " + native_error)
             get_tree().quit(1)
             return
-    if use_inprocess and not native_started and inprocess_bus != null and inprocess_bus.is_ready():
+    if not native_started and inprocess_bus != null and inprocess_bus.is_ready():
         native_started = true
         _poll()
         _request_devices()
@@ -916,7 +846,7 @@ func _process(_delta: float) -> void:
             frame_result["native_scanned_events"] = practice_view.stage.renderer.frame_scanned_events
             frame_result["phase"] = str(last_state.get("phase", ""))
             print("PHASE8D_FRAME_INTERVALS:", JSON.stringify(frame_result))
-    # Animate short-lived hit pulses between HTTP state samples.
+    # Animate short-lived hit pulses between state samples.
     var ticks: int = Time.get_ticks_msec()
     score_effects.prune_expired(ticks)
     _read_live_midi()
@@ -925,7 +855,7 @@ func _process(_delta: float) -> void:
     lesson_view.present_busy(action_pending)
     lesson_session.ensure_current(ticks)
     # Start Listen WAV on the actual negative-to-zero beat crossing at
-    # frame rate, not on the next 150ms HTTP state poll. This preserves the
+    # frame rate, not on the next 150ms state poll. This preserves the
     # first note AND keeps its attack aligned with the engraved notehead.
     if demo_player != null and str(last_state.get("mode", "")) == "listen" \
             and bool(last_state.get("running", false)) \
@@ -1006,7 +936,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         if action_request_started_ms > 0 and state_request_started_ms <= action_request_started_ms:
             return
     if code != 200:
-        practice_view.present_message(_http_failure(code, body))
+        practice_view.present_message(_command_failure(code, body))
         return
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
@@ -1032,11 +962,11 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
             and not str(parsed.get("device", "")).is_empty())
         # Note-on cues arrive via loopback datagrams within the next frame;
         # full-state projections can now poll slightly less often.
-        var interval := (0.08 if use_inprocess or live_subscribed else 0.05) if live_rate else 0.15
+        var interval := 0.08 if live_rate else 0.15
         if absf(state_poll_timer.wait_time - interval) > 0.001:
             state_poll_timer.wait_time = interval
     settings_view.present_practice(parsed, current_screen == "settings")
-    # The backend sampled the clock during this HTTP round trip. Estimate
+    # The backend sampled the clock during this round trip. Estimate
     # that sample at the midpoint so music never waits for the poll interval.
     var started_ms: int = state_request_started_ms if sample_started_ms < 0 else sample_started_ms
     var received_ms: int = Time.get_ticks_msec()
@@ -1216,7 +1146,7 @@ func _send_action(command: Dictionary) -> void:
         return
     last_control_action = requested
     practice_view.begin_action(requested)
-    _send_post("/control", command)
+    _send_command("/control", command)
 
 
 func _present_fingering_status(summary: Variant) -> void:
@@ -1237,7 +1167,7 @@ func _on_fingering_change_requested(source_id: String, finger: Variant) -> void:
     var fingerprint: String = native_score_piece_fingerprint
     if not fingerprint.is_empty():
         payload["fingerprint"] = fingerprint
-    _send_post("/fingering",payload)
+    _send_command("/fingering",payload)
 
 func _flush_transport_action() -> void:
     if not pending_transport_action.is_empty():
@@ -1245,7 +1175,7 @@ func _flush_transport_action() -> void:
         pending_transport_action = ""
         _send_action({"action": action})
 
-func _send_post(path: String, payload: Dictionary) -> void:
+func _send_command(path: String, payload: Dictionary) -> void:
     if action_pending:
         return
     action_pending = true
@@ -1257,9 +1187,7 @@ func _send_post(path: String, payload: Dictionary) -> void:
     action_request_started_ms = Time.get_ticks_msec()
     # The in-process request adapter is dynamically typed; := cannot infer
     # an Error from its Variant-returning request() method.
-    var err: int = int(action_request.request(
-        URL + path, ["Content-Type: application/json"],
-        HTTPClient.METHOD_POST, JSON.stringify(payload)))
+    var err: int = int(action_request.request(path, JSON.stringify(payload), "POST"))
     if err != OK:
         action_pending = false
         practice_view.present_busy(false)
@@ -1279,7 +1207,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         library_resume_requested = false
     var completed_action := last_control_action
     if code != 200:
-        var message := _http_failure(code, body)
+        var message := _command_failure(code, body)
         if path == "/fingering":
             fingering_save_error = message
             _present_fingering_status(last_state.get("fingering",{}))

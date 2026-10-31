@@ -70,7 +70,7 @@ def main() -> None:
     print("Installed verified native files:")
     for path in outputs:
         print(" ", path.relative_to(ROOT))
-    print("Run ./run-inprocess.sh (no build tools needed).")
+    print("Run ./run.sh (no build tools needed).")
 
 
 if __name__ == "__main__":

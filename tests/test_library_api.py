@@ -1,48 +1,34 @@
+"""Library/settings commands use the in-process dispatcher, not a server."""
 import json
-from http.server import ThreadingHTTPServer
-from threading import Thread
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
-
-from piano_teacher.server import Handler, PracticeEngine
+from piano_teacher.server import PracticeEngine
+from piano_teacher.inprocess import EngineCommands
 
 
-def test_library_and_settings_http_endpoints(tmp_path):
-    music = tmp_path / 'music'
+def test_library_and_settings_queue_commands(tmp_path):
+    music = tmp_path / "music"
     music.mkdir()
-    (music / 'Prelude.mid').write_bytes(b'fake')
-    engine = PracticeEngine(tmp_path / 'state', enable_midi=False)
-    # Handler uses class engine, consistent with the normal single service process.
-    class LocalHandler(Handler):
-        pass
-    LocalHandler.engine = engine
-    server = ThreadingHTTPServer(('127.0.0.1', 0), LocalHandler)
-    worker = Thread(target=server.serve_forever, daemon=True)
-    worker.start()
-    base = f'http://127.0.0.1:{server.server_address[1]}'
+    (music / "Prelude.mid").write_bytes(b"fake")
+    engine = PracticeEngine(tmp_path / "state", enable_midi=False)
+    commands = EngineCommands(engine=engine)
+
     def get(path):
-        with urlopen(base + path, timeout=3) as reply:
-            return json.load(reply)
-    def post(path, value):
-        payload = json.dumps(value).encode()
-        with urlopen(Request(base + path, payload, {'Content-Type': 'application/json'}), timeout=3) as reply:
-            return json.load(reply)
+        status, body = commands.request("GET", path)
+        return status, json.loads(body)
+
+    def post(path, payload):
+        status, body = commands.request("POST", path, json.dumps(payload))
+        return status, json.loads(body)
+
     try:
-        assert 'music_dir' in get('/settings')
-        new = post('/settings', {'music_dir': str(music), 'fullscreen': False})
-        assert new['fullscreen'] is False
-        assert new['music_dir'] == str(music)
-        listing = get('/library')
-        assert listing['count'] == 1
-        assert listing['pieces'][0]['id'] == 'Prelude.mid'
-        try:
-            post('/settings', {'music_dir': str(tmp_path / 'absent')})
-            assert False, 'Expected HTTP 400'
-        except HTTPError as error:
-            assert error.code == 400
-        assert get('/settings')['music_dir'] == str(music)
+        assert "music_dir" in get("/settings")[1]
+        status, settings = post("/settings", {"music_dir": str(music), "fullscreen": False})
+        assert status == 200 and settings["fullscreen"] is False
+        assert settings["music_dir"] == str(music)
+        status, listing = get("/library")
+        assert status == 200 and listing["count"] == 1
+        assert listing["pieces"][0]["id"] == "Prelude.mid"
+        status, error = post("/settings", {"music_dir": str(tmp_path / "absent")})
+        assert status == 400 and "error" in error
+        assert get("/settings")[1]["music_dir"] == str(music)
     finally:
-        server.shutdown()
-        server.server_close()
-        worker.join(timeout=2)
         engine.db.close()

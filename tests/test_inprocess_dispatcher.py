@@ -1,4 +1,4 @@
-"""The in-process dispatcher has the same *semantic* routes as desktop HTTP.
+"""The in-memory command dispatcher preserves Godot/engine contracts.
 
 These contracts are independent of GDExtension, allowing cheap tests of the
 Python engine and avoiding a second behavioral implementation in C++.
@@ -8,7 +8,8 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
-from piano_teacher.inprocess import EngineCommands, InMemoryVisualPublisher
+from piano_teacher.inprocess import EngineCommands
+from piano_teacher.live_event_ring import LiveEventRing
 from piano_teacher.server import PracticeEngine
 
 
@@ -96,13 +97,13 @@ def test_native_dispatcher_post_and_errors():
 
 
 def test_real_embedded_engine_does_not_create_network_visual_publisher(tmp_path):
-    visual = InMemoryVisualPublisher()
-    engine = PracticeEngine(tmp_path, enable_midi=False, visual_publisher=visual)
+    visual = LiveEventRing()
+    engine = PracticeEngine(tmp_path, enable_midi=False, live_events=visual)
     bridge = EngineCommands(engine=engine)
     try:
         status, values = _decode(bridge.request("GET", "/state"))
         assert status == 200 and not values["loaded"]
-        assert not hasattr(engine.midi_visual_publisher, "socket")
+        assert not hasattr(engine.live_events, "socket")
         status, values = _decode(bridge.request("GET", "/settings"))
         assert status == 200 and "exercise_strategy" in values
         visual.publish({"sequence": 4, "transport_id": 11,

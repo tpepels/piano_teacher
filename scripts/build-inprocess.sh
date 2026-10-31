@@ -41,4 +41,4 @@ if [[ "${PIANO_SKIP_NATIVE_SMOKE:-0}" != "1" ]] && \
   { command -v godot >/dev/null 2>&1 || command -v godot4 >/dev/null 2>&1; }; then
   bash scripts/verify-native-bridge.sh
 fi
-echo "Built and prepared Godot/CPython extension. Run: ./run-inprocess.sh"
+echo "Built and prepared Godot/CPython extension. Run: ./run.sh"

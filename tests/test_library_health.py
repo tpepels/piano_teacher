@@ -1,15 +1,13 @@
-"""On-demand library import diagnostics: real importer, HTTP, caching, isolation."""
+"""On-demand library import diagnostics, caching and queue isolation."""
 from __future__ import annotations
 
 import json
 import time
-from http.server import ThreadingHTTPServer
-from threading import Thread
-from urllib.request import Request, urlopen
 
 import mido
 
-from piano_teacher.server import Handler, PracticeEngine
+from piano_teacher.server import PracticeEngine
+from piano_teacher.inprocess import EngineCommands
 
 
 def _midi(path, *, zero_note=False):
@@ -113,32 +111,23 @@ def test_folder_switch_clears_previous_health_and_ignores_symlinks(tmp_path):
         engine.db.close()
 
 
-def test_http_health_start_is_nonblocking_and_does_not_load_a_piece(tmp_path):
+def test_queue_health_start_is_nonblocking_and_does_not_load_a_piece(tmp_path):
     music = tmp_path / "music"
     music.mkdir()
     _midi(music / "study.mid")
     engine = PracticeEngine(tmp_path / "data", enable_midi=False)
+    commands = EngineCommands(engine=engine)
     engine.set_preferences(music_dir=str(music))
-    class LocalHandler(Handler):
-        pass
-    LocalHandler.engine = engine
-    service = ThreadingHTTPServer(("127.0.0.1", 0), LocalHandler)
-    thread = Thread(target=service.serve_forever, daemon=True)
-    thread.start()
-    base = f"http://127.0.0.1:{service.server_address[1]}"
     try:
-        with urlopen(base + "/library/health") as response:
-            assert json.load(response)["started"] is False
-        req = Request(base + "/library/health", b"{}", {"Content-Type": "application/json"})
-        with urlopen(req, timeout=4) as response:
-            assert json.load(response)["started"] is True
-        status = _finished(engine.library_health)
-        assert status["ok"] == 1
-        assert engine.plan is None  # No music is implicitly opened or graded.
-        with urlopen(base + "/library/health") as response:
-            assert json.load(response)["items"]["study.mid"]["notes"] == 1
+        status, body = commands.request("GET", "/library/health")
+        assert status == 200 and json.loads(body)["started"] is False
+        status, body = commands.request("POST", "/library/health", "{}")
+        assert status == 200 and json.loads(body)["started"] is True
+        result = _finished(engine.library_health)
+        assert result["ok"] == 1
+        assert engine.plan is None
+        status, body = commands.request("GET", "/library/health")
+        assert status == 200
+        assert json.loads(body)["items"]["study.mid"]["notes"] == 1
     finally:
-        service.shutdown()
-        service.server_close()
-        thread.join(timeout=3)
         engine.db.close()

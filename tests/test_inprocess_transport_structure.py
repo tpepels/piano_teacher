@@ -1,9 +1,4 @@
-"""Guard the zero-network desktop transport and its native extension source.
-
-The Python dispatcher is tested dynamically elsewhere. This inexpensive
-test ensures the experimental native launch never silently re-introduces
-a server/UDP bridge and the in-process bridge files stay wired together.
-"""
+"""Only embedded CPython and in-memory Godot queues are supported."""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,48 +6,60 @@ GODOT = ROOT / "godot"
 SRC = ROOT / "native" / "src"
 
 
-def test_native_launch_starts_one_godot_process_without_network_backend():
-    launcher = (ROOT / "run-inprocess.sh").read_text()
+def test_single_launcher_starts_only_godot():
+    launcher = (ROOT / "run.sh").read_text()
+    assert "exec " in launcher and '--path godot' in launcher
+    assert "8765" not in launcher
+    assert " --in-process" not in launcher
     assert "python_teacher.server &" not in launcher
     assert "piano_teacher.server &" not in launcher
-    assert "8765" not in launcher
-    assert " --in-process" in launcher
-    assert "exec " in launcher
+    assert not (ROOT / "run-inprocess.sh").exists()
 
 
-def test_embedded_worker_queue_has_no_socket_or_server_dependencies():
+def test_native_worker_queue_contains_no_network_api():
     cpp = (SRC / "piano_native.cpp").read_text()
     header = (SRC / "piano_native.hpp").read_text()
-    assert "std::condition_variable" in header
-    assert "std::deque<Command>" in header
-    assert "std::deque<Reply>" in header
-    assert "Py_InitializeFromConfig" in cpp
-    assert "PyGILState_Ensure" in cpp
-    # GDExtension uses RTLD_LOCAL; CPython .so modules need Py* symbols globally.
-    assert "RTLD_GLOBAL" in cpp and "RTLD_NOLOAD" in cpp
-    assert "PYTHON_SHARED_OBJECT" in cpp
-    assert "ClassDB::register_class<PianoNative>" in cpp
-    assert not any(word in cpp for word in ("socket(", "sendto(", "recvfrom(", "HTTPClient", "listen("))
+    for token in ("std::condition_variable", "std::deque<Command>", "std::deque<Reply>"):
+        assert token in header
+    for token in ("Py_InitializeFromConfig", "PyGILState_Ensure",
+                  "RTLD_GLOBAL", "PYTHON_SHARED_OBJECT",
+                  "ClassDB::register_class<PianoNative>"):
+        assert token in cpp
+    assert not any(token in cpp for token in (
+        "socket(", "sendto(", "recvfrom(", "HTTPClient", "listen("))
 
 
-def test_embedded_godot_request_contract_is_complete():
+def test_only_one_godot_command_adapter_and_score_queue():
     main = (GODOT / "main.gd").read_text()
-    asset = (GODOT / "score_asset_http.gd").read_text()
+    queue = (GODOT / "score_asset_queue.gd").read_text()
     demo = (GODOT / "demo_player.gd").read_text()
     request = (GODOT / "inprocess_request.gd").read_text()
-    assert "use_inprocess" in main
     assert "InProcessBus.new()" in main
     assert "inprocess_bus.poll_midi(" in main
-    assert "inprocess_bus" in asset and "inprocess_bus" in demo
+    assert 'res://score_asset_queue.gd' in main
+    assert "use_inprocess" not in main
+    for script in (main, queue, demo, request):
+        assert "HTTPRequest" not in script
+        assert "127.0.0.1" not in script
+    assert not (GODOT / "score_asset_http.gd").exists()
     for name in ("request_completed", "func request(", "func cancel_request(",
                  "func complete(", "download_file"):
         assert name in request
 
 
-def test_release_uses_a_bundled_runtime_and_drops_mcp_network_plugin():
+def test_no_server_udp_or_dual_runtime_entrypoints():
+    from importlib import import_module
+    assert not (ROOT / "piano_teacher" / "transport" / "http.py").exists()
+    assert not (ROOT / "piano_teacher" / "midi_visual_publisher.py").exists()
+    module = import_module("piano_teacher.server")
+    assert not hasattr(module, "Handler")
+    assert not hasattr(module, "main")
+    assert "piano_teacher.server:main" not in (ROOT / "pyproject.toml").read_text()
+
+
+def test_release_bundles_python_node_and_godot():
     build = (ROOT / "scripts" / "package-inprocess.sh").read_text()
-    assert "PIANO_BUNDLED_PYTHON_HOME" in build
-    assert "PIANO_BUNDLED_NODE" in build
-    assert "PIANO_GODOT_BINARY" in build
-    assert "runtime/python" in build
+    for token in ("PIANO_BUNDLED_PYTHON_HOME", "PIANO_BUNDLED_NODE",
+                  "PIANO_GODOT_BINARY", "runtime/python"):
+        assert token in build
     assert 'rm -rf "$STAGE/godot/addons/godot_mcp_toolkit"' in build

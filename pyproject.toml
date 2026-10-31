@@ -15,9 +15,6 @@ coda-research = ["numpy>=1.26,<3"]
 godot = ["music21>=9.1,<10", "verovio>=5,<6", "CairoSVG>=2.7,<3", "Pillow>=9,<13"]
 qt = ["PySide6>=6.6,<7"]
 
-[project.scripts]
-piano-teacher = "piano_teacher.server:main"
-
 [tool.setuptools.package-data]
 piano_teacher = ["lesson_settings.json"]
 "piano_teacher.fingering" = ["lumikey_runtime/*.cjs", "lumikey_runtime/package*.json", "lumikey_runtime/THIRD_PARTY_NOTICES.md"]

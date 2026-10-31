@@ -1,42 +1,33 @@
-"""Full public HTTP navigation with actual engraved PNGs, no mock endpoints."""
+"""Full in-memory command navigation with actual engraved PNGs."""
 from __future__ import annotations
 
 import json
-from http.server import ThreadingHTTPServer
 from pathlib import Path
-from threading import Thread
-from urllib.request import Request, urlopen
 
 from PIL import Image
 from io import BytesIO
 
-from piano_teacher.server import Handler, PracticeEngine
+from piano_teacher.server import PracticeEngine
+from piano_teacher.inprocess import EngineCommands
 
 FIXTURE = Path(__file__).parent / "fixtures" / "musical_fidelity" / "midi_four_four.mid"
 
 
-def test_import_open_measure_navigation_geometry_png_over_real_http(tmp_path):
+def test_import_open_measure_navigation_geometry_png_over_real_queue(tmp_path):
     music = tmp_path / "music"
     music.mkdir()
     (music / "real.mid").write_bytes(FIXTURE.read_bytes())
     engine = PracticeEngine(tmp_path / "data", enable_midi=False)
     engine.set_preferences(music_dir=str(music))
 
-    class LocalHandler(Handler):
-        pass
-
-    LocalHandler.engine = engine
-    service = ThreadingHTTPServer(("127.0.0.1", 0), LocalHandler)
-    thread = Thread(target=service.serve_forever, daemon=True)
-    thread.start()
-    base = f"http://127.0.0.1:{service.server_address[1]}"
+    commands = EngineCommands(engine=engine)
 
     def request(route, payload=None, *, raw=False):
-        body = None if payload is None else json.dumps(payload).encode("utf-8")
-        req = Request(base + route, body, {"Content-Type": "application/json"} if body else {})
-        with urlopen(req, timeout=90) as reply:
-            content = reply.read()
-            return content if raw else json.loads(content)
+        verb = "POST" if payload is not None else "GET"
+        status, data = commands.request(
+            verb, route, json.dumps(payload) if payload is not None else "")
+        assert status == 200, (status, data[:500])
+        return data if raw else json.loads(data)
 
     try:
         listed = request("/library")
@@ -70,7 +61,4 @@ def test_import_open_measure_navigation_geometry_png_over_real_http(tmp_path):
         # The source files and user's real learner data were never modified.
         assert (music / "real.mid").read_bytes() == FIXTURE.read_bytes()
     finally:
-        service.shutdown()
-        service.server_close()
-        thread.join(timeout=5)
         engine.db.close()

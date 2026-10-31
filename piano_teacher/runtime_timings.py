@@ -31,8 +31,7 @@ class RuntimeTimings:
         return {
             "midi_callback": self._describe(self.midi_ms),
             "full_state": self._describe(self.state_ms),
-            "http_server": "threaded",
             "multiprocessing": False,
-            "midi_visual_delivery": "loopback UDP; HTTP state fallback",
-            "measurement": "local Python processing time; excludes Bluetooth input and display latency",
+            "midi_visual_delivery": "in-process bounded event ring",
+            "measurement": "embedded Python processing time; excludes Bluetooth input and display latency",
         }

@@ -1,36 +1,21 @@
-"""In-process application command dispatcher.
+"""In-process Godot/Python commands and bounded MIDI event retrieval.
 
-This is the same user-facing contract as the previous HTTP routes, but
-without URL clients, ports, sockets, HTTP headers, or another process.
-The native Godot extension calls request() on a worker thread. Responses
-are (status, bytes); audio is binary, other responses are compact JSON.
+The Godot GDExtension calls request() on a worker thread. Responses
+contain status and compact JSON or binary audio bytes.
 """
 from __future__ import annotations
 
 import json
 import traceback
-from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs
 
 from .server import PracticeEngine
-
-
-class InMemoryVisualPublisher:
-    """MIDI callback -> bounded in-process ring, no socket or serialization."""
-    def __init__(self):
-        from collections import deque
-        self.events = deque(maxlen=128)
-
-    def publish(self, event: dict) -> None:
-        self.events.append(dict(event))
-
-    def close(self) -> None:
-        self.events.clear()
+from .live_event_ring import LiveEventRing
 
 
 class EngineCommands:
     def __init__(self, *, engine: PracticeEngine | None = None):
-        self.engine = engine if engine is not None else PracticeEngine(visual_publisher=InMemoryVisualPublisher())
+        self.engine = engine if engine is not None else PracticeEngine()
         self.owned = engine is None
 
     @staticmethod
@@ -39,10 +24,9 @@ class EngineCommands:
 
     def request(self, method: str, target: str, body: str = "") -> tuple[int, bytes]:
         try:
-            url = urlsplit(target)
-            route = url.path
+            route, _, query_string = target.partition("?")
             if method == "GET":
-                return self._get(route, parse_qs(url.query))
+                return self._get(route, parse_qs(query_string))
             if method == "POST":
                 payload = json.loads(body) if body else {}
                 if not isinstance(payload, dict):
@@ -114,14 +98,9 @@ class EngineCommands:
         return self._reply(200, engine.preferences() if path == "/settings" else engine.state())
 
     def drain_midi_events(self, since: int) -> list[dict]:
-        # Events remain source- and transport-versioned. Never duplicate them
-        # or let presentation mutate the recorder/assessment clock.
-        # These events have already been classified synchronously in the MIDI
-        # callback. A bounded ring does not depend on HTTP or UDP subscribers.
+        # Presentation cannot mutate the recorder or assessment clock.
         with self.engine.lock:
-            events = self.engine.midi_visual_publisher.events
-            return [dict(event) for event in events
-                    if int(event.get("sequence", 0)) > since]
+            return self.engine.live_events.after(since)
 
     def close(self) -> None:
         if not self.owned:

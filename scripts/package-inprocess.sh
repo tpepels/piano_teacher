@@ -53,6 +53,6 @@ s = s.replace('[autoload]\n\nMCPRuntimeServer="*res://addons/godot_mcp_toolkit/r
 s = s.replace('[editor_plugins]\n\nenabled=PackedStringArray("res://addons/godot_mcp_toolkit/plugin.cfg")\n\n', '')
 p.write_text(s)
 PY
-rm -rf "$STAGE/godot/addons/godot_mcp_toolkit"
+rm -rf "$STAGE/godot/addons/godot_mcp_toolkit" "$STAGE/godot/.godot"
 tar -C dist -czf dist/piano-teacher-linux-x86_64.tar.gz piano-teacher-linux-x86_64
 echo "Package: dist/piano-teacher-linux-x86_64.tar.gz"

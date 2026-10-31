@@ -29,7 +29,7 @@ var posts: Array = []
 func _decode(body: PackedByteArray) -> Variant:
     return JSON.parse_string(body.get_string_from_utf8())
 func _failure(code: int, _body: PackedByteArray) -> String:
-    return "HTTP " + str(code)
+    return "Command " + str(code)
 func _post(path: String, payload: Dictionary) -> void:
     posts.append({"path":path,"payload":payload})
 
@@ -38,7 +38,7 @@ func _initialize() -> void:
     var lib := FakeLibrary.new()
     var home := FakeHome.new()
     var coordinator := Coordinator.new()
-    coordinator.configure("http://127.0.0.1:8765",lib,home,
+    coordinator.configure(lib,home,
         _decode, _failure, _post)
     coordinator.request_catalog()
     if coordinator.pending:
@@ -48,7 +48,7 @@ func _initialize() -> void:
     if lib.catalog.get("pieces",[]).size() != 1 or home.catalog != lib.catalog:
         failures += 1
     coordinator.on_catalog(0,503,PackedStringArray(),PackedByteArray())
-    if lib.error != "HTTP 503" or not home.unavailable:
+    if lib.error != "Command 503" or not home.unavailable:
         failures += 1
     coordinator.start_health(true)
     if posts.size() != 0:
@@ -64,7 +64,7 @@ func _initialize() -> void:
     if posts.size() != 1:
         failures += 1
     coordinator.on_health(0,500,PackedStringArray(),PackedByteArray())
-    if lib.message != "Cannot check music files: HTTP 500":
+    if lib.message != "Cannot check music files: Command 500":
         failures += 1
     print("LIBRARY_COORDINATOR_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

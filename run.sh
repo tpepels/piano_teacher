@@ -1,69 +1,47 @@
 #!/usr/bin/env bash
-set -euo pipefail
+# Sole Piano Teacher launcher: Godot + embedded CPython in one process.
+set -Eeuo pipefail
 cd "$(dirname "$0")"
-if command -v godot >/dev/null 2>&1; then
-  GODOT=godot
-elif command -v godot4 >/dev/null 2>&1; then
-  GODOT=godot4
-else
-  echo "Godot 4 is required. On Arch: sudo pacman -S godot" >&2
+if [[ ! -s godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so ||
+      ! -f godot/native/piano_bridge.gdextension ]]; then
+  echo "Missing the precompiled in-process extension." >&2
+  echo "Download the piano-native-linux-x86_64-py314 artifact from the" >&2
+  echo "Embedded Python bridge GitHub Actions run for this commit, then:" >&2
+  echo "  python3 scripts/install-inprocess-artifact.py /path/to/artifact.zip" >&2
+  echo "Developer-only alternative: bash scripts/build-inprocess.sh" >&2
   exit 1
 fi
-# Validate GDScript before launching the fullscreen window. Python unit tests
-# cannot catch parse errors, which otherwise appear as an empty grey screen.
-PARSER_OUTPUT=""
-if ! PARSER_OUTPUT="$("$GODOT" --headless --path godot --check-only --script res://main.gd 2>&1)"; then
-  printf '%s\n' "$PARSER_OUTPUT" >&2
-  echo "Godot cannot parse the Piano Teacher interface. See the script error above." >&2
-  exit 1
-fi
-if [[ "$PARSER_OUTPUT" == *"SCRIPT ERROR"* || "$PARSER_OUTPUT" == *"Parse Error:"* ]]; then
-  printf '%s\n' "$PARSER_OUTPUT" >&2
-  echo "Godot reported a script parse error. The application was not launched." >&2
-  exit 1
-fi
-# A few Python/Arch editable-install combinations omit the project from sys.path.
-# Explicitly select this checkout and its venv; do not start a disconnected GUI.
-export PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}"
-
-# Enable the independently installed, offline RubricNet extractor only when
-# explicitly selected. No optional imports happen during normal startup.
-if [[ -x "$PWD/.rubricnet-venv/bin/python" ]]; then
-  export PIANO_TEACHER_RUBRICNET_PYTHON="$PWD/.rubricnet-venv/bin/python"
-fi
+GODOT="$(command -v godot || command -v godot4 || true)"
+test -n "$GODOT" || { echo "Godot is needed during development" >&2; exit 1; }
+# Developer environment. A published bundle sets these paths to its
+# vendored CPython runtime and installs no dependencies on the user's OS.
 PYTHON="$PWD/.venv/bin/python"
-if [[ ! -x "$PYTHON" ]]; then
-  PYTHON="$(command -v python)"
-fi
-if ! "$PYTHON" -c 'import piano_teacher.server' >/dev/null; then
-  echo "Cannot import piano_teacher. Run: source .venv/bin/activate && pip install -e '.[godot,test]'" >&2
+[[ -x "$PYTHON" ]] || PYTHON="$(command -v python3)"
+PY_SITE="$("$PYTHON" -c 'import site; print(site.getsitepackages()[0])')"
+PY_BASE="$("$PYTHON" -c 'import sys; print(sys.base_prefix)')"
+PY_ABI="$("$PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+if [[ -f godot/native/python-abi.txt && "$(cat godot/native/python-abi.txt)" != "$PY_ABI" ]]; then
+  echo "This native extension needs CPython $(cat godot/native/python-abi.txt), but your venv uses $PY_ABI." >&2
   exit 1
 fi
-# Never connect the new UI to an older backend still using our port.
-if "$PYTHON" -c 'import socket,sys; s=socket.socket(); s.settimeout(0.25); sys.exit(0 if s.connect_ex(("127.0.0.1",8765)) == 0 else 1)' >/dev/null 2>&1; then
-  echo "Cannot start Piano Teacher: 127.0.0.1:8765 is already in use." >&2
-  echo "Close the previous Piano Teacher backend, then run ./run.sh again." >&2
-  exit 1
+PY_LIB="$("$PYTHON" -c 'import sysconfig; print(sysconfig.get_config_var("LIBDIR") or "")')"
+if [[ -n "$PY_LIB" ]]; then
+  export LD_LIBRARY_PATH="$PY_LIB${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 fi
-"$PYTHON" -m piano_teacher.server &
-BACKEND_PID=$!
-trap 'kill "$BACKEND_PID" 2>/dev/null || true' EXIT
-# Fail visibly if the Python backend exits before Godot connects.
-BACKEND_READY=0
-for _ in $(seq 1 150); do
-  if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
-    echo "Piano Teacher backend exited during startup." >&2
-    wait "$BACKEND_PID" || true
+export PIANO_TEACHER_PYTHON_HOME="$PY_BASE"
+export PYTHONPATH="$PWD:$PY_SITE${PYTHONPATH:+:$PYTHONPATH}"
+# The .gdextension is generated after checkout, so Godot may have a stale
+# extension index even though both files exist. Verify once per native build
+# before opening the UI; never show an empty library as a "working" app.
+stamp=godot/.godot/piano-native-verified
+binary=godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
+manifest=godot/native/piano_bridge.gdextension
+if [[ ! -f "$stamp" || "$binary" -nt "$stamp" || "$manifest" -nt "$stamp" || \
+      godot/native_bridge_smoke.gd -nt "$stamp" ]]; then
+  if ! GODOT_BIN="$GODOT" bash scripts/verify-native-bridge.sh; then
+    echo "Embedded Piano Teacher failed its startup/library check." >&2
+    echo "Fix the native loader error above before running Piano Teacher." >&2
     exit 1
   fi
-  if "$PYTHON" -c 'import urllib.request; urllib.request.urlopen("http://127.0.0.1:8765/state", timeout=0.2)' >/dev/null 2>&1; then
-    BACKEND_READY=1
-    break
-  fi
-  sleep 0.1
-done
-if [[ "$BACKEND_READY" -ne 1 ]]; then
-  echo "The Python backend did not become ready on 127.0.0.1:8765" >&2
-  exit 1
 fi
-"$GODOT" --path godot "$@"
+exec "$GODOT" --path godot -- "$@"

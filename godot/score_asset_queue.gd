@@ -1,27 +1,16 @@
 extends RefCounted
-
-# Thin HTTP transport for the independent ScoreAssetSession. Each callback
-# returns the exact request ID granted by its owner; aborting an in-flight
-# old HTTP request cannot accidentally publish that revision's score.
+## Score layout and model commands. Revision checks prevent stale publication.
 var layout_request
 var model_request
 var _owner
-var _base_url := ""
-var _inprocess_bus: Node
-var _request_ids := {"layout":-1, "model":-1}
+var _request_ids := {"layout": -1, "model": -1}
 
-func attach(host: Node, owner, base_url: String, bus: Node = null) -> void:
+func attach(host: Node, owner, bus: Node) -> void:
     _owner = owner
-    _base_url = base_url
-    _inprocess_bus = bus
-    if bus != null:
-        layout_request = preload("res://inprocess_request.gd").new()
-        model_request = preload("res://inprocess_request.gd").new()
-        layout_request.configure(bus)
-        model_request.configure(bus)
-    else:
-        layout_request = HTTPRequest.new()
-        model_request = HTTPRequest.new()
+    layout_request = preload("res://inprocess_request.gd").new()
+    model_request = preload("res://inprocess_request.gd").new()
+    layout_request.configure(bus)
+    model_request.configure(bus)
     layout_request.timeout = 90.0
     model_request.timeout = 5.0
     host.add_child(layout_request)
@@ -43,14 +32,12 @@ func start(kind: String, request_id: int, path: String,
         _owner.request_start_result(kind, request_id, ERR_UNAVAILABLE,
             Time.get_ticks_msec())
         return
-    # Score revisions can advance while HTTP is still in flight.
-    # Cancel before replacing the slot: a stale response must never inherit
-    # a newer request's ID.
+    # A cancelled or outdated response cannot publish a different revision.
     if int(_request_ids.get(kind, -1)) != -1:
         request.cancel_request()
     _request_ids[kind] = request_id
     request.timeout = timeout_seconds
-    var error: Error = request.request(_base_url + path)
+    var error: Error = request.request(path)
     if error != OK:
         _request_ids[kind] = -1
         _owner.request_start_result(kind, request_id, error,

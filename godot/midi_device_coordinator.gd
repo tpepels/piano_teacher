@@ -6,19 +6,17 @@ var request
 var pending := false
 var picker_requested := false
 var names: Array = []
-var _url: String
 var _settings
 var _decode: Callable
 var _failure: Callable
-var _send_post: Callable
+var _send_command: Callable
 
-func configure(url: String, settings, decode: Callable,
-        failure: Callable, send_post: Callable) -> void:
-    _url = url
+func configure(settings, decode: Callable,
+        failure: Callable, send_command: Callable) -> void:
     _settings = settings
     _decode = decode
     _failure = failure
-    _send_post = send_post
+    _send_command = send_command
 
 func attach_request(value) -> void:
     request = value
@@ -27,7 +25,7 @@ func discover() -> void:
     if pending or request == null:
         return
     pending = true
-    if request.request(_url + "/devices") != OK:
+    if request.request("/devices") != OK:
         pending = false
 
 func show_picker() -> void:
@@ -35,7 +33,7 @@ func show_picker() -> void:
     discover()
 
 func choose(name: String) -> void:
-    _send_post.call("/device", {"name":name})
+    _send_command.call("/device", {"name":name})
     if not name.is_empty():
         _settings.present_device_selection(name)
 

@@ -9,7 +9,7 @@ var last_sync_probe_ms := 0
 var last_start_offset_s := 0.0
 var player: AudioStreamPlayer
 var request
-var inprocess_bus: Node
+var command_bus: Node
 var token := ""
 var revision := -1
 var audio_path := ""
@@ -21,8 +21,8 @@ var audio_error := false
 # Independent local gain for the recorded piano; no MIDI output changes.
 var listen_volume_db := 6.0
 
-func set_inprocess_bus(bus: Node) -> void:
-    inprocess_bus = bus
+func configure(bus: Node) -> void:
+    command_bus = bus
 
 func _ready() -> void:
     player = AudioStreamPlayer.new()
@@ -31,11 +31,8 @@ func _ready() -> void:
         listen_volume_db = clampf(float(config.get_value("audio", "listen_volume_db", 6.0)), -12.0, 12.0)
     player.volume_db = listen_volume_db
     add_child(player)
-    if inprocess_bus != null:
-        request = preload("res://inprocess_request.gd").new()
-        request.configure(inprocess_bus)
-    else:
-        request = HTTPRequest.new()
+    request = preload("res://inprocess_request.gd").new()
+    request.configure(command_bus)
     request.timeout = 120.0
     request.request_completed.connect(_downloaded)
     add_child(request)
@@ -65,10 +62,7 @@ func synchronize(state: Dictionary, visual_beat: float = NAN) -> void:
     if not loaded and not downloading and not audio_error and not str(demo.get("url", "")).is_empty():
         request.download_file = audio_path
         downloading = true
-        var location: String = str(demo.get("url", ""))
-        if inprocess_bus == null:
-            location = "http://127.0.0.1:8765" + location
-        var error: int = request.request(location)
+        var error: int = request.request(str(demo.get("url", "")))
         if error != OK:
             failed.emit("Cannot prepare Listen audio. Try Listen again.")
         return
@@ -84,7 +78,7 @@ func synchronize(state: Dictionary, visual_beat: float = NAN) -> void:
             state.get("clock_beat", 0.0))
         # The lead-in moves the sheet and the playhead, but the WAV starts
         # on the downbeat. Never seek ahead during first start: doing that
-        # irreversibly cuts the first piano attack after HTTP/audio latency.
+        # irreversibly cuts the first piano attack after processing/audio latency.
         if not started and beat < 0.0:
             return
         if not started:
@@ -129,7 +123,7 @@ func _downloaded(result: int, code: int, _headers: PackedStringArray, _body: Pac
     downloading = false
     if token.is_empty():
         return
-    if result != HTTPRequest.RESULT_SUCCESS or code != 200:
+    if result != OK or code != 200:
         audio_error = true
         failed.emit("Listen audio could not load. Try Listen again.")
         return

@@ -1,9 +1,9 @@
-"""Loopback-only practice service for the native Godot UI.
+"""Piano practice engine embedded directly into the Godot process.
 
-Start: python -m piano_teacher.server. No Internet, account, or Qt required.
+Owns the MIDI, grading, lessons, notation and persistent library state.
+Communication with Godot uses an in-memory native command queue.
 """
 from __future__ import annotations
-import argparse
 from dataclasses import asdict, replace
 import hashlib
 import json
@@ -12,8 +12,6 @@ import os
 from pathlib import Path
 import threading
 import time
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit
 
 from .learning import LearningPlan
 from .exercise_strategies import resolve_strategy
@@ -48,7 +46,7 @@ from .application.practice_transitions import run_before_assessment
 from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
 from .midi_calibration import MidiTapCalibration
-from .midi_visual_publisher import MidiVisualPublisher
+from .live_event_ring import LiveEventRing
 from .runtime_timings import RuntimeTimings
 from .live_input_view import LiveInputView
 from .instruction import next_full_attempt
@@ -82,7 +80,7 @@ class PracticeEngine:
     visual_gap_beats = TransportField("visual_gap_beats")
 
     def __init__(self, data_dir: Path | None = None, enable_midi: bool = True,
-                 visual_publisher=None):
+                 live_events: LiveEventRing | None = None):
         self.lock = threading.RLock()
         # Whole-source inference must never block MIDI or state polling.
         # Serialize source loads and durable corrections separately instead.
@@ -100,8 +98,7 @@ class PracticeEngine:
         self.next_boundary_beat = 0.0
         self.feedback_seconds = SETTINGS.feedback_seconds
         self.midi_calibration = MidiTapCalibration()
-        self.midi_visual_publisher = (visual_publisher if visual_publisher is not None
-                                      else MidiVisualPublisher())
+        self.live_events = live_events if live_events is not None else LiveEventRing()
         self.runtime_timings = RuntimeTimings()
         self.recovery_notice: dict | None = None
         self.pause_context: str | None = None
@@ -348,11 +345,6 @@ class PracticeEngine:
                 self._save()
             self.library.mark_opened(identifier)
 
-    def subscribe_midi_visual(self, port: int) -> None:
-        # The web API is loopback-only. A forged event never changes scoring.
-        with self.lock:
-            self.midi_visual_publisher.subscribe(port)
-
     def performance_diagnostics(self) -> dict:
         return self.runtime_timings.snapshot()
 
@@ -375,7 +367,7 @@ class PracticeEngine:
                 return
             corrected_at = now - self.library.settings["midi_offset_ms"] / 1000.0
             # A key can reach the next attempt's musical deadline before the
-            # next HTTP state poll, even if no poll observed the source ending.
+            # next frame-state snapshot, even if none observed the source ending.
             # Settle only a due handoff; retain the hardware timestamp above.
             if (message.type in ("note_on", "note_off") and self.plan is not None
                     and self.mode in ("practice", "perform")
@@ -407,7 +399,7 @@ class PracticeEngine:
                     tempo_map=self._active_tempo_map(),
                 )
                 if is_on and self.live_input.events:
-                    self.midi_visual_publisher.publish(self.live_input.events[-1])
+                    self.live_events.publish(self.live_input.events[-1])
             if self.mode == "learn":
                 if (self.teaching is not None and self.midi.connected
                         and message.type in ("note_on", "note_off")):
@@ -1803,27 +1795,3 @@ class PracticeEngine:
                 self.plan, fingerprint=self.fingerprint)
 
 
-# Keep the original public Handler import stable for clients and tests.
-from .transport.http import Handler
-
-
-def main():
-    parser=argparse.ArgumentParser()
-    parser.add_argument("--port",type=int,default=8765)
-    parser.add_argument("--no-midi",action="store_true",help="Test server without an attached MIDI device")
-    args=parser.parse_args()
-    Handler.engine=PracticeEngine(enable_midi=not args.no_midi)
-    # The service must never bind to a public interface.
-    server=ThreadingHTTPServer(("127.0.0.1",args.port),Handler)
-    print(f"Piano Teacher backend: http://127.0.0.1:{args.port}",flush=True)
-    try:
-        server.serve_forever(poll_interval=0.1)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        server.server_close()
-        Handler.engine.connect("")
-        Handler.engine.db.close()
-
-if __name__=="__main__":
-    main()

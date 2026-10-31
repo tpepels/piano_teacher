@@ -1,23 +1,21 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_frontend_handles_empty_and_invalid_http_responses_without_logging_json_errors():
-    script = (ROOT / 'godot' / 'main.gd').read_text(encoding='utf-8')
-    assert 'func _decode_json(body: PackedByteArray)' in script
-    assert 'if body.is_empty():' in script
-    assert 'document.parse(body.get_string_from_utf8()) != OK' in script
-    assert 'func _http_failure(code: int, body: PackedByteArray)' in script
-    assert 'if code == 0:' in script
-    assert not any('JSON.parse_string(' in line for line in script.splitlines()
-                   if not line.strip().startswith('#'))
+def test_frontend_decodes_invalid_engine_responses_without_json_parser_noise():
+    main = (ROOT / "godot" / "main.gd").read_text(encoding="utf-8")
+    assert "func _decode_json(body: PackedByteArray)" in main
+    assert "if body.is_empty():" in main
+    assert "document.parse(body.get_string_from_utf8()) != OK" in main
+    assert "func _command_failure(code: int, body: PackedByteArray)" in main
+    assert "HTTPRequest" not in main
 
 
-def test_linux_launcher_checks_backend_before_starting_godot():
-    script = (ROOT / 'run.sh').read_text(encoding='utf-8')
+def test_single_launcher_requires_embedded_engine_preflight():
+    script = (ROOT / "run.sh").read_text()
     assert 'export PYTHONPATH=' in script
-    assert 'import piano_teacher.server' in script
-    assert 'BACKEND_READY=1' in script
-    assert 'if [[ "$BACKEND_READY" -ne 1 ]]' in script
+    assert "scripts/verify-native-bridge.sh" in script
+    assert "piano-native-verified" in script
+    assert 'exec "$GODOT"' in script
+    assert "8765" not in script

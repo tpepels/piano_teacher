@@ -19,7 +19,7 @@ var posts: Array = []
 func _decode(body: PackedByteArray) -> Variant:
     return JSON.parse_string(body.get_string_from_utf8())
 func _failure(code: int, _body: PackedByteArray) -> String:
-    return "HTTP " + str(code)
+    return "Command " + str(code)
 func _post(path: String, payload: Dictionary) -> void:
     posts.append({"path":path, "payload":payload})
 
@@ -27,7 +27,7 @@ func _initialize() -> void:
     var failures := 0
     var settings := FakeSettings.new()
     var owner := Owner.new()
-    owner.configure("http://127.0.0.1:8765", settings,
+    owner.configure(settings,
         _decode, _failure, _post)
     owner.show_picker()
     if not owner.picker_requested or owner.pending:
@@ -48,7 +48,7 @@ func _initialize() -> void:
         failures += 1
     owner.show_picker()
     owner.receive(503, PackedByteArray(), "settings", "", "Piano A")
-    if owner.picker_requested or not settings.message.contains("HTTP 503"):
+    if owner.picker_requested or not settings.message.contains("Command 503"):
         failures += 1
     owner.choose("Piano B")
     if settings.selection != "Piano B" or posts.size() != 2:

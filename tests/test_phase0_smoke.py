@@ -42,8 +42,8 @@ def test_no_midi_mode_cannot_award_mastery(tmp_path):
         engine.db.close()
 
 
-def test_launcher_rejects_stale_backend_and_is_executable():
+def test_native_launcher_is_executable_and_contains_no_server():
     content = (ROOT / "run.sh").read_text()
-    assert '127.0.0.1",8765' in content
-    assert "is already in use" in content
+    assert '127.0.0.1' not in content
+    assert "PianoNative" not in content  # verified by native preflight
     assert (ROOT / "run.sh").stat().st_mode & 0o111
