@@ -5,15 +5,18 @@ extends Node2D
 var owner_view
 var kind := "source"
 var variant := "first"
+var recovery_context: Dictionary = {}
 var note_instances: Array = []
 var symbols_drawn := 0
 var beam_groups_drawn := 0
 var compiled := false
 
-func configure(view: Control, segment_kind: String, segment_variant: String) -> void:
+func configure(view: Control, segment_kind: String, segment_variant: String,
+        context: Dictionary = {}) -> void:
     owner_view = view
     kind = segment_kind
     variant = segment_variant
+    recovery_context = context.duplicate(true)
     compiled = false
     queue_redraw()
 
@@ -23,14 +26,14 @@ func _draw() -> void:
     if owner_view == null or not owner_view.native_ready:
         return
     if kind == "source":
-        var frame = owner_view.paint_retained_source(self,variant)
+        var frame = owner_view.paint_retained_source(self,variant,recovery_context)
         if frame == null:
             return
         note_instances = frame.drawn_note_instances.duplicate(true)
         symbols_drawn = frame.visible_symbols
         beam_groups_drawn = frame.visible_beam_groups
     else:
-        owner_view.paint_retained_rest(self)
+        owner_view.paint_retained_rest(self,recovery_context)
     compiled = true
     # The parent may already have projected this frame before our first draw.
     # Update notehead hit regions on the next frame, once, without rebuilding ink.
