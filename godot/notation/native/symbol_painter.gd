@@ -284,13 +284,21 @@ func paint_slurs(canvas, frame: RenderPass, playhead_x: float,clock: float,gap: 
             clock,playhead_x,frame.play_from_beat)
         if x0 > score_layout.size.x+50.0 or x1 < -50.0:
             continue
-        x0 += float(score_layout.cached_head_offsets.get(str(first.get("id","")),0.0))
-        x1 += float(score_layout.cached_head_offsets.get(str(last.get("id","")),0.0))
-        if x1 <= x0:
+        var identity: String = connector_geometry.slur_identity(pair)
+        var vertices: PackedVector2Array = connector_geometry.prepared_slurs.get(
+            identity,PackedVector2Array())
+        var ink_texture: Texture2D = score_layout.glyphs.slur_textures.get(
+            str(pair["key"]))
+        if vertices.size()!=4 or ink_texture == null:
             continue
-        score_layout.glyphs.paint_slur(canvas,str(pair["key"]),x0,score_layout.event_y(first,gap),
-            x1,score_layout.event_y(last,gap),gap,
-            frame.event_ink(score_layout,first))
+        var shift_x: float = playhead_x-(
+            clock+frame.play_from_beat)*score_layout.timeline.pixels_per_beat
+        var ink: Color = frame.event_ink(score_layout,first)
+        canvas.draw_set_transform(Vector2(shift_x,0.0))
+        canvas.draw_polygon(vertices,PackedColorArray([ink,ink,ink,ink]),
+            PackedVector2Array([Vector2.ZERO,Vector2(1.0,0.0),
+                Vector2.ONE,Vector2(0.0,1.0)]),ink_texture)
+        canvas.draw_set_transform(Vector2.ZERO)
 
 
 func paint_grace_notes(canvas, frame: RenderPass, gap: float) -> void:
