@@ -5,10 +5,14 @@ clock, grading policy, transport, or durable session state. A phrase's source
 measure grid is immutable during its attempt and is built only once.
 """
 from __future__ import annotations
+import time
+
+from ..practice import Recorder
+from ..lesson_timing import lead_in_beats, preparation_meter
 
 from .practice_transitions import run_before_assessment
 from ..lesson_settings import SETTINGS
-from ..measure_grid import phrase_grid, next_chunk_end
+from ..measure_grid import phrase_grid, next_chunk_end, bar_number_at
 
 
 class AttemptProgression:
@@ -23,6 +27,60 @@ class AttemptProgression:
             self._boundaries = boundaries
             self._grid = phrase_grid(phrase, boundaries)
         return self._grid
+
+    def begin(self, engine, *, from_beat: float | None,
+              mode: str, loop_continuation: bool) -> None:
+        engine.mode = mode
+        engine.teaching = None
+        engine.guided_range = None
+        engine._guided_return = None
+        engine.performance_summary = None
+        engine.review_stage_identity = None
+        engine.review_session_complete = False
+        # A user must be able to watch the time-driven score without a
+        # connected instrument. Only actual MIDI input enables assessment.
+        engine.preview_only = not engine.midi.connected
+        phrase=engine.plan.active_phrase
+        position = engine.open_from_beat if from_beat is None else from_beat
+        engine.play_from_beat=max(0.0,min(float(position),phrase.end-phrase.start-1e-6))
+
+        engine.visual_transport.begin_take(loop_continuation=loop_continuation)
+        engine.transport_id+=1
+        engine.live_input.reset_attempt()
+        # Keep large-score attack indexing off the physical MIDI callback.
+        engine.live_input.prepare(phrase)
+        engine.running=True
+        engine.auto=mode == "practice" and not engine.preview_only
+        engine.awaiting_score_revision=None
+        engine.pending_result=None
+        engine.feedback_marks=[]
+        engine.feedback_unmapped=0
+        engine.recorder=Recorder()
+        grid=engine.attempt_progression.grid_for(
+            phrase,engine.plan.piece.bar_boundaries)
+        active_bar = max(0, min(len(grid)-2,
+            next((i for i in range(len(grid)-1) if grid[i] <= engine.play_from_beat < grid[i+1]), len(grid)-2)))
+        engine.count_in_bar_beats = grid[active_bar + 1] - grid[active_bar]
+        engine.count_in_meter = [max(1, round(engine.count_in_bar_beats)), 4]
+        source_beat = phrase.start + engine.play_from_beat
+        meter = next(((numerator, denominator) for beat, numerator, denominator
+                      in sorted(engine.plan.piece.time_signatures, reverse=True)
+                      if beat <= source_beat + 1e-7), None)
+        meter = preparation_meter(
+            meter, engine.plan.piece.time_signatures, source_beat)
+        if meter is not None:
+            engine.count_in_meter = list(meter)
+            engine.count_in_bar_beats = meter[0] * 4 / meter[1]
+        # The empty staff measure BETWEEN loops already provides the
+        # preparation interval. Do not prepend another count-in measure.
+        engine.visual_gap_beats = engine._source_model()["practice_timeline"]["gap"]["duration_beats"]
+        engine.count_in_beats = (0.0 if loop_continuation else
+            lead_in_beats(engine.count_in_bar_beats, engine.plan.bpm))
+        engine.next_boundary_beat=next_chunk_end(grid,engine.play_from_beat)
+        engine.run_at=time.monotonic()+engine.count_in_beats*60/engine.plan.bpm
+        engine.feedback="Count in, then play"
+        engine.next_action = ("Watch the moving score; connect a piano for feedback." if engine.preview_only
+            else f"Play from bar {bar_number_at(grid,engine.play_from_beat,phrase.first_bar)} at {engine.plan.bpm} BPM.")
 
     def advance(self, engine, now: float) -> None:
         """Inspect a single monotonic instant, stopping after the first transition."""
