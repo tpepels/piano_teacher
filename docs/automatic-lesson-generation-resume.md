@@ -140,3 +140,22 @@ skipped**. See `docs/research-reproduction-gate-2-coda.md`
 for caveats. The remaining objective is full notation-preserving
 source-to-exercise projection and wider pinned author parity,
 not unrelated native rendering.
+
+## 2026-10-31 — practical Coda research exercise pipeline
+
+Source MusicXML → Coda reference-guided `TimingPlan` →
+`CodaProjectedStage` → production `ScoreArtifacts` →
+real Verovio SVG, production `ListenSession` /
+`DemoAudioCache` WAV and `assess_timed` /
+`timed_live_marks` now share a **single source-mapped clock** for
+a strict notation subset. Dotted-short/long, chordified and x2/x4
+written slowdown are verified on a source-backed two-hand XML
+score; source rest-only voice/key-change context survives.
+Fast CI **218 passed, 6 skipped**, actual SVG/WAV/live test
+**6 passed**, code SHA `99c33563`.
+Evidence run `41194677252`, artifact `13039764876`.
+The production lesson planner remains unchanged: no user-facing
+Coda strategy has been enabled; no original mastery is granted
+by transformed exercises. See Gate 2 tracker for limitations and
+the next annotation-projection work. Do not resume unrelated
+notation audit workstreams.

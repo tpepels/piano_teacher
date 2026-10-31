@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-31",
+  "tested_code_revision": "99c335631eb7ead03c89db2449e91c0f93a8a772",
+  "source_fixture": "tests/fixtures/research/coda_four_families.musicxml",
+  "fixture_original_notes": 16,
+  "original_rest_only_voice": true,
+  "source_key_change_original_beat": 4,
+  "notation_variants": [
+    "dotted-long",
+    "dotted-short",
+    "chord",
+    "slow-2",
+    "slow-4"
+  ],
+  "source_to_ink_checks": 80,
+  "selected_note_id_verified_each": 16,
+  "slowdown_written_mapped_key_changes": {
+    "slow-2": 8,
+    "slow-4": 16
+  },
+  "svg_workflow": "https://github.com/tpepels/piano_teacher/actions/runs/41194677252",
+  "svg_workflow_artifact_id": 13039764876,
+  "svg_tests_passed": 6,
+  "real_verovio_svg": true,
+  "actual_wave_file": true,
+  "listen_session_real_synth": true,
+  "live_input_note_on_verified": true,
+  "missed_note_real_ink_binding_verified": true,
+  "source_mastery_unchanged": true,
+  "unit_workflow": "https://github.com/tpepels/piano_teacher/actions/runs/41194677205",
+  "unit_passed": 218,
+  "unit_skipped": 6,
+  "production_enabled": false,
+  "godot_native_verified": false,
+  "physical_midi_verified": false,
+  "gate_2_complete": false,
+  "unsupported": [
+    "ties",
+    "slurs",
+    "tuplets",
+    "authored beams",
+    "lyrics",
+    "directions",
+    "nontrivial barlines and repeats",
+    "multi-meter slowdown",
+    "noninitial passage extraction",
+    "written source chord slowdown"
+  ]
+}

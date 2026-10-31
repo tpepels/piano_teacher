@@ -421,3 +421,80 @@ rounding, note overflow, complete transformed MusicXML engraving,
 Listen/grade integration for all three timing families, real piano
 hardware and teaching effectiveness. Do not promote research
 strategies to production or close Gate 2 based on this sample.
+
+## Actual Coda notation → Listen → grading pipeline (2026-10-31)
+
+The first **source-backed research projection**, separate from production
+curriculum flags, is implemented at
+`piano_teacher/research/coda_score_projection.py`. One immutable original
+`Piece` plus one source-indexed Coda `TimingPlan` produce
+`CodaProjectedStage` containing:
+
+- A private, source-owned, **new** `Piece` and `Phrase` whose note
+  onsets/releases exactly follow the transformed `TimingPlan`;
+- A uniquely fingerprinted `ScoreSelection` consumed by the
+  **production** `ScoreArtifacts` MusicXML → semantic-score → Verovio
+  engraving path, with canonical `source_id` note and actual glyph binding;
+- A `ListenSelection` consumed by **production** `ListenSession` and
+  `DemoAudioCache`, with the same selected `ExerciseVariant` and
+  constant `TempoMap`;
+- `grade()` that calls `assess_timed` with the same plan and clock,
+  rebinding the outcome to the immutable original event identities **without
+  granting original-piece mastery**.
+
+It supports both author dotted patterns, equal-run chordification and
+written slowdown factors 2 and 4. Crucially, slowdown **expands written
+beats and rebars the excerpt**; it does not substitute an arbitrary
+tempo-map ramp. The source context's key, meter and clef positions are
+mapped to the transformed timeline. Explicit source rests, including the
+fixture's RH rest-only voice, survive by scaling a private source-XML
+projection for x2/x4 while preserving the original immutable XML.
+The two-measure genuine MusicXML test has a right-hand key change
+from fifths 0 to -1 at original beat 4: it appears at transformed
+beat 4, 8 and 16 for ordinary, x2 and x4 notation respectively.
+
+**Fail-closed scope:** only complete bar-1 excerpts of the supported
+source-partwise subset are currently accepted. Altered rhythms with
+directions, lyrics, tuplets, ties, slurs, ornaments, beams or mid-measure
+attributes are rejected instead of discarding original annotations.
+For written slowdown, changing bar lengths/meters, authored special
+barlines/repeats and source XML chord notes also require new validated
+projection logic. Source-wide fingering edits remain under the original
+piece; no fingering is fabricated for the new exercise.
+
+### Executed evidence at source revision `99c33563`
+
+- Fast semantic/Listen/grading tests:
+  https://github.com/tpepels/piano_teacher/actions/runs/41194677205
+  (**218 passed, 6 skipped**; 10/10 old supported MusicXML semantic
+  fixtures pass as separate independent coverage).
+- Bounded **real Verovio rendering** and actual audio/live event test:
+  https://github.com/tpepels/piano_teacher/actions/runs/41194677252
+  (**6 passed**, 1.63s tests; separate short opt-in job).
+- Artifact `13039764876` contains **five independently produced**
+  MusicXML scores and their actual production Verovio SVGs, plus JUnit,
+  captured WAV cache and revision marker. For each of the 5,
+  source-to-ink mapping verifies **16/16 note identities**, resulting
+  in 80 selected-note glyph checks. The source rest-only voice and
+  key change were independently checked in the produced XML and in
+  the retained graphics; SVG visual samples were manually reviewed.
+- In the 6th real-tool test, `ListenSession` synthesized an actual
+  8000-Hz WAV from a dotted-stage `DemoAudioCache` (not a test fake).
+  Playback duration equals the canonical `TempoMap`. A simulated
+  *physical-format* note-on enters the normal `LiveInputView`
+  on-time and retains its original `source_id`. Omitting one
+  right-hand note from the right-hand take produces a `missed`
+  mark attached to the exact Verovio note ID in the selected
+  engraving layout.
+- Original MusicXML remains intact in the original `Piece`;
+  the working score is a **separate** research stage. No production
+  strategy or mastery gate is automatically enabled.
+
+The above verifies actual SVG and synthesized WAV behavior for a small
+source excerpt. **Not** yet verified: native Godot score drawing, real
+MIDI hardware, changing meters with written slowdown, tuples/beams/ties,
+arbitrary unvoiced directions, broad published author example parity,
+student-model integration or teacher-study outcomes. Do not accept Gate 2
+as complete on this evidence alone. The next technical step is
+source-annotation-preserving projection for a broader real-score set
+followed by bounded Verovio/Godot rendering and device tests.
