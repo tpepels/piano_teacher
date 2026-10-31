@@ -170,3 +170,42 @@ def test_real_authored_eighth_beam_groups_survive_selected_coda_stage(tmp_path):
     assert set(score.layout["attack_map"])=={
         n.source_id for n in piece.notes}
     assert score.pages and len(score.pages)<=2
+
+
+def test_unchanged_authored_slur_and_staccato_are_actual_verovio_ink(tmp_path):
+    """Other hand's Coda rhythm changes while the slurred RH phrase stays."""
+    from piano_teacher.exercise_contracts import OriginalTiming
+
+    root=ET.fromstring(SOURCE.read_text())
+    notes=[n for n in root.findall("./part")[0].findall("./measure")[0].findall("note")
+           if n.find("pitch") is not None]
+    start=ET.SubElement(notes[0],"notations")
+    ET.SubElement(start,"slur",type="start",number="1")
+    articulations=ET.SubElement(start,"articulations")
+    ET.SubElement(articulations,"staccato")
+    stop=ET.SubElement(notes[3],"notations")
+    ET.SubElement(stop,"slur",type="stop",number="1")
+    fixture=tmp_path/"authored-arc.musicxml"
+    fixture.write_text(ET.tostring(root,encoding="unicode"))
+    piece=load_musicxml(fixture,bpm=80)
+    original=ExerciseVariant("original",Phrase(1,1,2,0,8,piece.notes),
+                             tuple(range(len(piece.notes))))
+    result=CodaReferenceDotted(True).transform(
+        original,boundaries=piece.bar_boundaries,quantization=4,
+        source_musicxml=piece.source_musicxml)
+    assert result.changed_sources
+    stage=project_coda_score(
+        piece,result.timing,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"arc-cache"))
+    notation=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    assert len(notation.findall(".//slur[@type='start']"))==1
+    assert len(notation.findall(".//slur[@type='stop']"))==1
+    assert len(notation.findall(".//staccato"))==1
+    rendered=artifacts.engraving(stage.selection)
+    assert set(rendered.layout["attack_map"])=={
+        n.source_id for n in piece.notes}
+    svg=ET.fromstring(rendered.pages[0])
+    classes={token for node in svg.iter() for token in
+             node.get("class","").split()}
+    assert "slur" in classes
+    (tmp_path/"authored-arc.svg").write_text(rendered.pages[0])
