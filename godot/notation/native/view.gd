@@ -287,6 +287,7 @@ func _prepare_static_geometry() -> void:
         layout.ordered_events, prepared_gap, layout.cached_head_offsets,
         glyphs.bounds)
     layout.cached_offsets_gap = prepared_gap
+    layout.prepare_event_positions(prepared_gap)
     connector_geometry.clear_cache()
     connector_geometry.prewarm_tie_clearances(prepared_gap)
     connector_geometry.prewarm_beam_layout(prepared_gap,layout.cached_head_offsets)
