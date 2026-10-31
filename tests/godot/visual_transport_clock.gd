@@ -223,7 +223,8 @@ func run() -> void:
         "visual_scroll_beat": 7.0, "visual_scroll_speed": 1.0,
         "visual_target_beat": 8.0, "visual_offset_beats": 0.0,
         "play_from_beat": 0.0, "clock_beat": 4.0,
-        "clock_sampled_at_ms": 1000000.0, "visual_run_at_ms": 993000.0}
+        "clock_sampled_at_ms": 1000000.0, "visual_run_at_ms": 993000.0,
+        "visual_tempo_segments":[]}
     epoch_clock.accept(epoch_gap, base_ms, base_ms)
     check(absf(epoch_clock.visual_beat(base_ms + 1000) - 8.0) < .000001,
         "Absolute MIDI epoch puts the next measure at the rest deadline")
@@ -239,7 +240,8 @@ func run() -> void:
         "phase": "playing", "bpm": 60.0, "running": true,
         "paused": false, "visual_offset_beats": 8.0,
         "play_from_beat": 0.0, "clock_beat": 0.22,
-        "clock_sampled_at_ms": 1001220.0, "visual_run_at_ms": 1001000.0}
+        "clock_sampled_at_ms": 1001220.0, "visual_run_at_ms": 1001000.0,
+        "visual_tempo_segments":[]}
     epoch_clock.accept(epoch_play, base_ms + 1220, base_ms + 1220)
     check(absf(epoch_clock.visual_beat(base_ms + 1220) - 8.22) < .000001,
         "Next measure uses identical epoch and graphical position")
@@ -251,7 +253,7 @@ func run() -> void:
         "phase": "playing", "bpm": 60.0, "running": true,
         "paused": false, "play_from_beat": 0.0,
         "visual_offset_beats": 0.0, "clock_beat": 0.0,
-        "visual_run_at_ms": 1000000.0,
+        "visual_run_at_ms": 1000000.0, "visual_tempo_segments":[],
         "clock_sampled_at_ms": 1000000.0}
     inside.accept(internal, base_ms, base_ms)
     for quarter in range(1, 41):
