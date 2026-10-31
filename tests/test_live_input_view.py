@@ -148,7 +148,7 @@ def test_provisional_midi_feedback_uses_shaped_grading_clock():
     view.reset_attempt()
     _send(view, 60, 14.35, tempo_map=shaped)
     assert _last(view, 14.36)["source_id"] == "attack-c"
-    assert _last(view, 14.21)["status"] == "late"
+    assert _last(view, 14.36)["status"] == "late"
     view.reset_attempt()
     _send(view, 61, 14.01, tempo_map=shaped)
     assert _last(view, 14.02)["reference_source_id"] == "attack-c"
