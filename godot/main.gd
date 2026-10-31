@@ -27,6 +27,7 @@ const MidiDeviceCoordinator := preload("res://midi_device_coordinator.gd")
 const ScoreAssetSession := preload("res://score_asset_session.gd")
 const ScoreAssetQueue := preload("res://score_asset_queue.gd")
 const InProcessBus := preload("res://inprocess_bus.gd")
+const PracticeFrameCoordinator := preload("res://practice_frame_coordinator.gd")
 
 var current_screen := "practice"
 var settings_return_screen := "practice"
@@ -845,96 +846,7 @@ func _process(_delta: float) -> void:
         _request_devices()
         _request_settings()
         _request_library()
-    # On-device frame intervals, opt-in only. _delta is never fed back into
-    # the backend tempo or score assessment; tests may call _process(0).
-    if frame_diagnostics and current_screen == "practice":
-        var frame_result: Dictionary = frame_meter.record_frame(_delta)
-        if not frame_result.is_empty():
-            frame_result["native_visible_noteheads"] = _visible_score_noteheads()
-            frame_result["native_scanned_events"] = practice_view.stage.renderer.frame_scanned_events
-            frame_result["phase"] = str(last_state.get("phase", ""))
-            print("PHASE8D_FRAME_INTERVALS:", JSON.stringify(frame_result))
-    # Animate short-lived hit pulses between state samples.
-    var ticks: int = Time.get_ticks_msec()
-    score_effects.prune_expired(ticks)
-    _read_live_midi()
-    settings_view.present_busy(action_pending)
-    practice_view.present_busy(action_pending)
-    lesson_view.present_busy(action_pending)
-    lesson_session.ensure_current(ticks)
-    # Start Listen WAV on the actual negative-to-zero beat crossing at
-    # frame rate, not on the next 150ms state poll. This preserves the
-    # first note AND keeps its attack aligned with the engraved notehead.
-    if demo_player != null and str(last_state.get("mode", "")) == "listen" \
-            and bool(last_state.get("running", false)) \
-            and not bool(last_state.get("paused", false)) \
-            and bool(demo_player.get("loaded")) \
-            and not bool(demo_player.get("started")):
-        demo_player.synchronize(last_state, _transport_beat_now())
-    # Continuous Listen drift measurements are display/audio only and
-    # never feed back into the MIDI grading or the Python transport.
-    if demo_player != null and str(last_state.get("mode", "")) == "listen" \
-            and bool(last_state.get("running", false)) \
-            and not bool(last_state.get("paused", false)):
-        demo_player.keep_synchronized(_transport_beat_now(),
-            maxf(1.0, float(last_state.get("bpm", 60.0))),
-            last_state.get("tempo_segments", []))
-        if listen_sync_diagnostics and ticks - last_listen_sync_report_ms >= 1000:
-            last_listen_sync_report_ms = ticks
-            print("PHASE8B_LISTEN_SOFTWARE_SYNC:",
-                JSON.stringify(demo_player.sync_report()))
-    _update_count_in()
-    # Frame-accurate native projection uses the SAME clock as score and
-    # count-in. No Verovio X positions or per-note speed correction.
-    if practice_view.stage.renderer != null \
-            and bool(last_state.get("loaded", false)):
-        var score_clock: float = _transport_beat_now()
-        practice_view.stage.renderer.present(last_state, score_clock,
-            _unrolled_score_beat(score_clock))
-    # The stage's lighting follows exactly the musical beat used by the
-    # moving Verovio notation. Preview/Listen use a neutral pulse; neither
-    # this visual beat nor its glow can create grading events.
-    if practice_view.stage.effects != null and bool(last_state.get("running", false)) \
-            and not bool(last_state.get("paused", false)):
-        practice_view.stage.effects.sync_beat(
-            _transport_beat_now(),
-            maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4))))),
-            bool(last_state.get("preview_only", false))
-                or str(last_state.get("mode", "")) == "listen")
-    # Source-event reactions still follow the backend clock. Native feedback
-    # owns visible note cues and grading; no page-coordinate camera runs here.
-    if last_state.is_empty() or not bool(last_state.get("running", false)) \
-            or bool(last_state.get("paused", false)) or not _native_score_ready():
-        last_playhead_strike_transport = -1
-        return
-    var clock: float = _transport_beat_now()
-    var musical_clock: float = float(last_state.get("play_from_beat", 0.0)) + clock
-    var strike_transport: int = int(last_state.get("transport_id", 0))
-    if last_playhead_strike_transport == strike_transport \
-            and musical_clock >= last_playhead_strike_beat \
-            and musical_clock - last_playhead_strike_beat <= .5:
-        var onsets: Array = LivingScore.groups_crossed(
-            living_chords, last_playhead_strike_beat, musical_clock)
-        if not onsets.is_empty() and (bool(last_state.get("preview_only", false)) \
-                or str(last_state.get("mode", "")) == "listen"):
-            _preview_note_arrivals(onsets)
-    last_playhead_strike_transport = strike_transport
-    last_playhead_strike_beat = musical_clock
-    if phase0_smoke_mode:
-        var tick: int = int(floor(clock * 4.0))
-        var playhead: float = practice_view.stage.renderer.size.x * .42
-        var content_x: float = -practice_view.stage.renderer.clock_beat * practice_view.stage.renderer.timeline.pixels_per_beat
-        if clock < 0.0 and tick != phase0_last_lead_tick:
-            phase0_last_lead_tick = tick
-            print("PHASE0_LEAD_BEAT:", clock, " CONTENT_X:", content_x,
-                " CURSOR_X:", playhead, " VISIBLE:", practice_view.stage.renderer.visible)
-        elif clock >= 0.0 and tick != phase0_last_cursor_tick:
-            phase0_last_cursor_tick = tick
-            print("PHASE0_VISIBLE_NOTES:", _visible_score_noteheads(),
-                " PANEL_WIDTH:", practice_view.stage.score_frame.size.x, " CONTENT_X:", content_x)
-            print("PHASE0_CURSOR_BEAT:", musical_clock, " SCREEN_X:", playhead,
-                " VISIBLE:", practice_view.stage.renderer.visible, " CONTENT_X:", content_x)
-
+    PracticeFrameCoordinator.advance(self, _delta)
 
 func _on_state(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, sample_started_ms: int = -1) -> void:
     if sample_started_ms < 0:
