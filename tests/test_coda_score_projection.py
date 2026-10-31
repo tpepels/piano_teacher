@@ -300,3 +300,42 @@ def test_coda_rejects_incomplete_parallel_voice_source_tie(tmp_path):
     with pytest.raises(ValueError,match="incomplete source ties"):
         project_coda_score(changed,OriginalTiming().transform(variant),
                            reference_family="dotted-rhythms",bpm=80)
+
+
+def test_coda_rejects_retimed_or_styled_source_tie(tmp_path):
+    path=Path(__file__).parent/"fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml"
+    piece=load_musicxml(path,bpm=80)
+    variant=ExerciseVariant("original",Phrase(1,1,len(piece.bar_boundaries)-1,
+            0,piece.bar_boundaries[-1],piece.notes),tuple(range(len(piece.notes))))
+    original=OriginalTiming().transform(variant)
+
+    from piano_teacher.exercise_contracts import TimingPlan
+    events=list(original.events)
+    events[0]=replace(events[0],exercise_end=events[0].exercise_end-.25)
+    changed=TimingPlan("invalid-retimed-tie",variant,tuple(events),
+                        original.duration_beats)
+    with pytest.raises(ValueError,match="unchanged ties"):
+        project_coda_score(piece,changed,reference_family="dotted-rhythms",bpm=80)
+
+    root=ET.fromstring(piece.source_musicxml)
+    tied_note=root.find(".//note[tie]")
+    assert tied_note is not None
+    notations=ET.SubElement(tied_note,"notations")
+    ET.SubElement(notations,"tied",type="start",placement="above")
+    styled=replace(piece,source_musicxml=ET.tostring(root,encoding="unicode"))
+    with pytest.raises(ValueError,match="plain, unretimed source-bar ties"):
+        project_coda_score(styled,original,reference_family="dotted-rhythms",bpm=80)
+
+
+def test_coda_rejects_unverified_authored_tuplet_marks(tmp_path):
+    piece,variant=context()
+    root=ET.fromstring(piece.source_musicxml)
+    note=root.find(".//note[pitch]")
+    assert note is not None
+    ratio=ET.SubElement(note,"time-modification")
+    ET.SubElement(ratio,"actual-notes").text="3"
+    ET.SubElement(ratio,"normal-notes").text="2"
+    decorated=replace(piece,source_musicxml=ET.tostring(root,encoding="unicode"))
+    with pytest.raises(ValueError,match="expressive/tuplet/tied"):
+        project_coda_score(decorated,OriginalTiming().transform(variant),
+                           reference_family="dotted-rhythms",bpm=80)
