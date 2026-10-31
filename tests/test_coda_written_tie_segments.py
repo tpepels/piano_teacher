@@ -97,5 +97,6 @@ def test_written_tie_rejects_unowned_source_continuation():
     broken=replace(original,phrase=replace(
         original.phrase,notes=tuple(n for n in original.notes
                                     if n.voice.endswith("-v1"))))
+    reduced=OriginalTiming().transform(broken)
     with pytest.raises(ValueError,match="sounding source attack"):
-        tie_segment_chains(piece,replace(stage.timing,original=broken))
+        tie_segment_chains(piece,reduced)
