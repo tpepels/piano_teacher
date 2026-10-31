@@ -380,7 +380,7 @@ def test_coda_mixed_meter_slowdown_projects_authored_bars_and_rests(
     rest_events=[e for e in model["notation_events"]
                  if e["kind"]=="rest"]
     assert rest_events
-    assert any(abs(e["onset_beats"]-2*factor)<1e-7
+    assert any(abs(e["beat"]-2*factor)<1e-7
                and abs(e["duration_beats"]-factor)<1e-7
                for e in rest_events)
     played=[PlayedNote(note.pitch,stage.tempo_map.seconds_at(note.start),
