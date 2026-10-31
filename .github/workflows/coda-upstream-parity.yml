@@ -41,6 +41,18 @@ jobs:
               exit 1
             }
           cat "$RUNNER_TEMP/coda-diff/report.json"
+      - name: Compare mixed durations and record known/unknown divergences
+        id: edges
+        continue-on-error: true
+        run: |
+          timeout 70s python scripts/probe_coda_upstream_edges.py \
+            --upstream "$RUNNER_TEMP/upstream" \
+            --report "$RUNNER_TEMP/coda-diff/edge-cases.json" \
+            > "$RUNNER_TEMP/coda-diff/edge-output.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/coda-diff/edge-output.txt"
+              exit 1
+            }
+          cat "$RUNNER_TEMP/coda-diff/edge-output.txt"
       - name: Retain exact-source evidence and failures
         if: always()
         uses: actions/upload-artifact@v4
@@ -50,5 +62,5 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Reject a mismatch
-        if: steps.proof.outcome != 'success'
+        if: steps.proof.outcome != 'success' || steps.edges.outcome != 'success'
         run: exit 1
