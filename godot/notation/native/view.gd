@@ -409,10 +409,13 @@ func paint_retained_rest(canvas: CanvasItem, context: Dictionary = {}) -> void:
     var gap: float = staff_gap()
     var silence: Dictionary = (context["measure"].duplicate(true)
         if context.has("measure") else practice_timeline["gap"].duplicate(true))
-    silence["left_barline"] = timeline.measures[-1].get("right_barline",{})
-    var incoming: Variant = timeline.measures[0].get("left_barline")
-    if incoming is Dictionary:
-        silence["right_barline"] = incoming
+    if context.is_empty():
+        # Only ordinary between-take silence inherits the previous source
+        # ending. Recovery rest descriptors carry their own authored context.
+        silence["left_barline"] = timeline.measures[-1].get("right_barline",{})
+        var incoming: Variant = timeline.measures[0].get("left_barline")
+        if incoming is Dictionary:
+            silence["right_barline"] = incoming
     var frame: RenderPass = _new_paint_frame(0.0,0.0,gap,0,0.0)
     frame.visual_scroll_beat = float(silence["start_beat"])
     var previous: Dictionary = context.get("previous",timeline.measures[-1])
