@@ -152,6 +152,11 @@ void PianoNative::worker_loop() {
                 completed_.push_back(std::move(output));
             }
         }
+        // A Play/Pause/Stop POST changes the wakeup cadence immediately,
+        // rather than inheriting a stale 250 ms idle interval. Reads do
+        // not re-anchor transport or influence its scheduled deadlines.
+        if (has_command && next.method == "POST")
+            next_tick = Clock::now();
         // Always check after handling a command: sustained state polls may
         // not starve the native transport tick.
         if (Clock::now() >= next_tick) {
