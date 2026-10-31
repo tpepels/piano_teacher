@@ -128,9 +128,7 @@ func paint_engraved_chord(canvas, frame: RenderPass, event: Dictionary, x: float
         var head_x: float = x+float(offset[0])*gap/250.0
         var head_y: float = anchor+float(offset[1])*gap/250.0
         var staff: String = str(current.get("staff","right"))
-        var clef: Dictionary = score_layout.clef_for(staff,score_layout.measure_for(current))
-        var step: int = Geometry.staff_step(
-            current.get("spelling",{}),clef)
+        var step: int = score_layout.prepared_step(current,gap)
         head_centres.append(Vector2(head_x,head_y))
         # Ledger rules must be UNDER the authentic filled noteheads.
         paint_ledger(canvas,frame,head_x,head_y,step,score_layout.staff_center(staff)+gap*2.0,
@@ -169,11 +167,9 @@ func paint_note(canvas, frame: RenderPass, event: Dictionary, x: float,
     # Only local glyph separation: the source beat is unchanged.
     x += head_offset
     var staff: String = str(event.get("staff", "right"))
-    var measure: Dictionary = score_layout.measure_for(event)
-    var clef: Dictionary = score_layout.clef_for(staff, measure)
-    var step: int = Geometry.staff_step(event.get("spelling", {}), clef)
+    var step: int = score_layout.prepared_step(event,gap)
     var bottom: float = score_layout.staff_center(staff) + gap*2.0
-    var y: float = Geometry.note_y(step, bottom, gap)
+    var y: float = score_layout.event_y(event,gap)
     var kind: String = str(event.get("note_type", "quarter"))
     paint_ledger(canvas,frame,x, y, step, bottom, gap, ink)
     # Simple notes are complete Verovio-engraved sprites: no Godot stem,
