@@ -11,11 +11,20 @@ class Canvas:
     extends RefCounted
     var lines: Array = []
     var textures: Array = []
+    var regions: Array = []
+    var polygons: Array = []
+    var transforms: Array = []
     var strings: Array = []
     func draw_line(a, b, ink, width, aa = false) -> void:
         lines.append([a,b,ink,width,aa])
     func draw_texture_rect(texture, rect, tiled, ink) -> void:
         textures.append([texture,rect,tiled,ink])
+    func draw_set_transform(translation, _rotation = 0.0, _scale = Vector2.ONE) -> void:
+        transforms.append(translation)
+    func draw_texture_rect_region(texture, destination, source, ink) -> void:
+        regions.append([texture,destination,source,ink])
+    func draw_polygon(vertices, _colors, _uvs, texture) -> void:
+        polygons.append([vertices,texture])
     func draw_string(font, at, text, alignment, width, font_size, ink) -> void:
         strings.append([at,text,font_size,ink])
 
@@ -31,6 +40,8 @@ class Atlas:
     var chord_stem_bounds: Dictionary = {}
     var note_stem_bounds := {"quarter_up":[40,-500,10,500]}
     var beam_metadata: Dictionary = {}
+    var beam_textures: Dictionary = {}
+    var slur_textures: Dictionary = {}
     var tie_metadata := {"up":{"bounds":[50,30,400,40],"span":500,"head_centers":[0,0],"head_widths":[100,100]},
         "down":{"bounds":[50,30,400,40],"span":500,"head_centers":[0,0],"head_widths":[100,100]}}
     var tie_textures: Dictionary = {}
@@ -202,11 +213,18 @@ func check_symbols() -> void:
     var image := Image.create(2,2,false,Image.FORMAT_RGBA8)
     image.fill(Color.WHITE)
     score.glyphs.tie_textures = {"up":ImageTexture.create_from_image(image),"down":ImageTexture.create_from_image(image)}
+    painter.connector_geometry.prepared_ties["a|b"] = {
+        "direction":"up","rect":Rect2(9,222.4,196,3.2)}
     painter.paint_ties(canvas,frame,100.0,0.0,20.0)
-    check(canvas.textures.size() == 1 and canvas.textures[0][1].is_equal_approx(Rect2(109,222.4,196,3.2)),"ties use connector-owned fixed endpoint contours")
+    check(canvas.textures.size() == 1 and canvas.textures[0][1].is_equal_approx(Rect2(109,222.4,196,3.2)),"ties translate cached authentic ink")
     score.slur_pairs = [{"first":a,"last":b,"key":"a|b"}]
+    score.glyphs.slur_textures["a|b"] = ImageTexture.create_from_image(image)
+    painter.connector_geometry.prepared_slurs["a|b|a|b"] = PackedVector2Array([
+        Vector2(5,220),Vector2(209,220),Vector2(209,223),Vector2(5,223)])
     painter.paint_slurs(canvas,frame,100.0,0.0,20.0)
-    check(score.glyphs.calls[-1][0] == "slur:a|b" and score.glyphs.calls[-1][1] == Vector2(105,220) and score.glyphs.calls[-1][2] == Vector2(309,220),"slurs project authentic displaced endpoints")
+    check(canvas.polygons.size() == 1 and \
+        canvas.polygons[0][0][0] == Vector2(5,220) and \
+        canvas.transforms[-2] == Vector2(100,0),"slurs draw prepared Verovio polygons with X translation")
     score.notation_tuplets = [{"events":[a,b]},{"events":[a,b],"show_number":"none","bracket":"no"}]
     painter.paint_tuplet_brackets(canvas,frame,0.0,100.0,20.0)
     check(score.glyphs.calls[-1][0] == "tuplet:a|b","visible source tuplet painted")
@@ -215,7 +233,8 @@ func check_symbols() -> void:
     painter.paint_tuplet_brackets(canvas,hidden,0.0,100.0,20.0)
     painter.paint_ties(canvas,hidden,100.0,0.0,20.0)
     painter.paint_slurs(canvas,hidden,100.0,0.0,20.0)
-    check(score.glyphs.calls.size() == count and canvas.textures.size() == 1,"recovery hides connectors and tuplets consistently")
+    check(score.glyphs.calls.size() == count and canvas.textures.size() == 1 and \
+        canvas.polygons.size() == 1,"recovery hides cached connectors and tuplets consistently")
     score.attached_grace_notes = [{"before_note_id":"b","measure":1,"staff":"right","note_type":"eighth","spelling":{"step":"E","octave":4}}]
     painter.paint_grace_notes(canvas,frame,20.0)
     check(score.glyphs.calls[-1][1] == Vector2(281,220) and is_equal_approx(score.glyphs.calls[-1][2],13.2),"grace uses recorded actual target head and uniform scale")
@@ -244,13 +263,27 @@ func check_chord(painter, canvas, frame, score) -> void:
 
 func check_beams(painter, canvas, frame, score, a, b) -> void:
     score.beam_stem_up_by_note = {"a":true,"b":true}
-    score.glyphs.beam_metadata["a|b"] = {"head_offsets":[0,250],"tip_offsets":[-500,-450]}
+    var image := Image.create(4,4,false,Image.FORMAT_RGBA8)
+    image.fill(Color.WHITE)
+    var texture := ImageTexture.create_from_image(image)
+    score.glyphs.beam_textures["a|b"] = texture
+    painter.connector_geometry.prepared_beams["a|b"] = {
+        "art_key":"a|b","up":true,"staff":"right","hand":"right",
+        "anchor_y":220.0,"source_stem_offsets":[0,250],
+        "members":[{"id":"a","x":8.6,"head_x":8.6,"tip_y":180.0},
+                   {"id":"b","x":212.6,"head_x":212.6,"tip_y":184.0}],
+        "regions":[{"dest":Rect2(8.6,200,204,4),
+                    "source":Rect2(0,0,4,4)}]}
     var plan: Dictionary = painter.beam_layout(frame,score.cached_head_offsets,[[a,b]])
-    check(frame.visible_beam_groups == 1 and not plan.has("visible_count"),"explicit beam plans keep original counter contract")
-    check(plan["stems"]["a"]["tip_y"] == 180.0 and plan["stems"]["b"]["tip_y"] == 184.0,"source beam tips retain measured offsets")
+    check(frame.visible_beam_groups == 1 and not plan.has("visible_count"),"explicit prepared beam plans keep source counters")
+    check(plan["stems"]["a"]["tip_y"] == 180.0 and plan["stems"]["b"]["tip_y"] == 184.0,"prepared source stem tips retain original artwork")
+    check(is_equal_approx(float(plan["stems"]["a"]["x"]),108.6) and \
+        is_equal_approx(float(plan["stems"]["b"]["x"]),312.6),"camera shifts prepared source stem coordinates")
     painter.paint_beams(canvas,frame,plan,20.0)
-    check(score.glyphs.calls[-1][0] == "beam:a|b","source beam mask painted")
-    check(score.glyphs.calls[-1][1] == [108.6,312.6],"beam mask attaches at actual shaft centers")
+    check(canvas.regions.size() == 1 and canvas.regions[0][0] == texture and \
+        canvas.regions[0][1] == Rect2(8.6,200,204,4),"prepared beam masks are submitted without interpolation")
+    check(canvas.transforms[-2] == Vector2(100,0) and \
+        canvas.transforms[-1] == Vector2.ZERO,"beam camera translation resets after drawing")
     painter.beam_layout(frame,score.cached_head_offsets,[])
     check(frame.visible_beam_groups == 0,"empty explicit group list cannot resurrect source beams")
 
