@@ -96,7 +96,11 @@ var frame_scanned_events := 0
 var frame_visible_beam_groups := 0
 
 func _init() -> void:
-    resized.connect(func(): layout.set_viewport(size))
+    resized.connect(func():
+        layout.set_viewport(size)
+        if native_ready and size.y >= 100.0:
+            _prepare_static_geometry()
+    )
     annotations.fingering_change_requested.connect(func(source_id, finger):
         fingering_change_requested.emit(source_id,finger))
     mouse_filter = Control.MOUSE_FILTER_PASS
@@ -233,15 +237,9 @@ func load_score(candidate: Dictionary) -> bool:
     layout.cached_offsets_gap = -1.0
     layout.cached_head_offsets.clear()
     layout.cached_accidental_offsets.clear()
-    # All event head offsets and flagged-tie pixel clearances belong to this
-    # immutable score layout. Never compute them on the first frame in which
-    # a previously invisible measure crosses the playhead.
-    var prepared_gap: float = staff_gap()
-    layout.cached_head_offsets = layout.engraved_head_offsets(prepared_gap)
-    layout.cached_accidental_offsets = Geometry.accidental_offsets(
-        layout.ordered_events, prepared_gap, layout.cached_head_offsets, glyphs.bounds)
-    layout.cached_offsets_gap = prepared_gap
-    connector_geometry.prewarm_tie_clearances(prepared_gap)
+    # No source connector or chord geometry may first be prepared when its
+    # measure scrolls into view. All immutable structures use source-space X.
+    _prepare_static_geometry()
     failure_reason = ""
     native_ready = true
     queue_redraw()
@@ -281,6 +279,17 @@ func _missing_source_engraving() -> String:
 func staff_gap() -> float:
     layout.set_viewport(size)
     return layout.staff_gap(staff_gap_limit)
+
+func _prepare_static_geometry() -> void:
+    var prepared_gap: float = staff_gap()
+    layout.cached_head_offsets = layout.engraved_head_offsets(prepared_gap)
+    layout.cached_accidental_offsets = Geometry.accidental_offsets(
+        layout.ordered_events, prepared_gap, layout.cached_head_offsets,
+        glyphs.bounds)
+    layout.cached_offsets_gap = prepared_gap
+    connector_geometry.clear_cache()
+    connector_geometry.prewarm_tie_clearances(prepared_gap)
+    connector_geometry.prewarm_beam_layout(prepared_gap,layout.cached_head_offsets)
 
 func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
     if state.get("phase","") == "ready" and state.get("practice_preparation") == null and \
