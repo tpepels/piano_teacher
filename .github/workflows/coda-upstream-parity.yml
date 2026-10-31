@@ -22,7 +22,7 @@ jobs:
       - name: Dependencies and syntax
         run: |
           python -m pip install -e '.[test,coda-research]' 'music21>=9.1,<10'
-          python -m compileall -q scripts/compare_coda_upstream.py
+          python -m compileall -q scripts/compare_coda_upstream.py scripts/probe_coda_upstream_edges.py
       - name: Checkout exactly published author backend SHA
         run: |
           git clone -q --depth 1 https://github.com/annieetang/coda_backend.git "$RUNNER_TEMP/upstream"
