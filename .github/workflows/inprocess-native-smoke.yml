@@ -29,6 +29,10 @@ jobs:
         with:
           python-version: '3.14'
           cache: pip
+      - name: Install ALSA headers for CPython 3.14 MIDI build
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends libasound2-dev
       - name: Install Python practice and score runtime (CI only)
         run: python -m pip install -e '.[godot]'
       # Reuse the verified CPython 3.14 shared library built from main.
