@@ -244,9 +244,9 @@ def test_coda_rejects_retimed_note_inside_an_authored_source_slur(tmp_path):
     mutable=list(original.events)
     idx=next(i for i,n in enumerate(variant.notes)
              if n.hand=="right" and n.start==1)
-    mutable[idx]=replace(mutable[idx],exercise_start=1.25,exercise_end=2)
+    mutable[idx]=replace(mutable[idx],exercise_start=2.1,exercise_end=2.5)
     broken=TimingPlan("unsafe-mark-change",variant,tuple(mutable),8)
-    with pytest.raises(ValueError,match="note inside an authored slur"):
+    with pytest.raises(ValueError,match="overlapping or reordered slur"):
         project_coda_score(piece,broken,reference_family="dotted-rhythms",bpm=80)
 
 
@@ -521,3 +521,30 @@ def test_coda_tuplet_proof_rejects_changed_generated_bracket_and_ratio(tmp_path)
     with pytest.raises(ValueError,match="changed an authored 3:2 tuplet ratio"):
         verify_projected_tuplets(groups,ET.tostring(wrong_ratio,encoding="unicode"),
                                  score.note_bindings)
+
+
+def test_coda_retimed_source_slur_keeps_authored_ink_and_grading(tmp_path):
+    """All four RH attacks retime inside the same voice and source measure."""
+    from piano_teacher.exercise_contracts import TimingPlan
+    piece,variant=annotated_original(tmp_path)
+    source=OriginalTiming().transform(variant)
+    retimed=list(source.events)
+    for first_start,length in ((0,1.5),(1,0.5),(2,1.5),(3,0.5)):
+        idx=next(i for i,n in enumerate(variant.notes)
+                 if n.hand=="right" and n.start==first_start)
+        at=(0,1.5,2,3.5)[first_start]
+        retimed[idx]=replace(retimed[idx],
+                              exercise_start=at,exercise_end=at+length)
+    plan=TimingPlan("retimed-authored-slur",variant,tuple(retimed),8)
+    stage=project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
+    art=ScoreArtifacts(PreprocessingCache(tmp_path/"retimed-slur"))
+    root=ET.fromstring(art.notation_musicxml(stage.selection))
+    assert len(root.findall(".//slur[@type='start']"))==1
+    assert len(root.findall(".//slur[@type='stop']"))==1
+    assert len(root.findall(".//staccato"))==1
+    assert {x["id"] for x in art.source_model(stage.selection)["notes"]}=={
+        n.source_id for n in variant.notes}
+    performed=[PlayedNote(n.pitch,stage.tempo_map.seconds_at(n.start),
+                          stage.tempo_map.seconds_at(n.end))
+               for n in stage.variant.notes]
+    assert stage.grade(performed).assessment.clean
