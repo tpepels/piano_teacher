@@ -17,6 +17,6 @@ env.Append(LINKFLAGS=["-pthread"])
 # LD_LIBRARY_PATH; no system Python is needed in a published runtime.
 target = env.get("target", "template_debug")
 arch = env.get("arch", "x86_64")
-dest = "../godot/native/bin/libpiano_bridge.linux."+target+"."+arch
+dest = "../godot/native/bin/libpiano_bridge.linux."+target+"."+arch+".so"
 library = env.SharedLibrary(target=dest, source=["src/piano_native.cpp"])
 Default(library)
