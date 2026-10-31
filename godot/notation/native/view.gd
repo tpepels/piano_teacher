@@ -508,7 +508,7 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
         var opening: bool = first and pass_index==0 and current_preparation.is_empty()
         if not target_boundary and not (first and pass_index>0):
             var barline: Dictionary = layout.barline_geometry(measure,camera_clock,playhead_x,gap,play_from_beat)
-            if not barline.is_empty() and float(barline["x"])>=-gap*2.0 and float(barline["x"])<=size.x+gap*2.0:
+            if not barline.is_empty() and float(barline["x"])>=-gap*2.0 and float(barline["x"])<=(retained_width if retained_width>0.0 else size.x)+gap*2.0:
                 context_painter.paint_barline(target,frame,barline,gap)
         var meter_right_limit := INF
         if target_boundary or (first and pass_index>0):
@@ -517,7 +517,7 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
             meter_right_limit = context_painter.barline_left_limit(
                 BarlineLayout.project(at,timeline,camera_clock,playhead_x,play_from_beat,gap),mark,gap)
         var crowded_meter: bool = context_painter.paint_context(target,frame,measure,previous_measure,x,gap,opening,meter_right_limit)
-        if not first and not crowded_meter and x>=0.0 and x<=size.x:
+        if not first and not crowded_meter and x>=0.0 and x<=(retained_width if retained_width>0.0 else size.x):
             target.draw_string(font,Vector2(x+gap*.4,layout.staff_center("right")-gap*4.3),
                 str(int(measure.get("number",0))),HORIZONTAL_ALIGNMENT_LEFT,-1,11,DIM_INK)
         previous_measure = measure
@@ -525,8 +525,8 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
     # It must not disappear simply because no following measure exists.
     var terminal: Dictionary = layout.terminal_barline_geometry(
         camera_clock,playhead_x,gap,play_from_beat)
-    if not score_loop_enabled and not terminal.is_empty() and float(terminal["x"]) >= -gap*2.0 and \
-            float(terminal["x"]) <= size.x+gap*2.0:
+    if not frame.score_loop_enabled and not terminal.is_empty() and float(terminal["x"]) >= -gap*2.0 and \
+            float(terminal["x"]) <= (retained_width if retained_width>0.0 else size.x)+gap*2.0:
         context_painter.paint_barline(target,frame,terminal,gap)
     context_painter.paint_volta_endings(target,frame,left,right,camera_clock,playhead_x,gap)
     # Source geometry must already exist before this frame. Rebuilding
