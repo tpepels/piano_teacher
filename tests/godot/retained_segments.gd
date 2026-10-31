@@ -12,7 +12,7 @@ class FakeView extends Control:
             _context: Dictionary = {}) -> RefCounted:
         source_draws += 1
         canvas.draw_rect(Rect2(10,10,20,12),Color.WHITE)
-        var frame = RenderPass.new()
+        var frame = load("res://notation/native/render_pass.gd").new()
         frame.drawn_note_instances = [{"event_id":"n1","source_id":"n1",
             "position":Vector2(20,16),"pass_index":0,"instance_id":"0:n1"}]
         frame.visible_symbols = 1
