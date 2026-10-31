@@ -2,7 +2,7 @@ extends Node2D
 ## A single retained CanvasItem command list for authentic native source ink.
 ## Godot records _draw once per score/viewport/hand revision. The practice view
 ## subsequently changes position/visibility, never queue_redraw on each beat.
-var owner_view: Control
+var owner_view
 var kind := "source"
 var variant := "first"
 var note_instances: Array = []
