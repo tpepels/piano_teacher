@@ -1,6 +1,6 @@
 name: Coda selected-exercise real engraving
 
-# Small explicit Verovio check. Never run full corpus or long Godot audits.
+# Small explicit Verovio check, now including author beam-group continuity. No corpus or long Godot audits.
 on:
   workflow_dispatch:
   push:
