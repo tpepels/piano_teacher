@@ -32,3 +32,6 @@ func _draw() -> void:
     else:
         owner_view.paint_retained_rest(self)
     compiled = true
+    # The parent may already have projected this frame before our first draw.
+    # Update notehead hit regions on the next frame, once, without rebuilding ink.
+    owner_view.queue_redraw()
