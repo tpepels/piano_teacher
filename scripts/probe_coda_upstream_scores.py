@@ -16,6 +16,10 @@ from pathlib import Path
 import numpy as np
 
 from piano_teacher.importing.musicxml import load_musicxml
+from piano_teacher.exercise_generator import ExerciseVariant
+from piano_teacher.research.coda_reference_exercises import (
+    CodaReferenceSlowdown,CodaReferenceDotted,CodaReferenceChordification,
+)
 from piano_teacher.music import Phrase
 from piano_teacher.research.coda_matrix import MatrixScore
 from piano_teacher.research.coda_reference_matrix import (
@@ -33,7 +37,26 @@ CASES=(
 )
 
 
-def _case(name: str, filename: str, bars: int, converter, meter, key, ExerciseLine):
+def _music21_events(part):
+    from music21 import chord
+    events=[]
+    for event in part.recurse().notes:
+        pitches=event.pitches if isinstance(event,chord.Chord) else (event.pitch,)
+        for pitch in pitches:
+            events.append((round(float(event.getOffsetInHierarchy(part)),6),
+                           int(pitch.midi),round(float(event.quarterLength),6)))
+    return sorted(events)
+
+
+def _coda_events(plan, indices):
+    return sorted((round(float(plan.events[i].exercise_start),6),
+                   plan.original.notes[i].pitch,
+                   round(float(plan.events[i].exercise_end-plan.events[i].exercise_start),6))
+                  for i in indices)
+
+
+def _case(name: str, filename: str, bars: int, converter, meter, key,
+          ExerciseLine, MusicMatrixRepresentation):
     from music21 import chord
     row={"case":name,"source":filename,"sample_bars":bars,
          "status":"diagnostic","voices":[]}
@@ -47,6 +70,7 @@ def _case(name: str, filename: str, bars: int, converter, meter, key, ExerciseLi
         matrix=MatrixScore.from_phrase(
             phrase,boundaries=tuple(piece.bar_boundaries[:bars+1]),
             source_musicxml=piece.source_musicxml)
+        variant=ExerciseVariant("original",phrase,tuple(range(len(phrase.notes))))
         q=reference_quantization(
             min(n.end-n.start for n in notes),piece.time_signatures[0][1])
         generated=score_voice_matrices(matrix,quantization=q)
@@ -80,8 +104,51 @@ def _case(name: str, filename: str, bars: int, converter, meter, key, ExerciseLi
                 result["status"]=(
                     "exact-array-match" if len(matched)==1 else
                     "ambiguous-array-match" if len(matched)>1 else "mismatch")
-                # Note counts alone must never be credited as reference
-                # parity: full 128-pitch arrays are compared above.
+                # Compare the actual author algorithms for that exact
+                # matrix/voice, never only a matching note count.
+                result["algorithms"]={}
+                if len(matched)==1:
+                    line.music_matrix_representation=MusicMatrixRepresentation(
+                        line.key_signature,line.time_signature,q,*original)
+                    owners={index for _,_,index,_ in matched[0].owners}
+                    for name,reference_fn,ours_fn in (
+                        ("slow-x2",lambda:line.generate_slowed_down_exercise(2),
+                         lambda:CodaReferenceSlowdown(2).transform(variant).timing),
+                        ("slow-x4",lambda:line.generate_slowed_down_exercise(4),
+                         lambda:CodaReferenceSlowdown(4).transform(variant).timing),
+                        ("dotted-3-to-1",lambda:line.generate_dotted_exercise([1.5,.5]),
+                         lambda:CodaReferenceDotted(True).transform(
+                             variant,boundaries=matrix.boundaries,
+                             quantization=q,source_musicxml=piece.source_musicxml).timing),
+                        ("dotted-1-to-3",lambda:line.generate_dotted_exercise([.5,1.5]),
+                         lambda:CodaReferenceDotted(False).transform(
+                             variant,boundaries=matrix.boundaries,
+                             quantization=q,source_musicxml=piece.source_musicxml).timing),
+                        ("chord-2-beat",lambda:line.generate_chordify_exercise(2*q),
+                         lambda:CodaReferenceChordification(2*q).transform(
+                             variant,boundaries=matrix.boundaries,
+                             quantization=q,source_musicxml=piece.source_musicxml).timing),
+                    ):
+                        try:
+                            upstream=reference_fn()
+                            if upstream is None:
+                                result["algorithms"][name]={"status":"upstream-none"}
+                                continue
+                            observed=_music21_events(upstream)
+                            expected=_coda_events(ours_fn(),owners)
+                            result["algorithms"][name]={
+                                "status":"match" if observed==expected else "mismatch",
+                                "source_note_count":len(expected),
+                                "reference_note_count":len(observed)}
+                            if observed!=expected:
+                                result["algorithms"][name].update(
+                                    author_first=observed[:6],ours_first=expected[:6])
+                        except Exception as exc:
+                            result["algorithms"][name]={
+                                "status":"exception","error":type(exc).__name__,
+                                "detail":str(exc)[:350]}
+                # Matrix parity is independent of algorithm output parity.
+                # No diagnostic exception or mismatch is promoted.
             except Exception as exc:
                 result.update(status="upstream-exception",
                               error=type(exc).__name__,
@@ -112,9 +179,10 @@ def main():
     sys.modules["services.database"]=unused
     sys.path.insert(0,str(checkout))
     from music21 import converter,meter,key
-    from music.exercise import ExerciseLine
+    from music.exercise import ExerciseLine,MusicMatrixRepresentation
 
-    rows=[_case(*case,converter,meter,key,ExerciseLine) for case in CASES]
+    rows=[_case(*case,converter,meter,key,ExerciseLine,MusicMatrixRepresentation)
+          for case in CASES]
     result={"upstream_revision":"a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
             "status":"diagnostic-only",
             "author_parity_proven":False,"cases":rows}
@@ -123,7 +191,11 @@ def main():
     print(json.dumps({"cases":len(rows),
           "successful_diagnostic_cases":sum(row["status"]=="diagnostic" for row in rows),
           "source_match_counts":[(row["case"],row.get("exactly_matched_voices",0),
-            row.get("reference_voices",0)) for row in rows]},sort_keys=True))
+            row.get("reference_voices",0)) for row in rows],
+          "algorithm_counts":[(row["case"],sum(
+                sum(v["status"]=="match" for v in voice.get("algorithms",{}).values())
+                for voice in row.get("voices",[])))
+                for row in rows]},sort_keys=True))
     # Missing fixtures and broken imports are infrastructure failures.
     # Legitimate author mismatches/errors remain in the source-bound report.
     if any(row.get("status")=="diagnostic-error" for row in rows):

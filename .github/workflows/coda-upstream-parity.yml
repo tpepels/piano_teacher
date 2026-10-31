@@ -56,7 +56,7 @@ jobs:
               exit 1
             }
           cat "$RUNNER_TEMP/coda-diff/edge-output.txt"
-      - name: Compare selected original MusicXML voices without awarding parity
+      - name: Compare selected original MusicXML algorithms and matrices without awarding parity
         id: scores
         continue-on-error: true
         run: |
