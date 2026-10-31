@@ -2,10 +2,12 @@ extends RefCounted
 ## Source-bound connector plans, independent of paint and transport ownership.
 ## Owns only authentic tie/flag contour cache; event geometry belongs to ScoreLayout.
 const BeamSpritePlan := preload("res://notation/native/beam_sprite_plan.gd")
+const SlurSpritePlan := preload("res://notation/native/slur_sprite_plan.gd")
 var score
 var flag_clearances: Dictionary = {}
 var prepared_ties: Dictionary = {}
 var prepared_beams: Dictionary = {}
+var prepared_slurs: Dictionary = {}
 
 func _init(score_layout) -> void:
     score = score_layout
@@ -14,6 +16,7 @@ func clear_cache() -> void:
     flag_clearances.clear()
     prepared_ties.clear()
     prepared_beams.clear()
+    prepared_slurs.clear()
 
 # Flag/tie intersection uses CPU pixel scans and texture.get_image().
 # Every tie has a camera-invariant head-to-head distance, so calculate its
@@ -62,6 +65,29 @@ func prewarm_beam_layout(gap: float, head_offsets: Dictionary) -> void:
             continue
         item["regions"] = regions
         prepared_beams[str(item["art_key"])] = item
+
+static func slur_identity(pair: Dictionary) -> String:
+    return (str(pair["first"].get("id",""))+"|"+
+        str(pair["last"].get("id",""))+"|"+str(pair.get("key","")))
+
+func prewarm_slur_geometry(gap: float) -> void:
+    prepared_slurs.clear()
+    for pair in score.slur_pairs:
+        var first: Dictionary = pair["first"]
+        var last: Dictionary = pair["last"]
+        var key: String = str(pair["key"])
+        var left: float = score.timeline.x_at_beat(
+            float(first.get("beat",0.0)))+float(score.cached_head_offsets.get(
+            str(first.get("id","")),0.0))
+        var right: float = score.timeline.x_at_beat(
+            float(last.get("beat",0.0)))+float(score.cached_head_offsets.get(
+            str(last.get("id","")),0.0))
+        var quad: PackedVector2Array = SlurSpritePlan.build(score.glyphs,
+            key,left,score.event_y(first,gap),right,score.event_y(last,gap),gap)
+        if quad.size()!=4:
+            push_error("Missing prepared Verovio slur geometry: "+key)
+            continue
+        prepared_slurs[slur_identity(pair)] = quad
 
 func tie_placement(first: Dictionary, last: Dictionary,
         x0: float, x1: float, gap: float) -> Dictionary:
