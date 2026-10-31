@@ -50,6 +50,21 @@ var active_visual_offset := 0.0
 var active_play_from := 0.0
 var source_phase := ""
 
+# A forward pass and its following automatic rest are one monotonic
+# schedule. Rendering consumes the same backend run_at epoch as MIDI grading,
+# rather than re-anchoring the camera from each delayed state reply.
+var visual_epoch_enabled := false
+var visual_epoch_backend_ms := 0.0
+var visual_epoch_offset_beats := 0.0
+var visual_epoch_bpm := 60.0
+var visual_epoch_segments: Array = []
+
+func _visual_from_epoch(at_ms: int) -> float:
+    var elapsed: float = (float(at_ms) - backend_offset_ms -
+        visual_epoch_backend_ms) / 1000.0
+    return visual_epoch_offset_beats + TempoTimeline.beat_at_seconds(
+        elapsed, visual_epoch_bpm, visual_epoch_segments)
+
 func _accept_retry(state: Dictionary, sampled_ms: int) -> void:
     var phase := str(state.get("phase", ""))
     var ident := int(state.get("transport_id", -1))
@@ -100,6 +115,8 @@ func visual_beat(at_ms: int) -> float:
                 minf(retry_from_beat, retry_start_beat),
                 maxf(retry_from_beat, retry_start_beat))
         return retry_start_beat + (float(at_ms)-retry_preparation_ms)/60000.0 * retry_bpm
+    if visual_epoch_enabled and (active or idle_continues_through_gap):
+        return _visual_from_epoch(at_ms)
     if active:
         return active_visual_offset + active_play_from + now(at_ms)
     var projected: float = idle_visual_beat + idle_visual_speed * \
@@ -125,6 +142,8 @@ func score_beat(at_ms: int) -> float:
     # Both the scrolling score and its fixed playhead use this same epoch.
     if retry_active and source_phase == "playing":
         return visual_beat(at_ms) - retry_visual_offset - retry_play_from
+    if visual_epoch_enabled and active:
+        return _visual_from_epoch(at_ms) - active_visual_offset - active_play_from
     return now(at_ms)
 
 
@@ -174,11 +193,21 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
         # Calibrate clock epochs on the lowest-latency idle sample, before
         # the attempt. A delayed first active response then cannot shift its
         # origin. Freeze this offset while moving; never alter musical speed.
-        if not has_backend_offset or (not next_active and round_trip < best_round_trip_ms):
+        if not has_backend_offset or (not next_active and
+                absf(idle_visual_speed) < 0.000001 and
+                not retry_active and round_trip < best_round_trip_ms):
             backend_offset_ms = float(captured_ms) - backend_ms
             best_round_trip_ms = round_trip
             has_backend_offset = true
         captured_ms = mini(roundi(backend_ms + backend_offset_ms), received_ms)
+    visual_epoch_enabled = state.has("visual_run_at_ms") and has_backend_offset
+    if visual_epoch_enabled:
+        visual_epoch_backend_ms = float(state.get("visual_run_at_ms", 0.0))
+        visual_epoch_offset_beats = active_visual_offset + active_play_from
+        visual_epoch_bpm = next_bpm
+        # Active graded time includes source tempo changes. Automatic gap
+        # transport uses the same source-time mapping until its next take.
+        visual_epoch_segments = next_segments.duplicate(true)
     var observed: float = float(state.get("clock_beat", 0.0))
     var next_elapsed: float = float(state.get("clock_elapsed_seconds", 0.0))
     if next_active:
