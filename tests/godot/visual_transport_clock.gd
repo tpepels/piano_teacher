@@ -208,5 +208,60 @@ func run() -> void:
     check(preview.visual_beat(base_ms + 1220) > 8.2,
         "MIDI-free preview also keeps the visual rest moving")
 
+
+    # The backend's scheduled run_at is immutable across a measure, its
+    # following rest, and the next take. Even a stale state response after
+    # the rest boundary must not reschedule the camera.
+    var epoch_clock = load("res://visual_transport_clock.gd").new()
+    var idle_epoch := {"revision": 8, "transport_id": 11,
+        "phase": "ready", "bpm": 60.0, "running": false, "paused": false,
+        "clock_sampled_at_ms": 999000.0, "visual_scroll_speed": 0.0}
+    epoch_clock.accept(idle_epoch, base_ms - 1000, base_ms - 1000)
+    var epoch_gap := {"revision": 8, "transport_id": 12,
+        "phase": "feedback", "bpm": 60.0, "running": false,
+        "paused": false, "auto": true, "preview_only": false,
+        "visual_scroll_beat": 7.0, "visual_scroll_speed": 1.0,
+        "visual_target_beat": 8.0, "visual_offset_beats": 0.0,
+        "play_from_beat": 0.0, "clock_beat": 4.0,
+        "clock_sampled_at_ms": 1000000.0, "visual_run_at_ms": 993000.0}
+    epoch_clock.accept(epoch_gap, base_ms, base_ms)
+    check(absf(epoch_clock.visual_beat(base_ms + 1000) - 8.0) < .000001,
+        "Absolute MIDI epoch puts the next measure at the rest deadline")
+    epoch_gap["clock_sampled_at_ms"] = 1000400.0
+    epoch_gap["visual_scroll_beat"] = 7.4
+    # Simulated queued response arrived 300ms after the state was sampled.
+    epoch_clock.accept(epoch_gap, base_ms + 400, base_ms + 700)
+    check(absf(epoch_clock.visual_beat(base_ms + 700) - 7.7) < .000001,
+        "Queued state must not re-anchor automatic rest motion")
+    check(absf(epoch_clock.visual_beat(base_ms + 1220) - 8.22) < .000001,
+        "Visual time moves beyond the downbeat without Python acknowledgement")
+    var epoch_play := {"revision": 8, "transport_id": 13,
+        "phase": "playing", "bpm": 60.0, "running": true,
+        "paused": false, "visual_offset_beats": 8.0,
+        "play_from_beat": 0.0, "clock_beat": 0.22,
+        "clock_sampled_at_ms": 1001220.0, "visual_run_at_ms": 1001000.0}
+    epoch_clock.accept(epoch_play, base_ms + 1220, base_ms + 1220)
+    check(absf(epoch_clock.visual_beat(base_ms + 1220) - 8.22) < .000001,
+        "Next measure uses identical epoch and graphical position")
+    check(absf(epoch_clock.score_beat(base_ms + 1236) - .236) < .000001,
+        "MIDI beat and graphical beat remain one mapping after the rest")
+    # A rest written within a measure does not affect the transport state.
+    var inside = load("res://visual_transport_clock.gd").new()
+    var internal := {"revision": 40, "transport_id": 42,
+        "phase": "playing", "bpm": 60.0, "running": true,
+        "paused": false, "play_from_beat": 0.0,
+        "visual_offset_beats": 0.0, "clock_beat": 0.0,
+        "visual_run_at_ms": 1000000.0,
+        "clock_sampled_at_ms": 1000000.0}
+    inside.accept(internal, base_ms, base_ms)
+    for quarter in range(1, 41):
+        var at: int = base_ms + quarter * 250
+        # Written events: note measure 1, whole rest, note measure 3.
+        # The renderer does not provide the clock with note/rest events.
+        check(absf(inside.visual_beat(at) - quarter * .25) < .000001,
+            "Internal rest/bar boundary changed visual velocity at %d" % quarter)
+        check(absf(inside.score_beat(at) - quarter * .25) < .000001,
+            "Internal rest/bar boundary diverged from grading time at %d" % quarter)
+
     print("VISUAL_TRANSPORT_CLOCK_FAILURES:", failure_count)
     quit(0 if failure_count == 0 else 1)
