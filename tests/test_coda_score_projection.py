@@ -769,3 +769,41 @@ def test_coda_rest_tuplet_rejects_generated_wrong_rest_voice(tmp_path):
         verify_projected_tuplets(
             groups,ET.tostring(root,encoding="unicode"),
             built.note_bindings,boundaries=piece.bar_boundaries)
+
+
+@pytest.mark.parametrize("actual,normal,quantization",[(5,4,20),(7,4,70)])
+def test_coda_quintuplet_septuplet_interior_source_rest_keeps_clock_and_voice(
+        actual,normal,quantization,tmp_path):
+    from piano_teacher.research.coda_source_tuplets import source_tuplet_groups
+
+    source=(Path(__file__).parent/"fixtures/research"/
+            f"coda_group_{actual}_{normal}_interior_rest.musicxml")
+    piece=load_musicxml(source,bpm=80)
+    variant=ExerciseVariant("original",Phrase(1,1,1,0,4,piece.notes),
+                             tuple(range(len(piece.notes))))
+    plan=CodaReferenceDotted(True).transform(
+        variant,boundaries=piece.bar_boundaries,
+        quantization=quantization,source_musicxml=piece.source_musicxml)
+    group,=source_tuplet_groups(piece,plan.timing,factor=1)
+    assert (group.actual,group.normal)==(actual,normal)
+    assert len(group.rests)==1
+    assert group.rests[0].onset==pytest.approx(normal/(2*actual))
+    assert group.rests[0].end==pytest.approx(normal/actual)
+    assert plan.changed_sources
+    stage=project_coda_score(
+        piece,plan.timing,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/f"rest-ratio-{actual}"))
+    written=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    authored=[n for n in written.findall(".//note")
+              if n.find("rest") is not None and
+              n.findtext("time-modification/actual-notes")==str(actual)]
+    assert len(authored)==1
+    assert authored[0].findtext("time-modification/normal-notes")==str(normal)
+    model=artifacts.source_model(stage.selection)
+    assert len(model["notes"])==len(piece.notes)
+    assert set(n["id"] for n in model["notes"])=={
+        note.source_id for note in piece.notes}
+    played=[PlayedNote(n.pitch,stage.tempo_map.seconds_at(n.start),
+                       stage.tempo_map.seconds_at(n.end))
+            for n in stage.variant.notes]
+    assert stage.grade(played).assessment.clean
