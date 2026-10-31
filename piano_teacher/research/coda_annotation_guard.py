@@ -30,9 +30,17 @@ class SourceNoteMarks:
 
 
 @dataclass(frozen=True)
+class SourceBarTie:
+    source_id: str
+    boundary: float
+    sounding_end: float
+
+
+@dataclass(frozen=True)
 class AnnotationObligations:
     notes: tuple[SourceNoteMarks, ...]
     dynamics: tuple[str, ...]
+    ties: tuple[SourceBarTie, ...]
 
 
 def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
@@ -51,6 +59,7 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
 
     marks = []
     dynamics = []
+    has_source_ties = False
     for pi, part in enumerate(source.findall("{*}part")):
         for mi, measure in enumerate(part.findall("{*}measure")):
             saw_note = False
@@ -74,6 +83,14 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
                     continue
                 saw_note = True
                 source_id=f"xml-p{pi}-m{mi}-e{ordinal}"
+                declared=child.findall("{*}tie")
+                declared+=child.findall("{*}notations/{*}tied")
+                if declared:
+                    has_source_ties=True
+                    if factor!=1 or any(
+                            set(m.attrib)!={"type"} or m.get("type") not in
+                            ("start","stop") or len(m) for m in declared):
+                        raise ValueError("Coda only supports plain, unretimed source-bar ties")
                 slurs=[]
                 articulations=[]
                 for group in child.findall("{*}notations"):
@@ -83,6 +100,11 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
                                     or set(mark.attrib)-{"number","type","placement"}):
                                 raise ValueError("Unsupported source slur markup")
                             slurs.append(tuple(sorted(mark.attrib.items())))
+                        elif _tag(mark)=="tied":
+                            # Sounding tie chains are verified as one
+                            # original source attack below, not as separate
+                            # re-attack source-note identities.
+                            continue
                         elif _tag(mark)=="articulations":
                             if not len(mark) or any(
                                     _tag(m) not in ("staccato","tenuto","accent")
@@ -103,25 +125,52 @@ def source_annotation_obligations(piece: Piece, timing: TimingPlan, *,
                     raise ValueError("Coda annotations cannot follow a retimed source attack")
                 marks.append(SourceNoteMarks(source_id,tuple(slurs),
                             tuple(articulations),beams,stem))
-    if any(mark.slurs for mark in marks):
+    ties=[]
+    if has_source_ties or any(mark.slurs for mark in marks):
         matrix = MatrixScore.from_phrase(
             timing.original.phrase,boundaries=piece.bar_boundaries,
             source_musicxml=piece.source_musicxml)
-        links = [link for link in matrix.source_connectors() if link.kind=="slur"]
-        if not links or any(link.issue is not None or
-                            link.start_source_id not in index or
-                            link.stop_source_id not in index for link in links):
-            raise ValueError("Unpaired or unsupported source slur cannot be preserved")
-        if any(not unchanged(sid)
-               for sid in matrix.connector_protected_source_ids()):
-            raise ValueError("Coda cannot retime a note inside an authored slur")
-    return AnnotationObligations(tuple(marks),tuple(dynamics))
+        links = matrix.source_connectors()
+        slurs = [link for link in links if link.kind=="slur"]
+        if any(mark.slurs for mark in marks):
+            if not slurs or any(link.issue is not None or
+                                link.start_source_id not in index or
+                                link.stop_source_id not in index for link in slurs):
+                raise ValueError("Unpaired or unsupported source slur cannot be preserved")
+            if any(not unchanged(sid)
+                   for sid in matrix.connector_protected_source_ids()
+                   if sid in index):
+                raise ValueError("Coda cannot retime a note inside an authored slur")
+        if has_source_ties:
+            arcs=[link for link in links if link.kind=="tie"]
+            source_by_id={item.source_id:item for item in matrix.notation_elements}
+            if not arcs or any(link.issue is not None for link in arcs):
+                raise ValueError("Coda cannot preserve incomplete source ties")
+            seen=set()
+            for arc in arcs:
+                start=source_by_id.get(arc.start_source_id)
+                stop=source_by_id.get(arc.stop_source_id)
+                expected=index.get(arc.start_source_id)
+                boundary=arc.stop_beat
+                if (start is None or stop is None or expected is None
+                        or stop.end is None or boundary is None
+                        or arc.start_source_id in seen
+                        or arc.stop_source_id in index
+                        or not any(abs(boundary-b)<1e-7
+                                   for b in piece.bar_boundaries[1:-1])
+                        or abs(start.onset-expected[0])>1e-7
+                        or abs(stop.end-expected[1])>1e-7
+                        or not unchanged(arc.start_source_id)):
+                    raise ValueError("Coda only supports complete unchanged ties at source barlines")
+                seen.add(arc.start_source_id)
+                ties.append(SourceBarTie(arc.start_source_id,boundary,stop.end))
+    return AnnotationObligations(tuple(marks),tuple(dynamics),tuple(ties))
 
 
 def verify_annotation_projection(obligations: AnnotationObligations,
                                  musicxml: str, bindings: dict) -> None:
     """Compare the *actual* compiler output with every source annotation."""
-    if not obligations.notes and not obligations.dynamics:
+    if not obligations.notes and not obligations.dynamics and not obligations.ties:
         return
     generated=ET.fromstring(musicxml)
     targets={}
@@ -147,6 +196,25 @@ def verify_annotation_projection(obligations: AnnotationObligations,
                 or Counter(actual_beams)!=Counter(required.beams)
                 or dest.findtext("{*}stem")!=required.stem):
             raise ValueError(f"Coda changed authored annotation at {required.source_id}")
+    for tie in obligations.ties:
+        starts=[]
+        stops=[]
+        for note in generated.findall(".//note[@id]"):
+            info=bindings.get(note.get("id"))
+            if not info or info["source_id"]!=tie.source_id:
+                continue
+            at=float(info["display_beat"])
+            length=int(note.findtext("{*}duration","0"))/10080
+            if abs(at+length-tie.boundary)<1e-7:
+                if (note.find("{*}tie[@type='start']") is not None and
+                        note.find("{*}notations/{*}tied[@type='start']") is not None):
+                    starts.append(note)
+            if abs(at-tie.boundary)<1e-7:
+                if (note.find("{*}tie[@type='stop']") is not None and
+                        note.find("{*}notations/{*}tied[@type='stop']") is not None):
+                    stops.append(note)
+        if len(starts)!=1 or len(stops)!=1:
+            raise ValueError("Coda lost the original sounding tie at its barline")
     # Replacing a complete source beam group must never leave a dangling
     # auto-generated begin/end on an adjacent changed or omitted note.
     # Every rendered voice's primary beam sequence must be internally

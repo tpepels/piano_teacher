@@ -32,7 +32,7 @@ _ALLOWED_MEASURE = frozenset({
 })
 _ALLOWED_NOTE = frozenset({
     "pitch", "rest", "duration", "voice", "type", "dot", "staff", "chord",
-    "accidental", "stem", "notations", "beam",
+    "accidental", "stem", "notations", "beam", "tie",
 })
 _ALLOWED_ATTRIBUTES = frozenset({
     "divisions", "key", "time", "clef", "staves",
@@ -68,8 +68,6 @@ def _safe_xml(source: str, *, slowdown: bool) -> ET.Element:
                             raise ValueError("Unsupported original staff attribute")
                 elif tag == "note":
                     seen_note = True
-                    if item.find("{*}tie") is not None:
-                        raise ValueError("Coda source ties need a separate continuation proof")
                     if item.find("{*}grace") is not None or (
                             set(map(_tag,item)) - _ALLOWED_NOTE):
                         raise ValueError("Coda projection cannot remap expressive/tuplet/tied notes")
