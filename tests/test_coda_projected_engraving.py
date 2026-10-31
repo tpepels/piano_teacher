@@ -128,7 +128,8 @@ def test_actual_coda_wav_live_input_and_missed_note_use_svg_clock(tmp_path):
 
     played=[PlayedNote(n.pitch,stage.tempo_map.seconds_at(n.start),
                        stage.tempo_map.seconds_at(n.end))
-            for n in stage.variant.notes if n.source_id!=target.source_id]
+            for n in stage.variant.notes
+            if n.hand=="right" and n.source_id!=target.source_id]
     marks=timed_live_marks(
         stage.variant.phrase,"right",stage.tempo_map,played,
         from_beat=0,elapsed_seconds=stage.tempo_map.duration_seconds,
