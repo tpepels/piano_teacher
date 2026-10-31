@@ -65,7 +65,7 @@ func _visual_from_epoch(at_ms: int) -> float:
     return visual_epoch_offset_beats + TempoTimeline.beat_at_seconds(
         elapsed, visual_epoch_bpm, visual_epoch_segments)
 
-func _accept_retry(state: Dictionary, sampled_ms: int) -> void:
+func _accept_retry(state: Dictionary) -> void:
     var phase := str(state.get("phase", ""))
     var ident := int(state.get("transport_id", -1))
     var rev := int(state.get("revision", -1))
@@ -87,19 +87,21 @@ func _accept_retry(state: Dictionary, sampled_ms: int) -> void:
     var measure: Variant = preparation.get("measure")
     if not measure is Dictionary:
         return
-    var remaining := float(state.get("transition_in_seconds", 0.0))
-    if remaining <= 0.0:
+    var schedule: Variant = state.get("visual_preparation_schedule")
+    if not schedule is Dictionary or not has_backend_offset:
         return
     retry_revision = rev
     retry_transport = ident
     retry_playing_transport = -1
-    retry_start_ms = float(sampled_ms)
-    retry_deadline_ms = retry_start_ms + remaining * 1000.0
+    # Reversal, preparation, and the next MIDI deadline are authored by
+    # Python's monotonic transport. Translate the epochs once; never derive
+    # them from a delayed "transition_in_seconds" snapshot.
+    retry_start_ms = float(schedule["reverse_at_ms"]) + backend_offset_ms
+    retry_preparation_ms = float(schedule["prepare_at_ms"]) + backend_offset_ms
+    retry_deadline_ms = float(schedule["deadline_at_ms"]) + backend_offset_ms
     retry_bpm = maxf(1.0, float(state.get("bpm", 60.0)))
-    retry_start_beat = float(measure.get("start_beat", 0.0))
-    var destination: float = float(measure.get("end_beat", 0.0))
-    retry_preparation_ms = retry_deadline_ms - (destination-retry_start_beat)*60000.0/retry_bpm
-    retry_from_beat = float(state.get("visual_scroll_beat", 0.0))
+    retry_start_beat = float(schedule["to_beat"])
+    retry_from_beat = float(schedule["from_beat"])
     var rewind_duration: float = retry_preparation_ms - retry_start_ms
     retry_velocity = ((retry_start_beat-retry_from_beat)*1000.0/rewind_duration
         if rewind_duration > 1.0 else 0.0)
@@ -180,7 +182,6 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
         and (bool(state.get("auto", false)) or bool(state.get("preview_only", false)))
         and float(state.get("visual_scroll_speed", 0.0)) > 0.0)
     idle_visual_sample_ms = measured_ms
-    _accept_retry(state, measured_ms)
     var next_bpm: float = maxf(1.0, float(state.get("bpm", 60.0)))
     var next_active: bool = bool(state.get("running", false)) and not bool(state.get("paused", false))
     var next_id: int = int(state.get("transport_id", 0))
@@ -200,6 +201,7 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
             best_round_trip_ms = round_trip
             has_backend_offset = true
         captured_ms = mini(roundi(backend_ms + backend_offset_ms), received_ms)
+    _accept_retry(state)
     # Active playback and automatic silence use one mandatory source-plus-
     # rest segment list. No nominal-BPM interpolation switch at the boundary.
     visual_epoch_enabled = (state.has("visual_run_at_ms") and
