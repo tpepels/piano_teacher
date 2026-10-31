@@ -120,6 +120,9 @@ func set_density(value: float) -> bool:
     if not super.set_density(value):
         return false
     configured_density = value
+    if native_ready:
+        # Source-space X changed; prepared beams and tie spans must follow.
+        _prepare_static_geometry()
     return true
 
 func set_density_from_env() -> bool:
