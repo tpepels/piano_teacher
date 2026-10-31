@@ -235,3 +235,50 @@ def test_real_parallel_voice_source_ties_have_independent_verovio_connector_ink(
                 if "tie" in node.get("class","").split()]
     assert len(tie_groups)>=2
     (tmp_path/"parallel-voices.svg").write_text(score.pages[0])
+
+
+def test_real_authored_triplet_group_engraves_on_unmodified_source_attacks(tmp_path):
+    """Real 3:2 eighth group plus independently dotted left hand."""
+    source=Path(__file__).parent/"fixtures/research/coda_authored_triplet.musicxml"
+    piece=load_musicxml(source,bpm=80)
+    original=ExerciseVariant(
+        "original",Phrase(1,1,1,0,4,piece.notes),
+        tuple(range(len(piece.notes))))
+    plan=CodaReferenceDotted(True).transform(
+        original,boundaries=piece.bar_boundaries,quantization=12,
+        source_musicxml=piece.source_musicxml).timing
+    stage=project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"real-triplets"))
+    xml=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    assert len(xml.findall(".//notations/tuplet[@type='start']"))==1
+    assert len(xml.findall(".//notations/tuplet[@type='stop']"))==1
+    score=artifacts.engraving(stage.selection)
+    assert set(score.layout["attack_map"])=={n.source_id for n in original.notes}
+    classes={token for svg in score.pages for elem in ET.fromstring(svg).iter()
+             for token in elem.get("class","").split()}
+    assert "tuplet" in classes
+    for i,svg in enumerate(score.pages):
+        (tmp_path/f"real-triplet-{i}.svg").write_text(svg)
+
+
+@pytest.mark.parametrize("factor", [2,4])
+def test_real_mixed_meter_coda_written_slowdown_svg(factor,tmp_path):
+    source=Path(__file__).parent/"fixtures/research/coda_mixed_meter.musicxml"
+    piece=load_musicxml(source,bpm=80)
+    original=ExerciseVariant(
+        "original",Phrase(1,1,2,0,5,piece.notes),
+        tuple(range(len(piece.notes))))
+    plan=CodaReferenceSlowdown(factor).transform(original).timing
+    stage=project_coda_score(piece,plan,reference_family="tempo-shaping",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/f"mixed-{factor}"))
+    model=artifacts.source_model(stage.selection)
+    assert [m["meter"] for m in model["measures"]]==(
+        [[3,4]]*factor + [[2,4]]*factor)
+    score=artifacts.engraving(stage.selection)
+    assert score.pages
+    assert set(score.layout["attack_map"])=={n.source_id for n in original.notes}
+    assert score.layout["beats"]==factor*5
+    for i,svg in enumerate(score.pages):
+        root=ET.fromstring(svg)
+        assert root.tag.endswith("svg")
+        (tmp_path/f"mixed-meter-x{factor}-{i}.svg").write_text(svg)
