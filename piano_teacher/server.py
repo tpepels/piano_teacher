@@ -42,7 +42,7 @@ from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.strategy_session import restored_strategy_plan
 from .application.lesson_snapshot import build_lesson_snapshot
 from .application.control_dispatch import ControlDispatcher
-from .application.practice_transitions import run_before_assessment
+from .application.attempt_progression import AttemptProgression
 from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
 from .midi_calibration import MidiTapCalibration
@@ -94,6 +94,7 @@ class PracticeEngine:
         self.recorder: Recorder | None = None
         self.visual_transport = VisualTransport(
             _visual_rewind_seconds=SETTINGS.feedback_seconds)
+        self.attempt_progression = AttemptProgression()
         self.open_from_beat = 0.0  # Explicit opening measure; never an inferred clock
         self.next_boundary_beat = 0.0
         self.feedback_seconds = SETTINGS.feedback_seconds
@@ -1022,7 +1023,8 @@ class PracticeEngine:
             self.feedback_marks=[]
             self.feedback_unmapped=0
             self.recorder=Recorder()
-            grid=phrase_grid(phrase,self.plan.piece.bar_boundaries)
+            grid=self.attempt_progression.grid_for(
+                phrase,self.plan.piece.bar_boundaries)
             active_bar = max(0, min(len(grid)-2,
                 next((i for i in range(len(grid)-1) if grid[i] <= self.play_from_beat < grid[i+1]), len(grid)-2)))
             self.count_in_bar_beats = grid[active_bar + 1] - grid[active_bar]
@@ -1526,52 +1528,11 @@ class PracticeEngine:
             if now >= self.next_at:
                 self._update()
 
-    def _update(self):
+    def _update(self) -> None:
+        """Advance a single backend-owned clock tick under the session lock."""
         self._poll_midi_connection()
         self._apply_listen_failure()
-        now=time.monotonic()
-        if run_before_assessment(self, now):
-            return
-        phrase=self.plan.active_phrase
-        total_beats=phrase.end-phrase.start
-        elapsed_beats=max(0.0,self._elapsed_beat(now-self.run_at))
-        score_beat=self.play_from_beat+elapsed_beats
-        grid=phrase_grid(phrase,self.plan.piece.bar_boundaries)
-        beats_per_bar=grid[1]-grid[0]
-        # Coda practice must not jump backwards halfway through a passage.
-        # Inspect its rolling errors only when the complete source finishes;
-        # manual Learn remains available for any passage.
-        while (self.mode == "practice" and self.review_end_beat is None and not self.preview_only
-               and (self.plan.exercise_strategy.name != "coda-part"
-                    or score_beat >= total_beats - 1e-7)
-               and self.next_boundary_beat and score_beat >= self.next_boundary_beat):
-            tempo_map = self._active_tempo_map()
-            decision = self.assessment_policies.select(tempo_map).recover(
-                phrase, hand=self.plan.hand, bpm=self.plan.bpm,
-                played=self.recorder.presses if self.recorder else [],
-                from_beat=self.play_from_beat, end_beat=self.next_boundary_beat,
-                grid=grid,
-                threshold=(SETTINGS.warmup_recovery_errors if self.is_builtin_warmup
-                           else SETTINGS.recovery_errors_in_window),
-                warmup=self.is_builtin_warmup, tempo=tempo_map)
-            if decision is not None:
-                self._apply_rolling_recovery(decision, phrase, grid, score_beat, now)
-                return
-            previous_boundary=self.next_boundary_beat
-            self.next_boundary_beat=next_chunk_end(grid,previous_boundary)
-            if self.next_boundary_beat <= previous_boundary + 1e-7:
-                self.next_boundary_beat=0.0
-        ending = (min(total_beats, self.review_end_beat)
-                  if self.review_end_beat is not None else total_beats)
-        duration=self._elapsed_seconds(ending)-self._elapsed_seconds(self.play_from_beat)
-        # Settlement belongs inside the musical rest, including very short
-        # explicit meters. It must never extend the next attempt's deadline.
-        settlement = .20
-        if self.preview_only or (self.auto and self.review_end_beat is None):
-            settlement = min(settlement, self.visual_gap_beats*60/self.plan.bpm)
-        if now < self.run_at+duration+settlement:
-            return
-        self._complete_attempt(phrase, ending, total_beats, duration, now)
+        self.attempt_progression.advance(self, time.monotonic())
 
     def _phase(self, now: float) -> str:
         teaching_phase = None
