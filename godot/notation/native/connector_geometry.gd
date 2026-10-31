@@ -10,6 +10,20 @@ func _init(score_layout) -> void:
 func clear_cache() -> void:
     flag_clearances.clear()
 
+# Flag/tie intersection uses CPU pixel scans and texture.get_image().
+# Every tie has a camera-invariant head-to-head distance, so calculate its
+# clearance once when the score is installed, before playback can start.
+# Painting a later measure may only look up the existing result.
+func prewarm_tie_clearances(gap: float) -> void:
+    for pair in score.tie_pairs:
+        var first: Dictionary = pair["first"]
+        var last: Dictionary = pair["last"]
+        var first_x: float = score.timeline.x_at_beat(float(first.get("beat", 0.0)))
+        var last_x: float = score.timeline.x_at_beat(float(last.get("beat", 0.0)))
+        var placement: Dictionary = tie_placement(first, last, first_x, last_x, gap)
+        if not placement.is_empty():
+            tie_contour_rect(first, last, placement, gap)
+
 func tie_placement(first: Dictionary, last: Dictionary,
         x0: float, x1: float, gap: float) -> Dictionary:
     var left: float = x0+float(score.cached_head_offsets.get(
