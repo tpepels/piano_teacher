@@ -103,6 +103,8 @@ var retained_first_once: Node2D
 var retained_first_loop: Node2D
 var retained_repeat_segments: Array = []
 var retained_rest_segments: Array = []
+var retained_recovery_sources: Dictionary = {}
+var retained_recovery_rests: Dictionary = {}
 var retained_annotations: Node2D
 const RETAINED_POOL_SIZE := 5
 
@@ -326,11 +328,18 @@ func _clear_retained_segments() -> void:
     retained_annotations = null
     retained_repeat_segments.clear()
     retained_rest_segments.clear()
+    for segment in retained_recovery_sources.values()+retained_recovery_rests.values():
+        if segment != null and is_instance_valid(segment):
+            remove_child(segment)
+            segment.queue_free()
+    retained_recovery_sources.clear()
+    retained_recovery_rests.clear()
 
-func _new_retained_segment(kind: String, variant: String) -> Node2D:
+func _new_retained_segment(kind: String, variant: String,
+        context: Dictionary = {}) -> Node2D:
     var segment: Node2D = RetainedSegment.new()
     add_child(segment)
-    segment.configure(self,kind,variant)
+    segment.configure(self,kind,variant,context)
     return segment
 
 func _install_retained_segments() -> void:
@@ -360,6 +369,10 @@ func _hide_retained_segments() -> void:
         segment.visible = not segment.compiled
         if not segment.compiled:
             segment.position = Vector2(-1000000.0,0.0)
+    for segment in retained_recovery_sources.values()+retained_recovery_rests.values():
+        segment.visible = not segment.compiled
+        if not segment.compiled:
+            segment.position = Vector2(-1000000.0,0.0)
 
 func _invalidate_retained_segments() -> void:
     # Structural changes invalidate cached ink. Unused pool entries recompile
@@ -371,14 +384,18 @@ func _invalidate_retained_segments() -> void:
     for segment in retained_repeat_segments + retained_rest_segments:
         segment.compiled = false
         segment.queue_redraw()
+    for segment in retained_recovery_sources.values()+retained_recovery_rests.values():
+        segment.compiled = false
+        segment.queue_redraw()
     _hide_retained_segments()
 
-func paint_retained_source(canvas: CanvasItem, variant: String) -> RenderPass:
+func paint_retained_source(canvas: CanvasItem, variant: String,
+        context: Dictionary = {}) -> RenderPass:
     var gap: float = staff_gap()
     var stride: float = float(practice_timeline.get("stride_beats",0.0))
     var repeated: bool = variant == "repeat"
-    var pass_index: int = 1 if repeated else 0
-    var pass_start: float = stride if repeated else 0.0
+    var pass_index: int = int(context.get("pass_index",1 if repeated else 0))
+    var pass_start: float = float(context.get("pass_start",stride if repeated else 0.0))
     var width: float = maxf(size.x,
         (timeline.duration_beats+1.0)*timeline.pixels_per_beat+size.x)
     # camera_clock cancels play_from_beat so every source note uses
@@ -386,20 +403,21 @@ func paint_retained_source(canvas: CanvasItem, variant: String) -> RenderPass:
     return _paint_source_pass(-play_from_beat,0.0,gap,
         pass_index,pass_start,canvas,width,variant)
 
-func paint_retained_rest(canvas: CanvasItem) -> void:
+func paint_retained_rest(canvas: CanvasItem, context: Dictionary = {}) -> void:
     if practice_timeline.is_empty() or timeline.measures.is_empty():
         return
     var gap: float = staff_gap()
-    var silence: Dictionary = practice_timeline["gap"].duplicate(true)
+    var silence: Dictionary = (context["measure"].duplicate(true)
+        if context.has("measure") else practice_timeline["gap"].duplicate(true))
     silence["left_barline"] = timeline.measures[-1].get("right_barline",{})
     var incoming: Variant = timeline.measures[0].get("left_barline")
     if incoming is Dictionary:
         silence["right_barline"] = incoming
     var frame: RenderPass = _new_paint_frame(0.0,0.0,gap,0,0.0)
     frame.visual_scroll_beat = float(silence["start_beat"])
-    var previous: Dictionary = timeline.measures[-1]
+    var previous: Dictionary = context.get("previous",timeline.measures[-1])
     context_painter.paint_preparation_measure(canvas,frame,
-        silence,previous,gap,0.0,false)
+        silence,previous,gap,0.0,previous.is_empty())
 
 func paint_retained_annotations(canvas: CanvasItem) -> void:
     if not native_ready:
@@ -482,11 +500,15 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
     var target: CanvasItem = canvas if canvas != null else self
     var frame: RenderPass = _new_paint_frame(camera_clock,playhead_x,gap,pass_index,pass_start)
     if not retained_variant.is_empty():
-        # Source-space compilation is independent of today's scroll, copies,
-        # preparations, and frontend state polling.
+        # A recovery variant captures the changed source visibility once;
+        # ordinary copies retain the same command buffer across attempts.
         frame.score_loop_enabled = retained_variant != "once"
-        frame.preparation_history = {}
-        frame.current_preparation = {}
+        if retained_variant == "recovery":
+            frame.preparation_history = preparation_history.duplicate(true)
+            frame.current_preparation = frame.preparation_history.get(pass_start,{})
+        else:
+            frame.preparation_history = {}
+            frame.current_preparation = {}
         layout.set_viewport(Vector2(retained_width,size.y))
     var current_preparation: Dictionary = frame.current_preparation
     var font: Font = ThemeDB.fallback_font
