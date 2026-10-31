@@ -1,0 +1,61 @@
+name: Embedded Python bridge (bounded build)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'native/**'
+      - 'scripts/build-inprocess.sh'
+      - 'scripts/install-inprocess-artifact.py'
+      - 'run-inprocess.sh'
+      - '.github/workflows/inprocess-native-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: embedded-bridge-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build GDExtension (Linux x86_64 / CPython 3.14)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: pip
+      - name: Install compile tools in CI only
+        run: python -m pip install 'scons>=4.7,<5'
+      - name: Compile native extension
+        env:
+          PIANO_PYTHON: python
+        run: bash scripts/build-inprocess.sh
+      - name: Check compiled artifact and CPython ABI
+        shell: bash
+        run: |
+          test -s godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
+          test -f godot/native/piano_bridge.gdextension
+          test "$(cat godot/native/python-abi.txt)" = "$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+          ldd godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
+          ! ldd godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so | grep 'not found'
+      - name: Archive precompiled plugin (no local SCons required)
+        shell: bash
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          mkdir -p staging/godot/native/bin
+          cp godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so staging/godot/native/bin/
+          cp godot/native/piano_bridge.gdextension staging/godot/native/
+          cp godot/native/python-abi.txt staging/godot/native/
+          printf '%s\n' "$REVISION" > staging/godot/native/source-revision.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: piano-native-linux-x86_64-py314
+          path: staging/
+          if-no-files-found: error
+          retention-days: 14

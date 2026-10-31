@@ -12,6 +12,7 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_practice_warning_policy.py \
   tests/test_live_input_index.py \
   tests/test_inprocess_dispatcher.py \
+  tests/test_inprocess_artifact_install.py \
   tests/test_inprocess_transport_structure.py \
   tests/test_godot_preload_paths.py \
   tests/test_midi_polyphonic_stems.py \

@@ -42,9 +42,24 @@ GDExtension passes a real Godot startup and keyboard test. The native
 path is **experimental**, invoked by `./run-inprocess.sh` after
 building the extension. It is *not yet a precompiled standalone release*.
 
-Developer workflow on a compatible Linux build machine:
+Developer/testing workflow **without SCons or a local C++ compiler**:
+
+1. Open **GitHub → Actions → Embedded Python bridge (bounded build)** for the
+   checkout revision and download its `piano-native-linux-x86_64-py314` ZIP.
+2. Run `python3 scripts/install-inprocess-artifact.py ~/Downloads/ARTIFACT.zip`.
+   It refuses mismatched revisions or CPython ABIs without changing files.
+3. Run `./run-inprocess.sh`.
+
+The workflow compiles the extension with Python 3.14 and publishes only
+the native extension and its manifest. Your development environment
+still supplies the matching Python packages and installed Godot. This is
+**not yet a self-contained end-user release**.
+
+For contributors who deliberately want a **local** build, SCons and a
+compiler are developer-only dependencies:
 
 ```bash
+.venv/bin/python -m pip install scons
 bash scripts/build-inprocess.sh
 ./run-inprocess.sh
 ```
