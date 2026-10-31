@@ -147,6 +147,44 @@ def verify_annotation_projection(obligations: AnnotationObligations,
                 or Counter(actual_beams)!=Counter(required.beams)
                 or dest.findtext("{*}stem")!=required.stem):
             raise ValueError(f"Coda changed authored annotation at {required.source_id}")
+    # Replacing a complete source beam group must never leave a dangling
+    # auto-generated begin/end on an adjacent changed or omitted note.
+    # Every rendered voice's primary beam sequence must be internally
+    # balanced within the original measure.
+    for part in generated.findall("{*}part"):
+        for measure in part.findall("{*}measure"):
+            by_voice = {}
+            for note in measure.findall("{*}note"):
+                if note.find("{*}rest") is not None or (
+                        note.find("{*}chord") is not None):
+                    continue
+                voice=note.findtext("{*}voice","1")
+                by_voice.setdefault(voice,[]).append(note)
+            for notes in by_voice.values():
+                opened=False
+                for note in notes:
+                    beams=[mark for mark in note.findall("{*}beam")
+                           if mark.get("number","1")=="1"]
+                    if len(beams)>1:
+                        raise ValueError("Coda output duplicates primary beams")
+                    kind=(beams[0].text or "").strip() if beams else None
+                    if kind=="begin":
+                        if opened:
+                            raise ValueError("Coda beam group was split without an end")
+                        opened=True
+                    elif kind=="continue":
+                        if not opened:
+                            raise ValueError("Coda beam group lost its beginning")
+                    elif kind=="end":
+                        if not opened:
+                            raise ValueError("Coda beam group lost its beginning")
+                        opened=False
+                    elif kind is not None:
+                        raise ValueError("Unsupported Coda output beam mark")
+                    elif opened:
+                        raise ValueError("Coda beam group has an unmarked middle")
+                if opened:
+                    raise ValueError("Coda beam group has no ending")
     actual_dynamics=tuple(_tag(m) for m in
         generated.findall(".//direction/direction-type/dynamics/*"))
     if Counter(actual_dynamics)!=Counter(obligations.dynamics):

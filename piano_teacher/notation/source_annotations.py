@@ -240,13 +240,19 @@ def project_annotations(source_musicxml: str, lesson_xml: str,
                 break
         if not valid:
             continue
-        if retimed_source and any(dest.findall("beam")
-                                  for dest, _source, _sid in translated):
-            # Auto-beaming already owns this transformed measure. Do not
-            # splice a potentially different source group into its middle.
-            continue
+        # A complete, source-identity- and duration-verified authored beam
+        # group wins over generated rhythmic grouping. Automatic beaming
+        # can group identical eighth notes differently (for example eight
+        # notes as 2+2+2+2 rather than the author's 4+4). Retain the actual
+        # authored policy when EVERY member and duration still agrees.
+        # Incomplete or retimed groups are excluded above and keep their
+        # generated beam policy. The Coda research projection additionally
+        # validates beam continuity and exact source-group ownership.
         for dest, original, _sid in translated:
-            if dest.findall("beam"):
+            if retimed_source:
+                for auto_mark in list(dest.findall("beam")):
+                    dest.remove(auto_mark)
+            elif dest.findall("beam"):
                 raise ValueError("Conflicting source beam marks in generated score")
             for original_mark in original.findall("beam"):
                 dest.append(deepcopy(original_mark))
