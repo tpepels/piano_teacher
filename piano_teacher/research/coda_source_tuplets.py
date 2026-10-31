@@ -108,19 +108,26 @@ def source_tuplet_groups(piece: Piece, timing: TimingPlan, *,
                         or members[0].source_id!=start.source_id
                         or members[-1].source_id!=item.source_id):
                     raise ValueError("Coda source tuplet has an incomplete numbered group")
-                if (any(member.source_id not in ratio_notes or member.is_rest
+                if (any(member.source_id not in ratio_notes
                         or ratios.get(member.source_id)!=start_ratio
                         for member in members) or
                         any(abs(left.end-right.onset)>1e-7
                         for left,right in zip(members,members[1:]))):
                     raise ValueError("Coda source tuplet must be a complete contiguous ratio group")
+                rest_members=[(i,m) for i,m in enumerate(members) if m.is_rest]
+                if len(rest_members)>1 or any(
+                        i in (0,len(members)-1) for i,_ in rest_members):
+                    raise ValueError("Coda only supports one interior tuplet rest")
                 ids=tuple(member.source_id for member in members)
                 if involved.intersection(ids):
                     raise ValueError("Coda source tuplets share ambiguous notes")
                 involved.update(ids)
                 groups.append(CodaTupletGroup(
                     ids,start_ratio[0],start_ratio[1],
-                    number,start_attrs,tuple(sorted(attrs.items()))))
+                    number,start_attrs,tuple(sorted(attrs.items())),
+                    tuple(CodaTupletRest(
+                        item.source_id,item.onset,item.end,item.measure)
+                        for _,item in rest_members)))
     if opened or ratio_notes != involved:
         raise ValueError("Coda source tuplet is incomplete or has unowned ratio notes")
     return tuple(groups)
