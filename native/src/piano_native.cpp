@@ -6,6 +6,8 @@
 #include <godot_cpp/core/binder_common.hpp>
 #include <godot_cpp/godot.hpp>
 #include <cstring>
+#include <chrono>
+#include <algorithm>
 #include <cstdlib>
 #include <dlfcn.h>
 #include <utility>
@@ -123,19 +125,39 @@ void PianoNative::initialize_python() {
 
 void PianoNative::worker_loop() {
     initialize_python();
+    // Command responses and musical deadlines share this one worker.
+    // A stopped UI or slow /state polling must never be the engine's timer.
+    // Waiting releases the queue mutex and the CPython GIL.
+    using Clock = std::chrono::steady_clock;
+    auto next_tick = Clock::now();
     while (!stopping_) {
         Command next;
+        bool has_command = false;
         {
             std::unique_lock<std::mutex> guard(mutex_);
-            available_.wait(guard, [this] {return stopping_ || !pending_.empty();});
+            available_.wait_until(guard, next_tick, [this] {
+                return stopping_ || !pending_.empty();
+            });
             if (stopping_) break;
-            next = std::move(pending_.front());
-            pending_.pop_front();
+            if (!pending_.empty()) {
+                next = std::move(pending_.front());
+                pending_.pop_front();
+                has_command = true;
+            }
         }
-        Reply output = execute(next);
-        {
-            std::lock_guard<std::mutex> guard(mutex_);
-            completed_.push_back(std::move(output));
+        if (has_command) {
+            Reply output = execute(next);
+            {
+                std::lock_guard<std::mutex> guard(mutex_);
+                completed_.push_back(std::move(output));
+            }
+        }
+        // Always check after handling a command: sustained state polls may
+        // not starve the native transport tick.
+        if (Clock::now() >= next_tick) {
+            const int interval_ms = tick_engine();
+            next_tick = Clock::now() +
+                std::chrono::milliseconds(std::clamp(interval_ms, 10, 500));
         }
     }
     if (engine_) {
@@ -148,6 +170,27 @@ void PianoNative::worker_loop() {
         engine_ = nullptr;
         PyGILState_Release(gil);
     }
+}
+
+int PianoNative::tick_engine() {
+    if (!engine_) return 250;
+    PyGILState_STATE gil = PyGILState_Ensure();
+    PyObject *response = PyObject_CallMethod(
+        static_cast<PyObject *>(engine_), "tick", nullptr);
+    int next_ms = 100;
+    if (response && PyLong_Check(response)) {
+        const long requested = PyLong_AsLong(response);
+        if (!PyErr_Occurred())
+            next_ms = static_cast<int>(std::clamp(requested, 10L, 500L));
+    }
+    if (PyErr_Occurred()) {
+        // A failed background tick must be visible: silently losing
+        // automatic transitions would make the score appear to freeze.
+        PyErr_Print();
+    }
+    Py_XDECREF(response);
+    PyGILState_Release(gil);
+    return next_ms;
 }
 
 PianoNative::Reply PianoNative::execute(const Command &command) {
