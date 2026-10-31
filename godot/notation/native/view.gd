@@ -139,8 +139,9 @@ func set_density(value: float) -> bool:
         return false
     configured_density = value
     if native_ready:
-        # Source-space X changed; both geometry and CanvasItem ink are stale.
+        # Horizontal density changes how many source copies fit onscreen.
         _prepare_static_geometry()
+        _resize_retained_pool()
         _invalidate_retained_segments()
     return true
 
