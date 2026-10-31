@@ -92,12 +92,12 @@ func rebuild_index() -> void:
     ordered_events = index["ordered_events"]
     attached_grace_notes = timeline.model.get("grace_notes", []).duplicate(true)
     source_expressions = timeline.model.get("expressions", []).duplicate(true)
-    prepared_hairpins = SourceSpans.hairpins(source_expressions,self)
-    prepared_voltas = SourceSpans.voltas(timeline.measures,timeline.duration_beats)
     expression_note_index.clear()
     for source_event in ordered_events:
         if str(source_event.get("kind", "")) == "note":
             expression_note_index[str(source_event.get("id", ""))] = source_event
+    prepared_hairpins = SourceSpans.hairpins(source_expressions,self)
+    prepared_voltas = SourceSpans.voltas(timeline.measures,timeline.duration_beats)
     chord_members = index["chord_members"]
     sorted_chord_members.clear()
     for leader_id in chord_members:
