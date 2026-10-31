@@ -1,7 +1,7 @@
 """Strict source-owned tuplets for the Coda experimental notation projection.
 
-For now, only one complete 3:2 eighth triplet occupying one quarter
-in the same source measure/voice is supported. The exact original attack,
+Complete source-owned 3:2, 5:4 or 7:4 eighth-note groups in one
+source measure/voice are supported when their timing remains unchanged. The exact original attack,
 duration, source XML markers and generated group must all agree. Complex,
 nested, rest-bearing or time-shifted groups deliberately fail closed.
 """
@@ -21,7 +21,9 @@ def _name(element: ET.Element) -> str:
 
 @dataclass(frozen=True)
 class CodaTupletGroup:
-    source_ids: tuple[str, str, str]
+    source_ids: tuple[str, ...]
+    actual: int
+    normal: int
     number: str
     start_attrs: tuple[tuple[str, str], ...]
     stop_attrs: tuple[tuple[str, str], ...]
@@ -35,7 +37,6 @@ def source_tuplet_groups(piece: Piece, timing: TimingPlan, *,
     original = timing.original.phrase
     xml = source_elements(piece.source_musicxml,first_bar=original.first_bar,
                           last_bar=original.last_bar,boundaries=piece.bar_boundaries)
-    note_by_id = {item.source_id:item for item in xml if item.kind=="note"}
     source = {note.source_id:note for note in timing.original.notes}
     exercise = {note.source_id:note for note in timing.exercise_phrase.notes}
     if len(source)!=len(timing.original.notes) or set(source)!=set(exercise):
@@ -44,6 +45,7 @@ def source_tuplet_groups(piece: Piece, timing: TimingPlan, *,
     opened = {}
     involved = set()
     ratio_notes = set()
+    ratios = {}
     for item in xml:
         if item.kind!="note":
             continue
@@ -56,12 +58,15 @@ def source_tuplet_groups(piece: Piece, timing: TimingPlan, *,
                         (source[item.source_id].start,exercise[item.source_id].start),
                         (source[item.source_id].end,exercise[item.source_id].end)))):
                 raise ValueError("Coda cannot remap a source tuplet's timed event")
-            if (ratio is None or ratio.findtext("{*}actual-notes")!="3"
-                    or ratio.findtext("{*}normal-notes")!="2"
+            actual=int(ratio.findtext("{*}actual-notes","0")) if ratio is not None else 0
+            normal=int(ratio.findtext("{*}normal-notes","0")) if ratio is not None else 0
+            if ((actual,normal) not in ((3,2),(5,4),(7,4))
                     or note.findtext("{*}type")!="eighth"
-                    or item.end is None or abs(item.end-item.onset-1/3)>1e-7):
-                raise ValueError("Coda currently requires unmodified 3:2 eighth tuplets")
+                    or item.end is None
+                    or abs(item.end-item.onset-(normal/(2*actual)))>1e-7):
+                raise ValueError("Coda currently requires unmodified 3:2, 5:4 or 7:4 eighth tuplets")
             ratio_notes.add(item.source_id)
+            ratios[item.source_id]=(actual,normal)
         for mark in marks:
             attrs=mark.attrib
             kind=attrs.get("type")
@@ -87,20 +92,25 @@ def source_tuplet_groups(piece: Piece, timing: TimingPlan, *,
                     candidate.measure==item.measure and
                     candidate.voice_id==item.voice_id and
                     start.onset-1e-7<=candidate.onset<=item.onset+1e-7]
-                if (len(members)!=3 or members[0].source_id!=start.source_id
+                start_ratio=ratios.get(start.source_id)
+                if (start_ratio is None
+                        or len(members)!=start_ratio[0]
+                        or members[0].source_id!=start.source_id
                         or members[-1].source_id!=item.source_id):
-                    raise ValueError("Coda source tuplet must have three explicit notes")
+                    raise ValueError("Coda source tuplet has an incomplete numbered group")
                 if (any(member.source_id not in ratio_notes or member.is_rest
+                        or ratios.get(member.source_id)!=start_ratio
                         for member in members) or
                         any(abs(left.end-right.onset)>1e-7
                         for left,right in zip(members,members[1:]))):
-                    raise ValueError("Coda source tuplet must be a complete contiguous 3:2 group")
+                    raise ValueError("Coda source tuplet must be a complete contiguous ratio group")
                 ids=tuple(member.source_id for member in members)
                 if involved.intersection(ids):
                     raise ValueError("Coda source tuplets share ambiguous notes")
                 involved.update(ids)
                 groups.append(CodaTupletGroup(
-                    ids,number,start_attrs,tuple(sorted(attrs.items()))))
+                    ids,start_ratio[0],start_ratio[1],
+                    number,start_attrs,tuple(sorted(attrs.items()))))
     if opened or ratio_notes != involved:
         raise ValueError("Coda source tuplet is incomplete or has unowned ratio notes")
     return tuple(groups)
@@ -108,7 +118,7 @@ def source_tuplet_groups(piece: Piece, timing: TimingPlan, *,
 
 def verify_projected_tuplets(groups: tuple[CodaTupletGroup, ...],
                              xml: str, bindings: dict) -> None:
-    """Check generated ratio, eighth glyph type and the actual bracket endpoints."""
+    """Check generated ratio, eighth glyph type and authored bracket endpoints."""
     if not groups:
         return
     generated=ET.fromstring(xml)
@@ -125,13 +135,14 @@ def verify_projected_tuplets(groups: tuple[CodaTupletGroup, ...],
             if note is None:
                 raise ValueError("Coda tuplet lost a source notehead")
             ratio=note.find("{*}time-modification")
-            if (ratio is None or ratio.findtext("{*}actual-notes")!="3"
-                    or ratio.findtext("{*}normal-notes")!="2"
-                    or note.findtext("{*}type")!="eighth"):
-                raise ValueError("Coda changed an authored 3:2 tuplet ratio")
+            if (ratio is None or
+                    ratio.findtext("{*}actual-notes")!=str(group.actual) or
+                    ratio.findtext("{*}normal-notes")!=str(group.normal) or
+                    note.findtext("{*}type")!="eighth"):
+                raise ValueError("Coda changed an authored tuplet ratio")
             marks=note.findall("{*}notations/{*}tuplet")
             expected = (group.start_attrs if index==0
-                        else group.stop_attrs if index==2 else None)
+                        else group.stop_attrs if index==len(group.source_ids)-1 else None)
             if expected is None:
                 if marks:
                     raise ValueError("Coda added an unowned middle tuplet mark")
