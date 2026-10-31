@@ -32,6 +32,7 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_coda_reference_matrix.py \
   tests/test_coda_reference_exercises.py \
   tests/test_coda_score_projection.py \
+  tests/test_coda_written_tie_segments.py \
   tests/test_coda_research_strategies.py \
   tests/test_shared_tempo_timeline.py \
   tests/test_live_input_view.py \
