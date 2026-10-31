@@ -254,7 +254,8 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
         verify_annotation_projection(obligations,preview.musicxml,
                                      preview.note_bindings)
         verify_projected_tuplets(tuplet_groups,preview.musicxml,
-                                 preview.note_bindings)
+                                 preview.note_bindings,
+                                 boundaries=projected_piece.bar_boundaries)
         verify_written_tie_projection(written_ties,preview)
     variant=ExerciseVariant(
         timing.name,new_phrase,timing.original.source_indices)
