@@ -348,20 +348,30 @@ func _install_retained_segments() -> void:
     _hide_retained_segments()
 
 func _hide_retained_segments() -> void:
+    # Newly installed segments compile their draw-command buffers offscreen
+    # before their first appearance in a scrolling measure. Once compiled,
+    # normal visibility culling no longer causes source reconstruction.
     for segment in [retained_first_once,retained_first_loop]:
         if segment != null:
-            segment.visible = false
+            segment.visible = not segment.compiled
+            if not segment.compiled:
+                segment.position = Vector2(-1000000.0,0.0)
     for segment in retained_repeat_segments + retained_rest_segments:
-        segment.visible = false
+        segment.visible = not segment.compiled
+        if not segment.compiled:
+            segment.position = Vector2(-1000000.0,0.0)
 
 func _invalidate_retained_segments() -> void:
-    # Score density, viewport height and the selected hand affect ink, not
-    # playback time. Rebuild only on these genuine structural changes.
+    # Structural changes invalidate cached ink. Unused pool entries recompile
+    # offscreen now rather than when a later measure comes into view.
     for segment in [retained_first_once,retained_first_loop]:
         if segment != null:
+            segment.compiled = false
             segment.queue_redraw()
     for segment in retained_repeat_segments + retained_rest_segments:
+        segment.compiled = false
         segment.queue_redraw()
+    _hide_retained_segments()
 
 func paint_retained_source(canvas: CanvasItem, variant: String) -> RenderPass:
     var gap: float = staff_gap()
@@ -616,7 +626,8 @@ func _source_overlaps_preparation(pass_start: float) -> bool:
     var interval := {"start_beat":pass_start,
         "end_beat":pass_start+timeline.duration_beats}
     for item in preparation_history.values():
-        if SourceVisibility.intervals_overlap(interval,item["measure"]):
+        if absf(float(item.get("pass_start_beat",-INF))-pass_start)<.00001 or \
+                SourceVisibility.intervals_overlap(interval,item["measure"]):
             return true
     return false
 
