@@ -65,7 +65,10 @@ func synchronize(state: Dictionary, visual_beat: float = NAN) -> void:
     if not loaded and not downloading and not audio_error and not str(demo.get("url", "")).is_empty():
         request.download_file = audio_path
         downloading = true
-        var error: int = request.request("http://127.0.0.1:8765" + str(demo.get("url", "")))
+        var location: String = str(demo.get("url", ""))
+        if inprocess_bus == null:
+            location = "http://127.0.0.1:8765" + location
+        var error: int = request.request(location)
         if error != OK:
             failed.emit("Cannot prepare Listen audio. Try Listen again.")
         return

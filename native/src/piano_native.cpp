@@ -43,7 +43,11 @@ void PianoNative::_bind_methods() {
                          &PianoNative::live_events_json);
 }
 
-PianoNative::PianoNative() : worker_([this] { worker_loop(); }) {}
+PianoNative::PianoNative() {
+    // Initialize all atomics, mutexes and storage before the thread may
+    // access them. A member-initializer thread start is a data race here.
+    worker_ = std::thread([this] { worker_loop(); });
+}
 
 PianoNative::~PianoNative() {
     stopping_ = true;

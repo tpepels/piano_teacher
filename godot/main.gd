@@ -149,7 +149,7 @@ var demo_player: Node
 var ui_scale := 1.0
 var last_seen_midi_visual_sequence := 0
 var state_poll_timer: Timer
-var live_udp := PacketPeerUDP.new()
+var live_udp
 var live_udp_port := 0
 var live_subscribe_request
 var live_subscribed := false
@@ -200,11 +200,13 @@ func _ready() -> void:
         get_window().size_changed.connect(_update_responsive_layout)
     _update_responsive_layout()
     if not use_inprocess:
+        live_udp = PacketPeerUDP.new()
         if live_udp.bind(0, "127.0.0.1") == OK:
             live_udp_port = live_udp.get_local_port()
         else:
             push_warning("MIDI live datagrams unavailable; using HTTP events")
-    live_subscribe_request = _new_request(_on_live_subscribe)
+    if not use_inprocess:
+        live_subscribe_request = _new_request(_on_live_subscribe)
     state_request = _new_request(_on_state)
     score_http.attach(self, score_session, URL, inprocess_bus)
     layout_request = score_http.layout_request
