@@ -14,6 +14,9 @@ from piano_teacher.application.listen_session import ListenSession
 from piano_teacher.application.score_artifacts import ScoreArtifacts
 from piano_teacher.demo import DemoAudio
 from piano_teacher.exercise_generator import ExerciseVariant
+from piano_teacher.exercise_contracts import OriginalTiming
+from piano_teacher.application.score_artifacts import ScoreArtifacts
+from piano_teacher.preprocessing_cache import PreprocessingCache
 from piano_teacher.importing.musicxml import load_musicxml
 from piano_teacher.music import Phrase
 from piano_teacher.practice import PlayedNote
@@ -139,7 +142,7 @@ def test_coda_score_rejects_unsupported_annotations_without_silent_omission():
         source_musicxml=original.source_musicxml)
     decorated=original.source_musicxml.replace(
         "<type>quarter</type>","<type>quarter</type><notations><articulations><staccato/></articulations></notations>",1)
-    with pytest.raises(ValueError,match="expressive/tuplet/tied"):
+    with pytest.raises(ValueError,match="annotations cannot follow a retimed source attack"):
         project_coda_score(replace(original,source_musicxml=decorated),
                            result.timing,reference_family="dotted-rhythms",bpm=80)
     augmented=original.source_musicxml.replace(
@@ -161,3 +164,112 @@ def test_coda_score_rejects_wrong_source_grid_and_mastery_overwrites():
     with pytest.raises(ValueError,match="original source MusicXML"):
         project_coda_score(no_source,result.timing,
                            reference_family="tempo-shaping",bpm=80)
+
+
+def annotated_original(tmp_path, *, slur=True, dynamics=False, beam=False):
+    root=ET.fromstring(SOURCE.read_text())
+    right=root.findall("part")[0]
+    bar=right.findall("measure")[0]
+    notes=[n for n in bar.findall("note") if n.find("pitch") is not None]
+    if slur:
+        start=ET.SubElement(notes[0],"notations")
+        ET.SubElement(start,"slur",type="start",number="1")
+        art=ET.SubElement(start,"articulations")
+        ET.SubElement(art,"staccato")
+        stop=ET.SubElement(notes[3],"notations")
+        ET.SubElement(stop,"slur",type="stop",number="1")
+    if dynamics:
+        later=right.findall("measure")[1]
+        direction=ET.Element("direction",placement="below")
+        group=ET.SubElement(direction,"direction-type")
+        dyn=ET.SubElement(group,"dynamics")
+        ET.SubElement(dyn,"p")
+        later.insert(1,direction)
+    if beam:
+        for idx,note in enumerate(notes):
+            # Unchanged authored eighth-note beam levels are verified
+            # separately on the existing real-score beam fixture.
+            ET.SubElement(note,"stem").text="up"
+    source=tmp_path/"annotated-original.musicxml"
+    source.write_text(ET.tostring(root,encoding="unicode"))
+    piece=load_musicxml(source,bpm=80)
+    variant=ExerciseVariant("original",Phrase(1,1,2,0,8,piece.notes),
+                             tuple(range(len(piece.notes))))
+    return piece,variant
+
+
+def test_coda_preserves_unmodified_source_slur_and_articulation_while_other_voice_changes(tmp_path):
+    piece,variant=annotated_original(tmp_path)
+    result=CodaReferenceDotted(True).transform(
+        variant,boundaries=piece.bar_boundaries,quantization=4,
+        source_musicxml=piece.source_musicxml)
+    # Source slur protects all four RH attacks of measure 1.
+    protected={n.source_id for n in variant.notes
+               if n.hand=="right" and n.start < 4}
+    assert not protected.intersection(result.changed_sources)
+    assert result.changed_sources
+    stage=project_coda_score(piece,result.timing,
+                             reference_family="dotted-rhythms",bpm=80)
+    art=ScoreArtifacts(PreprocessingCache(tmp_path/"score"))
+    xml=ET.fromstring(art.notation_musicxml(stage.selection))
+    starts=xml.findall(".//notations/slur[@type='start']")
+    stops=xml.findall(".//notations/slur[@type='stop']")
+    staccati=xml.findall(".//notations/articulations/staccato")
+    assert len(starts)==len(stops)==len(staccati)==1
+    model=art.source_model(stage.selection)
+    assert len(model["notes"])==16
+    assert any(n.start!=o.start or n.end!=o.end
+               for n,o in zip(stage.variant.notes,variant.notes))
+    assert any("slur" in str(item) for item in [ET.tostring(root) for root in starts])
+
+
+def test_coda_preserves_source_dynamic_at_unchanged_measure_boundary(tmp_path):
+    piece,variant=annotated_original(tmp_path,slur=False,dynamics=True)
+    plan=CodaReferenceDotted(False).transform(
+        variant,boundaries=piece.bar_boundaries,quantization=4,
+        source_musicxml=piece.source_musicxml).timing
+    stage=project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
+    art=ScoreArtifacts(PreprocessingCache(tmp_path/"score"))
+    root=ET.fromstring(art.notation_musicxml(stage.selection))
+    assert len(root.findall(".//direction/direction-type/dynamics/p"))==1
+    assert len(art.source_model(stage.selection)["notes"])==16
+
+
+def test_coda_rejects_retimed_note_inside_an_authored_source_slur(tmp_path):
+    piece,variant=annotated_original(tmp_path)
+    # Deliberately use an unguarded plan from the same original source,
+    # which would otherwise drop a slur's correct physical placement.
+    from piano_teacher.exercise_contracts import TimingPlan
+    original=OriginalTiming().transform(variant)
+    mutable=list(original.events)
+    idx=next(i for i,n in enumerate(variant.notes)
+             if n.hand=="right" and n.start==1)
+    mutable[idx]=replace(mutable[idx],exercise_start=1.25,exercise_end=2)
+    broken=TimingPlan("unsafe-mark-change",variant,tuple(mutable),8)
+    with pytest.raises(ValueError,match="note inside an authored slur"):
+        project_coda_score(piece,broken,reference_family="dotted-rhythms",bpm=80)
+
+
+def test_coda_rejects_unpaired_source_slur_instead_of_silent_omission(tmp_path):
+    piece,variant=annotated_original(tmp_path)
+    root=ET.fromstring(piece.source_musicxml)
+    stop=root.find(".//slur[@type='stop']")
+    assert stop is not None
+    for parent in root.iter():
+        if stop in parent:
+            parent.remove(stop)
+            break
+    changed=replace(piece,source_musicxml=ET.tostring(root,encoding="unicode"))
+    plan=OriginalTiming().transform(variant)
+    with pytest.raises(ValueError,match="Unpaired or unsupported source slur"):
+        project_coda_score(changed,plan,reference_family="dotted-rhythms",bpm=80)
+
+
+def test_coda_real_score_source_tie_stays_fail_closed():
+    path=Path(__file__).parent/"fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml"
+    piece=load_musicxml(path,bpm=80)
+    variant=ExerciseVariant("original",Phrase(1,1,len(piece.bar_boundaries)-1,
+            0,piece.bar_boundaries[-1],piece.notes),tuple(range(len(piece.notes))))
+    plan=OriginalTiming().transform(variant)
+    with pytest.raises(ValueError,match="source ties need a separate continuation proof"):
+        project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
