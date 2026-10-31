@@ -27,6 +27,13 @@ def test_native_worker_queue_contains_no_network_api():
         assert token in cpp
     assert not any(token in cpp for token in (
         "socket(", "sendto(", "recvfrom(", "HTTPClient", "listen("))
+    # Musical time advances on the one native worker even when Godot does
+    # not request /state. No additional timer, service, or Python thread.
+    assert "available_.wait_until" in cpp
+    assert "tick_engine()" in cpp
+    assert '"tick"' in cpp
+    assert "std::chrono::steady_clock" in cpp
+    assert "def tick(self)" in (ROOT/"piano_teacher/inprocess.py").read_text()
 
 
 def test_only_one_godot_command_adapter_and_score_queue():
