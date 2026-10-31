@@ -19,13 +19,15 @@ incomplete. For `coda-part` timed practice, automatic recovery waits for the
 end of the current passage and repeats at a lower tempo, without switching
 into untimed Learn or requiring an unexpected piano keypress. Use Learn
 explicitly when desired. The native score gives consecutive fast notes at
-least 36 screen pixels between attack times (when the MIDI has sustained fast
+least 52 screen pixels between attack times (when the MIDI has sustained fast
 rhythm), preserving the shared linear score clock and real glyph shapes.
 
 **Bluetooth/MIDI input calibration:** Settings → MIDI input → Calibrate
 MIDI timing now shows an explicit **four-beat count-in** before each of
-**three consecutive eight-tap rounds**. A large countdown, round number,
-tap progress and per-round results accompany the clicks. The calibrated
+**three consecutive eight-tap rounds**. A large countdown, a breathing/collapsing circle synchronized to every
+metronome click, round number, tap progress and per-round results
+accompany the clicks. The display distinguishes **Measured delay** from
+**Saved correction**: a reliable estimate is not applied until **Apply offset**. The calibrated
 offset is the median of three independently measured round medians, not
 one arbitrary response. Each round requires six or more taps with median
 absolute timing deviation at most 45 ms, the three medians must agree
@@ -34,6 +36,19 @@ measurements are **not** applied. Press Apply offset to save an accepted
 estimate; Reset offset restores zero. This tap-along measurement includes
 human response and sound output delay; it cannot isolate Bluetooth input
 latency. Incoming MIDI timestamps alone are corrected.
+
+**MIDI-only polyphonic notation:** Independently held notes (for example
+a quarter-note C beneath four simultaneous/sequential sixteenths) now
+retain their separate duration values **and explicit opposing voice
+stems** in the generated MusicXML supplied to Verovio. The lower voice
+uses down stems and the upper voice up stems; beams remain per voice.
+A notehead that shares the first attack must not visually become a
+sixteenth-note chord member. This does not fabricate original authored
+voice assignments from MIDI; it preserves the input MIDI overlap and
+uses pitch register to select readable voice stems. Dense short-note
+passages receive increased uniform horizontal density, including
+clearance near both sides of barlines, without retiming the music.
+The fixed score playhead also breathes on each metrical beat.
 
 **Practice warning policy:** Exact onsets are green. Slightly early/late
 or over/underheld attacks remain amber with detailed feedback. **A

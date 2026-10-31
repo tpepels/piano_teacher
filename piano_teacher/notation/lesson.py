@@ -124,7 +124,7 @@ def _tuplet_type(duration: int):
 def _append_note(measure: ET.Element, pitch: int | None, duration: int,
                  voice: int, *, chord=False, begin_tie=False, end_tie=False,
                  spelling=None, identifier: str | None = None,
-                 hidden_rest: bool = False) -> None:
+                 hidden_rest: bool = False, stem: str | None = None) -> None:
     el = ET.SubElement(measure, "note")
     if pitch is None and hidden_rest:
         # Keep each synthetic voice's exact duration/cursor but omit its
@@ -163,6 +163,8 @@ def _append_note(measure: ET.Element, pitch: int | None, duration: int,
         modification = ET.SubElement(el, "time-modification")
         ET.SubElement(modification, "actual-notes").text = str(ratio.denominator)
         ET.SubElement(modification, "normal-notes").text = str(ratio.numerator)
+    if pitch is not None and stem in ('up', 'down'):
+        ET.SubElement(el, 'stem').text = stem
     if pitch is not None and (begin_tie or end_tie):
         if begin_tie:
             ET.SubElement(el, "tie", type="stop")
@@ -185,7 +187,8 @@ def _append_note(measure: ET.Element, pitch: int | None, duration: int,
 
 def _append_event(measure: ET.Element, tones: list, duration: int,
                   voice: int, *, begin_tie=False, end_tie=False, display_start=0,
-                  bindings=None, counts=None, hidden_rest=False) -> None:
+                  bindings=None, counts=None, hidden_rest=False,
+                  stem: str | None = None) -> None:
     # Authored rest spelling is not derivable from length: a full-measure
     # rest in 3/4 uses a whole-rest glyph, rather than a dotted half rest.
     # Keep its complete written representation when the event is uncut.
@@ -229,13 +232,54 @@ def _append_event(measure: ET.Element, tones: list, duration: int,
                          end_tie=end_tie or index < len(parts)-1,
                          spelling=tone.get('spelling') if tone else None,
                          identifier=identifier,
-                         hidden_rest=hidden_rest or bool(tone and tone.get('hidden_rest')))
+                         hidden_rest=hidden_rest or bool(tone and tone.get('hidden_rest')),
+                         stem=stem)
         position += length
+
+
+def _midi_voice_stems(lanes: list[list[tuple]]) -> dict[int, str]:
+    """Explicit opposite stems for independently held MIDI voices.
+
+    Standard polyphonic engraving places upper voices up and lower voices
+    down. MIDI may encode a sustained lower note and rapid upper notes
+    on the *same* track/voice; they still need independent shafts/flags.
+    The incoming note durations are never changed.
+    """
+    events = [(start, end, index, tone['pitch'])
+              for index, lane in enumerate(lanes)
+              for start, end, tones in lane
+              for tone in tones if tone is not None and tone.get('pitch') is not None]
+    if len(events) < 2:
+        return {}
+    events.sort()
+    active: list[tuple[int, int]] = []
+    overlapping = set()
+    for start, end, lane, _ in events:
+        active = [(until, owner) for until, owner in active if until > start]
+        for until, owner in active:
+            if owner != lane:
+                overlapping.update((owner, lane))
+        active.append((end, lane))
+    if len(overlapping) < 2:
+        return {}
+    pitches = {
+        lane: sorted(tone['pitch'] for _, _, tones in lanes[lane]
+                     for tone in tones if tone is not None and tone.get('pitch') is not None)
+        for lane in overlapping
+    }
+    # Use each lane's middle register (not accidental first-event order).
+    # An upper short-note beam should stay up; a sustained low note down.
+    upper_first = sorted(overlapping,
+                         key=lambda i: (-pitches[i][len(pitches[i])//2], i))
+    split = (len(upper_first)+1)//2
+    return {lane: 'up' if rank < split else 'down'
+            for rank, lane in enumerate(upper_first)}
 
 
 def _render_measure(measure: ET.Element, lanes: list[list[tuple]], length: int,
                     bar_start: int, bindings: dict, counts: dict,
-                    hide_performance_micro_rests: bool = False) -> None:
+                    hide_performance_micro_rests: bool = False,
+                    midi_stems: dict[int, str] | None = None) -> None:
     for lane_idx, events in enumerate(lanes or [[]]):
         if lane_idx:
             backup = ET.SubElement(measure, "backup")
@@ -257,7 +301,8 @@ def _render_measure(measure: ET.Element, lanes: list[list[tuple]], length: int,
                               hidden_rest=lane_idx > 0 or micro_gap)
             _append_event(measure, tones, end-start, lane_idx+1,
                           begin_tie=first, end_tie=last, display_start=bar_start+start,
-                          bindings=bindings, counts=counts)
+                          bindings=bindings, counts=counts,
+                          stem=(midi_stems or {}).get(lane_idx))
             position = end
         if position < length:
             _append_event(measure, [None], length-position, lane_idx+1,
@@ -763,6 +808,7 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
                     attack_key = next((key for key in reversed(keys) if key.beat <= tone['note'].start+1e-7),None)
                     tone['spelling'] = _spelling(tone['note'],attack_key.fifths if attack_key else 0)
         _project_authored_rests(source_musicxml, phrase, lanes, hand)
+        midi_stems = _midi_voice_stems(lanes) if not source_musicxml else None
         for change in (*keys,*clefs):
             if phrase.start < change.beat < phrase.end and not any(abs(change.beat-phrase.start-beat)<1e-7 for beat in grid):
                 raise ValueError('Mid-measure source key/clef changes are not supported in generated lessons')
@@ -815,7 +861,8 @@ def build_lesson_score(phrase: Phrase, *, boundaries: tuple[float, ...] = (),
             append_barline(measure,source_beat,"left")
             _render_measure(measure,lanes,bar_end-bar_start,bar_start,bindings,
                             counts,
-                            hide_performance_micro_rests=not bool(source_musicxml))
+                            hide_performance_micro_rests=not bool(source_musicxml),
+                            midi_stems=midi_stems)
             _write_accidentals(measure,active_key.fifths if active_key else 0)
             _write_tuplet_groups(measure)
             if not source_musicxml or retimed_source:

@@ -476,6 +476,20 @@ func _draw() -> void:
         draw_line(Vector2(playhead_x,layout.staff_center("right")-gap*3.8),
             Vector2(playhead_x,layout.staff_center("left")+gap*3.7),
             PREVIEW_LIGHT,2.0,true)
+        # Beat breathing is an accent on the fixed playhead, not a moving
+        # alternate clock. Music, retry preparation and calibration each
+        # retain the application's single beat axis.
+        var rhythmic: bool = (running and not paused) or (
+            score_loop_enabled and not practice_preparation.is_empty() and not paused)
+        if rhythmic:
+            var beat_axis := visual_scroll_beat if score_loop_enabled else clock_beat
+            var fraction := fposmod(beat_axis, 1.0)
+            var impulse := pow(1.0-fraction, 2.4)
+            var center := Vector2(playhead_x, top + gap*.22)
+            draw_circle(center, 5.0 + 10.0*impulse,
+                Color(PREVIEW_LIGHT, .15+.12*impulse))
+            draw_arc(center, 7.0 + 10.0*impulse, 0.0, TAU, 40,
+                Color(PREVIEW_LIGHT, .40+.50*impulse), 2.4, true)
     # The count-in runs on the same clock, but its leading boundary is
     # intentionally NOT a printed barline: it sits before the clef/header
     # and used to look like an orphaned vertical rule in the score.

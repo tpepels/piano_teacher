@@ -11,6 +11,7 @@ find scripts -type f -name '*.sh' -print0 | xargs -0 -r bash -n
 timeout 25s "$PYTHON" -m pytest -q \
   tests/test_practice_warning_policy.py \
   tests/test_live_input_index.py \
+  tests/test_midi_polyphonic_stems.py \
   tests/test_midi_visual_fast_path.py \
   tests/test_midi_calibration.py \
   tests/test_forgiving_midi_practice.py \

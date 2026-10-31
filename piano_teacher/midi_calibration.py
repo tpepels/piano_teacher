@@ -78,7 +78,10 @@ class MidiTapCalibration:
             centers = [round_info["median_ms"] for round_info in rounds]
             result_ms = median(centers)
             if max(centers) - min(centers) > self.max_round_spread * 1000:
-                failure = "Three rounds disagree; repeat calibration"
+                failure = (f"Three rounds disagree: their medians span "
+                           f"{max(centers)-min(centers)} ms (limit "
+                           f"{round(self.max_round_spread*1000)} ms); "
+                           f"repeat calibration")
             elif not 0 <= result_ms <= self.max_credible_delay * 1000:
                 failure = "Delay estimate is outside the safe 0–200 ms range"
         self.result = {

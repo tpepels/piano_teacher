@@ -331,6 +331,9 @@ func _update_count_in() -> void:
         var beat := float(calibration.get("beat", -2.0)) + \
             maxf(0.0, float(now_ms-last_state_tick)/1000.0) * \
             float(calibration.get("bpm", 80.0))/60.0
+        settings_view.animate_calibration_beat(
+            beat, true, int(calibration.get("round_beats", 12)),
+            int(calibration.get("count_in", 4)))
         var interval := maxi(1, int(calibration.get("round_beats", 12)))
         var total := interval * maxi(1, int(calibration.get("rounds", 3)))
         if beat >= 0.0 and beat < float(total):
@@ -345,6 +348,8 @@ func _update_count_in() -> void:
                         inside_round == int(calibration.get("count_in", 4)))
         return
     calibration_tick_index = -999
+    if settings_view.calibration_beat_pulse != null and settings_view.calibration_beat_pulse.visible:
+        settings_view.animate_calibration_beat(-1.0, false)
 
     if (str(last_state.get("phase", "")) in ["feedback", "recovering"]
             and retry_camera_clock.active

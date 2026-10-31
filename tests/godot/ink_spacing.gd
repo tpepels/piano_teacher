@@ -37,18 +37,18 @@ func _initialize() -> void:
     if absf(float(InkSpacing.minimum_density(same_onset,24.0,10.0)["density"])-24.0) > .0001:
         failures += 1
 
-    # Outgoing edge 20, boundary left -14, clearance 2, quarter-beat:
-    # .25 * P >= 20 + 14 + 2, so the one global density must be 144.
+    # More legible outgoing barline clearance for rapid MIDI rhythms.
+    # The stem/flag contour is left intact; spacing is global.
     var outgoing: Array = [{"staff":"right","beat":1.75,
         "ink":Rect2(-10,0,30,8),"event":{"id":"flag"}}]
     var boundaries: Array = [{"beat":2.0,"ink":Rect2(-14,0,1,20)}]
     var constrained: Dictionary = InkSpacing.minimum_density(outgoing,96.0,10.0,boundaries)
-    if absf(float(constrained["density"])-144.0) > .0001 or \
+    if absf(float(constrained["density"])-178.0) > .0001 or \
             constrained["witness"].get("reason") != "outgoing-barline-clearance":
         failures += 1
     var paired: Array = boundaries.duplicate(true)
     paired.append({"beat":2.0,"ink":Rect2(-18,0,2,20)})
-    if InkSpacing.minimum_density(outgoing,96.0,10.0,paired)["density"] != 160.0:
+    if InkSpacing.minimum_density(outgoing,96.0,10.0,paired)["density"] != 194.0:
         failures += 1
     # A sufficiently early note stays at the ordinary fixed scale.
     outgoing[0]["beat"] = 1.5
@@ -73,7 +73,7 @@ func _initialize() -> void:
     var sixteenths: Array = [
         {"onset_beats":0.0}, {"onset_beats":0.25},
         {"onset_beats":0.5}, {"onset_beats":0.75}]
-    if absf(InkSpacing.readable_density(sixteenths,96.0)-144.0) > .001:
+    if absf(InkSpacing.readable_density(sixteenths,96.0)-208.0) > .001:
         failures += 1
     var eighths: Array = [
         {"onset_beats":0.0}, {"onset_beats":0.5},
@@ -88,12 +88,19 @@ func _initialize() -> void:
     var thirty_seconds: Array = [
         {"onset_beats":0.0}, {"onset_beats":0.125},
         {"onset_beats":0.25}, {"onset_beats":0.375}]
-    if absf(InkSpacing.readable_density(thirty_seconds,96.0)-288.0) > .001:
+    if absf(InkSpacing.readable_density(thirty_seconds,96.0)-416.0) > .001:
         failures += 1
     # Chord heads on the same beat are still one onset.
     sixteenths.append({"onset_beats":0.5})
     if absf(InkSpacing.readable_density(sixteenths,96.0)-144.0) > .001:
         failures += 1
 
+    # The first attack after a barline also needs room for its actual ink.
+    var after_barline: Array = [{"staff":"right","beat":2.25,
+        "ink":Rect2(-36,0,20,8),"event":{"id":"next16th"}}]
+    var incoming := InkSpacing.minimum_density(after_barline,96.0,10.0,boundaries)
+    if absf(float(incoming["density"])-128.0) > .0001 or \
+            incoming["witness"].get("reason") != "incoming-barline-clearance":
+        failures += 1
     print("INK_SPACING_FAILURES:",failures)
     quit(0 if failures == 0 else 1)

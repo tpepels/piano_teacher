@@ -30,6 +30,7 @@ var device_button: Button
 var input_activity_label: Label
 var calibration_label: Label
 var calibration_count_label: Label
+var calibration_beat_pulse: Control
 var calibration_progress: ProgressBar
 var calibration_round_labels: Array[Label] = []
 var calibration_apply_button: Button
@@ -153,6 +154,8 @@ func _ready() -> void:
     calibration_count_label = _label("4 · 3 · 2 · 1 → PLAY", 28, INK, true)
     calibration_count_label.visible = false
     midi.add_child(calibration_count_label)
+    calibration_beat_pulse = preload("res://calibration_beat_pulse.gd").new()
+    midi.add_child(calibration_beat_pulse)
     calibration_progress = ProgressBar.new()
     calibration_progress.min_value = 0
     calibration_progress.max_value = 100
@@ -313,6 +316,12 @@ func _ready() -> void:
     device_menu.id_pressed.connect(_device_chosen)
     add_child(device_menu)
 
+func animate_calibration_beat(beat: float, active: bool,
+        round_beats: int = 12, preparation: int = 4) -> void:
+    if calibration_beat_pulse != null:
+        calibration_beat_pulse.present_beat(
+            beat, active, round_beats, preparation)
+
 func present_calibration(state: Dictionary, offset_ms: int) -> void:
     if calibration_label == null:
         return
@@ -338,16 +347,20 @@ func present_calibration(state: Dictionary, offset_ms: int) -> void:
         calibration_round_labels[i].text = title
         calibration_round_labels[i].add_theme_color_override("font_color",
             INK if active and i == current-1 else MUTED)
-    var status := "Applied timing correction: %d ms. " % offset_ms
+    var status := "Saved correction: %d ms. " % offset_ms
     if active:
         status += ("Tap with each accented PLAY beat. Three independent rounds; " +
             "each begins with four preparation clicks.")
     elif result is Dictionary:
         var measurement: Dictionary = result
         if bool(measurement.get("reliable", false)):
-            status += "Median of three rounds: %d ms; max variation: %d ms. Review before applying." % [
-                int(measurement.get("estimate_ms", 0)),
-                int(measurement.get("jitter_ms", 0))]
+            var estimate: int = int(measurement.get("estimate_ms", 0))
+            status += "Measured delay: %d ms (3-round median; max within-round variation %d ms)." % [
+                estimate, int(measurement.get("jitter_ms", 0))]
+            if estimate != offset_ms:
+                status += " Not yet applied: select Apply offset to use %d ms." % estimate
+            else:
+                status += " This estimate matches the saved correction."
         else:
             status += str(measurement.get("error", "Inconsistent timing; calibrate again."))
         for i in range(mini(calibration_round_labels.size(), measurement.get("rounds", []).size())):

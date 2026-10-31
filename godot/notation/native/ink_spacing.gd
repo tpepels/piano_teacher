@@ -28,7 +28,7 @@ static func readable_density(notes: Array, preferred: float) -> float:
         return preferred
     quick.sort()
     var interval: float = float(quick[maxi(1, quick.size()/4)])
-    return maxf(preferred, minf(320.0, 36.0/interval))
+    return maxf(preferred, minf(420.0, 52.0/interval))
 
 static func minimum_density(items: Array, preferred: float, gap: float,
         boundaries: Array = []) -> Dictionary:
@@ -95,7 +95,11 @@ static func minimum_density(items: Array, preferred: float, gap: float,
                                     current.position.y,current.size.x,current.size.y]
                             }
     var outgoing: Dictionary = outgoing_boundary_density(items,boundaries,density,gap)
-    return outgoing if float(outgoing["density"]) > density else {"density":density,"witness":witness}
+    if float(outgoing["density"]) > density:
+        density = float(outgoing["density"])
+        witness = outgoing["witness"]
+    var incoming: Dictionary = incoming_boundary_density(items,boundaries,density,gap)
+    return incoming if float(incoming["density"]) > density else {"density":density,"witness":witness}
 
 
 static func outgoing_boundary_density(items: Array, boundaries: Array,
@@ -133,7 +137,7 @@ static func outgoing_boundary_density(items: Array, boundaries: Array,
             for band in item.get("boundary_ink",[item["ink"]]):
                 if band.position.y >= stroke.end.y or band.end.y <= stroke.position.y:
                     continue
-                var required: float = (band.end.x-stroke.position.x+gap*.2)/distance
+                var required: float = (band.end.x-stroke.position.x+(gap*.45 + 6.0))/distance
                 if required > density:
                     density = required
                     witness = {"reason":"outgoing-barline-clearance","required_density":required,
@@ -141,4 +145,37 @@ static func outgoing_boundary_density(items: Array, boundaries: Array,
                         "previous_beat":float(item["beat"]),"boundary_beat":beat,
                         "beat_separation":distance,"glyph_right":band.end.x,
                         "stroke_left":stroke.position.x}
+    return {"density":density,"witness":witness}
+
+
+static func incoming_boundary_density(items: Array, boundaries: Array,
+        preferred: float, gap: float) -> Dictionary:
+    # A barline must also have readable clearance to its first following
+    # attack. Preserve the musical onset; alter only uniform px-per-beat.
+    var density := preferred
+    var witness: Dictionary = {}
+    var ordered: Array = items.duplicate()
+    ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+        return float(a["beat"]) < float(b["beat"]))
+    for boundary in boundaries:
+        var beat: float = float(boundary["beat"])
+        var stroke: Rect2 = boundary["ink"]
+        for item in ordered:
+            var distance: float = float(item["beat"])-beat
+            if distance <= 0.000001:
+                continue
+            if distance*density > gap*8.0:
+                break
+            for band in item.get("boundary_ink", [item["ink"]]):
+                if band.position.y >= stroke.end.y or band.end.y <= stroke.position.y:
+                    continue
+                var needed: float = (stroke.end.x-band.position.x+
+                    maxf(9.0, gap*.45)) / distance
+                if needed > density:
+                    density = needed
+                    witness = {"reason":"incoming-barline-clearance",
+                        "required_density":needed, "staff_gap":gap,
+                        "next_id":str(item.get("event", {}).get("id", "")),
+                        "boundary_beat":beat, "next_beat":float(item["beat"]),
+                        "beat_separation":distance}
     return {"density":density,"witness":witness}
