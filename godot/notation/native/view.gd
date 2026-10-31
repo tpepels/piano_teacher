@@ -791,12 +791,15 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
         _project_retained_source(segment,source_shift,source_clock,
             pass_index,pass_start)
         active_segments[segment] = true
-        var silence: Dictionary = practice_timeline["gap"].duplicate(true)
-        silence["start_beat"] = pass_start+float(silence["start_beat"])
-        silence["end_beat"] = pass_start+float(silence["end_beat"])
+        var silence_start: float = pass_start+timeline.duration_beats
+        var silence_end: float = pass_start+stride
+        if silence_start > virtual_right+.7 or silence_end < virtual_left-.7:
+            continue
         var replaced := false
         for item in preparation_history.values():
-            if SourceVisibility.intervals_overlap(silence,item["measure"]):
+            var measure: Dictionary = item["measure"]
+            if silence_start < float(measure["end_beat"])-.00001 and \
+                    float(measure["start_beat"]) < silence_end-.00001:
                 replaced = true
                 break
         if not replaced and rest_slot < retained_rest_segments.size():
