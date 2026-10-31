@@ -395,6 +395,25 @@ func _hide_retained_segments() -> void:
         if not segment.compiled:
             segment.position = Vector2(-1000000.0,0.0)
 
+func _sync_retained_visibility(active: Array) -> void:
+    # CanvasItems keep their draw lists when merely translated. Do not
+    # toggle visibility off/on every frame; it invalidates scene batching.
+    var all_segments: Array = [retained_first_once,retained_first_loop]
+    all_segments.append_array(retained_repeat_segments)
+    all_segments.append_array(retained_rest_segments)
+    all_segments.append_array(retained_recovery_sources.values())
+    all_segments.append_array(retained_recovery_rests.values())
+    for segment in all_segments:
+        if segment == null:
+            continue
+        var warming: bool = not segment.compiled
+        var selected: bool = active.has(segment)
+        var should_show: bool = selected or warming
+        if segment.visible != should_show:
+            segment.visible = should_show
+        if warming and not selected:
+            segment.position = Vector2(-1000000.0,0.0)
+
 func _invalidate_retained_segments() -> void:
     retained_ink_published = false
     # Structural changes invalidate cached ink. Unused pool entries recompile
@@ -707,7 +726,6 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
 func _project_retained_source(segment, shift_x: float,
         camera_clock: float, pass_index: int, pass_start: float) -> void:
     segment.position = Vector2(shift_x,0.0)
-    segment.visible = true
     if not segment.compiled:
         return
     frame_visible_beam_groups += segment.beam_groups_drawn
@@ -754,11 +772,13 @@ func _source_overlaps_preparation(pass_start: float) -> bool:
 func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -> void:
     if retained_first_once == null:
         return
-    _hide_retained_segments()
+    var active_segments: Array = []
     var density: float = timeline.pixels_per_beat
     if not score_loop_enabled:
         var shift: float = playhead_x-(camera_clock+play_from_beat)*density
         _project_retained_source(retained_first_once,shift,camera_clock,0,0.0)
+        active_segments.append(retained_first_once)
+        _sync_retained_visibility(active_segments)
         return
     _remember_preparation()
     var stride: float = float(practice_timeline["stride_beats"])
@@ -790,6 +810,7 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
             continue
         _project_retained_source(segment,source_shift,source_clock,
             pass_index,pass_start)
+        active_segments.append(segment)
         var silence: Dictionary = practice_timeline["gap"].duplicate(true)
         silence["start_beat"] = pass_start+float(silence["start_beat"])
         silence["end_beat"] = pass_start+float(silence["end_beat"])
@@ -803,7 +824,7 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
             rest_slot += 1
             rest.position = Vector2(playhead_x+(
                 pass_start+timeline.duration_beats-visual_scroll_beat)*density,0.0)
-            rest.visible = true
+            active_segments.append(rest)
     # Exceptional recovery measures are retained too; their visibility
     # variant is built when the backend publishes the preparation.
     for owner in preparation_history:
@@ -817,7 +838,8 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
             continue
         recovery_rest.position = Vector2(playhead_x+(
             float(replaced_rest["start_beat"])-visual_scroll_beat)*density,0.0)
-        recovery_rest.visible = true
+        active_segments.append(recovery_rest)
+    _sync_retained_visibility(active_segments)
 
 func _draw() -> void:
     layout.set_viewport(size)
