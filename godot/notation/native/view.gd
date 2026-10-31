@@ -375,7 +375,9 @@ func retained_ready() -> bool:
 func retained_segment_compiled() -> void:
     if retained_ready() and not retained_ink_published:
         retained_ink_published = true
-        retained_ink_compiled.emit()
+        # Do not re-enter score publication or the UI hierarchy from
+        # inside a CanvasItem draw notification.
+        call_deferred("emit_signal","retained_ink_compiled")
 
 func _hide_retained_segments() -> void:
     # Newly installed segments compile their draw-command buffers offscreen
@@ -750,6 +752,7 @@ func _project_retained_source(segment, shift_x: float,
             break
         var screen: Vector2 = source_point+Vector2(shift_x,0.0)
         visible_symbols += 1
+        frame_scanned_events += 1
         var current: Dictionary = source_note.duplicate(false)
         var ident: String = str(source_note["event_id"])
         current["position"] = screen
@@ -846,6 +849,8 @@ func _draw() -> void:
     drawn_noteheads.clear()
     drawn_note_instances.clear()
     visible_symbols = 0
+    frame_scanned_events = 0
+    frame_visible_beam_groups = 0
     annotations.begin_frame()
     fingering_pass_clocks.clear()
     if size.x < 100.0 or size.y < 100.0:
