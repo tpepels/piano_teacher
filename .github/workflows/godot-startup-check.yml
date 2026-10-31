@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - 'godot/**'
+      - 'tests/godot/visual_transport_clock.gd'
       - 'scripts/check-godot-syntax.sh'
       - '.github/workflows/godot-startup-check.yml'
   pull_request:
     paths:
       - 'godot/**'
+      - 'tests/godot/visual_transport_clock.gd'
       - 'scripts/check-godot-syntax.sh'
       - '.github/workflows/godot-startup-check.yml'
 
@@ -39,3 +41,10 @@ jobs:
         env:
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
         run: bash scripts/check-godot-syntax.sh
+      - name: Assert constant visual velocity across a delayed rest handoff
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: |
+          timeout 15s "$GODOT_BIN" --headless --path godot \
+            --script "$PWD/tests/godot/visual_transport_clock.gd"
+
