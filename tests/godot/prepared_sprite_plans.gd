@@ -2,6 +2,9 @@ extends SceneTree
 const Beams := preload("res://notation/native/beam_sprite_plan.gd")
 const Slurs := preload("res://notation/native/slur_sprite_plan.gd")
 const Glyphs := preload("res://notation/native/glyphs.gd")
+const SourceSpans := preload("res://notation/native/source_spans.gd")
+const Layout := preload("res://notation/native/score_layout.gd")
+const Axis := preload("res://notation/shared/timeline.gd")
 
 func _initialize() -> void:
     var failures := 0
@@ -47,6 +50,36 @@ func _initialize() -> void:
                 (quad[2]-Vector2(280,217.36)).length()>.00001:
             failures += 1
     if not Slurs.build(atlas,"missing",0,0,200,0,20).is_empty():
+        failures += 1
+    var layout := Layout.new(Axis.new(),atlas)
+    var directions: Array = [
+        {"kind":"hairpin","value":"crescendo","number":"1",
+            "hand":"left","beat":1.0},
+        {"kind":"hairpin","value":"stop","number":"1",
+            "hand":"left","beat":4.0},
+        {"kind":"hairpin","value":"diminuendo","number":"2",
+            "hand":"right","beat":5.0},
+        {"kind":"hairpin","value":"stop","number":"2",
+            "hand":"right","beat":7.0}
+    ]
+    var spans: Array = SourceSpans.hairpins(directions,layout)
+    if spans.size()!=2 or spans[0]["begin"]!=1.0 or \
+            spans[0]["end"]!=4.0 or spans[0]["hand"]!="left" or \
+            spans[1]["begin"]!=5.0 or spans[1]["end"]!=7.0:
+        failures += 1
+    var measures: Array = [
+        {"start_beat":0.0,"end_beat":4.0,
+            "left_barline":{"ending":{"number":"1","type":"start"}}},
+        {"start_beat":4.0,"end_beat":8.0,
+            "right_barline":{"ending":{"number":"1","type":"stop"}}},
+        {"start_beat":8.0,"end_beat":12.0,
+            "left_barline":{"ending":{"number":"2","type":"start"}}}
+    ]
+    var endings: Array = SourceSpans.voltas(measures,12.0)
+    if endings.size()!=2 or endings[0]["start"]!=0.0 or \
+            endings[0]["end"]!=8.0 or not endings[0]["closed"] or \
+            endings[1]["start"]!=8.0 or endings[1]["end"]!=12.0 or \
+            endings[1]["closed"]:
         failures += 1
     print("PREPARED_SPRITE_PLAN_FAILURES:",failures)
     quit(0 if failures==0 else 1)
