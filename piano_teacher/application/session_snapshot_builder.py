@@ -12,7 +12,7 @@ import time
 from ..state_projection import (
     ActivitySnapshot, GuidedSnapshot, SessionSnapshot, TimingSnapshot,
 )
-from ..application.lesson_snapshot import build_lesson_snapshot
+from .lesson_snapshot import build_lesson_snapshot
 from ..learner_state import placement_candidate
 
 
