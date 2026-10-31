@@ -1071,36 +1071,13 @@ class PracticeEngine:
         self.count_in_beats = 0.0
 
     def _visual_motion(self, now: float) -> tuple[float, float, float]:
-        """Project the current transport snapshot without changing any clocks."""
+        """Read the one transport projection, including authored tempo and silence."""
         phrase = self.plan.active_phrase
-        tempo_map = self._active_tempo_map()
-        # The score and its appended automatic rest share a single
-        # run_at-based piecewise clock. After the last authored beat the
-        # semantic preparation measure advances at the selected practice BPM;
-        # never restart nominal-tempo interpolation from the last state poll.
-        forward_gap = (self._preview_loop_pending or
-                       (self.pending_result is not None and self.auto and
-                        self.pending_rewind is None))
-        if tempo_map is not None and now >= self.run_at and (self.running or forward_gap):
-            source_end = phrase.end-phrase.start
-            source_seconds = (self._elapsed_seconds(source_end) -
-                              self._elapsed_seconds(self.play_from_beat))
-            elapsed = now-self.run_at
-            if elapsed <= source_seconds:
-                beat = self.play_from_beat+self._elapsed_beat(elapsed)
-                rate = tempo_map.bpm_at(min(beat, source_end-1e-8))/60.0
-            else:
-                beat = source_end+(elapsed-source_seconds)*self.plan.bpm/60.0
-                rate = self.plan.bpm/60.0
-            return (self.visual_offset_beats+beat,
-                    0.0 if self.paused else rate,
-                    self.visual_offset_beats+source_end+
-                    (self.visual_gap_beats if forward_gap else 0.0))
         return self.visual_transport.position(
             now, phrase_length=phrase.end-phrase.start, bpm=self.plan.bpm,
             running=self.running,
-            pending_auto_result=(self.pending_result is not None and self.auto))
-
+            pending_auto_result=(self.pending_result is not None and self.auto),
+            tempo_map=self._active_tempo_map())
 
     def control(self, action: str, **kwargs) -> None:
         # Session state and all command transitions remain serialized here.
