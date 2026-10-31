@@ -4,6 +4,8 @@ extends Node
 var native
 var pending: Dictionary = {}
 var ready_error := ""
+var midi_request_id := -1
+var midi_ready_events: Array = []
 
 const EXTENSION_PATH := "res://native/piano_bridge.gdextension"
 
@@ -45,11 +47,15 @@ func submit(requester: Node, method: String, path: String, body: String) -> int:
     return identifier
 
 func poll_midi(after_sequence: int) -> Array:
-    if not is_ready():
-        return []
-    var parsed: Variant = JSON.parse_string(str(
-        native.call("live_events_json", after_sequence)))
-    return parsed if parsed is Array else []
+    # Never call CPython or acquire its GIL on the Godot rendering thread.
+    # The one outstanding read is dispatched through the existing worker.
+    # Heavy notation/assessment may delay its result, but cannot block paint.
+    var completed: Array = midi_ready_events
+    midi_ready_events = []
+    if midi_request_id < 0 and is_ready():
+        midi_request_id = int(native.call("submit", "GET",
+            "/midi/live?since=%d" % maxi(0, after_sequence), ""))
+    return completed
 
 func _process(_delta: float) -> void:
     if native == null:
@@ -64,6 +70,13 @@ func _process(_delta: float) -> void:
         if not reply is Dictionary:
             continue
         var identifier := int(reply.get("id", -1))
+        if identifier == midi_request_id:
+            midi_request_id = -1
+            if int(reply.get("status", 500)) == 200:
+                var bytes: PackedByteArray = reply.get("body", PackedByteArray())
+                var parsed: Variant = JSON.parse_string(bytes.get_string_from_utf8())
+                midi_ready_events = parsed if parsed is Array else []
+            continue
         var handle: WeakRef = pending.get(identifier)
         pending.erase(identifier)
         var requester: Variant = handle.get_ref() if handle != null else null

@@ -57,7 +57,6 @@ public:
     String failure_message();
     int64_t submit(const String &method, const String &path, const String &body);
     Array take_responses();
-    String live_events_json(int64_t after_sequence);
 };
 
 } // namespace godot

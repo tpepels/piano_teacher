@@ -134,6 +134,9 @@ var phase0_smoke_mode := false
 var listen_sync_diagnostics := false
 var last_listen_sync_report_ms := 0
 var frame_diagnostics := false
+var last_timing_phase := ""
+var last_timing_transport := -1
+var last_timing_revision := -1
 var frame_meter = FrameMeter.new()
 var phase0_last_phase := ""
 var phase0_last_cursor_tick := -1
@@ -486,7 +489,12 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
     # An idle screen or paused lesson does not need the same redraw budget
     # as a scrolling score. This never changes Python-owned audio, tempo
     # or MIDI grading, only how often the Godot display is presented.
-    var active: bool = (bool(state.get("running", false)) \
+    var transitioning: bool = (str(state.get("phase", "")) in ["feedback", "preview_gap"]
+        and (bool(state.get("auto", false)) or bool(state.get("preview_only", false))))
+    # An automatic rest is still a moving transport, including the few
+    # frames after the scheduled downbeat but before Python acknowledges
+    # the next attempt. Never drop Godot into 30 FPS / low-power mode there.
+    var active: bool = (bool(state.get("running", false)) or transitioning \
         or absf(float(state.get("visual_scroll_speed", 0.0))) > .000001) \
         and not bool(state.get("paused", false)) \
         and current_screen == "practice"
@@ -941,6 +949,25 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var parsed = _decode_json(body)
     if typeof(parsed) != TYPE_DICTIONARY:
         return
+    if frame_diagnostics:
+        var phase_name: String = str(parsed.get("phase", ""))
+        var attempt: int = int(parsed.get("transport_id", -1))
+        var score_rev: int = int(parsed.get("revision", -1))
+        if phase_name != last_timing_phase or attempt != last_timing_transport \
+                or score_rev != last_timing_revision:
+            print("TRANSPORT_TRANSITION:", JSON.stringify({
+                "phase":phase_name, "transport_id":attempt,
+                "revision":score_rev,
+                "state_request_ms":Time.get_ticks_msec()-state_request_started_ms,
+                "score_ready":_native_score_ready(),
+                "layout_pending":layout_pending,
+                "model_pending":timeline_model_pending,
+                "awaiting_score_revision":parsed.get("awaiting_score_revision"),
+                "visual_scroll_beat":parsed.get("visual_scroll_beat"),
+                "visual_scroll_speed":parsed.get("visual_scroll_speed")}))
+            last_timing_phase = phase_name
+            last_timing_transport = attempt
+            last_timing_revision = score_rev
     # A long MIDI should not engrave its default first passage while the
     # learner is still choosing a source measure in the library. Wait for
     # open_at to select the real passage before requesting any score pages.
@@ -1115,9 +1142,14 @@ func _request_layout() -> void:
 func _on_layout(_result: int, code: int, _headers: PackedStringArray,
         body: PackedByteArray) -> void:
     if score_session != null:
+        var began: int = Time.get_ticks_msec()
         score_session.complete_response(
             "layout", score_session.pending_id("layout"), code, body,
             Time.get_ticks_msec())
+        if frame_diagnostics:
+            print("SCORE_ASSET_MAIN_THREAD:", JSON.stringify({
+                "kind":"layout", "elapsed_ms":Time.get_ticks_msec()-began,
+                "revision":score_session.revision, "phase":last_state.get("phase")}))
 
 func _finish_native_score() -> void:
     if score_session != null:
@@ -1130,9 +1162,14 @@ func _request_timeline_model() -> void:
 func _on_timeline_model(_result: int, code: int,
         _headers: PackedStringArray, body: PackedByteArray) -> void:
     if score_session != null:
+        var began: int = Time.get_ticks_msec()
         score_session.complete_response(
             "model", score_session.pending_id("model"), code, body,
             Time.get_ticks_msec())
+        if frame_diagnostics:
+            print("SCORE_ASSET_MAIN_THREAD:", JSON.stringify({
+                "kind":"model", "elapsed_ms":Time.get_ticks_msec()-began,
+                "revision":score_session.revision, "phase":last_state.get("phase")}))
 
 
 func _send_action(command: Dictionary) -> void:

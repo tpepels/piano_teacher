@@ -46,8 +46,6 @@ void PianoNative::_bind_methods() {
     ClassDB::bind_method(D_METHOD("submit", "method", "path", "body"),
                          &PianoNative::submit);
     ClassDB::bind_method(D_METHOD("take_responses"), &PianoNative::take_responses);
-    ClassDB::bind_method(D_METHOD("live_events_json", "after_sequence"),
-                         &PianoNative::live_events_json);
 }
 
 PianoNative::PianoNative() {
@@ -215,43 +213,3 @@ Array PianoNative::take_responses() {
     return result;
 }
 
-String PianoNative::live_events_json(int64_t after_sequence) {
-    if (!ready_) return "[]";
-    // Event ring reads are tiny and only take the GIL. No networking or
-    // intermediate Python process; the MIDI callback itself remains async.
-    PyGILState_STATE gil = PyGILState_Ensure();
-    PyObject *events = PyObject_CallMethod(static_cast<PyObject *>(engine_),
-                                           "drain_midi_events", "L",
-                                           static_cast<long long>(after_sequence));
-    PyObject *json = PyImport_ImportModule("json");
-    PyObject *encoded = events && json
-        ? PyObject_CallMethod(json, "dumps", "O", events) : nullptr;
-    const char *data = encoded ? PyUnicode_AsUTF8(encoded) : nullptr;
-    String output = data ? String::utf8(data) : "[]";
-    Py_XDECREF(encoded);
-    Py_XDECREF(json);
-    Py_XDECREF(events);
-    PyErr_Clear();
-    PyGILState_Release(gil);
-    return output;
-}
-
-void initialize_piano_bridge(ModuleInitializationLevel level) {
-    if (level == MODULE_INITIALIZATION_LEVEL_SCENE)
-        ClassDB::register_class<PianoNative>();
-}
-
-void uninitialize_piano_bridge(ModuleInitializationLevel) {}
-
-extern "C" {
-GDExtensionBool GDE_EXPORT piano_bridge_library_init(
-        GDExtensionInterfaceGetProcAddress get_proc_address,
-        GDExtensionClassLibraryPtr library,
-        GDExtensionInitialization *initialization) {
-    GDExtensionBinding::InitObject init(get_proc_address, library, initialization);
-    init.register_initializer(initialize_piano_bridge);
-    init.register_terminator(uninitialize_piano_bridge);
-    init.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
-    return init.init();
-}
-}

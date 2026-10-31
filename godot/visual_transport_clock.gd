@@ -1,7 +1,7 @@
 extends RefCounted
 
 # Presentation clock; the backend alone scores MIDI and schedules Listen.
-# HTTP snapshots contain sampling/transport error. Once an authoritative
+# Engine snapshots contain sampling/transport error. Once an authoritative
 # snapshot establishes the origin, project at its BPM until a transport
 # transition. Backend and frontend use the same machine's monotonic time;
 # chasing poll phase error introduces audible/visible tempo modulation.
@@ -44,6 +44,7 @@ var retry_play_from := 0.0
 var idle_visual_beat := 0.0
 var idle_visual_speed := 0.0
 var idle_visual_target := 0.0
+var idle_continues_through_gap := false
 var idle_visual_sample_ms := 0
 var active_visual_offset := 0.0
 var active_play_from := 0.0
@@ -101,10 +102,17 @@ func visual_beat(at_ms: int) -> float:
         return retry_start_beat + (float(at_ms)-retry_preparation_ms)/60000.0 * retry_bpm
     if active:
         return active_visual_offset + active_play_from + now(at_ms)
-    return minf(idle_visual_target, idle_visual_beat + idle_visual_speed *
-        maxf(0.0,float(at_ms-idle_visual_sample_ms)/1000.0)) if idle_visual_speed > 0.0 \
-        else maxf(idle_visual_target, idle_visual_beat + idle_visual_speed *
-        maxf(0.0,float(at_ms-idle_visual_sample_ms)/1000.0))
+    var projected: float = idle_visual_beat + idle_visual_speed * \
+        maxf(0.0, float(at_ms-idle_visual_sample_ms)/1000.0)
+    # The final measure of an automatic attempt is already the count-in for
+    # the next copy. Godot may see the Python transition up to a poll or an
+    # engraving/assessment stall later. Do not freeze the score at the exact
+    # rest boundary while awaiting that reply. Both copies share this axis.
+    # Explicit Stop/Pause and non-automatic feedback still stop at target.
+    if idle_continues_through_gap and idle_visual_speed > 0.0:
+        return projected
+    return minf(idle_visual_target, projected) if idle_visual_speed > 0.0 \
+        else maxf(idle_visual_target, projected)
 
 func retry_count_in_beat(at_ms: int) -> float:
     return (float(at_ms)-retry_deadline_ms)/60000.0*retry_bpm
@@ -148,6 +156,10 @@ func accept(state: Dictionary, measured_ms: int, received_ms: int) -> void:
         active_visual_offset+active_play_from))
     idle_visual_speed = float(state.get("visual_scroll_speed", 0.0))
     idle_visual_target = float(state.get("visual_target_beat",idle_visual_beat))
+    idle_continues_through_gap = (not bool(state.get("paused", false))
+        and source_phase in ["feedback", "preview_gap"]
+        and (bool(state.get("auto", false)) or bool(state.get("preview_only", false)))
+        and float(state.get("visual_scroll_speed", 0.0)) > 0.0)
     idle_visual_sample_ms = measured_ms
     _accept_retry(state, measured_ms)
     var next_bpm: float = maxf(1.0, float(state.get("bpm", 60.0)))

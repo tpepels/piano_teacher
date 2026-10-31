@@ -63,7 +63,11 @@ def project_visual_motion(state: VisualMotionSnapshot, now: float) -> tuple[floa
         speed = (target-state.rewind_from)/seconds if progress < 1 else 0.0
     elif state.pending_auto_result or state.preview_loop_pending:
         target += state.gap_beats
-        position = min(target, state.visual_offset+max(
-            length, state.play_from_beat+(now-state.run_at)*state.bpm/60))
-        speed = state.bpm/60 if position < target else 0.0
+        # The end of the rest is a scheduled handoff, not an instruction to
+        # stop the musical clock. The engine may process that handoff a frame
+        # or a state query later. Keep the one continuous visual axis moving
+        # until a different transport phase is actually published.
+        position = state.visual_offset + max(
+            length, state.play_from_beat + (now-state.run_at)*state.bpm/60)
+        speed = state.bpm/60
     return position, 0.0 if state.paused else speed, target

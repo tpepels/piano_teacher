@@ -6,6 +6,8 @@ contain status and compact JSON or binary audio bytes.
 from __future__ import annotations
 
 import json
+import os
+import time
 import traceback
 from urllib.parse import parse_qs
 
@@ -23,6 +25,7 @@ class EngineCommands:
         return status, json.dumps(value, separators=(",", ":")).encode("utf-8")
 
     def request(self, method: str, target: str, body: str = "") -> tuple[int, bytes]:
+        began = time.perf_counter()
         try:
             route, _, query_string = target.partition("?")
             if method == "GET":
@@ -38,6 +41,12 @@ class EngineCommands:
         except Exception as exc:
             traceback.print_exc()
             return self._reply(500, {"error": f"Practice engine error: {exc}"})
+        finally:
+            if os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
+                elapsed_ms = (time.perf_counter() - began) * 1000.0
+                if elapsed_ms >= 24.0:
+                    print("INPROCESS_COMMAND_SLOW:", method, target.partition("?")[0],
+                          round(elapsed_ms, 2), "ms", flush=True)
 
     def _get(self, path: str, query: dict) -> tuple[int, bytes]:
         engine = self.engine
@@ -53,6 +62,11 @@ class EngineCommands:
             "/diagnostics/performance": "performance_diagnostics",
             "/score/model": "semantic_score",
         }
+        if path == "/midi/live":
+            since = int(query.get("since", ["0"])[0])
+            if since < 0:
+                raise ValueError("MIDI event sequence must be nonnegative")
+            return self._reply(200, self.drain_midi_events(since))
         if path == "/devices":
             return self._reply(200, {"devices": engine.ports()})
         if path in commands:

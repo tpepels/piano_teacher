@@ -37,7 +37,12 @@ def test_completed_pass_advances_through_gap_without_a_new_camera_origin(snapsho
     assert speed == pytest.approx(80/60)
     assert target == 24
     position, speed, target = project_visual_motion(gap, 110)
-    assert (position, speed, target) == (24, 0.0, 24)
+    assert position == pytest.approx(25.333333333333332)
+    assert speed == pytest.approx(80/60)
+    assert target == 24
+    # A slow engine transition can no longer freeze the visible bar at 24.
+    after, _, _ = project_visual_motion(gap, 110.2)
+    assert after - position == pytest.approx(.2 * 80/60)
 
 
 def test_rewind_is_backward_and_preparation_resumes_forward(snapshot):

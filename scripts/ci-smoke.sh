@@ -15,6 +15,7 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_library_api.py \
   tests/test_frontend_startup.py \
   tests/test_phase0_smoke.py \
+  tests/test_transport_projection.py \
   tests/test_inprocess_dispatcher.py \
   tests/test_inprocess_artifact_install.py \
   tests/test_inprocess_transport_structure.py \

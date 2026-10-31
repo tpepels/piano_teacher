@@ -110,5 +110,9 @@ def test_real_embedded_engine_does_not_create_network_visual_publisher(tmp_path)
                         "status": "on_time", "pitch": 60})
         assert bridge.drain_midi_events(3)[0]["sequence"] == 4
         assert bridge.drain_midi_events(4) == []
+        status, payload = _decode(bridge.request("GET", "/midi/live?since=3"))
+        assert status == 200 and payload[0]["sequence"] == 4
+        assert _decode(bridge.request("GET", "/midi/live?since=4")) == (200, [])
+        assert _decode(bridge.request("GET", "/midi/live?since=-1"))[0] == 400
     finally:
         engine.db.close()

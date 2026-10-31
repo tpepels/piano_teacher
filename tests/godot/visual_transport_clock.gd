@@ -166,5 +166,47 @@ func run() -> void:
         "Partial shaped seek must reach its tempo transition at local beat 4")
     check(absf(partial.now(base_ms+6000)-5.0) < .00001,
         "Partial shaped retry must continue at the second segment's BPM")
+    # The final rest leads into the next repeat at exactly 1 beat/second.
+    # Simulate a backend state callback delayed by 220ms after the boundary.
+    var continuous = load("res://visual_transport_clock.gd").new()
+    var rest_state := {"revision": 8, "transport_id": 12,
+        "phase": "feedback", "bpm": 60.0, "running": false,
+        "paused": false, "auto": true, "preview_only": false,
+        "visual_scroll_beat": 7.0, "visual_scroll_speed": 1.0,
+        "visual_target_beat": 8.0, "visual_offset_beats": 0.0,
+        "play_from_beat": 0.0, "clock_beat": 4.0}
+    continuous.accept(rest_state, base_ms, base_ms)
+    check(absf(continuous.visual_beat(base_ms + 1000) - 8.0) < .0001,
+        "Automatic rest reaches the next attack at uniform velocity")
+    check(absf(continuous.visual_beat(base_ms + 1220) - 8.22) < .0001,
+        "Automatic rest must not freeze at end while awaiting the engine")
+    var next_state := {"revision": 8, "transport_id": 13,
+        "phase": "playing", "bpm": 60.0, "running": true,
+        "paused": false, "visual_offset_beats": 8.0,
+        "play_from_beat": 0.0, "clock_beat": 0.22}
+    continuous.accept(next_state, base_ms + 1220, base_ms + 1220)
+    check(absf(continuous.visual_beat(base_ms + 1220) - 8.22) < .0001,
+        "Delayed next-take acknowledgement cannot jerk the score")
+    check(absf(continuous.visual_beat(base_ms + 1236) - 8.236) < .0001,
+        "First attack retains a constant score velocity")
+    var manual = load("res://visual_transport_clock.gd").new()
+    rest_state["auto"] = false
+    manual.accept(rest_state, base_ms, base_ms)
+    check(absf(manual.visual_beat(base_ms + 1220) - 8.0) < .0001,
+        "Non-automatic feedback must remain stopped at its boundary")
+    rest_state["auto"] = true
+    rest_state["paused"] = true
+    manual.accept(rest_state, base_ms + 1220, base_ms + 1220)
+    check(not manual.idle_continues_through_gap,
+        "Explicit pause disables automatic rest continuation")
+    var preview = load("res://visual_transport_clock.gd").new()
+    rest_state["paused"] = false
+    rest_state["auto"] = false
+    rest_state["preview_only"] = true
+    rest_state["phase"] = "preview_gap"
+    preview.accept(rest_state, base_ms, base_ms)
+    check(preview.visual_beat(base_ms + 1220) > 8.2,
+        "MIDI-free preview also keeps the visual rest moving")
+
     print("VISUAL_TRANSPORT_CLOCK_FAILURES:", failure_count)
     quit(0 if failure_count == 0 else 1)
