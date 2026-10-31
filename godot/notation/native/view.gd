@@ -587,6 +587,107 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
     fingering_pass_clocks.append({"clock":camera_clock,"pass_index":pass_index,"pass_start":pass_start})
     return frame
 
+func _project_retained_source(segment: Node2D, shift_x: float,
+        camera_clock: float, pass_index: int, pass_start: float) -> void:
+    segment.position = Vector2(shift_x,0.0)
+    segment.visible = true
+    if not segment.compiled:
+        return
+    visible_symbols += segment.symbols_drawn
+    frame_visible_beam_groups += segment.beam_groups_drawn
+    fingering_pass_clocks.append({"clock":camera_clock,
+        "pass_index":pass_index,"pass_start":pass_start})
+    var playhead_x: float = size.x*PLAYHEAD_FRACTION
+    for source_note in segment.note_instances:
+        var screen: Vector2 = source_note["position"]+Vector2(shift_x,0.0)
+        if screen.x < -60.0 or screen.x > size.x+60.0:
+            continue
+        var current: Dictionary = source_note.duplicate(false)
+        var ident: String = str(source_note["event_id"])
+        current["position"] = screen
+        current["pass_index"] = pass_index
+        current["instance_id"] = "%d:%s" % [pass_index,ident]
+        drawn_note_instances.append(current)
+        if not drawn_noteheads.has(ident) or \
+                absf(screen.x-playhead_x)<absf(drawn_noteheads[ident].x-playhead_x):
+            drawn_noteheads[ident] = screen
+
+func _source_overlaps_preparation(pass_start: float) -> bool:
+    var interval := {"start_beat":pass_start,
+        "end_beat":pass_start+timeline.duration_beats}
+    for item in preparation_history.values():
+        if SourceVisibility.intervals_overlap(interval,item["measure"]):
+            return true
+    return false
+
+func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -> void:
+    if retained_first_once == null:
+        return
+    _hide_retained_segments()
+    var density: float = timeline.pixels_per_beat
+    if not score_loop_enabled:
+        var shift: float = playhead_x-(camera_clock+play_from_beat)*density
+        _project_retained_source(retained_first_once,shift,camera_clock,0,0.0)
+        return
+    _remember_preparation()
+    var stride: float = float(practice_timeline["stride_beats"])
+    var virtual_left: float = visual_scroll_beat-playhead_x/density
+    var virtual_right: float = virtual_left+size.x/density
+    var first_pass: int = maxi(0,floori(virtual_left/stride)-1)
+    var last_pass: int = maxi(first_pass,ceili(virtual_right/stride)+1)
+    var source_slot := 0
+    var rest_slot := 0
+    for pass_index in range(first_pass,last_pass+1):
+        var pass_start: float = pass_index*stride
+        if pass_start>virtual_right+.7 or pass_start+stride<virtual_left-.7:
+            continue
+        var source_clock: float = visual_scroll_beat-pass_start-play_from_beat
+        var source_shift: float = playhead_x+(pass_start-visual_scroll_beat)*density
+        if _source_overlaps_preparation(pass_start):
+            # Recovered measures have altered source context. Until a specific
+            # recovery variant has been compiled, preserve exact authored
+            # notation with the existing exception-only painter.
+            _paint_source_pass(source_clock,playhead_x,gap,pass_index,pass_start)
+        else:
+            var segment: Node2D
+            if pass_index == 0:
+                segment = retained_first_loop
+            elif source_slot < retained_repeat_segments.size():
+                segment = retained_repeat_segments[source_slot]
+                source_slot += 1
+            else:
+                push_error("Retained source segment pool exhausted")
+                continue
+            _project_retained_source(segment,source_shift,source_clock,
+                pass_index,pass_start)
+        var silence: Dictionary = practice_timeline["gap"].duplicate(true)
+        silence["start_beat"] = pass_start+float(silence["start_beat"])
+        silence["end_beat"] = pass_start+float(silence["end_beat"])
+        var replaced := false
+        for item in preparation_history.values():
+            if SourceVisibility.intervals_overlap(silence,item["measure"]):
+                replaced = true
+                break
+        if not replaced and rest_slot < retained_rest_segments.size():
+            var rest: Node2D = retained_rest_segments[rest_slot]
+            rest_slot += 1
+            rest.position = Vector2(playhead_x+(
+                pass_start+timeline.duration_beats-visual_scroll_beat)*density,0.0)
+            rest.visible = true
+    # Recovery intervals can replace arbitrary source measures or ordinary
+    # silence. Render those exceptional contexts at their exact source beats.
+    for owner in preparation_history:
+        var item: Dictionary = preparation_history[owner]
+        var replaced_rest: Dictionary = item["measure"]
+        if float(replaced_rest["end_beat"])<virtual_left-.7 or \
+                float(replaced_rest["start_beat"])>virtual_right+.7:
+            continue
+        var previous: Dictionary = _practice_context_before(
+            float(replaced_rest["start_beat"]),stride)
+        context_painter.paint_preparation_measure(
+            self,_new_paint_frame(clock_beat,playhead_x,gap,0,0.0),
+            replaced_rest,previous,gap,playhead_x,previous.is_empty())
+
 func _draw() -> void:
     layout.set_viewport(size)
     drawn_noteheads.clear()
