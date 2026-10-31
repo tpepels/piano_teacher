@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Callable, Literal
 from .music import Note, Phrase, Piece
 from .lesson_settings import SETTINGS
+from .grading_tolerance import onset_tolerance, duration_tolerance
 
 
 @dataclass(frozen=True)
@@ -57,43 +58,57 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
     Matching uses the nearest unused same-pitch onset in a generous window;
     the stricter onset/release tolerances decide whether it was correct.
     """
+    if bpm <= 0:
+        raise ValueError("Practice BPM must be positive")
     seconds_per_beat = 60.0 / bpm
     expected = [n for n in phrase.notes if hand == "both" or n.hand == hand]
     unused = set(range(len(played)))
     assessments: list[NoteAssessment] = []
-    onset_tolerance = SETTINGS.grading_onset_tolerance_seconds
+    timing = []
     for note in expected:
         if expected_seconds is None:
             start = (note.start - phrase.start) * seconds_per_beat
             duration = (min(note.end, phrase.end) - note.start) * seconds_per_beat
-            local_seconds_per_beat = seconds_per_beat
+            local_spb = seconds_per_beat
         else:
-            start, release, local_seconds_per_beat = expected_seconds(note)
+            start, release, local_spb = expected_seconds(note)
             duration = release - start
-        search_window = max(SETTINGS.grading_match_window_min_seconds,
-                            SETTINGS.grading_match_window_beats * local_seconds_per_beat)
-        options = [(abs(played[i].onset - start), i) for i in unused
-                   if played[i].pitch == note.pitch and abs(played[i].onset - start) <= search_window]
-        if not options:
+        timing.append((start, duration, local_spb))
+
+    # Closest-onset assignment first: an omitted repeated note must not steal
+    # the correct press belonging to the next 16th of the same pitch.
+    pairs = []
+    for note_index, (note, (start, _, local_spb)) in enumerate(zip(expected, timing)):
+        window = max(SETTINGS.grading_match_window_min_seconds,
+                     SETTINGS.grading_match_window_beats * local_spb)
+        pairs.extend((abs(event.onset - start), note_index, event_index)
+                     for event_index, event in enumerate(played)
+                     if event.pitch == note.pitch and abs(event.onset-start) <= window)
+    matched = {}
+    for _, note_index, event_index in sorted(pairs):
+        if note_index not in matched and event_index in unused:
+            matched[note_index] = event_index
+            unused.remove(event_index)
+
+    for note_index, (note, (start, duration, local_spb)) in enumerate(zip(expected, timing)):
+        if note_index not in matched:
             assessments.append(NoteAssessment(note, "missed"))
             continue
-        _, index = min(options)
-        unused.remove(index)
-        event = played[index]
+        event = played[matched[note_index]]
         drift = event.onset - start
-        if drift < -onset_tolerance:
+        allowed = onset_tolerance(local_spb)
+        if drift < -allowed:
             status = "early"
-        elif drift > onset_tolerance:
+        elif drift > allowed:
             status = "late"
         elif event.release is None:
             status = "short"  # key never released
         else:
-            actual = max(0, event.release - event.onset)
-            tolerance = max(SETTINGS.grading_duration_floor_seconds,
-                            duration * SETTINGS.grading_duration_tolerance_fraction)
-            if actual < duration - tolerance:
+            actual = max(0, event.release-event.onset)
+            hold_slack = duration_tolerance(duration, local_spb)
+            if actual < duration-hold_slack:
                 status = "short"
-            elif actual > duration + tolerance:
+            elif actual > duration+hold_slack:
                 status = "long"
             else:
                 status = "correct"
@@ -109,7 +124,7 @@ def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,
                           if expected_seconds is None else expected_seconds(entry.note)[0])
         candidates = [(abs(played[j].onset - expected_onset), j)
                       for j in unused
-                      if abs(played[j].onset - expected_onset) <= onset_tolerance]
+                      if abs(played[j].onset - expected_onset) <= onset_tolerance(timing[i][2])]
         if candidates:
             _, index = min(candidates)
             unused.remove(index)

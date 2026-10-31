@@ -372,6 +372,15 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
             instruction_text = "Acoustic grand piano · " + instrument
         if _audio_error:
             feedback_text = "Listen audio could not load. Choose Listen to try again."
+    # Amber can mean onset drift OR an overly short/long key hold.
+    if phase == "feedback" and not learning:
+        var has_amber := false
+        for mark in parsed.get("feedback_marks", []):
+            if str(mark.get("status", "")) in ["early", "late", "short", "long"]:
+                has_amber = true
+                break
+        if has_amber:
+            feedback_text += " · Yellow: early/late press or short/long hold"
     var unpositioned: int = int(parsed.get("feedback_unmapped", 0))
     if unpositioned > 0:
         feedback_text += " · %d unpositioned note(s)" % unpositioned

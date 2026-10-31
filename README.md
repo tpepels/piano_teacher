@@ -4,6 +4,14 @@ An offline Linux piano teacher built with Godot 4 and Python. Import your own
 MIDI, learn simplified passages, restore the original notes, then connect the
 passages into a complete performance. All progress stays local.
 
+**MIDI practice grading:** Starting tempos now reflect consecutive MIDI note
+attacks: sixteenth-note passages can start near 30 BPM rather than the
+ordinary 40 BPM. At low speeds a wider onset window (225 ms at 40 BPM)
+and more forgiving key-release lengths help beginning practice. Accepted
+notes are green, early/late or short/long notes yellow, and wrong/missed
+notes red. Repeated notes are matched to the closest actual MIDI attack.
+This does not calibrate physical keyboard or audio latency.
+
 **MIDI-only product contract:** Personal music requires only `.mid` or `.midi`.
 The app derives readable notation from MIDI note events, tracks and available
 meter/key metadata; it may generate MusicXML **internally** as a rendering

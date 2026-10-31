@@ -98,7 +98,7 @@ class PracticeEngine:
         self.recovery_notice: dict | None = None
         self.pause_context: str | None = None
         self._deferred_score_ack: int | None = None
-        self.next_action = "Open a MIDI or MusicXML file."
+        self.next_action = "Open a MIDI file."
         self.retry_range: dict | None = None
         # Persistent trouble means two boundary failures in consecutive takes
         # at the same stage and source two-bar chunk. Only a clean full take
@@ -124,7 +124,7 @@ class PracticeEngine:
         self.count_in_beats = 0
         self.count_in_bar_beats = 4.0
         self.count_in_meter = [4, 4]
-        self.feedback = "Open a MIDI or MusicXML file"
+        self.feedback = "Open a MIDI file"
         self.score_revision = 0
         self.awaiting_score_revision: int | None = None
         self.pending_result = None

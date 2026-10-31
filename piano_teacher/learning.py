@@ -13,6 +13,7 @@ from .exercise_generator import ExerciseVariant, generate_variants
 from .exercise_contracts import resolve_timing_strategy, resolve_tempo_strategy
 from .musical_groups import grouping_for_piece, MusicalGrouping
 from .lesson_settings import SETTINGS
+from .tempo_difficulty import suggested_start_bpm
 from .repeated_passages import exact_repetition_signature
 
 @dataclass(frozen=True)
@@ -400,7 +401,10 @@ class LearningPlan:
         if self.warmup:
             return min(getattr(self, "target_bpm", self.piece.bpm), self.piece.bpm)
         target = getattr(self, "target_bpm", self.piece.bpm)
-        return min(target, max(SETTINGS.minimum_bpm, SETTINGS.start_tempo_bpm))
+        baseline = min(target, max(SETTINGS.minimum_bpm, SETTINGS.start_tempo_bpm))
+        return min(target, suggested_start_bpm(
+            self.active_phrase, self.hand,
+            default_bpm=baseline, minimum_bpm=SETTINGS.minimum_bpm))
 
     @property
     def exercise(self) -> Exercise:
@@ -649,7 +653,7 @@ class LearningPlan:
         self.streak = self.failures = 0
 
     def tempo_rungs(self) -> tuple[int, ...]:
-        """Integer tempo ladder with a common start and exact song target."""
+        """Integer tempo ladder from the active MIDI stage to song target."""
         start, target = self.start_bpm, self.target_bpm
         if start >= target:
             return (target,)

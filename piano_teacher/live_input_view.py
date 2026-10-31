@@ -9,6 +9,8 @@ from collections import deque
 
 from .music import Phrase, source_note_id
 from .exercise_contracts import TempoMap
+from .grading_tolerance import onset_tolerance
+from .lesson_settings import SETTINGS
 
 
 class LiveInputView:
@@ -75,11 +77,12 @@ class LiveInputView:
                         continue
                     expected_at, seconds_per_beat = expected(note)
                     distance = abs(at - expected_at)
-                    if distance <= .1:
+                    if distance <= onset_tolerance(seconds_per_beat):
                         nearby.append((distance, abs(pitch - note.pitch),
                                        index, note))
                     if (index not in self.used and note.pitch == pitch and
-                            distance <= max(0.35, .65 * seconds_per_beat)):
+                            distance <= max(SETTINGS.grading_match_window_min_seconds,
+                                            SETTINGS.grading_match_window_beats * seconds_per_beat)):
                         candidates.append((distance, index, note, expected_at))
                 if candidates:
                     _, index, note, expected_at = min(
@@ -87,7 +90,8 @@ class LiveInputView:
                     self.used.add(index)
                     source = source_note_id(note, index)
                     drift = at - expected_at
-                    status = "on_time" if abs(drift) <= .1 else "early" if drift < 0 else "late"
+                    status = ("on_time" if abs(drift) <= onset_tolerance(
+                        expected(note)[1]) else "early" if drift < 0 else "late")
                 else:
                     status = "unexpected"
                     # Only exact source attacks can receive provisional
