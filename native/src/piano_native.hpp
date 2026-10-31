@@ -45,6 +45,7 @@ class PianoNative : public RefCounted {
     void *engine_ = nullptr;
     void initialize_python();
     void worker_loop();
+    int tick_engine();
     Reply execute(const Command &command);
 protected:
     static void _bind_methods();
