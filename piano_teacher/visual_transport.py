@@ -118,6 +118,7 @@ class VisualTransport:
     def position(
         self, now: float, *, phrase_length: float, bpm: float,
         running: bool, pending_auto_result: bool,
+        tempo_map=None,
     ) -> tuple[float, float, float]:
         measure = (self.practice_preparation["measure"]
                    if self.practice_preparation is not None else None)
@@ -139,7 +140,7 @@ class VisualTransport:
             preview_loop_pending=self._preview_loop_pending,
             gap_beats=self.visual_gap_beats,
             paused=self.paused,
-        ), now)
+        ), now, tempo_map=tempo_map)
 
 
 class TransportField:
