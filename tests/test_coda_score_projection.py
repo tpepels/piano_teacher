@@ -612,3 +612,72 @@ def test_retimed_source_bar_tie_shortens_after_boundary_without_retrigger(tmp_pa
                           stage.tempo_map.seconds_at(n.end))
                for n in stage.variant.notes]
     assert stage.grade(performed).assessment.clean
+
+
+def test_source_dynamic_follows_retimed_note_with_original_identity(tmp_path):
+    """Move a source dynamic from beat 1 to the retimed attack at beat 1.5."""
+    from piano_teacher.exercise_contracts import TimingPlan
+
+    root=ET.fromstring(SOURCE.read_text())
+    right=root.findall("./part")[0]
+    bar=right.findall("./measure")[0]
+    pitched=[n for n in bar.findall("note") if n.find("pitch") is not None]
+    direction=ET.Element("direction",placement="below")
+    dt=ET.SubElement(direction,"direction-type")
+    ET.SubElement(ET.SubElement(dt,"dynamics"),"mf")
+    bar.insert(list(bar).index(pitched[1]),direction)
+    source=tmp_path/"authored-midbeat-dynamic.musicxml"
+    source.write_text(ET.tostring(root,encoding="unicode"))
+    piece=load_musicxml(source,bpm=80)
+    original=ExerciseVariant(
+        "original",Phrase(1,1,2,0,8,piece.notes),
+        tuple(range(len(piece.notes))))
+    baseline=OriginalTiming().transform(original)
+    changed=list(baseline.events)
+    idx=next(i for i,n in enumerate(original.notes)
+             if n.hand=="right" and abs(n.start-1)<1e-7)
+    changed[idx]=replace(changed[idx],exercise_start=1.5,exercise_end=2)
+    plan=TimingPlan("moved-dynamic",original,tuple(changed),8)
+    stage=project_coda_score(
+        piece,plan,reference_family="dotted-rhythms",bpm=80)
+    assert piece.source_musicxml!=stage.piece.source_musicxml
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"dynamic"))
+    xml=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    direction=xml.find("./part[@id='RH']/measure[@number='1']/direction")
+    assert direction is not None
+    assert direction.find(".//mf") is not None
+    assert int(direction.findtext("offset"))==15120
+    assert len(xml.findall(".//direction/direction-type/dynamics/mf"))==1
+    model=artifacts.source_model(stage.selection)
+    identity=original.notes[idx].source_id
+    assert next(n for n in model["notes"] if n["id"]==identity)[
+        "onset_beats"]==pytest.approx(1.5)
+    assert original.notes[idx].start==1
+    performed=[PlayedNote(n.pitch,stage.tempo_map.seconds_at(n.start),
+                          stage.tempo_map.seconds_at(n.end))
+               for n in stage.variant.notes]
+    assert stage.grade(performed).assessment.clean
+
+
+def test_source_dynamic_cannot_move_to_another_measure(tmp_path):
+    from piano_teacher.exercise_contracts import TimingPlan
+    root=ET.fromstring(SOURCE.read_text())
+    bar=root.findall("./part")[0].findall("./measure")[0]
+    notes=[n for n in bar.findall("./note") if n.find("pitch") is not None]
+    direction=ET.Element("direction")
+    dt=ET.SubElement(direction,"direction-type")
+    ET.SubElement(ET.SubElement(dt,"dynamics"),"p")
+    bar.insert(list(bar).index(notes[-1]),direction)
+    path=tmp_path/"crossing-direction.musicxml"
+    path.write_text(ET.tostring(root,encoding="unicode"))
+    piece=load_musicxml(path,bpm=80)
+    original=ExerciseVariant("original",Phrase(1,1,2,0,8,piece.notes),
+                             tuple(range(len(piece.notes))))
+    baseline=OriginalTiming().transform(original)
+    events=list(baseline.events)
+    i=next(i for i,n in enumerate(original.notes)
+           if n.hand=="right" and n.start==3)
+    events[i]=replace(events[i],exercise_start=4.1,exercise_end=4.5)
+    plan=TimingPlan("bad-direction-crossbar",original,tuple(events),8)
+    with pytest.raises(ValueError,match="direction moved outside original source measure"):
+        project_coda_score(piece,plan,reference_family="dotted-rhythms",bpm=80)
