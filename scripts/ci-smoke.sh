@@ -20,6 +20,8 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_inprocess_artifact_install.py \
   tests/test_inprocess_transport_structure.py \
   tests/test_godot_preload_paths.py \
+  tests/test_retained_score_pipeline.py::test_frame_path_never_reassembles_source_or_preparation_ink \
+  tests/test_retained_score_pipeline.py::test_fingering_overlay_has_bounded_source_window \
   tests/test_midi_polyphonic_stems.py \
   tests/test_midi_visual_fast_path.py \
   tests/test_midi_calibration.py \
