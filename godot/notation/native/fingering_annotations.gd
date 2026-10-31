@@ -14,6 +14,7 @@ var score_layout
 var connector_geometry
 var obstacles
 var fingering_layout: Array = []
+var widest_fingering := 0.0
 var drawn_fingerings: Array = []
 var fingering_layout_gap := -1.0
 var fingering_layout_height := -1.0
@@ -33,6 +34,7 @@ func begin_frame() -> void:
 
 func clear() -> void:
     fingering_layout.clear()
+    widest_fingering = 0.0
     drawn_fingerings.clear()
     fingering_placement_issues.clear()
     fingering_layout_gap = -1.0
@@ -86,6 +88,13 @@ func layout_fingerings(gap: float, play_from_beat: float = 0.0) -> void:
     var packed: Dictionary = FingeringSpatialLayout.pack(candidates, cell_metrics,
         gap, score_layout.size.y, cell, bins, obstacles.staff_lines, font_size)
     fingering_layout = packed["layout"]
+    # Layout packing is source-space work. Sort once so the dynamic
+    # overlay never scans annotations in offscreen measures.
+    fingering_layout.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
+        return a["rect"].position.x < b["rect"].position.x)
+    widest_fingering = 0.0
+    for item in fingering_layout:
+        widest_fingering = maxf(widest_fing,float(item["rect"].size.x))
     fingering_placement_issues = packed["issues"]
 
 
@@ -118,7 +127,20 @@ func paint(canvas, clock: float, playhead_x: float, gap: float,
     if absf(fingering_layout_gap-gap) > .001 or absf(fingering_layout_height-score_layout.size.y) > .001:
         layout_fingerings(gap,float(context.get("play_from_beat",0.0)))
     var translation := Vector2(score_layout.timeline.screen_x(0.0,clock,playhead_x,float(context.get("play_from_beat",0.0))),0.0)
-    for item in fingering_layout:
+    var earliest: float = 30.0-translation.x-widest_fingering
+    var latest: float = score_layout.size.x-translation.x
+    var low := 0
+    var high: int = fingering_layout.size()
+    while low < high:
+        var mid: int = (low+high)>>1
+        if float(fingering_layout[mid]["rect"].position.x) < earliest:
+            low = mid+1
+        else:
+            high = mid
+    for index in range(low,fingering_layout.size()):
+        var item: Dictionary = fingering_layout[index]
+        if float(item["rect"].position.x) > latest:
+            break
         if not SourceVisibility.event_visible(score_layout.expression_note_index.get(str(item["event_ids"][0]),{}),
                 pass_start,bool(context.get("score_loop_enabled",false)),context.get("preparation_history",{})):
             continue
