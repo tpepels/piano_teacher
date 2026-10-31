@@ -336,7 +336,7 @@ def test_coda_rejects_unverified_authored_tuplet_marks(tmp_path):
     ET.SubElement(ratio,"actual-notes").text="3"
     ET.SubElement(ratio,"normal-notes").text="2"
     decorated=replace(piece,source_musicxml=ET.tostring(root,encoding="unicode"))
-    with pytest.raises(ValueError,match="requires unmodified 3:2 eighth tuplets"):
+    with pytest.raises(ValueError,match="requires unmodified 3:2, 5:4 or 7:4 eighth tuplets"):
         project_coda_score(decorated,OriginalTiming().transform(variant),
                            reference_family="dotted-rhythms",bpm=80)
 
@@ -518,7 +518,7 @@ def test_coda_tuplet_proof_rejects_changed_generated_bracket_and_ratio(tmp_path)
     ratio=wrong_ratio.find(".//time-modification/actual-notes")
     assert ratio is not None
     ratio.text="5"
-    with pytest.raises(ValueError,match="changed an authored 3:2 tuplet ratio"):
+    with pytest.raises(ValueError,match="changed an authored tuplet ratio"):
         verify_projected_tuplets(groups,ET.tostring(wrong_ratio,encoding="unicode"),
                                  score.note_bindings)
 
@@ -548,3 +548,35 @@ def test_coda_retimed_source_slur_keeps_authored_ink_and_grading(tmp_path):
                           stage.tempo_map.seconds_at(n.end))
                for n in stage.variant.notes]
     assert stage.grade(performed).assessment.clean
+
+
+@pytest.mark.parametrize("actual,normal,quantization",[(5,4,20),(7,4,70)])
+def test_complete_source_quintuplet_and_septuplet_keep_original_ink(
+        actual,normal,quantization,tmp_path):
+    from piano_teacher.research.coda_source_tuplets import source_tuplet_groups
+    path=Path(__file__).parent / "fixtures/research" / f"coda_group_{actual}_{normal}.musicxml"
+    piece=load_musicxml(path,bpm=80)
+    original=ExerciseVariant("original",Phrase(1,1,1,0,4,piece.notes),
+                             tuple(range(len(piece.notes))))
+    result=CodaReferenceDotted(True).transform(
+        original,boundaries=piece.bar_boundaries,
+        quantization=quantization,source_musicxml=piece.source_musicxml)
+    groups=source_tuplet_groups(piece,result.timing,factor=1)
+    assert len(groups)==1
+    assert len(groups[0].source_ids)==actual
+    assert (groups[0].actual,groups[0].normal)==(actual,normal)
+    assert not set(groups[0].source_ids).intersection(result.changed_sources)
+    assert result.changed_sources
+    stage=project_coda_score(
+        piece,result.timing,reference_family="dotted-rhythms",bpm=80)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/f"{actual}-{normal}"))
+    root=ET.fromstring(artifacts.notation_musicxml(stage.selection))
+    first=root.find(".//tuplet[@type='start']")
+    last=root.find(".//tuplet[@type='stop']")
+    assert first is not None and last is not None
+    assert first.get("bracket")=="yes"
+    assert len(root.findall(".//time-modification"))>=actual
+    model=artifacts.source_model(stage.selection)
+    assert len(model["notes"])==len(original.notes)
+    assert {n["id"] for n in model["notes"]}=={
+        n.source_id for n in original.notes}
