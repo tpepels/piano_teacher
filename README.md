@@ -1,8 +1,16 @@
 # Piano Teacher
 
 An offline Linux piano teacher built with Godot 4 and Python. Import your own
-MIDI or MusicXML, learn simplified passages, restore the original notes, then
-connect the passages into a complete performance. All progress stays local.
+MIDI, learn simplified passages, restore the original notes, then connect the
+passages into a complete performance. All progress stays local.
+
+**MIDI-only product contract:** Personal music requires only `.mid` or `.midi`.
+The app derives readable notation from MIDI note events, tracks and available
+meter/key metadata; it may generate MusicXML **internally** as a rendering
+interchange format. Original authored slurs, expressions, detailed voice
+spelling and written rests cannot be recovered reliably from a MIDI file.
+Any source-MusicXML-dependent Coda reproduction remains research-only and is
+excluded from the desktop product and mandatory CI.
 
 Piano fingering uses the real pretrained Lumikey models locally. Install Node.js
 20+ and npm, then run `./scripts/setup-fingering.sh` once. Original-piece plans
@@ -137,8 +145,8 @@ arguments can be passed through, for example `./run.sh --windowed`.
 
 Use **Music** to choose music from `~/Music/Piano Teacher`. Settings
 can select another folder; its subfolders are scanned automatically. Supported
-formats are `.mid`, `.midi`, `.musicxml`, `.xml` and `.mxl`. The library displays
-real filename and format metadata; files are never moved or rewritten.
+formats for the personal music library are `.mid` and `.midi`. The library
+displays real filename and format metadata; files are never moved or rewritten.
 
 Select your actual piano in **Settings → Piano input**. A virtual MIDI Through
 port is not automatically treated as a connected instrument. Play a note to

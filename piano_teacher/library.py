@@ -15,7 +15,7 @@ from .exercise_strategies import available_strategies
 from .exercise_contracts import (resolve_timing_strategy, resolve_tempo_strategy,
                                  resolve_diagnosis_strategy, resolve_learner_strategy)
 
-FORMATS = {'.mid', '.midi', '.musicxml', '.xml', '.mxl'}
+FORMATS = frozenset({'.mid', '.midi'})  # Only user-supplied MIDI enters the desktop library.
 MAX_FILES = 5000
 
 
@@ -61,6 +61,11 @@ class ScoreLibrary:
                 ("learner_strategy", {"repeated-error", "repeat-only"}, "repeated-error")):
             if self.settings[key] not in valid:
                 self.settings[key] = fallback
+        # A previously selected MusicXML file is not a valid MIDI-only library entry.
+        recent = self.settings['last_piece']
+        if (recent and not is_warmup(recent)
+                and Path(recent).suffix.lower() not in FORMATS):
+            self.settings['last_piece'] = ''
         self._folder = self._normalize_folder(self.settings['music_dir'], require_exists=False)
         self.settings['music_dir'] = str(self._folder)
 
@@ -169,7 +174,7 @@ class ScoreLibrary:
                             continue
                         items.append({'id': relative, 'title': path.stem.replace('_', ' '),
                                       'folder': path.relative_to(root).parent.as_posix() if path.parent != root else '',
-                                      'format': 'MIDI' if path.suffix.lower() in {'.mid', '.midi'} else 'MusicXML'})
+                                      'format': 'MIDI'})
                     except OSError:
                         continue
                     if len(items) >= MAX_FILES:

@@ -9,6 +9,8 @@ PYTHON="${PYTHON:-python}"
 find scripts -type f -name '*.sh' -print0 | xargs -0 -r bash -n
 # Focused, self-contained MIDI and state/assessment contracts.
 timeout 25s "$PYTHON" -m pytest -q \
+  tests/test_midi_only_product.py \
+  tests/test_library.py \
   tests/test_midi_connection.py \
   tests/test_rolling_recovery_transition.py \
   tests/test_assessment_service.py \
@@ -23,18 +25,6 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_rubricnet_reproduction.py \
   tests/test_rubricnet_offline_integration.py \
   tests/test_moonlight_real_midi_beams.py \
-  tests/test_coda_matrix_research.py \
-  tests/test_coda_written_rests_research.py \
-  tests/test_coda_source_metadata.py \
-  tests/test_coda_source_connectors.py \
-  tests/test_coda_notation_hierarchy.py \
-  tests/test_coda_four_family_contract.py \
-  tests/test_coda_reference_matrix.py \
-  tests/test_coda_reference_exercises.py \
-  tests/test_coda_score_projection.py \
-  tests/test_coda_written_tie_segments.py \
-  tests/test_coda_research_strategies.py \
   tests/test_shared_tempo_timeline.py \
   tests/test_live_input_view.py \
-  tests/test_coda_timeline_end_to_end.py \
   tests/test_notation_coverage_report.py

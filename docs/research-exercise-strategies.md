@@ -59,7 +59,7 @@ Generate a reproducible side-by-side report (no score rendering or MIDI input):
 
 ```bash
 python scripts/compare_exercise_strategies.py path/to/song.mid
-python scripts/compare_exercise_strategies.py path/to/song.musicxml --json > comparison.json
+python scripts/compare_exercise_strategies.py path/to/song.mid --json > comparison.json
 python -m pytest -q tests/test_exercise_strategies.py tests/test_exercise_generator.py
 ```
 
@@ -74,7 +74,7 @@ The timing and adaptive-remediation contracts can be exercised independently
 of the live score:
 
 ```bash
-python scripts/compare_exercise_strategies.py song.musicxml --json \
+python scripts/compare_exercise_strategies.py song.mid --json \
   --timing-preview dotted-long-short --tempo-preview two-phase-tempo
 python -m pytest -q tests/test_exercise_strategies.py tests/test_exercise_contracts.py \
   tests/test_timing_live_integration.py tests/test_timed_real_scores_and_recovery.py

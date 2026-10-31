@@ -1,5 +1,16 @@
 # Research reproduction — Gate 2: Coda symbolic system
 
+> **Product scope revised 2026-10-31:** Piano Teacher now targets a MIDI-only
+> user library. Original MusicXML authoring metadata is unavailable for the
+> user's music, so source-XML preservation and exact upstream Coda parity are
+> excluded from the product roadmap and mandatory CI. The work described
+> below is historical, isolated research. Retain only MIDI-operable exercise
+> concepts (part selection, tempo changes, chord blocks, dotted pairs) with
+> verified source-note identity and the same notation/Listen/grading timeline.
+> Internally generated lesson MusicXML remains an engraving format, not an
+> external score dependency. No research-only Coda feature is promoted by
+> this scope change.
+
 2026-10-30. Branch: `main`. Status: **reference thesis and official backend now located; reference-guided subset implemented; complete parity NOT established**.
 
 ## Source record

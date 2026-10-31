@@ -12,7 +12,8 @@ def populated(tmp_path):
     (music / 'Bach.mid').write_bytes(b'midi example')
     (music / 'notes.txt').write_text('ignore')
     (music / 'Etudes').mkdir()
-    (music / 'Etudes' / 'Chopin.musicxml').write_text('xml example')
+    (music / 'Etudes' / 'Chopin.midi').write_bytes(b'midi example')
+    (music / 'Etudes' / 'Chopin.musicxml').write_text('ignored source notation')
     (music / '.drafts').mkdir()
     (music / '.drafts' / 'hidden.mid').write_bytes(b'ignore')
     library = ScoreLibrary(config_dir=tmp_path / 'config')
@@ -24,8 +25,8 @@ def test_library_lists_supported_scores_recursively_without_parsing(tmp_path):
     library, _ = populated(tmp_path)
     listing = library.scan()
     assert listing['count'] == 2
-    assert [p['id'] for p in listing['pieces']] == ['Bach.mid', 'Etudes/Chopin.musicxml']
-    assert listing['pieces'][1]['format'] == 'MusicXML'
+    assert [p['id'] for p in listing['pieces']] == ['Bach.mid', 'Etudes/Chopin.midi']
+    assert listing['pieces'][1]['format'] == 'MIDI'
     assert listing['pieces'][1]['folder'] == 'Etudes'
     assert not listing.get('error')
 
@@ -37,7 +38,8 @@ def test_library_rejects_path_escape_unsupported_files_and_links(tmp_path):
     (folder / 'bad.mid').symlink_to(outside)
     assert library.scan()['count'] == 2
     assert library.resolve('Bach.mid') == folder / 'Bach.mid'
-    for path in ('../outside.mid', '/etc/passwd', 'notes.txt', 'bad.mid', '', 'Etudes/../../outside.mid'):
+    for path in ('../outside.mid', '/etc/passwd', 'notes.txt', 'bad.mid', '',
+                 'Etudes/Chopin.musicxml', 'Etudes/../../outside.mid'):
         with pytest.raises(ValueError):
             library.resolve(path)
 
@@ -98,3 +100,15 @@ def test_bad_preferences_do_not_override_valid_saved_config(tmp_path):
     with pytest.raises(ValueError):
         lib.update(unexpected=True)
     assert lib.public_settings()['fullscreen'] is True
+
+
+def test_obsolete_musicxml_recent_is_not_restored(tmp_path):
+    library, folder = populated(tmp_path)
+    settings = library.settings_path
+    stored = json.loads(settings.read_text())
+    stored['last_piece'] = 'Etudes/Chopin.musicxml'
+    settings.write_text(json.dumps(stored))
+    restored = ScoreLibrary(config_dir=tmp_path / 'config')
+    assert restored.scan()['last_piece'] == ''
+    assert [item['id'] for item in restored.scan()['pieces']] == [
+        'Bach.mid', 'Etudes/Chopin.midi']
