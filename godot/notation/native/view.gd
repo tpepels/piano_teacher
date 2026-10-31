@@ -294,6 +294,7 @@ func _prepare_static_geometry() -> void:
     connector_geometry.clear_cache()
     connector_geometry.prewarm_tie_clearances(prepared_gap)
     connector_geometry.prewarm_beam_layout(prepared_gap,layout.cached_head_offsets)
+    connector_geometry.prewarm_slur_geometry(prepared_gap)
 
 func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
     if state.get("phase","") == "ready" and state.get("practice_preparation") == null and \
