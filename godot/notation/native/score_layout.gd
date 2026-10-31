@@ -5,6 +5,7 @@ const Geometry := preload("res://notation/native/geometry.gd")
 const ScoreIndex := preload("res://notation/native/score_index.gd")
 const VoiceLayout := preload("res://notation/native/voice_layout.gd")
 const RestLanePlanning := preload("res://notation/native/rest_lane_planning.gd")
+const SourceSpans := preload("res://notation/native/source_spans.gd")
 var timeline
 var glyphs
 var size := Vector2.ZERO
@@ -19,6 +20,8 @@ var measure_by_number: Dictionary = {}
 var ordered_events: Array = []
 var attached_grace_notes: Array = []
 var source_expressions: Array = []
+var prepared_hairpins: Array = []
+var prepared_voltas: Array = []
 var expression_note_index: Dictionary = {}
 var tie_pairs: Array = []
 var slur_pairs: Array = []
@@ -61,6 +64,8 @@ func clear() -> void:
     ordered_events.clear()
     attached_grace_notes.clear()
     source_expressions.clear()
+    prepared_hairpins.clear()
+    prepared_voltas.clear()
     expression_note_index.clear()
     tie_pairs.clear()
     slur_pairs.clear()
@@ -87,6 +92,8 @@ func rebuild_index() -> void:
     ordered_events = index["ordered_events"]
     attached_grace_notes = timeline.model.get("grace_notes", []).duplicate(true)
     source_expressions = timeline.model.get("expressions", []).duplicate(true)
+    prepared_hairpins = SourceSpans.hairpins(source_expressions,self)
+    prepared_voltas = SourceSpans.voltas(timeline.measures,timeline.duration_beats)
     expression_note_index.clear()
     for source_event in ordered_events:
         if str(source_event.get("kind", "")) == "note":
