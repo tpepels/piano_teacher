@@ -123,3 +123,34 @@ def test_preview_shortens_settlement_without_grading():
     progression.advance(engine, 108.06)
     assert len(engine.completed) == 1
     assert not engine.policy.calls
+
+
+def test_start_and_loop_continuation_share_cached_grid_and_clock(tmp_path, monkeypatch):
+    from piano_teacher.learning import LearningPlan
+    from piano_teacher.music import Note, Piece
+    from piano_teacher.server import PracticeEngine
+
+    source = (Note(0.0, .5, 60, 0, 0, "right"),
+              Note(4.0, 4.5, 62, 0, 0, "right"))
+    phrase = Phrase(1, 1, 2, 0.0, 8.0, source)
+    piece = Piece("Start clock contract", 80, source, (phrase,),
+                  bar_boundaries=(0.0, 4.0, 8.0),
+                  time_signatures=((0.0, 4, 4),))
+    monkeypatch.setattr(module.time, "monotonic", lambda: 123.0)
+    engine = PracticeEngine(tmp_path, enable_midi=False)
+    engine.plan = LearningPlan(piece)
+    try:
+        engine.start()
+        assert engine.preview_only
+        assert engine.run_at == 123.0 + engine.count_in_beats*60/engine.plan.bpm
+        source_grid = engine.attempt_progression._grid
+        assert source_grid is not None
+        first_transport = engine.transport_id
+        engine.start(loop_continuation=True)
+        assert engine.attempt_progression._grid is source_grid
+        assert engine.transport_id == first_transport + 1
+        assert engine.run_at == 123.0
+        assert engine.count_in_beats == 0.0
+        assert not engine.auto
+    finally:
+        engine.db.close()
