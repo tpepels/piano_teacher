@@ -498,3 +498,73 @@ student-model integration or teacher-study outcomes. Do not accept Gate 2
 as complete on this evidence alone. The next technical step is
 source-annotation-preserving projection for a broader real-score set
 followed by bounded Verovio/Godot rendering and device tests.
+
+## Coda source annotation preservation — 2026-10-31
+
+**Verified current revision:** `3ddeb00e01774542b8b5594ee1ac611e49365105`.
+The research-only `coda_annotation_guard.py` extends the
+`CodaProjectedStage` contract to preserve authored notation only if its
+source event timing and identity are unchanged. It checks the *generated*
+`build_lesson_score()` XML before allowing a selected research stage:
+
+- **Paired source slurs:** explicit authored end identities, complete
+  source-voice interval protection, unchanged original attacks, exact
+  copied slur attributes on the corresponding new noteheads.
+- **Articulations:** unchanged staccato/tenuto/accent, source-id matched
+  and counted against the generated MusicXML.
+- **Beams:** source-authored primary begin/continue/end groups only where
+  all member attacks, durations and voice ownership survive. In that case,
+  the complete authored 4-eighth grouping supersedes automatically
+  inferred 2+2 groups. The generated score must match every source
+  member's beam marks and have balanced, uninterrupted beam sequences
+  per measure and voice.
+- **Simple directions:** dynamics `p, pp, ppp, mp, mf, f, ff, fff`
+  anchored at the beginning of an original measure, with a uniquely
+  identified original performing hand. The projected direction must
+  retain the same hand, measure, symbol and zero offset.
+- **Plain cross-bar ties:** complete two-segment unstyled ties over one
+  original internal measure boundary, whose sounding source note
+  remains unchanged. The start/stop source voice and pitch are linked,
+  the original note onset/end must equal the written tie chain, and the
+  generated score must retain physical `tie` and `tied` marks on
+  exactly one pair of source-owned glyphs at the original barline.
+  Source-tie continuations stay a single MIDI attack, never a second
+  graded note.
+
+The original `Piece` and its MusicXML are unmodified. Every accepted
+mark undergoes direct generated-XML comparison. Unsupported and
+incomplete marks fail closed (including malformed or styled ties,
+unpaired slurs, changed slur-interior notes, transformed beamed notes
+with unverifiable grouping, arbitrary directions, tuplets, ornaments
+and x2/x4 scaling of annotated tie/slur structures). No new production
+lesson strategies were activated.
+
+### Bounded additional real-score evidence
+
+- Current fast run:
+  https://github.com/tpepels/piano_teacher/actions/runs/41196496479
+  **226 passed / 6 skipped**. Separate existing semantic smoke:
+  **10/10 source scores** and 261 original attack identities.
+- Actual SVG/Listen/grade run:
+  https://github.com/tpepels/piano_teacher/actions/runs/41196496507
+  **9 passed in 1.65 s**, artifact `13040737024`. This includes the
+  original five transformed Coda score projections and WAV/live feedback;
+  an authored RH slur plus staccato over a differently transformed
+  voice, with real Verovio `slur` ink; exact original beam grouping
+  from `tests/fixtures/connector_pixels/beams/score.musicxml`; and
+  separate sounding ties from two competing voices in
+  `tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml`,
+  verified as independently anchored real SVG tie groups.
+- Negative source tests reject unpaired slurs, incomplete, shortened
+  or styled ties, unsupported tuplets and source changes inside an
+  authored slur rather than silently dropping their markup.
+
+**Limits of this proof:** the real parallel-tie fixture uses an
+unchanged original timing plan to validate the notation projection;
+it does not demonstrate Coda's rhythm rewriting through the tie.
+The author's broader MMR strategies still need research parity for
+complex source repertoire. Native Godot playback rendering and physical
+MIDI remain untested in this revision. General tuplets, arbitrary
+directions, altered annotation timing and mixed-meter written slowdown
+require distinct explicit semantic transformations and tests.
+**Gate 2 remains partial.**

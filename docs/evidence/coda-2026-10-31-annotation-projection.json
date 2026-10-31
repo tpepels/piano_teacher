@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-31",
+  "revision": "3ddeb00e01774542b8b5594ee1ac611e49365105",
+  "fast_ci": {
+    "url": "https://github.com/tpepels/piano_teacher/actions/runs/41196496479",
+    "passed": 226,
+    "skipped": 6,
+    "semantic_xml_scores": 10,
+    "original_attacks": 261
+  },
+  "selected_real_engraving": {
+    "url": "https://github.com/tpepels/piano_teacher/actions/runs/41196496507",
+    "tests_passed": 9,
+    "artifact_id": 13040737024
+  },
+  "preserved_when_source_timing_unchanged": [
+    "paired source slurs",
+    "simple source articulations",
+    "complete authored primary beam groups",
+    "simple zero-offset measure-initial dynamics with same hand",
+    "plain complete barline ties with sounding source identity"
+  ],
+  "verified_real_score_fixtures": [
+    "tests/fixtures/connector_pixels/beams/score.musicxml",
+    "tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml"
+  ],
+  "negative_cases": [
+    "unpaired source slur",
+    "retimed source slur interior",
+    "styled or partial or retimed source tie",
+    "unsupported tuplet notation",
+    "ambiguous source direction",
+    "unsupported markup"
+  ],
+  "limitations": [
+    "time-remapped tuplet notation",
+    "retimed/styled ties and slurs",
+    "mixed meter slowdown",
+    "arbitrary expressions and directions",
+    "native Godot physical framebuffer",
+    "physical MIDI",
+    "wide Coda upstream fidelity"
+  ],
+  "research_stage_only": true,
+  "gate_2_complete": false
+}

@@ -159,3 +159,26 @@ Coda strategy has been enabled; no original mastery is granted
 by transformed exercises. See Gate 2 tracker for limitations and
 the next annotation-projection work. Do not resume unrelated
 notation audit workstreams.
+
+## 2026-10-31 — preserved authored Coda annotation subset
+
+At source SHA `3ddeb00e`, the research projection preserves
+unchanged source slurs, staccato/tenuto/accent, exact primary beams,
+beginning-of-measure dynamics, and plain complete cross-bar sounding
+ties (one original MIDI attack, independent voices). Source data is
+checked against actual generated XML, with exact note ID/hand/measure
+obligations. The production source projector now restores a full
+unchanged authored beam group over generic auto-beaming.
+
+Current bounded evidence: **226 passed, 6 skipped**, 10/10 separate
+existing semantic MusicXML smoke scores; **9 actual Verovio/
+WAV/live-feedback tests passed**. Source checks include real authored
+beam and parallel tied-voice MusicXML fixture files; original source
+scores and original-stage mastery remain unchanged.
+Run `41196496507`, artifact `13040737024`.
+Incomplete/styled/retimed source ties, incomplete slurs, unsafe
+time-changing annotations, tuplets and arbitrary directions remain
+explicitly unsupported. Next: complete authorship-aware tuplet and
+expressive-direction time projection with new real-source examples,
+then broaden production/native MIDI proof. Do not return to
+unrelated pixel-audit work.
