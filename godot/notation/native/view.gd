@@ -6,8 +6,6 @@ extends "res://notation/shared/view_base.gd"
 # There is no full-page SVG bitmap or custom imitation of a music glyph.
 # Incomplete notation is rejected; production reports a preparation error.
 const Geometry := preload("res://notation/native/geometry.gd")
-const ScoreIndex := preload("res://notation/native/score_index.gd")
-const BarlineLayout := preload("res://notation/native/barline_layout.gd")
 const EngravingReadiness := preload("res://notation/native/engraving_readiness.gd")
 const VerovioGlyphs := preload("res://notation/native/glyphs.gd")
 const Design := preload("res://practice_theme.gd")
@@ -19,7 +17,6 @@ const MAX_STAFF_GAP := ViewportFit.MAX_STAFF_GAP
 # A piano learner needs upcoming notation in view. Preserve the largest
 # authentic staff that leaves at least this many beats to the right of the
 # fixed playhead. No temporal warping, font imitation or overlap is allowed.
-const FingeringPlacement := preload("res://notation/native/fingering_placement.gd")
 
 signal fingering_change_requested(source_id: String, finger: Variant)
 signal retained_ink_compiled
@@ -705,7 +702,8 @@ func _place_retained_score(playhead_x: float, camera_clock: float, gap: float) -
     _sync_retained_visibility(active_segments)
 
 func _draw() -> void:
-    layout.set_viewport(size)
+    if layout.size != size:
+        layout.set_viewport(size)
     drawn_noteheads.clear()
     drawn_note_instances.clear()
     visible_symbols = 0
@@ -725,9 +723,6 @@ func _draw() -> void:
     var gap: float = staff_gap()
     var playhead_x: float = size.x * PLAYHEAD_FRACTION
     var camera_clock: float = clock_beat if running or paused else 0.0
-    var current: float = timeline.musical_beat(camera_clock,play_from_beat)
-    var left: float = current-playhead_x/timeline.pixels_per_beat
-    var right: float = left+size.x/timeline.pixels_per_beat
     # A quiet pool of light marks the strike without hiding any engraved ink.
     var top: float = layout.staff_center("right")-gap*3.8
     var bottom: float = layout.staff_center("left")+gap*3.7
@@ -739,7 +734,8 @@ func _draw() -> void:
     # Always draw ten native rules; no copied or stitched raster systems.
     for staff in ["right","left"]:
         var center: float = layout.staff_center(staff)
-        var ink: Color = RenderPass.new({"active_hand":active_hand}).ink(staff)
+        var selected: bool = active_hand == "both" or active_hand == staff
+        var ink: Color = NOTE_INK if selected else Color(DIM_INK,.46)
         for line_index in range(5):
             var y: float = center+(float(line_index)-2.0)*gap
             draw_line(Vector2(0,y),Vector2(size.x,y),
