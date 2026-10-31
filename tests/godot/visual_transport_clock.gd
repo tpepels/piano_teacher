@@ -349,5 +349,32 @@ func run() -> void:
     check(absf(recovery_clock.visual_beat(base_ms+5500)-8.0)<.000001,
         "Retry rest meets the MIDI deadline without a visual hold")
 
+    # Once music starts, later pause/feedback polling cannot re-calibrate
+    # the monotonic epoch and shift an already scheduled retry.
+    var frozen_epoch = load("res://visual_transport_clock.gd").new()
+    var calibration_idle := {"revision":1,"transport_id":1,"bpm":80.0,
+        "running":false,"paused":false,"phase":"ready",
+        "clock_beat":0.0,"visual_scroll_speed":0.0,
+        "clock_sampled_at_ms":1000000.0}
+    frozen_epoch.accept(calibration_idle,base_ms,base_ms+80)
+    var original_offset: float = frozen_epoch.backend_offset_ms
+    var started := calibration_idle.duplicate(true)
+    started["running"] = true
+    started["transport_id"] = 2
+    started["phase"] = "playing"
+    started["visual_run_at_ms"] = 1000000.0
+    started["visual_tempo_segments"] = []
+    started["clock_sampled_at_ms"] = 1000100.0
+    frozen_epoch.accept(started,base_ms+100,base_ms+100)
+    var stopped_again := started.duplicate(true)
+    stopped_again["running"] = false
+    stopped_again["paused"] = true
+    stopped_again["phase"] = "paused"
+    stopped_again["clock_sampled_at_ms"] = 1000250.0
+    stopped_again["visual_scroll_speed"] = 0.0
+    frozen_epoch.accept(stopped_again,base_ms+200,base_ms+200)
+    check(frozen_epoch.backend_offset_ms == original_offset,
+        "Pause may not re-calibrate the clock epoch after music begins")
+
     print("VISUAL_TRANSPORT_CLOCK_FAILURES:", failure_count)
     quit(0 if failure_count == 0 else 1)
