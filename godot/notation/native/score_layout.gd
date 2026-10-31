@@ -96,7 +96,7 @@ func rebuild_index() -> void:
     for leader_id in chord_members:
         var ordered: Array = chord_members[leader_id].duplicate()
         ordered.sort_custom(func(a: Dictionary,b: Dictionary) -> bool:
-            return Geometry.diatonic_index(a.get("spelling",{})) <
+            return Geometry.diatonic_index(a.get("spelling",{})) < \
                 Geometry.diatonic_index(b.get("spelling",{})))
         sorted_chord_members[leader_id] = ordered
     voice_stem_up_by_note = polyphonic_stem_directions()
