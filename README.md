@@ -22,25 +22,40 @@ explicitly when desired. The native score gives consecutive fast notes at
 least 36 screen pixels between attack times (when the MIDI has sustained fast
 rhythm), preserving the shared linear score clock and real glyph shapes.
 
-**Bluetooth/MIDI input calibration:** Open **Settings → MIDI input →
-Calibrate MIDI timing**, then tap any piano key with each of the eight audible
-clicks. The app measures the median deviation between its reference click
-clock and incoming MIDI note-on timestamps and displays tap-to-tap variation.
-If enough taps agree, select **Apply offset** to save the correction for
-subsequent practice (up to 250 ms). **Reset offset** returns to zero.
-No device or direct audio loopback is involved: the estimate also includes
-human response and speaker/output latency, so it is *not* a precise measurement
-of Bluetooth transport latency. Inconsistent samples cannot be applied.
-The source score clock stays unchanged; only incoming attack timestamps are
-adjusted. New sessions reopen the last opened MIDI score at its saved lesson
-position without automatically starting playback.
+**Bluetooth/MIDI input calibration:** Settings → MIDI input → Calibrate
+MIDI timing now shows an explicit **four-beat count-in** before each of
+**three consecutive eight-tap rounds**. A large countdown, round number,
+tap progress and per-round results accompany the clicks. The calibrated
+offset is the median of three independently measured round medians, not
+one arbitrary response. Each round requires six or more taps with median
+absolute timing deviation at most 45 ms, the three medians must agree
+within 50 ms, and the result must be between 0 and 200 ms. Invalid
+measurements are **not** applied. Press Apply offset to save an accepted
+estimate; Reset offset restores zero. This tap-along measurement includes
+human response and sound output delay; it cannot isolate Bluetooth input
+latency. Incoming MIDI timestamps alone are corrected.
 
-In timed Coda practice, a failed passage is allowed to finish before
-automatic recovery. The reversing score camera is smoothed for poll jitter
-and the preparation bar now supplies audible countdown ticks without extending
-the pause. RubricNet trained-score generation remains available only to
-research scripts; its original-MusicXML-dependent option is hidden from
-the MIDI-only application.
+**Practice warning policy:** Exact onsets are green. Slightly early/late
+or over/underheld attacks remain amber with detailed feedback. **A
+passage with no red errors and fewer than half its distinct MIDI attack
+times marked amber is accepted**: it proceeds along the same lesson
+ladder without a failed rewind. At least half amber attacks, a wrong
+pitch, a missed pitch, or an extra pitch causes a retry. Simultaneous
+chord heads count as one attack when evaluating the amber fraction.
+
+**Retry presentation:** The retry camera now anchors a single visual
+timeline to the scheduled transition deadline, and projects the reverse,
+one-measure preparation, and forward movement from it. Poll response
+jitter does not resynchronize its position immediately before the
+first attack. Metronome ticks and the preparation count-in are driven
+by this same deadline. The backend's grading clock remains unchanged.
+
+**Local headless Godot tests:** Test scripts are outside the Godot
+project directory, so pass their **absolute** paths:
+```bash
+godot --headless --path godot --script "$PWD/tests/godot/ink_spacing.gd"
+godot --headless --path godot --script "$PWD/tests/godot/retry_camera_clock.gd"
+```
 
 **MIDI-only product contract:** Personal music requires only `.mid` or `.midi`.
 The app derives readable notation from MIDI note events, tracks and available

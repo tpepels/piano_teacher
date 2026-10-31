@@ -5,8 +5,8 @@ from .lesson_settings import SETTINGS
 
 def next_full_attempt(plan, result) -> str:
     """Describe the pending decision without applying or crediting it early."""
-    if not result.clean:
-        return "Let's try the whole passage again."
+    if not getattr(result, "passed", result.clean):
+        return "Retry the whole passage (red errors or at least half the attacks yellow)."
     if plan.bpm < plan.target_bpm:
         following = plan._next_automatic_bpm()
         return f"Clean passage — restore tempo to {following} BPM toward {plan.target_bpm} BPM."

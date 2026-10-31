@@ -14,6 +14,7 @@ const GameBackdrop := preload("res://game_backdrop.gd")
 const UI := preload("res://ui_factory.gd")
 const LibraryScreen := preload("res://library_screen.gd")
 const VisualTransportClock := preload("res://visual_transport_clock.gd")
+const RetryCameraClock := preload("res://retry_camera_clock.gd")
 const TempoTimeline := preload("res://tempo_timeline.gd")
 const FrameMeter := preload("res://frame_meter.gd")
 const SourceMeasurePicker := preload("res://source_measure_picker.gd")
@@ -62,8 +63,8 @@ var library_resume_requested := false
 var startup_last_music_checked := false
 var calibration_tick_index := -999
 var recovery_click_tick := -999
-var recovery_camera_beat := NAN
-var recovery_camera_tick := -1
+var retry_camera_clock = RetryCameraClock.new()
+var retry_first_click_sent := false
 var last_post_path := ""
 var last_control_action := ""
 var pending_transport_action := ""
@@ -286,41 +287,22 @@ func _transport_beat_now() -> float:
 func _unrolled_score_beat(transport_clock: float) -> float:
     if not last_state.has("visual_offset_beats"):
         return NAN
+    # Once a retry is prepared, a single monotonic deadline determines
+    # reversal, count-in and the first forward note. No HTTP poll correction.
+    if retry_camera_clock.active and not bool(last_state.get("paused", false)) \
+            and str(last_state.get("phase", "")) in ["recovering", "playing"]:
+        return retry_camera_clock.beat_at(Time.get_ticks_msec())
     if bool(last_state.get("running", false)):
-        recovery_camera_beat = NAN
-        recovery_camera_tick = -1
         return float(last_state.get("visual_offset_beats", 0.0)) \
             + float(last_state.get("play_from_beat", 0.0)) + transport_clock
     var observed: float = float(last_state.get("visual_scroll_beat", 0.0))
     if bool(last_state.get("paused", false)):
         return observed
     var speed: float = float(last_state.get("visual_scroll_speed", 0.0))
-    if absf(speed) < .000001:
-        recovery_camera_beat = NAN
-        recovery_camera_tick = -1
-        return observed
-    var age: float = maxf(0.0, float(Time.get_ticks_msec() - last_state_tick) / 1000.0)
+    var age: float = maxf(0.0, float(Time.get_ticks_msec()-last_state_tick)/1000.0)
     var target: float = float(last_state.get("visual_target_beat", observed))
-    var desired: float = minf(target, observed + speed * age) if speed > 0.0 \
+    return minf(target, observed + speed * age) if speed > 0.0 \
         else maxf(target, observed + speed * age)
-    if str(last_state.get("phase", "")) != "recovering":
-        recovery_camera_beat = NAN
-        recovery_camera_tick = -1
-        return desired
-    # Do not snap the reversing camera to each jittery HTTP snapshot.
-    # Preserve its direction and correct at most a small visual distance
-    # per frame. The MIDI/tempo clock and source notation stay untouched.
-    var now_tick := Time.get_ticks_msec()
-    if not is_finite(recovery_camera_beat) or recovery_camera_tick < 0:
-        recovery_camera_beat = desired
-    else:
-        var elapsed := minf(.1, maxf(0.0, float(now_tick-recovery_camera_tick)/1000.0))
-        var predicted: float = recovery_camera_beat + speed * elapsed
-        recovery_camera_beat = predicted + clampf(desired-predicted, -.08, .08)
-        recovery_camera_beat = minf(target, recovery_camera_beat) if speed > 0.0 \
-            else maxf(target, recovery_camera_beat)
-    recovery_camera_tick = now_tick
-    return recovery_camera_beat
 
 
 func _raw_click(accent: bool) -> void:
@@ -330,36 +312,45 @@ func _raw_click(accent: bool) -> void:
     click_player.play()
 
 func _update_count_in() -> void:
+    var now_ms := Time.get_ticks_msec()
     var calibration: Dictionary = last_state.get("midi_calibration", {})
     if bool(calibration.get("active", false)):
         recovery_click_tick = -999
-        var beat: float = float(calibration.get("beat", -2.0))
-        beat += maxf(0.0, float(Time.get_ticks_msec()-last_state_tick)/1000.0)             * float(calibration.get("bpm", 80.0))/60.0
-        if beat >= 0.0 and beat < float(calibration.get("ticks", 8)):
-            var index := floori(beat + 0.00001)
-            if index != calibration_tick_index:
-                calibration_tick_index = index
-                _raw_click(index % 4 == 0)
+        var beat := float(calibration.get("beat", -2.0)) + \
+            maxf(0.0, float(now_ms-last_state_tick)/1000.0) * \
+            float(calibration.get("bpm", 80.0))/60.0
+        var interval := maxi(1, int(calibration.get("round_beats", 12)))
+        var total := interval * maxi(1, int(calibration.get("rounds", 3)))
+        if beat >= 0.0 and beat < float(total):
+            var tick := floori(beat + .00001)
+            if tick != calibration_tick_index:
+                # Do not play a missed initial click halfway into its beat.
+                var timely := calibration_tick_index != -999 or beat - float(tick) < .12
+                calibration_tick_index = tick
+                if timely:
+                    var inside_round := posmod(tick, interval)
+                    _raw_click(inside_round == 0 or
+                        inside_round == int(calibration.get("count_in", 4)))
         return
     calibration_tick_index = -999
+
+    if (str(last_state.get("phase", "")) == "recovering"
+            and retry_camera_clock.active
+            and retry_camera_clock.is_preparing(now_ms)
+            and not bool(last_state.get("paused", false))):
+        var count_beat: float = retry_camera_clock.count_in_beat(now_ms)
+        var bar := maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4)))))
+        practice_view.stage.count_in.present(count_beat, bar, true, false)
+        var tick := floori(count_beat + .00001)
+        if tick != recovery_click_tick:
+            # The preparation measure is forward, always at one fixed BPM.
+            if count_beat < .10 and count_beat >= -float(bar):
+                _raw_click(posmod(tick, bar) == 0)
+                if tick == 0:
+                    retry_first_click_sent = true
+            recovery_click_tick = tick
+        return
     if last_state.is_empty() or not bool(last_state.get("running", false)):
-        var preparation: Variant = last_state.get("practice_preparation")
-        if str(last_state.get("phase", "")) == "recovering"                 and preparation is Dictionary                 and str(preparation.get("phase", "")) == "preparing"                 and not bool(last_state.get("paused", false)):
-            var remaining := maxf(0.0,
-                float(last_state.get("transition_in_seconds", 0.0)) -
-                maxf(0.0, float(Time.get_ticks_msec()-last_state_tick)/1000.0))
-            var bpm: float = maxf(1.0, float(last_state.get("bpm", 60.0)))
-            var count_beat := -remaining*bpm/60.0
-            var bar_beats := maxi(1, int(round(
-                float(last_state.get("count_in_bar_beats", 4)))))
-            practice_view.stage.count_in.present(count_beat, bar_beats, true, false)
-            var tick := floori(count_beat+0.00001)
-            if recovery_click_tick == -999:
-                recovery_click_tick = tick
-            elif tick > recovery_click_tick and count_beat < 0.0:
-                recovery_click_tick = tick
-                _raw_click(posmod(tick, bar_beats) == 0)
-            return
         recovery_click_tick = -999
         practice_view.stage.count_in.present(0.0, 4, false, false)
         count_tick_index = -999
@@ -377,16 +368,17 @@ func _update_count_in() -> void:
         play_tick_index = -1
         last_audio_transport_id = attempt
     if paused:
-        # A paused count-in and a paused score both freeze on their last beat.
-        count_tick_index = int(floor(beat + 0.00001))
+        count_tick_index = int(floor(beat + .00001))
         return
-    var tick: int = int(floor(beat + 0.00001))
+    var tick := int(floor(beat + .00001))
     if tick != count_tick_index:
         count_tick_index = tick
-        # The pickup may be shorter than a whole bar. Accents still follow
-        # the original musical meter, not its abbreviated preparation length.
-        var bar_beats: int = maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4)))))
-        _count_tick(posmod(tick, bar_beats) == 0)
+        var bar_beats := maxi(1,int(round(float(last_state.get("count_in_bar_beats",4)))))
+        if not (tick == 0 and retry_first_click_sent):
+            _count_tick(posmod(tick,bar_beats) == 0)
+        if tick >= 0:
+            retry_first_click_sent = false
+
 
 func _native_score_ready() -> bool:
     return score_session != null and score_session.is_ready()
@@ -955,6 +947,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     var received_ms: int = Time.get_ticks_msec()
     last_state_tick = int((started_ms + received_ms) / 2.0)
     visual_transport_clock.accept(parsed, last_state_tick, received_ms)
+    retry_camera_clock.accept(parsed, last_state_tick)
     if demo_player != null and bool(parsed.get("loaded",false)):
         demo_player.synchronize(parsed, _transport_beat_now())
     # ScoreAssetSession owns revision invalidation and the score_ready handshake.

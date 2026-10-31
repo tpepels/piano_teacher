@@ -29,6 +29,9 @@ var settings_grid: GridContainer
 var device_button: Button
 var input_activity_label: Label
 var calibration_label: Label
+var calibration_count_label: Label
+var calibration_progress: ProgressBar
+var calibration_round_labels: Array[Label] = []
 var calibration_apply_button: Button
 var folder_controls: VBoxContainer
 var folder_edit: LineEdit
@@ -147,7 +150,24 @@ func _ready() -> void:
         calibration_requested.emit("calibration_reset"), false, "utility"))
     calibration_row.add_child(_button("Cancel", func():
         calibration_requested.emit("calibration_cancel"), false, "utility"))
-    calibration_label = _label("No correction · tap in time with 8 clicks to estimate MIDI timing offset.", 14, MUTED)
+    calibration_count_label = _label("4 · 3 · 2 · 1 → PLAY", 28, INK, true)
+    calibration_count_label.visible = false
+    midi.add_child(calibration_count_label)
+    calibration_progress = ProgressBar.new()
+    calibration_progress.min_value = 0
+    calibration_progress.max_value = 100
+    calibration_progress.show_percentage = false
+    calibration_progress.custom_minimum_size.y = 16
+    calibration_progress.visible = false
+    midi.add_child(calibration_progress)
+    var rounds_row := HFlowContainer.new()
+    rounds_row.add_theme_constant_override("h_separation", 16)
+    midi.add_child(rounds_row)
+    for number in range(1, 4):
+        var round_label := _label("Round %d/3" % number, 14, MUTED)
+        calibration_round_labels.append(round_label)
+        rounds_row.add_child(round_label)
+    calibration_label = _label("Three rounds: 4-beat count-in, then 8 taps per round.", 14, MUTED)
     midi.add_child(calibration_label)
 
     var music := _section("Music library")
@@ -172,7 +192,7 @@ func _ready() -> void:
     folder_controls.add_child(folder_actions)
     folder_actions.add_child(_button("Choose folder…", _browse_folder, false, "navigation"))
     folder_actions.add_child(_button("Save folder", func(): save_folder_requested.emit(folder_edit.text.strip_edges()), false, "secondary"))
-    music.add_child(_label("MIDI and MusicXML files in this folder and its subfolders.", 13, MUTED))
+    music.add_child(_label("MIDI files in this folder and its subfolders.", 13, MUTED))
 
     var practice := _section("Practice tempo")
     var practice_panel := _card()
@@ -297,20 +317,52 @@ func present_calibration(state: Dictionary, offset_ms: int) -> void:
     if calibration_label == null:
         return
     var result: Variant = state.get("result")
-    var status := "Applied MIDI offset: %d ms." % offset_ms
-    if bool(state.get("active", false)):
-        status += " Tap any key with the clicks · %d/%d captured." % [
-            int(state.get("samples", 0)), int(state.get("ticks", 8))]
+    var active: bool = bool(state.get("active", false))
+    calibration_progress.visible = active
+    calibration_count_label.visible = active
+    calibration_progress.value = 100.0 * clampf(float(state.get("progress", 0.0)), 0.0, 1.0)
+    var current: int = clampi(int(state.get("round", 1)), 1, 3)
+    var phase: String = str(state.get("phase", "ready"))
+    if active:
+        if phase == "ready":
+            calibration_count_label.text = "READY · 4 · 3 · 2 · 1"
+        elif phase == "count_in":
+            calibration_count_label.text = "ROUND %d · COUNT IN  %d" % [
+                current, int(state.get("countdown", 4))]
+        else:
+            calibration_count_label.text = "ROUND %d · PLAY ON CLICK  %d/8" % [
+                current, int(state.get("tap_number", 0))]
+    for i in range(calibration_round_labels.size()):
+        var count: int = int(state.get("round_samples", [0, 0, 0])[i])
+        var title: String = "Round %d/3 · %d taps" % [i+1, count]
+        calibration_round_labels[i].text = title
+        calibration_round_labels[i].add_theme_color_override("font_color",
+            INK if active and i == current-1 else MUTED)
+    var status := "Applied timing correction: %d ms. " % offset_ms
+    if active:
+        status += ("Tap with each accented PLAY beat. Three independent rounds; " +
+            "each begins with four preparation clicks.")
     elif result is Dictionary:
         var measurement: Dictionary = result
         if bool(measurement.get("reliable", false)):
-            status += " Estimated tap delay: %d ms, variation: %d ms. Apply to compensate." % [
-                int(measurement.get("estimate_ms", 0)), int(measurement.get("jitter_ms", 0))]
+            status += "Median of three rounds: %d ms; max variation: %d ms. Review before applying." % [
+                int(measurement.get("estimate_ms", 0)),
+                int(measurement.get("jitter_ms", 0))]
         else:
-            status += " Inconsistent taps; retry calibration."
+            status += str(measurement.get("error", "Inconsistent timing; calibrate again."))
+        for i in range(mini(calibration_round_labels.size(), measurement.get("rounds", []).size())):
+            var entry: Dictionary = measurement.get("rounds", [])[i]
+            calibration_round_labels[i].text = "Round %d: %s" % [i+1,
+                ("%d ms" % int(entry.get("median_ms", 0))
+                 if bool(entry.get("reliable", false)) else "redo")]
+    else:
+        status += "Calibrate: three rounds, each with a count-in and eight key taps."
     calibration_label.text = status
-    calibration_label.tooltip_text = "Tap timing includes human reaction and audio output delay, not only Bluetooth MIDI latency."
-    calibration_apply_button.disabled = not (result is Dictionary and bool(result.get("reliable", false)))
+    calibration_label.tooltip_text = (
+        "Tap timing includes human response and speaker output delay; it is not a Bluetooth-only measurement.")
+    calibration_apply_button.disabled = not (result is Dictionary and
+        bool(result.get("reliable", false)))
+
 
 func present_preferences(values: Dictionary) -> void:
     folder_edit.text = str(values.get("music_dir", ""))

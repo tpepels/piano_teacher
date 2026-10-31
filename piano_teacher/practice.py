@@ -38,6 +38,25 @@ class Assessment:
         return bool(self.notes) and self.correct == len(self.notes) and self.extra_notes == 0
 
     @property
+    def yellow_attacks(self) -> int:
+        """Distinct MIDI onsets with a timing/hold warning, not noteheads."""
+        return len({round(entry.note.start, 6) for entry in self.notes
+                    if entry.status in ("early", "late", "short", "long")})
+
+    @property
+    def total_attacks(self) -> int:
+        return len({round(entry.note.start, 6) for entry in self.notes})
+
+    @property
+    def passed(self) -> bool:
+        """Red is failure; amber is advisory below half the attacks."""
+        if not self.notes or self.extra_notes:
+            return False
+        if any(note.status in ("missed", "wrong") for note in self.notes):
+            return False
+        return self.yellow_attacks * 2 < self.total_attacks
+
+    @property
     def summary(self) -> str:
         if self.clean:
             return f"Clean · {self.correct}/{len(self.notes)} notes"
@@ -48,7 +67,8 @@ class Assessment:
         if self.extra_notes:
             counts["extra"] = self.extra_notes
         details = ", ".join(f"{k}: {v}" for k, v in counts.items())
-        return f"{self.correct}/{len(self.notes)} correct · {details}"
+        prefix = "Accepted with warnings" if self.passed else "Retry"
+        return f"{prefix} · {self.correct}/{len(self.notes)} precise · {details}"
 
 
 def evaluate(phrase: Phrase, hand: str, bpm: float, played: list[PlayedNote], *,

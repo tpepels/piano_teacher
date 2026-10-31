@@ -930,7 +930,7 @@ class PracticeEngine:
         p = self.plan
         result = self.pending_result
         self.pending_result = None
-        if result.correct == len(result.notes) and result.extra_notes == 0:
+        if getattr(result, "passed", result.clean):
             self._reset_trouble()
             if self.fingerprint:
                 self.learner_store.resolve_trouble(self.fingerprint, p.identity)
@@ -942,9 +942,11 @@ class PracticeEngine:
                 and all(hasattr(entry, "status") for entry in result.notes)):
             evidence = AssessmentEvidence.from_result(before[0], result, before[1])
             recommendation = self.practice_policy.observe(self.fingerprint, evidence)
-        message = p.apply_result(correct=result.correct,
-                                 total=len(result.notes), extras=result.extra_notes)
-        if (recommendation is not None and not result.clean and self.auto
+        message = p.apply_result(
+            correct=result.correct, total=len(result.notes),
+            extras=result.extra_notes,
+            accepted=getattr(result, "passed", result.clean))
+        if (recommendation is not None and not getattr(result, "passed", result.clean) and self.auto
                 and self.mode == "practice" and not self.is_builtin_warmup
                 and p.exercise.kind == "learn" and p.identity == before[0]):
             self._remediation_pending = self.remediation_planner.plan(
@@ -1482,7 +1484,7 @@ class PracticeEngine:
     def _finish_full_passage(self, result, total_beats: float, duration: float, now: float):
         """Complete finish full passage after a scored take."""
         self.pending_result=result
-        if not result.clean and self.auto:
+        if not getattr(result, "passed", result.clean) and self.auto:
             # Repeated wrong takes traverse backward over the visible source
             # instead of teleporting to beat zero or appending failed copies.
             self._retry_previous_pass = True
@@ -1491,8 +1493,8 @@ class PracticeEngine:
                     + (now-self.run_at)*self.plan.bpm/60,
                 reverse_seconds=max(self.feedback_seconds,
                     min(4.0, total_beats * 60.0 / self.plan.bpm / 3.0)))
-        if not result.clean:
-            # Failure breaks consecutive clean takes immediately, even if
+        if not getattr(result, "passed", result.clean):
+            # Failure breaks consecutive accepted takes immediately, even if
             # Start/Restart/Stop discards this feedback before its commit.
             # Success and mastery still wait until the feedback interval ends.
             self.plan.streak = 0

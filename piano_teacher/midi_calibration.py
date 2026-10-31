@@ -1,29 +1,36 @@
-"""Tap-along MIDI timing calibration; no sound-device latency claims.
+"""Three-round, audible/visual MIDI tap calibration on a fixed clock.
 
-The app plays metronome ticks from its normal timeline. The user taps a key
-on each tick. Median deviation estimates an end-to-end playing offset which
-includes human response and speaker output latency, not just Bluetooth input.
-The result is only applied after explicit confirmation.
+Four preview clicks precede each eight-tap round. The reported delay is
+the median of three independent within-round medians. Tap-along includes
+human reaction and speaker latency; it cannot isolate Bluetooth transport.
 """
 from __future__ import annotations
+
 from statistics import median
 
 
 class MidiTapCalibration:
     bpm = 80
+    count_in = 4
     ticks = 8
+    rounds = 3
     period = 60.0 / bpm
+    round_beats = count_in + ticks
+    min_samples_per_round = 6
+    max_round_jitter = .045  # seconds, median absolute deviation
+    max_round_spread = .05
+    max_credible_delay = .20
 
     def __init__(self) -> None:
         self.active = False
         self.start_at = 0.0
-        self.samples: dict[int, float] = {}
+        self.samples: list[dict[int, float]] = [{} for _ in range(self.rounds)]
         self.result: dict | None = None
 
     def start(self, now: float) -> None:
         self.active = True
-        self.start_at = now + 1.5
-        self.samples = {}
+        self.start_at = now + 1.0  # let the screen present the starting count
+        self.samples = [{} for _ in range(self.rounds)]
         self.result = None
 
     def cancel(self) -> None:
@@ -32,33 +39,78 @@ class MidiTapCalibration:
     def observe(self, at: float) -> bool:
         if not self.active:
             return False
-        position = (at - self.start_at) / self.period
-        index = round(position)
-        delta = at - (self.start_at + index * self.period)
-        if 0 <= index < self.ticks and abs(delta) <= 0.32 and index not in self.samples:
-            self.samples[index] = delta
-            return True
-        return False
+        beat = (at - self.start_at) / self.period
+        index = round(beat)
+        round_index, local_index = divmod(index, self.round_beats)
+        if not (0 <= round_index < self.rounds
+                and self.count_in <= local_index < self.round_beats):
+            return False
+        delay = at - (self.start_at + index * self.period)
+        if abs(delay) > .30:
+            return False
+        slot = local_index - self.count_in
+        if slot in self.samples[round_index]:
+            return False
+        self.samples[round_index][slot] = delay
+        return True
+
+    def _finish(self) -> None:
+        self.active = False
+        rounds = []
+        failure = None
+        for index, samples in enumerate(self.samples, start=1):
+            values = list(samples.values())
+            if len(values) < self.min_samples_per_round:
+                failure = f"Round {index}: need at least six valid taps"
+                rounds.append({"round": index, "samples": len(values),
+                               "reliable": False})
+                continue
+            center = median(values)
+            jitter = median(abs(t-center) for t in values)
+            reliable = jitter <= self.max_round_jitter
+            if not reliable and failure is None:
+                failure = f"Round {index}: inconsistent timing; repeat calibration"
+            rounds.append({"round": index, "samples": len(values),
+                           "median_ms": round(center*1000),
+                           "jitter_ms": round(jitter*1000),
+                           "reliable": reliable})
+        if failure is None:
+            centers = [round_info["median_ms"] for round_info in rounds]
+            result_ms = median(centers)
+            if max(centers) - min(centers) > self.max_round_spread * 1000:
+                failure = "Three rounds disagree; repeat calibration"
+            elif not 0 <= result_ms <= self.max_credible_delay * 1000:
+                failure = "Delay estimate is outside the safe 0–200 ms range"
+        self.result = {
+            "rounds": rounds,
+            "samples": sum(len(s) for s in self.samples),
+            "reliable": failure is None,
+            **({"estimate_ms": round(result_ms),
+                "jitter_ms": max(r["jitter_ms"] for r in rounds)}
+               if failure is None else {"error": failure}),
+        }
 
     def snapshot(self, now: float) -> dict:
-        if self.active and now >= self.start_at + self.ticks * self.period:
-            self.active = False
-            if len(self.samples) >= 5:
-                offsets = list(self.samples.values())
-                middle = median(offsets)
-                jitter = median(abs(value-middle) for value in offsets)
-                self.result = {
-                    "estimate_ms": round(middle * 1000),
-                    "jitter_ms": round(jitter * 1000),
-                    "samples": len(offsets),
-                    "reliable": jitter <= 0.085 and abs(middle) <= 0.25,
-                }
-            else:
-                self.result = {"samples": len(self.samples), "reliable": False,
-                               "error": "At least five aligned key taps are required"}
+        beat = (now - self.start_at) / self.period
+        total = self.rounds * self.round_beats
+        if self.active and beat >= total:
+            self._finish()
+        active_beat = min(total-1e-8, max(0.0, beat))
+        round_index = min(self.rounds-1, int(active_beat // self.round_beats))
+        local_beat = active_beat - round_index * self.round_beats
+        phase = ("finished" if not self.active else "ready" if beat < 0
+                 else "count_in" if local_beat < self.count_in else "tap")
         return {
             "active": self.active, "bpm": self.bpm,
-            "beat": ((now-self.start_at)/self.period if self.active else 0.0),
-            "samples": len(self.samples), "ticks": self.ticks,
+            "beat": beat, "round": round_index+1, "rounds": self.rounds,
+            "phase": phase, "count_in": self.count_in,
+            "countdown": (self.count_in - int(local_beat)
+                          if phase == "count_in" else 0),
+            "tap_number": (min(self.ticks, 1+int(local_beat-self.count_in))
+                           if phase == "tap" else 0),
+            "samples": sum(len(s) for s in self.samples),
+            "round_samples": [len(s) for s in self.samples],
+            "ticks": self.ticks, "round_beats": self.round_beats,
+            "progress": min(1.0, max(0.0, beat/total)),
             "result": self.result,
         }

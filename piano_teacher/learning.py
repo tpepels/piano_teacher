@@ -695,7 +695,8 @@ class LearningPlan:
             self.transferable_tempos.add(self.identity)
         return self.bpm
 
-    def apply_result(self, *, correct: int, total: int, extras: int = 0) -> str:
+    def apply_result(self, *, correct: int, total: int, extras: int = 0,
+                     accepted: bool | None = None) -> str:
         """A clean run restores tempo; three target-speed clean runs confer mastery.
 
         Recovery slowdowns happen on five pitch errors in a two-bar window.
@@ -703,7 +704,7 @@ class LearningPlan:
         """
         if total <= 0:
             return "No notes to assess"
-        clean = correct == total and extras == 0
+        clean = correct == total and extras == 0 if accepted is None else accepted
         if not clean:
             self.streak = 0
             self.failures += 1
@@ -718,7 +719,8 @@ class LearningPlan:
         self.transferable_tempos.add(self.identity)
         self.streak += 1
         if self.streak < SETTINGS.clean_runs_to_master:
-            return f"Clean pass {self.streak}/{SETTINGS.clean_runs_to_master} - repeat"
+            label = "Clean" if correct == total and extras == 0 else "Accepted"
+            return f"{label} pass {self.streak}/{SETTINGS.clean_runs_to_master} - repeat"
         self.streak = 0
         previous = self.identity
         self.stage_tempos[previous] = self.bpm
