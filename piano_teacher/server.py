@@ -32,14 +32,11 @@ from .notation.practice_timeline import preparation_measure_descriptor
 from .measure_grid import phrase_grid
 from .course_navigation import locate_course_section
 from .state_projection import (
-    ActivitySnapshot, GuidedSnapshot, PhaseSnapshot,
-    SessionSnapshot, TimingSnapshot, project_phase,
-    project_session_state,
+    PhaseSnapshot, SessionSnapshot, project_phase, project_session_state,
 )
 from .assessment_service import AssessmentService
 from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.strategy_session import restored_strategy_plan
-from .application.lesson_snapshot import build_lesson_snapshot
 from .application.control_dispatch import ControlDispatcher
 from .application.attempt_progression import AttemptProgression
 from .application.session_snapshot_builder import capture as capture_session_snapshot
