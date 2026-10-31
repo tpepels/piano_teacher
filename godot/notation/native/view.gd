@@ -600,27 +600,25 @@ func _practice_context_before(at: float, stride: float) -> Dictionary:
         at, stride, timeline.measures, practice_timeline["gap"])
 
 func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
-        pass_index: int = 0, pass_start: float = 0.0,
-        canvas: CanvasItem = null, retained_width: float = 0.0,
-        retained_variant: String = "") -> RenderPass:
-    var target: CanvasItem = canvas if canvas != null else self
+        pass_index: int, pass_start: float, canvas: CanvasItem,
+        retained_width: float, retained_variant: String) -> RenderPass:
+    # Only a retained CanvasItem may invoke authored source painting. No
+    # frame-time source reconstruction route exists in the practice view.
+    var target: CanvasItem = canvas
     var frame: RenderPass = _new_paint_frame(camera_clock,playhead_x,gap,pass_index,pass_start)
-    if not retained_variant.is_empty():
-        # A recovery variant captures the changed source visibility once;
-        # ordinary copies retain the same command buffer across attempts.
-        frame.score_loop_enabled = retained_variant != "once"
-        if retained_variant == "recovery":
-            frame.preparation_history = preparation_history.duplicate(true)
-            frame.current_preparation = frame.preparation_history.get(pass_start,{})
-        else:
-            frame.preparation_history = {}
-            frame.current_preparation = {}
-        layout.set_viewport(Vector2(retained_width,size.y))
+    frame.score_loop_enabled = retained_variant != "once"
+    if retained_variant == "recovery":
+        frame.preparation_history = preparation_history.duplicate(true)
+        frame.current_preparation = frame.preparation_history.get(pass_start,{})
+    else:
+        frame.preparation_history = {}
+        frame.current_preparation = {}
+    layout.set_viewport(Vector2(retained_width,size.y))
     var current_preparation: Dictionary = frame.current_preparation
     var font: Font = ThemeDB.fallback_font
     var current: float = timeline.musical_beat(camera_clock,play_from_beat)
     var left: float = current-playhead_x/timeline.pixels_per_beat
-    var right: float = left+(retained_width if retained_width>0.0 else size.x)/timeline.pixels_per_beat
+    var right: float = left+retained_width/timeline.pixels_per_beat
     var previous_measure: Dictionary = {}
     if pass_index>0:
         previous_measure = _practice_context_before(pass_start,float(practice_timeline["stride_beats"]))
@@ -709,21 +707,9 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
     context_painter.paint_expressions(target,frame,left,right,camera_clock,playhead_x,gap)
     context_painter.paint_hairpins(target,frame,left,right,camera_clock,playhead_x,gap)
     symbols.paint_grace_notes(target,frame,gap)
-    if not retained_variant.is_empty():
-        layout.set_viewport(size)
-        return frame
-    drawn_note_instances.append_array(frame.drawn_note_instances)
-    # Across repeated source copies, feedback follows the nearest painted
-    # instance of each source identity. Per-copy heads stay in RenderPass.
-    for id in frame.drawn_noteheads:
-        var point: Vector2 = frame.drawn_noteheads[id]
-        if not drawn_noteheads.has(id) or absf(point.x-size.x*PLAYHEAD_FRACTION)<absf(drawn_noteheads[id].x-size.x*PLAYHEAD_FRACTION):
-            drawn_noteheads[id] = point
-    visible_symbols += frame.visible_symbols
-    frame_scanned_events = frame.scanned_events
-    frame_visible_beam_groups = frame.visible_beam_groups
-    fingering_pass_clocks.append({"clock":camera_clock,"pass_index":pass_index,"pass_start":pass_start})
+    layout.set_viewport(size)
     return frame
+
 
 func _project_retained_source(segment, shift_x: float,
         camera_clock: float, pass_index: int, pass_start: float) -> void:
