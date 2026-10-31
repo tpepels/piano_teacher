@@ -1244,7 +1244,11 @@ func _send_post(path: String, payload: Dictionary) -> void:
     action_request.timeout = 360.0 if path in ["/fingering","/load","/library/open"] else 5.0
     last_post_path = path
     action_request_started_ms = Time.get_ticks_msec()
-    var err := action_request.request(URL + path, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(payload))
+    # The in-process request adapter is dynamically typed; := cannot infer
+    # an Error from its Variant-returning request() method.
+    var err: int = int(action_request.request(
+        URL + path, ["Content-Type: application/json"],
+        HTTPClient.METHOD_POST, JSON.stringify(payload)))
     if err != OK:
         action_pending = false
         practice_view.present_busy(false)

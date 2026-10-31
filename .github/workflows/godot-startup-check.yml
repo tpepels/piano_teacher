@@ -1,0 +1,41 @@
+name: Godot 4.7.2 startup syntax (bounded)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'godot/**'
+      - 'scripts/check-godot-syntax.sh'
+      - '.github/workflows/godot-startup-check.yml'
+  pull_request:
+    paths:
+      - 'godot/**'
+      - 'scripts/check-godot-syntax.sh'
+      - '.github/workflows/godot-startup-check.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: godot-syntax-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parse:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get matching Godot editor binary
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error --retry 2 \
+            --max-time 65 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          chmod +x /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+      - name: Parse startup and native request adapters (no application launch)
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: bash scripts/check-godot-syntax.sh
