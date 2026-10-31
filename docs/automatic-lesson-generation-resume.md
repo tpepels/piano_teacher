@@ -88,3 +88,26 @@ heuristics as exact Coda.
   requirements. Next: written-notation projection/reconstruction proof
   across transformations, then published-reference matching when source
   can be obtained. Do not return to unrelated notation corpus tasks.
+
+## 2026-10-31 — Coda full thesis and public author backend recovered
+
+The user uploaded the complete Dartmouth 2025 thesis. The author's
+public backend source was found at `annieetang/coda_backend` SHA
+`a4eb85dfc2bd418818ca9ff775c0a11ccccb3530`; public
+frontend is at `annieetang/coda_app` SHA
+`c5a00ca53c3204fc66bde4cdaba3157ab760e76a`.
+**The previous missing-thesis blocker is resolved.**
+
+The earlier 'Coda' strategies are not all the thesis algorithms:
+source *Part Splitting* is Score→Part→Voice isolation, not measure
+segmentation; source *Tempo Shaping* is written x2/x4 note-duration
+expansion, not a BPM ramp; and dotted/chordification work through
+three 128-pitch MMR matrices and equal-duration runs.
+
+Added isolated `coda_reference_matrix.py` and
+`coda_reference_exercises.py` with independent, source-preserving
+research equivalents of the documented four categories and
+fail-closed guards. Existing production remains untouched.
+See `docs/research-reproduction-gate-2-coda.md` for the thesis
+and source comparison, known upstream limitations and remaining
+reference-run parity work. No full notation audit or long CI.

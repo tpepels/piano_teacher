@@ -1,6 +1,6 @@
 # Research reproduction — Gate 2: Coda symbolic system
 
-2026-10-30. Branch: `main`. Status: **partial, reference parity NOT established**.
+2026-10-30. Branch: `main`. Status: **reference thesis and official backend now located; reference-guided subset implemented; complete parity NOT established**.
 
 ## Source record
 
@@ -11,12 +11,17 @@ June 2025), https://digitalcommons.dartmouth.edu/cs_senior_theses/76/.
 The institutional abstract explicitly describes a Music Matrix
 Representation (MMR) with Score–Part–Voice hierarchy and four exercise
 families: **Part Splitting, Tempo Shaping, Chordification, and Dotted
-Rhythms**. The download endpoint returned HTTP 403 from our available
-source and a public implementation/algorithm reference could not be
-verified. The abstract alone does not specify transformation formulas,
-grouping heuristics or their reference examples. Therefore do not call
-these methods an exact recreation. Obtain the complete thesis and
-reference source before accepting research fidelity.
+Rhythms**. The complete 41-page thesis was supplied on 2026-10-31 and is
+available in the user's conversation. The author's own public GitHub
+repositories were also located and inspected:
+`https://github.com/annieetang/coda_backend` pinned at
+`a4eb85dfc2bd418818ca9ff775c0a11ccccb3530`, and
+`https://github.com/annieetang/coda_app` pinned at
+`c5a00ca53c3204fc66bde4cdaba3157ab760e76a`.
+This resolves the missing-specification blocker. It **does not**
+automatically confer algorithm parity: the thesis prints simplified
+methods, and the backend includes TODOs and known non-invertible cases.
+Exact executable upstream differential checks are still required.
 
 ## Implemented this increment
 
@@ -54,10 +59,12 @@ not relabeled research-complete by this work.
       spanning measures, articulation/directions, notational tuplets,
       meter/key changes and compositional grouping, with reference parity.
 - [ ] Full chordification eligibility and combinations **as documented in
-      the original Coda thesis**, with reference example parity.
-- [ ] Complete part-splitting algorithm matching author examples.
-- [ ] Complete tempo-shaping patterns and exact beat/second playback
-      integration across Learn/Listen/grading.
+      the original Coda thesis and pinned backend**, with executable reference parity.
+- [ ] Complete score/part/voice isolation matching author examples (the old
+      measure-splitting prototype is a separate lesson feature).
+- [ ] Complete author-specific x2/x4 note-duration/notation slowdown and
+      exact beat/second playback across Learn/Listen/grading (the old
+      measure-wise tempo ramp is a separate strategy).
 - [ ] Complete dotted-rhythm transformations, including polyphony, rests,
       tie segmentation, and notation-level reference examples.
 - [ ] Independent non-vacuous real-score correctness/performance benchmark,
@@ -229,3 +236,81 @@ and measured learning outcomes remain open.
 - Dotted rhythms: independent per-voice prototype; **not author-parity-proven**.
 
 Main branch only; no full corpus or long-running CI was initiated.
+
+## Research specification recovered — 2026-10-31
+
+The uploaded thesis is now authoritative alongside the author's pinned
+backend. **This section supersedes the older 'thesis unavailable' status.**
+
+| Family | Thesis/backend specification | Previously present | New independent reference-guided implementation |
+|---|---|---|---|
+| Score/Part/Voice splitting | `get_all_exercises` emits full score, each note-bearing Part and each `voicesToParts()` line | `ResearchPartSplitter` slices source measures, not the Coda algorithm | `original_coda_levels()` emits score, note-bearing hand and note-bearing voice selections with source indices |
+| Tempo Shaping | `generate_slowed_down_exercise(factor)`: expand grid, source onset and duration by integer factor 2 or 4; regenerate notation | `ResearchTempoShaper` uses a within-piece measure-wise BPM ramp | `CodaReferenceSlowdown(2/4)` expands source-mapped written rhythm; transformed Listen and score-grid integration still pending |
+| Chordification | Find runs of equal quantized durations, group by chord level, form blocked chords of group span; omit overly large/wide groups | Pairwise chord collapse retaining only original note duration | `CodaReferenceChordification(chord_level)` joins eligible discrete groups with longer duration, <=5 distinct tones and <=12 semitones, retaining every source ID |
+| Dotted Rhythms | Equal-duration runs, patterns `[1.5,.5]` or `[.5,1.5]`, regenerate onset/duration matrices | Fixed non-MMR pairs | `CodaReferenceDotted` iterates original MMR runs in independent voices with exact source IDs and original total duration |
+
+### MMR, from §2.2 and upstream
+
+The thesis and original `music/matrix.py` use *three*
+`128 × quantized-time` matrices: binary `piano_roll` (sounding
+occupancy), binary `onset_map` (attack, not sustain) and integer
+`durations_matrix` (onset duration). Other fields include
+`key_signature`, `time_signature` and `quantization`. The author's
+backend calculates the quantization as
+`ceil(1 / shortest_quarter_length) * time_signature.numerator` and
+uses a `ceil()` onset-time conversion. The new
+`coda_reference_matrix.py` deliberately rejects off-grid source
+beats rather than silently rounding and merging attacks.
+
+These contracts use **originally sourced IDs**, the existing
+lossless notation hierarchy and source-part/voice ownership. The
+three matrices are separate research assets, not enabled
+implicitly in any production practice stage.
+
+### Author code limitations and deliberate guarded differences
+
+- The backend's `_create_matrices()` contains a TODO for tie
+  handling and represents simultaneous pitches as if all have equal
+  duration. The reference adapter **fails closed** on same-pitch
+  overlaps, unquantizable events and unequal chord lengths.
+- The thesis and backend use `Chordification` at selected
+  `chord_level` values (quantization, twice and half quantization,
+  meter numerator/denominator-derived values). The new adapter
+  takes an explicit level; automatic exact level enumeration and
+  source output set parity are still outstanding.
+- The original backend's chord grouping includes weak edge-case
+  handling and its dotted algorithm has TODOs concerning rests.
+  The independent adapter refuses source-rest overlaps, authored
+  beam/slur/tie/tuplet changes and mid-measure context changes
+  unless their transformed notation can be proven. It leaves
+  unmatched odd dotted onsets unchanged. These are safety
+  adaptations, **not claims of bit-exact original results**.
+- The full thesis specifies invalid chords as more than five
+  notes or intervals wider than an octave and reports most
+  generation operations below 500 ms for typical examples.
+  Those time and exact-output benchmarks have **not** been
+  independently reproduced.
+- Upstream source presently shows no LICENSE file, so do not
+  vendor/relicense its implementation. Independent
+  algorithm-derived code and explicit references are used.
+
+### Bounded evidence
+
+The checked-in `tests/fixtures/research/coda_four_families.musicxml`
+(two-hand, 16-note, two-measure, source-rest voice) now exercises
+the exact three MMR matrix shapes, author quantization, original
+source-id preservation, score/part/voice isolation, x2/x4
+slowdown, both dotted patterns and blocked-chord outputs.
+Negative cases reject same-pitch collisions, off-grid attacks,
+unequal simultaneous note durations, wide chords and invalid
+grouping widths. This is a **specification-derived test set**;
+the author's functions have not yet been executed against
+the same fixture, and no production source stage is switched on.
+
+The next non-vacuous gate is to run these exact small reference
+input scores through the *pinned upstream backend* and compare
+part/voice output and per-voice matrices and generated MusicXML,
+while explicitly recording cases where the upstream fails or
+changes source identities. Follow that with offline transformed
+notation and Listen/MIDI/grade integration. No full corpus audit
+is warranted for this gate.
