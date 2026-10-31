@@ -753,79 +753,14 @@ func _draw() -> void:
     # and used to look like an orphaned vertical rule in the score.
     # One semantic practice timeline owns both source-copy placement and
     # preparation silence. No independently inferred final-bar duration.
-    if score_loop_enabled and not timeline.measures.is_empty():
-        if not practice_contract_error.is_empty():
-            draw_string(font,Vector2(20,size.y*.5),practice_contract_error,
-                HORIZONTAL_ALIGNMENT_LEFT,-1,15,NOTE_INK)
-            return
-        _remember_preparation()
-        var stride: float = float(practice_timeline["stride_beats"])
-        var virtual_left: float = visual_scroll_beat-playhead_x/timeline.pixels_per_beat
-        var virtual_right: float = virtual_left+size.x/timeline.pixels_per_beat
-        var first_pass: int = maxi(0,floori(virtual_left/stride)-1)
-        var last_pass: int = maxi(first_pass,ceili(virtual_right/stride)+1)
-        var preparations: Dictionary = {}
-        for pass_index in range(first_pass,last_pass+1):
-            var pass_start: float = pass_index*stride
-            if pass_start>virtual_right+.7 or pass_start+stride<virtual_left-.7:
-                continue
-            _paint_source_pass(visual_scroll_beat-pass_start-play_from_beat,
-                playhead_x,gap,pass_index,pass_start)
-            var silence: Dictionary = practice_timeline["gap"].duplicate(true)
-            silence["start_beat"] = pass_start+float(silence["start_beat"])
-            silence["end_beat"] = pass_start+float(silence["end_beat"])
-            var replaced := false
-            for preparation in preparation_history.values():
-                if SourceVisibility.intervals_overlap(silence,preparation["measure"]):
-                    replaced = true
-                    break
-            if replaced:
-                continue
-            silence["left_barline"] = timeline.measures[-1].get("right_barline",{})
-            var incoming: Variant = timeline.measures[0].get("left_barline")
-            if incoming is Dictionary:
-                silence["right_barline"] = incoming
-            var previous: Dictionary = timeline.measures[-1].duplicate(true)
-            previous["start_beat"] = pass_start+float(previous["start_beat"])
-            previous["end_beat"] = pass_start+float(previous["end_beat"])
-            preparations[float(silence["start_beat"])] = {"measure":silence,"previous":previous,"opening":false}
-        # Rewind preparation replaces only its declared practice interval.
-        # Remember completed rests while that pass remains on screen; a later
-        # source copy cannot make its past preparation disappear or flicker.
-        for pass_start in preparation_history.keys():
-            if float(pass_start)+stride<virtual_left-stride:
-                preparation_history.erase(pass_start)
-                continue
-            var item: Dictionary = preparation_history[pass_start]
-            var silence: Dictionary = item["measure"]
-            var previous: Dictionary = _practice_context_before(float(silence["start_beat"]),stride)
-            preparations[float(silence["start_beat"])] = {"measure":silence,"previous":previous,
-                "opening":previous.is_empty()}
-        var preparation_starts: Array = preparations.keys()
-        preparation_starts.sort()
-        for start in preparation_starts:
-            var item: Dictionary = preparations[start]
-            context_painter.paint_preparation_measure(self,_new_paint_frame(clock_beat,playhead_x,gap,0,0.0),item["measure"],item["previous"],gap,playhead_x,item["opening"])
-    else:
-        _paint_source_pass(camera_clock,playhead_x,gap)
-    # Instructional ink has its own compositor phase. It cannot change
-    # canonical music or be erased by the transport cursor during scrolling.
-    for annotation_pass in fingering_pass_clocks:
-        annotations.paint(self,float(annotation_pass["clock"]),playhead_x,gap,
-            int(annotation_pass["pass_index"]),float(annotation_pass["pass_start"]),{
-                "active_hand":active_hand,"play_from_beat":play_from_beat,
-                "score_loop_enabled":score_loop_enabled,"preparation_history":preparation_history})
-    # A genuine font brace joins the two continuous staves at the screen's
-    # edge. Stretch only this authentic brace, never the timed music stream.
-    var staff_top: float = layout.staff_center("right")-2.0*gap
-    var staff_bottom: float = layout.staff_center("left")+2.0*gap
-    draw_rect(Rect2(0, staff_top-gap, 29, staff_bottom-staff_top+gap*2), Design.STAGE)
-    if glyphs.textures.has("brace"):
-        draw_texture_rect(glyphs.textures["brace"],
-            Rect2(6, staff_top-2, 18, staff_bottom-staff_top+4), false,
-            NOTE_INK)
-    draw_line(Vector2(29,staff_top),Vector2(29,staff_bottom),
-        Color(NOTE_INK,.50),1.2,true)
+    if score_loop_enabled and not practice_contract_error.is_empty():
+        draw_string(font,Vector2(20,size.y*.5),practice_contract_error,
+            HORIZONTAL_ALIGNMENT_LEFT,-1,15,NOTE_INK)
+        _hide_retained_segments()
+        return
+    _place_retained_score(playhead_x,camera_clock,gap)
+    if retained_annotations != null:
+        retained_annotations.queue_redraw()
     # Never put engineering telemetry on top of the actual lesson.
     if OS.get_environment("PIANO_TEACHER_NATIVE_DIAGNOSTICS") == "1":
         var phase: String = "COUNT-IN" if camera_clock < 0.0 and running else \
