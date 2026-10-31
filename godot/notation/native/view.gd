@@ -398,13 +398,11 @@ func _paint_source_pass(camera_clock: float, playhead_x: float, gap: float,
             float(terminal["x"]) <= size.x+gap*2.0:
         context_painter.paint_barline(self,frame,terminal,gap)
     context_painter.paint_volta_endings(self,frame,left,right,camera_clock,playhead_x,gap)
-    # All symbols carry their original source onset; NO separate horizontal
-    # layout pass or per-note acceleration, including chord tones and rests.
+    # Source geometry must already exist before this frame. Rebuilding
+    # glyph spacing during a scroll is forbidden: it stalls the musical UI.
     if layout.cached_offsets_gap < 0.0 or absf(layout.cached_offsets_gap-gap) > .001:
-        layout.cached_head_offsets = layout.engraved_head_offsets(gap)
-        layout.cached_accidental_offsets = Geometry.accidental_offsets(
-            layout.ordered_events,gap,layout.cached_head_offsets,glyphs.bounds)
-        layout.cached_offsets_gap = gap
+        push_error("Static engraving cache is stale; reprepare before playback")
+        return
     var head_offsets: Dictionary = layout.cached_head_offsets
     var beam_data: Dictionary = beam_plan(gap, camera_clock,
         playhead_x, head_offsets,frame)
