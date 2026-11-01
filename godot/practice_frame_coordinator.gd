@@ -5,7 +5,8 @@ extends RefCounted
 const LivingScore := preload("res://living_score.gd")
 
 static func advance(app, delta: float) -> void:
-    var transport_beat: float = app._transport_beat_now()
+    var ticks: int = Time.get_ticks_msec()
+    var transport_beat: float = app._transport_beat_at(ticks)
     # On-device frame intervals, opt-in only. delta is never fed back into
     # the backend tempo or score assessment; tests may call _process(0).
     if app.frame_diagnostics and app.current_screen == "practice":
@@ -16,7 +17,6 @@ static func advance(app, delta: float) -> void:
             frame_result["phase"] = str(app.last_state.get("phase", ""))
             print("PHASE8D_FRAME_INTERVALS:", JSON.stringify(frame_result))
     # Animate short-lived hit pulses between state samples.
-    var ticks: int = Time.get_ticks_msec()
     app.score_effects.prune_expired(ticks)
     app._read_live_midi()
     app.settings_view.present_busy(app.action_pending)
@@ -44,14 +44,14 @@ static func advance(app, delta: float) -> void:
             app.last_listen_sync_report_ms = ticks
             print("PHASE8B_LISTEN_SOFTWARE_SYNC:",
                 JSON.stringify(app.demo_player.sync_report()))
-    app._update_count_in()
+    app._update_count_in(transport_beat,ticks)
     # Frame-accurate native projection uses the SAME clock as score and
     # count-in. No Verovio X positions or per-note speed correction.
     if app.practice_view.stage.renderer != null \
             and bool(app.last_state.get("loaded", false)):
         var score_clock: float = transport_beat
         app.practice_view.stage.renderer.present(app.last_state, score_clock,
-            app._unrolled_score_beat(score_clock))
+            app._unrolled_score_beat_at(score_clock,ticks))
     # The stage's lighting follows exactly the musical beat used by the
     # moving Verovio notation. Preview/Listen use a neutral pulse; neither
     # this visual beat nor its glow can create grading events.
