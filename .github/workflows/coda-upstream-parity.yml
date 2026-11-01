@@ -22,7 +22,7 @@ jobs:
       - name: Dependencies and syntax
         run: |
           python -m pip install -e '.[test,coda-research]' 'music21>=9.1,<10'
-          python -m compileall -q scripts/compare_coda_upstream.py scripts/probe_coda_upstream_edges.py scripts/probe_coda_upstream_scores.py piano_teacher/research/coda_differential.py piano_teacher/research/coda_discrepancy.py piano_teacher/research/coda_parity_contract.py
+          python -m compileall -q scripts/compare_coda_upstream.py scripts/probe_coda_upstream_edges.py scripts/probe_coda_upstream_scores.py piano_teacher/research/coda_differential.py piano_teacher/research/coda_discrepancy.py piano_teacher/research/coda_parity_contract.py piano_teacher/research/coda_auto_chord_levels.py scripts/probe_coda_upstream_extended.py
       - name: Pure written/sounding and discrepancy contracts
         run: timeout 20s python -m pytest -q --tb=short tests/test_coda_differential.py tests/test_coda_discrepancy.py tests/test_coda_parity_contract.py
       - name: Checkout exactly published author backend SHA
@@ -126,6 +126,43 @@ jobs:
             --report "$RUNNER_TEMP/coda-diff/real-source-voices.json" \
             --manifest "tests/fixtures/research/coda_supported_parity_v1.json" \
             --certificate "$RUNNER_TEMP/coda-diff/supported-subset.json"
+      - name: Diagnose wider source repertoire and original automatic chordification set
+        id: expanded
+        continue-on-error: true
+        run: |
+          timeout 55s python scripts/probe_coda_upstream_extended.py \
+            --upstream "$RUNNER_TEMP/upstream" \
+            --report "$RUNNER_TEMP/coda-diff/extended-source-voices.json" \
+            > "$RUNNER_TEMP/coda-diff/extended-output.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/coda-diff/extended-output.txt"
+              exit 1
+            }
+          cat "$RUNNER_TEMP/coda-diff/extended-output.txt"
+          python - "$RUNNER_TEMP/coda-diff/extended-source-voices.json" <<'PY'
+          import json,sys
+          from piano_teacher.research.coda_auto_chord_levels import original_chord_levels
+          result=json.load(open(sys.argv[1]))
+          assert result["research_only"] is True
+          assert result["author_revision"]=="a4eb85dfc2bd418818ca9ff775c0a11ccccb3530"
+          assert result["source_case_count"]==10
+          assert result["source_cases_diagnosed"]>=6, result["cases"]
+          assert result["auto_chord_levels_attempted"]>0
+          for case in result["cases"]:
+              if case["status"]!="diagnostic":
+                  assert case["status"]=="source-unavailable"
+                  assert case.get("type") and case.get("detail")
+                  continue
+              assert case["automatic_chord_levels"]==list(
+                  sorted(set(case["automatic_chord_levels"])))
+              for voice in case["voices"]:
+                  assert voice["status"] in (
+                      "diagnostic", "mmr-unmatched-or-ambiguous",
+                      "voice-exception")
+                  if voice["status"]=="diagnostic":
+                      auto=[o for o in voice["operations"]
+                            if o["chord_level"] is not None]
+                      assert [o["chord_level"] for o in auto]==case["automatic_chord_levels"]
+          PY
       - name: Retain exact-source evidence and failures
         if: always()
         uses: actions/upload-artifact@v4
@@ -135,5 +172,5 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Reject a mismatch
-        if: steps.proof.outcome != 'success' || steps.edges.outcome != 'success' || steps.scores.outcome != 'success' || steps.subset.outcome != 'success'
+        if: steps.proof.outcome != 'success' || steps.edges.outcome != 'success' || steps.scores.outcome != 'success' || steps.subset.outcome != 'success' || steps.expanded.outcome != 'success'
         run: exit 1
