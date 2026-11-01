@@ -179,7 +179,15 @@ def _case(identity,path,first_bar,last_bar,converter,meter,key,
                    automatic_chord_levels=list(widths),
                    source_voices=len(tuple(v for part in matrix.parts
                                            for v in part.voices)))
-        generated=score_voice_matrices(matrix,quantization=q)
+        try:
+            generated=score_voice_matrices(matrix,quantization=q)
+        except ValueError as exc:
+            # Preserve rejected out-of-grid scores as explicit evidence.
+            # Original Coda rounds these using ceil; our source MMR refuses
+            # invented tick positions. No author-output parity claim follows.
+            row.update(status="grid-rejected",failure_stage="source-mmr",
+                       detail=str(exc)[:350])
+            return row
         for vi,line_stream in enumerate(sliced):
             if not tuple(line_stream.recurse().notes):
                 continue
@@ -241,6 +249,8 @@ def main():
     outcomes=[x for row in rows for voice in row["voices"]
               for x in voice["operations"]]
     totals=Counter(x["status"] for x in outcomes)
+    auto_outcomes=Counter(x["status"] for x in outcomes
+                          if x["chord_level"] is not None)
     report={
         "research_only":True,"status":"diagnostic-only",
         "author_revision":REFERENCE_SHA,
@@ -252,6 +262,8 @@ def main():
         "source_voices_attempted":sum(len(row["voices"]) for row in rows),
         "auto_chord_levels_attempted":sum(
             x["chord_level"] is not None for x in outcomes),
+        "auto_chord_results":dict(sorted(auto_outcomes.items())),
+        "grid_rejected_cases":sum(row["status"]=="grid-rejected" for row in rows),
         "all_output_statuses":dict(sorted(totals.items())),
         "cases":rows,
     }
@@ -260,7 +272,8 @@ def main():
     print(json.dumps({key:report[key] for key in (
         "source_case_count","source_cases_diagnosed",
         "source_voices_attempted","voices_with_exact_mmr",
-        "auto_chord_levels_attempted","all_output_statuses"
+        "auto_chord_levels_attempted","auto_chord_results",
+        "grid_rejected_cases","all_output_statuses"
     )},sort_keys=True))
     if len(rows)!=len(SOURCES):
         raise AssertionError("Incomplete wider source inventory")

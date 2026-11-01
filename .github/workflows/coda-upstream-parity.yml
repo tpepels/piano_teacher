@@ -146,11 +146,21 @@ jobs:
           assert result["author_revision"]=="a4eb85dfc2bd418818ca9ff775c0a11ccccb3530"
           assert result["source_case_count"]==10
           assert result["source_cases_diagnosed"]>=6, result["cases"]
-          assert result["auto_chord_levels_attempted"]>0
+          assert result["source_cases_diagnosed"]==7
+          assert result["grid_rejected_cases"]==3
+          assert result["source_voices_attempted"]==10
+          assert result["voices_with_exact_mmr"]==8
+          assert result["auto_chord_levels_attempted"]==37
+          assert result["auto_chord_results"]=={
+              "observed-strict-changing":3,
+              "observed-different":2,
+              "upstream-none":32,
+          }
           for case in result["cases"]:
               if case["status"]!="diagnostic":
-                  assert case["status"]=="source-unavailable"
-                  assert case.get("type") and case.get("detail")
+                  assert case["status"]=="grid-rejected"
+                  assert case["failure_stage"]=="source-mmr"
+                  assert case.get("detail")
                   continue
               assert case["automatic_chord_levels"]==list(
                   sorted(set(case["automatic_chord_levels"])))
