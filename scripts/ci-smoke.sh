@@ -28,6 +28,10 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_assessment_settlement.py \
   tests/test_assessment_evidence.py \
   tests/test_assessment_commit.py \
+  tests/test_practice_transitions.py \
+  tests/test_guided_session.py \
+  tests/test_coordination_boundaries.py::test_transition_selection_and_guidance_own_narrow_inputs \
+  tests/test_coordination_boundaries.py::test_successful_command_view_effects_have_injected_dependencies \
   tests/test_learner_progress_coordination.py \
   tests/test_coordination_boundaries.py::test_snapshot_assembly_and_live_hit_mapping_have_one_owner \
   tests/test_coordination_boundaries.py::test_command_error_publication_has_injected_screen_dependencies \
