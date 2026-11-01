@@ -32,6 +32,7 @@ const PracticeStatePresenter := preload("res://practice_state_presenter.gd")
 const CommandFailurePresenter := preload("res://command_failure_presenter.gd")
 const CommandSuccessPolicy := preload("res://command_success_policy.gd")
 const CommandSuccessPresenter := preload("res://command_success_presenter.gd")
+const CommandSuccessEffects := preload("res://command_success_effects.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationPolicy := preload("res://navigation_policy.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
@@ -140,6 +141,7 @@ var state_presenter
 var command_failure_presenter
 var command_state = CommandRequestState.new()
 var command_success_presenter
+var command_success_effects
 var lesson_request
 var device_pending: bool:
     get:
@@ -248,6 +250,14 @@ func _ready() -> void:
         library_view,practice_view,settings_view,home_view)
     command_success_presenter = CommandSuccessPresenter.new(
         library_view,practice_view,settings_view,lesson_session)
+    command_success_effects = CommandSuccessEffects.new(
+        command_success_presenter,
+        Callable(self,"_on_state"),
+        Callable(self,"_navigate"),
+        Callable(self,"_request_settings"),
+        Callable(self,"_request_library"),
+        Callable(self,"_request_library_health"),
+        Callable(self,"_refresh_score_status"))
     set_process(true)
 
 func _make_count_click(frequency: float) -> AudioStreamWAV:
@@ -1046,39 +1056,12 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     var opened: Variant = _decode_json(body) if path == "/library/open" else null
     var decision: Dictionary = CommandSuccessPolicy.decide(
         path,completed_action,resume_saved,opened)
-    command_success_presenter.present_accepted(decision)
-    match str(decision["kind"]):
-        "fingering":
-            fingering_save_error = ""
-            _on_state(_result,code,_headers,body,int(completed["started_ms"]))
-        "control":
-            if bool(decision["refresh_settings"]):
-                _request_settings()
-            _on_state(_result,code,_headers,body,int(completed["started_ms"]))
-            if bool(decision["navigate_practice"]):
-                _navigate("practice")
-        "library_health":
-            _request_library_health()
-        "library_open":
-            score_error = ""
-            match str(decision["open_mode"]):
-                "practice":
-                    _navigate("practice")
-                    if bool(decision["publish_state"]):
-                        # A restored lesson already carries its hand, tempo
-                        # and clean streak; do not replace it with open_at.
-                        _on_state(_result,code,_headers,body,int(completed["started_ms"]))
-                    _refresh_score_status()
-                "picker":
-                    command_success_presenter.present_source_picker(opened)
-        "settings":
-            if bool(decision["refresh_settings"]):
-                _request_settings()
-            if bool(decision["refresh_library"]):
-                _request_library()
-        "device":
-            if bool(decision["refresh_settings"]):
-                _request_settings()
+    if str(decision["kind"]) == "fingering":
+        fingering_save_error = ""
+    elif str(decision["kind"]) == "library_open":
+        score_error = ""
+    command_success_effects.apply(decision,opened,
+        _result,code,_headers,body,int(completed["started_ms"]))
     _flush_transport_action()
     _poll()
     var deferred_library: Dictionary = command_state.take_library()
