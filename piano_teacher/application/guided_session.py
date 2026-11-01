@@ -7,6 +7,7 @@ retains neither a LearningPlan nor an engine, lock, store or callback.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 
 from ..exercise_generator import ExerciseVariant
 from .guided_fragment import select_guided_fragment
@@ -95,8 +96,7 @@ class GuidedSession:
         if (self.prepared or remediation_active or not learning
                 or self.controller is None):
             return False
-        from time import monotonic
-        snapshot = self.controller.snapshot(now=monotonic())
+        snapshot = self.controller.snapshot(now=time.monotonic())
         if not snapshot["completed"]:
             return False
         record_preparation(
