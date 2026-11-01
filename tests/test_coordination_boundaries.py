@@ -43,7 +43,9 @@ def test_main_callbacks_keep_reply_handling_and_presentation_separate():
     assert "score_session.update_context(" not in state
     frame = (ROOT / "godot/practice_frame_coordinator.gd").read_text()
     presenter = (ROOT / "godot/practice_state_presenter.gd").read_text()
-    assert frame.count("app._transport_beat_now()") == 1
+    assert frame.count("app._transport_beat_at(ticks)") == 1
+    assert "app._update_count_in(transport_beat,ticks)" in frame
+    assert "app._unrolled_score_beat_at(score_clock,ticks)" in frame
     assert "renderer.present_clock(" in frame
     assert "renderer.present(" not in frame
     assert "renderer.present(parsed,beat," in presenter
