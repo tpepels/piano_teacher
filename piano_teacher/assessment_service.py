@@ -15,6 +15,20 @@ from .live_feedback import settled_assessment, expired_attack_misses
 
 
 class AssessmentService:
+    @staticmethod
+    def select_review_section(summary: dict | None, *,
+                              plan_ready: bool, first_bar, last_bar) -> dict:
+        """Validate source-bound review selection before canceling transport."""
+        if (not plan_ready or not summary or type(first_bar) is not int
+                or type(last_bar) is not int):
+            raise ValueError("Finish an assessed attempt before retrying a section")
+        selected = next((section for section in summary["sections"]
+                         if section["first_bar"] == first_bar
+                         and section["last_bar"] == last_bar), None)
+        if selected is None or selected["errors"] <= 0:
+            raise ValueError("Choose a difficult section from the latest assessment")
+        return selected
+
     def assess_take(self, phrase: Phrase, *, hand: str, bpm: float, played,
                     from_beat: float, end_beat: float, evaluator=evaluate):
         """Grade only events in the attempted source interval."""
