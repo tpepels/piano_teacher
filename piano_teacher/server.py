@@ -91,6 +91,11 @@ class PracticeEngine:
         self.recorder: Recorder | None = None
         self.visual_transport = VisualTransport(
             _visual_rewind_seconds=SETTINGS.feedback_seconds)
+        # ExerciseStage can regenerate its full OriginalTiming transform on
+        # tempo_map(). Retain it while stage identity and BPM are unchanged.
+        self._tempo_stage = None
+        self._tempo_bpm = None
+        self._tempo_value = None
         self.attempt_progression = AttemptProgression()
         self.open_from_beat = 0.0  # Explicit opening measure; never an inferred clock
         self.next_boundary_beat = 0.0
@@ -291,10 +296,21 @@ class PracticeEngine:
             return updated
 
     def _active_tempo_map(self):
-        """The single authoritative active practice clock and grading map."""
+        """Reuse an immutable authored tempo map until stage or BPM changes.
+
+        This runs on the 20 ms worker as well as during state snapshots.
+        ExerciseStage.tempo_map() may transform every note, so rebuilding it
+        for every clock read creates work proportional to the full passage.
+        """
         if self.plan is None or self.mode not in ("practice", "listen"):
             return None
-        return self.plan.active_stage.tempo_map(self.plan.bpm)
+        stage = self.plan.active_stage
+        bpm = self.plan.bpm
+        if self._tempo_stage is not stage or self._tempo_bpm != bpm:
+            self._tempo_value = stage.tempo_map(bpm)
+            self._tempo_stage = stage
+            self._tempo_bpm = bpm
+        return self._tempo_value
 
     def _elapsed_beat(self, elapsed_seconds: float) -> float:
         tempo = self._active_tempo_map()
