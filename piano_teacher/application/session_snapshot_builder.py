@@ -10,6 +10,13 @@ import time
 from dataclasses import dataclass, replace
 from typing import Any, Callable
 
+from ..state_projection import (
+    ActivitySnapshot, GuidedSnapshot, SessionSnapshot, TimingSnapshot,
+)
+from .lesson_snapshot import build_lesson_snapshot
+from ..learner_state import placement_candidate
+
+
 @dataclass(frozen=True)
 class SnapshotValues:
     """Only the captured fields consumed by the presentation projection.
@@ -61,7 +68,6 @@ class SnapshotValues:
     running: bool
     score_revision: int
     transport_id: int
-    visual_gap_beats: float
     visual_offset_beats: float
 
 
@@ -84,15 +90,8 @@ class SnapshotReadPorts:
     listen_snapshot: Callable[..., Any]
     live_input_snapshot: Callable[..., Any]
     preparation_schedule: Callable[..., Any]
-    teaching_snapshot: Callable[..., Any]
+    teaching_snapshot: Callable[..., Any] | None
     set_visual_gap_beats: Callable[[float], None]
-
-
-from ..state_projection import (
-    ActivitySnapshot, GuidedSnapshot, SessionSnapshot, TimingSnapshot,
-)
-from .lesson_snapshot import build_lesson_snapshot
-from ..learner_state import placement_candidate
 
 
 def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
