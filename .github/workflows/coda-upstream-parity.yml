@@ -22,7 +22,7 @@ jobs:
       - name: Dependencies and syntax
         run: |
           python -m pip install -e '.[test,coda-research]' 'music21>=9.1,<10'
-          python -m compileall -q scripts/compare_coda_upstream.py scripts/probe_coda_upstream_edges.py scripts/probe_coda_upstream_scores.py
+          python -m compileall -q scripts/compare_coda_upstream.py scripts/probe_coda_upstream_edges.py scripts/probe_coda_upstream_scores.py piano_teacher/research/coda_differential.py
       - name: Pure written versus sounding normalization contracts
         run: timeout 20s python -m pytest -q --tb=short tests/test_coda_differential.py
       - name: Checkout exactly published author backend SHA
