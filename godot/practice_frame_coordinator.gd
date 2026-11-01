@@ -1,100 +1,108 @@
 extends RefCounted
-## Presentation-only frame coordinator. The backend owns musical deadlines,
-## MIDI scoring and transport time; this coordinator samples that clock once
-## and distributes it to Listen, notation, effects and preview indications.
+## Presentation-only frame owner. No reference to Main or backend commands.
+## Collaborators are injected once; each frame receives only immutable
+## state, one sampled beat, and the already projected visual position.
 const LivingScore := preload("res://living_score.gd")
 
-static func advance(app, delta: float) -> void:
-    var ticks: int = Time.get_ticks_msec()
-    var transport_beat: float = app._transport_beat_at(ticks)
-    # On-device frame intervals, opt-in only. delta is never fed back into
-    # the backend tempo or score assessment; tests may call _process(0).
-    if app.frame_diagnostics and app.current_screen == "practice":
-        var frame_result: Dictionary = app.frame_meter.record_frame(delta)
-        if not frame_result.is_empty():
-            frame_result["native_visible_noteheads"] = app._visible_score_noteheads()
-            frame_result["native_scanned_events"] = app.practice_view.stage.renderer.frame_scanned_events
-            frame_result["phase"] = str(app.last_state.get("phase", ""))
-            print("PHASE8D_FRAME_INTERVALS:", JSON.stringify(frame_result))
-    # Animate short-lived hit pulses between state samples.
-    app.score_effects.prune_expired(ticks)
-    app._read_live_midi()
-    if app.frame_busy_presented != app.action_pending:
-        app.frame_busy_presented = app.action_pending
-        app.settings_view.present_busy(app.action_pending)
-        app.practice_view.present_busy(app.action_pending)
-        app.lesson_view.present_busy(app.action_pending)
-    app.lesson_session.ensure_current(ticks)
-    # Start Listen WAV on the actual negative-to-zero beat crossing at
-    # frame rate, not on the next 150ms state poll. This preserves the
-    # first note AND keeps its attack aligned with the engraved notehead.
-    if app.demo_player != null and str(app.last_state.get("mode", "")) == "listen" \
-            and bool(app.last_state.get("running", false)) \
-            and not bool(app.last_state.get("paused", false)) \
-            and bool(app.demo_player.get("loaded")) \
-            and not bool(app.demo_player.get("started")):
-        app.demo_player.synchronize(app.last_state, transport_beat)
-    # Continuous Listen drift measurements are display/audio only and
-    # never feed back into the MIDI grading or the Python transport.
-    if app.demo_player != null and str(app.last_state.get("mode", "")) == "listen" \
-            and bool(app.last_state.get("running", false)) \
-            and not bool(app.last_state.get("paused", false)):
-        app.demo_player.keep_synchronized(transport_beat,
-            maxf(1.0, float(app.last_state.get("bpm", 60.0))),
-            app.last_state.get("tempo_segments", []))
-        if app.listen_sync_diagnostics and ticks - app.last_listen_sync_report_ms >= 1000:
-            app.last_listen_sync_report_ms = ticks
-            print("PHASE8B_LISTEN_SOFTWARE_SYNC:",
-                JSON.stringify(app.demo_player.sync_report()))
-    app._update_count_in(transport_beat,ticks)
-    # Frame-accurate native projection uses the SAME clock as score and
-    # count-in. No Verovio X positions or per-note speed correction.
-    if app.practice_view.stage.renderer != null \
-            and bool(app.last_state.get("loaded", false)):
-        var score_clock: float = transport_beat
-        app.practice_view.stage.renderer.present_clock(score_clock,
-            app._unrolled_score_beat_at(score_clock,ticks))
-    # The stage's lighting follows exactly the musical beat used by the
-    # moving Verovio notation. Preview/Listen use a neutral pulse; neither
-    # this visual beat nor its glow can create grading events.
-    if app.practice_view.stage.effects != null and bool(app.last_state.get("running", false)) \
-            and not bool(app.last_state.get("paused", false)):
-        app.practice_view.stage.effects.sync_beat(
-            transport_beat,
-            maxi(1, int(round(float(app.last_state.get("count_in_bar_beats", 4))))),
-            bool(app.last_state.get("preview_only", false))
-                or str(app.last_state.get("mode", "")) == "listen")
-    # Source-event reactions still follow the backend clock. Native feedback
-    # owns visible note cues and grading; no page-coordinate camera runs here.
-    if app.last_state.is_empty() or not bool(app.last_state.get("running", false)) \
-            or bool(app.last_state.get("paused", false)) or not app._native_score_ready():
-        app.last_playhead_strike_transport = -1
-        return
-    var clock: float = transport_beat
-    var musical_clock: float = float(app.last_state.get("play_from_beat", 0.0)) + clock
-    var strike_transport: int = int(app.last_state.get("transport_id", 0))
-    if app.last_playhead_strike_transport == strike_transport \
-            and musical_clock >= app.last_playhead_strike_beat \
-            and musical_clock - app.last_playhead_strike_beat <= .5:
-        var onsets: Array = LivingScore.groups_crossed(
-            app.living_chords, app.last_playhead_strike_beat, musical_clock)
-        if not onsets.is_empty() and (bool(app.last_state.get("preview_only", false)) \
-                or str(app.last_state.get("mode", "")) == "listen"):
-            app._preview_note_arrivals(onsets)
-    app.last_playhead_strike_transport = strike_transport
-    app.last_playhead_strike_beat = musical_clock
-    if app.phase0_smoke_mode:
-        var tick: int = int(floor(clock * 4.0))
-        var playhead: float = app.practice_view.stage.renderer.size.x * .42
-        var content_x: float = -app.practice_view.stage.renderer.clock_beat * app.practice_view.stage.renderer.timeline.pixels_per_beat
-        if clock < 0.0 and tick != app.phase0_last_lead_tick:
-            app.phase0_last_lead_tick = tick
-            print("PHASE0_LEAD_BEAT:", clock, " CONTENT_X:", content_x,
-                " CURSOR_X:", playhead, " VISIBLE:", app.practice_view.stage.renderer.visible)
-        elif clock >= 0.0 and tick != app.phase0_last_cursor_tick:
-            app.phase0_last_cursor_tick = tick
-            print("PHASE0_VISIBLE_NOTES:", app._visible_score_noteheads(),
-                " PANEL_WIDTH:", app.practice_view.stage.score_frame.size.x, " CONTENT_X:", content_x)
-            print("PHASE0_CURSOR_BEAT:", musical_clock, " SCREEN_X:", playhead,
-                " VISIBLE:", app.practice_view.stage.renderer.visible, " CONTENT_X:", content_x)
+var practice_view
+var settings_view
+var lesson_view
+var lesson_session
+var score_effects
+var demo_player
+var frame_meter
+var busy_presented: Variant = null
+var last_strike_transport := -1
+var last_strike_beat := -INF
+var last_sync_report_ms := 0
+var last_lead_tick := -999
+var last_cursor_tick := -1
 
+func _init(practice, settings, lesson, session, effects, demo, meter) -> void:
+    practice_view = practice
+    settings_view = settings
+    lesson_view = lesson
+    lesson_session = session
+    score_effects = effects
+    demo_player = demo
+    frame_meter = meter
+
+func _visible_noteheads() -> int:
+    var renderer = practice_view.stage.renderer
+    if renderer == null or not renderer.is_visible_in_tree():
+        return 0
+    var viewport := Rect2(Vector2.ZERO,renderer.size)
+    var visible := 0
+    for position in renderer.drawn_noteheads.values():
+        if viewport.has_point(position):
+            visible += 1
+    return visible
+
+func advance(state: Dictionary, beat: float, visual_beat: float,
+        ticks: int, delta: float, busy: bool, screen: String,
+        score_ready: bool, source_groups: Array,
+        frame_diagnostics: bool = false, listen_diagnostics: bool = false,
+        smoke: bool = false) -> Array:
+    if frame_diagnostics and screen == "practice":
+        var frame_result: Dictionary = frame_meter.record_frame(delta)
+        if not frame_result.is_empty():
+            frame_result["native_visible_noteheads"] = _visible_noteheads()
+            frame_result["native_scanned_events"] = practice_view.stage.renderer.frame_scanned_events
+            frame_result["phase"] = str(state.get("phase",""))
+            print("PHASE8D_FRAME_INTERVALS:",JSON.stringify(frame_result))
+    if busy_presented != busy:
+        busy_presented = busy
+        settings_view.present_busy(busy)
+        practice_view.present_busy(busy)
+        lesson_view.present_busy(busy)
+    lesson_session.ensure_current(ticks)
+
+    var listening: bool = str(state.get("mode","")) == "listen"
+    var moving: bool = bool(state.get("running",false)) and not bool(state.get("paused",false))
+    if demo_player != null and listening and moving:
+        if bool(demo_player.get("loaded")) and not bool(demo_player.get("started")):
+            demo_player.synchronize(state,beat)
+        demo_player.keep_synchronized(
+            beat,maxf(1.0,float(state.get("bpm",60.0))),
+            state.get("tempo_segments",[]))
+        if listen_diagnostics and ticks-last_sync_report_ms >= 1000:
+            last_sync_report_ms = ticks
+            print("PHASE8B_LISTEN_SOFTWARE_SYNC:",JSON.stringify(demo_player.sync_report()))
+
+    var stage = practice_view.stage
+    if stage.renderer != null and bool(state.get("loaded",false)):
+        stage.renderer.present_clock(beat,visual_beat)
+    if stage.effects != null and moving:
+        stage.effects.sync_beat(
+            beat,maxi(1,int(round(float(state.get("count_in_bar_beats",4))))),
+            bool(state.get("preview_only",false)) or listening)
+
+    if state.is_empty() or not moving or not score_ready:
+        last_strike_transport = -1
+        return []
+    var musical_clock: float = float(state.get("play_from_beat",0.0))+beat
+    var transport: int = int(state.get("transport_id",0))
+    var crossed: Array = []
+    if last_strike_transport == transport and \
+            musical_clock >= last_strike_beat and \
+            musical_clock-last_strike_beat <= .5 and \
+            (bool(state.get("preview_only",false)) or listening):
+        crossed = LivingScore.groups_crossed(source_groups,last_strike_beat,musical_clock)
+    last_strike_transport = transport
+    last_strike_beat = musical_clock
+
+    if smoke:
+        var tick: int = int(floor(beat*4.0))
+        var playhead: float = stage.renderer.size.x*.42
+        var content_x: float = -stage.renderer.clock_beat*stage.renderer.timeline.pixels_per_beat
+        if beat < 0.0 and tick != last_lead_tick:
+            last_lead_tick = tick
+            print("PHASE0_LEAD_BEAT:",beat," CONTENT_X:",content_x,
+                " CURSOR_X:",playhead," VISIBLE:",stage.renderer.visible)
+        elif beat >= 0.0 and tick != last_cursor_tick:
+            last_cursor_tick = tick
+            print("PHASE0_VISIBLE_NOTES:",_visible_noteheads(),
+                " PANEL_WIDTH:",stage.score_frame.size.x," CONTENT_X:",content_x)
+            print("PHASE0_CURSOR_BEAT:",musical_clock," SCREEN_X:",playhead,
+                " VISIBLE:",stage.renderer.visible," CONTENT_X:",content_x)
+    return crossed
