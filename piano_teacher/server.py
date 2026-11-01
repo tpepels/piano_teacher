@@ -881,14 +881,11 @@ class PracticeEngine:
 
     def _review_retry(self, first_bar, last_bar):
         """Select only a scored, real source interval from the current review."""
-        if (self.plan is None or self.review_stage_identity != self.plan.identity
-                or not self.performance_summary or type(first_bar) is not int
-                or type(last_bar) is not int):
-            raise ValueError("Finish an assessed attempt before retrying a section")
-        selected = next((section for section in self.performance_summary["sections"]
-                         if section["first_bar"] == first_bar and section["last_bar"] == last_bar), None)
-        if selected is None or selected["errors"] <= 0:
-            raise ValueError("Choose a difficult section from the latest assessment")
+        selected = self.assessment.select_review_section(
+            self.performance_summary,
+            plan_ready=(self.plan is not None
+                        and self.review_stage_identity == self.plan.identity),
+            first_bar=first_bar, last_bar=last_bar)
         self._prepare_practice()
         self.open_from_beat = selected["start_beat"]
         self.review_end_beat = selected["end_beat"]
