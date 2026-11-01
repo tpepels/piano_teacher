@@ -38,6 +38,7 @@ from .assessment_service import AssessmentService
 from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.strategy_session import restored_strategy_plan
 from .application.control_dispatch import ControlDispatcher
+from .application.stage_change import prepare_stage_change, apply_stage_change
 from .application.practice_transitions import TransitionContext, decide_transition
 from .application.attempt_progression import AttemptProgression, AttemptTick
 from .application.feedback_route import FeedbackFacts, select_feedback_route
@@ -1196,52 +1197,19 @@ class PracticeEngine:
         p=self.plan
         if not p:
             raise ValueError("Open a piece first")
-        if action == "select_step":
-            number = kwargs.get("number")
-            # Retain integer strings/whole floats, without truncating a step.
-            if (isinstance(number, bool) or not isinstance(number, (int, float, str))
-                    or (isinstance(number, float) and not number.is_integer())):
-                raise ValueError("Choose a whole lesson step number")
-            try:
-                number = int(number)
-            except ValueError:
-                raise ValueError("Choose a whole lesson step number") from None
-            if not 1 <= number <= len(p.lesson_steps):
-                raise ValueError("Lesson step out of bounds")
+        change = prepare_stage_change(p, action, kwargs)
         was_guided = self.mode == "learn"
         guided_start = self.guided_range[0] if self.guided_range is not None else 0.0
         guided_return = self._guided_return
         guided_retry_range = self.retry_range
         self._stop()
         self._reset_trouble()
-        if action == "select_step":
+        apply_stage_change(p, change, warmup=self.is_builtin_warmup)
+        if change.resets_open_position:
             self.open_from_beat = 0.0
-            p.select_step(number)
-        elif action == "next":
-            self.open_from_beat = 0.0
-            p.jump(1)
-        elif action == "previous":
-            self.open_from_beat = 0.0
-            p.jump(-1)
-        elif action == "hand":
-            requested = str(kwargs.get("hand", "both"))
-            if self.is_builtin_warmup and requested in p.hands and p.hands.index(requested) > p.hand_index:
-                previous_step = p.lesson_steps[p.hands.index(requested) - 1]
-                if previous_step.key not in p.mastered:
-                    raise ValueError("Complete three clean passes to unlock the next hand")
-            p.set_hand(requested)
-            self.open_from_beat = 0.0
-        elif action == "tempo":
-            p.set_bpm(int(kwargs["bpm"]))
-        elif action == "tempo_up":
-            p.increase_tempo()
-        elif action == "tempo_down":
-            p.decrease_tempo()
-        else:
-            raise ValueError(f"Unsupported action: {action}")
         # Native notation is engraved in source coordinates: changing
         # only playback BPM must not invalidate the score/reload Godot.
-        if action not in ("tempo", "tempo_up", "tempo_down"):
+        if not change.tempo_only:
             self.score_revision+=1
         self.feedback="Ready"
         self.next_action="Start when you are ready."
