@@ -50,7 +50,7 @@ static func advance(app, delta: float) -> void:
     if app.practice_view.stage.renderer != null \
             and bool(app.last_state.get("loaded", false)):
         var score_clock: float = transport_beat
-        app.practice_view.stage.renderer.present(app.last_state, score_clock,
+        app.practice_view.stage.renderer.present_clock(score_clock,
             app._unrolled_score_beat_at(score_clock,ticks))
     # The stage's lighting follows exactly the musical beat used by the
     # moving Verovio notation. Preview/Listen use a neutral pulse; neither
