@@ -37,6 +37,7 @@ from .assessment_service import AssessmentService
 from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.strategy_session import restored_strategy_plan
 from .application.control_dispatch import ControlDispatcher
+from .application.score_ack import ScoreAckState, choose_score_ack_action
 from .application.stage_change import prepare_stage_change, apply_stage_change
 from .application.practice_transitions import TransitionContext, decide_transition
 from .application.attempt_progression import AttemptProgression, AttemptTick
@@ -1075,19 +1076,20 @@ class PracticeEngine:
     def _control_acknowledgement(self, action: str, kwargs: dict) -> None:
         if action == "score_ready":
             revision = int(kwargs.get("revision", -1))
-            # Ignore delayed acknowledgements for previous engraving.
-            if (self.awaiting_score_revision != revision
-                    or revision != self.score_revision):
-                return
-            if self.paused:
+            decision = choose_score_ack_action(revision, ScoreAckState(
+                requested_revision=self.awaiting_score_revision,
+                current_revision=self.score_revision,
+                paused=self.paused, mode=self.mode,
+                teaching_bound=self.teaching is not None))
+            if decision == "defer":
                 self._deferred_score_ack = revision
-            elif self.mode == "listen":
+            elif decision == "listen":
                 self.listen.acknowledge_score(revision)
                 self._start_listen_if_ready()
-            elif self.mode == "learn" and self.teaching is not None:
+            elif decision == "learn":
                 self.awaiting_score_revision = None
                 self.teaching.start(now=time.monotonic())
-            else:
+            elif decision == "practice":
                 self.start(
                     from_beat=(self.pending_rewind if self.pending_rewind is not None
                                else self.open_from_beat),
