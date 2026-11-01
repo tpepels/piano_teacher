@@ -145,3 +145,19 @@ def test_source_preparation_uses_nearest_authored_measure_and_absolute_deadline(
         source, source_from_beat=8, from_visual=22,
         now=105, reverse_seconds=2, bpm=60)
     assert calls[-1] == (8, 0.0, ["right","left"], None)
+
+
+def test_cancel_preparation_does_not_reset_running_source_clock():
+    from piano_teacher.visual_transport import VisualTransport
+    transport = VisualTransport(run_at=123, play_from_beat=4,
+                                _preparation_pending=True,
+                                pending_rewind=2,
+                                practice_preparation={"phase": "reverse"},
+                                _visual_rewind_from=8, _visual_rewind_to=-4)
+    transport.cancel_preparation()
+    assert transport.run_at == 123 and transport.play_from_beat == 4
+    assert not transport._preparation_pending
+    assert transport.pending_rewind is None
+    assert transport.practice_preparation is None
+    assert transport._visual_rewind_from is None
+    assert transport._visual_rewind_to is None

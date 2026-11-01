@@ -42,7 +42,7 @@ from .application.transport_commands import (
 )
 from .application.stage_change import prepare_stage_change, apply_stage_change, guided_reentry
 from .application.practice_transitions import TransitionContext, decide_transition
-from .application.attempt_progression import AttemptProgression, AttemptTick
+from .application.attempt_progression import AttemptProgression, AttemptTick, repeat_deadline, plan_full_passage
 from .application.feedback_route import FeedbackFacts, select_feedback_route
 from .application.assessment_settlement import assess_completed_take
 from .application.assessment_commit import commit_assessed_result
@@ -1446,8 +1446,9 @@ class PracticeEngine:
             # invents notes, clean runs, mastery or a MIDI recording.
             self.running = False
             self._preview_loop_pending = True
-            gap_seconds = self.visual_gap_beats * 60 / self.plan.bpm
-            self.next_at = self.run_at + duration + gap_seconds
+            self.next_at = repeat_deadline(
+                run_at=self.run_at, duration=duration,
+                gap_beats=self.visual_gap_beats, bpm=self.plan.bpm)
             self.feedback = "Timing preview - repeating after one empty measure"
             self.next_action = "Connect your MIDI piano to earn clean runs."
             if now >= self.next_at:
@@ -1524,37 +1525,32 @@ class PracticeEngine:
         self.retry_range = None
 
     def _finish_full_passage(self, result, total_beats: float, duration: float, now: float):
-        """Complete finish full passage after a scored take."""
-        self.pending_result=result
-        if not getattr(result, "passed", result.clean) and self.auto:
-            # Repeated wrong takes traverse backward over the visible source
-            # instead of teleporting to beat zero or appending failed copies.
+        """Settle a full take using independent transport decisions."""
+        decision = plan_full_passage(
+            accepted=getattr(result, "passed", result.clean),
+            automatic=self.auto, warmup=self.is_builtin_warmup,
+            retry_pending=self._retry_previous_pass,
+            run_at=self.run_at, duration=duration, total_beats=total_beats,
+            gap_beats=self.visual_gap_beats, bpm=self.plan.bpm,
+            feedback_seconds=self.feedback_seconds)
+        self.pending_result = result
+        if decision.rewind:
             self._retry_previous_pass = True
-            self._schedule_preparation(self.play_from_beat, now=now,
-                # Use the same authored-tempo source+rest projection as the
-                # camera. Nominal BPM multiplication jumps at failure after
-                # a shaped passage, especially near its last bar.
+            self._schedule_preparation(
+                self.play_from_beat, now=now,
                 from_visual=self._visual_motion(now)[0],
-                reverse_seconds=max(self.feedback_seconds,
-                    min(4.0, total_beats * 60.0 / self.plan.bpm / 3.0)))
-        if not getattr(result, "passed", result.clean):
-            # Failure breaks consecutive accepted takes immediately, even if
-            # Start/Restart/Stop discards this feedback before its commit.
-            # Success and mastery still wait until the feedback interval ends.
+                reverse_seconds=decision.rewind_seconds)
+        if decision.failed:
             self.plan.streak = 0
             self._save()
-            if self.is_builtin_warmup:
-                self.auto = False  # Keep the beginner-study review available.
-                self._preparation_pending = False
-                self.practice_preparation = None
-                self.pending_rewind = None
-                self._visual_rewind_from = None
-                self._visual_rewind_to = None
-        self.next_action=next_full_attempt(self.plan, result)
-        if not self.auto:
+        if decision.stop_auto:
+            self.auto = False
+            self.visual_transport.cancel_preparation()
+        self.next_action = next_full_attempt(self.plan, result)
+        if decision.deadline_action == "clear":
             self.next_at = 0
-        elif not self._retry_previous_pass:
-            self.next_at = self.run_at + duration + self.visual_gap_beats*60/self.plan.bpm
+        elif decision.deadline_action == "schedule":
+            self.next_at = decision.deadline_at
             if now >= self.next_at:
                 self._update()
 

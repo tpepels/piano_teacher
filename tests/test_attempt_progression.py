@@ -138,3 +138,37 @@ def test_start_and_loop_continuation_share_cached_grid_and_clock(tmp_path,monkey
         assert not engine.auto
     finally:
         engine.db.close()
+
+
+def test_full_passage_routing_precedence_and_absolute_repetition():
+    from piano_teacher.application.attempt_progression import plan_full_passage
+    facts = dict(run_at=10.0, duration=6.0, total_beats=8.0,
+                 gap_beats=4.0, bpm=80.0, feedback_seconds=1.2,
+                 retry_pending=False)
+    clean = plan_full_passage(accepted=True, automatic=True, warmup=False, **facts)
+    assert clean.deadline_action == "schedule"
+    assert clean.deadline_at == 19.0
+    assert not clean.failed and not clean.rewind
+
+    failed = plan_full_passage(accepted=False, automatic=True, warmup=False, **facts)
+    assert failed.failed and failed.rewind and not failed.stop_auto
+    assert failed.deadline_action == "keep"
+    assert failed.rewind_seconds == max(1.2, min(4.0, 8*60/80/3))
+
+    warmup = plan_full_passage(accepted=False, automatic=True, warmup=True, **facts)
+    assert warmup.rewind and warmup.stop_auto and warmup.deadline_action == "clear"
+
+    manual = plan_full_passage(accepted=False, automatic=False, warmup=False, **facts)
+    assert manual.failed and not manual.rewind and manual.deadline_action == "clear"
+
+    recovering = plan_full_passage(
+        accepted=True, automatic=True, warmup=False,
+        **{**facts, "retry_pending": True})
+    assert recovering.deadline_action == "keep"
+    assert recovering.deadline_at is None
+
+
+def test_preview_and_successful_loop_use_identical_rest_deadline():
+    from piano_teacher.application.attempt_progression import repeat_deadline
+    assert repeat_deadline(run_at=200.0, duration=4.5,
+                           gap_beats=3.0, bpm=90.0) == 206.5

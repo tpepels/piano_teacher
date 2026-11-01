@@ -114,6 +114,14 @@ class VisualTransport:
         self._preview_loop_pending = False
         return self.next_at
 
+    def cancel_preparation(self) -> None:
+        """End a failed warm-up's automatic retry without erasing the score."""
+        self._preparation_pending = False
+        self.practice_preparation = None
+        self.pending_rewind = None
+        self._visual_rewind_from = None
+        self._visual_rewind_to = None
+
     def preparation_schedule(self) -> dict | None:
         """Absolute monotonic endpoints for the same rewind/preparation clock.
 
