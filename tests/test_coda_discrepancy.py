@@ -31,7 +31,8 @@ def test_rest_coverage_is_written_only():
     ("long-multipage-first-two-bars","dotted-1-to-3","cross-measure-group-protected"),
     ("authored-triplet","chord-2-beat","tuplet-source-protected"),
     ("rest-bearing-triplet","dotted-3-to-1","rest-bearing-tuplet-protected"),
-    ("changing-meter","chord-2-beat","changing-meter-group-protected"),
+    ("changing-meter","chord-2-beat","changing-meter-cross-bar-chord"),
+    ("changing-meter","dotted-3-to-1","changing-meter-dotted-quantization"),
 ])
 def test_changed_sounding_timelines_remain_distinct(fixture,operation,category):
     ref=(SoundingNote("v0",0,2,60),)

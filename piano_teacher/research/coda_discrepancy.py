@@ -42,9 +42,15 @@ CAUSES = {
         "Original Coda changes the note/rest-bearing tuplet group; the "
         "adapter applies its written-rest/tuplet preservation restrictions."
     ),
-    "changing-meter-group-protected": (
-        "Original Coda transforms notes in the 3/4-to-2/4 excerpt using its "
-        "first-meter-only policy; adapter enforces source-measure restrictions."
+    "changing-meter-dotted-quantization": (
+        "Source quantization is three ticks per quarter. Original Coda truncates "
+        "1.5-times three ticks to four and 0.5-times three ticks to one; "
+        "the adapter refuses non-integral dotted tick lengths."
+    ),
+    "changing-meter-cross-bar-chord": (
+        "Original Coda chords the second 2-beat window across the 3/4 "
+        "measure boundary at beat three; adapter requires chord groups "
+        "to stay inside the authored source measure."
     ),
     "upstream-disconnected-tie": (
         "The original exported MusicXML contains a tied continuation whose "
@@ -127,8 +133,10 @@ def explain_discrepancy(
         category = "tuplet-source-protected"
     elif source_case == "rest-bearing-triplet":
         category = "rest-bearing-tuplet-protected"
-    elif source_case == "changing-meter":
-        category = "changing-meter-group-protected"
+    elif source_case == "changing-meter" and operation.startswith("dotted-"):
+        category = "changing-meter-dotted-quantization"
+    elif source_case == "changing-meter" and operation.startswith("chord-"):
+        category = "changing-meter-cross-bar-chord"
     else:
         category = "unclassified"
 
