@@ -109,9 +109,8 @@ class ControlDispatcher:
                 engine.next_action = "Play one piano key to begin, or press Play."
             return
         if action == "hints":
-            engine.persistent_hints = bool(kwargs.get("enabled", False))
-            if engine.teaching is not None:
-                engine.teaching.set_hints(engine.persistent_hints, now=time.monotonic())
+            engine.guided_session.set_hints(
+                bool(kwargs.get("enabled", False)), now=time.monotonic())
             return
         if action == "stop":
             engine._stop()
