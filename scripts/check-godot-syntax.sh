@@ -16,6 +16,7 @@ for script in \
   res://main.gd \
   res://practice_frame_coordinator.gd \
   res://practice_state_presenter.gd \
+  res://command_failure_presenter.gd \
   res://live_midi_feedback.gd \
   res://notation/native/view.gd \
   res://inprocess_bus.gd \
