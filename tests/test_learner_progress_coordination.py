@@ -83,3 +83,37 @@ def test_source_trouble_validation_rejects_invalid_boundaries():
         with pytest.raises(ValueError, match="Choose a saved trouble spot"):
             owner.choose_trouble_spot(None, fingerprint="piece",
                                      stage_key="right", start_beat=beat)
+
+
+def test_rolling_trouble_records_only_source_attacks_inside_selected_idea():
+    class TrackingStore(Store):
+        def __init__(self):
+            super().__init__()
+            self.events = []
+        def record_trouble(self, fingerprint, stage, unit, *, errors, pitches):
+            self.events.append(("trouble", fingerprint, stage, unit, errors, pitches))
+        def save_resume(self, fingerprint, stage, unit):
+            self.events.append(("resume", fingerprint, stage, unit))
+        def resolve_trouble(self, fingerprint, stage):
+            self.events.append(("resolve", fingerprint, stage))
+    store = TrackingStore()
+    owner = LearnerProgress(store)
+    unit = {"start_beat":4.0,"end_beat":8.0}
+    def note(beat, pitch, status):
+        return SimpleNamespace(
+            note=SimpleNamespace(start=100.0+beat, pitch=pitch), status=status)
+    notes = [
+        note(2.0,60,"missed"), note(4.0,65,"wrong"),
+        note(5.0,67,"missed"), note(6.0,69,"correct"),
+        note(8.0,72,"wrong"), note(7.5,65,"wrong")]
+    owner.record_rolling_trouble(
+        fingerprint="piece", stage_key="right", unit=unit,
+        assessed_notes=notes, phrase_start=100.0)
+    assert store.events == [
+        ("trouble","piece","right",unit,3,[65,67]),
+        ("resume","piece","right",unit)]
+    owner.resolve_trouble(fingerprint="piece",stage_key="right")
+    assert store.events[-1] == ("resolve","piece","right")
+    owner.save_resume(fingerprint="",stage_key="right",unit=unit)
+    owner.resolve_trouble(fingerprint="",stage_key="right")
+    assert len(store.events)==3
