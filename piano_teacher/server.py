@@ -751,8 +751,8 @@ class PracticeEngine:
         self.mode = "learn"
         self.guided_range = (start, end)
         unit = self._guided_unit()
-        if unit is not None and self.fingerprint:
-            self.learner_store.save_resume(self.fingerprint, self.plan.identity, unit)
+        self.learner_progress.save_resume(
+            fingerprint=self.fingerprint, stage_key=self.plan.identity, unit=unit)
         if bump_revision:
             self.score_revision += 1
         self.transport_id += 1
@@ -952,8 +952,8 @@ class PracticeEngine:
         self.pending_result = None
         if getattr(result, "passed", result.clean):
             self._reset_trouble()
-            if self.fingerprint:
-                self.learner_store.resolve_trouble(self.fingerprint, p.identity)
+            self.learner_progress.resolve_trouble(
+                fingerprint=self.fingerprint, stage_key=p.identity)
         self.retry_range = None
         outcome = commit_assessed_result(
             plan=p, result=result, fingerprint=self.fingerprint,
@@ -1412,15 +1412,10 @@ class PracticeEngine:
                     played=self.recorder.presses if self.recorder else [],
                     from_beat=self.play_from_beat, end_beat=decision.end_beat,
                     tempo=tempo_map)
-                # Rolling detection can include the preceding idea;
-                # saved trouble describes only this canonical unit.
-                unit_errors = [entry for entry in assessed.notes
-                    if entry.status in ("missed", "wrong")
-                    and phrase.start+decision.restart_beat <= entry.note.start < phrase.start+decision.end_beat]
-                pitches = sorted({entry.note.pitch for entry in unit_errors})
-                self.learner_store.record_trouble(self.fingerprint, self.plan.identity, unit,
-                                                 errors=len(unit_errors), pitches=pitches)
-                self.learner_store.save_resume(self.fingerprint, self.plan.identity, unit)
+                self.learner_progress.record_rolling_trouble(
+                    fingerprint=self.fingerprint, stage_key=self.plan.identity,
+                    unit=unit, assessed_notes=assessed.notes,
+                    phrase_start=phrase.start)
         transition = plan_rolling_recovery(
             decision, identity=self.plan.identity, bpm=self.plan.bpm,
             previous_key=self._trouble_key, previous_count=self._trouble_count,
@@ -1493,7 +1488,8 @@ class PracticeEngine:
         """Complete finish performance review after a scored take."""
         if self.fingerprint:
             if result.clean:
-                self.learner_store.resolve_trouble(self.fingerprint, self.plan.identity)
+                self.learner_progress.resolve_trouble(
+                    fingerprint=self.fingerprint, stage_key=self.plan.identity)
             else:
                 for unit in self.performance_summary["weakest_bars"]:
                     self._record_saved_trouble(phrase, result, start=unit["start_beat"],
