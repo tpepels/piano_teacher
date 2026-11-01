@@ -274,14 +274,17 @@ func _count_tick(accent: bool) -> void:
         print("PHASE0_CLICK:", str(last_state.get("phase", "")))
 
 func _transport_beat_now() -> float:
+    return _transport_beat_at(Time.get_ticks_msec())
+
+func _transport_beat_at(at_ms: int) -> float:
     # Keep the score's musical clock phase-locked across uneven replies.
     # The Python engine remains authoritative for note timing and assessment.
     if visual_transport_clock.matches(last_state):
-        return visual_transport_clock.score_beat(Time.get_ticks_msec())
+        return visual_transport_clock.score_beat(at_ms)
     # Direct-state smoke fixtures, before any network snapshot is received.
     var beat: float = float(last_state.get("clock_beat", 0.0))
     if bool(last_state.get("running", false)) and not bool(last_state.get("paused", false)):
-        var elapsed: float = maxf(0.0, float(Time.get_ticks_msec() - last_state_tick) / 1000.0)
+        var elapsed: float = maxf(0.0, float(at_ms - last_state_tick) / 1000.0)
         var segments: Array = last_state.get("tempo_segments", [])
         if segments.is_empty():
             beat += elapsed * float(last_state.get("bpm", 60.0)) / 60.0
@@ -296,10 +299,13 @@ func _transport_beat_now() -> float:
 # visual axis. During feedback/recovery the server supplies the desired scroll
 # direction; extrapolate its last snapshot between state polls.
 func _unrolled_score_beat(transport_clock: float) -> float:
+    return _unrolled_score_beat_at(transport_clock,Time.get_ticks_msec())
+
+func _unrolled_score_beat_at(transport_clock: float, at_ms: int) -> float:
     # One presentation clock owns scrolling, reversal, retry count-in
     # and resumed playback; there is no independent retry camera.
     if visual_transport_clock.initialized and last_state.has("visual_offset_beats"):
-        return visual_transport_clock.visual_beat(Time.get_ticks_msec())
+        return visual_transport_clock.visual_beat(at_ms)
     if not last_state.has("visual_offset_beats"):
         return NAN
     return float(last_state.get("visual_scroll_beat", transport_clock))
@@ -311,8 +317,9 @@ func _raw_click(accent: bool) -> void:
     click_player.stream = click_high if accent else click_low
     click_player.play()
 
-func _update_count_in() -> void:
-    var now_ms := Time.get_ticks_msec()
+func _update_count_in(sampled_beat: float = NAN, now_ms: int = -1) -> void:
+    if now_ms < 0:
+        now_ms = Time.get_ticks_msec()
     var calibration: Dictionary = last_state.get("midi_calibration", {})
     if bool(calibration.get("active", false)):
         recovery_click_tick = -999
@@ -362,7 +369,7 @@ func _update_count_in() -> void:
         play_tick_index = -1
         return
     recovery_click_tick = -999
-    var beat: float = _transport_beat_now()
+    var beat: float = sampled_beat if is_finite(sampled_beat) else _transport_beat_at(now_ms)
     var paused: bool = bool(last_state.get("paused", false))
     practice_view.stage.count_in.present(beat,
         maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4))))),
