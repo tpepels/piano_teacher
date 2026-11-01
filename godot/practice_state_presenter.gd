@@ -33,6 +33,12 @@ static func present(app, parsed: Dictionary, sample_started_ms: int) -> void:
         app.demo_player.synchronize(parsed, app._transport_beat_now())
     # ScoreAssetSession owns revision invalidation and the score_ready handshake.
     app.score_session.update_context(parsed, received_ms)
+    # Structural score contracts and recovery descriptors change only on
+    # accepted backend snapshots. Per-frame movement uses present_clock().
+    if bool(parsed.get("loaded",false)) and app.practice_view.stage.renderer != null:
+        var beat: float = app._transport_beat_at(received_ms)
+        app.practice_view.stage.renderer.present(parsed,beat,
+            app._unrolled_score_beat_at(beat,received_ms))
     app.practice_view.present(parsed, app._native_score_ready(), app.action_pending,
         app.demo_player != null and bool(app.demo_player.get("audio_error")))
     if not bool(parsed.get("loaded",false)):
