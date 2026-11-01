@@ -97,7 +97,7 @@ def _native_written(plan, owners, piece, bars, converter, *, factor):
     native=build_lesson_score(
         selected,boundaries=grid,time_signatures=meters,
         key_signatures=keys,clef_changes=clefs,retimed_source=True)
-    rendered=converter.parseData(native.musicxml)
+    rendered=converter.parseData(native.musicxml, format="musicxml")
     nonempty=[part for part in rendered.parts if tuple(part.recurse().notes)]
     if len(nonempty)!=1:
         raise ValueError("Native source-voice notation is not isolated")
@@ -204,8 +204,9 @@ def _case(name: str, filename: str, bars: int, converter, meter, key,
                             try:
                                 native_written=_native_written(
                                     plan,owners,piece,bars,converter,factor=factor)
-                            except (ValueError,RuntimeError,KeyError,
-                                    IndexError,TypeError) as exc:
+                            except Exception as exc:
+                                # Notation may be unsupported, but this must
+                                # not suppress a valid sounding comparison.
                                 native_written=None
                                 native_error=f"{type(exc).__name__}: {exc}"
                             outcome=report_comparison(
@@ -301,6 +302,15 @@ def main():
           "algorithm_total":result["algorithm_total"]},sort_keys=True))
     # Missing fixtures and broken imports are infrastructure failures.
     # Legitimate author mismatches/errors remain in the source-bound report.
+    if result["algorithm_exceptions"]:
+        raise AssertionError(
+            "Coda differential infrastructure/algorithm exception: "
+            f"{result['algorithm_exceptions']} cases; inspect retained report")
+    if (result["algorithm_total"] !=
+            result["algorithm_upstream_none"] +
+            result["algorithm_exceptions"] +
+            sum(o["status"]=="compared" for o in algorithms)):
+        raise AssertionError("Coda diagnostic did not classify every algorithm")
     if any(row.get("status")=="diagnostic-error" for row in rows):
         raise AssertionError("Coda score diagnostics could not run one or more source fixtures")
 
