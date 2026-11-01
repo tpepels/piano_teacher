@@ -29,7 +29,7 @@ from .application.rolling_recovery import plan_rolling_recovery
 from .music import Phrase
 from .notation.practice_timeline import preparation_measure_descriptor
 from .measure_grid import phrase_grid
-from .course_navigation import locate_course_section
+from .course_navigation import choose_source_opening
 from .state_projection import (
     PhaseSnapshot, SessionSnapshot, project_phase, project_session_state,
 )
@@ -1173,19 +1173,14 @@ class PracticeEngine:
         # Select a source measure across the entire imported piece,
         # then enter the existing learning or timed-practice flow.
         # No score is awarded simply by changing the starting point.
-        if self.plan is None:
-            raise ValueError("Open a piece first")
-        if self.is_builtin_warmup:
-            raise ValueError("Warm-ups use their own hand progression")
-        bar = kwargs.get("bar")
-        last_bar = len(self.plan.piece.bar_boundaries) - 1
-        if type(bar) is not int or not 1 <= bar <= last_bar:
-            raise ValueError(f"Choose a whole measure between 1 and {last_bar}")
-        requested_mode = kwargs.get("mode", "learn")
-        if requested_mode not in ("learn", "practice"):
-            raise ValueError("Choose Learn Notes or Practice Rhythm")
+        target = choose_source_opening(
+            self.plan, bar=kwargs.get("bar"),
+            mode=kwargs.get("mode", "learn"),
+            warmup=self.is_builtin_warmup)
         plan = self.plan
-        index, section, selected_bar = locate_course_section(plan, bar)
+        requested_mode = target.mode
+        selected_bar = target.bar
+        index = target.exercise_index
         self._stop()
         self._reset_trouble()
         plan.select(index)
