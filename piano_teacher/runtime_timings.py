@@ -13,6 +13,7 @@ class RuntimeTimings:
     def __init__(self) -> None:
         self.midi_ms: deque[float] = deque(maxlen=256)
         self.state_ms: deque[float] = deque(maxlen=128)
+        self.tick_ms: deque[float] = deque(maxlen=256)
 
     @staticmethod
     def _describe(values: deque[float]) -> dict:
@@ -31,6 +32,7 @@ class RuntimeTimings:
         return {
             "midi_callback": self._describe(self.midi_ms),
             "full_state": self._describe(self.state_ms),
+            "engine_tick": self._describe(self.tick_ms),
             "multiprocessing": False,
             "midi_visual_delivery": "in-process bounded event ring",
             "measurement": "embedded Python processing time; excludes Bluetooth input and display latency",
