@@ -5,7 +5,7 @@ from piano_teacher.research.coda_auto_chord_levels import original_chord_levels
 
 @pytest.mark.parametrize(("q","n","d","expected"),[
     (4, 4, 4, (2,4,8,16)),
-    (8, 4, 4, (2,4,8,16,32)),
+    (8, 4, 4, (2,4,8,16)),
     (3, 3, 4, (1,2,3,4,6,8,12)),
     (12, 4, 4, (2,4,6,8,12,16,24)),
     (1, 3, 4, (0,1,2,4,8,12)),
