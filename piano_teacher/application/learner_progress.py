@@ -47,6 +47,36 @@ class LearnerProgress:
             unit = next(iter(guided_units(variant, boundaries)), None)
         return unit
 
+    def save_resume(self, *, fingerprint: str, stage_key: str,
+                    unit: dict | None) -> None:
+        if fingerprint and unit is not None:
+            self._store.save_resume(fingerprint, stage_key, unit)
+
+    def resolve_trouble(self, *, fingerprint: str, stage_key: str) -> None:
+        if fingerprint:
+            self._store.resolve_trouble(fingerprint, stage_key)
+
+    def record_rolling_trouble(
+        self, *, fingerprint: str, stage_key: str, unit: dict,
+        assessed_notes: Iterable[NoteAssessment], phrase_start: float,
+    ) -> None:
+        """Record only errors inside the selected source-bound guided idea.
+
+        Rolling assessment may include the preceding idea. Its other notes
+        must not leak into this unit's persistent trouble fingerprint.
+        """
+        if not fingerprint:
+            return
+        begin = phrase_start + unit["start_beat"]
+        end = phrase_start + unit["end_beat"]
+        errors = [entry for entry in assessed_notes
+                  if entry.status in ("missed", "wrong")
+                  and begin <= entry.note.start < end]
+        pitches = sorted({entry.note.pitch for entry in errors})
+        self._store.record_trouble(
+            fingerprint, stage_key, unit, errors=len(errors), pitches=pitches)
+        self._store.save_resume(fingerprint, stage_key, unit)
+
     def record_guided_preparation(self, *, fingerprint: str,
                                   stage_key: str, unit: dict | None,
                                   assisted_count: int) -> None:
