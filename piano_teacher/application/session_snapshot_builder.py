@@ -6,8 +6,8 @@ musical transition authority. The returned dataclass is projected separately.
 """
 from __future__ import annotations
 
-from dataclasses import replace
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, replace
 from typing import Any, Callable
 
 @dataclass(frozen=True)
@@ -31,10 +31,14 @@ class SnapshotValues:
     fingerprint: str
     guided_range: tuple[float, float] | None
     is_builtin_warmup: bool
-    library: Any
-    listen: Any
-    live_input: Any
-    midi: Any
+    metronome: bool
+    midi_input_count: int
+    midi_input_note: int | None
+    midi_input_at: float | None
+    midi_connected: bool
+    midi_device: str
+    midi_notes: int
+    teaching_active: bool
     mode: str
     next_action: str
     next_at: float
@@ -50,23 +54,23 @@ class SnapshotValues:
     play_from_beat: float
     practice_preparation: Any
     preview_only: bool
-    recorder: Any
     recovery_notice: Any
     retry_range: Any
     review_end_beat: float | None
     run_at: float
     running: bool
     score_revision: int
-    teaching: Any
     transport_id: int
     visual_gap_beats: float
     visual_offset_beats: float
-    visual_transport: Any
 
 
 @dataclass(frozen=True)
 class SnapshotReadPorts:
-    """Narrow, explicitly named read services, sampled under the engine lock."""
+    """Named operations, sampled under the engine lock.
+
+    The sole write port synchronizes the preparation gap after source lookup.
+    """
     seek_grid: Callable[..., Any]
     learner_snapshot: Callable[..., Any]
     elapsed_beat: Callable[..., Any]
@@ -77,10 +81,12 @@ class SnapshotReadPorts:
     active_tempo_map: Callable[..., Any]
     display_phrase: Callable[..., Any]
     guided_marks: Callable[..., Any]
+    listen_snapshot: Callable[..., Any]
+    live_input_snapshot: Callable[..., Any]
+    preparation_schedule: Callable[..., Any]
+    teaching_snapshot: Callable[..., Any]
     set_visual_gap_beats: Callable[[float], None]
 
-
-import time
 
 from ..state_projection import (
     ActivitySnapshot, GuidedSnapshot, SessionSnapshot, TimingSnapshot,
@@ -115,14 +121,14 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         recovery_notice=state.recovery_notice,
         guided_recovery=state._guided_recovery_pending or state._guided_return is not None,
         pause_context=state.pause_context,
-        demo=state.listen.snapshot(),
+        demo=reads.listen_snapshot(),
         performance_summary=state.performance_summary,
         review_pending=state.review_end_beat is not None,
-        midi_input_count=state.midi.input_count,
-        midi_input_note=state.midi.input_note,
-        midi_now=time.monotonic() if state.midi.input_at is not None else 0.0,
-        midi_input_at=state.midi.input_at,
-        metronome=state.library.settings["metronome"],
+        midi_input_count=state.midi_input_count,
+        midi_input_note=state.midi_input_note,
+        midi_now=time.monotonic() if state.midi_input_at is not None else 0.0,
+        midi_input_at=state.midi_input_at,
+        metronome=state.metronome,
         hints_enabled=state.persistent_hints,
         fingering=p.piece.fingering_plan.summary()
             if p is not None and p.piece.fingering_plan is not None else None,
@@ -131,7 +137,7 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     visual_beat = state.play_from_beat
     if state.running and visual_now >= state.run_at and p is not None:
         visual_beat += reads.elapsed_beat(visual_now-state.run_at)
-    activity = replace(activity, midi_display=state.live_input.snapshot(
+    activity = replace(activity, midi_display=reads.live_input_snapshot(
         now=time.monotonic(),
         phrase=p.active_phrase if p is not None else None,
         hand=p.hand if p is not None else "both", beat=visual_beat,
@@ -140,10 +146,11 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     ))
     if p is None:
         return SessionSnapshot(mode=state.mode, feedback=state.feedback,
-            device=state.midi.device, revision=state.score_revision,
+            device=state.midi_device, revision=state.score_revision,
             transport_id=state.transport_id, activity=activity)
     practice_timeline = reads.source_model()["practice_timeline"]
-    reads.set_visual_gap_beats(practice_timeline["gap"]["duration_beats"])
+    gap_beats = practice_timeline["gap"]["duration_beats"]
+    reads.set_visual_gap_beats(gap_beats)
     ex, variant = p.exercise, p.active_variant
     lesson_steps = tuple((step.exercise_index, step.hand, step.key) for step in p.lesson_steps)
     sampled_at = time.monotonic()
@@ -166,7 +173,7 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         tempo_segments = local_map.as_segments()
         visual_segments = (*tempo_segments, {
             "start_beat": local_map.duration_beats,
-            "end_beat": local_map.duration_beats+state.visual_gap_beats,
+            "end_beat": local_map.duration_beats+gap_beats,
             "bpm": float(p.bpm),
             "start_seconds": local_map.duration_seconds,
         })
@@ -174,7 +181,7 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         sampled_at=sampled_at, now=now, run_at=state.run_at,
         tempo_segments=tempo_segments,
         visual_tempo_segments=visual_segments,
-        visual_preparation_schedule=state.visual_transport.preparation_schedule(),
+        visual_preparation_schedule=reads.preparation_schedule(),
         mapped_clock_beat=(reads.elapsed_beat(now-state.run_at)
                            if tempo_map is not None else None),
         running=state.running, paused=state.paused, auto=state.auto,
@@ -184,9 +191,9 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
         awaiting_score_revision=state.awaiting_score_revision,
         count_in_beats=state.count_in_beats,
         count_in_bar_beats=state.count_in_bar_beats, count_in_meter=state.count_in_meter,
-        midi_notes=len(state.recorder.presses) if state.recorder is not None else 0,
+        midi_notes=state.midi_notes,
         visual_offset_beats=state.visual_offset_beats,
-        visual_gap_beats=state.visual_gap_beats, visual_motion=visual_motion,
+        visual_gap_beats=gap_beats, visual_motion=visual_motion,
         practice_timeline=practice_timeline, practice_preparation=state.practice_preparation,
         take_result=({"clean": bool(state.pending_result.clean),
                       "correct": state.pending_result.correct,
@@ -194,12 +201,12 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
                      if state.mode == "practice" and state.pending_result is not None else None),
         feedback_marks=state.feedback_marks, live_marks=live_marks,
         feedback_unmapped=state.feedback_unmapped,
-        scoring_available=(not state.preview_only and state.midi.connected
+        scoring_available=(not state.preview_only and state.midi_connected
                            and state.mode in ("practice", "perform")),
     )
     guided = None
-    if state.mode == "learn" and state.teaching is not None:
-        teaching = state.teaching.snapshot(now=time.monotonic())
+    if state.mode == "learn" and state.teaching_active:
+        teaching = reads.teaching_snapshot(now=time.monotonic())
         phrase = reads.display_phrase()
         guided = GuidedSnapshot(
             teaching=teaching,
@@ -215,7 +222,7 @@ def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
             feedback_marks=reads.guided_marks(teaching),
         )
     return SessionSnapshot(mode=state.mode, feedback=state.feedback,
-        device=state.midi.device, revision=state.score_revision,
+        device=state.midi_device, revision=state.score_revision,
         transport_id=state.transport_id, phase=phase, activity=activity,
         lesson=lesson, timing=timing, guided=guided)
 
