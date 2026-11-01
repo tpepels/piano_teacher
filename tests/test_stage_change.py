@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from piano_teacher.application.stage_change import (
-    StageChange, apply_stage_change, prepare_stage_change,
+    StageChange, apply_stage_change, prepare_stage_change, guided_reentry,
 )
 
 
@@ -73,3 +73,27 @@ def test_warmup_hand_change_requires_previous_mastered_stage():
 def test_unsupported_action_reports_original_error(action):
     with pytest.raises(ValueError, match="Unsupported action"):
         apply_stage_change(Plan(), StageChange(action), warmup=False)
+
+
+def test_guided_reentry_preserves_source_anchor_only_after_matching_tempo_change():
+    change=StageChange("tempo")
+    assert guided_reentry(
+        change=change,was_guided=True,course_guided=True,
+        previous_return=("right",4.0),current_stage="right").route == "same_fragment"
+    assert guided_reentry(
+        change=change,was_guided=True,course_guided=True,
+        previous_return=("right",4.0),current_stage="right").recovery
+    assert not guided_reentry(
+        change=change,was_guided=True,course_guided=True,
+        previous_return=("right",4.0),current_stage="left").recovery
+    assert guided_reentry(
+        change=change,was_guided=False,course_guided=True,
+        previous_return=None,current_stage="right").route == "none"
+    hand=guided_reentry(
+        change=StageChange("hand",hand="left"),was_guided=True,
+        course_guided=True,previous_return=None,current_stage="left")
+    assert (hand.route,hand.explicit_learn)==("course",True)
+    ordinary=guided_reentry(
+        change=StageChange("next"),was_guided=True,
+        course_guided=False,previous_return=None,current_stage="right")
+    assert (ordinary.route,ordinary.recovery)==("fresh",False)
