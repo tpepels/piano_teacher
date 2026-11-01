@@ -46,3 +46,40 @@ def test_completed_guided_preparation_is_persisted_only_when_bound_to_a_piece():
     progress.record_guided_preparation(
         fingerprint="score", stage_key="hand", unit=unit, assisted_count=0)
     assert store.completed[-1] == ("score", "hand", unit, False)
+
+
+def test_skip_validation_precedes_session_stop():
+    import pytest
+    plan = SimpleNamespace(
+        lesson_step_number=1,
+        lesson_steps=[SimpleNamespace(key="first"), SimpleNamespace(key="second")])
+    assert LearnerProgress.next_skippable_step(plan,"need to advance").key == "second"
+    for reason in ("", "  ", None, 5):
+        with pytest.raises(ValueError, match="Choose an available next step"):
+            LearnerProgress.next_skippable_step(plan,reason)
+    plan.lesson_step_number=2
+    with pytest.raises(ValueError, match="Choose an available next step"):
+        LearnerProgress.next_skippable_step(plan,"skip")
+
+
+def test_skip_persistence_uses_explicit_fingerprint():
+    class SkipStore(Store):
+        def __init__(self):
+            super().__init__()
+            self.skipped = []
+        def mark_skipped(self, fingerprint, stage, **kwargs):
+            self.skipped.append((fingerprint,stage,kwargs))
+    store=SkipStore()
+    owner=LearnerProgress(store)
+    owner.mark_skipped(fingerprint="",stage_key="r",reason="short")
+    owner.mark_skipped(fingerprint="piece",stage_key="r",reason="short")
+    assert store.skipped == [("piece","r",{"reason":"short"})]
+
+
+def test_source_trouble_validation_rejects_invalid_boundaries():
+    import pytest
+    owner=LearnerProgress(Store())
+    for beat in (True, None, -1.0, float("nan"), float("inf")):
+        with pytest.raises(ValueError, match="Choose a saved trouble spot"):
+            owner.choose_trouble_spot(None, fingerprint="piece",
+                                     stage_key="right", start_beat=beat)
