@@ -32,6 +32,7 @@ const PracticeStatePresenter := preload("res://practice_state_presenter.gd")
 const CommandFailurePresenter := preload("res://command_failure_presenter.gd")
 const CommandSuccessPolicy := preload("res://command_success_policy.gd")
 const CommandSuccessPresenter := preload("res://command_success_presenter.gd")
+const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationPolicy := preload("res://navigation_policy.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
 
@@ -63,17 +64,10 @@ var score_error: String:
         if score_session != null:
             score_session.score_error = value
 
-var pending_library_piece := ""
-var pending_library_resume := false
-var library_resume_requested := false
 var startup_last_music_checked := false
 var calibration_tick_index := -999
 var recovery_click_tick := -999
 var retry_first_click_sent := false
-var last_post_path := ""
-var last_control_action := ""
-var pending_transport_action := ""
-var action_request_started_ms := 0
 var state_request
 var layout_request
 var action_request
@@ -116,7 +110,6 @@ var rendered_revision: int:
     get:
         return score_session.rendered_revision if score_session != null else -1
 
-var action_pending := false
 var last_state: Dictionary = {}
 var last_state_tick := 0
 var visual_transport_clock = VisualTransportClock.new()
@@ -145,6 +138,7 @@ var frame_meter = FrameMeter.new()
 var frame_coordinator
 var state_presenter
 var command_failure_presenter
+var command_state = CommandRequestState.new()
 var command_success_presenter
 var lesson_request
 var device_pending: bool:
@@ -536,7 +530,7 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
 func _navigate(screen: String) -> void:
     var decision: Dictionary = NavigationPolicy.plan(
         screen,current_screen,str(last_state.get("phase","")),
-        action_pending,last_post_path,last_control_action)
+        command_state.pending,command_state.post_path,command_state.control_action)
     screen = str(decision["target"])
     var previous_screen: String = str(decision["previous"])
     if bool(decision["remember_settings"]):
@@ -777,20 +771,19 @@ func _on_library_health(result: int, code: int,
     library_catalog.on_health(result, code, headers, body)
 
 func _start_library_health() -> void:
-    library_catalog.start_health(action_pending)
+    library_catalog.start_health(command_state.pending)
 
 
 func _open_library_piece(identifier: String, resume_saved := false) -> void:
     # Pause requests are asynchronous. Store a quick selection and open it
     # once the transport has acknowledged the pause, rather than dropping
-    # the click while action_pending is true.
-    if action_pending:
-        pending_library_piece = identifier
-        pending_library_resume = resume_saved
+    # the click while command_state.pending is true.
+    if command_state.pending:
+        command_state.queue_library(identifier,resume_saved)
         library_view.present_open_status("Preparing your selected music…")
         return
     library_view.present_open_status("Opening score…")
-    library_resume_requested = resume_saved
+    command_state.resume_requested = resume_saved
     _send_command("/library/open", {"id": identifier})
 
 
@@ -848,7 +841,7 @@ func _poll() -> void:
     if score_session != null and not practice_view.is_source_picker_open():
         score_session.poll(Time.get_ticks_msec())
 
-    if not state_pending and not action_pending:
+    if not state_pending and not command_state.pending:
         state_pending = true
         state_request_started_ms = Time.get_ticks_msec()
         if state_request.request("/state") != OK:
@@ -874,7 +867,7 @@ func _process(_delta: float) -> void:
     _update_count_in(beat,ticks)
     var arrivals: Array = frame_coordinator.advance(
         last_state,beat,_unrolled_score_beat_at(beat,ticks),ticks,_delta,
-        action_pending,current_screen,_native_score_ready(),living_chords,
+        command_state.pending,current_screen,_native_score_ready(),living_chords,
         frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
     if not arrivals.is_empty():
         score_effects.record_preview(arrivals,practice_view.stage,ticks)
@@ -884,7 +877,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         state_pending = false
         # A pre-action snapshot can arrive after the control response. It
         # must not put a fresh count-in or paused attempt back in its old state.
-        if action_request_started_ms > 0 and state_request_started_ms <= action_request_started_ms:
+        if command_state.started_ms > 0 and state_request_started_ms <= command_state.started_ms:
             return
     if code != 200:
         practice_view.present_message(_command_failure(code, body))
@@ -933,7 +926,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         practice_view.stage.renderer.present(
             parsed,beat,_unrolled_score_beat_at(beat,received_ms))
     state_presenter.present(
-        parsed,current_screen,action_pending,_native_score_ready(),
+        parsed,current_screen,command_state.pending,_native_score_ready(),
         fingering_save_error,
         demo_player != null and bool(demo_player.get("audio_error")),
         sample_started_ms < 0,received_ms,phase0_smoke_mode)
@@ -987,14 +980,11 @@ func _on_timeline_model(_result: int, code: int,
 
 func _send_action(command: Dictionary) -> void:
     var requested: String = str(command.get("action", ""))
-    if action_pending:
-        # Avoid an apparently dead button: the user sees precisely which
-        # operation is still pending, rather than silently dropping clicks.
-        if requested in ["pause", "stop"]:
-            pending_transport_action = requested
-        practice_view.begin_action(requested, last_control_action)
+    var previous_action: String = command_state.control_action
+    if not command_state.action_requested(requested):
+        # Busy operations still show their current action; Pause/Stop queues.
+        practice_view.begin_action(requested, previous_action)
         return
-    last_control_action = requested
     practice_view.begin_action(requested)
     _send_command("/control", command)
 
@@ -1004,7 +994,7 @@ func _present_fingering_status(summary: Variant) -> void:
     practice_view.stage.present_fingering(summary, issues, fingering_save_error)
 
 func _on_fingering_change_requested(source_id: String, finger: Variant) -> void:
-    if action_pending or not _native_score_ready() or layout_pending or timeline_model_pending or \
+    if command_state.pending or not _native_score_ready() or layout_pending or timeline_model_pending or \
             int(last_state.get("revision",-1)) != timeline_model_revision or \
             native_score_piece_fingerprint != str(last_state.get("piece_fingerprint","")):
         fingering_save_error = "Wait for the current score operation to finish, then try again."
@@ -1020,26 +1010,22 @@ func _on_fingering_change_requested(source_id: String, finger: Variant) -> void:
     _send_command("/fingering",payload)
 
 func _flush_transport_action() -> void:
-    if not pending_transport_action.is_empty():
-        var action := pending_transport_action
-        pending_transport_action = ""
-        _send_action({"action": action})
+    var action: String = command_state.take_transport()
+    if not action.is_empty():
+        _send_action({"action":action})
 
 func _send_command(path: String, payload: Dictionary) -> void:
-    if action_pending:
+    if not command_state.begin(path,Time.get_ticks_msec()):
         return
-    action_pending = true
     practice_view.present_busy(true)
     # A complete local composition can take longer than a small control
     # request. Allow the bounded whole-piece inference to finish saving.
     action_request.timeout = 360.0 if path in ["/fingering","/load","/library/open"] else 5.0
-    last_post_path = path
-    action_request_started_ms = Time.get_ticks_msec()
     # The in-process request adapter is dynamically typed; := cannot infer
     # an Error from its Variant-returning request() method.
     var err: int = int(action_request.request(path, JSON.stringify(payload), "POST"))
     if err != OK:
-        action_pending = false
+        command_state.request_failed()
         practice_view.present_busy(false)
         practice_view.present_message("Cannot reach practice engine", true)
         if path == "/fingering":
@@ -1047,23 +1033,19 @@ func _send_command(path: String, payload: Dictionary) -> void:
             _present_fingering_status(last_state.get("fingering",{}))
 
 func _on_action(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-    action_pending = false
+    var completed: Dictionary = command_state.finish()
     practice_view.present_busy(false)
-    if last_post_path == "/control":
+    var path: String = str(completed["path"])
+    if path == "/control":
         practice_view.finish_action()
-    var path := last_post_path
-    var resume_saved: bool = path == "/library/open" and library_resume_requested
-    if path == "/library/open":
-        library_resume_requested = false
-    var completed_action := last_control_action
+    var resume_saved: bool = bool(completed["resume_saved"])
+    var completed_action: String = str(completed["action"])
     if code != 200:
         var message := _command_failure(code, body)
         if path == "/fingering":
             fingering_save_error = message
             _present_fingering_status(last_state.get("fingering",{}))
-        var queued_library_failed: bool = not pending_library_piece.is_empty()
-        pending_library_piece = ""
-        pending_library_resume = false
+        var queued_library_failed: bool = command_state.discard_library()
         command_failure_presenter.present(message,path,queued_library_failed)
         _flush_transport_action()
         return
@@ -1074,11 +1056,11 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     match str(decision["kind"]):
         "fingering":
             fingering_save_error = ""
-            _on_state(_result,code,_headers,body,action_request_started_ms)
+            _on_state(_result,code,_headers,body,command_state.started_ms)
         "control":
             if bool(decision["refresh_settings"]):
                 _request_settings()
-            _on_state(_result,code,_headers,body,action_request_started_ms)
+            _on_state(_result,code,_headers,body,command_state.started_ms)
             if bool(decision["navigate_practice"]):
                 _navigate("practice")
         "library_health":
@@ -1091,7 +1073,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
                     if bool(decision["publish_state"]):
                         # A restored lesson already carries its hand, tempo
                         # and clean streak; do not replace it with open_at.
-                        _on_state(_result,code,_headers,body,action_request_started_ms)
+                        _on_state(_result,code,_headers,body,command_state.started_ms)
                     _refresh_score_status()
                 "picker":
                     command_success_presenter.present_source_picker(opened)
@@ -1105,12 +1087,10 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
                 _request_settings()
     _flush_transport_action()
     _poll()
-    if not pending_library_piece.is_empty():
-        var queued: String = pending_library_piece
-        var queued_resume: bool = pending_library_resume
-        pending_library_piece = ""
-        pending_library_resume = false
-        call_deferred("_open_library_piece", queued, queued_resume)
+    var deferred_library: Dictionary = command_state.take_library()
+    if not str(deferred_library["piece"]).is_empty():
+        call_deferred("_open_library_piece",
+            str(deferred_library["piece"]),bool(deferred_library["resume_saved"]))
 
 func _has_active_transport() -> bool:
     return bool(last_state.get("running", false)) or str(last_state.get("phase", "")) in ["count_in", "playing", "paused", "feedback", "recovering", "loading", "preview_gap"]
