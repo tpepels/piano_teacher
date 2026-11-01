@@ -32,7 +32,17 @@ for script in \
   res://library_catalog_coordinator.gd \
   res://midi_device_coordinator.gd; do
   echo "Checking $script"
-  timeout 12s "$binary" --headless --path godot --check-only --script "$script"
+  output=$(timeout 12s "$binary" --headless --path godot --check-only --script "$script" 2>&1) || {
+    printf '%s\\n' "$output"
+    exit 1
+  }
+  printf '%s\\n' "$output"
+  # Godot can return zero even when transitive preloads fail to compile.
+  if [[ "$output" == *"SCRIPT ERROR:"* ||
+        "$output" == *"ERROR: Failed to load script"* ]]; then
+    echo "Godot reported a script compilation error in $script" >&2
+    exit 1
+  fi
 done
 # Pure SceneTree fixtures execute in-process, without MIDI, score loading or UI.
 for fixture in command_success_effects command_request_state command_success_presenter; do
