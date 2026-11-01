@@ -7,6 +7,79 @@ musical transition authority. The returned dataclass is projected separately.
 from __future__ import annotations
 
 from dataclasses import replace
+from dataclasses import dataclass
+from typing import Any, Callable
+
+@dataclass(frozen=True)
+class SnapshotValues:
+    """Only the captured fields consumed by the presentation projection.
+
+    This is shallow immutable: its collaborators remain owned by the session,
+    whose existing lock protects the entire capture.
+    """
+    _guided_recovery_pending: bool
+    _guided_return: tuple[str, float] | None
+    _remediation_active: Any
+    auto: bool
+    awaiting_score_revision: int | None
+    count_in_bar_beats: float
+    count_in_beats: float
+    count_in_meter: list[int]
+    feedback: str
+    feedback_marks: list[dict]
+    feedback_unmapped: int
+    fingerprint: str
+    guided_range: tuple[float, float] | None
+    is_builtin_warmup: bool
+    library: Any
+    listen: Any
+    live_input: Any
+    midi: Any
+    mode: str
+    next_action: str
+    next_at: float
+    open_from_beat: float
+    pause_context: str | None
+    paused: bool
+    paused_at: float
+    pending_result: Any
+    pending_rewind: float | None
+    performance_summary: Any
+    persistent_hints: bool
+    plan: Any
+    play_from_beat: float
+    practice_preparation: Any
+    preview_only: bool
+    recorder: Any
+    recovery_notice: Any
+    retry_range: Any
+    review_end_beat: float | None
+    run_at: float
+    running: bool
+    score_revision: int
+    teaching: Any
+    transport_id: int
+    visual_gap_beats: float
+    visual_offset_beats: float
+    visual_transport: Any
+
+
+@dataclass(frozen=True)
+class SnapshotReadPorts:
+    """Narrow, explicitly named read services, sampled under the engine lock."""
+    seek_grid: Callable[..., Any]
+    learner_snapshot: Callable[..., Any]
+    elapsed_beat: Callable[..., Any]
+    phase: Callable[..., Any]
+    source_model: Callable[..., Any]
+    live_feedback: Callable[..., Any]
+    visual_motion: Callable[..., Any]
+    active_tempo_map: Callable[..., Any]
+    display_phrase: Callable[..., Any]
+    guided_marks: Callable[..., Any]
+    set_visual_gap_beats: Callable[[float], None]
+
+
 import time
 
 from ..state_projection import (
@@ -16,133 +89,133 @@ from .lesson_snapshot import build_lesson_snapshot
 from ..learner_state import placement_candidate
 
 
-def capture(engine) -> SessionSnapshot:
+def capture(state: SnapshotValues, reads: SnapshotReadPorts) -> SessionSnapshot:
     """Capture values under the session lock, including stateful read adapters.
 
     Clock reads retain their original order and purpose. Teaching snapshots
     may tick the controller; all such work finishes before pure projection.
     """
-    p = engine.plan
-    seek_grid = engine._seek_grid()
+    p = state.plan
+    seek_grid = reads.seek_grid()
     activity = ActivitySnapshot(
         sampled_at=time.monotonic(),
-        learner=engine._learner_snapshot() if p is not None else None,
-        placement_available=(not engine.is_builtin_warmup and placement_candidate(p) is not None) if p is not None else False,
-        skip_available=(not engine.is_builtin_warmup and p.lesson_step_number < len(p.lesson_steps)) if p is not None else False,
-        seek_available=engine.paused and seek_grid is not None,
+        learner=reads.learner_snapshot() if p is not None else None,
+        placement_available=(not state.is_builtin_warmup and placement_candidate(p) is not None) if p is not None else False,
+        skip_available=(not state.is_builtin_warmup and p.lesson_step_number < len(p.lesson_steps)) if p is not None else False,
+        seek_available=state.paused and seek_grid is not None,
         seek_range=({"first_bar": p.active_phrase.first_bar, "last_bar": p.active_phrase.last_bar}
                     if seek_grid is not None else None),
-        next_action=engine.next_action,
-        transition_now=((engine.paused_at if engine.paused else time.monotonic())
-            if engine.next_at and (engine.pending_result is not None or engine.pending_rewind is not None) else 0.0),
-        next_at=engine.next_at,
-        pending_transition=engine.pending_result is not None or engine.pending_rewind is not None,
-        retry_range=engine.retry_range,
-        notice_now=time.monotonic() if engine.recovery_notice is not None else 0.0,
-        recovery_notice=engine.recovery_notice,
-        guided_recovery=engine._guided_recovery_pending or engine._guided_return is not None,
-        pause_context=engine.pause_context,
-        demo=engine.listen.snapshot(),
-        performance_summary=engine.performance_summary,
-        review_pending=engine.review_end_beat is not None,
-        midi_input_count=engine.midi.input_count,
-        midi_input_note=engine.midi.input_note,
-        midi_now=time.monotonic() if engine.midi.input_at is not None else 0.0,
-        midi_input_at=engine.midi.input_at,
-        metronome=engine.library.settings["metronome"],
-        hints_enabled=engine.persistent_hints,
+        next_action=state.next_action,
+        transition_now=((state.paused_at if state.paused else time.monotonic())
+            if state.next_at and (state.pending_result is not None or state.pending_rewind is not None) else 0.0),
+        next_at=state.next_at,
+        pending_transition=state.pending_result is not None or state.pending_rewind is not None,
+        retry_range=state.retry_range,
+        notice_now=time.monotonic() if state.recovery_notice is not None else 0.0,
+        recovery_notice=state.recovery_notice,
+        guided_recovery=state._guided_recovery_pending or state._guided_return is not None,
+        pause_context=state.pause_context,
+        demo=state.listen.snapshot(),
+        performance_summary=state.performance_summary,
+        review_pending=state.review_end_beat is not None,
+        midi_input_count=state.midi.input_count,
+        midi_input_note=state.midi.input_note,
+        midi_now=time.monotonic() if state.midi.input_at is not None else 0.0,
+        midi_input_at=state.midi.input_at,
+        metronome=state.library.settings["metronome"],
+        hints_enabled=state.persistent_hints,
         fingering=p.piece.fingering_plan.summary()
             if p is not None and p.piece.fingering_plan is not None else None,
     )
-    visual_now = engine.paused_at if engine.paused else time.monotonic()
-    visual_beat = engine.play_from_beat
-    if engine.running and visual_now >= engine.run_at and p is not None:
-        visual_beat += engine._elapsed_beat(visual_now-engine.run_at)
-    activity = replace(activity, midi_display=engine.live_input.snapshot(
+    visual_now = state.paused_at if state.paused else time.monotonic()
+    visual_beat = state.play_from_beat
+    if state.running and visual_now >= state.run_at and p is not None:
+        visual_beat += reads.elapsed_beat(visual_now-state.run_at)
+    activity = replace(activity, midi_display=state.live_input.snapshot(
         now=time.monotonic(),
         phrase=p.active_phrase if p is not None else None,
         hand=p.hand if p is not None else "both", beat=visual_beat,
-        playing=(p is not None and engine.mode in ("practice", "perform")
-                 and (engine.running or engine._phase(visual_now) == "ready")),
+        playing=(p is not None and state.mode in ("practice", "perform")
+                 and (state.running or reads.phase(visual_now) == "ready")),
     ))
     if p is None:
-        return SessionSnapshot(mode=engine.mode, feedback=engine.feedback,
-            device=engine.midi.device, revision=engine.score_revision,
-            transport_id=engine.transport_id, activity=activity)
-    practice_timeline = engine._source_model()["practice_timeline"]
-    engine.visual_gap_beats = practice_timeline["gap"]["duration_beats"]
+        return SessionSnapshot(mode=state.mode, feedback=state.feedback,
+            device=state.midi.device, revision=state.score_revision,
+            transport_id=state.transport_id, activity=activity)
+    practice_timeline = reads.source_model()["practice_timeline"]
+    reads.set_visual_gap_beats(practice_timeline["gap"]["duration_beats"])
     ex, variant = p.exercise, p.active_variant
     lesson_steps = tuple((step.exercise_index, step.hand, step.key) for step in p.lesson_steps)
     sampled_at = time.monotonic()
-    now = engine.paused_at if engine.paused else sampled_at
-    elapsed = now-engine.run_at
-    phase = engine._phase(now)
-    live_marks = engine._live_feedback(elapsed) if phase == "playing" else []
-    visual_motion = engine._visual_motion(now)
+    now = state.paused_at if state.paused else sampled_at
+    elapsed = now-state.run_at
+    phase = reads.phase(now)
+    live_marks = reads.live_feedback(elapsed) if phase == "playing" else []
+    visual_motion = reads.visual_motion(now)
     lesson = build_lesson_snapshot(
-        p, ex, variant, fingerprint=engine.fingerprint,
-        warmup=engine.is_builtin_warmup, lesson_steps=lesson_steps)
-    tempo_map = engine._active_tempo_map()
+        p, ex, variant, fingerprint=state.fingerprint,
+        warmup=state.is_builtin_warmup, lesson_steps=lesson_steps)
+    tempo_map = reads.active_tempo_map()
     # Local-zero source timing followed by the explicit practice-BPM
     # silence. These exact segments are sent to Godot and retained
     # through the automatic-rest phase with the same run_at timestamp.
     visual_segments = ()
     tempo_segments = ()
     if tempo_map is not None:
-        local_map = tempo_map.from_beat(engine.play_from_beat)
+        local_map = tempo_map.from_beat(state.play_from_beat)
         tempo_segments = local_map.as_segments()
         visual_segments = (*tempo_segments, {
             "start_beat": local_map.duration_beats,
-            "end_beat": local_map.duration_beats+engine.visual_gap_beats,
+            "end_beat": local_map.duration_beats+state.visual_gap_beats,
             "bpm": float(p.bpm),
             "start_seconds": local_map.duration_seconds,
         })
     timing = TimingSnapshot(
-        sampled_at=sampled_at, now=now, run_at=engine.run_at,
+        sampled_at=sampled_at, now=now, run_at=state.run_at,
         tempo_segments=tempo_segments,
         visual_tempo_segments=visual_segments,
-        visual_preparation_schedule=engine.visual_transport.preparation_schedule(),
-        mapped_clock_beat=(engine._elapsed_beat(now-engine.run_at)
+        visual_preparation_schedule=state.visual_transport.preparation_schedule(),
+        mapped_clock_beat=(reads.elapsed_beat(now-state.run_at)
                            if tempo_map is not None else None),
-        running=engine.running, paused=engine.paused, auto=engine.auto,
-        preview_only=engine.preview_only, play_from_beat=engine.play_from_beat,
-        open_from_beat=engine.open_from_beat, pending_rewind=engine.pending_rewind,
-        review_end_beat=engine.review_end_beat,
-        awaiting_score_revision=engine.awaiting_score_revision,
-        count_in_beats=engine.count_in_beats,
-        count_in_bar_beats=engine.count_in_bar_beats, count_in_meter=engine.count_in_meter,
-        midi_notes=len(engine.recorder.presses) if engine.recorder is not None else 0,
-        visual_offset_beats=engine.visual_offset_beats,
-        visual_gap_beats=engine.visual_gap_beats, visual_motion=visual_motion,
-        practice_timeline=practice_timeline, practice_preparation=engine.practice_preparation,
-        take_result=({"clean": bool(engine.pending_result.clean),
-                      "correct": engine.pending_result.correct,
-                      "total": len(engine.pending_result.notes)}
-                     if engine.mode == "practice" and engine.pending_result is not None else None),
-        feedback_marks=engine.feedback_marks, live_marks=live_marks,
-        feedback_unmapped=engine.feedback_unmapped,
-        scoring_available=(not engine.preview_only and engine.midi.connected
-                           and engine.mode in ("practice", "perform")),
+        running=state.running, paused=state.paused, auto=state.auto,
+        preview_only=state.preview_only, play_from_beat=state.play_from_beat,
+        open_from_beat=state.open_from_beat, pending_rewind=state.pending_rewind,
+        review_end_beat=state.review_end_beat,
+        awaiting_score_revision=state.awaiting_score_revision,
+        count_in_beats=state.count_in_beats,
+        count_in_bar_beats=state.count_in_bar_beats, count_in_meter=state.count_in_meter,
+        midi_notes=len(state.recorder.presses) if state.recorder is not None else 0,
+        visual_offset_beats=state.visual_offset_beats,
+        visual_gap_beats=state.visual_gap_beats, visual_motion=visual_motion,
+        practice_timeline=practice_timeline, practice_preparation=state.practice_preparation,
+        take_result=({"clean": bool(state.pending_result.clean),
+                      "correct": state.pending_result.correct,
+                      "total": len(state.pending_result.notes)}
+                     if state.mode == "practice" and state.pending_result is not None else None),
+        feedback_marks=state.feedback_marks, live_marks=live_marks,
+        feedback_unmapped=state.feedback_unmapped,
+        scoring_available=(not state.preview_only and state.midi.connected
+                           and state.mode in ("practice", "perform")),
     )
     guided = None
-    if engine.mode == "learn" and engine.teaching is not None:
-        teaching = engine.teaching.snapshot(now=time.monotonic())
-        phrase = engine.display_phrase()
+    if state.mode == "learn" and state.teaching is not None:
+        teaching = state.teaching.snapshot(now=time.monotonic())
+        phrase = reads.display_phrase()
         guided = GuidedSnapshot(
             teaching=teaching,
             fragment={"first_bar": phrase.first_bar, "last_bar": phrase.last_bar,
-                      "start_beat": engine.guided_range[0], "end_beat": engine.guided_range[1]},
-            phase=engine._phase(now),
-            has_more_units=activity.learner["next_unit"] is not None and engine._guided_return is None,
-            returning=bool(engine._guided_return),
-            required_notes=(len(engine._remediation_active.variant.notes)
-                            if engine._remediation_active is not None
+                      "start_beat": state.guided_range[0], "end_beat": state.guided_range[1]},
+            phase=reads.phase(now),
+            has_more_units=activity.learner["next_unit"] is not None and state._guided_return is None,
+            returning=bool(state._guided_return),
+            required_notes=(len(state._remediation_active.variant.notes)
+                            if state._remediation_active is not None
                             else len(phrase.notes)),
             duration_beats=phrase.end-phrase.start,
-            feedback_marks=engine._guided_marks(teaching),
+            feedback_marks=reads.guided_marks(teaching),
         )
-    return SessionSnapshot(mode=engine.mode, feedback=engine.feedback,
-        device=engine.midi.device, revision=engine.score_revision,
-        transport_id=engine.transport_id, phase=phase, activity=activity,
+    return SessionSnapshot(mode=state.mode, feedback=state.feedback,
+        device=state.midi.device, revision=state.score_revision,
+        transport_id=state.transport_id, phase=phase, activity=activity,
         lesson=lesson, timing=timing, guided=guided)
 
