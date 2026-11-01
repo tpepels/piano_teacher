@@ -30,6 +30,8 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_assessment_commit.py \
   tests/test_control_routing.py \
   tests/test_control_engine_routes.py \
+  tests/test_course_navigation.py \
+  tests/test_coordination_boundaries.py::test_success_effects_keep_ordering_without_main_access \
   tests/test_stage_change.py \
   tests/test_coordination_boundaries.py::test_control_dispatch_is_pure_and_domain_effects_are_locked \
   tests/test_coordination_boundaries.py::test_command_request_owner_has_no_scene_or_application_dependencies \
