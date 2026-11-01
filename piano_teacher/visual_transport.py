@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .transport_projection import VisualMotionSnapshot, project_visual_motion
+from .notation.practice_timeline import preparation_measure_descriptor
 
 
 @dataclass
@@ -64,6 +65,31 @@ class VisualTransport:
             self.practice_preparation = None
         self.next_at = 0.0
         self.pending_rewind = None
+
+    def schedule_source_preparation(
+        self, source_model: dict, *, source_from_beat: float,
+        from_visual: float, now: float, reverse_seconds: float,
+        bpm: float,
+    ) -> float:
+        """Derive the single written rest from the source's meter and staves.
+
+        Source-space placement, reverse animation and the absolute deadline
+        share this transport owner. No engine or second clock is involved.
+        """
+        measures = source_model["measures"]
+        context_index = max(
+            index for index, measure in enumerate(measures)
+            if measure["start_beat"] <= source_from_beat + 1e-7)
+        context = measures[context_index]
+        following = (measures[context_index + 1]
+                     if context_index + 1 < len(measures) else None)
+        measure = preparation_measure_descriptor(
+            context, 0.0, source_model["staff_order"],
+            following_measure=following)
+        return self.schedule_preparation(
+            measure, source_from_beat=source_from_beat,
+            from_visual=from_visual, now=now,
+            reverse_seconds=reverse_seconds, bpm=bpm)
 
     def schedule_preparation(
         self, measure: dict, *, source_from_beat: float,
