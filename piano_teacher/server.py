@@ -41,7 +41,9 @@ from .application.control_dispatch import ControlDispatcher
 from .application.practice_transitions import run_before_assessment
 from .application.attempt_progression import AttemptProgression, AttemptTick
 from .application.tempo_map_cache import TempoMapCache
-from .application.session_snapshot_builder import capture as capture_session_snapshot
+from .application.session_snapshot_builder import (
+    SnapshotValues, SnapshotReadPorts, capture as capture_session_snapshot,
+)
 from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
 from .midi_calibration import MidiTapCalibration
@@ -1646,9 +1648,73 @@ class PracticeEngine:
             state["midi_calibration"] = self.midi_calibration.snapshot(time.monotonic())
             return state
 
+    def _set_snapshot_visual_gap(self, beats: float) -> None:
+        # Engraved preparation is authoritative for loop silence.
+        self.visual_gap_beats = beats
+
     def _capture_session_snapshot(self) -> SessionSnapshot:
-        """Capture a coherent snapshot while holding the application lock."""
-        return capture_session_snapshot(self)
+        """Sample named read ports under the existing application lock."""
+        values = SnapshotValues(
+            _guided_recovery_pending=self._guided_recovery_pending,
+            _guided_return=self._guided_return,
+            _remediation_active=self._remediation_active,
+            auto=self.auto,
+            awaiting_score_revision=self.awaiting_score_revision,
+            count_in_bar_beats=self.count_in_bar_beats,
+            count_in_beats=self.count_in_beats,
+            count_in_meter=self.count_in_meter,
+            feedback=self.feedback,
+            feedback_marks=self.feedback_marks,
+            feedback_unmapped=self.feedback_unmapped,
+            fingerprint=self.fingerprint,
+            guided_range=self.guided_range,
+            is_builtin_warmup=self.is_builtin_warmup,
+            library=self.library,
+            listen=self.listen,
+            live_input=self.live_input,
+            midi=self.midi,
+            mode=self.mode,
+            next_action=self.next_action,
+            next_at=self.next_at,
+            open_from_beat=self.open_from_beat,
+            pause_context=self.pause_context,
+            paused=self.paused,
+            paused_at=self.paused_at,
+            pending_result=self.pending_result,
+            pending_rewind=self.pending_rewind,
+            performance_summary=self.performance_summary,
+            persistent_hints=self.persistent_hints,
+            plan=self.plan,
+            play_from_beat=self.play_from_beat,
+            practice_preparation=self.practice_preparation,
+            preview_only=self.preview_only,
+            recorder=self.recorder,
+            recovery_notice=self.recovery_notice,
+            retry_range=self.retry_range,
+            review_end_beat=self.review_end_beat,
+            run_at=self.run_at,
+            running=self.running,
+            score_revision=self.score_revision,
+            teaching=self.teaching,
+            transport_id=self.transport_id,
+            visual_gap_beats=self.visual_gap_beats,
+            visual_offset_beats=self.visual_offset_beats,
+            visual_transport=self.visual_transport,
+        )
+        reads = SnapshotReadPorts(
+            seek_grid=self._seek_grid,
+            learner_snapshot=self._learner_snapshot,
+            elapsed_beat=self._elapsed_beat,
+            phase=self._phase,
+            source_model=self._source_model,
+            live_feedback=self._live_feedback,
+            visual_motion=self._visual_motion,
+            active_tempo_map=self._active_tempo_map,
+            display_phrase=self.display_phrase,
+            guided_marks=self._guided_marks,
+            set_visual_gap_beats=self._set_snapshot_visual_gap,
+        )
+        return capture_session_snapshot(values, reads)
 
     def _score_selection(self) -> ScoreSelection:
         """Capture the selected source under the application lock."""
