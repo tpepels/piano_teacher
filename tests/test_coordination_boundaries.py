@@ -44,9 +44,18 @@ def test_main_callbacks_keep_reply_handling_and_presentation_separate():
     frame = (ROOT / "godot/practice_frame_coordinator.gd").read_text()
     presenter = (ROOT / "godot/practice_state_presenter.gd").read_text()
     assert frame.count("app._transport_beat_now()") == 1
-    assert "renderer.present(" in frame
+    assert "renderer.present_clock(" in frame
+    assert "renderer.present(" not in frame
+    assert "renderer.present(parsed,beat," in presenter
     assert "demo_player.keep_synchronized(" in frame
     assert "app.visual_transport_clock.accept(" in presenter
+    assert "app._transport_beat_at(received_ms)" in presenter
+    assert "present_clock(" not in presenter
+    base = (ROOT / "godot/notation/shared/view_base.gd").read_text()
+    clock = base.split("func present_clock(", 1)[1].split("\nfunc ", 1)[0]
+    assert "queue_redraw()" in clock
+    assert "duplicate(true)" not in clock
+    assert "_practice_timeline_error(" not in clock
     assert "app.score_session.update_context(" in presenter
 
 
