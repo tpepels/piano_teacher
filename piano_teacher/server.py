@@ -40,6 +40,7 @@ from .application.strategy_session import restored_strategy_plan
 from .application.control_dispatch import ControlDispatcher
 from .application.practice_transitions import run_before_assessment
 from .application.attempt_progression import AttemptProgression, AttemptTick
+from .application.feedback_route import FeedbackFacts, select_feedback_route
 from .application.tempo_map_cache import TempoMapCache
 from .application.session_snapshot_builder import (
     SnapshotValues, SnapshotReadPorts, capture as capture_session_snapshot,
@@ -1285,34 +1286,38 @@ class PracticeEngine:
             self.feedback_unmapped=0
             assignment = self._remediation_pending
             self._remediation_pending = None
-            if (self.auto and assignment is not None
-                    and self.plan.identity == previous_identity
-                    and self.plan.exercise_strategy.name != "coda-part"):
+            route = select_feedback_route(FeedbackFacts(
+                automatic=self.auto, has_remediation=assignment is not None,
+                same_stage=self.plan.identity == previous_identity,
+                coda=self.plan.exercise_strategy.name == "coda-part",
+                course_guided=self.course_guided,
+                score_changed=self.score_revision != previous_revision,
+                message=message))
+            if route == "remediation":
                 self._start_remedial_assignment(assignment)
                 return
-            if self.auto and message != "Piece mastered":
-                if self.course_guided and self.plan.identity != previous_identity:
-                    self._begin_course_stage()
-                    return
-                if self.score_revision != previous_revision:
-                    # Never consume the next count-in while Godot is still
-                    # rendering the newly selected score and its note map.
-                    self.awaiting_score_revision = self.score_revision
-                    self.auto = False
-                    self.feedback = "Preparing next passage"
-                    self.next_at = 0
-                else:
-                    # Clean takes advance to the appended copy. Failed
-                    # takes rewind the SAME copy (already animated during
-                    # feedback); there is no jump/re-engrave on retry.
-                    if not self._retry_previous_pass:
-                        self.visual_offset_beats += self._source_model()["practice_timeline"]["stride_beats"]
-                    target = (self.practice_preparation["source_from_beat"]
-                              if self._retry_previous_pass and self.practice_preparation else 0.0)
-                    self._continue_at(deadline, from_beat=target)
+            if route == "guided_stage":
+                self._begin_course_stage()
+                return
+            if route == "await_score":
+                # Wait until Godot has acknowledged the next score revision;
+                # never consume a count-in against stale notation ink.
+                self.awaiting_score_revision = self.score_revision
+                self.auto = False
+                self.feedback = "Preparing next passage"
+                self.next_at = 0
+            elif route == "continue":
+                # Failed attempts reuse the existing source; clean attempts
+                # append another passage with the exact authored rest gap.
+                if not self._retry_previous_pass:
+                    self.visual_offset_beats += self._source_model()[
+                        "practice_timeline"]["stride_beats"]
+                target = (self.practice_preparation["source_from_beat"]
+                          if self._retry_previous_pass and self.practice_preparation else 0.0)
+                self._continue_at(deadline, from_beat=target)
             else:
-                self.next_at=0
-                self.auto=False
+                self.next_at = 0
+                self.auto = False
                 self.feedback = message or self.feedback
         return
 
