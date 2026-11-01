@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "reference_revision": "a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
+  "research_only": true,
+  "production_enabled": false,
+  "comparison_scope": "Pinned six-fixture, two-voice author-exported and bare-native MusicXML comparison; not full annotation/physical MIDI parity",
+  "operations": [
+    "slow-x2",
+    "slow-x4",
+    "dotted-3-to-1",
+    "dotted-1-to-3",
+    "chord-2-beat"
+  ],
+  "fixtures": [
+    {
+      "id": "source-parallel-ties",
+      "source": "tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml",
+      "sha256": "ce269dac9e04a654f4865fdf998d89cef808a94b9f869bb893eb69932adc3689",
+      "bars": 2,
+      "voices": {
+        "0": {
+          "slow-x2": "sounding-only",
+          "slow-x4": "sounding-only",
+          "dotted-3-to-1": "exact-noop",
+          "dotted-1-to-3": "exact-noop",
+          "chord-2-beat": "upstream-none"
+        },
+        "1": {
+          "slow-x2": "sounding-only",
+          "slow-x4": "sounding-only",
+          "dotted-3-to-1": "exact-noop",
+          "dotted-1-to-3": "exact-noop",
+          "chord-2-beat": "upstream-none"
+        }
+      }
+    },
+    {
+      "id": "source-authored-beams",
+      "source": "tests/fixtures/connector_pixels/beams/score.musicxml",
+      "sha256": "d2cc5cb4ebafa572a2c71fc03fc4087e10bcf2713cbffe93b446fb863a61eb3e",
+      "bars": 1,
+      "voices": {
+        "0": {
+          "slow-x2": "strict-transformed",
+          "slow-x4": "strict-transformed",
+          "dotted-3-to-1": "excluded-safety",
+          "dotted-1-to-3": "excluded-safety",
+          "chord-2-beat": "excluded-safety"
+        },
+        "1": {
+          "slow-x2": "strict-transformed",
+          "slow-x4": "strict-transformed",
+          "dotted-3-to-1": "exact-noop",
+          "dotted-1-to-3": "exact-noop",
+          "chord-2-beat": "upstream-none"
+        }
+      }
+    },
+    {
+      "id": "long-multipage-first-two-bars",
+      "source": "tests/fixtures/musical_fidelity/xml_long_multipage.musicxml",
+      "sha256": "59d0c0dbc54aff612636bcecd7cb9db8c9a0ba12d2b77ad0b571ad841d435b16",
+      "bars": 2,
+      "voices": {
+        "0": {
+          "slow-x2": "strict-transformed",
+          "slow-x4": "strict-transformed",
+          "dotted-3-to-1": "strict-transformed",
+          "dotted-1-to-3": "strict-transformed",
+          "chord-2-beat": "strict-transformed"
+        },
+        "1": {
+          "slow-x2": "strict-transformed",
+          "slow-x4": "strict-transformed",
+          "dotted-3-to-1": "excluded-safety",
+          "dotted-1-to-3": "excluded-safety",
+          "chord-2-beat": "upstream-none"
+        }
+      }
+    },
+    {
+      "id": "authored-triplet",
+      "source": "tests/fixtures/research/coda_authored_triplet.musicxml",
+      "sha256": "51fcb565fb35de9ee698c59af6522829c486c68f1ee7eda367d371aa4aee82b9",
+      "bars": 1,
+      "voices": {
+        "0": {
+          "slow-x2": "strict-transformed",
+          "slow-x4": "strict-transformed",
+          "dotted-3-to-1": "excluded-upstream-defect",
+          "dotted-1-to-3": "excluded-safety",
+          "chord-2-beat": "excluded-safety"
+        },
+        "1": {
+          "slow-x2": "strict-transformed",
+          "slow-x4": "strict-transformed",
+          "dotted-3-to-1": "strict-transformed",
+          "dotted-1-to-3": "strict-transformed",
+          "chord-2-beat": "strict-transformed"
+        }
+      }
+    },
+    {
+      "id": "rest-bearing-triplet",
+      "source": "tests/fixtures/research/coda_triplet_interior_rest.musicxml",
+      "sha256": "f1517c24e93b77e322d27e8bc043ad1c7e53c4fce3cc2d3c4887fad0b1c02fa3",
+      "bars": 1,
+      "voices": {
+        "0": {
+          "slow-x2": "sounding-only",
+          "slow-x4": "strict-transformed",
+          "dotted-3-to-1": "excluded-safety",
+          "dotted-1-to-3": "excluded-safety",
+          "chord-2-beat": "excluded-safety"
+        },
+        "1": {
+          "slow-x2": "strict-transformed",
+          "slow-x4": "strict-transformed",
+          "dotted-3-to-1": "strict-transformed",
+          "dotted-1-to-3": "strict-transformed",
+          "chord-2-beat": "strict-transformed"
+        }
+      }
+    },
+    {
+      "id": "changing-meter",
+      "source": "tests/fixtures/research/coda_mixed_meter.musicxml",
+      "sha256": "f46246f217dfd23fd9feae74add6694126e05171ed00da83cba92a29a8e4bdb6",
+      "bars": 2,
+      "voices": {
+        "0": {
+          "slow-x2": "sounding-only",
+          "slow-x4": "sounding-only",
+          "dotted-3-to-1": "excluded-upstream-defect",
+          "dotted-1-to-3": "excluded-upstream-defect",
+          "chord-2-beat": "excluded-safety"
+        },
+        "1": {
+          "slow-x2": "sounding-only",
+          "slow-x4": "sounding-only",
+          "dotted-3-to-1": "excluded-upstream-defect",
+          "dotted-1-to-3": "excluded-upstream-defect",
+          "chord-2-beat": "sounding-only"
+        }
+      }
+    }
+  ],
+  "expected_counts": {
+    "strict-transformed": 24,
+    "exact-noop": 6,
+    "sounding-only": 10,
+    "excluded-safety": 11,
+    "excluded-upstream-defect": 5,
+    "upstream-none": 4
+  }
+}
