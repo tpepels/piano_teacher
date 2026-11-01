@@ -158,3 +158,30 @@ def test_command_error_publication_has_injected_screen_dependencies():
     assert "func _init(library, practice, settings, home)" in presenter
     assert "app." not in presenter
     assert "request(" not in presenter
+
+
+def test_navigation_pause_decision_has_explicit_inputs():
+    main = (ROOT / "godot/main.gd").read_text()
+    policy = (ROOT / "godot/navigation_policy.gd").read_text()
+    assert "NavigationPolicy.plan(" in main
+    assert 'if bool(decision["pause"]):' in main
+    assert "func _navigate(" not in policy
+    assert "app." not in policy
+    assert "get_tree()" not in policy
+
+
+@pytest.mark.skipif(not (shutil.which("godot") or shutil.which("godot4")),
+                    reason="Godot is not installed")
+@pytest.mark.parametrize(("script", "success"), [
+    ("command_failure_presenter", "COMMAND_FAILURE_PRESENTER_FAILURES:0"),
+    ("navigation_policy", "NAVIGATION_POLICY_FAILURES:0"),
+])
+def test_pure_frontend_policy_with_headless_godot(script, success):
+    binary = shutil.which("godot") or shutil.which("godot4")
+    run = subprocess.run(
+        [binary, "--headless", "--path", str(ROOT / "godot"),
+         "--script", str(ROOT / "tests" / "godot" / (script + ".gd"))],
+        capture_output=True, text=True, timeout=20)
+    output = run.stdout + run.stderr
+    assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
+    assert success in output, output
