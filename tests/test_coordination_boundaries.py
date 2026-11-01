@@ -114,12 +114,16 @@ def test_score_effects_owner_visual_contract():
 
 def test_snapshot_assembly_and_live_hit_mapping_have_one_owner():
     server = (ROOT / "piano_teacher/server.py").read_text()
-    assert "return capture_session_snapshot(self)" in server
+    assert "return capture_session_snapshot(values, reads)" in server
+    assert "SnapshotValues(" in server and "SnapshotReadPorts(" in server
     assert "ActivitySnapshot(" not in server
     assert "TimingSnapshot(" not in server
     builder = (ROOT / "piano_teacher/application/session_snapshot_builder.py").read_text()
     assert "ActivitySnapshot(" in builder and "TimingSnapshot(" in builder
     assert "return SessionSnapshot(" in builder
+    assert "def capture(state: SnapshotValues, reads: SnapshotReadPorts)" in builder
+    assert "engine." not in builder
+    assert "state.midi." not in builder
 
     main = (ROOT / "godot/main.gd").read_text()
     handler = main.split("func _consume_live_piano_hits(", 1)[1].split(
@@ -143,3 +147,14 @@ def test_live_midi_hits_use_revision_bound_score_index():
     output = run.stdout + run.stderr
     assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
     assert "LIVE_MIDI_FEEDBACK_FAILURES:0" in output, output
+
+
+def test_command_error_publication_has_injected_screen_dependencies():
+    main = (ROOT / "godot/main.gd").read_text()
+    presenter = (ROOT / "godot/command_failure_presenter.gd").read_text()
+    handler = main.split("func _on_action(", 1)[1].split("\nfunc ", 1)[0]
+    assert "command_failure_presenter.present(message,path,queued_library_failed)" in handler
+    assert "CommandFailurePresenter.new(" in main
+    assert "func _init(library, practice, settings, home)" in presenter
+    assert "app." not in presenter
+    assert "request(" not in presenter
