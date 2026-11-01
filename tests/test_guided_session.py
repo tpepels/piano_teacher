@@ -102,3 +102,48 @@ def test_marks_use_only_expected_feedback_and_matching_source_attack_glyphs():
     assert session.marks(teaching, {}) == []
     session.clear_selection()
     assert session.marks(teaching, layout) == []
+
+
+def test_ticked_guidance_persists_completion_once_without_engine():
+    module, fragment = selected()
+    session = module.GuidedSession()
+    session.bind(fragment, stage_key="stage", revision=7,
+                 now=0, connected=True, recovery=True)
+    session.controller.start(now=1)
+    session.controller.receive(pitch=60, is_on=True, at=1.1)
+    session.advance(connected=True, now=1.2)
+    writes = []
+    def persist(**kwargs):
+        writes.append(kwargs)
+    def unit():
+        return {"start_beat": 6, "end_beat": 14}
+    assert session.commit_completed_preparation(
+        learning=True, remediation_active=False,
+        fingerprint="piece", stage_key="stage",
+        current_unit=unit, record_preparation=persist)
+    assert not session.commit_completed_preparation(
+        learning=True, remediation_active=False,
+        fingerprint="piece", stage_key="stage",
+        current_unit=unit, record_preparation=persist)
+    assert writes == [{
+        "fingerprint":"piece", "stage_key":"stage",
+        "unit":unit(), "assisted_count":0}]
+    session.stop()
+    assert not session.prepared and session.return_context is None
+    assert session.controller is not None
+
+
+def test_guided_preparation_ignores_untimed_or_remedial_takes():
+    module, fragment = selected()
+    session = module.GuidedSession()
+    session.bind(fragment, stage_key="stage", revision=7, now=0, connected=True)
+    session.controller.start(now=1)
+    session.controller.receive(pitch=60, is_on=True, at=1.1)
+    def forbidden(**_kwargs):
+        raise AssertionError("no persistent preparation write expected")
+    for learning, remediation in [(False, False), (True, True)]:
+        assert not session.commit_completed_preparation(
+            learning=learning, remediation_active=remediation,
+            fingerprint="piece", stage_key="stage",
+            current_unit=lambda: None, record_preparation=forbidden)
+    assert not session.prepared
