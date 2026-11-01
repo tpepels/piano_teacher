@@ -23,6 +23,10 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_coordination_boundaries.py::test_attempt_progression_uses_explicit_inputs_and_returns_decisions \
   tests/test_coordination_boundaries.py::test_main_callbacks_keep_reply_handling_and_presentation_separate \
   tests/test_tempo_map_cache.py \
+  tests/test_feedback_route.py \
+  tests/test_guided_fragment.py \
+  tests/test_coordination_boundaries.py::test_snapshot_assembly_and_live_hit_mapping_have_one_owner \
+  tests/test_coordination_boundaries.py::test_command_error_publication_has_injected_screen_dependencies \
   tests/test_attempt_progression.py::test_authoritative_tick_caches_source_grid_until_phrase_changes \
   tests/test_retained_score_pipeline.py::test_frame_path_never_reassembles_source_or_preparation_ink \
   tests/test_retained_score_pipeline.py::test_fingering_overlay_has_bounded_source_window \
