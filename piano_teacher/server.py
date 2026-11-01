@@ -39,6 +39,7 @@ from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.strategy_session import restored_strategy_plan
 from .application.control_dispatch import ControlDispatcher
 from .application.attempt_progression import AttemptProgression
+from .application.tempo_map_cache import TempoMapCache
 from .application.session_snapshot_builder import capture as capture_session_snapshot
 from .completion_route import completion_route
 from .visual_transport import VisualTransport, TransportField
@@ -91,11 +92,7 @@ class PracticeEngine:
         self.recorder: Recorder | None = None
         self.visual_transport = VisualTransport(
             _visual_rewind_seconds=SETTINGS.feedback_seconds)
-        # ExerciseStage can regenerate its full OriginalTiming transform on
-        # tempo_map(). Retain it while stage identity and BPM are unchanged.
-        self._tempo_stage = None
-        self._tempo_bpm = None
-        self._tempo_value = None
+        self.tempo_map_cache = TempoMapCache()
         self.attempt_progression = AttemptProgression()
         self.open_from_beat = 0.0  # Explicit opening measure; never an inferred clock
         self.next_boundary_beat = 0.0
@@ -304,13 +301,7 @@ class PracticeEngine:
         """
         if self.plan is None or self.mode not in ("practice", "listen"):
             return None
-        stage = self.plan.active_stage
-        bpm = self.plan.bpm
-        if self._tempo_stage is not stage or self._tempo_bpm != bpm:
-            self._tempo_value = stage.tempo_map(bpm)
-            self._tempo_stage = stage
-            self._tempo_bpm = bpm
-        return self._tempo_value
+        return self.tempo_map_cache.get(self.plan.active_stage, self.plan.bpm)
 
     def _elapsed_beat(self, elapsed_seconds: float) -> float:
         tempo = self._active_tempo_map()
