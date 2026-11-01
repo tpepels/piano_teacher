@@ -38,7 +38,7 @@ from .assessment_service import AssessmentService
 from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.strategy_session import restored_strategy_plan
 from .application.control_dispatch import ControlDispatcher
-from .application.practice_transitions import run_before_assessment
+from .application.practice_transitions import TransitionContext, decide_transition
 from .application.attempt_progression import AttemptProgression, AttemptTick
 from .application.feedback_route import FeedbackFacts, select_feedback_route
 from .application.assessment_settlement import assess_completed_take
@@ -1513,12 +1513,53 @@ class PracticeEngine:
                        else SETTINGS.recovery_errors_in_window),
             warmup=self.is_builtin_warmup, tempo=tempo_map)
 
+    def _run_pre_assessment_transition(self, now: float) -> bool:
+        """Apply an explicit non-grading transition under the session lock."""
+        context = TransitionContext(
+            has_plan=self.plan is not None,
+            learning=self.mode == "learn" and self.teaching is not None,
+            paused=self.paused, listening=self.mode == "listen",
+            preview_pending=self._preview_loop_pending,
+            preparation_pending=self._preparation_pending,
+            feedback_pending=self.pending_result is not None,
+            awaiting_score=self.awaiting_score_revision is not None,
+            rewind_pending=self.pending_rewind is not None,
+            running=self.running, run_at=self.run_at)
+        decision = decide_transition(
+            context, now=now, next_at=self.next_at,
+            preparation_at=self._preparation_at)
+        if decision.preparation_phase is not None:
+            self.practice_preparation["phase"] = decision.preparation_phase
+        if decision.action == "learning":
+            self.teaching.set_connected(self.midi.connected, now=now)
+            self.teaching.tick(now=now)
+            self._save_guided_preparation()
+        elif decision.action == "listening":
+            if self.running and self.listen.finished(now=now, run_at=self.run_at):
+                self.running = False
+                self.feedback = "Example complete"
+                self.next_action = (
+                    "Choose Learn to find the notes, or Practice to play the rhythm.")
+        elif decision.action == "preview_due":
+            deadline = self.next_at
+            self.visual_offset_beats += self._source_model()[
+                "practice_timeline"]["stride_beats"]
+            self._continue_at(deadline)
+        elif decision.action == "feedback":
+            self._advance_pending_feedback(now)
+        elif decision.action == "rewind_due":
+            if self._guided_recovery_pending:
+                self._begin_learn(from_beat=self.pending_rewind, recovery=True)
+            else:
+                self._continue_at(self.next_at, from_beat=self.pending_rewind)
+        return decision.consumed
+
     def _update(self) -> None:
         """Advance the backend clock under its existing session lock."""
         self._poll_midi_connection()
         self._apply_listen_failure()
         now = time.monotonic()
-        if run_before_assessment(self, now):
+        if self._run_pre_assessment_transition(now):
             return
         phrase = self.plan.active_phrase
         score_beat = self.play_from_beat + max(
