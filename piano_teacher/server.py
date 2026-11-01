@@ -27,7 +27,6 @@ from .library_health import LibraryHealth
 from .warmups import is_warmup
 from .application.rolling_recovery import plan_rolling_recovery
 from .music import Phrase
-from .notation.practice_timeline import preparation_measure_descriptor
 from .measure_grid import phrase_grid
 from .course_navigation import choose_source_opening
 from .state_projection import (
@@ -1028,17 +1027,10 @@ class PracticeEngine:
     def _schedule_preparation(self, target: float, *, now: float,
                               from_visual: float, reverse_seconds: float):
         """Reverse on this pass, then traverse one semantic rest into target."""
-        model = self._source_model()
-        context_index = max(index for index,measure in enumerate(model["measures"])
-                            if measure["start_beat"] <= target + 1e-7)
-        context = model["measures"][context_index]
-        following = (model["measures"][context_index+1]
-                     if context_index+1 < len(model["measures"]) else None)
-        measure = preparation_measure_descriptor(context,0.0,model["staff_order"],
-                                                 following_measure=following)
-        self.visual_transport.schedule_preparation(
-            measure, source_from_beat=target, from_visual=from_visual,
-            now=now, reverse_seconds=reverse_seconds, bpm=self.plan.bpm)
+        self.visual_transport.schedule_source_preparation(
+            self._source_model(), source_from_beat=target,
+            from_visual=from_visual, now=now,
+            reverse_seconds=reverse_seconds, bpm=self.plan.bpm)
         self.running = False
         self.recorder = None
         self.count_in_beats = 0.0
