@@ -33,16 +33,10 @@ class Practice:
     func present_busy(_busy: bool) -> void:
         calls += 1
 
-class Pulses:
-    extends RefCounted
-    var prunes := 0
-    func prune_expired(_now_ms: int) -> void:
-        prunes += 1
-
 class Session:
     extends RefCounted
     var checks := 0
-    func ensure_current(_now_ms: int) -> void:
+    func ensure_current(_ticks: int) -> void:
         checks += 1
 
 class Demo:
@@ -57,80 +51,36 @@ class Demo:
     func keep_synchronized(beat: float, _bpm: float, _segments: Array) -> void:
         kept = beat
 
-class App:
-    extends RefCounted
-    var last_state: Dictionary = {}
-    var frame_diagnostics := false
-    var current_screen := "practice"
-    var score_effects = Pulses.new()
-    var settings_view = Busy.new()
-    var practice_view = Practice.new()
-    var lesson_view = Busy.new()
-    var lesson_session = Session.new()
-    var demo_player = Demo.new()
-    var action_pending := false
-    var frame_busy_presented: Variant = null
-    var listen_sync_diagnostics := false
-    var last_listen_sync_report_ms := 0
-    var last_playhead_strike_transport := 0
-    var last_playhead_strike_beat := 0.0
-    var living_chords: Array = []
-    var phase0_smoke_mode := false
-    var phase0_last_lead_tick := -999
-    var phase0_last_cursor_tick := -999
-    var clock_samples := 0
-    var midi_polls := 0
-    var metronome_updates := 0
-
-    func _transport_beat_at(_at_ms: int) -> float:
-        clock_samples += 1
-        return 1.25
-
-    func _read_live_midi() -> void:
-        midi_polls += 1
-
-    var count_in_beat := NAN
-    func _update_count_in(beat: float, _at_ms: int) -> void:
-        metronome_updates += 1
-        count_in_beat = beat
-
-    func _unrolled_score_beat_at(clock: float, _at_ms: int) -> float:
-        return clock + 8.0
-
-    func _native_score_ready() -> bool:
-        return true
-
-    func _preview_note_arrivals(_groups: Array) -> void:
-        pass
-
 func _initialize() -> void:
     var failures := 0
-    var app := App.new()
-    Coordinator.advance(app,0.016)
-    if app.clock_samples != 1 or app.midi_polls != 1 or \
-            app.metronome_updates != 1 or app.count_in_beat != 1.25 or \
-            app.score_effects.prunes != 1 or \
-            app.last_playhead_strike_transport != -1:
+    var settings := Busy.new()
+    var practice := Practice.new()
+    var lesson := Busy.new()
+    var session := Session.new()
+    var demo := Demo.new()
+    var coordinator = Coordinator.new(practice,settings,lesson,session,null,demo,null)
+    var empty: Dictionary = {}
+    if not coordinator.advance(empty,1.25,9.25,1000,.016,
+            false,"practice",true,[]).is_empty():
         failures += 1
-    app.last_state = {"mode":"listen","running":true,"paused":false,
+    if settings.calls != 1 or practice.calls != 1 or lesson.calls != 1:
+        failures += 1
+
+    var state := {"mode":"listen","running":true,"paused":false,
         "loaded":true,"transport_id":7,"play_from_beat":0.0}
-    app.last_playhead_strike_transport = 7
-    app.last_playhead_strike_beat = 1.0
-    Coordinator.advance(app,0.016)
-    if app.settings_view.calls != 1 or app.practice_view.calls != 1 or \
-            app.lesson_view.calls != 1:
+    coordinator.last_strike_transport = 7
+    coordinator.last_strike_beat = 1.0
+    coordinator.advance(state,1.25,9.25,1016,.016,false,"practice",true,[])
+    if settings.calls != 1 or practice.calls != 1 or lesson.calls != 1:
         failures += 1
-    app.action_pending = true
-    Coordinator.advance(app,0.016)
-    if app.settings_view.calls != 2 or app.practice_view.calls != 2 or \
-            app.lesson_view.calls != 2:
+    coordinator.advance(state,1.25,9.25,1032,.016,true,"practice",true,[])
+    if settings.calls != 2 or practice.calls != 2 or lesson.calls != 2:
         failures += 1
-    if app.clock_samples != 3 or app.demo_player.synchronized != 1.25 or \
-            app.demo_player.kept != 1.25 or \
-            app.practice_view.stage.renderer.last_beat != 1.25 or \
-            app.practice_view.stage.renderer.last_visual != 9.25 or \
-            app.practice_view.stage.effects.last_beat != 1.25 or \
-            app.last_playhead_strike_beat != 1.25:
+    if demo.synchronized != 1.25 or demo.kept != 1.25 or \
+            practice.stage.renderer.last_beat != 1.25 or \
+            practice.stage.renderer.last_visual != 9.25 or \
+            practice.stage.effects.last_beat != 1.25 or \
+            coordinator.last_strike_beat != 1.25 or session.checks != 3:
         failures += 1
     print("PRACTICE_FRAME_COORDINATOR_FAILURES:",failures)
-    quit(0 if failures == 0 else 1)
+    quit(0 if failures==0 else 1)
