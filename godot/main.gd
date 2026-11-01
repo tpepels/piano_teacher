@@ -1018,14 +1018,8 @@ func _send_command(path: String, payload: Dictionary) -> void:
     if not command_state.begin(path,Time.get_ticks_msec()):
         return
     practice_view.present_busy(true)
-    # A complete local composition can take longer than a small control
-    # request. Allow the bounded whole-piece inference to finish saving.
-    action_request.timeout = 360.0 if path in ["/fingering","/load","/library/open"] else 5.0
-    # The in-process request adapter is dynamically typed; := cannot infer
-    # an Error from its Variant-returning request() method.
-    var err: int = int(action_request.request(path, JSON.stringify(payload), "POST"))
+    var err: int = command_state.dispatch(action_request,path,payload)
     if err != OK:
-        command_state.request_failed()
         practice_view.present_busy(false)
         practice_view.present_message("Cannot reach practice engine", true)
         if path == "/fingering":
