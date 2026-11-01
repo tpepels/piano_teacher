@@ -1238,7 +1238,8 @@ class PracticeEngine:
 
     def _pause_current_session(self):
         """Pause learning, playback or preparation using the current clock."""
-        require_pausable(paused=self.paused, phase=self._phase(time.monotonic()))
+        context = self._phase(time.monotonic()) if not self.paused else ""
+        require_pausable(paused=self.paused, phase=context)
         self.pause_context = context
         self.visual_transport.pause(at=time.monotonic())
         if self.mode == "learn" and self.teaching is not None:
