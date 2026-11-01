@@ -1,6 +1,15 @@
 extends SceneTree
 const State := preload("res://command_request_state.gd")
 
+class Adapter:
+    extends RefCounted
+    var timeout := 0.0
+    var result_code := 0
+    var calls: Array = []
+    func request(path: String, content: String, method: String) -> int:
+        calls.append([path,content,method])
+        return result_code
+
 func _initialize() -> void:
     var failures := 0
     var state := State.new()
@@ -38,8 +47,20 @@ func _initialize() -> void:
         failures += 1
     if not state.begin("/fingering",250):
         failures += 1
-    state.request_failed()
-    if state.pending or not state.begin("/control",300):
+    var adapter := Adapter.new()
+    if state.dispatch(adapter,"/fingering",{"finger":2}) != OK or \
+            adapter.timeout != 360.0 or adapter.calls.size() != 1 or \
+            adapter.calls[0][0] != "/fingering" or \
+            JSON.parse_string(str(adapter.calls[0][1])).get("finger") != 2:
+        failures += 1
+    state.finish()
+    if not state.begin("/control",300):
+        failures += 1
+    adapter.result_code = FAILED
+    if state.dispatch(adapter,"/control",{"action":"pause"}) != FAILED or \
+            state.pending or adapter.timeout != 5.0:
+        failures += 1
+    if not state.begin("/control",310):
         failures += 1
     print("COMMAND_REQUEST_STATE_FAILURES:",failures)
     quit(0 if failures == 0 else 1)
