@@ -185,3 +185,50 @@ def test_pure_frontend_policy_with_headless_godot(script, success):
     output = run.stdout + run.stderr
     assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
     assert success in output, output
+
+
+def test_completed_take_owns_only_mutations_and_persistence():
+    server = (ROOT/"piano_teacher/server.py").read_text()
+    assessment = (ROOT/"piano_teacher/application/assessment_settlement.py").read_text()
+    evidence = (ROOT/"piano_teacher/application/assessment_evidence.py").read_text()
+    assert "assess_completed_take(" in server
+    assert "observe_assessed_take(" in server
+    assert "def assess_completed_take(" in assessment
+    assert "def observe_assessed_take(" in evidence
+    for source in (assessment, evidence):
+        assert "engine." not in source
+        assert "PracticeEngine" not in source
+    assert server.index("observe_assessed_take(") < server.index("message = p.apply_result(")
+
+
+def test_teaching_selection_and_preparation_are_learner_owned():
+    server = (ROOT/"piano_teacher/server.py").read_text()
+    learner = (ROOT/"piano_teacher/application/learner_progress.py").read_text()
+    assert "self.learner_progress.next_course_unit(" in server
+    assert "self.learner_progress.record_guided_preparation(" in server
+    assert "def next_course_unit(" in learner
+    assert "def record_guided_preparation(" in learner
+
+
+def test_successful_command_route_has_no_application_dependency():
+    main = (ROOT/"godot/main.gd").read_text()
+    policy = (ROOT/"godot/command_success_policy.gd").read_text()
+    response = main.split("func _on_action(",1)[1].split("\nfunc ",1)[0]
+    assert "CommandSuccessPolicy.decide(" in response
+    assert "NavigationPolicy.plan(" in main
+    assert "static func decide(" in policy
+    assert "app." not in policy
+    assert "request(" not in policy
+
+
+@pytest.mark.skipif(not (shutil.which("godot") or shutil.which("godot4")),
+                    reason="Godot is not installed")
+def test_successful_command_decisions_headless():
+    binary = shutil.which("godot") or shutil.which("godot4")
+    run = subprocess.run(
+        [binary,"--headless","--path",str(ROOT/"godot"),
+         "--script",str(ROOT/"tests/godot/command_success_policy.gd")],
+        capture_output=True,text=True,timeout=20)
+    output = run.stdout + run.stderr
+    assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
+    assert "COMMAND_SUCCESS_POLICY_FAILURES:0" in output, output
