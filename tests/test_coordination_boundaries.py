@@ -305,7 +305,10 @@ def test_command_request_owner_has_no_scene_or_application_dependencies():
     assert "command_state.discard_library()" in main
     assert "command_state.take_library()" in main
     assert "app." not in queue and "get_tree()" not in queue
-    assert "request(" not in queue
+    assert "func dispatch(adapter, path: String, payload: Dictionary)" in queue
+    assert "adapter.request(path,JSON.stringify(payload),\"POST\")" in queue
+    assert "command_state.dispatch(action_request,path,payload)" in main
+    assert "action_request.request(path" not in main
 
 
 def test_learner_navigation_validates_before_transport_changes():
