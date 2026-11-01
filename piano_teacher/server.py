@@ -38,7 +38,8 @@ from .assessment_service import AssessmentService
 from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.strategy_session import restored_strategy_plan
 from .application.control_dispatch import ControlDispatcher
-from .application.attempt_progression import AttemptProgression
+from .application.practice_transitions import run_before_assessment
+from .application.attempt_progression import AttemptProgression, AttemptTick
 from .application.tempo_map_cache import TempoMapCache
 from .application.session_snapshot_builder import capture as capture_session_snapshot
 from .completion_route import completion_route
@@ -1001,9 +1002,45 @@ class PracticeEngine:
             if self.mode == "learn":
                 self._prepare_practice()
                 return
-            self.attempt_progression.begin(
-                self, from_beat=from_beat, mode=mode,
-                loop_continuation=loop_continuation)
+            self.mode = mode
+            self.teaching = None
+            self.guided_range = None
+            self._guided_return = None
+            self.performance_summary = None
+            self.review_stage_identity = None
+            self.review_session_complete = False
+            self.preview_only = not self.midi.connected
+            phrase = self.plan.active_phrase
+            # Only the engine mutates transport and input state. The timing
+            # policy below receives an explicit immutable musical schedule.
+            self.visual_transport.begin_take(loop_continuation=loop_continuation)
+            self.transport_id += 1
+            self.live_input.reset_attempt()
+            self.live_input.prepare(phrase)
+            self.running = True
+            self.auto = mode == "practice" and not self.preview_only
+            self.awaiting_score_revision = None
+            self.pending_result = None
+            self.feedback_marks = []
+            self.feedback_unmapped = 0
+            self.recorder = Recorder()
+            self.visual_gap_beats = self._source_model()[
+                "practice_timeline"]["gap"]["duration_beats"]
+            position = self.open_from_beat if from_beat is None else from_beat
+            scheduled = self.attempt_progression.schedule_start(
+                phrase=phrase, boundaries=self.plan.piece.bar_boundaries,
+                time_signatures=self.plan.piece.time_signatures,
+                bpm=self.plan.bpm, position=position,
+                loop_continuation=loop_continuation,
+                preview=self.preview_only, now=time.monotonic())
+            self.play_from_beat = scheduled.from_beat
+            self.count_in_bar_beats = scheduled.count_in_bar_beats
+            self.count_in_meter = list(scheduled.count_in_meter)
+            self.count_in_beats = scheduled.count_in_beats
+            self.next_boundary_beat = scheduled.next_boundary_beat
+            self.run_at = scheduled.run_at
+            self.feedback = "Count in, then play"
+            self.next_action = scheduled.next_action
 
     def _continue_at(self, deadline: float, *, from_beat: float = 0.0):
         """Retain polling overshoot instead of moving the musical deadline."""
@@ -1485,10 +1522,44 @@ class PracticeEngine:
                 self._update()
 
     def _update(self) -> None:
-        """Advance a single backend-owned clock tick under the session lock."""
+        """Advance the backend clock under its existing session lock."""
         self._poll_midi_connection()
         self._apply_listen_failure()
-        self.attempt_progression.advance(self, time.monotonic())
+        now = time.monotonic()
+        if run_before_assessment(self, now):
+            return
+        phrase = self.plan.active_phrase
+        score_beat = self.play_from_beat + max(
+            0.0, self._elapsed_beat(now-self.run_at))
+
+        def assess_boundary(boundary: float, grid: tuple[float, ...]):
+            tempo_map = self._active_tempo_map()
+            return self.assessment_policies.select(tempo_map).recover(
+                phrase, hand=self.plan.hand, bpm=self.plan.bpm,
+                played=self.recorder.presses if self.recorder else [],
+                from_beat=self.play_from_beat, end_beat=boundary,
+                grid=grid,
+                threshold=(SETTINGS.warmup_recovery_errors
+                           if self.is_builtin_warmup
+                           else SETTINGS.recovery_errors_in_window),
+                warmup=self.is_builtin_warmup, tempo=tempo_map)
+
+        step = self.attempt_progression.inspect(AttemptTick(
+            phrase=phrase, boundaries=self.plan.piece.bar_boundaries,
+            now=now, score_beat=score_beat, from_beat=self.play_from_beat,
+            run_at=self.run_at, next_boundary=self.next_boundary_beat,
+            review_end=self.review_end_beat, preview=self.preview_only,
+            auto=self.auto, mode=self.mode,
+            coda=self.plan.exercise_strategy.name == "coda-part",
+            bpm=self.plan.bpm, gap_beats=self.visual_gap_beats),
+            assess_boundary, self._elapsed_seconds)
+        self.next_boundary_beat = step.next_boundary
+        if step.action == "recovery":
+            self._apply_rolling_recovery(
+                step.recovery, phrase, step.grid, score_beat, now)
+        elif step.action == "complete":
+            self._complete_attempt(phrase, step.ending,
+                                   phrase.end-phrase.start, step.duration, now)
 
     def _phase(self, now: float) -> str:
         teaching_phase = None
