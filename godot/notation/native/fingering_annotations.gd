@@ -94,7 +94,7 @@ func layout_fingerings(gap: float, play_from_beat: float = 0.0) -> void:
         return a["rect"].position.x < b["rect"].position.x)
     widest_fingering = 0.0
     for item in fingering_layout:
-        widest_fingering = maxf(widest_fing,float(item["rect"].size.x))
+        widest_fingering = maxf(widest_fingering,float(item["rect"].size.x))
     fingering_placement_issues = packed["issues"]
 
 
