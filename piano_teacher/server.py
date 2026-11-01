@@ -97,6 +97,14 @@ class PracticeEngine:
             self.guided_session.controller = controller
 
     @property
+    def persistent_hints(self) -> bool:
+        return self.guided_session.persistent_hints
+
+    @persistent_hints.setter
+    def persistent_hints(self, enabled: bool) -> None:
+        self.guided_session.persistent_hints = bool(enabled)
+
+    @property
     def _guided_prepared(self) -> bool:
         return self.guided_session.prepared
 
@@ -756,7 +764,6 @@ class PracticeEngine:
         self.transport_id += 1
         # Reuse the existing guided owner: one controller, held-key history,
         # fragment source and completion state for this teaching session.
-        self.guided_session.persistent_hints = self.persistent_hints
         self.guided_session.bind(GuidedFragment(
             variant=(remediation.variant if remediation is not None
                      else self.plan.active_variant),
