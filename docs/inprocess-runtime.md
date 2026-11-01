@@ -52,6 +52,22 @@ No source code should instantiate `HTTPRequest` or `PacketPeerUDP`.
 - `live_midi_feedback.gd` builds one note-ID lookup at layout publication. It consumes live MIDI events without deep-copying the score layout or scanning every note. Grading stays with the backend.
 - Focused tests: `tests/test_attempt_progression.py` and `tests/test_coordination_boundaries.py`. These do not establish physical MIDI latency or GPU timing.
 
+## Hot-path optimization
+
+- `TempoMapCache` retains the active immutable exercise tempo map by stage
+  identity and BPM. A shaped-tempo stage can transform every note to construct
+  this map; the embedded 20 ms worker now reuses it until either input changes.
+- The native view accepts structural score/recovery state on backend replies.
+  Each display frame calls only `present_clock()`, avoiding full practice
+  timeline comparisons and recovery-data copies at 60 FPS.
+- One monotonic frame timestamp drives the score beat, count-in, and visual
+  scroll projection. Busy-button state is updated only on transitions.
+- Snapshot projection generates the shifted tempo segment list once for both
+  MIDI-time and visual-rest transport fields.
+- `/diagnostics/performance` now exposes bounded `engine_tick` latency
+  alongside `midi_callback` and `full_state` latency. These measurements
+  exclude physical MIDI hardware and actual display latency.
+
 ## Building
 
 Arch developer machine:
