@@ -87,9 +87,11 @@ def capture(engine) -> SessionSnapshot:
     # silence. These exact segments are sent to Godot and retained
     # through the automatic-rest phase with the same run_at timestamp.
     visual_segments = ()
+    tempo_segments = ()
     if tempo_map is not None:
         local_map = tempo_map.from_beat(engine.play_from_beat)
-        visual_segments = (*local_map.as_segments(), {
+        tempo_segments = local_map.as_segments()
+        visual_segments = (*tempo_segments, {
             "start_beat": local_map.duration_beats,
             "end_beat": local_map.duration_beats+engine.visual_gap_beats,
             "bpm": float(p.bpm),
@@ -97,8 +99,7 @@ def capture(engine) -> SessionSnapshot:
         })
     timing = TimingSnapshot(
         sampled_at=sampled_at, now=now, run_at=engine.run_at,
-        tempo_segments=(tempo_map.from_beat(engine.play_from_beat).as_segments()
-                        if tempo_map is not None else ()),
+        tempo_segments=tempo_segments,
         visual_tempo_segments=visual_segments,
         visual_preparation_schedule=engine.visual_transport.preparation_schedule(),
         mapped_clock_beat=(engine._elapsed_beat(now-engine.run_at)
