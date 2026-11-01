@@ -276,3 +276,58 @@ def test_successful_command_view_effects_headless():
     output = run.stdout + run.stderr
     assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
     assert "COMMAND_SUCCESS_PRESENTER_FAILURES:0" in output, output
+
+
+def test_control_dispatch_is_pure_and_domain_effects_are_locked():
+    server = (ROOT/"piano_teacher/server.py").read_text()
+    router = (ROOT/"piano_teacher/application/control_dispatch.py").read_text()
+    stage = (ROOT/"piano_teacher/application/stage_change.py").read_text()
+    assert "ControlDispatcher.route(action)" in server
+    assert "ControlDispatcher.dispatch(self" not in server
+    assert "engine." not in router
+    assert "def dispatch(engine" not in router
+    for method in ("_control_acknowledgement", "_control_listening",
+                   "_control_learning", "_control_transport"):
+        assert f"def {method}(" in server
+    assert "prepare_stage_change(" in server
+    assert "apply_stage_change(" in server
+    assert "engine." not in stage
+
+
+def test_command_request_owner_has_no_scene_or_application_dependencies():
+    main = (ROOT/"godot/main.gd").read_text()
+    queue = (ROOT/"godot/command_request_state.gd").read_text()
+    assert "CommandRequestState.new()" in main
+    assert "command_state.begin(path,Time.get_ticks_msec())" in main
+    assert "command_state.finish()" in main
+    assert "command_state.take_transport()" in main
+    assert "command_state.queue_library(identifier,resume_saved)" in main
+    assert "command_state.discard_library()" in main
+    assert "command_state.take_library()" in main
+    assert "app." not in queue and "get_tree()" not in queue
+    assert "request(" not in queue
+
+
+def test_learner_navigation_validates_before_transport_changes():
+    learner = (ROOT/"piano_teacher/application/learner_progress.py").read_text()
+    server = (ROOT/"piano_teacher/server.py").read_text()
+    for method in ("next_skippable_step", "original_placement_step",
+                   "choose_trouble_spot", "mark_prior_steps_placed",
+                   "reactivate_trouble"):
+        assert f"def {method}(" in learner
+        assert f"learner_progress.{method}(" in server
+    assert "learner_store.mark_skipped(" not in server
+    assert "learner_store.reactivate(" not in server
+
+
+@pytest.mark.skipif(not (shutil.which("godot") or shutil.which("godot4")),
+                    reason="Godot is not installed")
+def test_command_request_queue_with_headless_godot():
+    binary = shutil.which("godot") or shutil.which("godot4")
+    run = subprocess.run(
+        [binary,"--headless","--path",str(ROOT/"godot"),
+         "--script",str(ROOT/"tests/godot/command_request_state.gd")],
+        capture_output=True,text=True,timeout=20)
+    output = run.stdout+run.stderr
+    assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
+    assert "COMMAND_REQUEST_STATE_FAILURES:0" in output, output
