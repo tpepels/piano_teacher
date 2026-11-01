@@ -1533,17 +1533,22 @@ class PracticeEngine:
         clock, thread, or unsynchronized state writer is introduced.
         Returns the next wakeup interval in milliseconds.
         """
-        with self.lock:
-            self._update()
-            if self.plan is None or self.paused:
-                return 250
-            if (self.running or self._preview_loop_pending or self._preparation_pending
-                    or self.pending_result is not None or self.pending_rewind is not None
-                    or self.mode == "listen"):
-                # Responsive automatic transitions, recovery, and practice.
-                # The musical deadline is still the absolute monotonic epoch.
-                return 20
-            return 100
+        began = time.perf_counter()
+        try:
+            with self.lock:
+                self._update()
+                if self.plan is None or self.paused:
+                    return 250
+                if (self.running or self._preview_loop_pending or self._preparation_pending
+                        or self.pending_result is not None or self.pending_rewind is not None
+                        or self.mode == "listen"):
+                    # Responsive automatic transitions, recovery, and practice.
+                    # The musical deadline is still the absolute monotonic epoch.
+                    return 20
+                return 100
+        finally:
+            self.runtime_timings.tick_ms.append(
+                (time.perf_counter() - began) * 1000.0)
 
     def state(self) -> dict:
         began = time.perf_counter()
