@@ -491,6 +491,11 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
     canvas.draw_line(Vector2(29,staff_top),Vector2(29,staff_bottom),
         Color(NOTE_INK,.50),1.2,true)
 
+func present_clock(transport_beat: float, visual_beat: float = NAN) -> void:
+    super.present_clock(transport_beat,visual_beat)
+    if score_loop_enabled and not preparation_history.is_empty():
+        _prune_preparation_history()
+
 func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
     if state.get("phase","") == "ready" and state.get("practice_preparation") == null and \
             absf(float(state.get("visual_offset_beats",0.0)))<.00001:
