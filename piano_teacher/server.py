@@ -27,7 +27,7 @@ from .preprocessing_cache import PreprocessingCache
 from .library_health import LibraryHealth
 from .warmups import is_warmup
 from .application.rolling_recovery import plan_rolling_recovery
-from .music import Phrase, source_note_id
+from .music import Phrase
 from .notation.practice_timeline import preparation_measure_descriptor
 from .measure_grid import phrase_grid
 from .course_navigation import locate_course_section
@@ -774,37 +774,13 @@ class PracticeEngine:
         self._save()
 
     def _guided_marks(self, snapshot: dict) -> list[dict]:
+        """Project current guided note identities through the owned fragment."""
         if self.plan is None:
             return []
-        selected = self._score_selection()
-        engraving = self.score_artifacts.cached_layout(selected)
-        if engraving is None:
-            return []
-        source = {f"{self.plan.identity}:{index}": note for index, note in
-                  zip(self.plan.active_variant.source_indices, self.plan.active_variant.notes)}
-        phrase = selected.phrase
-        layout = engraving.layout
-        glyphs = {glyph["id"]: glyph for glyph in layout.get("notes", [])}
-        local_indices = {id(note): index for index, note in enumerate(phrase.notes)}
-        settled = {entry["id"]: entry for entry in snapshot.get("note_feedback", [])}
-        for entry in snapshot.get("expected_notes", []):
-            if settled.get(entry["id"], {}).get("status") != "wrong":
-                settled[entry["id"]] = {**entry, "status": "expected"}
-        marks = []
-        for identifier, entry in settled.items():
-            note = source.get(identifier)
-            if note is None:
-                continue
-            local_index = local_indices.get(id(note))
-            if local_index is None:
-                continue
-            canonical_id = source_note_id(note, local_index)
-            glyph = glyphs.get(layout.get("attack_map", {}).get(canonical_id))
-            if (glyph is not None and glyph.get("is_attack")
-                    and glyph.get("pitch") == note.pitch and glyph.get("hand") == note.hand):
-                marks.append({**glyph, "target_id": identifier, "status": entry["status"],
-                              "hint_used": bool(entry.get("hint_used", False))})
-        return marks
+        engraving = self.score_artifacts.cached_layout(self._score_selection())
+        return (self.guided_session.marks(snapshot, engraving.layout)
+                if engraving is not None else [])
+
 
     def _prepare_practice(self):
         if self.plan is None:
