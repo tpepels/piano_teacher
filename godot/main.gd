@@ -1095,10 +1095,13 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
                     practice_view.show_source_picker(opened)
         "settings":
             settings_view.present_message("Settings saved")
-            _request_settings()
-            _request_library()
+            if bool(decision["refresh_settings"]):
+                _request_settings()
+            if bool(decision["refresh_library"]):
+                _request_library()
         "device":
-            _request_settings()
+            if bool(decision["refresh_settings"]):
+                _request_settings()
     _flush_transport_action()
     _poll()
     if not pending_library_piece.is_empty():
