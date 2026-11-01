@@ -117,3 +117,31 @@ def test_retry_epochs_are_absolute_and_shift_together_on_resume():
     assert after["to_beat"] == schedule["to_beat"]
     t.begin_take(loop_continuation=True)
     assert t.preparation_schedule() is None
+
+
+def test_source_preparation_uses_nearest_authored_measure_and_absolute_deadline(monkeypatch):
+    import piano_teacher.visual_transport as module
+    calls = []
+    def descriptor(context, start, staves, *, following_measure):
+        calls.append((context["start_beat"], start, staves,
+                      following_measure["start_beat"] if following_measure else None))
+        return {"duration_beats":4, "source_bar":context["start_beat"]}
+    monkeypatch.setattr(module, "preparation_measure_descriptor", descriptor)
+    source = {
+        "measures":[{"start_beat":0}, {"start_beat":4}, {"start_beat":8}],
+        "staff_order":["right","left"]}
+    t = VisualTransport(visual_offset_beats=16)
+    deadline = t.schedule_source_preparation(
+        source, source_from_beat=6, from_visual=25,
+        now=100, reverse_seconds=1.5, bpm=80)
+    assert calls == [(4, 0.0, ["right","left"], 8)]
+    assert deadline == pytest.approx(104.5)
+    assert t.pending_rewind == 6
+    assert t.practice_preparation["measure"]["end_beat"] == 22
+    assert t.practice_preparation["measure"]["start_beat"] == 18
+    assert t.practice_preparation["measure"]["source_bar"] == 4
+    assert t._preparation_at == pytest.approx(101.5)
+    t.schedule_source_preparation(
+        source, source_from_beat=8, from_visual=22,
+        now=105, reverse_seconds=2, bpm=60)
+    assert calls[-1] == (8, 0.0, ["right","left"], None)
