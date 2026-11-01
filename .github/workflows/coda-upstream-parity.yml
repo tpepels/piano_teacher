@@ -81,6 +81,15 @@ jobs:
           assert result["algorithm_sounding_different"]==15
           assert result["algorithm_sounding_invalid_ties"]==1
           assert result["algorithm_written_exact"]==30
+          assert (result["strict_exact_changed"]+
+                  result["strict_exact_noop"])==30
+          assert all(
+              outcome["transformation_effect"]["native_matches_grading"]
+              for sample in result["cases"]
+              for voice in sample["voices"]
+              for outcome in voice.get("algorithms",{}).values()
+              if outcome["status"]=="compared"
+          )
           assert result["algorithm_written_different"]==26
           assert result["algorithm_written_unavailable"]==4
           assert sum(result["discrepancy_categories"].values())==26

@@ -219,6 +219,14 @@ def _case(name: str, filename: str, bars: int, converter, meter, key,
                                     native_error)
                             reference_sounding, tie_errors=sounding_from_written(
                                 author_written)
+                            outcome["transformation_effect"]={
+                                "adapter_changes_source":
+                                    adapter_sounding!=source_sounding,
+                                "author_changes_source":
+                                    bool(tie_errors) or reference_sounding!=source_sounding,
+                                "native_matches_grading":
+                                    outcome["sounding"]["native_written_to_plan"]=="exact",
+                            }
                             if (outcome["written"]["status"]!="exact" or
                                     outcome["sounding"]["status"]!="exact"):
                                 diagnosis=explain_discrepancy(
@@ -313,6 +321,16 @@ def main():
         "algorithm_legacy_raw_exact":sum(o.get("legacy_raw_status")=="match" for o in algorithms),
         "algorithm_legacy_raw_mismatches":sum(o.get("legacy_raw_status")=="mismatch" for o in algorithms),
         "algorithm_written_exact":count(("written","status"),"exact"),
+        "strict_exact_changed":sum(
+            o.get("written",{}).get("status")=="exact" and
+            o.get("sounding",{}).get("status")=="exact" and
+            o.get("transformation_effect",{}).get("adapter_changes_source",False)
+            for o in algorithms),
+        "strict_exact_noop":sum(
+            o.get("written",{}).get("status")=="exact" and
+            o.get("sounding",{}).get("status")=="exact" and
+            not o.get("transformation_effect",{}).get("adapter_changes_source",True)
+            for o in algorithms),
         "algorithm_written_different":count(("written","status"),"different"),
         "algorithm_written_unavailable":count(("written","status"),"unavailable"),
         "algorithm_sounding_exact":count(("sounding","status"),"exact"),
@@ -335,6 +353,8 @@ def main():
             row.get("reference_voices",0)) for row in rows],
           "algorithm_sounding_exact":result["algorithm_sounding_exact"],
           "algorithm_written_exact":result["algorithm_written_exact"],
+          "strict_exact_changed":result["strict_exact_changed"],
+          "strict_exact_noop":result["strict_exact_noop"],
           "algorithm_written_unavailable":result["algorithm_written_unavailable"],
           "algorithm_legacy_raw_exact":result["algorithm_legacy_raw_exact"],
           "algorithm_total":result["algorithm_total"],
