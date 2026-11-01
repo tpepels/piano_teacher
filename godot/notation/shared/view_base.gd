@@ -110,6 +110,17 @@ func _practice_timeline_error() -> String:
         staves[event["staff"]] = true
     return ""
 
+func present_clock(transport_beat: float, visual_beat: float = NAN) -> void:
+    # A frame only advances the view transform. It must never copy recovery
+    # measures or compare large MusicXML timelines at display refresh rate.
+    var next_visual: float = (visual_beat if is_finite(visual_beat) else
+        transport_beat + play_from_beat)
+    if absf(clock_beat-transport_beat) > .00001 or \
+            absf(visual_scroll_beat-next_visual) > .00001:
+        clock_beat = transport_beat
+        visual_scroll_beat = next_visual
+        queue_redraw()
+
 func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN) -> void:
     var next_clock: float = transport_beat
     var next_visual: float = visual_beat if is_finite(visual_beat) else transport_beat + float(state.get("play_from_beat", 0.0))
