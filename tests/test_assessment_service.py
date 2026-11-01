@@ -49,3 +49,25 @@ def test_live_marks_do_not_invent_feedback_before_take_begins():
         phrase=phrase, hand="right", bpm=80, played=[],
         played_from_beat=0, elapsed_seconds=-.1,
         bar_boundaries=(0, 4, 8, 12, 16), layout={}) == []
+
+
+def test_review_section_selection_is_source_bound_and_rejects_non_weak_ranges():
+    sections = [
+        {"first_bar": 1, "last_bar": 2, "errors": 3,
+         "start_beat": 0, "end_beat": 8},
+        {"first_bar": 3, "last_bar": 4, "errors": 0,
+         "start_beat": 8, "end_beat": 16},
+    ]
+    summary = {"sections": sections}
+    service = AssessmentService()
+    assert service.select_review_section(
+        summary, plan_ready=True, first_bar=1, last_bar=2) is sections[0]
+    for first, last in [(3, 4), (1, 3), (None, 2), (True, 2)]:
+        import pytest
+        with pytest.raises(ValueError):
+            service.select_review_section(
+                summary, plan_ready=True, first_bar=first, last_bar=last)
+    import pytest
+    with pytest.raises(ValueError, match="Finish an assessed attempt"):
+        service.select_review_section(
+            summary, plan_ready=False, first_bar=1, last_bar=2)
