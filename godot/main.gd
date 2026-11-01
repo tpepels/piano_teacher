@@ -871,7 +871,7 @@ func _process(_delta: float) -> void:
         action_pending,current_screen,_native_score_ready(),living_chords,
         frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
     if not arrivals.is_empty():
-        _preview_note_arrivals(arrivals)
+        score_effects.record_preview(arrivals,practice_view.stage,ticks)
 
 func _on_state(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, sample_started_ms: int = -1) -> void:
     if sample_started_ms < 0:
@@ -913,7 +913,7 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
         return
     last_state = parsed
     _update_visual_frame_rate(parsed)
-    _clear_assessed_effects_in_ungraded_mode(parsed)
+    score_effects.transition_mode(parsed,practice_view.stage)
     var received_ms: int = Time.get_ticks_msec()
     var started_ms: int = (state_request_started_ms
         if sample_started_ms < 0 else sample_started_ms)
@@ -934,51 +934,6 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if bool(parsed.get("loaded",false)):
         _consume_live_piano_hits(parsed)
     _refresh_score_status()
-
-func _preview_note_arrivals(groups: Array) -> void:
-    # Demonstrate musical energy when there is no keyboard, but in blue
-    # rather than graded mint. These are backend-clock onsets, never grades.
-    if groups.is_empty():
-        return
-    var now_ms: int = Time.get_ticks_msec()
-    for group in groups:
-        var notes: Array = group.get("notes", [])
-        for note in notes:
-            if score_effects.preview_pulses.size() >= 24:
-                score_effects.preview_pulses.pop_front()
-            score_effects.preview_pulses.append({
-                "page": int(note.get("page", 0)),
-                "x": float(note.get("x", 0.0)),
-                "y": float(note.get("y", 0.0)),
-                "duration_ms": 220,
-                "until_ms": now_ms + 220,
-                "status": "preview"
-            })
-    practice_view.stage.effects.preview_react()
-
-
-func _clear_assessed_effects_in_ungraded_mode(state: Dictionary) -> void:
-    # Mode-specific colors have distinct meanings. Clear old assessed
-    # success when entering preview/Listen, and clear blue preview sparks
-    # when returning to a real scored MIDI take.
-    var ungraded: bool = bool(state.get("preview_only", false)) \
-        or str(state.get("mode", "")) == "listen"
-    if ungraded:
-        if practice_view.stage.impact_callout != null:
-            practice_view.stage.impact_callout.call("clear")
-        if score_effects.hit_pulses.is_empty() and score_effects.wrong_ghosts.is_empty():
-            return
-        score_effects.hit_pulses.clear()
-        score_effects.wrong_ghosts.clear()
-        # The stage is a separate canvas and must drop its older earned
-        # success energy along with the note particles on mode change.
-        practice_view.stage.effects.impact_energy = 0.0
-        practice_view.stage.effects.queue_redraw()
-    else:
-        if score_effects.preview_pulses.is_empty():
-            return
-        score_effects.preview_pulses.clear()
-
 
 func _consume_live_piano_hits(state: Dictionary) -> void:
     last_seen_midi_visual_sequence = live_midi_feedback.consume(
