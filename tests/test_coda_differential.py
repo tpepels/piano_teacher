@@ -93,3 +93,34 @@ def test_music21_reader_preserves_rests_and_written_tie_segments():
     sounding,errors = sounding_from_written(written)
     assert errors == ()
     assert sounding == (SoundingNote("v0",0,2,60),)
+
+
+def test_serialized_musicxml_cursor_ties_rests_and_parallel_voices():
+    from piano_teacher.research.coda_differential import written_from_musicxml
+    score = """<score-partwise version="4.0">
+      <part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+      <part id="P1">
+        <measure number="1"><attributes><divisions>4</divisions></attributes>
+          <note><pitch><step>C</step><octave>4</octave></pitch><duration>16</duration>
+            <voice>1</voice><tie type="start"/></note>
+          <backup><duration>16</duration></backup>
+          <note><rest/><duration>8</duration><voice>2</voice></note>
+          <note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration>
+            <voice>2</voice><tie type="start"/></note>
+        </measure>
+        <measure number="2">
+          <note><pitch><step>C</step><octave>4</octave></pitch><duration>8</duration>
+            <voice>1</voice><tie type="stop"/></note>
+          <note><rest/><duration>8</duration><voice>1</voice></note>
+          <backup><duration>16</duration></backup>
+          <note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration>
+            <voice>2</voice><tie type="stop"/></note>
+          <note><rest/><duration>12</duration><voice>2</voice></note>
+        </measure>
+      </part></score-partwise>"""
+    written = written_from_musicxml(score)
+    sound, errors = sounding_from_written(written)
+    assert errors == ()
+    assert sound == (SoundingNote("v0", 0, 6, 60),
+                     SoundingNote("v1", 2, 5, 60))
+    assert sum(entry.rest for entry in written) == 3

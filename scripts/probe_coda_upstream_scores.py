@@ -25,7 +25,7 @@ from piano_teacher.research.coda_matrix import MatrixScore
 from piano_teacher.exercise_contracts import OriginalTiming
 from piano_teacher.research.coda_written_tie_segments import tie_segment_chains
 from piano_teacher.research.coda_differential import (
-    written_from_music21, sounding_from_plan, report_comparison,
+    written_from_musicxml, sounding_from_plan, report_comparison,
 )
 from piano_teacher.research.coda_score_projection import _original_metadata
 from piano_teacher.notation.lesson import build_lesson_score
@@ -97,15 +97,11 @@ def _native_written(plan, owners, piece, bars, converter, *, factor):
     native=build_lesson_score(
         selected,boundaries=grid,time_signatures=meters,
         key_signatures=keys,clef_changes=clefs,retimed_source=True)
-    rendered=converter.parseData(native.musicxml, format="musicxml")
-    nonempty=[part for part in rendered.parts if tuple(part.recurse().notes)]
-    if len(nonempty)!=1:
-        raise ValueError("Native source-voice notation is not isolated")
-    return written_from_music21(nonempty[0])
+    return written_from_musicxml(native.musicxml)
 
 
 def _case(name: str, filename: str, bars: int, converter, meter, key,
-          ExerciseLine, MusicMatrixRepresentation):
+          ExerciseLine, MusicMatrixRepresentation, get_musicxml_from_music21):
     from music21 import chord
     row={"case":name,"source":filename,"sample_bars":bars,
          "source_sha256":sha256((ROOT/filename).read_bytes()).hexdigest(),
@@ -198,7 +194,8 @@ def _case(name: str, filename: str, bars: int, converter, meter, key,
                                     "written":{"status":"unavailable","reason":"author returned None"},
                                     "sounding":{"status":"unavailable","reason":"author returned None"}}
                                 continue
-                            author_written=written_from_music21(upstream)
+                            author_written=written_from_musicxml(
+                                get_musicxml_from_music21(upstream))
                             plan=ours_fn()
                             native_error=""
                             try:
@@ -221,8 +218,8 @@ def _case(name: str, filename: str, bars: int, converter, meter, key,
                                 "legacy_raw_status":(
                                     "match" if raw_observed==raw_expected
                                     else "mismatch"),
-                                "written_basis":"actual music21 author score versus bare native lesson MusicXML",
-                                "sounding_basis":"explicit tie-collapsed author score versus canonical grading TimingPlan",
+                                "written_basis":"actual author-exported MusicXML versus bare native lesson MusicXML",
+                                "sounding_basis":"explicit tie-collapsed author-exported MusicXML versus canonical grading TimingPlan",
                                 **outcome,
                             }
                         except Exception as exc:
@@ -262,8 +259,10 @@ def main():
     sys.path.insert(0,str(checkout))
     from music21 import converter,meter,key
     from music.exercise import ExerciseLine,MusicMatrixRepresentation
+    from music.processor import get_musicxml_from_music21
 
-    rows=[_case(*case,converter,meter,key,ExerciseLine,MusicMatrixRepresentation)
+    rows=[_case(*case,converter,meter,key,ExerciseLine,MusicMatrixRepresentation,
+                get_musicxml_from_music21)
           for case in CASES]
     algorithms=[outcome for row in rows for voice in row.get("voices",())
                 for outcome in voice.get("algorithms",{}).values()]
@@ -272,7 +271,7 @@ def main():
     result={
         "upstream_revision":"a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
         "status":"diagnostic-only",
-        "comparison_basis":"Written music21 and native MusicXML events are compared separately from tie-collapsed author performance and adapter TimingPlan",
+        "comparison_basis":"Both written scores parsed from generated MusicXML; reference tie chains collapsed separately from adapter TimingPlan",
         "native_written_scope":"bare generated notation for one source voice; authored expressive annotations not compared",
         "author_parity_proven":False,
         "reference_mmr_exact_voices":sum(row.get("exactly_matched_voices",0) for row in rows),

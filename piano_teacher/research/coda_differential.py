@@ -69,6 +69,102 @@ def written_from_music21(stream) -> tuple[WrittenNote, ...]:
                        -1 if n.pitch is None else n.pitch, n.tie)))
 
 
+
+def written_from_musicxml(xml: str) -> tuple[WrittenNote, ...]:
+    """Read the *serialized* score with exact part/voice, rests and tie segments.
+
+    Processing MusicXML cursor/backup/forward records avoids relying on a
+    music21 stream's mutable activeSite offsets after makeNotation/makeTies.
+    This is deliberately restricted to one generated pitch-bearing part.
+    """
+    from fractions import Fraction
+    from xml.etree import ElementTree as ET
+
+    root = ET.fromstring(xml)
+    if root.tag.rsplit("}", 1)[-1] != "score-partwise":
+        raise ValueError("Coda differential requires score-partwise MusicXML")
+    raw_by_part = []
+    steps = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+    for part_id, part in enumerate(root.findall("{*}part")):
+        divisions = Fraction(1)
+        absolute = Fraction(0)
+        rows = []
+        for measure in part.findall("{*}measure"):
+            cursor = Fraction(0)
+            extent = Fraction(0)
+            previous = None
+            for child in measure:
+                name = child.tag.rsplit("}", 1)[-1]
+                if name == "attributes":
+                    value = child.findtext("{*}divisions")
+                    if value is not None:
+                        divisions = Fraction(value)
+                        if divisions <= 0:
+                            raise ValueError("Nonpositive MusicXML divisions")
+                elif name in ("backup", "forward"):
+                    duration = Fraction(child.findtext("{*}duration")) / divisions
+                    if duration <= 0:
+                        raise ValueError("Invalid MusicXML cursor movement")
+                    cursor += duration if name == "forward" else -duration
+                    if cursor < 0:
+                        raise ValueError("MusicXML backup precedes measure")
+                    previous = None
+                    extent = max(extent, cursor)
+                elif name == "note":
+                    if child.find("{*}grace") is not None:
+                        raise ValueError("Untimed grace notes are not normalized here")
+                    voice = child.findtext("{*}voice", "1")
+                    staff = child.findtext("{*}staff", "1")
+                    owner = f"p{part_id}-s{staff}-v{voice}"
+                    duration = Fraction(child.findtext("{*}duration")) / divisions
+                    if duration <= 0:
+                        raise ValueError("Nonpositive written note/rest duration")
+                    if child.find("{*}chord") is not None:
+                        if previous is None or previous[1:] != (voice, staff):
+                            raise ValueError("MusicXML chord missing same-voice predecessor")
+                        onset = previous[0]
+                    else:
+                        onset = cursor
+                        previous = (onset, voice, staff)
+                        cursor += duration
+                    extent = max(extent, onset + duration, cursor)
+                    if child.find("{*}rest") is not None:
+                        pitch = None
+                    else:
+                        p = child.find("{*}pitch")
+                        if p is None:
+                            raise ValueError("Unknown non-pitched written event")
+                        pitch = ((int(p.findtext("{*}octave")) + 1) * 12
+                                 + steps[p.findtext("{*}step")]
+                                 + int(p.findtext("{*}alter", "0")))
+                    played = {x.get("type") for x in child.findall("{*}tie")}
+                    drawn = {x.get("type") for x in child.findall("{*}notations/{*}tied")}
+                    if played and drawn and played != drawn:
+                        raise ValueError("Performance and engraved tie roles disagree")
+                    roles = played or drawn
+                    if not roles <= {"start", "stop"}:
+                        raise ValueError("Unsupported MusicXML tie role")
+                    tie = ("continue" if len(roles) == 2
+                           else next(iter(roles)) if roles else "")
+                    start = absolute + onset
+                    rows.append((owner, round(float(start), 6),
+                                 round(float(start+duration), 6), pitch, tie))
+            if extent <= 0:
+                raise ValueError("Empty or unmeasured MusicXML bar")
+            absolute += extent
+        if any(row[3] is not None for row in rows):
+            raw_by_part.append(rows)
+    if len(raw_by_part) != 1:
+        raise ValueError("Expected exactly one pitch-bearing source voice part")
+    raw = raw_by_part[0]
+    voices = {name: f"v{i}" for i, name in enumerate(sorted({x[0] for x in raw}))}
+    return tuple(sorted(
+        (WrittenNote(voices[owner], start, end, pitch, tie)
+         for owner, start, end, pitch, tie in raw),
+        key=lambda n: (n.voice, n.onset, n.end,
+                       -1 if n.pitch is None else n.pitch, n.tie)))
+
+
 def sounding_from_written(
     written: Iterable[WrittenNote],
 ) -> tuple[tuple[SoundingNote, ...], tuple[str, ...]]:
