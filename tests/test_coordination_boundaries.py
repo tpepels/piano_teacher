@@ -13,24 +13,26 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_practice_engine_delegates_start_and_progression_under_lock():
-    server = (ROOT / "piano_teacher/server.py").read_text()
-    source = ast.parse(server)
-    engine = next(node for node in source.body
-                  if isinstance(node, ast.ClassDef) and node.name == "PracticeEngine")
-    methods = {node.name: node for node in engine.body
-               if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
-    for method in ("start", "_update"):
-        segment = ast.get_source_segment(server, methods[method])
-        assert "self.attempt_progression." in segment
-        assert len(segment.splitlines()) < 22
-    progression = (ROOT / "piano_teacher/application/attempt_progression.py").read_text()
-    assert "def grid_for(" in progression
-    assert "def begin(" in progression
-    assert "def advance(" in progression
-    assert "run_before_assessment(engine, now)" in progression
-    assert "engine._apply_rolling_recovery(" in progression
-    assert "engine._complete_attempt(" in progression
+def test_attempt_progression_uses_explicit_inputs_and_returns_decisions():
+    server = (ROOT/"piano_teacher/server.py").read_text()
+    tree = ast.parse(server)
+    engine = next(node for node in tree.body
+                  if isinstance(node,ast.ClassDef) and node.name=="PracticeEngine")
+    methods = {node.name: ast.get_source_segment(server,node)
+               for node in engine.body if isinstance(node,ast.FunctionDef)}
+    assert "self.attempt_progression.schedule_start(" in methods["start"]
+    assert "self.attempt_progression.inspect(AttemptTick(" in methods["_update"]
+    assert "run_before_assessment(self, now)" in methods["_update"]
+    assert "_apply_rolling_recovery(" in methods["_update"]
+    assert "_complete_attempt(" in methods["_update"]
+    policy = (ROOT/"piano_teacher/application/attempt_progression.py").read_text()
+    assert "class AttemptTick:" in policy
+    assert "class AttemptStart:" in policy
+    assert "class AttemptStep:" in policy
+    assert "def schedule_start(" in policy
+    assert "def inspect(" in policy
+    assert "engine." not in policy
+    assert "PracticeEngine" not in policy.split('"""',2)[-1]
 
 
 def test_main_callbacks_keep_reply_handling_and_presentation_separate():
