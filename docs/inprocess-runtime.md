@@ -46,9 +46,9 @@ No source code should instantiate `HTTPRequest` or `PacketPeerUDP`.
 
 ## Presentation and progression boundaries
 
-- `PracticeEngine.start()` and `_update()` use `AttemptProgression` for timed attempt setup, source measure grids, rolling recovery checks, and completion deadlines. The engine retains its lock and musical clock.
-- `session_snapshot_builder.py` assembles the activity, lesson, timing and guided snapshots under that same lock; the engine still owns capture timing and state projection.
-- `practice_state_presenter.gd` distributes accepted backend state snapshots. `practice_frame_coordinator.gd` drives Listen, notation, and stage effects using one sampled beat per frame. `main.gd` keeps request ordering and app navigation.
+- `AttemptProgression` accepts immutable `AttemptTick` inputs and authored meter/source-boundary facts, and returns `AttemptStart` or `AttemptStep` scheduling decisions. It has no engine reference. `PracticeEngine` owns the session lock, native transport, rolling assessment callback, recovery application and state mutation; no second deadline clock is created.
+- `session_snapshot_builder.py` assembles activity, lesson, timing and guided snapshots under that same lock. Snapshot builder dependencies are still broader than ideal and are a remaining boundary to narrow.
+- `practice_frame_coordinator.gd` and `practice_state_presenter.gd` receive only their visual collaborators at construction rather than the entire application. `main.gd` owns request sequencing, accepted-state transport updates and clock sampling; the frame coordinator receives the sampled beat and returns ungraded onset cues.
 - `live_midi_feedback.gd` builds one note-ID lookup at layout publication. It consumes live MIDI events without deep-copying the score layout or scanning every note. Grading stays with the backend.
 - Focused tests: `tests/test_attempt_progression.py` and `tests/test_coordination_boundaries.py`. These do not establish physical MIDI latency or GPU timing.
 
