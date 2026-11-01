@@ -84,6 +84,18 @@ jobs:
           assert result["algorithm_written_different"]==26
           assert result["algorithm_written_unavailable"]==4
           assert sum(result["discrepancy_categories"].values())==26
+          assert result["discrepancy_categories"]=={
+              "rest-coverage-only":5,
+              "written-segmentation-tuplet":1,
+              "written-segmentation-meter":4,
+              "beamed-source-protected":3,
+              "cross-measure-group-protected":2,
+              "tuplet-source-protected":2,
+              "rest-bearing-tuplet-protected":3,
+              "changing-meter-dotted-quantization":4,
+              "changing-meter-cross-bar-chord":1,
+              "upstream-disconnected-tie":1,
+          }
           for sample in result["cases"]:
               for voice in sample["voices"]:
                   for operation,outcome in voice.get("algorithms",{}).items():
