@@ -29,7 +29,7 @@ func begin(path: String, now_ms: int) -> bool:
 func dispatch(adapter, path: String, payload: Dictionary) -> int:
     ## Dispatch only a request previously reserved by begin(). The adapter
     ## is supplied for this call, never retained or obtained from Main.
-    assert pending and post_path == path
+    assert(pending and post_path == path)
     adapter.timeout = 360.0 if path in [
         "/fingering","/load","/library/open"] else 5.0
     var err: int = int(adapter.request(path,JSON.stringify(payload),"POST"))
