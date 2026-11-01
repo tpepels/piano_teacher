@@ -62,8 +62,11 @@ def written_from_music21(stream) -> tuple[WrittenNote, ...]:
             tie = getattr(getattr(event, "tie", None), "type", "") or ""
             raw.append((owner, onset, end, int(event.pitch.midi), tie))
     labels = {name: f"v{i}" for i, name in enumerate(sorted({v[0] for v in raw}))}
-    return tuple(sorted(WrittenNote(labels[voice], start, end, pitch, tie)
-                        for voice, start, end, pitch, tie in raw))
+    return tuple(sorted(
+        (WrittenNote(labels[voice], start, end, pitch, tie)
+         for voice, start, end, pitch, tie in raw),
+        key=lambda n: (n.voice, n.onset, n.end,
+                       -1 if n.pitch is None else n.pitch, n.tie)))
 
 
 def sounding_from_written(
@@ -77,7 +80,7 @@ def sounding_from_written(
     attacks = []
     pending = {}
     errors = []
-    for atom in sorted(written, key=lambda n: (n.onset, n.voice, n.pitch or -1, n.end)):
+    for atom in sorted(written, key=lambda n: (n.onset, n.voice, -1 if n.pitch is None else n.pitch, n.end)):
         if atom.pitch is None:
             continue
         key = atom.voice, atom.pitch

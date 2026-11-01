@@ -24,6 +24,13 @@ from piano_teacher.music import Phrase
 from piano_teacher.research.coda_matrix import MatrixScore
 from piano_teacher.exercise_contracts import OriginalTiming
 from piano_teacher.research.coda_written_tie_segments import tie_segment_chains
+from piano_teacher.research.coda_differential import (
+    written_from_music21, sounding_from_plan, report_comparison,
+)
+from piano_teacher.research.coda_score_projection import _original_metadata
+from piano_teacher.notation.lesson import build_lesson_score
+from dataclasses import replace
+from hashlib import sha256
 from piano_teacher.research.coda_reference_matrix import (
     reference_quantization,score_voice_matrices,
 )
@@ -63,10 +70,45 @@ def _coda_events(plan, indices):
                   for i in indices)
 
 
+
+def _native_written(plan, owners, piece, bars, converter, *, factor):
+    """Parse actual generated *bare* native notation, never guessed MIDI notes.
+
+    This comparison covers pitches, rhythms, written rests and ties for the
+    isolated source voice. It does not certify source expression preservation
+    or the full strict Coda projected-notation pipeline.
+    """
+    source=plan.original.phrase
+    if source.start != 0 or source.first_bar != 1:
+        raise ValueError("Comparison needs a bar-one source excerpt")
+    end=piece.bar_boundaries[bars]
+    excerpt=replace(
+        piece,bar_boundaries=tuple(piece.bar_boundaries[:bars+1]),
+        time_signatures=tuple(t for t in piece.time_signatures if t[0]<end),
+        key_signatures=tuple(v for v in piece.key_signatures if v.beat<end),
+        clef_changes=tuple(v for v in piece.clef_changes if v.beat<end))
+    grid,meters,keys,clefs=_original_metadata(excerpt,source,plan,factor)
+    selected=replace(
+        plan.exercise_phrase,first_bar=1,last_bar=len(grid)-1,
+        notes=tuple(note for i,note in enumerate(plan.exercise_phrase.notes)
+                    if i in owners))
+    if not selected.notes:
+        raise ValueError("No owned source-voice notes to render")
+    native=build_lesson_score(
+        selected,boundaries=grid,time_signatures=meters,
+        key_signatures=keys,clef_changes=clefs,retimed_source=True)
+    rendered=converter.parseData(native.musicxml)
+    nonempty=[part for part in rendered.parts if tuple(part.recurse().notes)]
+    if len(nonempty)!=1:
+        raise ValueError("Native source-voice notation is not isolated")
+    return written_from_music21(nonempty[0])
+
+
 def _case(name: str, filename: str, bars: int, converter, meter, key,
           ExerciseLine, MusicMatrixRepresentation):
     from music21 import chord
     row={"case":name,"source":filename,"sample_bars":bars,
+         "source_sha256":sha256((ROOT/filename).read_bytes()).hexdigest(),
          "status":"diagnostic","voices":[]}
     try:
         piece=load_musicxml(ROOT/filename,bpm=80)
@@ -130,43 +172,58 @@ def _case(name: str, filename: str, bars: int, converter, meter, key,
                     line.music_matrix_representation=MusicMatrixRepresentation(
                         line.key_signature,line.time_signature,q,*original)
                     owners={index for _,_,index,_ in matched[0].owners}
-                    for name,reference_fn,ours_fn in (
+                    for name,reference_fn,ours_fn,factor in (
                         ("slow-x2",lambda:line.generate_slowed_down_exercise(2),
-                         lambda:CodaReferenceSlowdown(2).transform(variant).timing),
+                         lambda:CodaReferenceSlowdown(2).transform(variant).timing,2),
                         ("slow-x4",lambda:line.generate_slowed_down_exercise(4),
-                         lambda:CodaReferenceSlowdown(4).transform(variant).timing),
+                         lambda:CodaReferenceSlowdown(4).transform(variant).timing,4),
                         ("dotted-3-to-1",lambda:line.generate_dotted_exercise([1.5,.5]),
                          lambda:CodaReferenceDotted(True).transform(
                              variant,boundaries=matrix.boundaries,
-                             quantization=q,source_musicxml=piece.source_musicxml).timing),
+                             quantization=q,source_musicxml=piece.source_musicxml).timing,1),
                         ("dotted-1-to-3",lambda:line.generate_dotted_exercise([.5,1.5]),
                          lambda:CodaReferenceDotted(False).transform(
                              variant,boundaries=matrix.boundaries,
-                             quantization=q,source_musicxml=piece.source_musicxml).timing),
+                             quantization=q,source_musicxml=piece.source_musicxml).timing,1),
                         ("chord-2-beat",lambda:line.generate_chordify_exercise(2*q),
                          lambda:CodaReferenceChordification(2*q).transform(
                              variant,boundaries=matrix.boundaries,
-                             quantization=q,source_musicxml=piece.source_musicxml).timing),
+                             quantization=q,source_musicxml=piece.source_musicxml).timing,1),
                     ):
                         try:
                             upstream=reference_fn()
                             if upstream is None:
-                                result["algorithms"][name]={"status":"upstream-none"}
+                                result["algorithms"][name]={
+                                    "status":"upstream-none",
+                                    "written":{"status":"unavailable","reason":"author returned None"},
+                                    "sounding":{"status":"unavailable","reason":"author returned None"}}
                                 continue
-                            observed=_music21_events(upstream)
-                            expected=_coda_events(ours_fn(),owners)
-                            reference_pairs=[(at,pitch)
-                                             for at,pitch,duration in observed]
+                            author_written=written_from_music21(upstream)
+                            plan=ours_fn()
+                            native_error=""
+                            try:
+                                native_written=_native_written(
+                                    plan,owners,piece,bars,converter,factor=factor)
+                            except (ValueError,RuntimeError,KeyError,
+                                    IndexError,TypeError) as exc:
+                                native_written=None
+                                native_error=f"{type(exc).__name__}: {exc}"
+                            outcome=report_comparison(
+                                author_written,sounding_from_plan(plan,owners),
+                                native_written,unavailable_reason=native_error)
+                            # Keep the historic raw tuple comparison for audit,
+                            # but DO NOT use it as a valid parity classification.
+                            raw_observed=_music21_events(upstream)
+                            raw_expected=_coda_events(plan,owners)
                             result["algorithms"][name]={
-                                "status":"match" if observed==expected else "mismatch",
-                                "compared": "raw music21 written notes versus one sounding MIDI attack",
-                                "source_note_count":len(expected),
-                                "reference_note_count":len(observed),
-                                "reference_colliding_pitch_onsets":
-                                    len(reference_pairs)-len(set(reference_pairs))}
-                            if observed!=expected:
-                                result["algorithms"][name].update(
-                                    author_first=observed[:6],ours_first=expected[:6])
+                                "status":"compared",
+                                "legacy_raw_status":(
+                                    "match" if raw_observed==raw_expected
+                                    else "mismatch"),
+                                "written_basis":"actual music21 author score versus bare native lesson MusicXML",
+                                "sounding_basis":"explicit tie-collapsed author score versus canonical grading TimingPlan",
+                                **outcome,
+                            }
                         except Exception as exc:
                             result["algorithms"][name]={
                                 "status":"exception","error":type(exc).__name__,
@@ -207,32 +264,41 @@ def main():
 
     rows=[_case(*case,converter,meter,key,ExerciseLine,MusicMatrixRepresentation)
           for case in CASES]
-    statuses=[result["status"] for row in rows for voice in row.get("voices",())
-              for result in voice.get("algorithms",{}).values()]
-    result={"upstream_revision":"a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
-            "status":"diagnostic-only","comparison_basis":
-                "Music21 author written events and adapter sounding MIDI events are distinct",
-            "author_parity_proven":False,
-            "reference_mmr_exact_voices":sum(row.get("exactly_matched_voices",0)
-                                              for row in rows),
-            "reference_mmr_sampled_voices":sum(row.get("reference_voices",0)
-                                                for row in rows),
-            "algorithm_total":len(statuses),
-            "algorithm_exact":statuses.count("match"),
-            "algorithm_mismatches":statuses.count("mismatch"),
-            "algorithm_upstream_none":statuses.count("upstream-none"),
-            "algorithm_exceptions":statuses.count("exception"),
-            "cases":rows}
+    algorithms=[outcome for row in rows for voice in row.get("voices",())
+                for outcome in voice.get("algorithms",{}).values()]
+    count=lambda path,value:sum(
+        outcome.get(path[0],{}).get(path[1])==value for outcome in algorithms)
+    result={
+        "upstream_revision":"a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
+        "status":"diagnostic-only",
+        "comparison_basis":"Written music21 and native MusicXML events are compared separately from tie-collapsed author performance and adapter TimingPlan",
+        "native_written_scope":"bare generated notation for one source voice; authored expressive annotations not compared",
+        "author_parity_proven":False,
+        "reference_mmr_exact_voices":sum(row.get("exactly_matched_voices",0) for row in rows),
+        "reference_mmr_sampled_voices":sum(row.get("reference_voices",0) for row in rows),
+        "algorithm_total":len(algorithms),
+        "algorithm_legacy_raw_exact":sum(o.get("legacy_raw_status")=="match" for o in algorithms),
+        "algorithm_legacy_raw_mismatches":sum(o.get("legacy_raw_status")=="mismatch" for o in algorithms),
+        "algorithm_written_exact":count(("written","status"),"exact"),
+        "algorithm_written_different":count(("written","status"),"different"),
+        "algorithm_written_unavailable":count(("written","status"),"unavailable"),
+        "algorithm_sounding_exact":count(("sounding","status"),"exact"),
+        "algorithm_sounding_different":count(("sounding","status"),"different"),
+        "algorithm_sounding_invalid_ties":count(("sounding","status"),"invalid-reference-ties"),
+        "algorithm_upstream_none":sum(o["status"]=="upstream-none" for o in algorithms),
+        "algorithm_exceptions":sum(o["status"]=="exception" for o in algorithms),
+        "cases":rows}
     args.report.parent.mkdir(parents=True,exist_ok=True)
     args.report.write_text(json.dumps(result,indent=2)+"\n")
     print(json.dumps({"cases":len(rows),
           "successful_diagnostic_cases":sum(row["status"]=="diagnostic" for row in rows),
           "source_match_counts":[(row["case"],row.get("exactly_matched_voices",0),
             row.get("reference_voices",0)) for row in rows],
-          "algorithm_counts":[(row["case"],sum(
-                sum(v["status"]=="match" for v in voice.get("algorithms",{}).values())
-                for voice in row.get("voices",[])))
-                for row in rows]},sort_keys=True))
+          "algorithm_sounding_exact":result["algorithm_sounding_exact"],
+          "algorithm_written_exact":result["algorithm_written_exact"],
+          "algorithm_written_unavailable":result["algorithm_written_unavailable"],
+          "algorithm_legacy_raw_exact":result["algorithm_legacy_raw_exact"],
+          "algorithm_total":result["algorithm_total"]},sort_keys=True))
     # Missing fixtures and broken imports are infrastructure failures.
     # Legitimate author mismatches/errors remain in the source-bound report.
     if any(row.get("status")=="diagnostic-error" for row in rows):
