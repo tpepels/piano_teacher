@@ -7,10 +7,9 @@ retains neither a LearningPlan nor an engine, lock, store or callback.
 from __future__ import annotations
 
 from dataclasses import dataclass
-import math
 
 from ..exercise_generator import ExerciseVariant
-from ..measure_grid import phrase_grid
+from .guided_fragment import select_guided_fragment
 from ..music import Phrase, source_note_id
 from ..teaching import TeachingConfig, TeachingController
 
@@ -31,19 +30,9 @@ def select_fragment(variant: ExerciseVariant, boundaries: tuple[float, ...],
                     *, from_beat: float) -> GuidedFragment:
     """Validate before canceling a live session; skip only empty guided ideas."""
     phrase = variant.phrase
-    grid = phrase_grid(phrase, boundaries)
-    if not math.isfinite(from_beat) or not 0 <= from_beat < grid[-1]:
-        raise ValueError("Choose a measure inside the active passage")
-    first = max(i for i, beat in enumerate(grid[:-1]) if beat <= from_beat+1e-7)
-    while first < len(grid)-1:
-        last = min(first+2, len(grid)-1)
-        if any(phrase.start+grid[first]-1e-7 <= note.start < phrase.start+grid[last]-1e-7
-               for note in phrase.notes):
-            break
-        first = last
-    if first >= len(grid)-1:
-        raise ValueError("No note attacks in the selected fragment")
-    start, end = grid[first], grid[last]
+    choice = select_guided_fragment(phrase, boundaries, from_beat)
+    first, last = choice.first_index, choice.end_index
+    start, end = choice.start, choice.end
     absolute_start, absolute_end = phrase.start+start, phrase.start+end
     display = Phrase(phrase.number, phrase.first_bar+first, phrase.first_bar+last-1,
         absolute_start, absolute_end,
@@ -85,6 +74,36 @@ class GuidedSession:
         self.controller.bind(stage_key=stage_key, revision=revision,
             variant=fragment.variant, fragment_start=fragment.start_beat,
             fragment_end=fragment.end_beat, now=now, connected=connected)
+
+    def advance(self, *, connected: bool, now: float) -> None:
+        """Tick untimed note recognition with explicit MIDI-connection facts."""
+        if self.controller is None:
+            return
+        self.controller.set_connected(connected, now=now)
+        self.controller.tick(now=now)
+
+    def commit_completed_preparation(
+        self, *, learning: bool, remediation_active: bool,
+        fingerprint: str, stage_key: str,
+        current_unit, record_preparation,
+    ) -> bool:
+        """Record one completed idea; do not award timed practice mastery.
+
+        Callbacks resolve the current source unit and save a completion only
+        after the controller confirms it. Never accesses the engine or store.
+        """
+        if (self.prepared or remediation_active or not learning
+                or self.controller is None):
+            return False
+        from time import monotonic
+        snapshot = self.controller.snapshot(now=monotonic())
+        if not snapshot["completed"]:
+            return False
+        record_preparation(
+            fingerprint=fingerprint, stage_key=stage_key,
+            unit=current_unit(), assisted_count=snapshot["assisted_count"])
+        self.prepared = True
+        return True
 
     def set_hints(self, enabled: bool, *, now: float) -> None:
         self.persistent_hints = bool(enabled)
