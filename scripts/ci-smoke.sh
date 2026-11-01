@@ -41,6 +41,8 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_coordination_boundaries.py::test_learner_navigation_validates_before_transport_changes \
   tests/test_practice_transitions.py \
   tests/test_guided_session.py \
+  tests/test_guided_engine.py::test_guided_waits_for_correct_fresh_attacks_at_any_speed_and_never_masters \
+  tests/test_guided_engine.py::test_guided_marks_and_expected_ids_use_the_displayed_generated_fragment \
   tests/test_coordination_boundaries.py::test_transition_selection_and_guidance_own_narrow_inputs \
   tests/test_coordination_boundaries.py::test_successful_command_view_effects_have_injected_dependencies \
   tests/test_learner_progress_coordination.py \
