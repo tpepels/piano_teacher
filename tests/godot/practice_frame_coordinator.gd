@@ -69,6 +69,7 @@ class App:
     var lesson_session = Session.new()
     var demo_player = Demo.new()
     var action_pending := false
+    var frame_busy_presented: Variant = null
     var listen_sync_diagnostics := false
     var last_listen_sync_report_ms := 0
     var last_playhead_strike_transport := 0
@@ -116,7 +117,15 @@ func _initialize() -> void:
     app.last_playhead_strike_transport = 7
     app.last_playhead_strike_beat = 1.0
     Coordinator.advance(app,0.016)
-    if app.clock_samples != 2 or app.demo_player.synchronized != 1.25 or \
+    if app.settings_view.calls != 1 or app.practice_view.calls != 1 or \
+            app.lesson_view.calls != 1:
+        failures += 1
+    app.action_pending = true
+    Coordinator.advance(app,0.016)
+    if app.settings_view.calls != 2 or app.practice_view.calls != 2 or \
+            app.lesson_view.calls != 2:
+        failures += 1
+    if app.clock_samples != 3 or app.demo_player.synchronized != 1.25 or \
             app.demo_player.kept != 1.25 or \
             app.practice_view.stage.renderer.last_beat != 1.25 or \
             app.practice_view.stage.renderer.last_visual != 9.25 or \
