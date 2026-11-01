@@ -3,7 +3,7 @@ from types import SimpleNamespace as Obj
 
 import pytest
 
-from piano_teacher.course_navigation import locate_course_section
+from piano_teacher.course_navigation import locate_course_section, choose_source_opening, SourceOpening
 
 
 def _plan(onsets):
@@ -40,3 +40,20 @@ def test_perform_sections_do_not_replace_teaching_sections():
     plan = _plan((0.5, 6.2))
     index, section, bar = locate_course_section(plan, 3)
     assert (index, section, bar) == (2, plan.exercises[2], 3)
+
+
+def test_source_opening_validates_before_transport_is_affected():
+    plan = _plan((3.5, 9.5))
+    assert choose_source_opening(plan, bar=1, mode="learn", warmup=False) == (
+        SourceOpening(0, 2, "learn"))
+    assert choose_source_opening(plan, bar=3, mode="practice", warmup=False) == (
+        SourceOpening(2, 4, "practice"))
+    for bad in (None, True, False, 0, 5, 1.5, "2"):
+        with pytest.raises(ValueError, match="whole measure"):
+            choose_source_opening(plan, bar=bad, mode="learn", warmup=False)
+    with pytest.raises(ValueError, match="Choose Learn Notes"):
+        choose_source_opening(plan, bar=1, mode="listen", warmup=False)
+    with pytest.raises(ValueError, match="Warm-ups"):
+        choose_source_opening(plan, bar=1, mode="learn", warmup=True)
+    with pytest.raises(ValueError, match="Open a piece"):
+        choose_source_opening(None, bar=1, mode="learn", warmup=False)
