@@ -199,15 +199,24 @@ def test_completed_take_owns_only_transport_and_session_persistence():
     assert "def commit_assessed_result(" in commit
     assert "observe_assessed_take(" in commit
     assert commit.index("observe_assessed_take(") < commit.index("message = plan.apply_result(")
+    # Check executable dependencies, not prose in module docstrings.
+    import ast
     for source in (assessment, evidence, commit):
-        assert "engine." not in source
-        assert "PracticeEngine" not in source
+        parsed = ast.parse(source)
+        assert not any(
+            isinstance(node, (ast.Attribute, ast.Name)) and (
+                (isinstance(node, ast.Name) and node.id == "PracticeEngine")
+                or (isinstance(node, ast.Attribute)
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == "engine"))
+            for node in ast.walk(parsed))
 
 def test_teaching_selection_and_preparation_are_learner_owned():
     server = (ROOT/"piano_teacher/server.py").read_text()
     learner = (ROOT/"piano_teacher/application/learner_progress.py").read_text()
     assert "self.learner_progress.next_course_unit(" in server
-    assert "self.learner_progress.record_guided_preparation(" in server
+    assert "record_preparation=self.learner_progress.record_guided_preparation" in server
+    assert "self.guided_session.commit_completed_preparation(" in server
     assert "def next_course_unit(" in learner
     assert "def record_guided_preparation(" in learner
 
