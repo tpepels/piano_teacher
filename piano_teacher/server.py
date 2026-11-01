@@ -1071,10 +1071,118 @@ class PracticeEngine:
             tempo_map=self._active_tempo_map())
 
     def control(self, action: str, **kwargs) -> None:
-        # Session state and all command transitions remain serialized here.
+        """Single locked command entry; dispatch owns no engine state."""
         with self.lock:
             self._apply_listen_failure()
-            return ControlDispatcher.dispatch(self, action, kwargs)
+            route = ControlDispatcher.route(action)
+            if route == "calibration":
+                return self.midi_calibration_action(action)
+            if route == "reset":
+                return self._reset_current_path(
+                    fingerprint=kwargs.get("fingerprint"),
+                    confirm=kwargs.get("confirm") is True)
+            if route == "acknowledgement":
+                return self._control_acknowledgement(action, kwargs)
+            if route == "listening":
+                return self._control_listening(action, kwargs)
+            if route == "learning":
+                return self._control_learning(action, kwargs)
+            if route == "transport":
+                return self._control_transport(action, kwargs)
+            return self._change_stage(action, kwargs)
+
+    def _control_acknowledgement(self, action: str, kwargs: dict) -> None:
+        if action == "score_ready":
+            revision = int(kwargs.get("revision", -1))
+            # Ignore delayed acknowledgements for previous engraving.
+            if (self.awaiting_score_revision != revision
+                    or revision != self.score_revision):
+                return
+            if self.paused:
+                self._deferred_score_ack = revision
+            elif self.mode == "listen":
+                self.listen.acknowledge_score(revision)
+                self._start_listen_if_ready()
+            elif self.mode == "learn" and self.teaching is not None:
+                self.awaiting_score_revision = None
+                self.teaching.start(now=time.monotonic())
+            else:
+                self.start(
+                    from_beat=(self.pending_rewind if self.pending_rewind is not None
+                               else self.open_from_beat),
+                    mode="perform" if self.mode == "perform" else "practice")
+        elif self.mode == "listen" and self.listen.acknowledge_audio(kwargs.get("token")):
+            # Demo tokens are invalidated by Stop, tempo and navigation.
+            self._start_listen_if_ready()
+
+    def _control_listening(self, action: str, kwargs: dict) -> None:
+        if action == "listen":
+            self._prepare_listen()
+        elif action == "perform":
+            self._prepare_perform(scope=str(kwargs.get("scope", "current")))
+        elif action == "practice_weak":
+            self._practice_weak()
+        elif action == "review_retry":
+            self._review_retry(kwargs.get("first_bar"), kwargs.get("last_bar"))
+        elif action == "seek":
+            self._seek(kwargs.get("bar"))
+
+    def _control_learning(self, action: str, kwargs: dict) -> None:
+        if action == "learn_next":
+            if (self.mode != "learn" or self.teaching is None
+                    or not self.teaching.snapshot(now=time.monotonic())["completed"]):
+                raise ValueError("Find the current notes before continuing to the next idea")
+            self._save_guided_preparation()
+            if self._guided_return is not None:
+                self._prepare_practice()
+            else:
+                self._begin_course_stage()
+        elif action == "skip_stage":
+            if self.is_builtin_warmup:
+                raise ValueError("Warm-up stages unlock after three clean runs, not skips")
+            self._skip_stage(kwargs.get("reason"))
+        elif action == "place_original":
+            if self.is_builtin_warmup:
+                raise ValueError("Warm-up stages unlock after three clean runs")
+            self._place_original()
+        elif action == "revisit_trouble":
+            self._revisit_trouble(kwargs.get("stage_key"), kwargs.get("start_beat"))
+        elif action in ("learn", "learn_retry"):
+            if action == "learn":
+                self.course_guided = True
+                if "from_beat" not in kwargs:
+                    self._begin_course_stage(explicit_learn=True)
+                    return
+            previous_start = self.guided_range[0] if self.guided_range else 0.0
+            self._begin_learn(
+                from_beat=float(kwargs.get(
+                    "from_beat",
+                    previous_start if action == "learn_retry" else 0.0)),
+                recovery=self._guided_return is not None and action == "learn_retry")
+        elif action == "open_at":
+            self._open_selected_measure(kwargs)
+        elif action == "hints":
+            self.guided_session.set_hints(
+                bool(kwargs.get("enabled", False)), now=time.monotonic())
+
+    def _control_transport(self, action: str, kwargs: dict) -> None:
+        if action == "practice":
+            self._prepare_practice()
+            if kwargs.get("wait_for_player", False):
+                # Listen returns to a ready score without an auto count-in.
+                self.awaiting_score_revision = None
+                self.feedback = "Ready to play"
+                self.next_action = "Play one piano key to begin, or press Play."
+        elif action == "stop":
+            self._stop()
+            self.feedback = "Stopped"
+            self.next_action = "Start when you are ready."
+        elif action in ("start", "restart"):
+            self._start_or_restart(action)
+        elif action == "pause":
+            self._pause_current_session()
+        elif action == "resume":
+            self._resume_current_session()
 
     def _open_selected_measure(self, kwargs: dict):
         """Open a source measure using the existing lesson navigation policy."""
