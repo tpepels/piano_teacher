@@ -18,6 +18,7 @@ for script in \
   res://practice_state_presenter.gd \
   res://command_failure_presenter.gd \
   res://command_success_policy.gd \
+  res://command_success_presenter.gd \
   res://navigation_policy.gd \
   res://live_midi_feedback.gd \
   res://notation/native/view.gd \
