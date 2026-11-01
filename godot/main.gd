@@ -31,6 +31,7 @@ const PracticeFrameCoordinator := preload("res://practice_frame_coordinator.gd")
 const PracticeStatePresenter := preload("res://practice_state_presenter.gd")
 const CommandFailurePresenter := preload("res://command_failure_presenter.gd")
 const CommandSuccessPolicy := preload("res://command_success_policy.gd")
+const CommandSuccessPresenter := preload("res://command_success_presenter.gd")
 const NavigationPolicy := preload("res://navigation_policy.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
 
@@ -144,6 +145,7 @@ var frame_meter = FrameMeter.new()
 var frame_coordinator
 var state_presenter
 var command_failure_presenter
+var command_success_presenter
 var lesson_request
 var device_pending: bool:
     get:
@@ -250,6 +252,8 @@ func _ready() -> void:
         score_effects,state_poll_timer)
     command_failure_presenter = CommandFailurePresenter.new(
         library_view,practice_view,settings_view,home_view)
+    command_success_presenter = CommandSuccessPresenter.new(
+        library_view,practice_view,settings_view,lesson_session)
     set_process(true)
 
 func _make_count_click(frequency: float) -> AudioStreamWAV:
@@ -1066,13 +1070,12 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     var opened: Variant = _decode_json(body) if path == "/library/open" else null
     var decision: Dictionary = CommandSuccessPolicy.decide(
         path,completed_action,resume_saved,opened)
+    command_success_presenter.present_accepted(decision)
     match str(decision["kind"]):
         "fingering":
             fingering_save_error = ""
             _on_state(_result,code,_headers,body,action_request_started_ms)
         "control":
-            if bool(decision["invalidate_lesson"]):
-                lesson_session.invalidate()
             if bool(decision["refresh_settings"]):
                 _request_settings()
             _on_state(_result,code,_headers,body,action_request_started_ms)
@@ -1081,7 +1084,6 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         "library_health":
             _request_library_health()
         "library_open":
-            library_view.present_open_status("")
             score_error = ""
             match str(decision["open_mode"]):
                 "practice":
@@ -1092,9 +1094,8 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
                         _on_state(_result,code,_headers,body,action_request_started_ms)
                     _refresh_score_status()
                 "picker":
-                    practice_view.show_source_picker(opened)
+                    command_success_presenter.present_source_picker(opened)
         "settings":
-            settings_view.present_message("Settings saved")
             if bool(decision["refresh_settings"]):
                 _request_settings()
             if bool(decision["refresh_library"]):
