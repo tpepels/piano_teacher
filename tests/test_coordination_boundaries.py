@@ -88,6 +88,30 @@ def test_state_presenter_receives_only_visual_collaborators():
     assert "PRACTICE_STATE_PRESENTER_FAILURES:0" in output, output
 
 
+def test_preview_particle_ownership_is_not_in_application_root():
+    main = (ROOT/"godot/main.gd").read_text()
+    effects = (ROOT/"godot/score_effects.gd").read_text()
+    assert "score_effects.record_preview(" in main
+    assert "score_effects.transition_mode(" in main
+    assert "func _preview_note_arrivals(" not in main
+    assert "func _clear_assessed_effects_in_ungraded_mode(" not in main
+    assert "func record_preview(" in effects
+    assert "func transition_mode(" in effects
+
+
+@pytest.mark.skipif(not (shutil.which("godot") or shutil.which("godot4")),
+                    reason="Godot is not installed")
+def test_score_effects_owner_visual_contract():
+    binary = shutil.which("godot") or shutil.which("godot4")
+    run = subprocess.run(
+        [binary,"--headless","--path",str(ROOT/"godot"),
+         "--script",str(ROOT/"tests/godot/score_effects_owner.gd")],
+        capture_output=True,text=True,timeout=20)
+    output = run.stdout+run.stderr
+    assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
+    assert "SCORE_EFFECTS_OWNER_FAILURES:0" in output, output
+
+
 def test_snapshot_assembly_and_live_hit_mapping_have_one_owner():
     server = (ROOT / "piano_teacher/server.py").read_text()
     assert "return capture_session_snapshot(self)" in server
