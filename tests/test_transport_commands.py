@@ -56,5 +56,5 @@ def test_resume_shifts_only_running_non_guided_deadlines(inputs, expected):
     facts = {"paused":True,"learning":False,"running":False,
              "preview_pending":False,"automatic_feedback":False}
     assert resume_timeline(**{**facts,**inputs}) is expected
-    with pytest.raises(ValueError, match="already paused"):
+    with pytest.raises(ValueError, match="unless an exercise is paused"):
         resume_timeline(**{**facts, **inputs, "paused":False})
