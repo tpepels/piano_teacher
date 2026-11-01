@@ -1,6 +1,6 @@
 name: Coda author reference differential smoke
 
-# Run once at creation and then only by explicit manual dispatch.
+# Explicit only (except workflow edits); no long-running CI corpus.
 on:
   workflow_dispatch:
   push:
@@ -22,9 +22,9 @@ jobs:
       - name: Dependencies and syntax
         run: |
           python -m pip install -e '.[test,coda-research]' 'music21>=9.1,<10'
-          python -m compileall -q scripts/compare_coda_upstream.py scripts/probe_coda_upstream_edges.py scripts/probe_coda_upstream_scores.py piano_teacher/research/coda_differential.py
-      - name: Pure written versus sounding normalization contracts
-        run: timeout 20s python -m pytest -q --tb=short tests/test_coda_differential.py
+          python -m compileall -q scripts/compare_coda_upstream.py scripts/probe_coda_upstream_edges.py scripts/probe_coda_upstream_scores.py piano_teacher/research/coda_differential.py piano_teacher/research/coda_discrepancy.py
+      - name: Pure written/sounding and discrepancy contracts
+        run: timeout 20s python -m pytest -q --tb=short tests/test_coda_differential.py tests/test_coda_discrepancy.py
       - name: Checkout exactly published author backend SHA
         run: |
           git clone -q --depth 1 https://github.com/annieetang/coda_backend.git "$RUNNER_TEMP/upstream"
@@ -43,9 +43,6 @@ jobs:
               exit 1
             }
           cat "$RUNNER_TEMP/coda-diff/report.json"
-      # The original four edge cases gate equality. More complex
-      # sixteenth, quintuplet and septuplet inputs are diagnostic-only,
-      # reporting every array/output mismatch instead of claiming parity.
       - name: Compare mixed durations and record known/unknown divergences
         id: edges
         continue-on-error: true
@@ -58,7 +55,7 @@ jobs:
               exit 1
             }
           cat "$RUNNER_TEMP/coda-diff/edge-output.txt"
-      - name: Compare six real-source MusicXML written and sounding timelines independently
+      - name: Diagnose six source scores with complete written/sounding counterexamples
         id: scores
         continue-on-error: true
         run: |
@@ -67,23 +64,39 @@ jobs:
             --report "$RUNNER_TEMP/coda-diff/real-source-voices.json" \
             > "$RUNNER_TEMP/coda-diff/real-source-output.txt" 2>&1 || {
               cat "$RUNNER_TEMP/coda-diff/real-source-output.txt"
-          python - "$RUNNER_TEMP/coda-diff/real-source-voices.json" <<'PY'
-          import json, sys
-          result = json.load(open(sys.argv[1]))
-          assert result["algorithm_total"] == 60
-          assert result["algorithm_exceptions"] == 0
-          assert result["algorithm_upstream_none"] == 4
-          assert (result["algorithm_sounding_exact"] +
-                  result["algorithm_sounding_different"] +
-                  result["algorithm_sounding_invalid_ties"] +
-                  result["algorithm_upstream_none"]) == 60
-          assert (result["algorithm_written_exact"] +
-                  result["algorithm_written_different"] +
-                  result["algorithm_written_unavailable"]) == 60
-          PY
               exit 1
             }
           cat "$RUNNER_TEMP/coda-diff/real-source-output.txt"
+          python - "$RUNNER_TEMP/coda-diff/real-source-voices.json" <<'PY'
+          import json,sys
+          from collections import Counter
+          result=json.load(open(sys.argv[1]))
+          assert result["algorithm_total"]==60
+          assert result["algorithm_exceptions"]==0
+          assert result["algorithm_upstream_none"]==4
+          assert result["diagnosed_cases"]==26
+          assert result["unclassified_cases"]==0
+          assert result["reference_mmr_exact_voices"]==12
+          assert result["algorithm_sounding_exact"]==40
+          assert result["algorithm_sounding_different"]==15
+          assert result["algorithm_sounding_invalid_ties"]==1
+          assert result["algorithm_written_exact"]==30
+          assert result["algorithm_written_different"]==26
+          assert result["algorithm_written_unavailable"]==4
+          assert sum(result["discrepancy_categories"].values())==26
+          for sample in result["cases"]:
+              for voice in sample["voices"]:
+                  for operation,outcome in voice.get("algorithms",{}).items():
+                      if "diagnosis" not in outcome:
+                          continue
+                      diagnosis=outcome["diagnosis"]
+                      assert diagnosis["evidence"]["source_case"]==sample["case"]
+                      assert diagnosis["evidence"]["source_voice"]==voice["reference_voice_index"]
+                      assert diagnosis["evidence"]["operation"]==operation
+                      assert diagnosis["category"]!="unclassified"
+                      assert "counterexample" in diagnosis
+          print("Coda pinned discrepancies classified:", result["discrepancy_categories"])
+          PY
       - name: Retain exact-source evidence and failures
         if: always()
         uses: actions/upload-artifact@v4

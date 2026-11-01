@@ -25,8 +25,9 @@ from piano_teacher.research.coda_matrix import MatrixScore
 from piano_teacher.exercise_contracts import OriginalTiming
 from piano_teacher.research.coda_written_tie_segments import tie_segment_chains
 from piano_teacher.research.coda_differential import (
-    written_from_musicxml, sounding_from_plan, report_comparison,
+    written_from_musicxml, sounding_from_written, sounding_from_plan, report_comparison,
 )
+from piano_teacher.research.coda_discrepancy import explain_discrepancy
 from piano_teacher.research.coda_score_projection import _original_metadata
 from piano_teacher.notation.lesson import build_lesson_score
 from dataclasses import replace
@@ -168,6 +169,8 @@ def _case(name: str, filename: str, bars: int, converter, meter, key,
                     line.music_matrix_representation=MusicMatrixRepresentation(
                         line.key_signature,line.time_signature,q,*original)
                     owners={index for _,_,index,_ in matched[0].owners}
+                    source_sounding=sounding_from_plan(
+                        OriginalTiming().transform(variant), owners)
                     for name,reference_fn,ours_fn,factor in (
                         ("slow-x2",lambda:line.generate_slowed_down_exercise(2),
                          lambda:CodaReferenceSlowdown(2).transform(variant).timing,2),
@@ -206,9 +209,39 @@ def _case(name: str, filename: str, bars: int, converter, meter, key,
                                 # not suppress a valid sounding comparison.
                                 native_written=None
                                 native_error=f"{type(exc).__name__}: {exc}"
+                            adapter_sounding=sounding_from_plan(plan,owners)
                             outcome=report_comparison(
-                                author_written,sounding_from_plan(plan,owners),
+                                author_written,adapter_sounding,
                                 native_written,unavailable_reason=native_error)
+                            if native_written is None:
+                                raise ValueError(
+                                    "Bare native notation missing for pinned source: "+
+                                    native_error)
+                            reference_sounding, tie_errors=sounding_from_written(
+                                author_written)
+                            if (outcome["written"]["status"]!="exact" or
+                                    outcome["sounding"]["status"]!="exact"):
+                                diagnosis=explain_discrepancy(
+                                    source_case=row["case"],
+                                    voice_index=index,operation=name,
+                                    reference_written=author_written,
+                                    native_written=native_written,
+                                    reference_sounding=reference_sounding,
+                                    adapter_sounding=adapter_sounding,
+                                    source_sounding=source_sounding,
+                                    reference_tie_errors=tie_errors)
+                                outcome["diagnosis"]={
+                                    "category":diagnosis.category,
+                                    "explanation":diagnosis.reason,
+                                    "evidence":diagnosis.evidence,
+                                    "counterexample":{
+                                        "author_written":[vars(x) for x in author_written],
+                                        "native_written":[vars(x) for x in native_written],
+                                        "author_sounding":[vars(x) for x in reference_sounding],
+                                        "adapter_sounding":[vars(x) for x in adapter_sounding],
+                                        "source_sounding":[vars(x) for x in source_sounding],
+                                    },
+                                }
                             # Keep the historic raw tuple comparison for audit,
                             # but DO NOT use it as a valid parity classification.
                             raw_observed=_music21_events(upstream)
@@ -287,6 +320,12 @@ def main():
         "algorithm_sounding_invalid_ties":count(("sounding","status"),"invalid-reference-ties"),
         "algorithm_upstream_none":sum(o["status"]=="upstream-none" for o in algorithms),
         "algorithm_exceptions":sum(o["status"]=="exception" for o in algorithms),
+        "diagnosed_cases":sum("diagnosis" in o for o in algorithms),
+        "unclassified_cases":sum(o.get("diagnosis",{}).get("category")=="unclassified"
+                                 for o in algorithms),
+        "discrepancy_categories":dict(sorted(__import__("collections").Counter(
+            o["diagnosis"]["category"] for o in algorithms if "diagnosis" in o
+        ).items())),
         "cases":rows}
     args.report.parent.mkdir(parents=True,exist_ok=True)
     args.report.write_text(json.dumps(result,indent=2)+"\n")
@@ -298,9 +337,16 @@ def main():
           "algorithm_written_exact":result["algorithm_written_exact"],
           "algorithm_written_unavailable":result["algorithm_written_unavailable"],
           "algorithm_legacy_raw_exact":result["algorithm_legacy_raw_exact"],
-          "algorithm_total":result["algorithm_total"]},sort_keys=True))
+          "algorithm_total":result["algorithm_total"],
+          "diagnosed_cases":result["diagnosed_cases"],
+          "unclassified_cases":result["unclassified_cases"],
+          "discrepancy_categories":result["discrepancy_categories"]},sort_keys=True))
     # Missing fixtures and broken imports are infrastructure failures.
     # Legitimate author mismatches/errors remain in the source-bound report.
+    if result["unclassified_cases"]:
+        raise AssertionError(
+            "Unclassified author/adapter discrepancies: "+
+            str(result["unclassified_cases"]))
     if result["algorithm_exceptions"]:
         raise AssertionError(
             "Coda differential infrastructure/algorithm exception: "
