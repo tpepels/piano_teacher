@@ -1,6 +1,8 @@
 """Pure source-bar to course-section selection; no transport/UI state."""
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from .measure_grid import bar_number_at
 
 
@@ -34,3 +36,25 @@ def locate_course_section(plan, bar: int):
         (item[1].phrase.first_bar if item[1].phrase.first_bar > bar else bar,
          item[1].phrase.last_bar-item[1].phrase.first_bar))
     return index, section, max(bar, section.phrase.first_bar)
+
+
+@dataclass(frozen=True)
+class SourceOpening:
+    """Validated source measure target; transport still belongs to the engine."""
+    exercise_index: int
+    bar: int
+    mode: str
+
+
+def choose_source_opening(plan, *, bar, mode, warmup: bool) -> SourceOpening:
+    if plan is None:
+        raise ValueError("Open a piece first")
+    if warmup:
+        raise ValueError("Warm-ups use their own hand progression")
+    last_bar = len(plan.piece.bar_boundaries) - 1
+    if type(bar) is not int or not 1 <= bar <= last_bar:
+        raise ValueError(f"Choose a whole measure between 1 and {last_bar}")
+    if mode not in ("learn", "practice"):
+        raise ValueError("Choose Learn Notes or Practice Rhythm")
+    index, _section, selected_bar = locate_course_section(plan, bar)
+    return SourceOpening(index, selected_bar, mode)
