@@ -42,6 +42,7 @@ from .application.practice_transitions import run_before_assessment
 from .application.attempt_progression import AttemptProgression, AttemptTick
 from .application.feedback_route import FeedbackFacts, select_feedback_route
 from .application.assessment_settlement import assess_completed_take
+from .application.assessment_evidence import observe_assessed_take
 from .application.guided_fragment import select_guided_fragment
 from .application.tempo_map_cache import TempoMapCache
 from .application.session_snapshot_builder import (
@@ -58,7 +59,7 @@ from .learner_state import guided_units, placement_candidate
 from .progress_repository import ProgressRepository
 from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
-from .exercise_contracts import AssessmentEvidence
+
 from .practice_history import PracticePolicyService
 from .remediation import RemediationPlanner, RemedialAssignment
 
@@ -953,11 +954,9 @@ class PracticeEngine:
         self.retry_range = None
         before = (p.identity, p.bpm)
         # Persist real graded evidence under its original stage identity.
-        recommendation = None
-        if (self.fingerprint and getattr(result, "notes", None)
-                and all(hasattr(entry, "status") for entry in result.notes)):
-            evidence = AssessmentEvidence.from_result(before[0], result, before[1])
-            recommendation = self.practice_policy.observe(self.fingerprint, evidence)
+        recommendation = observe_assessed_take(
+            fingerprint=self.fingerprint, stage_key=before[0], bpm=before[1],
+            result=result, observe=self.practice_policy.observe)
         message = p.apply_result(
             correct=result.correct, total=len(result.notes),
             extras=result.extra_notes,
