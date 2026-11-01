@@ -64,7 +64,7 @@ from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
 
 from .practice_history import PracticePolicyService
-from .remediation import RemediationPlanner, RemedialAssignment
+from .remediation import RemediationPlanner, RemedialAssignment, plan_timed_remedial_review
 
 
 class PracticeEngine:
@@ -1242,18 +1242,18 @@ class PracticeEngine:
         return
 
     def _pause_current_session(self):
-        """Pause learning, playback or preparation using the current clock."""
-        context = self._phase(time.monotonic()) if not self.paused else ""
+        """Pause learning, playback or preparation using one sampled clock."""
+        now = time.monotonic()
+        context = self._phase(now) if not self.paused else ""
         require_pausable(paused=self.paused, phase=context)
         self.pause_context = context
-        self.visual_transport.pause(at=time.monotonic())
+        self.visual_transport.pause(at=now)
         if self.mode == "learn" and self.teaching is not None:
-            self.teaching.pause(now=time.monotonic())
+            self.teaching.pause(now=now)
         return
 
     def _resume_current_session(self):
-        """Resume the teaching controller and shift owned transport deadlines."""
-        # Validate before touching teaching state; one authoritative timeline.
+        """Resume teaching and transport from the same monotonic instant."""
         learning = self.mode == "learn" and self.teaching is not None
         shift_run_at = resume_timeline(
             paused=self.paused, learning=learning, running=self.running,
@@ -1261,11 +1261,11 @@ class PracticeEngine:
             automatic_feedback=self.pending_result is not None and self.auto)
         now = time.monotonic()
         if learning:
-            self.teaching.resume(now=time.monotonic())
+            self.teaching.resume(now=now)
         self.visual_transport.resume(now=now, shift_run_at=shift_run_at)
         self.pause_context = None
         if self.running:
-            self.feedback = "Count in" if time.monotonic() < self.run_at else "Playing"
+            self.feedback = "Count in" if now < self.run_at else "Playing"
         if self._deferred_score_ack is not None:
             revision = self._deferred_score_ack
             self._deferred_score_ack = None
@@ -1374,6 +1374,9 @@ class PracticeEngine:
         """Enter a source-bound remedial take, with no mastery from partial work."""
         if self.plan is None or assignment.stage_key != self.plan.identity:
             return
+        # A malformed interval must not cancel the current session.
+        review = (None if assignment.guided else plan_timed_remedial_review(
+            assignment, self.plan.active_phrase, self.plan.piece.bar_boundaries))
         if assignment.guided:
             self._begin_learn(
                 from_beat=assignment.start_beat, recovery=True,
@@ -1381,19 +1384,9 @@ class PracticeEngine:
             self.feedback = "Reviewing recurring pitch mistakes"
         else:
             self._prepare_practice()
-            self.open_from_beat = assignment.start_beat
-            self.review_end_beat = assignment.end_beat
-            grid = phrase_grid(self.plan.active_phrase,
-                               self.plan.piece.bar_boundaries)
-            first = self.plan.active_phrase.first_bar + grid.index(
-                assignment.start_beat)
-            last = self.plan.active_phrase.first_bar + grid.index(
-                assignment.end_beat) - 1
-            self.retry_range = {
-                "start_beat": assignment.start_beat,
-                "end_beat": assignment.end_beat,
-                "first_bar": first, "last_bar": last,
-            }
+            self.open_from_beat = review.start_beat
+            self.review_end_beat = review.end_beat
+            self.retry_range = review.retry_range
             self.awaiting_score_revision = None
             self.feedback = f"Focused {assignment.focus} practice ready"
             self.next_action = (
