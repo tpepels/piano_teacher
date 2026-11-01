@@ -33,6 +33,31 @@ class LearnerProgress:
         return next((unit for unit in guided_units(plan.active_variant, plan.piece.bar_boundaries)
                      if (unit["start_beat"], unit["end_beat"]) == guided_range), None)
 
+    @staticmethod
+    def next_course_unit(variant, boundaries: tuple[float, ...],
+                         saved: dict, *, explicit_learn: bool) -> dict | None:
+        """Find the first unfinished guided idea, or restart learning on request.
+
+        Saved progress is an explicit input; this selection never mutates
+        the plan, invokes the teaching controller or awards mastery.
+        """
+        unit = next_guided_unit(variant, boundaries, saved)
+        if unit is None and explicit_learn:
+            unit = next(iter(guided_units(variant, boundaries)), None)
+        return unit
+
+    def record_guided_preparation(self, *, fingerprint: str,
+                                  stage_key: str, unit: dict | None,
+                                  assisted_count: int) -> None:
+        """Persist a completed guided idea without changing lesson routing.
+
+        The engine verifies that the teaching controller has completed the
+        idea and prevents duplicate writes within the current attempt.
+        """
+        if unit is not None and fingerprint:
+            self._store.complete_unit(fingerprint, stage_key, unit,
+                                      assisted=assisted_count > 0)
+
     def snapshot(self, plan: LearningPlan, *, fingerprint: str, mode: str,
                  guided_range: tuple[float, float] | None, course_guided: bool) -> dict:
         units = guided_units(plan.active_variant, plan.piece.bar_boundaries)
