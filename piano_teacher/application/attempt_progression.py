@@ -1,20 +1,57 @@
-"""Advance a timed practice attempt under PracticeEngine's existing lock.
+"""Pure attempt timing decisions and source-measure grid caching.
 
-Owns boundary inspection and completion scheduling, not MIDI, the musical
-clock, grading policy, transport, or durable session state. A phrase's source
-measure grid is immutable during its attempt and is built only once.
+The application owns MIDI, transport mutation, assessment, and persistence.
+This policy receives explicit facts and callbacks for grading / tempo lookup;
+it never receives PracticeEngine or any generic application object.
 """
 from __future__ import annotations
 
 from bisect import bisect_right
-import time
+from dataclasses import dataclass
+from typing import Any, Callable
 
-from ..practice import Recorder
 from ..lesson_timing import lead_in_beats, preparation_meter
-
-from .practice_transitions import run_before_assessment
-from ..lesson_settings import SETTINGS
 from ..measure_grid import phrase_grid, next_chunk_end, bar_number_at
+from ..music import Phrase
+
+
+@dataclass(frozen=True)
+class AttemptStart:
+    from_beat: float
+    count_in_bar_beats: float
+    count_in_meter: tuple[int, int]
+    count_in_beats: float
+    next_boundary_beat: float
+    run_at: float
+    next_action: str
+
+
+@dataclass(frozen=True)
+class AttemptTick:
+    phrase: Phrase
+    boundaries: tuple[float, ...]
+    now: float
+    score_beat: float
+    from_beat: float
+    run_at: float
+    next_boundary: float
+    review_end: float | None
+    preview: bool
+    auto: bool
+    mode: str
+    coda: bool
+    bpm: float
+    gap_beats: float
+
+
+@dataclass(frozen=True)
+class AttemptStep:
+    action: str
+    next_boundary: float
+    grid: tuple[float, ...]
+    recovery: Any = None
+    ending: float = 0.0
+    duration: float = 0.0
 
 
 class AttemptProgression:
@@ -23,116 +60,74 @@ class AttemptProgression:
         self._boundaries = None
         self._grid = None
 
-    def grid_for(self, phrase, boundaries) -> tuple[float, ...]:
+    def grid_for(self, phrase: Phrase,
+                 boundaries: tuple[float, ...]) -> tuple[float, ...]:
         if phrase is not self._phrase or boundaries is not self._boundaries:
             self._phrase = phrase
             self._boundaries = boundaries
             self._grid = phrase_grid(phrase, boundaries)
         return self._grid
 
-    def begin(self, engine, *, from_beat: float | None,
-              mode: str, loop_continuation: bool) -> None:
-        engine.mode = mode
-        engine.teaching = None
-        engine.guided_range = None
-        engine._guided_return = None
-        engine.performance_summary = None
-        engine.review_stage_identity = None
-        engine.review_session_complete = False
-        # A user must be able to watch the time-driven score without a
-        # connected instrument. Only actual MIDI input enables assessment.
-        engine.preview_only = not engine.midi.connected
-        phrase = engine.plan.active_phrase
-        position = engine.open_from_beat if from_beat is None else from_beat
-        engine.play_from_beat = max(0.0, min(float(position),
-                                           phrase.end - phrase.start - 1e-6))
-
-        engine.visual_transport.begin_take(loop_continuation=loop_continuation)
-        engine.transport_id+=1
-        engine.live_input.reset_attempt()
-        # Keep large-score attack indexing off the physical MIDI callback.
-        engine.live_input.prepare(phrase)
-        engine.running=True
-        engine.auto=mode == "practice" and not engine.preview_only
-        engine.awaiting_score_revision=None
-        engine.pending_result=None
-        engine.feedback_marks=[]
-        engine.feedback_unmapped=0
-        engine.recorder=Recorder()
-        grid = self.grid_for(phrase, engine.plan.piece.bar_boundaries)
+    def schedule_start(self, *, phrase: Phrase,
+                       boundaries: tuple[float, ...],
+                       time_signatures: tuple,
+                       bpm: float, position: float,
+                       loop_continuation: bool, preview: bool,
+                       now: float) -> AttemptStart:
+        from_beat = max(0.0, min(float(position),
+                                 phrase.end - phrase.start - 1e-6))
+        grid = self.grid_for(phrase, boundaries)
         active_bar = max(0, min(len(grid) - 2,
-                                bisect_right(grid, engine.play_from_beat) - 1))
-        engine.count_in_bar_beats = grid[active_bar + 1] - grid[active_bar]
-        engine.count_in_meter = [max(1, round(engine.count_in_bar_beats)), 4]
-        source_beat = phrase.start + engine.play_from_beat
-        meter = next(((numerator, denominator) for beat, numerator, denominator
-                      in sorted(engine.plan.piece.time_signatures, reverse=True)
-                      if beat <= source_beat + 1e-7), None)
-        meter = preparation_meter(
-            meter, engine.plan.piece.time_signatures, source_beat)
-        if meter is not None:
-            engine.count_in_meter = list(meter)
-            engine.count_in_bar_beats = meter[0] * 4 / meter[1]
-        # The empty staff measure BETWEEN loops already provides the
-        # preparation interval. Do not prepend another count-in measure.
-        engine.visual_gap_beats = engine._source_model()["practice_timeline"]["gap"]["duration_beats"]
-        engine.count_in_beats = (0.0 if loop_continuation else
-            lead_in_beats(engine.count_in_bar_beats, engine.plan.bpm))
-        engine.next_boundary_beat=next_chunk_end(grid,engine.play_from_beat)
-        engine.run_at=time.monotonic()+engine.count_in_beats*60/engine.plan.bpm
-        engine.feedback="Count in, then play"
-        engine.next_action = ("Watch the moving score; connect a piano for feedback." if engine.preview_only
-            else f"Play from bar {bar_number_at(grid,engine.play_from_beat,phrase.first_bar)} at {engine.plan.bpm} BPM.")
+                                bisect_right(grid, from_beat) - 1))
+        bar_beats = grid[active_bar + 1] - grid[active_bar]
+        meter = (max(1, round(bar_beats)), 4)
+        source_beat = phrase.start + from_beat
+        authored_meter = next(
+            ((numerator, denominator)
+             for beat, numerator, denominator
+             in sorted(time_signatures, reverse=True)
+             if beat <= source_beat + 1e-7), None)
+        authored_meter = preparation_meter(
+            authored_meter, time_signatures, source_beat)
+        if authored_meter is not None:
+            meter = tuple(authored_meter)
+            bar_beats = meter[0] * 4 / meter[1]
+        count_in = 0.0 if loop_continuation else lead_in_beats(bar_beats,bpm)
+        return AttemptStart(
+            from_beat=from_beat, count_in_bar_beats=bar_beats,
+            count_in_meter=meter, count_in_beats=count_in,
+            next_boundary_beat=next_chunk_end(grid,from_beat),
+            run_at=now+count_in*60/bpm,
+            next_action=("Watch the moving score; connect a piano for feedback."
+                if preview else
+                f"Play from bar {bar_number_at(grid,from_beat,phrase.first_bar)} at {bpm} BPM."))
 
-    def advance(self, engine, now: float) -> None:
-        """Inspect a single monotonic instant, stopping after the first transition."""
-        if run_before_assessment(engine, now):
-            return
-
-        phrase = engine.plan.active_phrase
-        total_beats = phrase.end - phrase.start
-        score_beat = engine.play_from_beat + max(
-            0.0, engine._elapsed_beat(now - engine.run_at))
-        grid = self.grid_for(phrase, engine.plan.piece.bar_boundaries)
-
-        # Coda practice may recover only at the end of its source phrase.
-        # Other strategies inspect each completed authored source window.
-        while (engine.mode == "practice" and engine.review_end_beat is None
-               and not engine.preview_only
-               and (engine.plan.exercise_strategy.name != "coda-part"
-                    or score_beat >= total_beats - 1e-7)
-               and engine.next_boundary_beat
-               and score_beat >= engine.next_boundary_beat):
-            tempo_map = engine._active_tempo_map()
-            decision = engine.assessment_policies.select(tempo_map).recover(
-                phrase, hand=engine.plan.hand, bpm=engine.plan.bpm,
-                played=engine.recorder.presses if engine.recorder else [],
-                from_beat=engine.play_from_beat,
-                end_beat=engine.next_boundary_beat,
-                grid=grid,
-                threshold=(SETTINGS.warmup_recovery_errors
-                           if engine.is_builtin_warmup
-                           else SETTINGS.recovery_errors_in_window),
-                warmup=engine.is_builtin_warmup, tempo=tempo_map)
+    def inspect(self, tick: AttemptTick,
+                recover: Callable[[float, tuple[float, ...]], Any],
+                seconds_at: Callable[[float], float]) -> AttemptStep:
+        """Decide the next transition without modifying transport or learner state."""
+        grid = self.grid_for(tick.phrase,tick.boundaries)
+        boundary = tick.next_boundary
+        total_beats = tick.phrase.end-tick.phrase.start
+        while (tick.mode == "practice" and tick.review_end is None
+               and not tick.preview and (not tick.coda
+                   or tick.score_beat >= total_beats - 1e-7)
+               and boundary and tick.score_beat >= boundary):
+            decision = recover(boundary,grid)
             if decision is not None:
-                engine._apply_rolling_recovery(
-                    decision, phrase, grid, score_beat, now)
-                return
-            previous_boundary = engine.next_boundary_beat
-            engine.next_boundary_beat = next_chunk_end(grid, previous_boundary)
-            if engine.next_boundary_beat <= previous_boundary + 1e-7:
-                engine.next_boundary_beat = 0.0
+                return AttemptStep("recovery",boundary,grid,recovery=decision)
+            previous_boundary = boundary
+            boundary = next_chunk_end(grid,previous_boundary)
+            if boundary <= previous_boundary+1e-7:
+                boundary = 0.0
 
-        ending = (min(total_beats, engine.review_end_beat)
-                  if engine.review_end_beat is not None else total_beats)
-        duration = (engine._elapsed_seconds(ending)
-                    - engine._elapsed_seconds(engine.play_from_beat))
-        # The settlement is inside the silent measure. It cannot postpone
-        # the next attempt's absolute scheduled deadline.
+        ending = (min(total_beats,tick.review_end)
+                  if tick.review_end is not None else total_beats)
+        duration = seconds_at(ending)-seconds_at(tick.from_beat)
         settlement = .20
-        if engine.preview_only or (engine.auto and engine.review_end_beat is None):
-            settlement = min(
-                settlement, engine.visual_gap_beats * 60 / engine.plan.bpm)
-        if now < engine.run_at + duration + settlement:
-            return
-        engine._complete_attempt(phrase, ending, total_beats, duration, now)
+        if tick.preview or (tick.auto and tick.review_end is None):
+            settlement = min(settlement,tick.gap_beats*60/tick.bpm)
+        if tick.now < tick.run_at+duration+settlement:
+            return AttemptStep("waiting",boundary,grid)
+        return AttemptStep("complete",boundary,grid,
+                           ending=ending,duration=duration)
