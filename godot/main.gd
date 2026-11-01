@@ -113,12 +113,8 @@ var rendered_revision: int:
         return score_session.rendered_revision if score_session != null else -1
 
 var action_pending := false
-# Frame presentation touches control disabled flags only when this changes.
-var frame_busy_presented: Variant = null
 var last_state: Dictionary = {}
 var last_state_tick := 0
-var last_playhead_strike_beat := -INF
-var last_playhead_strike_transport := -1
 var visual_transport_clock = VisualTransportClock.new()
 # The native compositor is the sole production score view.
 var timeline_model_request
@@ -137,15 +133,13 @@ var last_audio_transport_id := -1
 # Opt-in diagnostic hook for the actual headless UI integration test only.
 var phase0_smoke_mode := false
 var listen_sync_diagnostics := false
-var last_listen_sync_report_ms := 0
 var frame_diagnostics := false
 var last_timing_phase := ""
 var last_timing_transport := -1
 var last_timing_revision := -1
 var frame_meter = FrameMeter.new()
+var frame_coordinator
 var phase0_last_phase := ""
-var phase0_last_cursor_tick := -1
-var phase0_last_lead_tick := -999
 var lesson_request
 var device_pending: bool:
     get:
@@ -244,6 +238,9 @@ func _ready() -> void:
         if current_screen == "library" and library_catalog.health_running:
             _request_library_health())
     add_child(health_timer)
+    frame_coordinator = PracticeFrameCoordinator.new(
+        practice_view,settings_view,lesson_view,lesson_session,
+        score_effects,demo_player,frame_meter)
     set_process(true)
 
 func _make_count_click(frequency: float) -> AudioStreamWAV:
@@ -861,7 +858,17 @@ func _process(_delta: float) -> void:
         _request_devices()
         _request_settings()
         _request_library()
-    PracticeFrameCoordinator.advance(self, _delta)
+    var ticks: int = Time.get_ticks_msec()
+    var beat: float = _transport_beat_at(ticks)
+    score_effects.prune_expired(ticks)
+    _read_live_midi()
+    _update_count_in(beat,ticks)
+    var arrivals: Array = frame_coordinator.advance(
+        last_state,beat,_unrolled_score_beat_at(beat,ticks),ticks,_delta,
+        action_pending,current_screen,_native_score_ready(),living_chords,
+        frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
+    if not arrivals.is_empty():
+        _preview_note_arrivals(arrivals)
 
 func _on_state(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, sample_started_ms: int = -1) -> void:
     if sample_started_ms < 0:
