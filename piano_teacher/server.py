@@ -37,6 +37,9 @@ from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.strategy_session import restored_strategy_plan
 from .application.control_dispatch import ControlDispatcher
 from .application.score_ack import ScoreAckState, choose_score_ack_action
+from .application.transport_commands import (
+    StartFacts, select_start_route, require_pausable, resume_timeline,
+)
 from .application.stage_change import prepare_stage_change, apply_stage_change
 from .application.practice_transitions import TransitionContext, decide_transition
 from .application.attempt_progression import AttemptProgression, AttemptTick
@@ -1193,24 +1196,26 @@ class PracticeEngine:
 
     def _start_or_restart(self, action: str):
         """Start a take or schedule a seamless retry under the control lock."""
-        if self.mode == "listen":
+        p = self.plan
+        route = select_start_route(StartFacts(
+            action=action, mode=self.mode, loaded=p is not None,
+            source_changed=(self.score_artifacts.source_bpm_changed(p.piece.bpm)
+                            if p is not None and self.mode not in ("listen", "learn")
+                            else False),
+            exercise_kind=p.exercise.kind if p is not None else None))
+        if route == "listen":
             self._prepare_listen()
             return
-        if self.mode == "learn":
+        if route == "prepare_practice":
             self.control("practice")
             return
-        if (self.plan is not None
-                and self.score_artifacts.source_bpm_changed(self.plan.piece.bpm)):
-            # Only a genuinely different source engraving needs a
-            # new model. Tempo changes reuse the exact same score
-            # with a different transport speed.
+        if route == "reload_score":
             self._stop()
             self.score_revision += 1
             self.awaiting_score_revision = self.score_revision
             self.feedback = "Preparing sheet music"
             return
-        if (action == "restart" and self.plan is not None
-                and self.mode == "practice" and self.plan.exercise.kind != "perform"):
+        if route == "rewind":
             sampled = time.monotonic()
             visual_now = self.paused_at if self.paused else sampled
             position, _, _ = self._visual_motion(visual_now)
@@ -1233,11 +1238,7 @@ class PracticeEngine:
 
     def _pause_current_session(self):
         """Pause learning, playback or preparation using the current clock."""
-        if self.paused:
-            raise ValueError("Cannot pause an exercise that is already paused")
-        context = self._phase(time.monotonic())
-        if context not in ("playing", "count_in", "feedback", "recovering", "loading", "guided_wait", "preview_gap"):
-            raise ValueError("Cannot pause unless an exercise is playing or preparing")
+        require_pausable(paused=self.paused, phase=self._phase(time.monotonic()))
         self.pause_context = context
         self.visual_transport.pause(at=time.monotonic())
         if self.mode == "learn" and self.teaching is not None:
@@ -1246,20 +1247,16 @@ class PracticeEngine:
 
     def _resume_current_session(self):
         """Resume the teaching controller and shift owned transport deadlines."""
-        if not self.paused:
-            raise ValueError("Cannot resume unless an exercise is paused")
-        # Sample once; the transport owner shifts every active deadline by the
-        # same duration, preserving preparation and backward-recovery motion.
-        now = time.monotonic()
+        # Validate before touching teaching state; one authoritative timeline.
         learning = self.mode == "learn" and self.teaching is not None
+        shift_run_at = resume_timeline(
+            paused=self.paused, learning=learning, running=self.running,
+            preview_pending=self._preview_loop_pending,
+            automatic_feedback=self.pending_result is not None and self.auto)
+        now = time.monotonic()
         if learning:
             self.teaching.resume(now=time.monotonic())
-        self.visual_transport.resume(
-            now=now,
-            shift_run_at=(not learning and (
-                self.running or self._preview_loop_pending
-                or (self.pending_result is not None and self.auto))),
-        )
+        self.visual_transport.resume(now=now, shift_run_at=shift_run_at)
         self.pause_context = None
         if self.running:
             self.feedback = "Count in" if time.monotonic() < self.run_at else "Playing"
