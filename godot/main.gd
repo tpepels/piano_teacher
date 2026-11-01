@@ -34,6 +34,7 @@ const CommandSuccessPolicy := preload("res://command_success_policy.gd")
 const CommandSuccessPresenter := preload("res://command_success_presenter.gd")
 const CommandSuccessEffects := preload("res://command_success_effects.gd")
 const PracticeControlPolicy := preload("res://practice_control_policy.gd")
+const MetronomeFrameCoordinator := preload("res://metronome_frame_coordinator.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationPolicy := preload("res://navigation_policy.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
@@ -67,9 +68,6 @@ var score_error: String:
             score_session.score_error = value
 
 var startup_last_music_checked := false
-var calibration_tick_index := -999
-var recovery_click_tick := -999
-var retry_first_click_sent := false
 var state_request
 var layout_request
 var action_request
@@ -81,8 +79,6 @@ var device_menu_requested: bool:
     set(value):
         midi_devices.picker_requested = value
 var score_effects = ScoreEffects.new()
-var count_tick_index := -1
-var play_tick_index := -1
 var click_player: AudioStreamPlayer
 var click_high: AudioStreamWAV
 var click_low: AudioStreamWAV
@@ -115,6 +111,7 @@ var rendered_revision: int:
 var last_state: Dictionary = {}
 var last_state_tick := 0
 var visual_transport_clock = VisualTransportClock.new()
+var metronome_frame
 # The native compositor is the sole production score view.
 var timeline_model_request
 var timeline_model_pending: bool:
@@ -128,7 +125,6 @@ var timeline_model_retry_after_ms: int:
         return score_session.timeline_model_retry_after_ms if score_session != null else 0
 
 var state_request_started_ms := 0
-var last_audio_transport_id := -1
 # Opt-in diagnostic hook for the actual headless UI integration test only.
 var phase0_smoke_mode := false
 var listen_sync_diagnostics := false
@@ -259,6 +255,10 @@ func _ready() -> void:
         Callable(self,"_request_library"),
         Callable(self,"_request_library_health"),
         Callable(self,"_refresh_score_status"))
+    metronome_frame = MetronomeFrameCoordinator.new(
+        settings_view,practice_view,visual_transport_clock,
+        Callable(self,"_transport_beat_at"),Callable(self,"_count_tick"),
+        Callable(self,"_raw_click"))
     set_process(true)
 
 func _make_count_click(frequency: float) -> AudioStreamWAV:
@@ -338,76 +338,7 @@ func _raw_click(accent: bool) -> void:
 func _update_count_in(sampled_beat: float = NAN, now_ms: int = -1) -> void:
     if now_ms < 0:
         now_ms = Time.get_ticks_msec()
-    var calibration: Dictionary = last_state.get("midi_calibration", {})
-    if bool(calibration.get("active", false)):
-        recovery_click_tick = -999
-        var beat := float(calibration.get("beat", -2.0)) + \
-            maxf(0.0, float(now_ms-last_state_tick)/1000.0) * \
-            float(calibration.get("bpm", 80.0))/60.0
-        settings_view.animate_calibration_beat(
-            beat, true, int(calibration.get("round_beats", 12)),
-            int(calibration.get("count_in", 4)))
-        var interval := maxi(1, int(calibration.get("round_beats", 12)))
-        var total := interval * maxi(1, int(calibration.get("rounds", 3)))
-        if beat >= 0.0 and beat < float(total):
-            var tick := floori(beat + .00001)
-            if tick != calibration_tick_index:
-                # Do not play a missed initial click halfway into its beat.
-                var timely := calibration_tick_index != -999 or beat - float(tick) < .12
-                calibration_tick_index = tick
-                if timely:
-                    var inside_round := posmod(tick, interval)
-                    _raw_click(inside_round == 0 or
-                        inside_round == int(calibration.get("count_in", 4)))
-        return
-    calibration_tick_index = -999
-    if settings_view.calibration_beat_pulse != null and settings_view.calibration_beat_pulse.visible:
-        settings_view.animate_calibration_beat(-1.0, false)
-
-    if (str(last_state.get("phase", "")) in ["feedback", "recovering"]
-            and visual_transport_clock.retry_active
-            and visual_transport_clock.retry_preparing(now_ms)
-            and not bool(last_state.get("paused", false))):
-        var count_beat: float = visual_transport_clock.retry_count_in_beat(now_ms)
-        var bar := maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4)))))
-        practice_view.stage.count_in.present(count_beat, bar, true, false)
-        var tick := floori(count_beat + .00001)
-        if tick != recovery_click_tick:
-            # The preparation measure is forward, always at one fixed BPM.
-            if count_beat < .10 and count_beat >= -float(bar):
-                _raw_click(posmod(tick, bar) == 0)
-                if tick == 0:
-                    retry_first_click_sent = true
-            recovery_click_tick = tick
-        return
-    if last_state.is_empty() or not bool(last_state.get("running", false)):
-        recovery_click_tick = -999
-        practice_view.stage.count_in.present(0.0, 4, false, false)
-        count_tick_index = -999
-        play_tick_index = -1
-        return
-    recovery_click_tick = -999
-    var beat: float = sampled_beat if is_finite(sampled_beat) else _transport_beat_at(now_ms)
-    var paused: bool = bool(last_state.get("paused", false))
-    practice_view.stage.count_in.present(beat,
-        maxi(1, int(round(float(last_state.get("count_in_bar_beats", 4))))),
-        true, paused)
-    var attempt: int = int(last_state.get("transport_id", 0))
-    if attempt != last_audio_transport_id:
-        count_tick_index = -999
-        play_tick_index = -1
-        last_audio_transport_id = attempt
-    if paused:
-        count_tick_index = int(floor(beat + .00001))
-        return
-    var tick := int(floor(beat + .00001))
-    if tick != count_tick_index:
-        count_tick_index = tick
-        var bar_beats := maxi(1,int(round(float(last_state.get("count_in_bar_beats",4)))))
-        if not (tick == 0 and retry_first_click_sent):
-            _count_tick(posmod(tick,bar_beats) == 0,beat)
-        if tick >= 0:
-            retry_first_click_sent = false
+    metronome_frame.update(last_state,last_state_tick,sampled_beat,now_ms)
 
 
 func _native_score_ready() -> bool:
