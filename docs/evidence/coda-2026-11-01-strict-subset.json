@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-01",
+  "gate": "Coda Gate 2; step 3",
+  "status": "bounded-symbolic-parity-verified",
+  "research_only": true,
+  "production_enabled": false,
+  "author_repo": "annieetang/coda_backend",
+  "author_revision": "a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
+  "comparison_commit": "634a597a23234265d6fd52e7364bc7268023b557",
+  "run": "https://github.com/tpepels/piano_teacher/actions/runs/41342300820",
+  "artifact_id": 13097607435,
+  "artifact_expiration_days": 14,
+  "certificate_file": "supported-subset.json",
+  "full_report_file": "real-source-voices.json",
+  "manifest": "tests/fixtures/research/coda_supported_parity_v1.json",
+  "manifest_sha256": "f9ddf892bd78cd6173521118049607ce53759a1a7b8fe739af1d621c6a6229c3",
+  "report_sha256": "04e7177c2bf075519bc0cb69a7cb4a5cf7709115d6cbfe9e11d9be60d9c32220",
+  "source_mmr_voices_exact": 12,
+  "source_mmr_voices_compared": 12,
+  "source_score_count": 6,
+  "operation_cases_total": 60,
+  "tiers": {
+    "strict-transformed": 24,
+    "exact-noop": 6,
+    "sounding-only": 10,
+    "excluded-safety": 11,
+    "excluded-upstream-defect": 5,
+    "upstream-none": 4
+  },
+  "strict_transformed_cases_by_fixture": {
+    "source-authored-beams": 4,
+    "long-multipage-first-two-bars": 7,
+    "authored-triplet": 7,
+    "rest-bearing-triplet": 6
+  },
+  "operation_parameters": [
+    "slow-x2",
+    "slow-x4",
+    "dotted-3-to-1",
+    "dotted-1-to-3",
+    "chord-2-beat"
+  ],
+  "scope": "Exact bare MusicXML note/rest/tie representations AND sounding NoteOn/Off for SHA-pinned source excerpts and voice; must change the source sounding timeline",
+  "not_in_scope": [
+    "Other source scores",
+    "Complete expressive/graphic annotation parity",
+    "All original chord levels",
+    "Original Score/Part/Voice batch-set parity",
+    "Native Godot runtime",
+    "Physical MIDI",
+    "Teaching efficacy"
+  ],
+  "production_strategies_enabled": false
+}

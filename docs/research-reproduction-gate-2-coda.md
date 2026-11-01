@@ -929,3 +929,37 @@ different legitimate written representations from output defects, then
 investigate the fifteen sounding differences and one invalid original
 tie chain with minimal counterexamples. The four upstream-None cases
 must remain rejected rather than being counted as successes.
+
+
+## Gate 2, step 3 — SHA-pinned *substantive* strict symbolic parity (2026-11-01)
+
+The former 30/60 exact-written-and-sounding results contain **six
+unmodified/no-op outputs**, which cannot demonstrate exercise-generation
+parity. A separate source-change comparison therefore reduces the certified
+strict subset to **24 genuinely transformed exact outputs**, out of the same
+60 selected comparisons. Ten more are sounding-equivalent but not
+written-equivalent; eleven differ because of notation-safety protections;
+five reflect unsafe/defective author behavior (four fractional dotted
+tick truncations, one disconnected tie); four original cases return None.
+
+All **12/12 source-voice MMRs remain exact**. Explicit author-execution and
+counterexample evidence was re-run successfully in
+https://github.com/tpepels/piano_teacher/actions/runs/41342300820,
+artifact `13097607435`, which includes the full
+`supported-subset.json` certificate and original/native written/sounding
+traces. The exact original reference, source SHA hashes, source voices,
+parameters, and expected cases are pinned in
+`tests/fixtures/research/coda_supported_parity_v1.json`.
+`piano_teacher/research/coda_parity_contract.py` checks all 60 cases
+**fail closed**; negative regression tests guard against accidentally
+promoting an unchanged score, a missing voice, a changed original author
+revision, an unsafe reference tie, or a grading mismatch.
+
+Detailed research scope, denominators, limitations, and replay commands:
+`docs/research-coda-supported-parity-2026-11-01.md`.
+Durable machine-readable evidence:
+`docs/evidence/coda-2026-11-01-strict-subset.json`.
+
+**No general Coda parity, source-expression engraving parity, completed
+production lesson, native Godot run, physical MIDI verification or learning
+improvement has been demonstrated by this step. Gate 2 stays open.**
