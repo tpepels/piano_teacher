@@ -44,6 +44,7 @@ from .application.feedback_route import FeedbackFacts, select_feedback_route
 from .application.assessment_settlement import assess_completed_take
 from .application.assessment_commit import commit_assessed_result
 from .application.guided_fragment import select_guided_fragment
+from .application.guided_session import GuidedSession, GuidedFragment
 from .application.tempo_map_cache import TempoMapCache
 from .application.session_snapshot_builder import (
     SnapshotValues, SnapshotReadPorts, capture as capture_session_snapshot,
@@ -84,6 +85,33 @@ class PracticeEngine:
     _preparation_at = TransportField("_preparation_at")
     visual_gap_beats = TransportField("visual_gap_beats")
 
+    @property
+    def teaching(self):
+        return self.guided_session.controller
+
+    @teaching.setter
+    def teaching(self, controller):
+        if controller is None:
+            self.guided_session.clear_selection()
+        else:
+            self.guided_session.controller = controller
+
+    @property
+    def _guided_prepared(self) -> bool:
+        return self.guided_session.prepared
+
+    @_guided_prepared.setter
+    def _guided_prepared(self, prepared: bool) -> None:
+        self.guided_session.prepared = prepared
+
+    @property
+    def _guided_return(self):
+        return self.guided_session.return_context
+
+    @_guided_return.setter
+    def _guided_return(self, context):
+        self.guided_session.return_context = context
+
     def __init__(self, data_dir: Path | None = None, enable_midi: bool = True,
                  live_events: LiveEventRing | None = None):
         self.lock = threading.RLock()
@@ -91,6 +119,7 @@ class PracticeEngine:
         # Serialize source loads and durable corrections separately instead.
         self._fingering_lock = threading.Lock()
         self._piece_generation = 0
+        self.guided_session = GuidedSession()
         self.plan: LearningPlan | None = None
         self.score = None
         self.source = None
@@ -546,8 +575,7 @@ class PracticeEngine:
         self._save()
 
     def _stop(self):
-        if self.teaching is not None:
-            self.teaching.stop()
+        self.guided_session.stop()
         self.visual_transport.reset_for_stop(
             rewind_seconds=SETTINGS.feedback_seconds)
         self.pause_context=None
@@ -584,17 +612,15 @@ class PracticeEngine:
             self.plan, mode=self.mode, guided_range=self.guided_range)
 
     def _save_guided_preparation(self):
-        if (self._guided_prepared or self._remediation_active is not None
-                or self.teaching is None or self.mode != "learn"):
-            return
-        snapshot = self.teaching.snapshot(now=time.monotonic())
-        if not snapshot["completed"]:
-            return
-        unit = self._guided_unit()
-        self.learner_progress.record_guided_preparation(
-            fingerprint=self.fingerprint, stage_key=self.plan.identity,
-            unit=unit, assisted_count=snapshot["assisted_count"])
-        self._guided_prepared = True
+        """Record a completed guided idea once, without awarding timed mastery."""
+        self.guided_session.commit_completed_preparation(
+            learning=self.mode == "learn",
+            remediation_active=self._remediation_active is not None,
+            fingerprint=self.fingerprint,
+            stage_key=self.plan.identity if self.plan is not None else "",
+            current_unit=self._guided_unit,
+            record_preparation=self.learner_progress.record_guided_preparation)
+
 
     def _learner_snapshot(self) -> dict:
         return self.learner_progress.snapshot(
@@ -708,7 +734,6 @@ class PracticeEngine:
     def _begin_learn(self, *, from_beat: float = 0.0, bump_revision: bool = True,
                      recovery: bool = False,
                      remediation: RemedialAssignment | None = None):
-        from .teaching import TeachingConfig, TeachingController
         if self.plan is None:
             raise ValueError("Open a piece first")
         phrase = self.plan.active_phrase
@@ -729,13 +754,17 @@ class PracticeEngine:
         if bump_revision:
             self.score_revision += 1
         self.transport_id += 1
-        if self.teaching is None:
-            self.teaching = TeachingController(TeachingConfig(persistent_hints=self.persistent_hints))
-        self.teaching.bind(stage_key=self.plan.identity, revision=self.score_revision,
+        # Reuse the existing guided owner: one controller, held-key history,
+        # fragment source and completion state for this teaching session.
+        self.guided_session.persistent_hints = self.persistent_hints
+        self.guided_session.bind(GuidedFragment(
             variant=(remediation.variant if remediation is not None
                      else self.plan.active_variant),
-            fragment_start=grid[first], fragment_end=grid[end_index],
-            now=time.monotonic(), connected=self.midi.connected)
+            start_beat=grid[first], end_beat=grid[end_index],
+            phrase=self.display_phrase()),
+            stage_key=self.plan.identity, revision=self.score_revision,
+            now=time.monotonic(), connected=self.midi.connected,
+            recovery=recovery)
         self.awaiting_score_revision = self.score_revision
         self.feedback = "Preparing a short idea to learn"
         self.next_action = (f"Learn the selected {remediation.focus} notes, then retry the original."
@@ -1531,8 +1560,7 @@ class PracticeEngine:
         if decision.preparation_phase is not None:
             self.practice_preparation["phase"] = decision.preparation_phase
         if decision.action == "learning":
-            self.teaching.set_connected(self.midi.connected, now=now)
-            self.teaching.tick(now=now)
+            self.guided_session.advance(connected=self.midi.connected, now=now)
             self._save_guided_preparation()
         elif decision.action == "listening":
             if self.running and self.listen.finished(now=now, run_at=self.run_at):
