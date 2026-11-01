@@ -69,3 +69,32 @@ def apply_stage_change(plan, change: StageChange, *, warmup: bool) -> None:
         plan.decrease_tempo()
     else:
         raise ValueError(f"Unsupported action: {action}")
+
+
+@dataclass(frozen=True)
+class GuidedReentry:
+    route: str
+    recovery: bool = False
+    explicit_learn: bool = False
+
+
+def guided_reentry(
+    *, change: StageChange, was_guided: bool, course_guided: bool,
+    previous_return: tuple[str, float] | None, current_stage: str,
+) -> GuidedReentry:
+    """Choose the next teaching stage without touching transport/revisions.
+
+    A tempo change in recovery keeps the source retry anchor only when
+    the stage identity remains unchanged.
+    """
+    if not was_guided:
+        return GuidedReentry("none")
+    if change.tempo_only:
+        return GuidedReentry(
+            "same_fragment",
+            recovery=(previous_return is not None
+                      and previous_return[0] == current_stage))
+    if course_guided:
+        return GuidedReentry(
+            "course", explicit_learn=change.action == "hand")
+    return GuidedReentry("fresh")
