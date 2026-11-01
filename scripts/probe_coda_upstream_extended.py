@@ -32,7 +32,7 @@ from piano_teacher.research.coda_reference_exercises import (
     CodaReferenceSlowdown, CodaReferenceDotted, CodaReferenceChordification,
 )
 from piano_teacher.research.coda_reference_matrix import score_voice_matrices
-from scripts.probe_coda_upstream_scores import _native_written
+from piano_teacher.research.coda_native_written import render_native_written
 
 ROOT = Path(__file__).resolve().parents[1]
 REFERENCE_SHA = "a4eb85dfc2bd418818ca9ff775c0a11ccccb3530"
@@ -115,7 +115,7 @@ def _exercise(name, level, line, variant, piece, boundaries, q, owners,
     written_status="unavailable"
     native_error=None
     try:
-        native=_native_written(plan,owners,piece,bars,converter,factor=factor)
+        native=render_native_written(plan,owners,piece,bars,factor=factor)
         written_status=("exact" if native==source_written else "different")
         actual,errors=sounding_from_written(native)
         if errors or actual!=projected:
