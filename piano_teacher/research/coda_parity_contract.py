@@ -213,3 +213,24 @@ def certify_files(report_path: str | Path, manifest_path: str | Path,
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(certificate, indent=2) + "\n", encoding="utf-8")
     return certificate
+
+
+def main() -> None:
+    """Command-line bounded certificate; nonzero exit on changed evidence."""
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument("--manifest", required=True, type=Path)
+    parser.add_argument("--certificate", required=True, type=Path)
+    args = parser.parse_args()
+    certificate = certify_files(args.report, args.manifest, args.certificate)
+    print(json.dumps({
+        "status": certificate["status"],
+        "strict_transformed_count": certificate["strict_transformed_count"],
+        "case_tiers": certificate["case_tiers"],
+        "research_only": certificate["research_only"],
+    }, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

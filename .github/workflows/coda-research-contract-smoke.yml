@@ -51,4 +51,5 @@ jobs:
             tests/test_coda_four_family_contract.py \
             tests/test_coda_timeline_end_to_end.py \
             tests/test_coda_differential.py \
-            tests/test_coda_discrepancy.py
+            tests/test_coda_discrepancy.py \
+            tests/test_coda_parity_contract.py
