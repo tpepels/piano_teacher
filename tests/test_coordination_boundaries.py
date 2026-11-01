@@ -265,8 +265,11 @@ def test_successful_command_view_effects_have_injected_dependencies():
     main = (ROOT/"godot/main.gd").read_text()
     presenter = (ROOT/"godot/command_success_presenter.gd").read_text()
     assert "CommandSuccessPresenter.new(" in main
-    assert "command_success_presenter.present_accepted(decision)" in main
-    assert "command_success_presenter.present_source_picker(opened)" in main
+    effects = (ROOT/"godot/command_success_effects.gd").read_text()
+    assert "command_success_effects.apply(decision,opened," in main
+    assert "presenter.present_accepted(decision)" in effects
+    assert "presenter.present_source_picker(opened)" in effects
+    assert "app." not in effects and "get_tree()" not in effects
     assert "lesson_session.invalidate()" not in main.split(
         "func _on_action(", 1)[1].split("\nfunc ", 1)[0]
     assert "func _init(library, practice, settings, lesson)" in presenter
@@ -343,3 +346,29 @@ def test_command_request_queue_with_headless_godot():
     output = run.stdout+run.stderr
     assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
     assert "COMMAND_REQUEST_STATE_FAILURES:0" in output, output
+
+
+def test_success_effects_keep_ordering_without_main_access():
+    main = (ROOT/"godot/main.gd").read_text()
+    effects = (ROOT/"godot/command_success_effects.gd").read_text()
+    response = main.split("func _on_action(",1)[1].split("\nfunc ",1)[0]
+    assert "command_success_effects.apply(" in response
+    assert "match str(decision" not in response
+    assert "func apply(decision: Dictionary" in effects
+    assert "publish_state.call(" in effects
+    assert "navigate_practice.call(" in effects
+    assert "request_settings.call()" in effects
+    assert "app." not in effects and "request(" not in effects
+
+
+@pytest.mark.skipif(not (shutil.which("godot") or shutil.which("godot4")),
+                    reason="Godot is not installed")
+def test_success_effects_headless():
+    binary = shutil.which("godot") or shutil.which("godot4")
+    run = subprocess.run(
+        [binary, "--headless", "--path", str(ROOT/"godot"),
+         "--script", str(ROOT/"tests/godot/command_success_effects.gd")],
+        capture_output=True,text=True,timeout=20)
+    output = run.stdout+run.stderr
+    assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
+    assert "COMMAND_SUCCESS_EFFECTS_FAILURES:0" in output, output
