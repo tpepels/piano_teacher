@@ -58,7 +58,7 @@ jobs:
               exit 1
             }
           cat "$RUNNER_TEMP/coda-diff/edge-output.txt"
-      - name: Compare six real-source MusicXML matrices and algorithms without claiming parity
+      - name: Compare six real-source MusicXML written and sounding timelines independently
         id: scores
         continue-on-error: true
         run: |
@@ -67,6 +67,20 @@ jobs:
             --report "$RUNNER_TEMP/coda-diff/real-source-voices.json" \
             > "$RUNNER_TEMP/coda-diff/real-source-output.txt" 2>&1 || {
               cat "$RUNNER_TEMP/coda-diff/real-source-output.txt"
+          python - "$RUNNER_TEMP/coda-diff/real-source-voices.json" <<'PY'
+          import json, sys
+          result = json.load(open(sys.argv[1]))
+          assert result["algorithm_total"] == 60
+          assert result["algorithm_exceptions"] == 0
+          assert result["algorithm_upstream_none"] == 4
+          assert (result["algorithm_sounding_exact"] +
+                  result["algorithm_sounding_different"] +
+                  result["algorithm_sounding_invalid_ties"] +
+                  result["algorithm_upstream_none"]) == 60
+          assert (result["algorithm_written_exact"] +
+                  result["algorithm_written_different"] +
+                  result["algorithm_written_unavailable"]) == 60
+          PY
               exit 1
             }
           cat "$RUNNER_TEMP/coda-diff/real-source-output.txt"
