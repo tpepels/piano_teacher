@@ -7,7 +7,6 @@ from __future__ import annotations
 from dataclasses import asdict, replace
 import hashlib
 import json
-import math
 import os
 from pathlib import Path
 import threading
