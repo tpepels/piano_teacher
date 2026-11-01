@@ -25,6 +25,9 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_tempo_map_cache.py \
   tests/test_feedback_route.py \
   tests/test_guided_fragment.py \
+  tests/test_assessment_settlement.py \
+  tests/test_assessment_evidence.py \
+  tests/test_learner_progress_coordination.py \
   tests/test_coordination_boundaries.py::test_snapshot_assembly_and_live_hit_mapping_have_one_owner \
   tests/test_coordination_boundaries.py::test_command_error_publication_has_injected_screen_dependencies \
   tests/test_attempt_progression.py::test_authoritative_tick_caches_source_grid_until_phrase_changes \
