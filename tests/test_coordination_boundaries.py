@@ -22,7 +22,7 @@ def test_attempt_progression_uses_explicit_inputs_and_returns_decisions():
                for node in engine.body if isinstance(node,ast.FunctionDef)}
     assert "self.attempt_progression.schedule_start(" in methods["start"]
     assert "self.attempt_progression.inspect(AttemptTick(" in methods["_update"]
-    assert "run_before_assessment(self, now)" in methods["_update"]
+    assert "self._run_pre_assessment_transition(now)" in methods["_update"]
     assert "_apply_rolling_recovery(" in methods["_update"]
     assert "_complete_attempt(" in methods["_update"]
     policy = (ROOT/"piano_teacher/application/attempt_progression.py").read_text()
@@ -234,3 +234,45 @@ def test_successful_command_decisions_headless():
     output = run.stdout + run.stderr
     assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
     assert "COMMAND_SUCCESS_POLICY_FAILURES:0" in output, output
+
+
+def test_transition_selection_and_guidance_own_narrow_inputs():
+    server = (ROOT/"piano_teacher/server.py").read_text()
+    transitions = (ROOT/"piano_teacher/application/practice_transitions.py").read_text()
+    guided = (ROOT/"piano_teacher/application/guided_session.py").read_text()
+    assert "decide_transition(" in server
+    assert "TransitionContext(" in server
+    assert "def decide_transition(context: TransitionContext" in transitions
+    assert "engine." not in transitions
+    assert "run_before_assessment(" not in transitions
+    assert "self.guided_session.advance(" in server
+    assert "self.guided_session.bind(" in server
+    assert "self.guided_session.commit_completed_preparation(" in server
+    assert "self.guided_session.marks(" in server
+    assert "engine." not in guided
+
+
+def test_successful_command_view_effects_have_injected_dependencies():
+    main = (ROOT/"godot/main.gd").read_text()
+    presenter = (ROOT/"godot/command_success_presenter.gd").read_text()
+    assert "CommandSuccessPresenter.new(" in main
+    assert "command_success_presenter.present_accepted(decision)" in main
+    assert "command_success_presenter.present_source_picker(opened)" in main
+    assert "lesson_session.invalidate()" not in main.split(
+        "func _on_action(", 1)[1].split("\nfunc ", 1)[0]
+    assert "func _init(library, practice, settings, lesson)" in presenter
+    assert "app." not in presenter
+    assert "request(" not in presenter
+
+
+@pytest.mark.skipif(not (shutil.which("godot") or shutil.which("godot4")),
+                    reason="Godot is not installed")
+def test_successful_command_view_effects_headless():
+    binary = shutil.which("godot") or shutil.which("godot4")
+    run = subprocess.run(
+        [binary,"--headless","--path",str(ROOT/"godot"),
+         "--script",str(ROOT/"tests/godot/command_success_presenter.gd")],
+        capture_output=True,text=True,timeout=20)
+    output = run.stdout + run.stderr
+    assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
+    assert "COMMAND_SUCCESS_PRESENTER_FAILURES:0" in output, output
