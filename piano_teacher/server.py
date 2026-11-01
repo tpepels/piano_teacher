@@ -41,6 +41,7 @@ from .application.control_dispatch import ControlDispatcher
 from .application.practice_transitions import run_before_assessment
 from .application.attempt_progression import AttemptProgression, AttemptTick
 from .application.feedback_route import FeedbackFacts, select_feedback_route
+from .application.guided_fragment import select_guided_fragment
 from .application.tempo_map_cache import TempoMapCache
 from .application.session_snapshot_builder import (
     SnapshotValues, SnapshotReadPorts, capture as capture_session_snapshot,
@@ -709,20 +710,9 @@ class PracticeEngine:
         if self.plan is None:
             raise ValueError("Open a piece first")
         phrase = self.plan.active_phrase
-        grid = phrase_grid(phrase, self.plan.piece.bar_boundaries)
-        if not math.isfinite(from_beat) or not 0 <= from_beat < grid[-1]:
-            raise ValueError("Choose a measure inside the active passage")
-        first = max(i for i, beat in enumerate(grid[:-1]) if beat <= from_beat+1e-7)
-        # Skip empty introductory units when finding keys. Timed practice
-        # still includes those source rests and the complete original ending.
-        while first < len(grid)-1:
-            end_index = min(first+2, len(grid)-1)
-            if any(phrase.start+grid[first]-1e-7 <= n.start < phrase.start+grid[end_index]-1e-7
-                   for n in phrase.notes):
-                break
-            first = end_index
-        if first >= len(grid)-1:
-            raise ValueError("No note attacks in the selected fragment")
+        fragment = select_guided_fragment(
+            phrase, self.plan.piece.bar_boundaries, from_beat)
+        grid, first, end_index = fragment.grid, fragment.first_index, fragment.end_index
         retry_range = self.retry_range if recovery else None
         self._stop()
         self._remediation_active = remediation
