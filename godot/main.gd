@@ -1056,11 +1056,11 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     match str(decision["kind"]):
         "fingering":
             fingering_save_error = ""
-            _on_state(_result,code,_headers,body,command_state.started_ms)
+            _on_state(_result,code,_headers,body,int(completed["started_ms"]))
         "control":
             if bool(decision["refresh_settings"]):
                 _request_settings()
-            _on_state(_result,code,_headers,body,command_state.started_ms)
+            _on_state(_result,code,_headers,body,int(completed["started_ms"]))
             if bool(decision["navigate_practice"]):
                 _navigate("practice")
         "library_health":
@@ -1073,7 +1073,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
                     if bool(decision["publish_state"]):
                         # A restored lesson already carries its hand, tempo
                         # and clean streak; do not replace it with open_at.
-                        _on_state(_result,code,_headers,body,command_state.started_ms)
+                        _on_state(_result,code,_headers,body,int(completed["started_ms"]))
                     _refresh_score_status()
                 "picker":
                     command_success_presenter.present_source_picker(opened)
