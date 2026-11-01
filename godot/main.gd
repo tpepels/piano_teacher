@@ -113,6 +113,8 @@ var rendered_revision: int:
         return score_session.rendered_revision if score_session != null else -1
 
 var action_pending := false
+# Frame presentation touches control disabled flags only when this changes.
+var frame_busy_presented: Variant = null
 var last_state: Dictionary = {}
 var last_state_tick := 0
 var last_playhead_strike_beat := -INF
@@ -262,10 +264,11 @@ func _make_count_click(frequency: float) -> AudioStreamWAV:
     audio.data = samples
     return audio
 
-func _count_tick(accent: bool) -> void:
+func _count_tick(accent: bool, sampled_beat: float = NAN) -> void:
     if click_player == null:
         return
-    if not bool(preferences.get("metronome", true)) and _transport_beat_now() >= 0.0:
+    if not bool(preferences.get("metronome", true)) and \
+            (sampled_beat if is_finite(sampled_beat) else _transport_beat_now()) >= 0.0:
         return
     click_player.stream = click_high if accent else click_low
     click_player.play()
@@ -387,7 +390,7 @@ func _update_count_in(sampled_beat: float = NAN, now_ms: int = -1) -> void:
         count_tick_index = tick
         var bar_beats := maxi(1,int(round(float(last_state.get("count_in_bar_beats",4)))))
         if not (tick == 0 and retry_first_click_sent):
-            _count_tick(posmod(tick,bar_beats) == 0)
+            _count_tick(posmod(tick,bar_beats) == 0,beat)
         if tick >= 0:
             retry_first_click_sent = false
 
