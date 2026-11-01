@@ -870,3 +870,62 @@ directions, physical MIDI/native Godot results for this
 research stage, wide repertoire and real teaching outcomes.
 No production Coda lesson family was enabled. Gate 2 is
 **not complete**.
+
+
+## Original Coda parity — dual written/sounding comparison (2026-11-01)
+
+This is an independent research diagnostic for issue #42, **not** a
+production Coda feature and not a claim of complete author parity.
+
+- Our revision: `04edd06e747c703b475290aedbb7a11dc1d38486`
+- Pinned unchanged author: `annieetang/coda_backend@a4eb85dfc2bd418818ca9ff775c0a11ccccb3530`
+- Workflow: https://github.com/tpepels/piano_teacher/actions/runs/41333643344
+- Artifact: `13094316522`, `real-source-voices.json`
+- Durable source comparison: `scripts/probe_coda_upstream_scores.py`
+- Independent parsers/classifiers: `piano_teacher/research/coda_differential.py`
+- Validation: **7/7** explicit normalization tests passed in author workflow.
+  Both the fast application CI gate and bounded Coda contract gate passed.
+
+### Corrected evidence: 12 source voices, 60 exercise outputs
+
+The original backend's generated `music21` objects can contain misleading
+in-memory offsets after `makeNotation/makeTies`. The old test compared those
+written `music21` events with this project's canonical sounding MIDI attacks.
+Now it calls the author's own `get_musicxml_from_music21()` and reads actual
+serialized note/rest/chord/tie/voice/measure events using MusicXML cursor,
+backup and forward durations. The native column parses actual bare lesson
+MusicXML generated from the exact source-owned TimingPlan. Tied segments
+are folded into sounding notes **only** for the separate performance comparison,
+and independent voices with the same pitch remain separate.
+
+| Source sample | Both written and sounding exact | Sounding-only exact | Neither exact | Invalid reference ties | Author returns none |
+|---|---:|---:|---:|---:|---:|
+| Independent parallel ties | 4 | 4 | 0 | 0 | 2 |
+| Authored beams | 6 | 0 | 3 | 0 | 1 |
+| Multipage source (first two measures) | 7 | 0 | 2 | 0 | 1 |
+| Authored triplet | 7 | 0 | 2 | 1 | 0 |
+| Triplet with interior rest | 6 | 1 | 3 | 0 | 0 |
+| Authored changing meter | 0 | 5 | 5 | 0 | 0 |
+| **Total** | **30** | **10** | **15** | **1** | **4** |
+
+Source matrices remain **12/12 exact**, across three MMR arrays per
+voice. The historic raw written-versus-MIDI tuple baseline remains **23
+raw exact / 33 different / 4 None**, preserved solely for auditing.
+The corrected comparison yields **30 exact native written note/rest/tie
+sequences**, **40 exact tie-collapsed sounding timelines**, **15 differing
+valid-sounding timelines**, **one invalid author tie sequence**, and **four
+author None results**. All 56 available bare native written outputs also
+normalize to exactly their associated grading TimingPlan.
+
+**Important limitation:** the native written comparison uses a basic
+source-voice lesson MusicXML render. Its exact written-match status covers
+timed note/rest/chord/tie events, not visual engraving, beam/style/slur/
+dynamic annotations, original author Score/Part/Voice output inventory, or
+live MIDI hardware. No mismatched case was silently counted as equivalent.
+These results do **not** settle all subsequent research-parity requirements.
+
+For the next investigation, use the ten sounding-only cases to separate
+different legitimate written representations from output defects, then
+investigate the fifteen sounding differences and one invalid original
+tie chain with minimal counterexamples. The four upstream-None cases
+must remain rejected rather than being counted as successes.

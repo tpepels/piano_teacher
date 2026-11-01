@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-01",
+  "research_only": true,
+  "issue": 42,
+  "reference_repository": "annieetang/coda_backend",
+  "reference_revision": "a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
+  "comparison_revision": "04edd06e747c703b475290aedbb7a11dc1d38486",
+  "workflow_run": "https://github.com/tpepels/piano_teacher/actions/runs/41333643344",
+  "artifact_id": 13094316522,
+  "artifact_file": "real-source-voices.json",
+  "source_mmr": {
+    "exact_voices": 12,
+    "sampled_voices": 12
+  },
+  "algorithm": {
+    "total": 60,
+    "legacy_raw_exact": 23,
+    "legacy_raw_mismatch": 33,
+    "both_exact": 30,
+    "sounding_only_exact": 10,
+    "neither_exact": 15,
+    "invalid_author_ties": 1,
+    "upstream_none": 4,
+    "sounding_exact": 40,
+    "written_exact": 30,
+    "native_written_to_plan_exact": 56,
+    "exceptions": 0
+  },
+  "cases": [
+    {
+      "name": "source-parallel-ties",
+      "both": 4,
+      "sounding_only": 4,
+      "neither": 0,
+      "invalid_ties": 0,
+      "upstream_none": 2
+    },
+    {
+      "name": "source-authored-beams",
+      "both": 6,
+      "sounding_only": 0,
+      "neither": 3,
+      "invalid_ties": 0,
+      "upstream_none": 1
+    },
+    {
+      "name": "long-multipage-first-two-bars",
+      "both": 7,
+      "sounding_only": 0,
+      "neither": 2,
+      "invalid_ties": 0,
+      "upstream_none": 1
+    },
+    {
+      "name": "authored-triplet",
+      "both": 7,
+      "sounding_only": 0,
+      "neither": 2,
+      "invalid_ties": 1,
+      "upstream_none": 0
+    },
+    {
+      "name": "rest-bearing-triplet",
+      "both": 6,
+      "sounding_only": 1,
+      "neither": 3,
+      "invalid_ties": 0,
+      "upstream_none": 0
+    },
+    {
+      "name": "changing-meter",
+      "both": 0,
+      "sounding_only": 5,
+      "neither": 5,
+      "invalid_ties": 0,
+      "upstream_none": 0
+    }
+  ],
+  "written_scope": "author-exported MusicXML versus generated bare native lesson MusicXML: written note/rest/tie rhythm and voice, excluding expressive annotations",
+  "sounding_scope": "author-exported MusicXML tie-collapsed attacks versus adapter TimingPlan source-owned grading attacks",
+  "gate_2_complete": false
+}
