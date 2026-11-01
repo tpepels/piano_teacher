@@ -33,10 +33,10 @@ for script in \
   res://midi_device_coordinator.gd; do
   echo "Checking $script"
   output=$(timeout 12s "$binary" --headless --path godot --check-only --script "$script" 2>&1) || {
-    printf '%s\\n' "$output"
+    printf '%s\n' "$output"
     exit 1
   }
-  printf '%s\\n' "$output"
+  printf '%s\n' "$output"
   # Godot can return zero even when transitive preloads fail to compile.
   if [[ "$output" == *"SCRIPT ERROR:"* ||
         "$output" == *"ERROR: Failed to load script"* ]]; then
