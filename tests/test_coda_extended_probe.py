@@ -3,7 +3,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from piano_teacher.research.coda_auto_chord_levels import original_chord_levels
-from scripts.probe_coda_upstream_extended import SOURCES, REFERENCE_SHA
+from piano_teacher.research.coda_extended_sources import SOURCES, REFERENCE_SHA
 
 ROOT = Path(__file__).resolve().parents[1]
 
