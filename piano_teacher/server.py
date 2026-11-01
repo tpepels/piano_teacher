@@ -57,7 +57,7 @@ from .live_event_ring import LiveEventRing
 from .runtime_timings import RuntimeTimings
 from .live_input_view import LiveInputView
 from .instruction import next_full_attempt
-from .learner_state import guided_units, placement_candidate
+from .learner_state import guided_units
 from .progress_repository import ProgressRepository
 from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
@@ -654,12 +654,9 @@ class PracticeEngine:
 
     def _skip_stage(self, reason):
         p = self.plan
-        if (p is None or not isinstance(reason, str) or not reason.strip()
-                or p.lesson_step_number >= len(p.lesson_steps)):
-            raise ValueError("Choose an available next step and explain the skip")
-        following = p.lesson_steps[p.lesson_step_number]
-        if self.fingerprint:
-            self.learner_store.mark_skipped(self.fingerprint, p.identity, reason=reason)
+        following = self.learner_progress.next_skippable_step(p, reason)
+        self.learner_progress.mark_skipped(
+            fingerprint=self.fingerprint, stage_key=p.identity, reason=reason)
         self._stop()
         self._select_step(following)
         self.course_guided = True
@@ -670,15 +667,9 @@ class PracticeEngine:
         if self.plan is None:
             raise ValueError("Open a piece first")
         p = self.plan
-        candidate = placement_candidate(p)
-        if candidate is None:
-            raise ValueError("You are already playing the original notes")
-        if self.fingerprint:
-            for step in p.lesson_steps[p.lesson_step_number-1:]:
-                if step.key == candidate.key:
-                    break
-                self.learner_store.mark_skipped(self.fingerprint, step.key,
-                    reason="Student chose to try the original notes", status="placed")
+        candidate = self.learner_progress.original_placement_step(p)
+        self.learner_progress.mark_prior_steps_placed(
+            p, fingerprint=self.fingerprint, candidate=candidate)
         self._stop()
         self._select_step(candidate)
         self.course_guided = True
@@ -690,26 +681,20 @@ class PracticeEngine:
             self.plan, fingerprint=self.fingerprint, stage_key=stage_key)
 
     def _revisit_trouble(self, stage_key, start_beat):
-        # Saved evidence can outlive a course revision. Validate the exact
-        # current source binding before stopping or selecting another stage.
-        if (self.plan is None or not self.fingerprint or not isinstance(stage_key, str)
-                or isinstance(start_beat, bool) or not isinstance(start_beat, (int, float))
-                or not math.isfinite(start_beat)):
-            raise ValueError("Choose a saved trouble spot for this piece")
+        step, unit = self.learner_progress.choose_trouble_spot(
+            self.plan, fingerprint=self.fingerprint,
+            stage_key=stage_key, start_beat=start_beat)
         p = self.plan
-        step = next((step for step in p.lesson_steps if step.key == stage_key), None)
-        stored = next((unit for unit in self._valid_trouble_spots(stage_key=stage_key)
-                       if unit["stage_key"] == stage_key and unit["start_beat"] == start_beat), None)
-        if step is None or stored is None:
-            raise ValueError("This trouble spot is no longer available")
-        unit = stored
         bpm = p.bpm
         self._stop()
         self._select_step(step)
         p.bpm = bpm
-        self.learner_store.reactivate(self.fingerprint, stage_key)
+        self.learner_progress.reactivate_trouble(
+            fingerprint=self.fingerprint, stage_key=stage_key)
         self.course_guided = True
-        self.retry_range = {field: unit[field] for field in ("first_bar", "last_bar", "start_beat", "end_beat")}
+        self.retry_range = {
+            field: unit[field] for field in (
+                "first_bar", "last_bar", "start_beat", "end_beat")}
         self._begin_learn(from_beat=unit["start_beat"], recovery=True)
         self._save()
 
