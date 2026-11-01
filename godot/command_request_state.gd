@@ -1,6 +1,6 @@
 extends RefCounted
 ## Owns only the outstanding command and deferred user intent.
-## No node, request adapter, app, clock sampling or scene-tree dependency.
+## No application, retained request adapter, clock sampling or scene tree.
 var pending := false
 var post_path := ""
 var control_action := ""
@@ -25,6 +25,17 @@ func begin(path: String, now_ms: int) -> bool:
     post_path = path
     started_ms = now_ms
     return true
+
+func dispatch(adapter, path: String, payload: Dictionary) -> int:
+    ## Dispatch only a request previously reserved by begin(). The adapter
+    ## is supplied for this call, never retained or obtained from Main.
+    assert pending and post_path == path
+    adapter.timeout = 360.0 if path in [
+        "/fingering","/load","/library/open"] else 5.0
+    var err: int = int(adapter.request(path,JSON.stringify(payload),"POST"))
+    if err != OK:
+        request_failed()
+    return err
 
 func request_failed() -> void:
     pending = false
