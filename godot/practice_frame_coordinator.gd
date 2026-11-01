@@ -19,9 +19,11 @@ static func advance(app, delta: float) -> void:
     # Animate short-lived hit pulses between state samples.
     app.score_effects.prune_expired(ticks)
     app._read_live_midi()
-    app.settings_view.present_busy(app.action_pending)
-    app.practice_view.present_busy(app.action_pending)
-    app.lesson_view.present_busy(app.action_pending)
+    if app.frame_busy_presented != app.action_pending:
+        app.frame_busy_presented = app.action_pending
+        app.settings_view.present_busy(app.action_pending)
+        app.practice_view.present_busy(app.action_pending)
+        app.lesson_view.present_busy(app.action_pending)
     app.lesson_session.ensure_current(ticks)
     # Start Listen WAV on the actual negative-to-zero beat crossing at
     # frame rate, not on the next 150ms state poll. This preserves the
