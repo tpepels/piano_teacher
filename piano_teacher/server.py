@@ -42,7 +42,7 @@ from .application.practice_transitions import run_before_assessment
 from .application.attempt_progression import AttemptProgression, AttemptTick
 from .application.feedback_route import FeedbackFacts, select_feedback_route
 from .application.assessment_settlement import assess_completed_take
-from .application.assessment_evidence import observe_assessed_take
+from .application.assessment_commit import commit_assessed_result
 from .application.guided_fragment import select_guided_fragment
 from .application.tempo_map_cache import TempoMapCache
 from .application.session_snapshot_builder import (
@@ -952,40 +952,30 @@ class PracticeEngine:
             if self.fingerprint:
                 self.learner_store.resolve_trouble(self.fingerprint, p.identity)
         self.retry_range = None
-        before = (p.identity, p.bpm)
-        # Persist real graded evidence under its original stage identity.
-        recommendation = observe_assessed_take(
-            fingerprint=self.fingerprint, stage_key=before[0], bpm=before[1],
-            result=result, observe=self.practice_policy.observe)
-        message = p.apply_result(
-            correct=result.correct, total=len(result.notes),
-            extras=result.extra_notes,
-            accepted=getattr(result, "passed", result.clean))
-        if (recommendation is not None and not getattr(result, "passed", result.clean) and self.auto
-                and self.mode == "practice" and not self.is_builtin_warmup
-                and p.exercise.kind == "learn" and p.identity == before[0]):
-            self._remediation_pending = self.remediation_planner.plan(
-                recommendation, result, p.active_variant,
-                stage_key=before[0], boundaries=p.piece.bar_boundaries)
-        if p.identity == before[0] and p.bpm > before[1]:
+        outcome = commit_assessed_result(
+            plan=p, result=result, fingerprint=self.fingerprint,
+            automatic=self.auto, mode=self.mode, warmup=self.is_builtin_warmup,
+            observe=self.practice_policy.observe,
+            plan_remediation=self.remediation_planner.plan)
+        if outcome.remediation is not None:
+            self._remediation_pending = outcome.remediation
+        if outcome.accelerated:
             self.recovery_notice = {
                 "kind": "speedup", "errors": 0,
-                "from_bpm": before[1], "to_bpm": p.bpm,
+                "from_bpm": outcome.previous_bpm, "to_bpm": p.bpm,
                 "first_bar": p.active_phrase.first_bar,
                 "last_bar": p.active_phrase.last_bar,
                 "expires_at": time.monotonic() + 7.0,
             }
-        if p.identity != before[0]:
+        if outcome.stage_changed:
             self.open_from_beat = 0.0
             self.performance_summary = None
             self.review_stage_identity = None
-        # Native engraving depends on source notation, not playback BPM.
-        # Do not discard the score model at every successful tempo increment.
-        if p.identity != before[0]:
+            # Engraving depends on notation, not changes of tempo alone.
             self.score_revision += 1
             self.visual_offset_beats = 0.0
         self._save()
-        return message
+        return outcome.message
 
     def start(self, *, from_beat: float | None = None, mode: str = "practice",
               loop_continuation: bool = False):
