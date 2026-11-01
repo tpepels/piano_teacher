@@ -50,9 +50,9 @@ No source code should instantiate `HTTPRequest` or `PacketPeerUDP`.
 - `session_snapshot_builder.py` receives `SnapshotValues` (explicit capture facts) and `SnapshotReadPorts` (named clock, learner, source, Listen, and guided services). It never receives `PracticeEngine`, `MidiConnection`, the library, or a renderer. `PracticeEngine` assembles these values under its existing lock; one explicitly named write port synchronizes the source-derived preparation gap.
 - `practice_frame_coordinator.gd` and `practice_state_presenter.gd` receive only their visual collaborators at construction rather than the entire application. `main.gd` owns request sequencing, accepted-state transport updates and clock sampling; the frame coordinator receives the sampled beat and returns ungraded onset cues.
 - `feedback_route.py` chooses remediation, guided continuation, score-revision wait, repeat or stop using immutable facts; the engine applies the decision. `guided_fragment.py` selects complete source-measure teaching units and skips silent opening units. Neither imports the engine.
-- `command_failure_presenter.gd` publishes failed command messages to injected views. Request ordering, error-state resets, queued library selection and deferred actions remain in `main.gd`.
+- `command_failure_presenter.gd` publishes failed command messages to injected views. `navigation_policy.gd` decides pause-on-leave and Settings return behavior from explicit screen/transport facts. Request ordering, error-state resets, queued library selection, deferred actions, actual Pause commands and view visibility remain in `main.gd`.
 - `live_midi_feedback.gd` builds one note-ID lookup at layout publication. It consumes live MIDI events without deep-copying the score layout or scanning every note. Grading stays with the backend.
-- Focused tests: `tests/test_attempt_progression.py` and `tests/test_coordination_boundaries.py`. These do not establish physical MIDI latency or GPU timing.
+- Focused tests: `tests/test_attempt_progression.py`, `tests/test_snapshot_capture_ports.py`, `tests/test_feedback_route.py`, `tests/test_guided_fragment.py`, and `tests/test_coordination_boundaries.py`. The headless Godot tests cover the injected presenters and navigation policy, but none of these establish physical MIDI latency or GPU timing.
 
 ## Hot-path optimization
 
