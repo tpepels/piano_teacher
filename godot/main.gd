@@ -30,6 +30,7 @@ const InProcessBus := preload("res://inprocess_bus.gd")
 const PracticeFrameCoordinator := preload("res://practice_frame_coordinator.gd")
 const PracticeStatePresenter := preload("res://practice_state_presenter.gd")
 const CommandFailurePresenter := preload("res://command_failure_presenter.gd")
+const CommandSuccessPolicy := preload("res://command_success_policy.gd")
 const NavigationPolicy := preload("res://navigation_policy.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
 
@@ -1062,38 +1063,42 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         command_failure_presenter.present(message,path,queued_library_failed)
         _flush_transport_action()
         return
-    if path == "/fingering":
-        fingering_save_error = ""
-        _on_state(_result,code,_headers,body,action_request_started_ms)
-    elif path == "/control":
-        if completed_action == "reset_path":
-            lesson_session.invalidate()
-        if completed_action in ["calibration_apply", "calibration_reset"]:
+    var opened: Variant = _decode_json(body) if path == "/library/open" else null
+    var decision: Dictionary = CommandSuccessPolicy.decide(
+        path,completed_action,resume_saved,opened)
+    match str(decision["kind"]):
+        "fingering":
+            fingering_save_error = ""
+            _on_state(_result,code,_headers,body,action_request_started_ms)
+        "control":
+            if bool(decision["invalidate_lesson"]):
+                lesson_session.invalidate()
+            if bool(decision["refresh_settings"]):
+                _request_settings()
+            _on_state(_result,code,_headers,body,action_request_started_ms)
+            if bool(decision["navigate_practice"]):
+                _navigate("practice")
+        "library_health":
+            _request_library_health()
+        "library_open":
+            library_view.present_open_status("")
+            score_error = ""
+            match str(decision["open_mode"]):
+                "practice":
+                    _navigate("practice")
+                    if bool(decision["publish_state"]):
+                        # A restored lesson already carries its hand, tempo
+                        # and clean streak; do not replace it with open_at.
+                        _on_state(_result,code,_headers,body,action_request_started_ms)
+                    _refresh_score_status()
+                "picker":
+                    practice_view.show_source_picker(opened)
+        "settings":
+            settings_view.present_message("Settings saved")
             _request_settings()
-        _on_state(_result, code, _headers, body, action_request_started_ms)
-        if completed_action in ["skip_stage", "place_original", "revisit_trouble"]:
-            _navigate("practice")
-    elif path == "/library/health":
-        _request_library_health()
-    elif path == "/library/open":
-        library_view.present_open_status("")
-        score_error = ""
-        var opened: Variant = _decode_json(body)
-        if opened is Dictionary and (bool(opened.get("warmup", false)) or resume_saved):
-            _navigate("practice")
-            if resume_saved:
-                # Loading already restores the backend's lesson, hand, tempo
-                # and clean streak. A new open_at would replace that place.
-                _on_state(_result, code, _headers, body, action_request_started_ms)
-            _refresh_score_status()
-        elif opened is Dictionary:
-            practice_view.show_source_picker(opened)
-    elif path == "/settings":
-        settings_view.present_message("Settings saved")
-        _request_settings()
-        _request_library()
-    elif path == "/device":
-        _request_settings()
+            _request_library()
+        "device":
+            _request_settings()
     _flush_transport_action()
     _poll()
     if not pending_library_piece.is_empty():
