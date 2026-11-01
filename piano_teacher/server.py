@@ -47,7 +47,7 @@ from .application.feedback_route import FeedbackFacts, select_feedback_route
 from .application.assessment_settlement import assess_completed_take
 from .application.assessment_commit import commit_assessed_result
 from .application.guided_fragment import select_guided_fragment
-from .application.guided_session import GuidedSession, GuidedFragment
+from .application.guided_session import GuidedSession, GuidedFragment, select_fragment
 from .application.tempo_map_cache import TempoMapCache
 from .application.session_snapshot_builder import (
     SnapshotValues, SnapshotReadPorts, capture as capture_session_snapshot,
@@ -719,6 +719,12 @@ class PracticeEngine:
         if self.mode != "learn" or self.guided_range is None:
             return phrase
         start, end = self.guided_range
+        current = self.guided_session.fragment
+        if (current is not None and current.beat_range == (start, end)
+                and current.phrase.number == phrase.number
+                and current.phrase.start >= phrase.start
+                and current.phrase.end <= phrase.end):
+            return current.phrase
         grid = phrase_grid(phrase, self.plan.piece.bar_boundaries)
         first = next(i for i, beat in enumerate(grid) if abs(beat-start) < 1e-6)
         last = next(i for i, beat in enumerate(grid) if abs(beat-end) < 1e-6)
@@ -732,18 +738,18 @@ class PracticeEngine:
                      remediation: RemedialAssignment | None = None):
         if self.plan is None:
             raise ValueError("Open a piece first")
-        phrase = self.plan.active_phrase
-        fragment = select_guided_fragment(
-            phrase, self.plan.piece.bar_boundaries, from_beat)
-        grid, first, end_index = fragment.grid, fragment.first_index, fragment.end_index
+        fragment = select_fragment(
+            self.plan.active_variant, self.plan.piece.bar_boundaries,
+            from_beat=from_beat)
+        start, end = fragment.beat_range
         retry_range = self.retry_range if recovery else None
         self._stop()
         self._remediation_active = remediation
         if recovery:
             self.retry_range = retry_range
-            self._guided_return = (self.plan.identity, grid[first])
+            self._guided_return = (self.plan.identity, start)
         self.mode = "learn"
-        self.guided_range = (grid[first], grid[end_index])
+        self.guided_range = (start, end)
         unit = self._guided_unit()
         if unit is not None and self.fingerprint:
             self.learner_store.save_resume(self.fingerprint, self.plan.identity, unit)
@@ -755,8 +761,8 @@ class PracticeEngine:
         self.guided_session.bind(GuidedFragment(
             variant=(remediation.variant if remediation is not None
                      else self.plan.active_variant),
-            start_beat=grid[first], end_beat=grid[end_index],
-            phrase=self.display_phrase()),
+            start_beat=start, end_beat=end,
+            phrase=fragment.phrase),
             stage_key=self.plan.identity, revision=self.score_revision,
             now=time.monotonic(), connected=self.midi.connected,
             recovery=recovery)
@@ -764,7 +770,7 @@ class PracticeEngine:
         self.feedback = "Preparing a short idea to learn"
         self.next_action = (f"Learn the selected {remediation.focus} notes, then retry the original."
                             if remediation is not None else
-                            f"Learn bars {self.display_phrase().first_bar}-{self.display_phrase().last_bar} "
+                            f"Learn bars {fragment.phrase.first_bar}-{fragment.phrase.last_bar} "
                             "at your own pace, then retry the rhythm.")
         self._save()
 
