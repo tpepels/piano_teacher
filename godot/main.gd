@@ -30,6 +30,7 @@ const InProcessBus := preload("res://inprocess_bus.gd")
 const PracticeFrameCoordinator := preload("res://practice_frame_coordinator.gd")
 const PracticeStatePresenter := preload("res://practice_state_presenter.gd")
 const CommandFailurePresenter := preload("res://command_failure_presenter.gd")
+const NavigationPolicy := preload("res://navigation_policy.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
 
 var current_screen := "practice"
@@ -528,19 +529,15 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
 
 
 func _navigate(screen: String) -> void:
-    var previous_screen: String = current_screen
-    if screen == "home":
-        screen = "practice" # Old Home is no longer part of normal navigation.
-    if screen == "settings" and current_screen != "settings":
-        settings_return_screen = current_screen
-    if screen != "practice" and current_screen == "practice":
-        var phase: String = str(last_state.get("phase", ""))
-        var starting: bool = (action_pending and last_post_path == "/control"
-            and last_control_action in ["start", "restart", "resume", "score_ready",
-            "learn", "learn_retry", "practice", "listen", "perform"])
-        if (phase in ["count_in", "playing", "guided_wait", "feedback",
-                      "recovering", "loading", "preview_gap"] or starting):
-            _send_action({"action": "pause"})
+    var decision: Dictionary = NavigationPolicy.plan(
+        screen,current_screen,str(last_state.get("phase","")),
+        action_pending,last_post_path,last_control_action)
+    screen = str(decision["target"])
+    var previous_screen: String = str(decision["previous"])
+    if bool(decision["remember_settings"]):
+        settings_return_screen = previous_screen
+    if bool(decision["pause"]):
+        _send_action({"action":"pause"})
     current_screen = screen
     _update_visual_frame_rate(last_state)
     navigation_drawer.present(screen, previous_screen)
