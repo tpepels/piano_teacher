@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-01",
+  "research_only": true,
+  "gate_2_complete": false,
+  "reference": {
+    "repository": "annieetang/coda_backend",
+    "commit": "a4eb85dfc2bd418818ca9ff775c0a11ccccb3530"
+  },
+  "execution": {
+    "code_commit": "708b542ae490f6bfc35edfb70b0e64234ce147ae",
+    "run": "https://github.com/tpepels/piano_teacher/actions/runs/41338162668",
+    "artifact_id": 13095553270,
+    "report_file": "real-source-voices.json",
+    "generator": "scripts/probe_coda_upstream_scores.py",
+    "classifier": "piano_teacher/research/coda_discrepancy.py",
+    "tests": "tests/test_coda_discrepancy.py"
+  },
+  "source_mmr_exact_voices": 12,
+  "source_mmr_sampled_voices": 12,
+  "total_algorithm_cases": 60,
+  "both_written_sounding_exact": 30,
+  "sounding_only_exact": 10,
+  "sounding_different": 15,
+  "reference_invalid_tie": 1,
+  "upstream_none": 4,
+  "classifications": {
+    "rest-coverage-only": 5,
+    "written-segmentation-tuplet": 1,
+    "written-segmentation-meter": 4,
+    "beamed-source-protected": 3,
+    "cross-measure-group-protected": 2,
+    "tuplet-source-protected": 2,
+    "rest-bearing-tuplet-protected": 3,
+    "changing-meter-dotted-quantization": 4,
+    "changing-meter-cross-bar-chord": 1,
+    "upstream-disconnected-tie": 1
+  },
+  "unclassified": 0,
+  "scope": "six pinned source scores; author-exported bare written MusicXML versus native bare written MusicXML, separately compare tie-collapsed played events",
+  "limitations": [
+    "no expressive mark/beam/style parity established",
+    "no unselected source-corpus parity",
+    "no pedagogy outcome evidence",
+    "no physical MIDI validation"
+  ],
+  "production_enabled": false,
+  "algorithm_changes": false
+}
