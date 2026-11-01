@@ -139,7 +139,7 @@ var last_timing_transport := -1
 var last_timing_revision := -1
 var frame_meter = FrameMeter.new()
 var frame_coordinator
-var phase0_last_phase := ""
+var state_presenter
 var lesson_request
 var device_pending: bool:
     get:
@@ -241,6 +241,9 @@ func _ready() -> void:
     frame_coordinator = PracticeFrameCoordinator.new(
         practice_view,settings_view,lesson_view,lesson_session,
         score_effects,demo_player,frame_meter)
+    state_presenter = PracticeStatePresenter.new(
+        practice_view,settings_view,lesson_view,lesson_session,
+        score_effects,state_poll_timer)
     set_process(true)
 
 func _make_count_click(frequency: float) -> AudioStreamWAV:
@@ -908,7 +911,29 @@ func _on_state(_result: int, code: int, _headers: PackedStringArray, body: Packe
     if practice_view.is_source_picker_open():
         practice_view.suppress_piano_input(parsed)
         return
-    PracticeStatePresenter.present(self, parsed, sample_started_ms)
+    last_state = parsed
+    _update_visual_frame_rate(parsed)
+    _clear_assessed_effects_in_ungraded_mode(parsed)
+    var received_ms: int = Time.get_ticks_msec()
+    var started_ms: int = (state_request_started_ms
+        if sample_started_ms < 0 else sample_started_ms)
+    last_state_tick = int((started_ms+received_ms)/2.0)
+    visual_transport_clock.accept(parsed,last_state_tick,received_ms)
+    if demo_player != null and bool(parsed.get("loaded",false)):
+        demo_player.synchronize(parsed,_transport_beat_at(received_ms))
+    score_session.update_context(parsed,received_ms)
+    if bool(parsed.get("loaded",false)) and practice_view.stage.renderer != null:
+        var beat: float = _transport_beat_at(received_ms)
+        practice_view.stage.renderer.present(
+            parsed,beat,_unrolled_score_beat_at(beat,received_ms))
+    state_presenter.present(
+        parsed,current_screen,action_pending,_native_score_ready(),
+        fingering_save_error,
+        demo_player != null and bool(demo_player.get("audio_error")),
+        sample_started_ms < 0,received_ms,phase0_smoke_mode)
+    if bool(parsed.get("loaded",false)):
+        _consume_live_piano_hits(parsed)
+    _refresh_score_status()
 
 func _preview_note_arrivals(groups: Array) -> void:
     # Demonstrate musical energy when there is no keyboard, but in blue
