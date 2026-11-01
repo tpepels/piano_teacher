@@ -27,9 +27,13 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_guided_fragment.py \
   tests/test_assessment_settlement.py \
   tests/test_assessment_evidence.py \
+  tests/test_assessment_commit.py \
   tests/test_learner_progress_coordination.py \
   tests/test_coordination_boundaries.py::test_snapshot_assembly_and_live_hit_mapping_have_one_owner \
   tests/test_coordination_boundaries.py::test_command_error_publication_has_injected_screen_dependencies \
+  tests/test_coordination_boundaries.py::test_completed_take_owns_only_transport_and_session_persistence \
+  tests/test_coordination_boundaries.py::test_teaching_selection_and_preparation_are_learner_owned \
+  tests/test_coordination_boundaries.py::test_successful_command_route_has_no_application_dependency \
   tests/test_attempt_progression.py::test_authoritative_tick_caches_source_grid_until_phrase_changes \
   tests/test_retained_score_pipeline.py::test_frame_path_never_reassembles_source_or_preparation_ink \
   tests/test_retained_score_pipeline.py::test_fingering_overlay_has_bounded_source_window \
