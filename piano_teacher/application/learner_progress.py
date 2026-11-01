@@ -7,9 +7,10 @@ the plan's selection, transport, teaching and timed mastery remain caller-owned.
 from __future__ import annotations
 
 from collections.abc import Iterable
+import math
 
 from ..learning import LearningPlan
-from ..learner_state import LearnerStateStore, guided_units, next_guided_unit
+from ..learner_state import LearnerStateStore, guided_units, next_guided_unit, placement_candidate
 from ..practice import NoteAssessment
 
 
@@ -76,6 +77,53 @@ class LearnerProgress:
         return {**saved, "course_guided": course_guided, "prepared_units": prepared,
                 "total_units": len(units), "current_unit": current, "next_unit": following,
                 "unit_number": next((i+1 for i, unit in enumerate(units) if unit == current), 0)}
+
+    @staticmethod
+    def next_skippable_step(plan: LearningPlan | None, reason):
+        if (plan is None or not isinstance(reason, str) or not reason.strip()
+                or plan.lesson_step_number >= len(plan.lesson_steps)):
+            raise ValueError("Choose an available next step and explain the skip")
+        return plan.lesson_steps[plan.lesson_step_number]
+
+    def mark_skipped(self, *, fingerprint: str, stage_key: str, reason: str) -> None:
+        if fingerprint:
+            self._store.mark_skipped(fingerprint, stage_key, reason=reason)
+
+    @staticmethod
+    def original_placement_step(plan: LearningPlan):
+        candidate = placement_candidate(plan)
+        if candidate is None:
+            raise ValueError("You are already playing the original notes")
+        return candidate
+
+    def mark_prior_steps_placed(self, plan: LearningPlan, *, fingerprint: str,
+                                candidate) -> None:
+        if not fingerprint:
+            return
+        for step in plan.lesson_steps[plan.lesson_step_number-1:]:
+            if step.key == candidate.key:
+                break
+            self._store.mark_skipped(fingerprint, step.key,
+                reason="Student chose to try the original notes", status="placed")
+
+    def choose_trouble_spot(self, plan: LearningPlan | None, *, fingerprint: str,
+                            stage_key, start_beat):
+        """Validate the current source binding before interrupting playback."""
+        if (plan is None or not fingerprint or not isinstance(stage_key, str)
+                or isinstance(start_beat, bool) or not isinstance(start_beat, (int, float))
+                or not math.isfinite(start_beat)):
+            raise ValueError("Choose a saved trouble spot for this piece")
+        step = next((step for step in plan.lesson_steps if step.key == stage_key), None)
+        stored = next((unit for unit in self.valid_trouble_spots(
+                           plan, fingerprint=fingerprint, stage_key=stage_key)
+                       if unit["stage_key"] == stage_key
+                       and unit["start_beat"] == start_beat), None)
+        if step is None or stored is None:
+            raise ValueError("This trouble spot is no longer available")
+        return step, stored
+
+    def reactivate_trouble(self, *, fingerprint: str, stage_key: str) -> None:
+        self._store.reactivate(fingerprint, stage_key)
 
     def valid_trouble_spots(self, plan: LearningPlan | None, *, fingerprint: str,
                            stage_key: str | None = None) -> list[dict]:
