@@ -230,3 +230,19 @@ def test_key_pressed_while_loading_cannot_be_reused_as_a_fresh_answer(learner):
     send(e, 60, False)
     send(e, 60)
     assert e.state()['teaching']['target_index'] == 1
+
+
+def test_engine_guided_session_is_the_single_controller_and_recovery_owner(learner):
+    e, _now = learner
+    e.control("learn")
+    assert e.teaching is e.guided_session.controller
+    assert e.guided_session.fragment.beat_range == e.guided_range
+    e._guided_prepared = True
+    assert e.guided_session.prepared
+    e._guided_return = (e.plan.identity, 0.0)
+    assert e.guided_session.return_context == (e.plan.identity, 0.0)
+    e.control("practice")
+    assert e.teaching is None
+    assert e.guided_session.fragment is None
+    # A source-bound recovery cursor may survive the Learn->Practice handoff.
+    assert e._guided_return == (e.plan.identity, 0.0)
