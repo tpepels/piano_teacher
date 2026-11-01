@@ -963,3 +963,33 @@ Durable machine-readable evidence:
 **No general Coda parity, source-expression engraving parity, completed
 production lesson, native Godot run, physical MIDI verification or learning
 improvement has been demonstrated by this step. Gate 2 stays open.**
+
+
+## Gate 2 follow-up — broader MusicXML and all original automatic chord levels (2026-11-01)
+
+A separate **diagnostic-only** extension now tries ten additional authored
+MusicXML excerpts, including Danny Boy and Autumn Leaves, while preserving the
+earlier certified 24-case symbolic subset. The original backend's actual
+automatic chord level formula is executed at **every** generated width, with
+all `None` and rejected values included in the denominator.
+
+At pinned run
+https://github.com/tpepels/piano_teacher/actions/runs/41347316618,
+**7/10 additional source excerpts** completed the differential;
+**3** were explicitly rejected for off-grid source quantization;
+**8/10 processed source voices** matched original source MMRs; two differed.
+There were **37 automatically selected chordification attempts**:
+**3** exact changing written-and-sounding results (observations, not yet
+certified), **2** different results, and **32** author `None` returns.
+
+A separate production engraving/software-timeline test run at
+https://github.com/tpepels/piano_teacher/actions/runs/41347147004
+passed **22 tests**, including complete changed-meter and trailing-rest
+source scores through native Verovio SVG, actual WAV Listen, and synthetic
+MIDI grading/source IDs. These are not physical-MIDI or native Godot
+framebuffer tests.
+
+Full fixture-by-fixture report:
+`docs/research-coda-expanded-corpus-2026-11-01.md`, with durable summary
+`docs/evidence/coda-2026-11-01-expanded-corpus.json`.
+**Gate 2 remains open and research-only.**

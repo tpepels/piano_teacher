@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-01",
+  "status": "extended-diagnostic-only",
+  "research_only": true,
+  "production_enabled": false,
+  "author_reference": "annieetang/coda_backend@a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
+  "code_revision": "2a343ca773076cb3e5366dd85dce1f5c7aa4f9dc",
+  "author_workflow": "https://github.com/tpepels/piano_teacher/actions/runs/41347316618",
+  "author_artifact_id": 13099996436,
+  "artifact_retention_days": 14,
+  "expanded_source_count": 10,
+  "full_differential_source_count": 7,
+  "offgrid_grid_rejections": 3,
+  "source_voices_attempted": 10,
+  "source_mmr_exact_voices": 8,
+  "other_source_mmr_mismatches": 2,
+  "auto_chord_level_attempts": 37,
+  "auto_chord_outcomes": {
+    "original-none": 32,
+    "observed-changing-written-and-sounding-exact": 3,
+    "observed-different": 2
+  },
+  "overall_compared_operations": 69,
+  "all_output_statuses": {
+    "observed-both-exact-unchanged": 6,
+    "observed-different": 4,
+    "observed-sounding-only": 10,
+    "observed-strict-changing": 16,
+    "upstream-invalid-ties": 1,
+    "upstream-none": 32
+  },
+  "extended_source_cases": [
+    {
+      "id": "chord-ties",
+      "status": "mmr-mismatch"
+    },
+    {
+      "id": "grandstaff-voices",
+      "status": "mmr-exact"
+    },
+    {
+      "id": "source-quintuplets",
+      "status": "mmr-mismatch"
+    },
+    {
+      "id": "trailing-rests",
+      "status": "mmr-exact"
+    },
+    {
+      "id": "source-mixed-meter",
+      "status": "mmr-exact"
+    },
+    {
+      "id": "source-sixteenth-beams",
+      "status": "mmr-exact"
+    },
+    {
+      "id": "source-five-to-four",
+      "status": "grid-rejected"
+    },
+    {
+      "id": "source-seven-to-four",
+      "status": "grid-rejected"
+    },
+    {
+      "id": "autumn-leaves-excerpt",
+      "status": "grid-rejected"
+    },
+    {
+      "id": "danny-boy-excerpt",
+      "status": "mmr-exact"
+    }
+  ],
+  "projected_pipeline": {
+    "status": "bounded-software-pass",
+    "run": "https://github.com/tpepels/piano_teacher/actions/runs/41347147004",
+    "test_count": 22,
+    "new_source_cases": [
+      "xml_mixed_meter.musicxml",
+      "xml_trailing_rests.musicxml"
+    ],
+    "verified": [
+      "real Verovio SVG and notehead IDs",
+      "WAV Listen output and time duration",
+      "synthetic MIDI note on/off grading",
+      "live input view source identity",
+      "immutable original MusicXML"
+    ]
+  },
+  "strict_parity_baseline": {
+    "source_scores": 6,
+    "strict_changed_exact": 24,
+    "unchanged": true
+  },
+  "not_verified": [
+    "new 10-source outputs certified as parity",
+    "all original Score/Part/Voice levels",
+    "authored source expression/notation style parity",
+    "Godot physical framebuffer",
+    "physical MIDI keyboard",
+    "pedagogical learning improvement"
+  ],
+  "gate_2_complete": false
+}
