@@ -187,19 +187,21 @@ def test_pure_frontend_policy_with_headless_godot(script, success):
     assert success in output, output
 
 
-def test_completed_take_owns_only_mutations_and_persistence():
+def test_completed_take_owns_only_transport_and_session_persistence():
     server = (ROOT/"piano_teacher/server.py").read_text()
     assessment = (ROOT/"piano_teacher/application/assessment_settlement.py").read_text()
     evidence = (ROOT/"piano_teacher/application/assessment_evidence.py").read_text()
+    commit = (ROOT/"piano_teacher/application/assessment_commit.py").read_text()
     assert "assess_completed_take(" in server
-    assert "observe_assessed_take(" in server
+    assert "commit_assessed_result(" in server
     assert "def assess_completed_take(" in assessment
     assert "def observe_assessed_take(" in evidence
-    for source in (assessment, evidence):
+    assert "def commit_assessed_result(" in commit
+    assert "observe_assessed_take(" in commit
+    assert commit.index("observe_assessed_take(") < commit.index("message = plan.apply_result(")
+    for source in (assessment, evidence, commit):
         assert "engine." not in source
         assert "PracticeEngine" not in source
-    assert server.index("observe_assessed_take(") < server.index("message = p.apply_result(")
-
 
 def test_teaching_selection_and_preparation_are_learner_owned():
     server = (ROOT/"piano_teacher/server.py").read_text()
