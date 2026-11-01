@@ -1312,8 +1312,11 @@ class PracticeEngine:
         guided_retry_range = self.retry_range
         self._stop()
         self._reset_trouble()
+        # Preserve the original ordering of the source opening reset.
+        if action in ("select_step", "next", "previous"):
+            self.open_from_beat = 0.0
         apply_stage_change(p, change, warmup=self.is_builtin_warmup)
-        if change.resets_open_position:
+        if action == "hand":
             self.open_from_beat = 0.0
         # Native notation is engraved in source coordinates: changing
         # only playback BPM must not invalidate the score/reload Godot.
