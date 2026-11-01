@@ -41,6 +41,7 @@ from .application.control_dispatch import ControlDispatcher
 from .application.practice_transitions import run_before_assessment
 from .application.attempt_progression import AttemptProgression, AttemptTick
 from .application.feedback_route import FeedbackFacts, select_feedback_route
+from .application.assessment_settlement import assess_completed_take
 from .application.guided_fragment import select_guided_fragment
 from .application.tempo_map_cache import TempoMapCache
 from .application.session_snapshot_builder import (
@@ -1407,26 +1408,18 @@ class PracticeEngine:
                 self._update()
             return
         tempo_map = self._active_tempo_map()
-        result = self.assessment_policies.select(tempo_map).grade(
-            phrase, hand=self.plan.hand, bpm=self.plan.bpm,
+        # Grading/projection uses explicit assessment inputs. The engine
+        # still owns take settlement and every subsequent state mutation.
+        assessed = assess_completed_take(
+            phrase=phrase, hand=self.plan.hand, bpm=self.plan.bpm,
             played=self.recorder.presses if self.recorder else [],
             from_beat=self.play_from_beat, end_beat=ending,
-            tempo=tempo_map)
-        # Keep the just-played score visible for feedback. Curriculum changes
-        # are applied only after the display interval, never mid-feedback.
-        try:
-            projection = self.assessment_policies.project(
-                result, phrase, bpm=self.plan.bpm,
-                layout=self.engraving().layout,
-                from_beat=self.play_from_beat, tempo=tempo_map)
-            self.feedback_marks = projection["marks"]
-            self.feedback_unmapped = projection["unmapped"]
-        except (ValueError, RuntimeError, KeyError) as exc:
-            self.feedback_marks = []
-            self.feedback_unmapped = len(result.notes)
-            self.feedback = f"Engraving feedback unavailable: {exc}"
-        else:
-            self.feedback = result.summary
+            tempo=tempo_map, policies=self.assessment_policies,
+            layout_for_feedback=lambda: self.engraving().layout)
+        result = assessed.result
+        self.feedback_marks = assessed.marks
+        self.feedback_unmapped = assessed.unmapped
+        self.feedback = assessed.feedback
         self.running=False
         self.recorder=None
         self.performance_summary = (self._performance_review(phrase, result)
