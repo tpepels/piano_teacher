@@ -81,17 +81,19 @@ class App:
     var midi_polls := 0
     var metronome_updates := 0
 
-    func _transport_beat_now() -> float:
+    func _transport_beat_at(_at_ms: int) -> float:
         clock_samples += 1
         return 1.25
 
     func _read_live_midi() -> void:
         midi_polls += 1
 
-    func _update_count_in() -> void:
+    var count_in_beat := NAN
+    func _update_count_in(beat: float, _at_ms: int) -> void:
         metronome_updates += 1
+        count_in_beat = beat
 
-    func _unrolled_score_beat(clock: float) -> float:
+    func _unrolled_score_beat_at(clock: float, _at_ms: int) -> float:
         return clock + 8.0
 
     func _native_score_ready() -> bool:
@@ -105,7 +107,8 @@ func _initialize() -> void:
     var app := App.new()
     Coordinator.advance(app,0.016)
     if app.clock_samples != 1 or app.midi_polls != 1 or \
-            app.metronome_updates != 1 or app.score_effects.prunes != 1 or \
+            app.metronome_updates != 1 or app.count_in_beat != 1.25 or \
+            app.score_effects.prunes != 1 or \
             app.last_playhead_strike_transport != -1:
         failures += 1
     app.last_state = {"mode":"listen","running":true,"paused":false,
