@@ -1521,6 +1521,19 @@ class PracticeEngine:
             if now >= self.next_at:
                 self._update()
 
+    def _assess_rolling_boundary(self, boundary: float,
+                                 grid: tuple[float, ...]):
+        """Grade one authored boundary under the existing session lock."""
+        tempo_map = self._active_tempo_map()
+        return self.assessment_policies.select(tempo_map).recover(
+            self.plan.active_phrase, hand=self.plan.hand, bpm=self.plan.bpm,
+            played=self.recorder.presses if self.recorder else [],
+            from_beat=self.play_from_beat, end_beat=boundary, grid=grid,
+            threshold=(SETTINGS.warmup_recovery_errors
+                       if self.is_builtin_warmup
+                       else SETTINGS.recovery_errors_in_window),
+            warmup=self.is_builtin_warmup, tempo=tempo_map)
+
     def _update(self) -> None:
         """Advance the backend clock under its existing session lock."""
         self._poll_midi_connection()
@@ -1532,18 +1545,6 @@ class PracticeEngine:
         score_beat = self.play_from_beat + max(
             0.0, self._elapsed_beat(now-self.run_at))
 
-        def assess_boundary(boundary: float, grid: tuple[float, ...]):
-            tempo_map = self._active_tempo_map()
-            return self.assessment_policies.select(tempo_map).recover(
-                phrase, hand=self.plan.hand, bpm=self.plan.bpm,
-                played=self.recorder.presses if self.recorder else [],
-                from_beat=self.play_from_beat, end_beat=boundary,
-                grid=grid,
-                threshold=(SETTINGS.warmup_recovery_errors
-                           if self.is_builtin_warmup
-                           else SETTINGS.recovery_errors_in_window),
-                warmup=self.is_builtin_warmup, tempo=tempo_map)
-
         step = self.attempt_progression.inspect(AttemptTick(
             phrase=phrase, boundaries=self.plan.piece.bar_boundaries,
             now=now, score_beat=score_beat, from_beat=self.play_from_beat,
@@ -1552,7 +1553,7 @@ class PracticeEngine:
             auto=self.auto, mode=self.mode,
             coda=self.plan.exercise_strategy.name == "coda-part",
             bpm=self.plan.bpm, gap_beats=self.visual_gap_beats),
-            assess_boundary, self._elapsed_seconds)
+            self._assess_rolling_boundary, self._elapsed_seconds)
         self.next_boundary_beat = step.next_boundary
         if step.action == "recovery":
             self._apply_rolling_recovery(
