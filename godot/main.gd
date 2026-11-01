@@ -29,6 +29,7 @@ const ScoreAssetQueue := preload("res://score_asset_queue.gd")
 const InProcessBus := preload("res://inprocess_bus.gd")
 const PracticeFrameCoordinator := preload("res://practice_frame_coordinator.gd")
 const PracticeStatePresenter := preload("res://practice_state_presenter.gd")
+const CommandFailurePresenter := preload("res://command_failure_presenter.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
 
 var current_screen := "practice"
@@ -140,6 +141,7 @@ var last_timing_revision := -1
 var frame_meter = FrameMeter.new()
 var frame_coordinator
 var state_presenter
+var command_failure_presenter
 var lesson_request
 var device_pending: bool:
     get:
@@ -244,6 +246,8 @@ func _ready() -> void:
     state_presenter = PracticeStatePresenter.new(
         practice_view,settings_view,lesson_view,lesson_session,
         score_effects,state_poll_timer)
+    command_failure_presenter = CommandFailurePresenter.new(
+        library_view,practice_view,settings_view,home_view)
     set_process(true)
 
 func _make_count_click(frequency: float) -> AudioStreamWAV:
@@ -1058,15 +1062,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         var queued_library_failed: bool = not pending_library_piece.is_empty()
         pending_library_piece = ""
         pending_library_resume = false
-        if path == "/library/open":
-            library_view.present_open_status("Cannot open score: " + message, true)
-        elif queued_library_failed:
-            library_view.present_open_status("Cannot open selected music: " + message, true)
-        practice_view.present_message(message)
-        settings_view.present_message(message)
-        if path != "/library/open" and not queued_library_failed:
-            library_view.present_request_error(message)
-        home_view.present_operation_error(message)
+        command_failure_presenter.present(message,path,queued_library_failed)
         _flush_transport_action()
         return
     if path == "/fingering":
