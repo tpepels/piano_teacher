@@ -75,6 +75,19 @@ def test_single_clock_sample_reaches_visual_consumers():
     assert "PRACTICE_FRAME_COORDINATOR_FAILURES:0" in output, output
 
 
+@pytest.mark.skipif(not (shutil.which("godot") or shutil.which("godot4")),
+                    reason="Godot is not installed")
+def test_state_presenter_receives_only_visual_collaborators():
+    binary = shutil.which("godot") or shutil.which("godot4")
+    run = subprocess.run(
+        [binary,"--headless","--path",str(ROOT/"godot"),
+         "--script",str(ROOT/"tests/godot/practice_state_presenter.gd")],
+        capture_output=True,text=True,timeout=20)
+    output = run.stdout+run.stderr
+    assert run.returncode == 0 and "SCRIPT ERROR" not in output, output
+    assert "PRACTICE_STATE_PRESENTER_FAILURES:0" in output, output
+
+
 def test_snapshot_assembly_and_live_hit_mapping_have_one_owner():
     server = (ROOT / "piano_teacher/server.py").read_text()
     assert "return capture_session_snapshot(self)" in server
