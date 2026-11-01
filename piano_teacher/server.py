@@ -54,7 +54,7 @@ from .live_event_ring import LiveEventRing
 from .runtime_timings import RuntimeTimings
 from .live_input_view import LiveInputView
 from .instruction import next_full_attempt
-from .learner_state import guided_units, next_guided_unit, placement_candidate
+from .learner_state import guided_units, placement_candidate
 from .progress_repository import ProgressRepository
 from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
@@ -590,9 +590,9 @@ class PracticeEngine:
         if not snapshot["completed"]:
             return
         unit = self._guided_unit()
-        if unit is not None and self.fingerprint:
-            self.learner_store.complete_unit(self.fingerprint, self.plan.identity, unit,
-                                            assisted=snapshot["assisted_count"] > 0)
+        self.learner_progress.record_guided_preparation(
+            fingerprint=self.fingerprint, stage_key=self.plan.identity,
+            unit=unit, assisted_count=snapshot["assisted_count"])
         self._guided_prepared = True
 
     def _learner_snapshot(self) -> dict:
@@ -604,9 +604,9 @@ class PracticeEngine:
         if self.plan.exercise.kind == "perform" and not explicit_learn:
             self._prepare_perform()
             return
-        unit = next_guided_unit(self.plan.active_variant, self.plan.piece.bar_boundaries, self._learner_saved())
-        if unit is None and explicit_learn:
-            unit = next(iter(guided_units(self.plan.active_variant, self.plan.piece.bar_boundaries)), None)
+        unit = self.learner_progress.next_course_unit(
+            self.plan.active_variant, self.plan.piece.bar_boundaries,
+            self._learner_saved(), explicit_learn=explicit_learn)
         if unit is None:
             self._prepare_practice()
         else:
