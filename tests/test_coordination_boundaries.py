@@ -35,30 +35,29 @@ def test_practice_engine_delegates_start_and_progression_under_lock():
 
 def test_main_callbacks_keep_reply_handling_and_presentation_separate():
     main = (ROOT / "godot/main.gd").read_text()
-    process = main.split("func _process(", 1)[1].split("\nfunc ", 1)[0]
-    state = main.split("func _on_state(", 1)[1].split("\nfunc ", 1)[0]
-    assert "PracticeFrameCoordinator.advance(self, _delta)" in process
-    assert "stage.renderer.present(" not in process
-    assert "PracticeStatePresenter.present(self, parsed, sample_started_ms)" in state
-    assert "score_session.update_context(" not in state
+    process = main.split("func _process(",1)[1].split("\nfunc ",1)[0]
+    state = main.split("func _on_state(",1)[1].split("\nfunc ",1)[0]
     frame = (ROOT / "godot/practice_frame_coordinator.gd").read_text()
     presenter = (ROOT / "godot/practice_state_presenter.gd").read_text()
-    assert frame.count("app._transport_beat_at(ticks)") == 1
-    assert "app._update_count_in(transport_beat,ticks)" in frame
-    assert "app._unrolled_score_beat_at(score_clock,ticks)" in frame
-    assert "renderer.present_clock(" in frame
+    assert "frame_coordinator.advance(" in process
+    assert "_transport_beat_at(ticks)" in process
+    assert "_update_count_in(beat,ticks)" in process
+    assert "state_presenter.present(" in state
+    assert "visual_transport_clock.accept(parsed,last_state_tick,received_ms)" in state
+    assert "score_session.update_context(parsed,received_ms)" in state
+    assert "renderer.present_clock(beat,visual_beat)" in frame
     assert "renderer.present(" not in frame
-    assert "renderer.present(parsed,beat," in presenter
-    assert "demo_player.keep_synchronized(" in frame
-    assert "app.visual_transport_clock.accept(" in presenter
-    assert "app._transport_beat_at(received_ms)" in presenter
-    assert "present_clock(" not in presenter
+    assert "stage.renderer.present(" in state
+    assert "app." not in frame
+    assert "app." not in presenter
+    assert "func _init(practice, settings, lesson, session," in frame
+    assert "func _init(practice, settings, lesson, session," in presenter
+    assert "visual_transport_clock" not in presenter
+    assert "score_session" not in presenter
     base = (ROOT / "godot/notation/shared/view_base.gd").read_text()
-    clock = base.split("func present_clock(", 1)[1].split("\nfunc ", 1)[0]
+    clock = base.split("func present_clock(",1)[1].split("\nfunc ",1)[0]
     assert "queue_redraw()" in clock
     assert "duplicate(true)" not in clock
-    assert "_practice_timeline_error(" not in clock
-    assert "app.score_session.update_context(" in presenter
 
 
 @pytest.mark.skipif(not (shutil.which("godot") or shutil.which("godot4")),
