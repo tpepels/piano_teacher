@@ -40,7 +40,7 @@ from .application.score_ack import ScoreAckState, choose_score_ack_action
 from .application.transport_commands import (
     StartFacts, select_start_route, require_pausable, resume_timeline,
 )
-from .application.stage_change import prepare_stage_change, apply_stage_change
+from .application.stage_change import prepare_stage_change, apply_stage_change, guided_reentry
 from .application.practice_transitions import TransitionContext, decide_transition
 from .application.attempt_progression import AttemptProgression, AttemptTick
 from .application.feedback_route import FeedbackFacts, select_feedback_route
@@ -1298,16 +1298,21 @@ class PracticeEngine:
             self.score_revision+=1
         self.feedback="Ready"
         self.next_action="Start when you are ready."
-        if was_guided:
-            if action in ("tempo", "tempo_up", "tempo_down"):
-                recovery = guided_return is not None and guided_return[0] == p.identity
-                if recovery:
-                    self.retry_range = guided_retry_range
-                self._begin_learn(from_beat=guided_start, bump_revision=False, recovery=recovery)
-            elif self.course_guided:
-                self._begin_course_stage(bump_revision=False, explicit_learn=action == "hand")
-            else:
-                self._begin_learn(bump_revision=False)
+        continuation = guided_reentry(
+            change=change, was_guided=was_guided,
+            course_guided=self.course_guided,
+            previous_return=guided_return, current_stage=p.identity)
+        if continuation.route == "same_fragment":
+            if continuation.recovery:
+                self.retry_range = guided_retry_range
+            self._begin_learn(
+                from_beat=guided_start, bump_revision=False,
+                recovery=continuation.recovery)
+        elif continuation.route == "course":
+            self._begin_course_stage(
+                bump_revision=False, explicit_learn=continuation.explicit_learn)
+        elif continuation.route == "fresh":
+            self._begin_learn(bump_revision=False)
         self._save()
 
     def _poll_midi_connection(self):
