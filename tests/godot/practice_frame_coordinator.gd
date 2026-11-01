@@ -17,7 +17,7 @@ class Renderer:
     extends RefCounted
     var last_beat := NAN
     var last_visual := NAN
-    func present(_state: Dictionary, beat: float, visual: float) -> void:
+    func present_clock(beat: float, visual: float) -> void:
         last_beat = beat
         last_visual = visual
 
