@@ -46,7 +46,6 @@ from .application.attempt_progression import AttemptProgression, AttemptTick
 from .application.feedback_route import FeedbackFacts, select_feedback_route
 from .application.assessment_settlement import assess_completed_take
 from .application.assessment_commit import commit_assessed_result
-from .application.guided_fragment import select_guided_fragment
 from .application.guided_session import GuidedSession, GuidedFragment, select_fragment
 from .application.tempo_map_cache import TempoMapCache
 from .application.session_snapshot_builder import (
