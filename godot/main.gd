@@ -33,6 +33,7 @@ const CommandFailurePresenter := preload("res://command_failure_presenter.gd")
 const CommandSuccessPolicy := preload("res://command_success_policy.gd")
 const CommandSuccessPresenter := preload("res://command_success_presenter.gd")
 const CommandSuccessEffects := preload("res://command_success_effects.gd")
+const PracticeControlPolicy := preload("res://practice_control_policy.gd")
 const CommandRequestState := preload("res://command_request_state.gd")
 const NavigationPolicy := preload("res://navigation_policy.gd")
 const LiveMidiFeedback := preload("res://live_midi_feedback.gd")
@@ -1069,56 +1070,26 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
         call_deferred("_open_library_piece",
             str(deferred_library["piece"]),bool(deferred_library["resume_saved"]))
 
-func _has_active_transport() -> bool:
-    return bool(last_state.get("running", false)) or str(last_state.get("phase", "")) in ["count_in", "playing", "paused", "feedback", "recovering", "loading", "preview_gap"]
+func _apply_practice_control(decision: Dictionary) -> void:
+    if decision.has("message"):
+        practice_view.present_message(str(decision["message"]))
+    elif decision.has("action"):
+        _send_action(decision)
 
 func _listen_or_return_to_practice() -> void:
-    # Listen is a one-tap reversible action, never a scored take.
-    if str(last_state.get("mode", "")) == "listen":
-        _send_action({"action": "practice", "wait_for_player": true})
-    else:
-        _send_action({"action": "listen"})
-
+    _apply_practice_control(PracticeControlPolicy.listen_toggle(last_state))
 
 func _toggle_playing() -> void:
-    if bool(last_state.get("paused", false)) and not score_error.is_empty():
-        practice_view.present_message(score_error)
-        return
-    if str(last_state.get("mode", "")) == "listen" and not _has_active_transport():
-        _send_action({"action": "practice" if bool(last_state.get("warmup", false)) else "listen"})
-        return
-    if str(last_state.get("mode", "practice")) == "learn":
-        var phase: String = str(last_state.get("phase", "ready"))
-        if phase not in ["paused", "guided_wait", "loading"] and not _native_score_ready():
-            practice_view.present_message("Preparing sheet music - wait for the notes before starting")
-            return
-        var teaching: Dictionary = last_state.get("teaching", {}) if last_state.get("teaching") is Dictionary else {}
-        if phase == "guided_complete" and bool(teaching.get("has_more_units", false)) and not bool(last_state.get("guided_recovery", false)):
-            _send_action({"action": "learn_next"})
-            return
-        _send_action({"action": "resume" if phase == "paused" else "practice" if phase in ["guided_complete", "disconnected"] else "pause" if phase in ["guided_wait", "loading"] else "learn_retry"})
-        return
-    if bool(last_state.get("paused", false)):
-        _send_action({"action": "resume"})
-        return
-    if _has_active_transport():
-        _send_action({"action": "pause"})
-        return
-    if not bool(last_state.get("running", false)) and (not _native_score_ready()):
-        practice_view.present_message("Preparing sheet music - wait for the notes before starting")
-        return
-    _send_action({"action": "pause" if bool(last_state.get("running", false)) else "start"})
+    _apply_practice_control(PracticeControlPolicy.primary(
+        last_state, _native_score_ready(), score_error))
 
 func _toggle_pause() -> void:
-    if bool(last_state.get("paused", false)) and not score_error.is_empty():
-        practice_view.present_message(score_error)
-        return
-    if _has_active_transport() or (str(last_state.get("mode", "practice")) == "learn" and str(last_state.get("phase", "")) in ["guided_wait", "paused"]):
-        _send_action({"action": "resume" if bool(last_state.get("paused", false)) else "pause"})
+    _apply_practice_control(PracticeControlPolicy.pause_toggle(
+        last_state, score_error))
 
 func _restart_practice() -> void:
-    if _native_score_ready():
-        _send_action({"action": "learn_retry" if str(last_state.get("mode", "practice")) == "learn" else "restart"})
+    _apply_practice_control(PracticeControlPolicy.retry(
+        last_state, _native_score_ready()))
 
 func _request_devices() -> void:
     midi_devices.discover()
