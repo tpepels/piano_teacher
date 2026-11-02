@@ -98,7 +98,27 @@ func run() -> void:
     var textures: Dictionary = view.glyphs.textures.duplicate()
     set_state(0.0, false)
     await draw_frame()
-    capture("ready")
+    await process_frame
+    await process_frame
+    var ready_frame: Dictionary = capture("ready")
+    # A stopped score must retain its source glyphs. For a source attack
+    # that fits the fixed initial camera, having no visible noteheads is a
+    # rendering failure even if score_ready and the staff rules are drawn.
+    var opening_attack_exists := false
+    var initial_cursor_x: float = view.size.x * .42
+    for event in view.layout.ordered_events:
+        if str(event.get("kind", "")) != "note" or bool(event.get("chord", false)):
+            continue
+        var predicted_x: float = initial_cursor_x + \
+            (float(event.get("beat", 0.0)) - view.play_from_beat) * \
+            timeline.pixels_per_beat
+        if predicted_x >= 0.0 and predicted_x < view.size.x:
+            opening_attack_exists = true
+            break
+    if opening_attack_exists and int(ready_frame.visible_count) <= 0:
+        push_error("Native score has a visible opening note but renders blank before Play")
+        quit(1)
+        return
     var short_passage: bool = view.timeline.duration_beats * view.timeline.pixels_per_beat < view.size.x * .91
     set_state(-2.5, true)
     await draw_frame()
