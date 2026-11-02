@@ -415,6 +415,22 @@ class LearningPlan:
         candidates = [(i, ex) for i, ex in enumerate(self.exercises)
                       if ex.phrase.first_bar <= first_bar and ex.phrase.last_bar >= last_bar]
         preferred = [(i, ex) for i, ex in candidates if ex.kind == kind]
+        if not preferred and kind == "learn":
+            # A previously saved whole-score Coda learn (1..73) must not
+            # silently reopen as the final full-piece performance after
+            # switching the desktop course to bounded teaching passages.
+            # Preserve the starting source measure and seek within the
+            # new learning route, even when the old interval no longer fits.
+            preferred = [(i, ex) for i, ex in enumerate(self.exercises)
+                         if ex.kind == "learn"
+                         and ex.phrase.first_bar <= first_bar <= ex.phrase.last_bar]
+            if not preferred:
+                following = [(i, ex) for i, ex in enumerate(self.exercises)
+                             if ex.kind == "learn" and ex.phrase.first_bar >= first_bar]
+                if following:
+                    closest_bar = min(ex.phrase.first_bar for _, ex in following)
+                    preferred = [(i, ex) for i, ex in following
+                                 if ex.phrase.first_bar == closest_bar]
         if not preferred:
             preferred = [(i, ex) for i, ex in candidates if ex.kind == "learn"]
         if not preferred and not candidates:
