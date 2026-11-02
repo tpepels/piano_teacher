@@ -126,7 +126,9 @@ func _ready() -> void:
     score_status_panel.add_child(status_content)
     score_status_label = UI.label("Choose a piece from your library", 18, Design.SCORE_INK)
     score_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    score_status_label.clip_text = true
+    # Preserve native-engraving failure details rather than clipping them.
+    score_status_label.clip_text = false
+    score_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     status_content.add_child(score_status_label)
     score_browse_button = _button("Choose music", func(): navigation_requested.emit("library"), true)
     score_browse_button.visible = true
@@ -343,8 +345,9 @@ func present_score_status(loaded: bool, ready: bool, score_error: String) -> voi
         return
     if not score_error.is_empty():
         score_status_label.text = "Unable to display sheet music:\n" + score_error
+        score_status_label.tooltip_text = score_status_label.text
         score_retry_button.visible = true
-        score_browse_button.visible = false
+        score_browse_button.visible = true
     elif loaded:
         score_status_label.text = "Preparing sheet music…"
         score_retry_button.visible = false
