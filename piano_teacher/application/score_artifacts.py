@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from copy import deepcopy
 import hashlib
+import os
+import time
 from dataclasses import dataclass
 
 from ..fingering.projection import authored_projection_sources, project_model
@@ -187,13 +189,28 @@ class ScoreArtifacts:
         return self._png[key]
 
     def geometry(self, selected: ScoreSelection, *, native_notes: bool = True) -> dict:
+        diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
+        began = time.perf_counter()
         score = self.engraving(selected)
+        if diagnostics:
+            print("SCORE_GEOMETRY_STAGE: engraving",
+                  round((time.perf_counter()-began)*1000, 1), "ms", flush=True)
         if not native_notes:
             return score_preparation.assemble_layout(score,
                 native_notes=False, revision=selected.revision)
+        checkpoint = time.perf_counter()
         notation = self._selected_notation(selected)
         model = self.semantic_score(selected)
-        return score_preparation.assemble_layout(score, native_notes=True,
+        if diagnostics:
+            print("SCORE_GEOMETRY_STAGE: semantic",
+                  round((time.perf_counter()-checkpoint)*1000, 1), "ms", flush=True)
+        checkpoint = time.perf_counter()
+        prepared = score_preparation.assemble_layout(score, native_notes=True,
             native_model=model, notation_xml=notation.musicxml,
             cache=self.preprocessing, cache_key=self._layout_key or "",
             revision=selected.revision)
+        if diagnostics:
+            print("SCORE_GEOMETRY_STAGE: native-assets",
+                  round((time.perf_counter()-checkpoint)*1000, 1), "ms",
+                  "total", round((time.perf_counter()-began)*1000, 1), "ms", flush=True)
+        return prepared
