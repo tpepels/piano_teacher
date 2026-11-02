@@ -109,3 +109,15 @@ bash scripts/verify-hybrid-workflow.sh --corpus
 The local suite verifies software contracts. The existing physical MIDI
 checklist remains required for actual keyboard timing, GUI transitions
 and count-in/retry experience.
+
+
+## Source-local Fukuda assignment
+
+The hybrid selector compares each prospective Fukuda reduction against the
+original MIDI attack IDs that are **actually removed**. For failed pitch
+notes, it prefers reductions that remove that exact attack, then reductions
+affecting the surrounding two-beat context. A chord reduction elsewhere in
+the same phrase is not presented as a remedy for an unrelated failed pitch.
+When no eligible local simplification exists, it falls back to Coda
+slowdown and the unchanged original score. The original candidate catalog
+is retained, including otherwise unused research variants.

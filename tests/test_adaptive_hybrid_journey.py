@@ -289,3 +289,38 @@ def test_accepted_amber_midi_take_does_not_restart_or_reengrave(tmp_path):
     finally:
         engine.listen.cancel()
         engine.db.close()
+
+
+def test_fukuda_rule_must_affect_the_failed_note_or_nearby_source(tmp_path):
+    """A distant chord reduction is not remedial practice for an isolated note."""
+    path = tmp_path / "unrelated-chord.mid"
+    midi = mido.MidiFile(type=1, ticks_per_beat=480)
+    track = mido.MidiTrack()
+    track.append(mido.MetaMessage("track_name", name="Right Hand", time=0))
+    track.append(mido.MetaMessage("time_signature",
+                                  numerator=4, denominator=4, time=0))
+    events = []
+    for pitch in (60, 64, 67, 72):
+        events.extend(((0, True, pitch), (240, False, pitch)))
+    events.extend(((1680, True, 76), (1920, False, 76)))
+    last = 0
+    for tick, on, pitch in sorted(events, key=lambda x:(x[0], x[1])):
+        track.append(mido.Message("note_on" if on else "note_off",
+                    note=pitch, velocity=80 if on else 0, time=tick-last))
+        last = tick
+    track.append(mido.MetaMessage("end_of_track", time=0))
+    midi.tracks.append(track)
+    midi.save(path)
+    piece = load_midi(path)
+    plan = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
+    assert any(s.variant.level.startswith("fukuda-midi-")
+               for stages in plan.lesson_generator.catalog.stage_sequences.values()
+               for s in stages)
+    far = next(n for n in piece.notes if n.start >= 3.5)
+    assert plan.refresh_from_feedback({far.source_id: "wrong"})
+    assert not any(s.variant.level.startswith("fukuda-midi-")
+                   for s in plan.stages)
+    chord = next(n for n in piece.notes if n.start == 0 and n.pitch == 64)
+    assert plan.refresh_from_feedback({chord.source_id: "wrong"})
+    assert any(s.variant.level.startswith("fukuda-midi-")
+               for s in plan.stages)
