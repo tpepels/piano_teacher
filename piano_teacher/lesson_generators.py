@@ -398,56 +398,87 @@ def compose_lesson_definitions(
 
 
 @dataclass(frozen=True)
-class CodaFukudaMidiLessonGenerator:
-    """Compose complete Coda rhythm/tempo exercises with Fukuda score reduction.
+class ComposedLessonGenerator:
+    """Independent registered whole-piece policies composed in declared order.
 
-    A whole-score lesson is always present. Graded original-note mistakes
-    additionally create source-delimited Fukuda repair exercises *before* the
-    whole-score curriculum; the combined generator owns the course structure.
-    Every component feeds identical ExerciseStage/ExerciseVariant consumers.
+    Any registered whole-course generator may participate. Participants
+    generate the ungraded core exactly once per initial compilation.
+    A feedback-capable participant may additionally supply repaired
+    source passages based on assessed original MIDI attacks.
     """
+    components: tuple[LessonGenerator, ...]
+    name: str
     mistakes: frozenset[str] | None = None
-    name: str = "coda-fukuda-midi"
     core: LessonPlanDefinition | None = None
 
     def with_mistakes(
         self, mistakes: frozenset[str], definition: LessonPlanDefinition,
-    ) -> "CodaFukudaMidiLessonGenerator":
+    ) -> "ComposedLessonGenerator":
         from dataclasses import replace
         if mistakes == self.mistakes:
             return self
-        core = self.core
-        if core is None:
-            # Reuse already compiled whole-piece Coda and Fukuda stages.
-            # Error-focus exercises are separate; omit them when reconstructing
-            # the immutable core. Nothing expensive is recomputed on MIDI grading.
-            whole = tuple(ex for ex in definition.exercises
-                          if ex.kind == "perform" or ex.key.startswith("coda:excerpt:"))
-            ids = {ex.key for ex in whole}
-            stages = {key: val for key, val in definition.stage_sequences.items()
-                      if key[0] in ids}
-            core = LessonPlanDefinition(
-                whole, stages, self.name, requires_unique_source_ids=True)
+        # A course initially generated without mistakes is exactly the
+        # immutable core. Reuse it, rather than re-running the complete
+        # score generators after each assessed original performance.
+        core = self.core or (definition if not self.mistakes else None)
         return replace(self, mistakes=mistakes, core=core)
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
-        if self.core is None:
-            primary = CodaLessonGenerator().generate(piece)
-            # A complete Fukuda score reduction is always offered, without
-            # restricting it to mistakes. Preserve Coda's whole-piece catalog.
-            full_reductions = FukudaMidiLessonGenerator().generate(piece)
-            combined = compose_lesson_definitions(
-                primary, full_reductions, name=self.name, merge_matching=True)
-        else:
+        if not self.components:
+            raise ValueError("Composed curriculum requires generators")
+        if self.core is not None:
             combined = self.core
+        else:
+            combined = self.components[0].generate(piece)
+            for generator in self.components[1:]:
+                combined = compose_lesson_definitions(
+                    combined, generator.generate(piece),
+                    name=self.name, merge_matching=True)
+            if combined.generator_name != self.name:
+                from dataclasses import replace
+                combined = replace(combined, generator_name=self.name)
         if self.mistakes:
-            # New source-specific remedial sections are inserted before the
-            # complete score, rather than replacing any existing Coda stages.
-            repairs = FukudaMidiLessonGenerator(
-                mistakes=self.mistakes).generate(piece)
-            combined = compose_lesson_definitions(
-                combined, repairs, name=self.name, merge_matching=False)
+            # Only feedback-capable components may create remedial lessons.
+            # Filter out the baseline score exercise, which is already
+            # represented in the full curriculum.
+            for generator in self.components:
+                update = getattr(generator, "with_mistakes", None)
+                if not callable(update):
+                    continue
+                informed = update(self.mistakes, combined)
+                responsive = informed.generate(piece)
+                repair_exercises = tuple(ex for ex in responsive.exercises
+                                         if ex.kind == "learn"
+                                         and not any(
+                                             old.kind == "learn" and
+                                             old.phrase.start == ex.phrase.start and
+                                             old.phrase.end == ex.phrase.end and
+                                             Counter(old.phrase.notes) ==
+                                             Counter(ex.phrase.notes)
+                                             for old in combined.exercises))
+                if not repair_exercises:
+                    continue
+                final = next((ex for ex in responsive.exercises
+                              if ex.kind == "perform"), None)
+                if final is None:
+                    raise ValueError("Feedback generator omitted original performance")
+                keep_keys = {ex.key for ex in (*repair_exercises, final)}
+                subset = LessonPlanDefinition(
+                    (*repair_exercises, final),
+                    {key: value for key, value in responsive.stage_sequences.items()
+                     if key[0] in keep_keys}, informed.name,
+                    responsive.requires_unique_source_ids)
+                combined = compose_lesson_definitions(
+                    combined, subset, name=self.name, merge_matching=False)
         return combined
+
+
+@dataclass(frozen=True)
+class CodaFukudaMidiLessonGenerator(ComposedLessonGenerator):
+    """Named preset; composition mechanics belong to ComposedLessonGenerator."""
+    components: tuple[LessonGenerator, ...] = (
+        CodaLessonGenerator(), FukudaMidiLessonGenerator())
+    name: str = "coda-fukuda-midi"
 
 
 @dataclass(frozen=True)
@@ -500,6 +531,37 @@ def build_lesson_generator(
         strategy=strategy, timing=timing, tempo=tempo,
         consolidate=consolidate, warmup=warmup, grouping=grouping,
         mistakes=mistakes)
+
+
+def register_composed_lesson_generator(
+    name: str, component_names: tuple[str, ...], *,
+    label: str | None = None, version: int = 1,
+) -> None:
+    """Compose any registered generators without changing application roots.
+
+    Components must all expose immutable whole-piece lesson definitions.
+    The declared order determines exercise order; the central engine and
+    LearningPlan remain unaware of the individual algorithms.
+    """
+    if (not component_names or len(set(component_names)) != len(component_names)
+            or name in component_names):
+        raise ValueError("Invalid lesson composition")
+    definitions = tuple(lesson_generator_registration(part)
+                        for part in component_names)
+    if any(definition is None for definition in definitions):
+        raise ValueError("Compositions require registered whole-piece generators")
+
+    def factory(**options):
+        participants = tuple(reg.factory(
+            **{**options, "mistakes": None}) for reg in definitions)
+        return ComposedLessonGenerator(
+            participants, name, mistakes=options["mistakes"])
+
+    register_lesson_generator(LessonGeneratorRegistration(
+        name, factory, version,
+        owns_timing=any(reg.owns_timing for reg in definitions),
+        midi_only=any(reg.midi_only for reg in definitions)),
+        label=label)
 
 
 register_lesson_generator(LessonGeneratorRegistration(

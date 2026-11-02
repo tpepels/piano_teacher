@@ -408,7 +408,13 @@ def resolve_strategy(spec: str | ExerciseStrategy | None, *, piece=None) -> Exer
                 or not callable(getattr(spec, "generate", None))):
             raise TypeError("Expected a strategy with name and generate")
         return SourcePreservingAdapter(spec)
-    if spec in _MIDI_ONLY_STRATEGIES and (piece is None or
+    # Every registered whole-piece generator is subject to its declared
+    # applicability, including dynamically registered composite policies.
+    from .lesson_generators import lesson_generator_registration
+    registration = lesson_generator_registration(spec)
+    midi_only = (registration.midi_only if registration is not None
+                 else spec in _MIDI_ONLY_STRATEGIES)
+    if midi_only and (piece is None or
             piece.source_format != "midi" or piece.source_musicxml):
         raise ValueError(f"{spec} lesson generation requires an imported MIDI piece")
     if spec == "rubricnet-trained":
