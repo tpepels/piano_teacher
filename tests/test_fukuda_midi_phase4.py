@@ -462,3 +462,53 @@ def test_fukuda_long_score_only_teaches_error_bars_not_unrelated_sections(tmp_pa
             final=plan.lesson_definition.stages(x,hand)[-1]
             assert final.variant.level=="original"
             assert all(n in original.notes for n in final.variant.notes)
+
+
+def test_recorded_midi_sustain_pedal_extends_note_and_respects_channels(tmp_path):
+    from piano_teacher.fukuda_midi_performance import load_performed_midi
+    midi = mido.MidiFile(type=1, ticks_per_beat=480)
+    track = mido.MidiTrack()
+    track.extend([
+        mido.Message("control_change", channel=0, control=64, value=127, time=0),
+        mido.Message("note_on", channel=0, note=60, velocity=80, time=0),
+        mido.Message("note_on", channel=1, note=67, velocity=80, time=0),
+        mido.Message("note_off", channel=0, note=60, velocity=0, time=240),
+        mido.Message("note_off", channel=1, note=67, velocity=0, time=0),
+        mido.Message("control_change", channel=0, control=64, value=0, time=240),
+    ])
+    midi.tracks.append(track)
+    file = tmp_path / "pedal.mid"
+    midi.save(file)
+    notes = load_performed_midi(file)
+    assert {n.pitch for n in notes} == {60, 67}
+    sustain = next(n for n in notes if n.pitch == 60)
+    other = next(n for n in notes if n.pitch == 67)
+    assert sustain.onset == pytest.approx(0)
+    assert sustain.release == pytest.approx(.5)
+    assert other.release == pytest.approx(.25)
+    # An incomplete physical pedal recording is rejected, not ended at EOF.
+    track[-1] = mido.MetaMessage("end_of_track", time=240)
+    midi.save(file)
+    with pytest.raises(ValueError, match="pedal-held"):
+        load_performed_midi(file)
+
+
+def test_retriggered_pedal_pitch_closes_previous_sounding_note(tmp_path):
+    from piano_teacher.fukuda_midi_performance import load_performed_midi
+    midi = mido.MidiFile(type=0, ticks_per_beat=480)
+    track = mido.MidiTrack()
+    track.extend([
+        mido.Message("control_change", channel=0, control=64, value=127, time=0),
+        mido.Message("note_on", channel=0, note=60, velocity=90, time=0),
+        mido.Message("note_off", channel=0, note=60, velocity=0, time=120),
+        mido.Message("note_on", channel=0, note=60, velocity=90, time=120),
+        mido.Message("note_off", channel=0, note=60, velocity=0, time=120),
+        mido.Message("control_change", channel=0, control=64, value=0, time=120),
+    ])
+    midi.tracks.append(track)
+    file = tmp_path / "pedal-repeat.mid"
+    midi.save(file)
+    notes = load_performed_midi(file)
+    assert len(notes) == 2
+    assert [(n.onset, n.release) for n in notes] == pytest.approx(
+        [(0, .25), (.25, .5)])

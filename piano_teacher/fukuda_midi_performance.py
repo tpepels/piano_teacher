@@ -16,39 +16,85 @@ import mido
 from .practice import PlayedNote
 
 
-def load_performed_midi(path: str | Path) -> tuple[PlayedNote,...]:
-    midi=mido.MidiFile(str(path))
-    if midi.type==2 or midi.ticks_per_beat<=0:
+def load_performed_midi(path: str | Path) -> tuple[PlayedNote, ...]:
+    """Read the physical sounding MIDI notes, including sustain pedal (CC64).
+
+    Key releases during sustain remain audible until pedal-up. Voice
+    membership is per MIDI channel; an unrelated channel's pedal cannot
+    extend notes. Missing key or pedal releases are rejected rather than
+    silently truncated at EOF.
+    """
+    midi = mido.MidiFile(str(path))
+    if midi.type == 2 or midi.ticks_per_beat <= 0:
         raise ValueError("Only synchronous PPQ MIDI performances can be aligned")
-    seconds=0.
-    microseconds=500000
-    pressed=defaultdict(deque)
-    notes=[]
+    seconds = 0.0
+    microseconds = 500000
+    pressed = defaultdict(deque)
+    sustained = defaultdict(list)
+    pedal = set()
+    notes = []
+
+    def close(pitch: int, onset: float) -> None:
+        if seconds <= onset:
+            raise ValueError("Zero-length MIDI sounding note")
+        notes.append(PlayedNote(pitch, onset, seconds))
+
     for message in mido.merge_tracks(midi.tracks):
-        seconds+=mido.tick2second(message.time,midi.ticks_per_beat,microseconds)
-        if message.type=="set_tempo":
-            if message.tempo<=0:
+        seconds += mido.tick2second(message.time, midi.ticks_per_beat,
+                                    microseconds)
+        if message.type == "set_tempo":
+            if message.tempo <= 0:
                 raise ValueError("Invalid performed MIDI tempo")
-            microseconds=message.tempo
-        if message.type not in ("note_on","note_off"):
+            microseconds = message.tempo
             continue
-        if message.channel==9:
+        if not hasattr(message, "channel") or message.channel == 9:
             continue
-        identity=(message.channel,message.note)
-        if message.type=="note_on" and message.velocity>0:
+        channel = message.channel
+        if message.type == "control_change":
+            if message.control == 64:
+                if message.value >= 64:
+                    pedal.add(channel)
+                elif channel in pedal:
+                    pedal.remove(channel)
+                    for pitch, onset in sustained.pop(channel, ()):
+                        close(pitch, onset)
+            elif message.control in (120, 123):
+                pedal.discard(channel)
+                for (ch, pitch), down in tuple(pressed.items()):
+                    if ch == channel:
+                        while down:
+                            close(pitch, down.popleft())
+                for pitch, onset in sustained.pop(channel, ()):
+                    close(pitch, onset)
+            continue
+        if message.type not in ("note_on", "note_off"):
+            continue
+        identity = (channel, message.note)
+        if message.type == "note_on" and message.velocity > 0:
+            # One piano key cannot sustain a second physical note of the
+            # same pitch while it is restruck. End its previous pedal
+            # sustain voice at the new onset.
+            remaining = []
+            for pitch, onset in sustained[channel]:
+                if pitch == message.note:
+                    close(pitch, onset)
+                else:
+                    remaining.append((pitch, onset))
+            sustained[channel] = remaining
             pressed[identity].append(seconds)
         else:
             if not pressed[identity]:
                 raise ValueError("Orphan MIDI key release")
-            onset=pressed[identity].popleft()
-            if seconds<=onset:
-                raise ValueError("Zero-length MIDI key press")
-            notes.append(PlayedNote(message.note,onset,seconds))
-    if any(pressed.values()):
-        raise ValueError("MIDI performance contains unreleased keys")
+            onset = pressed[identity].popleft()
+            if channel in pedal:
+                sustained[channel].append((message.note, onset))
+            else:
+                close(message.note, onset)
+    if any(pressed.values()) or any(sustained.values()):
+        raise ValueError("MIDI performance contains unreleased keys or pedal-held notes")
     if not notes:
         raise ValueError("No piano key presses in performance")
-    return tuple(sorted(notes,key=lambda n:(n.onset,n.pitch,n.release)))
+    return tuple(sorted(notes, key=lambda n: (n.onset, n.pitch, n.release)))
 
 
 def analyze_recorded_midi(score: str | Path, performance: str | Path) -> dict:
