@@ -36,7 +36,7 @@ def test_whole_piece_coda_does_not_call_heuristic_passage_planner(monkeypatch):
     assert plan.exercises[-1].phrase.notes==piece.notes
     assert plan.exercises[-1].phrase.first_bar==1
     assert plan.exercises[-1].phrase.last_bar==len(piece.bar_boundaries)-1
-    assert all(step.key.startswith("course:5:coda-midi:") for step in plan.lesson_steps)
+    assert all(step.key.startswith("course:6:coda-midi:") for step in plan.lesson_steps)
 
 
 def test_heuristic_generator_preserves_existing_passages_and_keys():
