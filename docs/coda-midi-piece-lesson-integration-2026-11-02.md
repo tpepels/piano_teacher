@@ -129,3 +129,20 @@ The original source has no automatic curriculum ordering. To develop a
 genuinely automatic pedagogical lesson selector, that must be designed
 and evaluated as a **separate product algorithm**, not called original
 Coda parity.
+
+
+### Final post-change evidence
+
+After the full-score catalog and v5 progression changes, the bounded
+verification completed as follows:
+
+- [Fast application test run 41451818359](https://github.com/tpepels/piano_teacher/actions/runs/41451818359):
+  **398 passed, 6 skipped**
+- [Coda research and course contracts 41451818293](https://github.com/tpepels/piano_teacher/actions/runs/41451818293):
+  **203 passed, 1 skipped**
+- [Actual Verovio engraving, synthesized Listen, MIDI grading 41451818275](https://github.com/tpepels/piano_teacher/actions/runs/41451818275):
+  **39 passed**, including new full-excerpt x2/x4 slowdown regression cases
+
+A permanent [machine-readable source and runtime evidence record](evidence/coda-2026-11-02-author-excerpt-catalog.json)
+captures the pinned author SHA, exact catalog classification, test links
+and separate unverified properties.
