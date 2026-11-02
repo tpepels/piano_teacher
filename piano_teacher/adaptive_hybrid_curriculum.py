@@ -97,6 +97,32 @@ def _course_exercises(piece: Piece) -> tuple[Exercise, ...]:
             out.insert(len(out) - 1, Exercise(
                 "connect", Phrase(0, first_bar, last_bar, start, end, joined),
                 f"hybrid:connect:{first_bar}-{last_bar}"))
+        # Hierarchical consolidation: after two, four and eight adjacent
+        # focus passages, practise their full original notes together.
+        # Only source-safe contiguous ranges participate, and a seam drill
+        # with identical content is not duplicated.
+        for size in (2, 4, 8):
+            if (i + 1) % size or i + 1 < size:
+                continue
+            group = passages[i + 1 - size:i + 1]
+            if any(a.last_bar + 1 != b.first_bar
+                   for a, b in zip(group, group[1:])):
+                continue
+            first_bar, last_bar = group[0].first_bar, group[-1].last_bar
+            start = piece.bar_boundaries[first_bar - 1]
+            end = piece.bar_boundaries[last_bar]
+            selected = tuple(n for n in piece.notes
+                             if start - 1e-7 <= n.start < end - 1e-7)
+            if not selected or any(n.end > end + 1e-7 for n in selected):
+                continue
+            # Avoid offering the same measure range twice as a connector.
+            if any(ex.kind == "connect"
+                   and ex.phrase.first_bar == first_bar
+                   and ex.phrase.last_bar == last_bar for ex in out):
+                continue
+            out.append(Exercise(
+                "connect", Phrase(0, first_bar, last_bar, start, end, selected),
+                f"hybrid:join:{size}:{first_bar}-{last_bar}"))
     last = len(piece.bar_boundaries) - 1
     complete = Phrase(
         0, 1, last, piece.bar_boundaries[0],
