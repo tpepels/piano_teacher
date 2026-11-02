@@ -196,7 +196,9 @@ class CodaMidiStrategy:
     name: str = "coda-midi"
 
     def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
-        return CodaPartStrategy().generate(context,baseline)
+        # The actual Score/Part/Voice hierarchy is generated with the
+        # whole MIDI Piece and its real measure grid in LearningPlan.
+        return _finish(context,[])
 
 
 @dataclass(frozen=True)

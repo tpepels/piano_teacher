@@ -16,7 +16,7 @@ from ..exercise_pipeline import ExerciseStage
 from ..music import Piece
 from ..research.coda_midi_grid import midi_coda_quantization
 from ..research.coda_reference_exercises import (
-    CodaReferenceChordification, CodaReferenceDotted,
+    CodaReferenceChordification, CodaReferenceDotted, original_coda_levels,
 )
 
 
@@ -77,13 +77,36 @@ def midi_coda_stages(
     if original.level!="original":
         raise ValueError("Coda curriculum must finish with the source")
     stages=[ExerciseStage(v) for v in variants[:-1]]
+    boundaries=tuple(
+        beat for beat in piece.bar_boundaries
+        if original.phrase.start-1e-7<=beat<=original.phrase.end+1e-7)
+    if (boundaries and
+            abs(boundaries[0]-original.phrase.start)<=1e-7 and
+            abs(boundaries[-1]-original.phrase.end)<=1e-7):
+        # Coda's actual hierarchy starts with isolated source voices,
+        # then a part, then the complete score; all attacks remain tied
+        # to the imported MIDI. The standard hand route already selects
+        # parts, so an identical full-part stage would be redundant.
+        try:
+            hierarchy=original_coda_levels(
+                original,boundaries=boundaries,source_musicxml="")
+            used={tuple(n.source_id for n in original.notes)}
+            for level in hierarchy:
+                if level.level not in ("voice","part"):
+                    continue
+                key=tuple(n.source_id for n in level.variant.notes)
+                if not key or key in used:
+                    continue
+                used.add(key)
+                stages.append(ExerciseStage(level.variant))
+        except ValueError:
+            # Unsupported binary-matrix polyphony must not damage the
+            # full source or suppress the safely playable original.
+            pass
     stages.append(ExerciseStage(
         ExerciseVariant("coda-slowdown-x2",original.phrase,
                         original.source_indices),
         tempo_policy=CodaHalfSpeed()))
-    boundaries=tuple(
-        beat for beat in piece.bar_boundaries
-        if original.phrase.start-1e-7<=beat<=original.phrase.end+1e-7)
     if (not boundaries or
             abs(boundaries[0]-original.phrase.start)>1e-7 or
             abs(boundaries[-1]-original.phrase.end)>1e-7):
