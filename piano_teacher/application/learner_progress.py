@@ -203,12 +203,26 @@ class LearnerProgress:
         """Return the readable curriculum without navigating or awarding credit."""
         if plan is None:
             raise ValueError("Open a piece first")
+        from ..lesson_stage_semantics import describe
         steps = []
         for i, step in enumerate(plan.lesson_steps):
             saved = self.saved(plan, fingerprint=fingerprint, stage_key=step.key)
+            label = step.level
+            family = "Practice"
+            change = "source notes"
+            if plan.generator_registration is not None and plan.generator_registration.midi_only:
+                ex = plan.exercises[step.exercise_index]
+                candidates = plan.lesson_definition.stages(ex, step.hand)
+                current = next(s for s in candidates if s.variant.level == step.level)
+                detail = describe(current, candidates[-1])
+                label = detail["label"]
+                family = detail["family"]
+                change = detail["change"]
             steps.append({
                 "number": i+1, "exercise": step.exercise_index+1,
-                "hand": step.hand, "level": step.level, "key": step.key,
+                "hand": step.hand, "level": step.level,
+                "stage_label": label, "stage_family": family,
+                "stage_change": change, "key": step.key,
                 "kind": step.kind, "first_bar": step.first_bar,
                 "last_bar": step.last_bar, "required_notes": step.required_notes,
                 "completed": step.key in plan.mastered,
