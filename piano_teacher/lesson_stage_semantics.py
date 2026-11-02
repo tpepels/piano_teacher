@@ -125,7 +125,7 @@ def teaching_sequence(candidates: tuple[ExerciseStage, ...], *,
         -difference(s, original).removed, _attacks(s),
         s.variant.level))
     candidates_by_priority = (
-        [*ranked_fukuda, *slow, *dotted] if pitch else
+        [*fukuda, *slow, *dotted] if pitch else
         [*dotted, *slow, *ranked_fukuda] if rhythm else
         [*slow, *ranked_fukuda, *dotted] if duration else
         [*ranked_fukuda, *(chord[:1] or dotted[:1]), *slow, *dotted]
