@@ -67,3 +67,10 @@ implements the MIDI-domain score-reduction adaptation.
 Pedagogical superiority of adaptive Coda+Fukuda over other lesson plans
 requires controlled learner evaluation. No synthetic tests count as
 evidence of improved teaching outcomes.
+
+## Physical acceptance script
+
+Use the [real MIDI keyboard checklist](../verification/coda-fukuda-physical-midi-checklist.md)
+to record a complete on-device run, including repeated mistakes, clean
+corrections, stage/BPM restoration, grading and full-score mastery.
+Software CI alone cannot provide this evidence.
