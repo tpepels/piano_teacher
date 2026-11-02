@@ -240,7 +240,12 @@ def test_live_learning_plan_rebuilds_graded_midi_stages_without_mastery_transfer
     assert plan.lesson_definition.generator_name=="fukuda-midi"
     assert not plan.update_fukuda_mistakes(mistakes)
     assert all(s.key not in plan.mastered for s in plan.lesson_steps)
-    assert original_key in {s.key for s in plan.lesson_steps}
+    # A new focused exercise has a different key from the old whole-
+    # score lesson, so stale completion is never credited to the focus.
+    assert original_key not in {s.key for s in plan.lesson_steps}
+    assert all(step.first_bar >= 1 for step in plan.lesson_steps)
+    assert plan.exercises[-1].kind=="perform"
+    assert plan.exercises[-1].phrase.notes==piece.notes
     assert plan.update_fukuda_mistakes(frozenset())
     assert not any(s.level.startswith("fukuda-midi-")
                    for s in plan.lesson_steps)
