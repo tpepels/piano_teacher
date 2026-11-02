@@ -10,6 +10,7 @@ on:
       - 'tests/test_coda_midi_passage_pipeline.py'
       - 'tests/test_coda_full_catalog_engraving.py'
       - 'piano_teacher/application/coda_midi_curriculum.py'
+      - 'piano_teacher/research/coda_midi_sparse.py'
       - 'piano_teacher/lesson_generators.py'
 
 permissions:

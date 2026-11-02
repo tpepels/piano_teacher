@@ -64,3 +64,65 @@ def test_full_excerpt_source_identity_engraving_and_slowdown(name,factor,tmp_pat
             for note in stage.variant.notes]
     assert evaluate(stage.variant.phrase,plan.hand,plan.bpm,played,
                     expected_seconds=expected).clean
+
+
+@pytest.mark.parametrize("family", ("coda-dotted-", "coda-chord-"))
+def test_actual_sparse_coda_rhythm_stage_native_engraving_listen_and_grading(
+        family, tmp_path):
+    """The *live LearningPlan's* sparse generated steps, not research plans."""
+    import mido
+    midi = mido.MidiFile(type=1, ticks_per_beat=480)
+    track = mido.MidiTrack()
+    track.append(mido.MetaMessage(
+        "track_name", name="Right Hand", time=0))
+    track.append(mido.MetaMessage(
+        "time_signature", numerator=4, denominator=4, time=0))
+    for pitch in range(60, 68):
+        track.append(mido.Message(
+            "note_on", note=pitch, velocity=80, time=0))
+        track.append(mido.Message(
+            "note_off", note=pitch, velocity=0, time=240))
+    midi.tracks.append(track)
+    source = tmp_path / "full-coda-rhythm.mid"
+    midi.save(source)
+
+    piece = load_midi(source)
+    plan = LearningPlan(piece, exercise_strategy="coda-midi")
+    index = next(i for i, stage in enumerate(plan.stages)
+                 if stage.variant.level.startswith(family))
+    plan.variant_index = index
+    stage = plan.active_stage
+    assert stage.transformed_rhythm
+    original = {n.source_id: n for n in piece.notes}
+    notes = stage.variant.notes
+    assert {n.source_id for n in notes} == set(original)
+    assert len(notes) == len(original)
+    assert any((n.start, n.end) !=
+               (original[n.source_id].start, original[n.source_id].end)
+               for n in notes)
+    tempo = stage.tempo_map(90)
+    selection = ScoreSelection(
+        piece=piece, phrase=stage.variant.phrase, hand=plan.hand,
+        stage_key=plan.identity, revision=8, fingerprint="sparse-coda-rhythm",
+        transformed_rhythm=stage.transformed_rhythm)
+    artifacts = ScoreArtifacts(PreprocessingCache(tmp_path / "score"))
+    engraved = artifacts.engraving(selection)
+    assert set(engraved.layout["attack_map"]) == set(original)
+    assert all(ET.fromstring(page).tag.endswith("svg") for page in engraved.pages)
+
+    listening = ListenSession(tmp_path / "listen")
+    try:
+        listening.prepare(ListenSelection(
+            variant=stage.variant, bpm=90, stage_key=plan.identity,
+            revision=8, bar_boundaries=piece.bar_boundaries,
+            time_signatures=piece.time_signatures, tempo_map=tempo))
+        listening.thread.join(timeout=8)
+        assert not listening.thread.is_alive()
+        assert listening.take_failure() is None
+        assert listening.snapshot()["audio_available"]
+    finally:
+        listening.cancel()
+    expected = expected_note_seconds(stage.variant.phrase, tempo)
+    played = [PlayedNote(n.pitch, *expected(n)[:2]) for n in notes]
+    assert evaluate(stage.variant.phrase, plan.hand, plan.bpm, played,
+                    expected_seconds=expected).clean
