@@ -241,7 +241,19 @@ class FukudaMidiLessonGenerator:
         if piece.source_format!="midi" or piece.source_musicxml:
             raise ValueError("Fukuda MIDI requires an imported MIDI piece")
         from .fukuda_midi import fukuda_midi_variants
-        exercises=build_exercises(piece,consolidate=self.consolidate)
+        # Whole-score assessment first gives Fukuda's three rule families
+        # access to any musical pattern across the original piece, not only
+        # whichever two-bar focus window another strategy selected.
+        from .lesson_source_planner import Exercise
+        last_bar=len(piece.bar_boundaries)-1
+        complete=Phrase(1,1,last_bar,piece.bar_boundaries[0],
+            max(piece.bar_boundaries[-1],max(n.end for n in piece.notes)),
+            piece.notes)
+        individual=tuple(h for h in ("right","left")
+                         if any(n.hand==h for n in piece.notes))
+        exercises=(Exercise("learn",complete,"fukuda:whole-score",
+                            individual+("both",) if len(individual)>1 else individual),
+                   Exercise("perform",complete,"perform:all"))
         result={}
         for exercise in exercises:
             for hand in lesson_hands(exercise):

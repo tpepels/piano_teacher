@@ -354,6 +354,7 @@ _FACTORIES = {
 # live-selectable until rendering and MIDI transport share the same timing map.
 APP_STRATEGIES = (
     ("legacy", "Original progression"),
+    ("fukuda", "Fukuda · earlier chord/leap strategy"),
     ("fukuda-midi", "Fukuda · MIDI adaptive simplification"),
     ("coda-midi", "Coda · MIDI whole-piece lessons"),
     ("feature-gated", "Feature-guided selection"),
