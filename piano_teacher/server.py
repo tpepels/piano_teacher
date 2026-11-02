@@ -981,9 +981,11 @@ class PracticeEngine:
             evidence = self.fukuda_mistakes.evidence(self.fingerprint)
             failed_ids = frozenset(n.note.source_id for n in result.notes
                                    if n.status != "correct")
+            accepted = getattr(result, "passed", result.clean)
             changed = p.refresh_from_feedback(
-                evidence, prefer_repair=bool(failed_ids))
-            if not changed and failed_ids:
+                evidence, prefer_repair=not accepted and bool(failed_ids),
+                focus_ids=failed_ids)
+            if not changed and not accepted and failed_ids:
                 changed = p.revisit_source_errors(failed_ids)
             if changed:
                 # A newly selected stage has its own notation revision.

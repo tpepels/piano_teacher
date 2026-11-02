@@ -159,23 +159,31 @@ class LearningPlan:
 
     def refresh_from_feedback(
         self, evidence: Mapping[str, str], *, prefer_repair: bool = True,
+        focus_ids: frozenset[str] | None = None,
     ) -> bool:
         """Rebuild selected stages from actual original-attack error families."""
         if not isinstance(evidence, Mapping) or any(
                 not isinstance(k, str) or not isinstance(v, str)
                 for k, v in evidence.items()):
             raise TypeError("Generator needs source-identified MIDI feedback")
+        if focus_ids is not None and (
+                not isinstance(focus_ids, frozenset)
+                or not focus_ids <= evidence.keys()):
+            raise ValueError("Focus must identify currently failed source attacks")
+        # Previously stored errors may belong to another passage. Never
+        # relocate the learner for old evidence during a new assessment.
+        target_ids = ((frozenset(evidence) if focus_ids is None else focus_ids)
+                      if prefer_repair else frozenset())
         hook = getattr(self.lesson_generator, "with_feedback", None)
         if callable(hook):
             updated = hook(evidence, self.lesson_definition)
-            return self._refresh_generator(updated, focus_ids=frozenset(evidence)
-                                           if prefer_repair else frozenset())
+            return self._refresh_generator(updated, focus_ids=target_ids)
         old = getattr(self.lesson_generator, "with_mistakes", None)
         if not callable(old):
             return False
         return self._refresh_generator(
             old(frozenset(evidence), self.lesson_definition),
-            focus_ids=frozenset(evidence) if prefer_repair else frozenset())
+            focus_ids=target_ids)
 
     def _refresh_generator(
         self, updated: LessonGenerator, *, focus_ids: frozenset[str],
