@@ -8,6 +8,7 @@ from pathlib import Path
 import mido
 import pytest
 
+from piano_teacher.assessment_clock import expected_note_seconds
 from piano_teacher.application.score_artifacts import ScoreSelection, ScoreArtifacts
 from piano_teacher.application.listen_session import ListenSelection, ListenSession
 from piano_teacher.exercise_strategies import available_strategies,resolve_strategy
@@ -112,10 +113,8 @@ def test_coda_stage_uses_native_score_listen_and_grader_on_original_piece(tmp_pa
                        tempo.seconds_at(note.end-stage.variant.phrase.start))
             for note in stage.variant.notes]
     assert evaluate(stage.variant.phrase,plan.hand,plan.bpm,played,
-        expected_seconds={
-            note.source_id:(tempo.seconds_at(note.start-stage.variant.phrase.start),
-                            tempo.seconds_at(note.end-stage.variant.phrase.start))
-            for note in stage.variant.notes}).clean
+        expected_seconds=expected_note_seconds(
+            stage.variant.phrase,tempo)).clean
 
 
 def test_engine_changes_strategy_on_loaded_midi_without_swapping_piece(tmp_path):
