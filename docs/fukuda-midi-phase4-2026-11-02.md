@@ -244,3 +244,80 @@ unperformed and remains a concrete acceptance blocker. The phase
 must remain marked open under the requirement that every agreed
 acceptance criterion actually pass. These facts cannot be converted
 into "passed" by more synthetic tests.
+
+
+## Follow-up software completion — 2026-11-02
+
+The complete MIDI-only software scope has been integrated and regression
+checked. The physical-keyboard and original-author numerical parity
+limitations recorded above remain unchanged; these are **not** silently
+counted as passing tests.
+
+### Recorded MIDI acquisition and matching
+
+- Real MIDI CC64 pedal down/up is honored: a key release under sustain
+  remains sounding until pedal-up. Each MIDI channel has its own pedal
+  and key state. Retriggering a pedal-held pitch closes the earlier
+  sounding occurrence rather than manufacturing overlapping piano keys.
+  CC120/CC123 close active notes. Orphan releases and unreleased keys
+  or pedal-held notes fail closed. Original tempo-change conversion
+  remains preserved.
+- Fukuda's offline source/performance pitch matching now builds indexed
+  candidate windows, instead of materializing every
+  source-attack × performance-note pair and repeatedly scanning the
+  complete DTW alignment. Repeated identical pitches retain independent
+  original source IDs with deterministic one-to-one ownership.
+- After MIDI-onset alignment, release durations can be classified
+  explicitly as `duration` mismatches, using the aligned performance
+  tempo scale and conservative note-off tolerances. The live practice
+  session continues to grade through the one existing authoritative
+  transport; there is no second live DTW clock.
+- Both held-pedal and repeated-pitch recordings, expressive performance,
+  octave errors, short note-off errors, missing pitches, extra notes and
+  a long deterministic indexed-matching case have independent regression
+  coverage.
+
+### Open extension and composition boundaries
+
+- All whole-piece generators implement the common immutable
+  `LessonGenerator` contract. `register_lesson_generator` exposes
+  independent generator factories, source applicability, versioned
+  progress and tempo ownership.
+- The general-purpose `ComposedLessonGenerator` combines **arbitrary
+  registered whole-piece algorithms** by the ordinary course
+  composition contract. `register_composed_lesson_generator` allows a
+  named/selectable combination with declared order, without adding
+  name-dependent branches in `LearningPlan` or `PracticeEngine`.
+- Any registered generator with the `with_mistakes` feedback hook
+  participates in the original-MIDI-assessment repair routing.
+  Unchanged whole-piece courses can be cached while only remedial
+  segments are rebuilt. All resulting source IDs, note counts,
+  passage boundaries, keys and original final performance are
+  independently validated by the shared lesson definition.
+- Settings reads the generator's `owns_timing` capability. Both
+  Coda-only and combined Coda+Fukuda correctly disable conflicting
+  separate timing/tempo controls; plain Fukuda keeps them available.
+  Previously this depended on the literal `coda-midi` strategy name.
+
+### Reproducible completed checks
+
+- [Fukuda source and recorded-MIDI contracts](https://github.com/tpepels/piano_teacher/actions/runs/41496062785):
+  **43 passed**; complete 16-fixture/17-repertoire corpus audit succeeded.
+- [Independent-composition contracts and actual 17 complete MIDI pieces](https://github.com/tpepels/piano_teacher/actions/runs/41496202247):
+  **61 passed + 17 passed**, covering registration, feedback,
+  persistence, score engraving, Listen, grading and source ownership.
+- [Native Godot 4.7.2 Coda and Fukuda strategies, Settings metadata,
+  syntax and transport](https://github.com/tpepels/piano_teacher/actions/runs/41496619198):
+  all bounded native checks passed with zero failures.
+- [Application contract gate](https://github.com/tpepels/piano_teacher/actions/runs/41496619239):
+  **398 passed, 6 skipped**.
+
+**Acceptance status:** All source-defined three score simplification
+families and the agreed MIDI-native acquisition, offline alignment,
+mistake detection, storage and actual application lesson generation are
+implemented and software-tested. The precise original acoustic paper's
+figure-to-event parity is impossible to certify from the published
+description alone. Physical Bluetooth/USB MIDI keyboard testing has not
+been run in this GitHub execution environment and remains to be
+verified locally. A claim that *every* Phase 4 criterion is satisfied
+would therefore be inaccurate.

@@ -89,3 +89,22 @@ capability fields. Settings disables independent timing/tempo policies for
 **any** registered generator that owns those decisions, including dynamically
 installed compositions; the UI no longer special-cases the string
 `coda-midi`.
+
+
+## Additional completed refactor
+
+The Coda/Fukuda preset now subclasses the general-purpose
+`ComposedLessonGenerator`, rather than owning its own independent
+composition engine. `register_composed_lesson_generator(name, members,
+label, version)` accepts any already registered whole-piece generator
+IDs and constructs the combined policy from those factories. Duplicate
+IDs, unknown components and self-referential compositions fail closed.
+All compositions emit ordinary immutable exercise stage definitions.
+The selected generator's capabilities, including `owns_timing` and
+`midi_only`, are advertised through the Settings API and consumed
+directly by the native Godot strategy controls.
+
+The separate offline MIDI-performance analysis improves note-off
+handling and matching speed, while the live application retains
+its one authoritative playback/assessment clock. See the
+[completed MIDI-only Fukuda implementation](../fukuda-midi-phase4-2026-11-02.md).
