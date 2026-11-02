@@ -116,8 +116,8 @@ def test_obsolete_musicxml_recent_is_not_restored(tmp_path):
 
 def test_coda_is_new_install_default_but_explicit_legacy_choice_persists(tmp_path):
     library = ScoreLibrary(config_dir=tmp_path / "fresh")
-    assert library.settings["exercise_strategy"] == "coda-part"
-    assert library.public_settings()["exercise_strategy"] == "coda-part"
+    assert library.settings["exercise_strategy"] == "coda-midi"
+    assert library.public_settings()["exercise_strategy"] == "coda-midi"
     library.update(exercise_strategy="legacy")
     again = ScoreLibrary(config_dir=tmp_path / "fresh")
     assert again.settings["exercise_strategy"] == "legacy"

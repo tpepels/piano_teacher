@@ -96,6 +96,7 @@ def test_changing_rhythm_resets_active_path_and_restores_previous_profile(tmp_pa
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
         engine.fingerprint = "timing-fixture"
+        engine.library.update(exercise_strategy="coda-part")
         engine.plan = LearningPlan(score(), exercise_strategy="coda-part")
         baseline_key = engine.plan.identity
         engine._save()
