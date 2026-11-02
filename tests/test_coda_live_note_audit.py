@@ -37,7 +37,7 @@ def test_negative_duplicate_source_ids_do_not_pass_audit():
     p=load_midi(ROOT/"midi_four_four.mid")
     bad=replace(p,notes=(p.notes[0],replace(p.notes[1],
         source_id=p.notes[0].source_id))+p.notes[2:])
-    with pytest.raises(ValueError,match="duplicate"):
+    with pytest.raises(ValueError,match="[Dd]uplicate"):
         audit_coda_midi(bad)
 
 
