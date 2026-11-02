@@ -275,7 +275,7 @@ def test_real_engine_records_assessed_original_midi_errors_and_restores(tmp_path
         engine.load(str(path))
         assert engine.plan.lesson_generator.mistakes
         assert len(engine.plan.stages)>1
-        engine.reset_progress(confirm=True,fingerprint=engine.fingerprint)
+        engine._reset_current_path(confirm=True,fingerprint=engine.fingerprint)
         assert not engine.fukuda_mistakes.problematic(engine.fingerprint)
         assert len(engine.plan.stages)==1
     finally:
