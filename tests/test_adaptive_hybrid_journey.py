@@ -65,7 +65,7 @@ def test_initial_lessons_are_progressive_and_cover_original_attacks(source):
                and plan.exercises[i+1].kind == "learn")
     assert plan.exercises[-1].kind == "perform"
     assert plan.exercises[-1].phrase.notes == source.notes
-    assert all(step.key.startswith("course:2:coda-fukuda-midi:")
+    assert all(step.key.startswith("course:3:coda-fukuda-midi:")
                for step in plan.lesson_steps)
 
 
