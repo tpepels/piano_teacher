@@ -32,8 +32,11 @@ the desktop process and has no separate CLI or network listener.
 
 - Import `.mid` / `.midi` music, restore the last practiced score, and
   maintain independent lesson progress for hands and practice steps.
-- Coda-inspired practice is the production default. Original Coda parity
-  remains a separate research issue.
+- New installations default to the adaptive **Coda + Fukuda MIDI** lesson
+  route; existing saved strategies remain selected. The UI identifies the
+  active generator and real note/rhythm/tempo transformation. Pure desktop
+  Coda uses bounded passages; direct author-style Coda generation is retained
+  for research parity.
 - Onset spacing and tempo adapt to fast passages. The score, playhead,
   recovery and metronome share one presentation timeline.
 - Incoming MIDI note-on events immediately enter a bounded memory ring,
