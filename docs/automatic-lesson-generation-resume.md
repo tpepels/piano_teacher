@@ -1,5 +1,15 @@
 # Automatic lesson-generation reproduction — resume point (2026-10-30)
 
+> **MIDI-first Gate 2 checkpoint (2026-11-02):** User input is standard
+> MIDI only. The two MusicXML source-MMR mismatches, three XML-grid
+> exclusions and authored score-preservation obligations below are
+> historical upstream-reproduction research, **not product blockers**.
+> Full MIDI-source identity, exact PPQ, synthesized notation, transformed
+> Listen and grading now have bounded tests. See
+> [the MIDI-first Gate 2 tracker](coda-midi-first-gate2-2026-11-02.md).
+> A MIDI-imported source needs no authored MusicXML. General passage
+> selection, real Godot runtime and physical MIDI remain unverified.
+
 **Primary project:** faithful research reproduction of automatic piano
 practice-exercise generation and adaptive teaching. The user explicitly
 redirected work here after a native notation verification detour.

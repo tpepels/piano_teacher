@@ -1,5 +1,15 @@
 # Research reproduction — Gate 2: Coda symbolic system
 
+> **MIDI-first Gate 2 checkpoint (2026-11-02):** User input is standard
+> MIDI only. The two MusicXML source-MMR mismatches, three XML-grid
+> exclusions and authored score-preservation obligations below are
+> historical upstream-reproduction research, **not product blockers**.
+> Full MIDI-source identity, exact PPQ, synthesized notation, transformed
+> Listen and grading now have bounded tests. See
+> [the MIDI-first Gate 2 tracker](coda-midi-first-gate2-2026-11-02.md).
+> A MIDI-imported source needs no authored MusicXML. General passage
+> selection, real Godot runtime and physical MIDI remain unverified.
+
 > **Product scope revised 2026-10-31:** Piano Teacher now targets a MIDI-only
 > user library. Original MusicXML authoring metadata is unavailable for the
 > user's music, so source-XML preservation and exact upstream Coda parity are
