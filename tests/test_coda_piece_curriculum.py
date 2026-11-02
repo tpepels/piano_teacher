@@ -50,11 +50,13 @@ def test_whole_piece_coda_plan_has_stages_for_each_lesson_and_original_final(tmp
     plan=LearningPlan(piece,exercise_strategy="coda-midi",consolidate=False)
     assert plan.piece is piece
     assert plan.exercise_strategy.name=="coda-midi"
-    assert len(plan.exercises)==2
-    assert plan.exercises[0].phrase.notes==piece.notes
+    assert len(plan.exercises)>=3
+    assert plan.exercises[0].phrase.notes!=piece.notes
     assert plan.exercises[0].phrase.first_bar==1
-    assert plan.exercises[0].phrase.last_bar==3
-    assert plan.exercises[0].key=="coda:excerpt:1-3"
+    assert plan.exercises[0].phrase.last_bar<3
+    assert plan.exercises[0].key.startswith("coda:excerpt:1-")
+    assert plan.exercises[-1].kind=="perform"
+    assert plan.exercises[-1].phrase.notes==piece.notes
     steps=plan.lesson_steps
     assert steps and len(steps)>len(plan.exercises)
     assert len({s.key for s in steps})==len(steps)
@@ -75,9 +77,9 @@ def test_whole_piece_coda_plan_has_stages_for_each_lesson_and_original_final(tmp
             assert any(s.variant.level=="coda-slowdown-x2" for s in stages)
         else:
             assert len(stages)==1
-    # New generator-owned whole-piece courses cannot inherit progress from
-    # old per-passage Coda stage keys, even if the notes happen to match.
-    assert all(step.key.startswith("course:6:coda-midi:") for step in steps)
+    # Version 7 is a different teaching path; earlier v6 whole-score
+    # completion records must not confer passage mastery automatically.
+    assert all(step.key.startswith("course:7:coda-midi:") for step in steps)
 
 
 def test_coda_stage_uses_native_score_listen_and_grader_on_original_piece(tmp_path):
@@ -130,8 +132,9 @@ def test_engine_changes_strategy_on_loaded_midi_without_swapping_piece(tmp_path)
         engine.load(str(MIDI))
         source=engine.plan.piece
         fingerprint=engine.fingerprint
-        assert engine.plan.exercise_strategy.name=="coda-midi"
+        assert engine.plan.exercise_strategy.name=="coda-fukuda-midi"
         assert engine.plan.piece is source
+        engine.set_preferences(exercise_strategy="coda-midi")
         first=engine.plan.identity
         engine.set_preferences(exercise_strategy="legacy")
         assert engine.plan.piece is source
