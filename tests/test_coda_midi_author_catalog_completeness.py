@@ -150,3 +150,21 @@ def test_author_shortened_independent_held_tone_is_not_a_parity_match():
     assert not author_lost_held_note_duration(source, source)
     assert not author_lost_held_note_duration(source, ((44,2,3.5),(49,2,6),(52,2,3.5)))
     assert not author_lost_held_note_duration(source, ((44,2,3.5),(49,2,3.5)))
+
+
+def test_original_chord_duration_homogenization_only_accepts_proven_corruption():
+    from scripts.probe_coda_midi_author_algorithms import (
+        author_homogenized_simultaneous_duration,
+    )
+    # A held bass note is shortened to match another chord tone.
+    source = ((44, 2, 3.5), (49, 2, 8), (52, 2, 3.5))
+    corrupt = ((44, 2, 3.5), (49, 2, 3.5), (52, 2, 3.5))
+    assert author_homogenized_simultaneous_duration(source, source, corrupt)
+    # A short upper chord tone is extended to match the lower pitch.
+    src = ((57, 1, 3), (59, 1, 2))
+    out = ((57, 1, 3), (59, 1, 3))
+    assert author_homogenized_simultaneous_duration(src, src, out)
+    # Reject unrelated timing edits, pitch changes and independent attacks.
+    assert not author_homogenized_simultaneous_duration(src, src, ((57,1,3),(59,1,2.8)))
+    assert not author_homogenized_simultaneous_duration(src, src, ((57,1,3),(60,1,3)))
+    assert not author_homogenized_simultaneous_duration(src, src, ((57,1,3),))

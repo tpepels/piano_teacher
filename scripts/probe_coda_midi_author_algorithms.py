@@ -101,6 +101,50 @@ def author_lost_held_note_duration(source, actual, *, tolerance=0.000002):
     return changed
 
 
+def author_homogenized_simultaneous_duration(source, expected, actual,
+                                              *, tolerance=0.000002):
+    """Recognize ONLY incorrect output lengths from MMR chord flattening.
+
+    A Coda voice matrix has one scalar rhythm duration per onset. The
+    original backend reconstructs all simultaneous pitches from that one
+    duration, extending or shortening independently held source notes.
+    Compare two complete note multisets: every difference must match the
+    ORIGINAL source lowest-pitch tone's end at the same onset; no changed
+    pitch, onset, or independent transformation is forgiven.
+    """
+    if len(source) != len(expected) or len(expected) != len(actual):
+        return False
+    if not timing_equivalent(
+            tuple((p, onset, onset) for p, onset, _ in expected),
+            tuple((p, onset, onset) for p, onset, _ in actual),
+            tolerance=tolerance):
+        return False
+    source_by_key = {(p, onset): end for p, onset, end in source}
+    expected_keys = {(p, onset) for p, onset, _ in expected}
+    if len(source_by_key) != len(source) or len(expected_keys) != len(expected):
+        return False
+    by_onset = {}
+    for pitch, onset, end in source:
+        by_onset.setdefault(onset, []).append((pitch, end))
+    wrong = False
+    for (pitch, onset, target_end), (_, _, observed_end) in zip(expected, actual):
+        if abs(target_end - observed_end) <= tolerance:
+            continue
+        key = (pitch, onset)
+        if key not in source_by_key:
+            return False
+        members = by_onset[onset]
+        if len(members) < 2:
+            return False
+        reference_end = min(members)[1]  # lowest pitch controls author flatten()
+        if (abs(target_end - source_by_key[key]) > tolerance or
+                abs(observed_end - reference_end) > tolerance or
+                abs(source_by_key[key] - reference_end) <= tolerance):
+            return False
+        wrong = True
+    return wrong
+
+
 def author_voice_overlap(notes):
     """Binary original MMR cannot encode overlapping same-pitch events."""
     pitches = {}
@@ -270,12 +314,12 @@ def compare_piece(path: Path, classes, *, measure_range=None) -> dict:
                     result["reason"] = (
                         "Original emits blocked chord with more than five "
                         "simultaneous sounding tones")
-                elif (item.category == "Voice Level: Dotted" and
-                      author_lost_held_note_duration(source_expected, actual)):
+                elif author_homogenized_simultaneous_duration(
+                        source_expected, expected, actual):
                     result["status"] = "author-invalid"
                     result["reason"] = (
-                        "Original flatten/reconstruction shortens an "
-                        "independently sustained chord tone")
+                        "Original flattened a simultaneous MIDI attack to the "
+                        "lowest pitch's duration; independent note-off lost")
                 elif item.status == "unrepresentable":
                     result["status"] = "adapter-unrepresentable"
                 elif actual == expected:
