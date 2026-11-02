@@ -8,6 +8,7 @@ on:
       - 'piano_teacher/fukuda_midi.py'
       - 'piano_teacher/fukuda_midi_performance.py'
       - 'scripts/analyze_fukuda_midi.py'
+      - 'scripts/audit_fukuda_full_midi_corpus.py'
       - 'piano_teacher/fukuda_mistake_store.py'
       - 'piano_teacher/server.py'
       - 'piano_teacher/preprocessing_cache.py'
@@ -39,3 +40,16 @@ jobs:
             tests/test_fukuda_midi_phase4.py \
             tests/test_exercise_strategies.py \
             tests/test_lesson_generator_architecture.py
+
+      - name: Audit all independent fixtures and shipped real MIDI pieces
+        run: |
+          timeout 55s python -m scripts.audit_fukuda_full_midi_corpus \
+            --budget-seconds 45 --output "$RUNNER_TEMP/fukuda-midi-corpus.json"
+      - name: Retain real-score source-identity evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fukuda-midi-all-scores-${{ github.sha }}
+          path: ${{ runner.temp }}/fukuda-midi-corpus.json
+          if-no-files-found: warn
+          retention-days: 14
