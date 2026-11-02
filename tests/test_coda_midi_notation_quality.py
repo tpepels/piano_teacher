@@ -65,7 +65,12 @@ def test_midi_written_beams_and_two_staff_rests_remain_real_score_elements(tmp_p
     assert len(score.findall(".//clef"))>=2
     assert all(note.find("voice") is not None
                for part in parts for note in part.findall(".//note"))
-    assert set(generated.note_bindings)=={n.source_id for n in piece.notes}
+    # A source attack may own several written segments across barlines.
+    # Bindings are keyed by *segment* ID and retain canonical MIDI source IDs.
+    assert {entry["source_id"] for entry in generated.note_bindings.values()}=={
+        n.source_id for n in piece.notes}
+    assert sum(entry["is_attack"] for entry in
+               generated.note_bindings.values())==len(piece.notes)
 
 
 def test_generated_midi_crossbar_ties_are_sounding_single_attacks(tmp_path):
@@ -83,7 +88,7 @@ def test_generated_midi_crossbar_ties_are_sounding_single_attacks(tmp_path):
     assert xml.findall(".//tied[@type='stop']")
     model=artifacts.source_model(stage.selection)
     assert len(model["notes"])==original_count
-    assert len(model["attack_map"]) if "attack_map" in model else True
+    assert len(model["notes"])==len(passage.variant.notes)
     assert {n["id"] for n in model["notes"]}==passage.original_source_ids
     engraved=artifacts.engraving(stage.selection)
     assert set(engraved.layout["attack_map"])==passage.original_source_ids
