@@ -71,6 +71,7 @@ const SymbolPainter := preload("res://notation/native/symbol_painter.gd")
 const ContextPainter := preload("res://notation/native/context_painter.gd")
 const RetainedSegment := preload("res://notation/native/retained_segment.gd")
 const RetainedNoteProjection := preload("res://notation/native/retained_note_projection.gd")
+const IdlePreview := preload("res://notation/native/idle_preview.gd")
 const SourcePassPainter := preload("res://notation/native/source_pass_painter.gd")
 const RetainedAnnotationOverlay := preload("res://notation/native/retained_annotation_overlay.gd")
 var symbols = SymbolPainter.new(layout,connector_geometry)
@@ -663,11 +664,13 @@ func _source_overlaps_preparation(pass_start: float) -> bool:
             return true
     return false
 
-func _place_retained_score(playhead_x: float, camera_clock: float) -> void:
+func _place_retained_score(playhead_x: float, camera_clock: float,
+        ready_preview_beat: float = NAN) -> void:
     if retained_first_once == null:
         return
     var active_segments: Dictionary = {}
     var density: float = timeline.pixels_per_beat
+    var scroll_beat: float = ready_preview_beat if is_finite(ready_preview_beat) else visual_scroll_beat
     if not score_loop_enabled:
         var shift: float = playhead_x-(camera_clock+play_from_beat)*density
         _project_retained_source(retained_first_once,shift,camera_clock,0,0.0)
@@ -675,7 +678,7 @@ func _place_retained_score(playhead_x: float, camera_clock: float) -> void:
         _sync_retained_visibility(active_segments)
         return
     var stride: float = float(practice_timeline["stride_beats"])
-    var virtual_left: float = visual_scroll_beat-playhead_x/density
+    var virtual_left: float = scroll_beat-playhead_x/density
     var virtual_right: float = virtual_left+size.x/density
     var first_pass: int = maxi(0,floori(virtual_left/stride)-1)
     var last_pass: int = maxi(first_pass,ceili(virtual_right/stride)+1)
@@ -685,8 +688,8 @@ func _place_retained_score(playhead_x: float, camera_clock: float) -> void:
         var pass_start: float = pass_index*stride
         if pass_start>virtual_right+.7 or pass_start+stride<virtual_left-.7:
             continue
-        var source_clock: float = visual_scroll_beat-pass_start-play_from_beat
-        var source_shift: float = playhead_x+(pass_start-visual_scroll_beat)*density
+        var source_clock: float = scroll_beat-pass_start-play_from_beat
+        var source_shift: float = playhead_x+(pass_start-scroll_beat)*density
         var segment
         if _source_overlaps_preparation(pass_start):
             segment = retained_recovery_sources.get(pass_start)
@@ -719,7 +722,7 @@ func _place_retained_score(playhead_x: float, camera_clock: float) -> void:
             var rest: Node2D = retained_rest_segments[rest_slot]
             rest_slot += 1
             rest.position = Vector2(playhead_x+(
-                pass_start+timeline.duration_beats-visual_scroll_beat)*density,0.0)
+                pass_start+timeline.duration_beats-scroll_beat)*density,0.0)
             active_segments[rest] = true
     # Exceptional recovery measures are retained too; their visibility
     # variant is built when the backend publishes the preparation.
@@ -733,7 +736,7 @@ func _place_retained_score(playhead_x: float, camera_clock: float) -> void:
         if recovery_rest == null:
             continue
         recovery_rest.position = Vector2(playhead_x+(
-            float(replaced_rest["start_beat"])-visual_scroll_beat)*density,0.0)
+            float(replaced_rest["start_beat"])-scroll_beat)*density,0.0)
         active_segments[recovery_rest] = true
     _sync_retained_visibility(active_segments)
 
@@ -758,7 +761,13 @@ func _draw() -> void:
         return
     var gap: float = staff_gap()
     var playhead_x: float = size.x * PLAYHEAD_FRACTION
-    var camera_clock: float = clock_beat if running or paused else 0.0
+    var ready_preview_beat: float = NAN
+    if not running and not paused:
+        ready_preview_beat = IdlePreview.beat_for_ready(
+            layout.ordered_events,active_hand,play_from_beat,
+            size.x,timeline.pixels_per_beat,PLAYHEAD_FRACTION)
+    var camera_clock: float = (clock_beat if running or paused else
+        ready_preview_beat-play_from_beat)
     # A quiet pool of light marks the strike without hiding any engraved ink.
     var top: float = layout.staff_center("right")-gap*3.8
     var bottom: float = layout.staff_center("left")+gap*3.7
@@ -808,7 +817,7 @@ func _draw() -> void:
             HORIZONTAL_ALIGNMENT_LEFT,-1,15,NOTE_INK)
         _hide_retained_segments()
         return
-    _place_retained_score(playhead_x,camera_clock)
+    _place_retained_score(playhead_x,camera_clock,ready_preview_beat)
     if retained_annotations != null:
         retained_annotations.queue_redraw()
     # Never put engineering telemetry on top of the actual lesson.
