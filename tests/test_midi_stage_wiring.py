@@ -137,3 +137,33 @@ def test_already_original_stage_reports_no_invented_technique(piece):
     assert metadata["label"] == "Original notes and rhythm"
     assert not metadata["meaningful"]
     assert metadata["removed"] == metadata["retimed"] == 0
+
+
+def test_live_engine_state_and_step_overview_show_actual_selected_strategy(piece, tmp_path):
+    from piano_teacher.server import PracticeEngine
+    engine = PracticeEngine(tmp_path / "engine-data", enable_midi=False)
+    try:
+        engine.set_preferences(exercise_strategy="coda-fukuda-midi")
+        engine.load(str(tmp_path / "chords-and-rapid-notes.mid"))
+        state = engine.state()
+        assert state["exercise_strategy"] == "coda-fukuda-midi"
+        assert state["stage_family"] == "Fukuda"
+        assert state["stage_meaningful"]
+        assert state["stage_change"] != "unchanged source"
+        assert state["last_bar"] < len(piece.bar_boundaries) - 1
+        overview = engine.lesson_overview()
+        assert overview["exercise_strategy"] == state["exercise_strategy"]
+        assert overview["steps"][0]["stage_family"] == state["stage_family"]
+        assert overview["steps"][0]["stage_label"] == state["stage_label"]
+        assert overview["steps"][0]["stage_change"] == state["stage_change"]
+        assert overview["steps"][-1]["stage_family"] == "Original"
+        # An explicit switch must use the registered Coda generator without
+        # silently retaining the adaptive Fukuda course or its stage labels.
+        engine.set_preferences(exercise_strategy="coda-midi")
+        state = engine.state()
+        assert state["exercise_strategy"] == "coda-midi"
+        assert state["stage_family"] in ("Coda", "Original")
+        assert engine.lesson_overview()["exercise_strategy"] == "coda-midi"
+    finally:
+        engine.listen.cancel()
+        engine.db.close()
