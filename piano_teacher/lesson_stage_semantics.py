@@ -128,7 +128,8 @@ def teaching_sequence(candidates: tuple[ExerciseStage, ...], *,
         [*fukuda, *slow, *dotted] if pitch else
         [*dotted, *slow, *ranked_fukuda] if rhythm else
         [*slow, *ranked_fukuda, *dotted] if duration else
-        [*ranked_fukuda, *(chord[:1] or dotted[:1]), *slow, *dotted]
+        [*ranked_fukuda[:1], *(chord[:1] or dotted[:1]),
+         *slow[:1], *ranked_fukuda[1:], *dotted, *slow[1:]]
     )
     chosen = []
     signatures = set()
