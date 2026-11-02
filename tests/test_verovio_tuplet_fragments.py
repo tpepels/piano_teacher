@@ -241,3 +241,64 @@ def test_nested_tuplets_keep_each_groups_own_number(monkeypatch):
     assert set(found)=={"n1|n2|n3","n2|n3"}
     assert found["n1|n2|n3"]["bracket"] is not None
     assert found["n2|n3"]["bracket"] is None
+
+
+def test_neighboring_idless_verovio_tuplets_match_their_own_graphics(monkeypatch):
+    """Nearby independent voices may have the same bracket span and number.
+
+    Verovio can export tuplet artwork as siblings of its notes. The previous
+    extractor discarded both groups because each saw two plausible targets.
+    Accept a group only when its original number/bracket uniquely fits one
+    source-owned three-note group; never choose by dictionary or page order.
+    """
+    from copy import deepcopy
+    from types import SimpleNamespace
+    import piano_teacher.source_svg as geometry
+
+    root = ET.fromstring(XML)
+    first = next(node for node in root if 'tuplet' in node.get('class', '').split())
+    for child in list(first):
+        if 'note' in child.get('class', '').split():
+            first.remove(child)
+    second = deepcopy(first)
+    second.set('id', 'triplet2')
+    for child in second.iter():
+        if 'tupletNum' in child.get('class', '').split():
+            text = next(node for node in child.iter() if node.tag.endswith('text'))
+            text.set('x', '270')
+        elif 'tupletBracket' in child.get('class', '').split():
+            line = next(node for node in child.iter() if node.tag.endswith('path'))
+            line.set('d', 'M114 60L114 50L434 50L434 60')
+    root.append(second)
+    def note_group(prefix, voice, start):
+        return [{**item, 'id': f'{prefix}{index+1}', 'voice': voice,
+                 'beat': start + index/3}
+                for index, item in enumerate(MODEL['notation_events'])]
+    model = {'notation_events': [
+        *note_group('n', '1', 0.0),
+        *note_group('m', '2', 0.05),
+    ]}
+    geometry_values = {
+        'n1': (.125, .5, 's1'),
+        'n2': (.3125, .475, 's1'),
+        'n3': (.525, .5, 's1'),
+        'm1': (.1425, .5, 's1'),
+        'm2': (.33, .475, 's1'),
+        'm3': (.5425, .5, 's1'),
+    }
+    monkeypatch.setattr(geometry, 'parse_svg_geometry', lambda _: SimpleNamespace(
+        elements=geometry_values,
+        staff_systems={'s1': {'staff_lines': [.55, .575, .6, .625, .65]}}))
+    found = extract_tuplets([ET.tostring(root, encoding='unicode')], model)
+    assert set(found) == {'n1|n2|n3', 'm1|m2|m3'}
+    assert found['n1|n2|n3']['note_ids'] == ['n1', 'n2', 'n3']
+    assert found['m1|m2|m3']['note_ids'] == ['m1', 'm2', 'm3']
+    # If both source groups are geometrically indistinguishable, neither
+    # graphic proves a unique note owner. Fail closed rather than mislabel.
+    duplicated = dict(geometry_values)
+    for left, right in zip(('m1', 'm2', 'm3'), ('n1', 'n2', 'n3')):
+        duplicated[left] = duplicated[right]
+    monkeypatch.setattr(geometry, 'parse_svg_geometry', lambda _: SimpleNamespace(
+        elements=duplicated,
+        staff_systems={'s1': {'staff_lines': [.55, .575, .6, .625, .65]}}))
+    assert extract_tuplets([ET.tostring(root, encoding='unicode')], model) == {}
