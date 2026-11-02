@@ -253,8 +253,8 @@ class CodaLessonGenerator:
                     midi_coda_stages(piece,(original,),kind=ex.kind)
                     if applicable else (ExerciseStage(original),))
                 if self.teaching_passages and ex.kind == "learn":
-                    from .lesson_stage_semantics import teaching_sequence
-                    stages = teaching_sequence(stages)
+                    from .lesson_stage_semantics import distinct_stages
+                    stages = (*distinct_stages(stages[:-1], stages[-1]), stages[-1])
                 result[(ex.key,hand)] = stages
         return LessonPlanDefinition(exercises,result,self.name,
                                     requires_unique_source_ids=True)
