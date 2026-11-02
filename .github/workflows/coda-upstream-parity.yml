@@ -176,9 +176,9 @@ jobs:
           PY
       - name: Execute pinned Coda algorithms on raw-MIDI MMR
         id: midi_algorithms
-        continue-on-error: true
         run: |
-          timeout 95s python scripts/probe_coda_midi_author_algorithms.py \
+          timeout 75s python scripts/probe_coda_midi_author_algorithms.py \
+            --strict --window-position 0 \
             --upstream "$RUNNER_TEMP/upstream" \
             --report "$RUNNER_TEMP/coda-diff/midi-domain.json" \
             > "$RUNNER_TEMP/coda-diff/midi-domain-output.txt" 2>&1 || {
@@ -195,5 +195,5 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
       - name: Reject a mismatch
-        if: steps.proof.outcome != 'success' || steps.edges.outcome != 'success' || steps.scores.outcome != 'success' || steps.subset.outcome != 'success' || steps.expanded.outcome != 'success'
+        if: steps.proof.outcome != 'success' || steps.edges.outcome != 'success' || steps.scores.outcome != 'success' || steps.subset.outcome != 'success' || steps.expanded.outcome != 'success' || steps.midi_algorithms.outcome != 'success'
         run: exit 1

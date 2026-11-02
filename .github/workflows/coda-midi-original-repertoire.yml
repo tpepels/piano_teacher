@@ -1,0 +1,51 @@
+name: Coda original backend parity on real MIDI repertoire (bounded)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/coda-midi-original-repertoire.yml'
+      - 'scripts/probe_coda_midi_author_algorithms.py'
+      - 'piano_teacher/application/coda_midi_curriculum.py'
+      - 'piano_teacher/research/coda_midi_sparse.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare-repertoire:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    strategy:
+      fail-fast: false
+      matrix:
+        position: [1, 2]
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install minimal pinned-Coda comparison dependencies
+        run: timeout 65s python -m pip install -q -e '.[test,coda-research]' 'music21>=9.1,<10'
+      - name: Checkout original pinned Coda backend
+        run: |
+          git clone -q --depth 1 https://github.com/annieetang/coda_backend.git "$RUNNER_TEMP/upstream"
+          test "$(git -C "$RUNNER_TEMP/upstream" rev-parse HEAD)" = 'a4eb85dfc2bd418818ca9ff775c0a11ccccb3530'
+      - name: Compare all 17 MIDI pieces at reference window position ${{ matrix.position }}
+        run: |
+          timeout 75s python scripts/probe_coda_midi_author_algorithms.py \
+            --strict --window-position ${{ matrix.position }} \
+            --upstream "$RUNNER_TEMP/upstream" \
+            --report "$RUNNER_TEMP/coda-midi-window-${{ matrix.position }}.json"
+      - name: Retain the complete independently compared note events
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coda-midi-author-window-${{ matrix.position }}-${{ github.sha }}
+          path: ${{ runner.temp }}/coda-midi-window-${{ matrix.position }}.json
+          retention-days: 14
+          if-no-files-found: warn

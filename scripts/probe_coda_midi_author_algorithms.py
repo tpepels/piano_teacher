@@ -258,6 +258,8 @@ def main():
     parser.add_argument("--upstream", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--strict", action="store_true")
+    parser.add_argument("--window-position", type=int, choices=(0, 1, 2),
+                        default=0, help="Which one of three real-score windows to audit")
     args = parser.parse_args()
     backend = args.upstream.resolve()
     if not (backend / "music/exercise.py").is_file():
@@ -276,24 +278,27 @@ def main():
     repertoire = sorted((ROOT / "midi").glob("*.midi"))
     if len(fixtures) != 16 or len(repertoire) != 17:
         raise AssertionError("MIDI comparison corpus changed; audit the full inventory")
-    rows = [compare_piece(path, classes) for path in fixtures]
+    rows = ([compare_piece(path, classes) for path in fixtures]
+            if args.window_position == 0 else [])
     for path in repertoire:
         piece = load_midi(path)
         windows = reference_windows(piece)
-        if not windows:
+        if len(windows) <= args.window_position:
             rows.append({
                 "file": path.name, "status": "source-rejected", "cases": [],
-                "reason": "No safe, bounded, complete-note reference excerpt"})
-        for measure_range in windows:
-            rows.append(compare_piece(path, classes, measure_range=measure_range))
+                "reason": f"No safe reference excerpt at selected position {args.window_position}"})
+        else:
+            rows.append(compare_piece(
+                path, classes, measure_range=windows[args.window_position]))
     counts = Counter(item["status"] for row in rows for item in row["cases"])
     report = {
         "reference_revision": AUTHOR_REVISION,
         "source_input": "raw MIDI", "author_algorithm_input": "MIDI-derived MMR",
         "comparison": "sounding pitch, onset, end (slowdown normalized by factor)",
-        "source_files": len(fixtures) + len(repertoire),
+        "source_files": len(repertoire) + (len(fixtures) if args.window_position == 0 else 0),
+        "repertoire_window_position": args.window_position,
         "reference_excerpts": len(rows),
-        "full_piece_reference_cases": len(fixtures),
+        "full_piece_reference_cases": len(fixtures) if args.window_position == 0 else 0,
         "real_repertoire_bounded_excerpts": sum(
             "excerpt" in row and not row["full_piece"] for row in rows),
         "source_rejected": sum(row["status"] != "compared" for row in rows),

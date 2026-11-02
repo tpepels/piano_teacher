@@ -90,3 +90,16 @@ failures, and differences are recorded. These samples are separate from the
 full-song production sparse algorithm tests and **do not certify unexamined
 full-song author algorithms**. Individual bounded windows are not assembled
 into a fictitious whole-piece author output.
+
+## Bounded original backend runs
+
+The expanded three-window differential originally exceeded its 95-second
+timeout. That run had a mistakenly permitted `continue-on-error` flag,
+which has been removed. Original algorithm mismatches, missing windows, and
+incomplete executions now fail the strict comparator.
+
+The three reproducible repertoire windows run as separate bounded CI jobs:
+position 0 together with all 16 original MIDI fixtures, and positions 1
+and 2 independently on all 17 real pieces. Every position uses the actual
+pinned author code, never a copied oracle, and writes a full per-request
+report. The complete-piece sparse tests stay separate and mandatory.
