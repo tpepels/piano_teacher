@@ -212,3 +212,80 @@ def test_repeated_identical_mistake_revisits_simplification(source):
     assert plan.variant_index == 0
     assert plan.active_variant.level.startswith("fukuda-midi-")
     assert not plan.revisit_source_errors(frozenset({sid}))
+
+
+def test_progressive_consolidation_joins_original_passages_in_order(source):
+    plan = LearningPlan(source, exercise_strategy="coda-fukuda-midi")
+    from piano_teacher.lesson_generators import lesson_hands
+    joins = [(i, ex) for i, ex in enumerate(plan.exercises)
+             if ex.key.startswith("hybrid:join:")]
+    assert joins, "Long courses must assemble learned passages, not jump to the finale"
+    assert any(ex.key.startswith("hybrid:join:4:") for _, ex in joins)
+    for idx, ex in joins:
+        learning = [p for p in plan.exercises[:idx] if p.kind == "learn"
+                    and ex.phrase.first_bar <= p.phrase.first_bar
+                    and p.phrase.last_bar <= ex.phrase.last_bar]
+        assert len(learning) >= 2
+        assert all(ex.phrase.end >= n.end - 1e-7 for n in ex.phrase.notes)
+        assert Counter(n.source_id for n in ex.phrase.notes) == Counter(
+            n.source_id for p in learning for n in p.phrase.notes)
+        assert set(lesson_hands(ex)) <= {"right", "left", "both"}
+        assert len(plan.lesson_definition.stages(ex, lesson_hands(ex)[0])) == 1
+        assert plan.lesson_definition.stages(ex, lesson_hands(ex)[0])[-1].variant.level == "original"
+    assert plan.exercises[-1].kind == "perform"
+    assert plan.exercises[-1].phrase.notes == source.notes
+
+
+def test_current_failed_attack_selects_its_passage_over_older_stored_error(source):
+    plan = LearningPlan(source, exercise_strategy="coda-fukuda-midi")
+    old = next(n for n in source.notes if n.hand == "right" and n.start == 0)
+    current = next(n for n in source.notes if n.hand == "right" and n.start >= 12)
+    current_ex = next(ex for ex in plan.exercises
+                      if ex.kind == "learn" and current in ex.phrase.notes)
+    plan.select(next(i for i, ex in enumerate(plan.exercises)
+                     if ex.key == current_ex.key))
+    plan.set_hand("right")
+    plan.variant_index = len(plan.variants) - 1
+    # This error belongs to a different bar; the current selection survives.
+    assert plan.refresh_from_feedback({old.source_id: "wrong"},
+                                      prefer_repair=False)
+    assert plan.exercise.key == current_ex.key
+    assert plan.refresh_from_feedback(
+        {old.source_id: "wrong", current.source_id: "late"},
+        focus_ids=frozenset({current.source_id}))
+    assert plan.exercise.key == current_ex.key
+    assert plan.active_variant.level.startswith("coda-dotted-")
+    with pytest.raises(ValueError, match="Focus"):
+        plan.refresh_from_feedback(
+            {old.source_id: "wrong"},
+            focus_ids=frozenset({current.source_id}))
+
+
+def test_accepted_amber_midi_take_does_not_restart_or_reengrave(tmp_path):
+    from piano_teacher.server import PracticeEngine
+    from piano_teacher.practice import Assessment, NoteAssessment
+    path = tmp_path / "accepted.mid"
+    make_piece(path)
+    engine = PracticeEngine(tmp_path / "accepted-data", enable_midi=False)
+    try:
+        engine.set_preferences(exercise_strategy="coda-fukuda-midi")
+        engine.load(str(path))
+        p = engine.plan
+        p.variant_index = len(p.variants) - 1
+        original_key = p.identity
+        notes = p.active_variant.notes
+        result = Assessment(tuple(
+            NoteAssessment(n, "late" if i == 0 else "correct")
+            for i, n in enumerate(notes)), 0)
+        assert result.passed and not result.clean
+        revision = engine.score_revision
+        engine.pending_result = result
+        engine._commit_pending()
+        assert engine.plan.identity == original_key
+        assert engine.score_revision == revision
+        assert engine.fukuda_mistakes.evidence(engine.fingerprint)[
+            notes[0].source_id] == "late"
+        assert engine.plan.streak <= 1
+    finally:
+        engine.listen.cancel()
+        engine.db.close()
