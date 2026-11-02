@@ -15,7 +15,7 @@ MAX_MATRIX_CELLS = 2_000_000
 
 def midi_coda_quantization(
     piece: Piece, phrase: Phrase, *, dotted: bool = False,
-    compact: bool = False, max_cells: int = MAX_MATRIX_CELLS,
+    compact: bool = False, max_cells: int | None = MAX_MATRIX_CELLS,
 ) -> int:
     """Choose PPQ-exact source grid; double it for half-tick dotted rhythms.
 
@@ -27,7 +27,7 @@ def midi_coda_quantization(
         raise ValueError("Coda MIDI grid requires a genuine MIDI-imported Piece")
     if not phrase.notes or phrase.start < 0 or phrase.end <= phrase.start:
         raise ValueError("Coda MIDI grid requires a nonempty bounded phrase")
-    if max_cells <= 0:
+    if max_cells is not None and max_cells <= 0:
         raise ValueError("Coda MIDI matrix needs a positive capacity")
     g = ppq
     for note in phrase.notes:
@@ -50,6 +50,6 @@ def midi_coda_quantization(
                 g=gcd(g,abs(round(ticks)))
     q = (ppq//g if compact else ppq) * (2 if dotted else 1)
     steps = (phrase.end-phrase.start)*q
-    if not isfinite(steps) or steps*128 > max_cells:
+    if not isfinite(steps) or (max_cells is not None and steps*128 > max_cells):
         raise ValueError("Coda MIDI source exceeds bounded matrix capacity")
     return q

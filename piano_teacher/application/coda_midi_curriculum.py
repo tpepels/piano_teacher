@@ -15,9 +15,8 @@ from ..exercise_generator import ExerciseVariant
 from ..exercise_pipeline import ExerciseStage
 from ..music import Phrase, Piece
 from ..research.coda_midi_grid import midi_coda_quantization
-from ..research.coda_reference_exercises import (
-    CodaReferenceChordification, CodaReferenceDotted, original_coda_levels,
-)
+from ..research.coda_midi_sparse import sparse_midi_coda
+from ..research.coda_reference_exercises import original_coda_levels
 from ..research.coda_author_catalog import (
     AUTHOR_SLOWDOWN_FACTORS, catalog_requests,
 )
@@ -102,7 +101,7 @@ def _excerpt_quantization(piece: Piece, phrase: Phrase) -> int:
                    if phrase.start - 1e-7 <= n.start < phrase.end - 1e-7)
     whole = Phrase(phrase.number, phrase.first_bar, phrase.last_bar,
                    phrase.start, phrase.end, source)
-    return midi_coda_quantization(piece, whole, compact=True)
+    return midi_coda_quantization(piece, whole, compact=True, max_cells=None)
 
 
 def midi_coda_catalog(piece: Piece, original: ExerciseVariant
@@ -175,16 +174,15 @@ def midi_coda_catalog(piece: Piece, original: ExerciseVariant
                     continue
                 try:
                     if request.category == "Voice Level: Dotted":
-                        result = CodaReferenceDotted(
-                            request.parameter == (1.5, 0.5)).transform(
-                            voice.variant, boundaries=boundaries,
-                            quantization=quantization * 2,
-                            source_musicxml="")
+                        result = sparse_midi_coda(
+                            voice.variant, family="dotted",
+                            quantization=quantization,
+                            long_first=request.parameter == (1.5, 0.5))
                     elif request.category == "Voice Level: Chordified":
-                        result = CodaReferenceChordification(
-                            request.parameter).transform(
-                            voice.variant, boundaries=boundaries,
-                            quantization=quantization, source_musicxml="")
+                        result = sparse_midi_coda(
+                            voice.variant, family="chord",
+                            quantization=quantization,
+                            chord_width=request.parameter)
                     else:
                         raise ValueError("Unknown Coda catalog category")
                     stage = _retimed(voice.variant, result.timing, name)
