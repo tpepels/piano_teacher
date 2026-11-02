@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/fukuda-midi-phase4.yml'
       - 'piano_teacher/fukuda_midi.py'
+      - 'piano_teacher/fukuda_midi_performance.py'
+      - 'scripts/analyze_fukuda_midi.py'
       - 'piano_teacher/fukuda_mistake_store.py'
       - 'piano_teacher/server.py'
       - 'piano_teacher/preprocessing_cache.py'
@@ -32,7 +34,7 @@ jobs:
         run: python -m pip install -e '.[test,coda-research]'
       - name: Compile and test all Phase 4 source contracts
         run: |
-          python -m compileall -q piano_teacher/fukuda_midi.py piano_teacher/lesson_generators.py tests/test_fukuda_midi_phase4.py
+          python -m compileall -q piano_teacher/fukuda_midi.py piano_teacher/fukuda_midi_performance.py piano_teacher/lesson_generators.py tests/test_fukuda_midi_phase4.py
           timeout 50s python -m pytest -q --tb=short \
             tests/test_fukuda_midi_phase4.py \
             tests/test_exercise_strategies.py \
