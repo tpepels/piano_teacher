@@ -53,5 +53,6 @@ jobs:
             tests/test_coda_differential.py \
             tests/test_coda_discrepancy.py \
             tests/test_coda_parity_contract.py \
+            tests/test_coda_midi_grid.py \
             tests/test_coda_auto_chord_levels.py \
             tests/test_coda_extended_probe.py
