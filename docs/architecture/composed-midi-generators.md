@@ -1,7 +1,7 @@
 # Composable MIDI lesson generators
 
 **Implemented:** 2026-11-02. **Main selectable strategy:** `coda-fukuda-midi`.
-The default remains `coda-midi` until learner-outcome evidence supports a
+The new-install default is `coda-fukuda-midi`; existing saved selections are kept. Independent learner-outcome evidence is still required to support a
 different choice.
 
 ## Responsibility boundaries
@@ -124,3 +124,16 @@ The separate offline MIDI-performance analysis improves note-off
 handling and matching speed, while the live application retains
 its one authoritative playback/assessment clock. See the
 [completed MIDI-only Fukuda implementation](../fukuda-midi-phase4-2026-11-02.md).
+
+
+## Desktop selection vs research-author generator
+
+The registered `coda-midi` desktop course uses source-safe focus passages
+and filters objectively unchanged/duplicate stages. Direct
+`CodaLessonGenerator()` is reserved for the author-style complete-excerpt
+research contract. The combined `coda-fukuda-midi` course retains all
+source candidates in its immutable catalog but selects a bounded ordered
+lesson using measured note/timing/tempo differences. Its current source-ID
+error evidence drives adaptive Coda/Fukuda stage selection. Both routes end
+with unchanged original MIDI notes. The stage provenance is carried to
+`state_projection`, lesson overview and the Godot practice/step-picker UI.
