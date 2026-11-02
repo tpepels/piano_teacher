@@ -136,6 +136,15 @@ def test_desktop_coda_teaches_bounded_excerpts_before_complete_performance(piece
     label = next(row["label"] for row in available_strategies()
                  if row["id"] == "coda-midi")
     assert "passage" in label.lower()
+    # Old v6 desktop Coda saved the entire source as its *learn* range.
+    # Restore it to the first relevant source passage, not to the
+    # course's only remaining containing interval (the final performance).
+    plan.restore_location(kind="learn", first_bar=1,
+                          last_bar=len(piece.bar_boundaries)-1,
+                          hand="right", level="original")
+    assert plan.exercise.kind == "learn"
+    assert plan.active_phrase.first_bar == 1
+    assert plan.active_phrase.last_bar < len(piece.bar_boundaries)-1
 
 
 def test_research_coda_retains_full_score_default_and_selected_excerpt(piece):
