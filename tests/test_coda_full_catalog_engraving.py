@@ -100,7 +100,9 @@ def test_actual_sparse_coda_rhythm_stage_native_engraving_listen_and_grading(
     assert any((n.start, n.end) !=
                (original[n.source_id].start, original[n.source_id].end)
                for n in notes)
-    tempo = stage.tempo_map(90)
+    from piano_teacher.exercise_contracts import ConstantTempo, OriginalTiming
+    tempo = (stage.tempo_map(90) or
+             ConstantTempo().generate(OriginalTiming().transform(stage.variant), 90))
     selection = ScoreSelection(
         piece=piece, phrase=stage.variant.phrase, hand=plan.hand,
         stage_key=plan.identity, revision=8, fingerprint="sparse-coda-rhythm",
