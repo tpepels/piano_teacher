@@ -148,39 +148,106 @@ class LearningPlan:
         return callable(getattr(self.lesson_generator, "with_mistakes", None))
 
     def refresh_from_mistakes(self, ids: frozenset[str]) -> bool:
-        """Regenerate only when the selected generator accepts graded source IDs.
-
-        Preserve existing source-derived mastery keys, but never assign
-        mastery to newly created repairs. Re-select the nearest valid stage.
-        """
+        """Compatibility with source-ID-only generators and saved evidence."""
         if not isinstance(ids, frozenset):
             raise TypeError("Generator feedback requires frozen source IDs")
-        update = getattr(self.lesson_generator, "with_mistakes", None)
-        if not callable(update):
+        hook = getattr(self.lesson_generator, "with_mistakes", None)
+        if not callable(hook):
             return False
-        new_generator = update(ids, self.lesson_definition)
-        if new_generator is self.lesson_generator:
+        return self._refresh_generator(hook(ids, self.lesson_definition),
+                                       focus_ids=ids)
+
+    def refresh_from_feedback(
+        self, evidence: Mapping[str, str], *, prefer_repair: bool = True,
+    ) -> bool:
+        """Rebuild selected stages from actual original-attack error families."""
+        if not isinstance(evidence, Mapping) or any(
+                not isinstance(k, str) or not isinstance(v, str)
+                for k, v in evidence.items()):
+            raise TypeError("Generator needs source-identified MIDI feedback")
+        hook = getattr(self.lesson_generator, "with_feedback", None)
+        if callable(hook):
+            updated = hook(evidence, self.lesson_definition)
+            return self._refresh_generator(updated, focus_ids=frozenset(evidence)
+                                           if prefer_repair else frozenset())
+        return self.refresh_from_mistakes(frozenset(evidence))
+
+    def _refresh_generator(
+        self, updated: LessonGenerator, *, focus_ids: frozenset[str],
+    ) -> bool:
+        """Replan without discarding unaffected progress, BPM or active cursor.
+
+        A failed original-score attempt may enter the relevant new scaffold;
+        a successful correction keeps the current lesson if it still exists.
+        Repairs that disappear resolve to the nearest remaining source phrase.
+        """
+        if updated is self.lesson_generator:
             return False
-        previous = self.active_variant.level
-        previous_key = self.exercise.key
+        previous_key = self.identity
+        previous_exercise_key = self.exercise.key
+        previous_range = (self.active_phrase.first_bar,
+                          self.active_phrase.last_bar)
         previous_kind = self.exercise.kind
         previous_hand = self.hand
-        definition = new_generator.generate(self.piece)
-        self.lesson_generator = new_generator
+        previous_level = self.active_variant.level
+        previous_bpm = self.bpm
+        previous_streak = self.streak
+        definition = updated.generate(self.piece)
+        old_exercises = self.exercises
+        self.lesson_generator = updated
         self.lesson_definition = definition
         self.exercises = definition.exercises
-        self.index = len(self.exercises) - 1 if previous_kind == "perform" else 0
-        self.hand_index = (lesson_hands(self.exercise).index(previous_hand)
-                           if previous_hand in lesson_hands(self.exercise) else 0)
         self._variants_cached = None
         self._lesson_steps_cache = None
         self._repeated_groups = None
-        self.variant_index = (0 if (previous_kind == "learn" and
-                                  self.exercise.key != previous_key)
-                              else next(
-                                  (i for i, stage in enumerate(self.stages)
-                                   if stage.variant.level == previous),
-                                  len(self.stages) - 1))
+        # Focus a newly diagnosed, actually failed source attack on the first
+        # source passage containing it. An existing selected step survives when
+        # its source IDs and stage definition are unchanged.
+        candidate = None
+        if focus_ids and previous_level == "original":
+            matching = [(i, ex) for i, ex in enumerate(self.exercises)
+                        if ex.kind == "learn" and any(
+                            n.source_id in focus_ids for n in ex.phrase.notes)]
+            # Prefer the previous source range when a user practised a
+            # particular passage, otherwise the earliest diagnosed passage.
+            candidate = next(((i, ex) for i, ex in matching
+                              if ex.key == previous_exercise_key),
+                             matching[0] if matching else None)
+        if candidate is not None:
+            self.index, target = candidate
+            self.hand_index = (self.hands.index(previous_hand)
+                               if previous_hand in self.hands else 0)
+            self.variant_index = 0
+            self.streak = self.failures = 0
+            self.bpm = self._tempo_for_current_stage()
+            return True
+        retained = next((step for step in self.lesson_steps
+                         if step.key == previous_key), None)
+        if retained is not None:
+            self.index = retained.exercise_index
+            self.hand_index = self.hands.index(retained.hand)
+            self.variant_index = next(i for i, v in enumerate(self.variants)
+                                      if v.level == retained.level)
+            self.bpm = previous_bpm
+            self.streak = previous_streak
+            return True
+        # Source content may change when a repair disappears. Prefer the same
+        # passage and hand; otherwise resume at the next surviving source
+        # section instead of arbitrarily restarting at exercise zero.
+        nearby = next(((i, ex) for i, ex in enumerate(self.exercises)
+                       if ex.key == previous_exercise_key), None)
+        if nearby is None:
+            nearby = next(((i, ex) for i, ex in enumerate(self.exercises)
+                           if ex.kind == previous_kind and
+                           ex.phrase.first_bar >= previous_range[0]),
+                          (len(self.exercises) - 1, self.exercises[-1]))
+        self.index = nearby[0]
+        self.hand_index = (self.hands.index(previous_hand)
+                           if previous_hand in self.hands else 0)
+        self.variant_index = next(
+            (i for i, variant in enumerate(self.variants)
+             if variant.level == previous_level),
+            len(self.variants) - 1 if previous_level == "original" else 0)
         self.streak = self.failures = 0
         self.bpm = self._tempo_for_current_stage()
         return True

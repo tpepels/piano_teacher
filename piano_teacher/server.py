@@ -327,7 +327,8 @@ class PracticeEngine:
                     old, settings=self.library.settings,
                     progress=self.progress, fingerprint=self.fingerprint,
                     warmup=self.is_builtin_warmup,
-                    fukuda_mistakes=self.fukuda_mistakes.problematic(self.fingerprint))
+                    fukuda_mistakes=self.fukuda_mistakes.problematic(self.fingerprint),
+                    feedback=self.fukuda_mistakes.evidence(self.fingerprint))
                 self.open_from_beat = 0.0
                 self.mode = "practice"
                 self.course_guided = False
@@ -491,7 +492,8 @@ class PracticeEngine:
                     exercise_strategy=self.library.settings['exercise_strategy'],
                     timing_strategy=self.library.settings['timing_strategy'],
                     tempo_strategy=self.library.settings['tempo_strategy'],
-                    fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint))
+                    fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint),
+                    feedback=self.fukuda_mistakes.evidence(fingerprint))
                 self.mode = "practice"
                 self.teaching = None
                 self.guided_range = None
@@ -577,7 +579,8 @@ class PracticeEngine:
                     exercise_strategy=self.library.settings['exercise_strategy'],
                     timing_strategy=self.library.settings['timing_strategy'],
                     tempo_strategy=self.library.settings['tempo_strategy'],
-                    fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint))
+                    fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint),
+                    feedback=self.fukuda_mistakes.evidence(fingerprint))
         self.open_from_beat = 0.0
         self.course_guided = False
         self.mode = "practice"
@@ -974,12 +977,19 @@ class PracticeEngine:
         if use_feedback:
             # Reuse graded original source IDs through the selected generator's
             # feedback contract. No name-based algorithm dispatch in the engine.
-            mistakes=self.fukuda_mistakes.observe(self.fingerprint,result)
-            if p.refresh_from_mistakes(mistakes):
+            self.fukuda_mistakes.observe(self.fingerprint, result)
+            changed = p.refresh_from_feedback(
+                self.fukuda_mistakes.evidence(self.fingerprint),
+                prefer_repair=any(n.status != "correct" for n in result.notes))
+            if changed:
+                # A newly selected stage has its own notation revision.
+                # Old-stage remediation cannot safely fire after this switch.
+                self._remediation_pending = None
                 self.score_artifacts.invalidate()
                 self.score_revision += 1
                 self.awaiting_score_revision = None
-        if outcome.remediation is not None:
+        if outcome.remediation is not None and not (
+                use_feedback and changed):
             self._remediation_pending = outcome.remediation
         if outcome.accelerated:
             self.recovery_notice = {
