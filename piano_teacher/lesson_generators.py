@@ -6,10 +6,8 @@ not algorithm-specific passage selection.
 """
 from __future__ import annotations
 
-from bisect import bisect_right
 from collections import Counter
 from dataclasses import dataclass
-from statistics import median
 from types import MappingProxyType
 from typing import Mapping, Protocol
 
@@ -92,6 +90,10 @@ class LessonGenerator(Protocol):
 
 
 def lesson_hands(exercise: Exercise) -> tuple[str,...]:
+    if exercise.hands:
+        if any(h not in ("right","left","both") for h in exercise.hands):
+            raise ValueError("Unknown hand in generated lesson")
+        return exercise.hands
     if exercise.kind=="warmup":
         return ("right","left","both")
     if exercise.kind!="learn":
@@ -142,69 +144,40 @@ class HeuristicLessonGenerator:
 
 
 def _coda_piece_sections(piece: Piece) -> tuple[Exercise,...]:
-    """Plan a whole MIDI score using global note density and score structure.
+    """Adapt the published author endpoint's explicitly chosen excerpt.
 
-    Coda owns passage boundaries: no call to heuristic build_exercises(),
-    _focus_phrases() or preselected LearningPlan exercises.
+    The original /generate route accepts start_measure and end_measure.
+    It does not select sections or prescribe learning order. By default
+    this MIDI adapter selects the *entire* score, from first to last bar.
+    The final performance step is an application teaching policy.
     """
-    grid=piece.bar_boundaries
-    if len(grid)<2:
-        raise ValueError("Whole-piece Coda requires a reliable MIDI bar grid")
-    bars=len(grid)-1
-    note_bars=[[] for _ in range(bars)]
-    attacks=[set() for _ in range(bars)]
-    for note in piece.notes:
-        i=bisect_right(grid,note.start+1e-7)-1
-        if 0<=i<bars and note.start<grid[i+1]-1e-7:
-            note_bars[i].append(note)
-            attacks[i].add(round(note.start,7))
-    nonempty=[len(a) for a in attacks if a]
-    if not nonempty:
-        raise ValueError("MIDI piece contains no rhythmic attacks")
-    # This target comes from the WHOLE piece rather than a fixed 2-bar
-    # local heuristic: dense scores shorten sections; sparse scores extend.
-    target=min(SETTINGS.focus_max_attacks,
-               max(SETTINGS.focus_min_onsets,int(round(2*median(nonempty)))))
-    spans=[]
-    start=0
-    while start<bars:
-        end=start
-        count=0
-        while end<bars and end-start<SETTINGS.focus_max_measures:
-            if end>start and any(
-                grid[end-1]+1e-7<t<=grid[end]+1e-7
-                for t,_,_ in piece.time_signatures):
-                break
-            proposed=count+len(attacks[end])
-            if end>start+1 and count>=SETTINGS.focus_min_onsets and proposed>target:
-                break
-            count=proposed
-            end+=1
-            if count>=target and end-start>=2:
-                break
-        if end<=start:
-            end=start+1
-        if count:
-            spans.append((start,end))
-        start=end
-    exercises=[]
-    for first,last in spans:
-        notes=tuple(n for bar in note_bars[first:last] for n in bar)
-        phrase=Phrase(len(exercises)+1,first+1,last,grid[first],grid[last],notes)
-        exercises.append(Exercise("learn",phrase,f"learn:{first+1}-{last}"))
-    if not exercises:
-        raise ValueError("Whole MIDI piece has no teachable attacks")
-    # A real full-piece performance is ALWAYS the terminal lesson, even
-    # for a one-section piece or for long introductory/trailing rests.
-    complete=Phrase(0,1,bars,grid[0],
-                    max(grid[-1],max(n.end for n in piece.notes)),piece.notes)
-    exercises.append(Exercise("perform",complete,"perform:all"))
-    return tuple(exercises)
+    boundaries=piece.bar_boundaries
+    if len(boundaries)<2 or not piece.notes:
+        raise ValueError("Coda needs an imported MIDI score with bar boundaries")
+    bars=len(boundaries)-1
+    last=max(boundaries[-1],max(n.end for n in piece.notes))
+    complete=Phrase(1,1,bars,boundaries[0],last,piece.notes)
+    present={n.hand for n in piece.notes}
+    if not present <= {"right","left"}:
+        raise ValueError("Coda requires known MIDI hand assignment")
+    hands=tuple(h for h in ("right","left") if h in present)
+    if len(hands)==2:
+        hands+=("both",)
+    if not hands:
+        raise ValueError("No playable MIDI hands")
+    return (
+        Exercise("learn",complete,"coda:whole-source",hands),
+        Exercise("perform",complete,"perform:all"),
+    )
 
 
 @dataclass(frozen=True)
 class CodaLessonGenerator:
-    """Analyze the whole MIDI Piece before selecting exercises and levels."""
+    """Generate the published Coda exercise catalog for the whole MIDI excerpt.
+
+    Ordering those exercises into a teaching path is our app's policy,
+    because the pinned original backend has no automatic curriculum.
+    """
     name: str = "coda-midi"
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:

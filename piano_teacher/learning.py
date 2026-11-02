@@ -17,6 +17,7 @@ from .tempo_difficulty import suggested_start_bpm
 from .repeated_passages import exact_repetition_signature
 from .lesson_generators import (
     Exercise, LessonGenerator, HeuristicLessonGenerator, CodaLessonGenerator,
+    lesson_hands,
     build_exercises, _course_phrases, _focus_phrases,
     _dense_single_measure_variants, _hands_for_learning, source_variants,
 )
@@ -114,11 +115,7 @@ class LearningPlan:
 
     @property
     def hands(self) -> tuple[str, ...]:
-        if self.warmup:
-            return ("right", "left", "both")
-        if self.exercise.kind != "learn":
-            return ("both",)
-        return _hands_for_learning(self.exercise)
+        return lesson_hands(self.exercise)
 
     @property
     def hand(self) -> str:
