@@ -249,9 +249,13 @@ class CodaLessonGenerator:
                 applicable = (not self.teaching_passages or ex.kind != "learn"
                     or abs(ex.phrase.end -
                            piece.bar_boundaries[ex.phrase.last_bar]) <= 1e-7)
-                result[(ex.key,hand)] = (
+                stages = (
                     midi_coda_stages(piece,(original,),kind=ex.kind)
                     if applicable else (ExerciseStage(original),))
+                if self.teaching_passages and ex.kind == "learn":
+                    from .lesson_stage_semantics import teaching_sequence
+                    stages = teaching_sequence(stages)
+                result[(ex.key,hand)] = stages
         return LessonPlanDefinition(exercises,result,self.name,
                                     requires_unique_source_ids=True)
 
@@ -641,7 +645,7 @@ def register_composed_lesson_generator(
 register_lesson_generator(LessonGeneratorRegistration(
     "coda-midi",
     lambda **options: CodaLessonGenerator(teaching_passages=True),
-    course_version=7, owns_timing=True, midi_only=True))
+    course_version=8, owns_timing=True, midi_only=True))
 register_lesson_generator(LessonGeneratorRegistration(
     "fukuda-midi",
     lambda **options: FukudaMidiLessonGenerator(
@@ -652,4 +656,4 @@ register_lesson_generator(LessonGeneratorRegistration(
     lambda **options: CodaFukudaMidiLessonGenerator(
         mistakes=options["mistakes"],
         error_status=tuple(sorted((options.get("feedback") or {}).items()))),
-    course_version=2, owns_timing=True, midi_only=True))
+    course_version=3, owns_timing=True, midi_only=True))
