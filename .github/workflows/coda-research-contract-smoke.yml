@@ -70,6 +70,7 @@ jobs:
             tests/test_coda_author_catalog.py \
             tests/test_coda_extended_probe.py \
             tests/test_coda_piece_curriculum.py \
+            tests/test_coda_midi_author_catalog_completeness.py \
             tests/test_lesson_generator_architecture.py \
             tests/test_coda_live_note_audit.py \
             tests/test_coda_pedagogy_pilot.py
