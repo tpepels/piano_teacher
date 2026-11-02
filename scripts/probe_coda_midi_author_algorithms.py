@@ -222,9 +222,13 @@ def main():
     classes = (ExerciseLine, MusicMatrixRepresentation, key, meter)
 
     data = json.loads(MANIFEST.read_text())
-    files = sorted(item["file"] for item in data["supported"]
-                   if item["file"].lower().endswith((".mid", ".midi")))
-    rows = [compare_piece(CORPUS / path, classes) for path in files]
+    fixtures = sorted(CORPUS / item["file"] for item in data["supported"]
+                      if item["file"].lower().endswith((".mid", ".midi")))
+    repertoire = sorted((ROOT / "midi").glob("*.midi"))
+    if len(fixtures) != 16 or len(repertoire) != 17:
+        raise AssertionError("MIDI comparison corpus changed; audit the full inventory")
+    files = [*fixtures, *repertoire]
+    rows = [compare_piece(path, classes) for path in files]
     counts = Counter(item["status"] for row in rows for item in row["cases"])
     report = {
         "reference_revision": AUTHOR_REVISION,
@@ -232,6 +236,9 @@ def main():
         "comparison": "sounding pitch, onset, end (slowdown normalized by factor)",
         "source_files": len(rows),
         "source_rejected": sum(row["status"] != "compared" for row in rows),
+        "source_rejections": [
+            {"file": row["file"], "reason": row["reason"]}
+            for row in rows if row["status"] != "compared"],
         "requests": sum(len(row["cases"]) for row in rows),
         "outcomes": dict(sorted(counts.items())),
         "cases": rows,

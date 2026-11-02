@@ -36,3 +36,28 @@ The MIDI-domain original reference inputs need a documented, reproducible
 MusicXML bridge; raw input should never require MusicXML from a user.
 
 Pedagogical superiority is a distinct Phase 7 acceptance criterion.
+
+## Executable differential (2026-11-02)
+
+`scripts/probe_coda_midi_author_algorithms.py` injects the exact same
+MIDI-derived 128-pitch onset/duration/piano-roll matrices into the actual
+unmodified pinned `ExerciseLine` transformation methods and the independent
+adapter. It compares **sounding pitch, onset and release**. A separate
+tolerance of 2×10⁻⁶ quarter beats is used only to classify music21
+serialization rounding; source-note or pitch loss is never tolerated.
+
+The domain is **all 16 supported imported-MIDI regression fixtures plus
+all 17 bundled real repertoire files**, not an undocumented selection.
+If the binary Coda matrix cannot express a file within its bounded capacity,
+it is recorded as a `source-rejected` case with an explicit reason rather
+than counted as success.
+
+The first 16-file run (GitHub Action 41479523951) compared 181 author
+transformation requests. Its initial diagnostic count was 33 exact, 8
+apparent mismatches, 83 author-invalid, 46 author-None and 11 exceptions.
+Detailed inspection showed that 3 apparent mismatches were author-produced
+six-note blocked chords (violating the paper's five-tone upper bound) and
+the other 5 were within 10⁻⁶ quarter-beat serialization rounding.
+The revised run explicitly classifies these rather than hiding them.
+The expanded 33-file differential is still diagnostic and is not a
+comprehensive input-domain parity certificate.
