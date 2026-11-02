@@ -191,6 +191,15 @@ class CodaPartStrategy:
 
 
 @dataclass(frozen=True)
+class CodaMidiStrategy:
+    """Piece-selected Coda lesson policy; stage generation is in LearningPlan."""
+    name: str = "coda-midi"
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
+        return CodaPartStrategy().generate(context,baseline)
+
+
+@dataclass(frozen=True)
 class FeatureGatedStrategy:
     """Feature-guided strategy selection; no pretrained RubricNet model."""
 
@@ -323,6 +332,7 @@ _FACTORIES = {
     "legacy": LegacyStrategy,
     "fukuda": FukudaStrategy,
     "coda-part": CodaPartStrategy,
+    "coda-midi": CodaMidiStrategy,
     "feature-gated": FeatureGatedStrategy,
 }
 
@@ -333,6 +343,7 @@ _FACTORIES = {
 APP_STRATEGIES = (
     ("legacy", "Original progression"),
     ("fukuda", "Fukuda · chord and leap simplification"),
+    ("coda-midi", "Coda · MIDI whole-piece lessons"),
     ("coda-part", "Coda · passage splitting"),
     ("feature-gated", "Feature-guided selection"),
     ("fukuda+coda-part", "Fukuda + Coda"),
@@ -351,6 +362,9 @@ def resolve_strategy(spec: str | ExerciseStrategy | None, *, piece=None) -> Exer
                 or not callable(getattr(spec, "generate", None))):
             raise TypeError("Expected a strategy with name and generate")
         return SourcePreservingAdapter(spec)
+    if spec == "coda-midi" and (piece is None or
+            piece.source_format != "midi" or piece.source_musicxml):
+        raise ValueError("Coda lesson generation requires an imported MIDI piece")
     if spec == "rubricnet-trained":
         if piece is None:
             raise ValueError("RubricNet-trained requires the original score")

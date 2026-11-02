@@ -349,9 +349,12 @@ class LearningPlan:
         self.piece = piece
         self.timing_strategy = resolve_timing_strategy(timing_strategy)
         self.tempo_strategy = resolve_tempo_strategy(tempo_strategy)
-        self.exercise_strategy = resolve_strategy(
-            exercise_strategy if exercise_strategy is not None else "legacy",
-            piece=piece)
+        # Warmups have their own fixed route; a selected MIDI-Coda policy
+        # applies to imported pieces, not the built-in warmup catalog.
+        requested = exercise_strategy if exercise_strategy is not None else "legacy"
+        if warmup and requested == "coda-midi":
+            requested = "legacy"
+        self.exercise_strategy = resolve_strategy(requested,piece=piece)
         self.pipeline = ExercisePipeline(self.exercise_strategy, self.timing_strategy,
                                          self.tempo_strategy)
         self.warmup = warmup
@@ -439,9 +442,13 @@ class LearningPlan:
         context = ExerciseContext(
             exercise.phrase, hand, groups, SETTINGS.focus_max_attacks,
             SETTINGS.focus_min_onsets, exercise.kind, self.warmup)
+        baseline=lambda: self._legacy_stage_variants(exercise,hand)
+        if self.exercise_strategy.name == "coda-midi":
+            from .application.coda_midi_curriculum import midi_coda_stages
+            variants=self.exercise_strategy.generate(context,baseline)
+            return midi_coda_stages(self.piece,variants,kind=exercise.kind)
         return self.pipeline.build(
-            context, lambda: self._legacy_stage_variants(exercise, hand),
-            source_musicxml=self.piece.source_musicxml)
+            context, baseline,source_musicxml=self.piece.source_musicxml)
 
     def _stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
         """Compatibility with existing curriculum and persisted stage keys."""
