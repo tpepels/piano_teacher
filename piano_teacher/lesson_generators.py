@@ -394,10 +394,14 @@ class LessonPlanDefinition:
         for exercise in self.exercises:
             for hand in lesson_hands(exercise):
                 stages=self.stage_sequences[(exercise.key,hand)]
-                if not stages or stages[-1].variant.level!="original":
-                    raise ValueError("Every generated lesson must end at original MIDI attacks")
                 source=tuple(n for n in exercise.phrase.notes
                              if hand=="both" or n.hand==hand)
+                # Existing built-in warmups intentionally expose all hand
+                # tabs, even when the source has no notes for one hand.
+                if not stages and exercise.kind=="warmup" and not source:
+                    continue
+                if not stages or stages[-1].variant.level!="original":
+                    raise ValueError("Every generated lesson must end at original MIDI attacks")
                 # Existing score fixtures can use repeated/blank source IDs
                 # and present their original notes in a different stable
                 # order. Compare full source-note multiplicities, not IDs.
