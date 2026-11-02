@@ -143,7 +143,9 @@ class HeuristicLessonGenerator:
         return LessonPlanDefinition(exercises,result,self.name)
 
 
-def _coda_piece_sections(piece: Piece) -> tuple[Exercise,...]:
+def _coda_piece_sections(piece: Piece, *,
+                         first_measure: int = 1,
+                         last_measure: int | None = None) -> tuple[Exercise,...]:
     """Adapt the published author endpoint's explicitly chosen excerpt.
 
     The original /generate route accepts start_measure and end_measure.
@@ -155,9 +157,23 @@ def _coda_piece_sections(piece: Piece) -> tuple[Exercise,...]:
     if len(boundaries)<2 or not piece.notes:
         raise ValueError("Coda needs an imported MIDI score with bar boundaries")
     bars=len(boundaries)-1
-    last=max(boundaries[-1],max(n.end for n in piece.notes))
-    complete=Phrase(1,1,bars,boundaries[0],last,piece.notes)
-    present={n.hand for n in piece.notes}
+    last_measure=bars if last_measure is None else last_measure
+    if (type(first_measure) is not int or type(last_measure) is not int
+            or first_measure<1 or last_measure<first_measure
+            or last_measure>bars):
+        raise ValueError("Coda excerpt must select an existing measure range")
+    start,end=boundaries[first_measure-1],boundaries[last_measure]
+    for note in piece.notes:
+        if note.start<start-1e-7 and note.end>start+1e-7:
+            raise ValueError("MIDI note sustains across Coda excerpt start")
+        if note.start<end-1e-7 and note.end>end+1e-7:
+            raise ValueError("MIDI note sustains across Coda excerpt end")
+    selected=tuple(n for n in piece.notes
+                   if start-1e-7<=n.start<end-1e-7)
+    if not selected:
+        raise ValueError("Coda selected measure range has no MIDI attacks")
+    complete=Phrase(1,first_measure,last_measure,start,end,selected)
+    present={n.hand for n in selected}
     if not present <= {"right","left"}:
         raise ValueError("Coda requires known MIDI hand assignment")
     hands=tuple(h for h in ("right","left") if h in present)
@@ -166,26 +182,31 @@ def _coda_piece_sections(piece: Piece) -> tuple[Exercise,...]:
     if not hands:
         raise ValueError("No playable MIDI hands")
     return (
-        Exercise("learn",complete,"coda:whole-source",hands),
-        Exercise("perform",complete,"perform:all"),
+        Exercise("learn",complete,
+                 f"coda:excerpt:{first_measure}-{last_measure}",hands),
+        Exercise("perform",complete,
+                 f"perform:{first_measure}-{last_measure}"),
     )
 
 
 @dataclass(frozen=True)
 class CodaLessonGenerator:
-    """Generate the published Coda exercise catalog for the whole MIDI excerpt.
+    """Generate original Coda categories for a caller-selected MIDI excerpt.
 
-    Ordering those exercises into a teaching path is our app's policy,
-    because the pinned original backend has no automatic curriculum.
+    Whole piece (measures 1..end) is the default request. The author does
+    not select these measures or define an automatic learning sequence.
     """
     name: str = "coda-midi"
+    first_measure: int = 1
+    last_measure: int | None = None
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         if (piece.source_format!="midi" or piece.source_musicxml or
                 piece.midi_ticks_per_beat<=0):
             raise ValueError("Coda lesson generation needs an original MIDI piece")
         from .application.coda_midi_curriculum import midi_coda_stages
-        exercises=_coda_piece_sections(piece)
+        exercises=_coda_piece_sections(
+            piece,first_measure=self.first_measure,last_measure=self.last_measure)
         result={}
         for ex in exercises:
             for hand in lesson_hands(ex):

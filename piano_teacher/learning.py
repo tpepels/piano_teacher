@@ -152,7 +152,9 @@ class LearningPlan:
         # Nonlegacy strategies cannot inherit unrelated completion/tempo credit.
         profile = ("" if self.warmup or self.profile == "legacy"
                    else f":{self.profile}")
-        version = 4 if self.lesson_generator.name=="coda-midi" else self.route_version
+        # Catalog scope and stage inventory changed: do not credit old
+        # v4 density-selected Coda exercise mastery.
+        version = 5 if self.lesson_generator.name=="coda-midi" else self.route_version
         return f"course:{version}{profile}:{exercise.key}:{hand}:{variant.level}:{signature}"
 
     @property
@@ -161,12 +163,7 @@ class LearningPlan:
         if self._lesson_steps_cache is None:
             steps: list[LessonStep] = []
             for index, ex in enumerate(self.exercises):
-                if ex.kind == "learn":
-                    hands = _hands_for_learning(ex)
-                elif ex.kind == "warmup":
-                    hands = ("right", "left", "both")
-                else:
-                    hands = ("both",)
+                hands = lesson_hands(ex)
                 for hand in hands:
                     for variant in self._stage_variants(ex, hand):
                         steps.append(LessonStep(

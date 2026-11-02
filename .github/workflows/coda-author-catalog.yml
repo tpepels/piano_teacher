@@ -28,7 +28,7 @@ jobs:
             'a4eb85dfc2bd418818ca9ff775c0a11ccccb3530'
       - name: Compare original source's endpoint and exercise schema
         run: |
-          timeout 20s python scripts/probe_coda_author_catalog_contract.py \
+          timeout 20s env PYTHONPATH="$PWD" python scripts/probe_coda_author_catalog_contract.py \
             --upstream "$RUNNER_TEMP/coda-author" \
             --report "$RUNNER_TEMP/coda-author-contract.json"
           python - "$RUNNER_TEMP/coda-author-contract.json" <<'PY'
