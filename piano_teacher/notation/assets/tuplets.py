@@ -13,6 +13,7 @@ import base64
 from collections import defaultdict
 from io import BytesIO
 import math
+import os
 import xml.etree.ElementTree as ET
 
 from PIL import Image
@@ -388,6 +389,33 @@ def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
     return output
 
 
+def _report_missing_visible_tuplets(model: dict, artwork: dict) -> None:
+    """Report genuine lost graphics, excluding expressly invisible MIDI ratios."""
+    if os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") != "1":
+        return
+    events = {str(event.get("id")):event
+              for event in model.get("notation_events",[]) if event.get("id")}
+    missing = []
+    visible = 0
+    for ids in semantic_tuplets(model):
+        first = events[ids[0]]
+        mark = next((item for item in first.get("tuplet_marks",[])
+                     if item.get("type") == "start"), {})
+        bracket = str(mark.get("bracket","yes")) == "yes"
+        if str(mark.get("show_number","actual")) == "none" and not bracket:
+            continue
+        visible += 1
+        key = "|".join(ids)
+        if key not in artwork:
+            missing.append("no-group:" + key)
+        elif bracket and not artwork[key].get("bracket"):
+            missing.append("no-bracket:" + key)
+    print("VEROVIO_TUPLET_COVERAGE:", visible-len(missing), "/", visible,
+          "visible groups", flush=True)
+    for item in missing[:12]:
+        print("VEROVIO_TUPLET_MISSING:", item, flush=True)
+
+
 def tuplet_fragments(svgs,model,cache=None,identity="") -> dict:
     key=cache.key("verovio-real-tuplets",VERSION,identity) if (
         cache is not None and identity) else None
@@ -397,8 +425,10 @@ def tuplet_fragments(svgs,model,cache=None,identity="") -> dict:
                 isinstance(v,dict) and
                 v.get("source")=="verovio-engraved-tuplet" and
                 isinstance(v.get("number"),dict) for v in stored.values())):
+            _report_missing_visible_tuplets(model,stored)
             return stored
     results=extract_tuplets(svgs,model)
+    _report_missing_visible_tuplets(model,results)
     if key and results:
         cache.write_json("verovio-tuplets",key,results)
     return results
