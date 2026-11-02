@@ -526,8 +526,10 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
             "revision":timeline.revision,
             "transport_id":transport_id,
             "bpm":bpm,
+            "effective_bpm":float(state.get("effective_bpm",bpm)),
             "pixels_per_beat":timeline.pixels_per_beat,
-            "pixels_per_second":timeline.pixels_per_second(bpm),
+            "pixels_per_second":timeline.pixels_per_second(
+                float(state.get("effective_bpm",bpm))),
             "running":running,
             "paused":paused,
             "phase":str(state.get("phase",""))
