@@ -62,6 +62,9 @@ def _segments(piece: Piece) -> tuple[Phrase, ...]:
         selected = tuple(n for n in piece.notes
                          if start - 1e-7 <= n.start < end - 1e-7)
         if selected:
+            # Some MIDI files end their measure grid before the final
+            # sounding key-off. Keep the release in the lesson timeline.
+            end = max(end, max(n.end for n in selected))
             groups.append(Phrase(
                 len(groups) + 1, first, last, start, end, selected))
         i += 1
@@ -88,6 +91,7 @@ def _course_exercises(piece: Piece) -> tuple[Exercise, ...]:
         joined = tuple(n for n in piece.notes if start <= n.start < end)
         if (any(n.start < phrase.start for n in joined)
                 and any(n.start >= phrase.start for n in joined)
+                and all(n.end <= end + 1e-7 for n in joined)
                 and len({round(n.start, 6) for n in joined})
                     <= SETTINGS.focus_max_attacks):
             out.insert(len(out) - 1, Exercise(
@@ -124,8 +128,9 @@ def compile_hybrid_catalog(piece: Piece):
             # Keep every applicable author candidate in the immutable catalog.
             # Coda transforms only source-safe bar-boundary passages.
             coda = (midi_coda_stages(piece, (original,), kind="learn")
-                    if not any(n.end > exercise.phrase.end + 1e-7
-                               for n in original.notes)
+                    if (abs(exercise.phrase.end -
+                            piece.bar_boundaries[exercise.phrase.last_bar])
+                        <= 1e-7)
                     else (ExerciseStage(original),))
             fukuda = fukuda_midi_variants(original, bpm=piece.bpm)
             variants = (*tuple(ExerciseStage(v) for v in fukuda[:-1]),

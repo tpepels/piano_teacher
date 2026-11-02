@@ -170,7 +170,12 @@ class LearningPlan:
             updated = hook(evidence, self.lesson_definition)
             return self._refresh_generator(updated, focus_ids=frozenset(evidence)
                                            if prefer_repair else frozenset())
-        return self.refresh_from_mistakes(frozenset(evidence))
+        old = getattr(self.lesson_generator, "with_mistakes", None)
+        if not callable(old):
+            return False
+        return self._refresh_generator(
+            old(frozenset(evidence), self.lesson_definition),
+            focus_ids=frozenset(evidence) if prefer_repair else frozenset())
 
     def _refresh_generator(
         self, updated: LessonGenerator, *, focus_ids: frozenset[str],
