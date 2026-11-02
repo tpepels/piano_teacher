@@ -260,6 +260,9 @@ def main():
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--window-position", type=int, choices=(0, 1, 2),
                         default=0, help="Which one of three real-score windows to audit")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--fixtures-only", action="store_true")
+    modes.add_argument("--repertoire-only", action="store_true")
     args = parser.parse_args()
     backend = args.upstream.resolve()
     if not (backend / "music/exercise.py").is_file():
@@ -279,8 +282,8 @@ def main():
     if len(fixtures) != 16 or len(repertoire) != 17:
         raise AssertionError("MIDI comparison corpus changed; audit the full inventory")
     rows = ([compare_piece(path, classes) for path in fixtures]
-            if args.window_position == 0 else [])
-    for path in repertoire:
+            if not args.repertoire_only else [])
+    for path in ([] if args.fixtures_only else repertoire):
         piece = load_midi(path)
         windows = reference_windows(piece)
         if len(windows) <= args.window_position:
@@ -295,10 +298,10 @@ def main():
         "reference_revision": AUTHOR_REVISION,
         "source_input": "raw MIDI", "author_algorithm_input": "MIDI-derived MMR",
         "comparison": "sounding pitch, onset, end (slowdown normalized by factor)",
-        "source_files": len(repertoire) + (len(fixtures) if args.window_position == 0 else 0),
-        "repertoire_window_position": args.window_position,
+        "source_files": len(rows),
+        "repertoire_window_position": None if args.fixtures_only else args.window_position,
         "reference_excerpts": len(rows),
-        "full_piece_reference_cases": len(fixtures) if args.window_position == 0 else 0,
+        "full_piece_reference_cases": len(fixtures) if not args.repertoire_only else 0,
         "real_repertoire_bounded_excerpts": sum(
             "excerpt" in row and not row["full_piece"] for row in rows),
         "source_rejected": sum(row["status"] != "compared" for row in rows),

@@ -178,7 +178,7 @@ jobs:
         id: midi_algorithms
         run: |
           timeout 75s python scripts/probe_coda_midi_author_algorithms.py \
-            --strict --window-position 0 \
+            --strict --fixtures-only \
             --upstream "$RUNNER_TEMP/upstream" \
             --report "$RUNNER_TEMP/coda-diff/midi-domain.json" \
             > "$RUNNER_TEMP/coda-diff/midi-domain-output.txt" 2>&1 || {

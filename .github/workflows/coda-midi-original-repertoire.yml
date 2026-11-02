@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        position: [1, 2]
+        position: [0, 1, 2]
     env:
       OPENBLAS_NUM_THREADS: "1"
       OMP_NUM_THREADS: "1"
@@ -38,7 +38,7 @@ jobs:
       - name: Compare all 17 MIDI pieces at reference window position ${{ matrix.position }}
         run: |
           timeout 75s python scripts/probe_coda_midi_author_algorithms.py \
-            --strict --window-position ${{ matrix.position }} \
+            --strict --repertoire-only --window-position ${{ matrix.position }} \
             --upstream "$RUNNER_TEMP/upstream" \
             --report "$RUNNER_TEMP/coda-midi-window-${{ matrix.position }}.json"
       - name: Retain the complete independently compared note events
