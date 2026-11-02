@@ -193,9 +193,10 @@ class LearningPlan:
         # Nonlegacy strategies cannot inherit unrelated completion/tempo credit.
         profile = ("" if self.warmup or self.profile == "legacy"
                    else f":{self.profile}")
-        # Catalog scope and stage inventory changed: do not credit old
-        # v4 density-selected Coda exercise mastery.
-        version = (5 if self.lesson_generator.name=="coda-midi" else
+        # Sparse MIDI-domain Coda transformations change source attack
+        # placement relative to the previous v5 catalog. Do not inherit
+        # completed steps or tempo mastery under different musical content.
+        version = (6 if self.lesson_generator.name=="coda-midi" else
                    4 if self.lesson_generator.name=="fukuda-midi"
                    else self.route_version)
         return f"course:{version}{profile}:{exercise.key}:{hand}:{variant.level}:{signature}"

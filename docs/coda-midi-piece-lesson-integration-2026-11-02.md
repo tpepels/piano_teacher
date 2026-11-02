@@ -1,3 +1,8 @@
+> **Phase 3 update (2026-11-02):** Complete MIDI-domain Coda reproduction is
+> verified in [Phase 3 completion evidence](coda-midi-phase3-completion-2026-11-02.md).
+> MIDI Coda course keys are now version **6**, superseding version 5
+> described in the historical development notes below.
+>
 # Coda MIDI: original excerpt catalog and teaching adapter
 
 **Updated 2026-11-02 — pinned source verified.**
