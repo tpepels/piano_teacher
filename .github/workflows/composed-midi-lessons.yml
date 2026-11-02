@@ -1,0 +1,36 @@
+name: Composed MIDI lesson generators (bounded)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/composed-midi-lessons.yml'
+      - 'piano_teacher/lesson_generators.py'
+      - 'piano_teacher/learning.py'
+      - 'piano_teacher/exercise_strategies.py'
+      - 'piano_teacher/library.py'
+      - 'piano_teacher/server.py'
+      - 'piano_teacher/application/strategy_session.py'
+      - 'tests/test_composed_midi_lessons.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-composition-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install app and native notation verification dependencies
+        run: timeout 75s python -m pip install -q -e '.[test,coda-research,godot]'
+      - name: Verify complete registered and combined MIDI curriculum
+        run: |
+          timeout 70s python -m pytest -q --tb=short             tests/test_composed_midi_lessons.py             tests/test_lesson_generator_architecture.py             tests/test_fukuda_midi_phase4.py             tests/test_coda_piece_curriculum.py             tests/test_library.py
