@@ -257,6 +257,43 @@ class LearningPlan:
         self.bpm = self._tempo_for_current_stage()
         return True
 
+    def revisit_source_errors(self, ids: frozenset[str]) -> bool:
+        """Repeat a relevant scaffold after a *repeated* original-note failure.
+
+        A second failure can contain the same status/ID as the previous take.
+        It still warrants a return to the previously generated simplification;
+        no recompilation or mastery transfer is necessary.
+        """
+        if not ids or self.active_variant.level != "original":
+            return False
+        target = next(((i, ex) for i, ex in enumerate(self.exercises)
+                       if ex.kind == "learn" and any(
+                           n.source_id in ids for n in ex.phrase.notes)
+                       and any(len(self.lesson_definition.stages(ex, hand)) > 1
+                               for hand in lesson_hands(ex))),
+                      None)
+        if target is None:
+            return False
+        i, ex = target
+        previous_hand = self.hand
+        error_hands = {n.hand for n in ex.phrase.notes
+                       if n.source_id in ids}
+        available = lesson_hands(ex)
+        hand = next((h for h in (previous_hand, "right", "left", "both")
+                     if h in available
+                     and (h == "both" or h in error_hands)
+                     and len(self.lesson_definition.stages(ex, h)) > 1),
+                    None)
+        if hand is None:
+            return False
+        self.index = i
+        self.hand_index = available.index(hand)
+        self.variant_index = 0
+        self._variants_cached = None
+        self.streak = self.failures = 0
+        self.bpm = self._tempo_for_current_stage()
+        return True
+
     def _pipeline_stages(self, exercise: Exercise, hand: str) -> tuple[ExerciseStage, ...]:
         """Read the generated course; never choose passages on navigation."""
         return self.lesson_definition.stages(exercise,hand)

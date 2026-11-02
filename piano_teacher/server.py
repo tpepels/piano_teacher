@@ -978,9 +978,13 @@ class PracticeEngine:
             # Reuse graded original source IDs through the selected generator's
             # feedback contract. No name-based algorithm dispatch in the engine.
             self.fukuda_mistakes.observe(self.fingerprint, result)
+            evidence = self.fukuda_mistakes.evidence(self.fingerprint)
+            failed_ids = frozenset(n.note.source_id for n in result.notes
+                                   if n.status != "correct")
             changed = p.refresh_from_feedback(
-                self.fukuda_mistakes.evidence(self.fingerprint),
-                prefer_repair=any(n.status != "correct" for n in result.notes))
+                evidence, prefer_repair=bool(failed_ids))
+            if not changed and failed_ids:
+                changed = p.revisit_source_errors(failed_ids)
             if changed:
                 # A newly selected stage has its own notation revision.
                 # Old-stage remediation cannot safely fire after this switch.
