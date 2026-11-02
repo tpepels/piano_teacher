@@ -1,0 +1,54 @@
+name: MIDI-Coda Godot semantic transport (bounded)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/coda-midi-godot-bounded.yml'
+      - 'tests/godot/coda_midi_passage_runtime.gd'
+      - 'scripts/research/export_coda_midi_godot_model.py'
+
+permissions:
+  contents: read
+
+jobs:
+  passage-clock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install just MIDI, research and semantic score dependencies
+        run: timeout 75s python -m pip install -q -e '.[test,coda-research,godot]'
+      - name: Export real later-bar MIDI Coda score
+        run: |
+          timeout 15s python scripts/research/export_coda_midi_godot_model.py \
+            --output "$RUNNER_TEMP/coda-midi-score.json" \
+            --cache "$RUNNER_TEMP/coda-midi-cache"
+      - name: Fetch matching Godot 4.7.2 editor
+        run: |
+          curl --fail --location --silent --show-error --retry 2 --max-time 65 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            -o "$RUNNER_TEMP/godot.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot-bin"
+          chmod +x "$RUNNER_TEMP/godot-bin/Godot_v4.7.2-stable_linux.x86_64"
+      - name: Consume actual MIDI-Coda score and check pause/retry/rest clock
+        run: |
+          timeout 20s "$RUNNER_TEMP/godot-bin/Godot_v4.7.2-stable_linux.x86_64" \
+            --headless --path godot \
+            --script "$PWD/tests/godot/coda_midi_passage_runtime.gd" \
+            -- "$RUNNER_TEMP/coda-midi-score.json"
+      - name: Retain semantic source proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coda-midi-godot-${{ github.sha }}
+          path: ${{ runner.temp }}/coda-midi-score.json
+          retention-days: 14
+          if-no-files-found: warn
