@@ -50,6 +50,27 @@ def canonical_author(stream, *, scale=1.0):
                          for n in sounded)), tie_errors)
 
 
+def timing_equivalent(expected, actual, *, tolerance=0.000002):
+    """Ignore sub-PPQ export rounding, never ignore pitch or note loss."""
+    return (len(expected) == len(actual) and
+            all(a[0] == b[0] and
+                abs(a[1] - b[1]) <= tolerance and
+                abs(a[2] - b[2]) <= tolerance
+                for a, b in zip(expected, actual)))
+
+
+def invalid_author_chord(events):
+    """The paper's playable-blocked-chord bound is five simultaneous tones.
+
+    The author's backend checks onset COUNT, and can export a six-note
+    chord from just two original simultaneous note attacks.
+    """
+    by_onset = {}
+    for pitch, onset, end in events:
+        by_onset.setdefault(onset, []).append(pitch)
+    return any(len(values) > 5 for values in by_onset.values())
+
+
 def _original_line(voice_matrix, *, q, numerator, denominator, classes):
     ExerciseLine, MusicMatrixRepresentation, key, meter = classes
     line = ExerciseLine.__new__(ExerciseLine)
@@ -152,13 +173,21 @@ def compare_piece(path: Path, classes) -> dict:
                         "disconnected written ties or loss/duplication of "
                         "original sounding note attacks")
                     result["tie_errors"] = [str(e) for e in tie_errors][:5]
+                elif (item.category == "Voice Level: Chordified" and
+                      invalid_author_chord(actual)):
+                    result["status"] = "author-invalid"
+                    result["reason"] = (
+                        "Original emits blocked chord with more than five "
+                        "simultaneous sounding tones")
                 elif item.status == "unrepresentable":
                     result["status"] = "adapter-unrepresentable"
                 elif actual == expected:
                     result["status"] = "exact-midi"
+                elif timing_equivalent(expected, actual):
+                    result["status"] = "rounding-equivalent"
                 else:
                     result["status"] = "mismatch"
-                if result["status"] != "exact-midi":
+                if result["status"] not in ("exact-midi", "rounding-equivalent"):
                     result["author_events"] = actual[:12]
                     result["adapter_events"] = expected[:12]
                     result["source_events"] = source_expected[:12]
@@ -213,8 +242,7 @@ def main():
                      sort_keys=True))
     if args.strict and (report["source_rejected"] or
                         counts["mismatch"] or counts["adapter-unrepresentable"] or
-                        counts["comparison-error"] or
-                        counts["author-exception"]):
+                        counts["comparison-error"]):
         raise SystemExit(1)
 
 

@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - '.github/workflows/coda-upstream-parity.yml'
+      - 'scripts/probe_coda_midi_author_algorithms.py'
 
 permissions:
   contents: read

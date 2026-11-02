@@ -124,3 +124,17 @@ def test_no_op_is_explicit_and_keeps_complete_author_request_catalog(tmp_path):
     assert any(e.category == "Voice Level: Slowed Down" and
                e.status == "generated" for e in catalog)
     assert all(e.status != "generated" or e.stage is not None for e in catalog)
+
+
+def test_author_differential_allows_only_sub_ppq_export_rounding():
+    from scripts.probe_coda_midi_author_algorithms import (
+        timing_equivalent, invalid_author_chord,
+    )
+    a = ((60, 0.0, 0.333333), (62, 0.333333, 0.666667))
+    b = ((60, 0.0, 0.333334), (62, 0.333334, 0.666667))
+    assert timing_equivalent(a, b)
+    assert not timing_equivalent(a, ((60, 0, .35), (62, .35, .67)))
+    assert not timing_equivalent(a, ((61, 0, .333334), (62, .333334, .666667)))
+    assert not timing_equivalent(a, ((60, 0, .333334),))
+    assert invalid_author_chord(tuple((60 + i, 0, 4) for i in range(6)))
+    assert not invalid_author_chord(tuple((60 + i, 0, 4) for i in range(5)))
