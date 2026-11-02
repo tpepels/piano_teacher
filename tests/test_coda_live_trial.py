@@ -24,7 +24,12 @@ def test_trial_is_source_isolated_and_respects_later_measure():
     assert {n.source_id for n in plan.piece.notes}==trial.passage.original_source_ids
     assert plan.piece.source_musicxml==""
     assert source.identity==identity
-    assert source.piece.bar_boundaries != plan.piece.bar_boundaries
+    # The source has two 3/4 measures; the selected second bar happens
+    # to double to the same *length* and meter grid. Attack identity
+    # and absolute origin, not unequal barlines, prove source isolation.
+    assert source.piece is not plan.piece
+    assert source.piece.notes != plan.piece.notes
+    assert trial.passage.source_start == 3
     assert plan.exercise_strategy.name=="legacy"
 
 
