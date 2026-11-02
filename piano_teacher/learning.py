@@ -355,6 +355,10 @@ class LearningPlan:
         if warmup and requested == "coda-midi":
             requested = "legacy"
         self.exercise_strategy = resolve_strategy(requested,piece=piece)
+        if self.exercise_strategy.name=="coda-midi" and (
+                self.timing_strategy.name!="original-timing" or
+                self.tempo_strategy.name!="constant-tempo"):
+            raise ValueError("Coda MIDI lessons generate their own timing and tempo stages")
         self.pipeline = ExercisePipeline(self.exercise_strategy, self.timing_strategy,
                                          self.tempo_strategy)
         self.warmup = warmup

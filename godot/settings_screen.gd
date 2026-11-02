@@ -383,7 +383,7 @@ func present_preferences(values: Dictionary) -> void:
     metronome_toggle.set_pressed_no_signal(bool(values.get("metronome", true)))
     _present_strategy_picker(strategy_picker,
         values.get("available_exercise_strategies", []),
-        str(values.get("exercise_strategy", "coda-part")))
+        str(values.get("exercise_strategy", "coda-midi")))
     _present_strategy_picker(timing_strategy_picker,
         values.get("available_timing_strategies", []),
         str(values.get("timing_strategy", "original-timing")))
@@ -396,6 +396,13 @@ func present_preferences(values: Dictionary) -> void:
     _present_strategy_picker(learner_strategy_picker,
         values.get("available_learner_strategies", []),
         str(values.get("learner_strategy", "repeated-error")))
+    var coda_mode: bool = str(values.get("exercise_strategy", "")) == "coda-midi"
+    timing_strategy_picker.disabled = coda_mode
+    tempo_strategy_picker.disabled = coda_mode
+    timing_strategy_picker.tooltip_text = ("Coda generates its own rhythmic exercises."
+        if coda_mode else "Choose an independent timing transformation.")
+    tempo_strategy_picker.tooltip_text = ("Coda generates its own slowdown stages."
+        if coda_mode else "Choose an independent tempo policy.")
 
 func _present_strategy_picker(picker: OptionButton, choices: Array, selected: String) -> void:
     picker.clear()

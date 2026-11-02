@@ -346,7 +346,6 @@ APP_STRATEGIES = (
     ("legacy", "Original progression"),
     ("fukuda", "Fukuda · chord and leap simplification"),
     ("coda-midi", "Coda · MIDI whole-piece lessons"),
-    ("coda-part", "Coda · passage splitting"),
     ("feature-gated", "Feature-guided selection"),
     ("fukuda+coda-part", "Fukuda + Coda"),
 )

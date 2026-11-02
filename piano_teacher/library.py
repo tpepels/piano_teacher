@@ -55,6 +55,9 @@ class ScoreLibrary:
             default_music_dir().mkdir(parents=True, exist_ok=True)
         if self.settings['exercise_strategy'] not in {x['id'] for x in available_strategies()}:
             self.settings['exercise_strategy'] = 'coda-midi'
+        if self.settings['exercise_strategy']=='coda-midi':
+            self.settings['timing_strategy']='original-timing'
+            self.settings['tempo_strategy']='constant-tempo'
         for key, valid, fallback in (
                 ("timing_strategy", {"original-timing", "dotted-long-short", "dotted-short-long", "coda-chord-blocks"}, "original-timing"),
                 ("tempo_strategy", {"constant-tempo", "two-phase-tempo"}, "constant-tempo"),
@@ -124,6 +127,17 @@ class ScoreLibrary:
                     raise ValueError("Invalid " + key)
                 resolver(value)
                 new[key] = value
+        if new['exercise_strategy']=='coda-midi':
+            if 'exercise_strategy' in changes:
+                # A piece-selected Coda lesson generates its own rhythmic
+                # and tempo stages. Avoid accidentally stacking old policies.
+                new['timing_strategy']='original-timing'
+                new['tempo_strategy']='constant-tempo'
+            elif (('timing_strategy' in changes and
+                   new['timing_strategy']!='original-timing') or
+                  ('tempo_strategy' in changes and
+                   new['tempo_strategy']!='constant-tempo')):
+                raise ValueError("Coda MIDI lessons generate their own timing and tempo stages")
         self.settings = new
         self._folder = Path(new['music_dir'])
         self.save()
