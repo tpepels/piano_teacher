@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "date": "2026-11-02",
+  "author": "annieetang/coda_backend",
+  "author_revision": "a4eb85dfc2bd418818ca9ff775c0a11ccccb3530",
+  "author_contract": {
+    "source": "music/exercise.py and api/endpoints.py",
+    "endpoint": "/generate",
+    "excerpt_selection": "caller-selected start_measure/end_measure",
+    "automatic_lesson_selector": false,
+    "automatic_lesson_order": false,
+    "categories": [
+      "Score Level",
+      "Part Level",
+      "Voice Level: Original",
+      "Voice Level: Dotted",
+      "Voice Level: Chordified",
+      "Voice Level: Slowed Down"
+    ],
+    "dotted_patterns": [
+      [
+        1.5,
+        0.5
+      ],
+      [
+        0.5,
+        1.5
+      ]
+    ],
+    "chord_width_formula": [
+      "q",
+      "2*q",
+      "q//2",
+      "denominator",
+      "2*denominator",
+      "denominator//2",
+      "numerator*denominator"
+    ],
+    "slowdown_factors": [
+      2,
+      4
+    ],
+    "source_verified_run": "https://github.com/tpepels/piano_teacher/actions/runs/41450764682",
+    "artifact_id": 13144920706
+  },
+  "midi_adapter": {
+    "default_excerpt": "full source MIDI score",
+    "programmatic_explicit_range": "CodaLessonGenerator(first_measure=N,last_measure=M)",
+    "returned_course": "Learn through app-ordered catalog alternatives, then original selected-score performance",
+    "category_parameter_scope": "source-verified",
+    "generated_note_parity": "only prior strict subset; no blanket full backend output parity",
+    "original_lesson_order": "not applicable (does not exist)",
+    "application_order": "proprietary policy, not attributed to Coda",
+    "midi_grid": "source-exact PPQ, not original MusicXML shortest-written-note grid",
+    "slowdown": "equivalent playback x2/x4 via tempo policy, not author written notation",
+    "saved_progress": "course version 5 separate from previous v4"
+  },
+  "checks": [
+    {
+      "kind": "fast application",
+      "run": "https://github.com/tpepels/piano_teacher/actions/runs/41451818359",
+      "passed": 398,
+      "skipped": 6
+    },
+    {
+      "kind": "bounded Coda contracts",
+      "run": "https://github.com/tpepels/piano_teacher/actions/runs/41451818293",
+      "passed": 203,
+      "skipped": 1
+    },
+    {
+      "kind": "real Verovio, Listen WAV and synthetic MIDI",
+      "run": "https://github.com/tpepels/piano_teacher/actions/runs/41451818275",
+      "passed": 39,
+      "skipped": 0
+    }
+  ],
+  "unverified": [
+    "physical MIDI hardware",
+    "complete interactive native Godot app",
+    "note-level original MusicXML output parity across every Coda catalog result",
+    "pedagogical effectiveness of app-defined lesson ordering"
+  ]
+}
