@@ -229,3 +229,39 @@ def test_combined_stage_uses_real_notation_listen_and_grading(piece, tmp_path, p
     played = [PlayedNote(n.pitch, *expected(n)[:2]) for n in stage.variant.notes]
     assert evaluate(stage.variant.phrase, plan.hand, plan.bpm, played,
                     expected_seconds=expected).clean
+
+
+def test_feedback_uses_cached_whole_piece_instead_of_regenerating_coda(piece, monkeypatch):
+    plan = LearningPlan(piece, exercise_strategy="coda-fukuda-midi",
+                        fukuda_mistakes=frozenset())
+    initial = tuple(plan.lesson_steps)
+    assert plan.lesson_generator.core is None
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Whole-piece Coda re-ran after a MIDI grading event")
+    monkeypatch.setattr(CodaLessonGenerator, "generate", forbidden)
+    source = [n.source_id for n in piece.notes if n.hand == "right"]
+    assert plan.refresh_from_mistakes(frozenset({source[0]}))
+    assert plan.lesson_generator.core is not None
+    assert plan.exercise.key.startswith("fukuda:errors:")
+    assert plan.variant_index == 0
+    assert plan.refresh_from_mistakes(frozenset({source[0], source[1]}))
+    assert plan.refresh_from_mistakes(frozenset())
+    assert tuple(plan.lesson_steps) == initial
+
+
+def test_registered_generators_cannot_omit_terminal_source_attack(piece):
+    from piano_teacher.lesson_generators import LessonPlanDefinition
+
+    plan = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
+    first = plan.exercises[0]
+    stages = dict(plan.lesson_definition.stage_sequences)
+    right = stages[(first.key, "right")]
+    broken_variant = replace(
+        right[-1].variant,
+        phrase=replace(right[-1].variant.phrase, notes=right[-1].variant.notes[:-1]))
+    stages[(first.key, "right")] = (*right[:-1], replace(
+        right[-1], variant=broken_variant))
+    with pytest.raises(ValueError, match="terminal original performance"):
+        LessonPlanDefinition(plan.exercises, stages, "malformed",
+                             requires_unique_source_ids=True)

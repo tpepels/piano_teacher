@@ -39,6 +39,17 @@ canonical importer. They do not initialize the page engraving facade. Optional
 legacy rendering/UI adapters remain separate because they are public supported
 entry points, rather than alternate owners of the active session.
 
+## Composable MIDI curricula
+
+`LessonGenerator` instances own complete curricula; a registry selects the
+whole-piece generator, not a conditional branch in `LearningPlan`. The
+reusable `compose_lesson_definitions` merges compatible exercise stages
+without changing source identities, while distinct error-focused repairs
+remain separate lessons. A common `with_mistakes` feedback interface lets the
+practice engine route graded original MIDI attacks to any interested generator.
+See [composed MIDI generators](composed-midi-generators.md) for contracts,
+course identity, caching, verification and Coda + Fukuda behavior.
+
 ## Godot client
 
 Screens own controls, responsive layout and their presentation/editing state.
