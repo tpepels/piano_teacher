@@ -164,36 +164,45 @@ def sparse_midi_coda(
     else:
         width = chord_width
         for run in runs:
-            # Sparse: visit only actual attack-containing author windows.
-            # Iterating every empty 2-tick window in a long, high-PPQ
-            # recording would recreate the dense algorithm's time cost.
+            # Original author groups *all* equal-duration attacks in fixed
+            # windows measured from the run's first onset. A release gap
+            # between consecutive MIDI notes does not prevent chordifying
+            # those attacks: their original duration ticks are summed.
             buckets: dict[int, list[_Attack]] = {}
             for attack in run.attacks:
                 buckets.setdefault((attack.tick - run.start) // width, []).append(attack)
             for bucket, attacks_in_bucket in sorted(buckets.items()):
-                start = run.start + bucket * width
-                stop_tick = min(start + width, run.stop)
+                begin = run.start + bucket * width
+                stop_tick = min(begin + width, run.stop)
                 members = tuple(attacks_in_bucket)
-                if len(members) < 2 or members[0].tick != start:
+                if not members:
                     continue
-                n = members[0].duration
-                if (any(a.duration != n for a in members) or
-                        any(b.tick - a.tick != n
-                            for a, b in zip(members, members[1:]))):
-                    continue
-                finish = members[-1].tick + n
-                if finish > stop_tick:
+                # Original loops to sub_end-1 when moving pitches but sums
+                # durations over the whole window. That drops a source
+                # attack at the final tick. Preserve the MIDI grader and
+                # leave this author-defective group unchanged.
+                if any(a.tick == stop_tick - 1 for a in members):
                     continue
                 indices = tuple(i for a in members for i in a.indices)
                 pitches = tuple(variant.notes[i].pitch for i in indices)
-                # The published piano-playability constraint is 5 distinct
-                # chord tones within one octave; a same-pitch retrigger
-                # cannot be played as a simultaneous new MIDI attack.
-                if (len(pitches) > 5 or len(set(pitches)) != len(pitches) or
+                if (len(members) > 5 or len(pitches) > 5 or
+                        len(set(pitches)) != len(pitches) or
                         max(pitches) - min(pitches) > 12):
                     continue
+                finish = begin + sum(a.duration for a in members)
+                if finish <= begin or finish > _tick(
+                        phrase.end - phrase.start, q):
+                    continue
+                # Same-pitch conflicting sounding attacks are never
+                # silently merged. They are excluded by the distinct-pitch
+                # test above; other pitches retain their source identities.
+                changed = any(
+                    begin != a.tick or finish != a.tick + a.duration
+                    for a in members)
+                if not changed:
+                    continue
                 for a in members:
-                    set_time(a.indices, start, finish)
+                    set_time(a.indices, begin, finish)
                 group = tuple(variant.notes[i].source_id for i in indices)
                 groups.append(group)
                 ids.extend(group)
