@@ -87,6 +87,10 @@ class Piece:
     source_musicxml: str = ""
     # Computed for this complete original piece, never for a lesson variant.
     fingering_plan: FingeringPlan | None = None
+    # Explicit import provenance. Generated MusicXML is internal rendering;
+    # MIDI input has no authoritative authored notation.
+    source_format: str = ""
+    midi_ticks_per_beat: int = 0
 
 
 def note_name(pitch: int) -> str:
@@ -280,5 +284,6 @@ def load_midi(path: str | Path, *, split_pitch: int = 60, bars_per_phrase: int =
     return Piece(Path(path).stem, bpm, tuple(notes), _phrases(notes, boundaries, bars_per_phrase),
                  split_pitch, tuple(boundaries), tuple(sorted(set(changes))),
                  tuple(sorted(set(keys), key=lambda signature: (signature.beat, signature.fifths))),
-                 import_warnings=tuple(warnings))
+                 import_warnings=tuple(warnings),
+                 source_format="midi", midi_ticks_per_beat=ticks)
 

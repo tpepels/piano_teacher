@@ -247,4 +247,5 @@ def load_musicxml(path: Path, *, bpm: int) -> Piece:
                  key_signatures=tuple(dict.fromkeys(keys)),
                  clef_changes=tuple(dict.fromkeys(clefs)),
                  barlines=tuple(mark for _, mark in sorted(source_barlines.items())),
-                 source_musicxml=ET.tostring(root,encoding="unicode"))
+                 source_musicxml=ET.tostring(root,encoding="unicode"),
+                 source_format="musicxml")

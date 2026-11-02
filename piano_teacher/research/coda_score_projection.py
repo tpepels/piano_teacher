@@ -29,8 +29,8 @@ from .coda_written_tie_segments import (
 )
 from ..notation.lesson import build_lesson_score, infer_piece_clefs
 from .coda_annotation_guard import (
-    source_annotation_obligations, verify_annotation_projection,
-    project_coda_source_directions,
+    AnnotationObligations, source_annotation_obligations,
+    verify_annotation_projection, project_coda_source_directions,
 )
 
 
@@ -196,9 +196,15 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
     if len(timing.original.notes)==0:
         raise ValueError("Coda projection requires pitched source notes")
     original=timing.original.phrase
-    if not piece.source_musicxml:
-        raise ValueError("Coda projection requires original source MusicXML")
-    _safe_xml(piece.source_musicxml,slowdown=reference_family=="tempo-shaping")
+    midi_input = piece.source_format == "midi"
+    if midi_input:
+        if piece.source_musicxml or piece.midi_ticks_per_beat <= 0:
+            raise ValueError("MIDI Coda projection requires native MIDI provenance")
+    else:
+        if not piece.source_musicxml:
+            raise ValueError("Coda projection requires original source MusicXML")
+        _safe_xml(piece.source_musicxml,
+                  slowdown=reference_family=="tempo-shaping")
     if original.start!=0 or original.first_bar!=1 or (
             original.end!=piece.bar_boundaries[-1]):
         raise ValueError("Coda projection currently requires the whole original selected score")
@@ -218,9 +224,12 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
             raise ValueError("Slowdown must scale the complete original source timeline")
     else:
         factor=1
-    obligations = source_annotation_obligations(piece,timing,factor=factor)
-    tuplet_groups = source_tuplet_groups(piece,timing,factor=factor)
-    written_ties = tie_segment_chains(piece,timing) if obligations.ties else ()
+    obligations = (AnnotationObligations((),(),()) if midi_input
+                   else source_annotation_obligations(piece,timing,factor=factor))
+    tuplet_groups = () if midi_input else source_tuplet_groups(
+        piece,timing,factor=factor)
+    written_ties = (tie_segment_chains(piece,timing)
+                    if obligations.ties else ())
     grid,meters,keys,clefs=_original_metadata(piece,original,timing,factor)
     new_phrase=timing.exercise_phrase
     new_phrase=replace(new_phrase,first_bar=1,last_bar=len(grid)-1)
@@ -229,7 +238,8 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
     if any(note.start<0 or note.end>new_phrase.end+1e-7
            for note in new_phrase.notes):
         raise ValueError("Transformed note exceeds the written score")
-    source_xml=(_scaled_original(piece.source_musicxml,factor)
+    source_xml=("" if midi_input else
+                _scaled_original(piece.source_musicxml,factor)
                 if factor>1 else project_coda_source_directions(
                     piece.source_musicxml,obligations.dynamics,
                     piece.bar_boundaries))
@@ -259,7 +269,14 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
         verify_written_tie_projection(written_ties,preview)
     variant=ExerciseVariant(
         timing.name,new_phrase,timing.original.source_indices)
-    digest=sha256((piece.source_musicxml+timing.name+
+    # MIDI has no authored XML: bind selection to canonical imported
+    # physical events, source identities, meter grid and PPQ instead.
+    provenance = (repr((
+        piece.notes, piece.bar_boundaries, piece.time_signatures,
+        piece.key_signatures, piece.midi_ticks_per_beat))
+        if midi_input else piece.source_musicxml)
+    source_digest=sha256(provenance.encode()).hexdigest()
+    digest=sha256((source_digest+timing.name+
                    repr(tuple((e.source_index,e.exercise_start,e.exercise_end)
                               for e in timing.events))).encode()).hexdigest()
     selection=ScoreSelection(
@@ -268,5 +285,4 @@ def project_coda_score(piece:Piece, timing:TimingPlan, *,
     tempo=ConstantTempo().generate(timing,bpm)
     return CodaProjectedStage(piece,timing,projected_piece,variant,selection,
                               tempo,reference_family,
-                              sha256(piece.source_musicxml.encode()).hexdigest(),
-                              written_ties)
+                              source_digest,written_ties)
