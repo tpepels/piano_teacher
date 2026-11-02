@@ -37,27 +37,43 @@ boundaries are equal. Nonmatching focus exercises are inserted separately.
 Extra original performance exercises are validated then de-duplicated.
 Colliding keys, stage levels and changed terminal source scores fail closed.
 
-The registered Coda + Fukuda policy:
+The selectable **Coda + Fukuda · MIDI combined lessons** now uses a
+progressive, error-aware application teaching policy, separate from the
+pure, published Coda algorithm catalog:
 
-1. Generate the **complete original Coda whole-piece** score/part/voice,
-   both dotted families, all chord widths and 2×/4× slowdown stages.
-2. Generate **all applicable Fukuda score-reduction rules** over the same
-   whole source and compose them before Coda's practice stages for each hand.
-3. On graded original-MIDI mistakes, add **source-specific Fukuda repairs**
-   ahead of the existing whole-source lessons. The user's learned Coda
-   stages are not removed.
-4. End with exactly one original MIDI performance, with no research
-   simplifications carried into the final source.
-5. Cache the immutable combined full-piece core across mistake updates:
-   Coda and whole-score Fukuda are **not re-generated** on each graded
-   attempt. Only changed remedial sections are rebuilt. When a new repair
-   appears, navigation opens its first stage instead of skipping the
-   reduction by jumping to its terminal original exercise.
+1. Split the original imported MIDI piece into manageable focus passages,
+   normally one or two measures. Sparse passages can expand to eight.
+   Extend passages when a sounding note crosses their final barline, so
+   no source MIDI note is truncated or duplicated. Add bridge exercises
+   between adjoining passages when they have attacks on both sides.
+2. Compile **every available Coda dotted, chord and slowdown** candidate
+   and all **Fukuda chord, fast-note and leap** reductions for each
+   applicable source hand once. These form an immutable full candidate
+   catalog. The pure Coda-only strategy still provides the author's
+   full-score exercise catalog, unchanged by this product sequencing.
+3. Start each passage with a small supported set of simple exercises,
+   followed by its exact original notes. After graded original-note
+   mistakes, select source-matched Fukuda reductions for wrong/missed
+   pitches, Coda dotted exercises for timing errors and Coda slowdown
+   stages for early releases or excessive sustain. Mixed-error stages
+   combine the relevant candidates.
+4. The complete original piece remains the sole final performance step.
+   No simplified pitches, altered rhythm or slowdown can be credited as
+   successful performance of the original.
+5. Replanning updates only the selected stage sequences; full Coda/Fukuda
+   candidate compilation is cached. Preserve unchanged source-derived
+   mastery, per-stage tempo, streak and the selected stage. After a
+   failed original take, focus the appropriate source passage and
+   introduce the relevant adaptive scaffold. Completed feedback can
+   remove unneeded stages without reinterpreting unrelated progress.
 
-All generated stages use ordinary native score engraving, Listen playback,
-MIDI timing/grading and persistent progress. The composed strategy uses its
-own **course version 1**, so it cannot inherit unrelated completion or BPM
-credit from Coda-only version 6 or Fukuda-only version 4.
+The combined policy now uses **course version 2** because the original
+version-1 whole-piece stage route is replaced by a passage-based route.
+Saved Coda-only and Fukuda-only progress remains isolated; no incompatible
+whole-piece mastery is silently applied to the new lesson structure.
+
+Read [adaptive workflow and acceptance evidence](adaptive-coda-fukuda-workflow.md)
+for the full route, feedback ownership and unresolved hardware validation.
 
 ## Validation
 
@@ -75,11 +91,11 @@ to choose a pedagogically superior default.
 ## Extending without adding application branches
 
 The generalized `ComposedLessonGenerator` accepts an ordered collection
-of independent `LessonGenerator` instances. The named Coda/Fukuda preset
-is a configuration of this same class. Its feedback hook provides any
+of independent `LessonGenerator` instances. The named Coda/Fukuda strategy is a specialized subclass which supplies
+its own progressive passage and error-selection policy. Its feedback hook provides any
 participant that implements `with_mistakes` with source-identified MIDI
-mistakes; new source-specific repair exercises are composed before the
-preserved core. The generic `register_composed_lesson_generator` entrypoint
+mistakes; the combined strategy chooses source-specific existing passage stages
+from the cached catalog, without rebuilding the original-score candidates. The generic `register_composed_lesson_generator` entrypoint
 takes any registered generator IDs, a new strategy ID, optional UI label,
 and a version for isolated progress keys. Registration also includes
 MIDI-only applicability and ownership of the exercise's tempo/rhythm.
