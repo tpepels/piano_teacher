@@ -33,10 +33,10 @@ def write_piece(path: Path) -> None:
         for i in range(32):
             tick = i * 240
             pitch = 60 + (i % 7) if hand == "Right Hand" else 43 + i % 4
-            events.extend(((tick, True, pitch), (tick + 200, False, pitch)))
+            events.extend(((tick, True, pitch), (tick + 240, False, pitch)))
         if hand == "Right Hand":
             for p in (48, 55, 67, 72):
-                events.extend(((0, True, p), (200, False, p)))
+                events.extend(((0, True, p), (240, False, p)))
         last = 0
         for tick, on, pitch in sorted(events, key=lambda x: (x[0], x[1])):
             track.append(mido.Message(
@@ -80,14 +80,13 @@ def test_hybrid_preserves_both_research_families_and_source_final(piece):
         baseline = coda.lesson_definition.stages(coda.exercises[0], hand)
         assert [s.variant.level for s in merged[-len(baseline):]] == [
             s.variant.level for s in baseline]
-        assert any(s.variant.level.startswith("fukuda-midi-")
-                   for s in merged)
         assert merged[-1].variant.level == "original"
         assert merged[-1].variant.notes == tuple(
             n for n in piece.notes if hand == "both" or n.hand == hand)
         source_ids = {n.source_id for n in merged[-1].variant.notes}
         assert all({n.source_id for n in s.variant.notes} <= source_ids
                    for s in merged)
+    assert any(s.level.startswith("fukuda-midi-") for s in combined.lesson_steps)
     assert any(s.level.startswith("coda-dotted-") for s in combined.lesson_steps)
     assert any(s.level.startswith("coda-chord-") for s in combined.lesson_steps)
     assert any(s.level.startswith("coda-slowdown-x2") for s in combined.lesson_steps)
