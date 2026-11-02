@@ -164,10 +164,16 @@ def sparse_midi_coda(
     else:
         width = chord_width
         for run in runs:
-            for start in range(run.start, run.stop, width):
+            # Sparse: visit only actual attack-containing author windows.
+            # Iterating every empty 2-tick window in a long, high-PPQ
+            # recording would recreate the dense algorithm's time cost.
+            buckets: dict[int, list[_Attack]] = {}
+            for attack in run.attacks:
+                buckets.setdefault((attack.tick - run.start) // width, []).append(attack)
+            for bucket, attacks_in_bucket in sorted(buckets.items()):
+                start = run.start + bucket * width
                 stop_tick = min(start + width, run.stop)
-                members = tuple(a for a in run.attacks
-                                if start <= a.tick < stop_tick)
+                members = tuple(attacks_in_bucket)
                 if len(members) < 2 or members[0].tick != start:
                     continue
                 n = members[0].duration

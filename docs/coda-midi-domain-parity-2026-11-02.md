@@ -61,3 +61,19 @@ the other 5 were within 10⁻⁶ quarter-beat serialization rounding.
 The revised run explicitly classifies these rather than hiding them.
 The expanded 33-file differential is still diagnostic and is not a
 comprehensive input-domain parity certificate.
+
+## Long-song algorithm implementation
+
+`research/coda_midi_sparse.py` replaces the product's dense 128-row
+piano-roll allocations with source-indexed attack/rhythm runs. Both dotted
+patterns, each enumerated chord width and all original Voice/Part categories
+are generated directly on the compact exact MIDI grid; x2/x4 slowdown
+remains tempo-map based. Chord subgroups visit only onset-containing windows,
+not all intervening silent ticks. The existing dense Coda oracle remains
+unchanged, bounded and independent for cross-checking.
+
+The original matrix limit remains enforced when actually allocating a
+dense reference matrix; `max_cells=None` is permitted only in the sparse
+MIDI quantization chooser. This is necessary to support the 17 complete
+real MIDI repertoire pieces, all of which the earlier bounded dense
+comparison rejected as oversized.
