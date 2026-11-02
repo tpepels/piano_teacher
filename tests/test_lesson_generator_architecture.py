@@ -22,21 +22,30 @@ from piano_teacher.music import Phrase, load_midi
 SOURCE=Path(__file__).parent/"fixtures/musical_fidelity/midi_three_four.mid"
 
 
-def test_whole_piece_coda_does_not_call_heuristic_passage_planner(monkeypatch):
+def test_desktop_coda_uses_own_bounded_passages_without_legacy_lesson_planner(monkeypatch):
     import piano_teacher.lesson_generators as mod
     piece=load_midi(SOURCE)
     def forbidden(*args,**kwargs):
-        raise AssertionError("Coda consulted the heuristic lesson planner")
+        raise AssertionError("Coda consulted the legacy lesson planner")
     monkeypatch.setattr(mod,"build_exercises",forbidden)
     plan=LearningPlan(piece,exercise_strategy="coda-midi")
     assert isinstance(plan.lesson_generator,CodaLessonGenerator)
+    assert plan.lesson_generator.teaching_passages is True
     assert plan.lesson_definition.exercises is plan.exercises
     assert plan.exercises[0].kind=="learn"
     assert plan.exercises[-1].kind=="perform"
     assert plan.exercises[-1].phrase.notes==piece.notes
     assert plan.exercises[-1].phrase.first_bar==1
     assert plan.exercises[-1].phrase.last_bar==len(piece.bar_boundaries)-1
-    assert all(step.key.startswith("course:6:coda-midi:") for step in plan.lesson_steps)
+    assert all(step.key.startswith("course:8:coda-midi:") for step in plan.lesson_steps)
+    assert all(ex.phrase.last_bar-ex.phrase.first_bar+1 <= 8
+               for ex in plan.exercises if ex.kind=="learn")
+    # A directly constructed research generator retains the author's
+    # whole-score request instead of inheriting this product passage policy.
+    research=CodaLessonGenerator().generate(piece)
+    assert research.exercises[0].phrase.notes==piece.notes
+    assert research.exercises[0].phrase.first_bar==1
+    assert research.exercises[0].phrase.last_bar==len(piece.bar_boundaries)-1
 
 
 def test_heuristic_generator_preserves_existing_passages_and_keys():
@@ -150,20 +159,28 @@ def test_coda_whole_piece_catalog_does_not_invent_sections_from_density(tmp_path
     path=tmp_path/"sparse-then-dense.mid"
     file.save(path)
     piece=load_midi(path)
-    plan=LearningPlan(piece,exercise_strategy="coda-midi")
-    catalog=[exercise for exercise in plan.exercises if exercise.kind=="learn"]
-    # The pinned author asks the caller for start/end measures, so
-    # selecting the complete source makes ONE excerpt regardless of
-    # global density. It does not invent a sequence of short lessons.
-    assert len(catalog)==1
-    excerpt=catalog[0]
-    assert excerpt.phrase.first_bar==1
-    assert excerpt.phrase.last_bar==20
+    # Author-style Coda is given one explicit whole-piece excerpt,
+    # regardless of the contrast between sparse and dense measures.
+    research=CodaLessonGenerator().generate(piece)
+    original_catalog=[ex for ex in research.exercises if ex.kind=="learn"]
+    assert len(original_catalog)==1
+    excerpt=original_catalog[0]
+    assert (excerpt.phrase.first_bar,excerpt.phrase.last_bar)==(1,20)
     assert excerpt.phrase.notes==piece.notes
     assert excerpt.key=="coda:excerpt:1-20"
-    assert plan.exercises[-1].kind=="perform"
-    assert Counter(n.source_id for n in excerpt.phrase.notes)==Counter(
+    # Desktop Coda is explicitly a different pedagogical route. Its
+    # source-safe passages neither invent nor drop attacks; source coverage
+    # is exact, while the final original score is still complete.
+    plan=LearningPlan(piece,exercise_strategy="coda-midi")
+    catalog=[ex for ex in plan.exercises if ex.kind=="learn"]
+    assert len(catalog)>1
+    assert catalog[0].phrase.first_bar==1
+    assert catalog[0].phrase.last_bar<20
+    assert all(1<=ex.phrase.last_bar-ex.phrase.first_bar+1<=8 for ex in catalog)
+    assert Counter(n.source_id for ex in catalog for n in ex.phrase.notes)==Counter(
         n.source_id for n in piece.notes)
+    assert plan.exercises[-1].kind=="perform"
+    assert plan.exercises[-1].phrase.notes==piece.notes
     before=plan.lesson_definition
     for number in (1,len(plan.lesson_steps)//2,len(plan.lesson_steps)):
         plan.select_step(number)
