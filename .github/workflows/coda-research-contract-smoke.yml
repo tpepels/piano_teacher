@@ -6,6 +6,9 @@ on:
   push:
     paths:
       - 'piano_teacher/research/coda_*.py'
+      - 'piano_teacher/application/coda_midi_curriculum.py'
+      - 'piano_teacher/exercise_strategies.py'
+      - 'piano_teacher/learning.py'
       - 'piano_teacher/notation/lesson.py'
       - 'piano_teacher/notation/source_annotations.py'
       - 'tests/test_coda_*.py'
