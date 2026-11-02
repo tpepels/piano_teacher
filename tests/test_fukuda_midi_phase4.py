@@ -281,3 +281,57 @@ def test_real_engine_records_assessed_original_midi_errors_and_restores(tmp_path
     finally:
         engine.listen.cancel()
         engine.db.close()
+
+
+@pytest.mark.parametrize("family",[
+    "fukuda-midi-chord-outer",
+    "fukuda-midi-fast-thin",
+    "fukuda-midi-return-leap",
+])
+def test_fukuda_midi_family_uses_actual_notation_listen_and_grading(
+    family,tmp_path,
+):
+    from piano_teacher.application.score_artifacts import ScoreSelection,ScoreArtifacts
+    from piano_teacher.application.listen_session import ListenSelection,ListenSession
+    from piano_teacher.preprocessing_cache import PreprocessingCache
+    from piano_teacher.practice import evaluate
+    from piano_teacher.assessment_clock import expected_note_seconds
+    from piano_teacher.exercise_contracts import TempoMap,TempoSegment
+
+    path=tmp_path/"fukuda-play.mid"
+    make_midi(path)
+    piece=load_midi(path)
+    plan=LearningPlan(piece,exercise_strategy="fukuda-midi",
+        fukuda_mistakes=frozenset(n.source_id for n in piece.notes))
+    stage=next(x for x in plan.stages if x.variant.level==family)
+    index=next(i for i,x in enumerate(plan.stages) if x is stage)
+    plan.variant_index=index
+    assert not stage.transformed_rhythm
+    assert stage.tempo_policy is None
+    assert stage.variant.notes
+    selected=ScoreSelection(piece=piece,phrase=stage.variant.phrase,
+        hand=plan.hand,stage_key=plan.identity,revision=1,
+        fingerprint="phase4-notation",transformed_rhythm=False)
+    artifacts=ScoreArtifacts(PreprocessingCache(tmp_path/"cache"))
+    score=artifacts.source_model(selected)
+    assert {x["id"] for x in score["notes"]}=={
+        n.source_id for n in stage.variant.notes}
+    listen=ListenSession(tmp_path/"listen")
+    try:
+        listen.prepare(ListenSelection(
+            variant=stage.variant,bpm=piece.bpm,stage_key=plan.identity,
+            revision=1,bar_boundaries=piece.bar_boundaries,
+            time_signatures=piece.time_signatures))
+        listen.thread.join(timeout=10)
+        assert not listen.thread.is_alive()
+        assert listen.take_failure() is None
+        assert listen.snapshot()["audio_available"]
+    finally:
+        listen.cancel()
+    tempo=TempoMap("constant",(
+        TempoSegment(0.0,stage.variant.phrase.end-stage.variant.phrase.start,
+                     float(piece.bpm)),))
+    expected=expected_note_seconds(stage.variant.phrase,tempo)
+    played=[PlayedNote(n.pitch,*expected(n)[:2]) for n in stage.variant.notes]
+    assert evaluate(stage.variant.phrase,plan.hand,piece.bpm,played,
+                    expected_seconds=expected).clean
