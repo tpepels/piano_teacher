@@ -270,6 +270,7 @@ func _hide_renderer() -> void:
             _feedback.bind_score(_renderer,-1)
 
 func _fail(message: String) -> void:
+    push_error("SCORE_ASSET_FAILURE: " + message)
     score_error = message
     rendered_revision = -1
     timeline_model_revision = -1
