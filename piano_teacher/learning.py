@@ -137,6 +137,34 @@ class LearningPlan:
     def variants(self) -> tuple[ExerciseVariant, ...]:
         return tuple(stage.variant for stage in self.stages)
 
+    def update_fukuda_mistakes(self, ids: frozenset[str]) -> bool:
+        """Update the whole-piece Fukuda exercise catalog after real MIDI grading.
+
+        Original stage identities and progress remain valid; new simplified
+        stages have separate source-derived keys and are not mastered.
+        """
+        if self.lesson_generator.name!="fukuda-midi":
+            return False
+        if not isinstance(ids,frozenset):
+            raise TypeError("Fukuda source mistakes need frozen source IDs")
+        if self.lesson_generator.mistakes==ids:
+            return False
+        from dataclasses import replace
+        previous=self.active_variant.level
+        new_generator=replace(self.lesson_generator,mistakes=ids)
+        definition=new_generator.generate(self.piece)
+        self.lesson_generator=new_generator
+        self.lesson_definition=definition
+        self.exercises=definition.exercises
+        self._variants_cached=None
+        self._lesson_steps_cache=None
+        self.variant_index=next(
+            (i for i,stage in enumerate(self.stages)
+             if stage.variant.level==previous),len(self.stages)-1)
+        self.streak=self.failures=0
+        self.bpm=self._tempo_for_current_stage()
+        return True
+
     def _pipeline_stages(self, exercise: Exercise, hand: str) -> tuple[ExerciseStage, ...]:
         """Read the generated course; never choose passages on navigation."""
         return self.lesson_definition.stages(exercise,hand)

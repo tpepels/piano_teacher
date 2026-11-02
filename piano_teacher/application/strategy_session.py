@@ -19,12 +19,14 @@ class StrategyProgress(Protocol):
 def restored_strategy_plan(
     previous: LearningPlan, *, settings: Mapping[str, str],
     progress: StrategyProgress, fingerprint: str, warmup: bool,
+    fukuda_mistakes: frozenset[str] | None = None,
 ) -> LearningPlan:
     replacement = LearningPlan(
         previous.piece, warmup=warmup,
         exercise_strategy=settings["exercise_strategy"],
         timing_strategy=settings["timing_strategy"],
-        tempo_strategy=settings["tempo_strategy"])
+        tempo_strategy=settings["tempo_strategy"],
+        fukuda_mistakes=fukuda_mistakes)
     replacement.target_bpm = previous.target_bpm
     has_saved = progress.has_strategy_session(fingerprint, replacement.profile)
     progress.restore(replacement, fingerprint, restore_session=has_saved)

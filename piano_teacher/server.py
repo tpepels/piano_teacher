@@ -64,6 +64,7 @@ from .application.learner_progress import LearnerProgress
 from .lesson_settings import SETTINGS
 
 from .practice_history import PracticePolicyService
+from .fukuda_mistake_store import FukudaMistakeStore
 from .remediation import RemediationPlanner, RemedialAssignment, plan_timed_remedial_review
 
 
@@ -197,6 +198,7 @@ class PracticeEngine:
         self.progress = ProgressRepository(data_dir / "progress.db")
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
+        self.fukuda_mistakes = FukudaMistakeStore(self.db)
         self.learner_store = self.progress.learner_store
         self.learner_progress = LearnerProgress(self.learner_store)
         self.practice_policy = PracticePolicyService(
@@ -324,7 +326,10 @@ class PracticeEngine:
                 self.plan = restored_strategy_plan(
                     old, settings=self.library.settings,
                     progress=self.progress, fingerprint=self.fingerprint,
-                    warmup=self.is_builtin_warmup)
+                    warmup=self.is_builtin_warmup,
+                    fukuda_mistakes=(self.fukuda_mistakes.problematic(self.fingerprint)
+                        if self.library.settings['exercise_strategy']=="fukuda-midi"
+                        else None))
                 self.open_from_beat = 0.0
                 self.mode = "practice"
                 self.course_guided = False
@@ -487,7 +492,10 @@ class PracticeEngine:
                 self.plan = LearningPlan(piece, warmup=warmup,
                     exercise_strategy=self.library.settings['exercise_strategy'],
                     timing_strategy=self.library.settings['timing_strategy'],
-                    tempo_strategy=self.library.settings['tempo_strategy'])
+                    tempo_strategy=self.library.settings['tempo_strategy'],
+                    fukuda_mistakes=(self.fukuda_mistakes.problematic(fingerprint)
+                        if self.library.settings['exercise_strategy']=="fukuda-midi"
+                        else None))
                 self.mode = "practice"
                 self.teaching = None
                 self.guided_range = None
@@ -566,12 +574,16 @@ class PracticeEngine:
         warmup = self.is_builtin_warmup
         # The database deletes are atomic, scoped exclusively to this score.
         self.progress.reset_piece(fingerprint)
+        self.fukuda_mistakes.reset(fingerprint)
         self._stop()
         self._reset_trouble()
         self.plan = LearningPlan(piece, warmup=warmup,
                     exercise_strategy=self.library.settings['exercise_strategy'],
                     timing_strategy=self.library.settings['timing_strategy'],
-                    tempo_strategy=self.library.settings['tempo_strategy'])
+                    tempo_strategy=self.library.settings['tempo_strategy'],
+                    fukuda_mistakes=(self.fukuda_mistakes.problematic(fingerprint)
+                        if self.library.settings['exercise_strategy']=="fukuda-midi"
+                        else None))
         self.open_from_beat = 0.0
         self.course_guided = False
         self.mode = "practice"
@@ -948,6 +960,12 @@ class PracticeEngine:
             return ""
         p = self.plan
         result = self.pending_result
+        # Source-specific mistakes are learned from authentic original
+        # MIDI attempts, never from generated exercises or Listen previews.
+        use_fukuda = (p.lesson_generator.name=="fukuda-midi"
+                      and p.active_variant.level=="original"
+                      and not self.is_builtin_warmup
+                      and bool(result.notes))
         self.pending_result = None
         if getattr(result, "passed", result.clean):
             self._reset_trouble()
@@ -959,6 +977,14 @@ class PracticeEngine:
             automatic=self.auto, mode=self.mode, warmup=self.is_builtin_warmup,
             observe=self.practice_policy.observe,
             plan_remediation=self.remediation_planner.plan)
+        if use_fukuda:
+            # Reuse graded note identities, not a second contradictory
+            # timing assessment. Source mistakes survive app restarts.
+            mistakes=self.fukuda_mistakes.observe(self.fingerprint,result)
+            if p.update_fukuda_mistakes(mistakes):
+                self.score_artifacts.invalidate()
+                self.score_revision += 1
+                self.awaiting_score_revision = None
         if outcome.remediation is not None:
             self._remediation_pending = outcome.remediation
         if outcome.accelerated:
