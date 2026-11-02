@@ -20,7 +20,7 @@ def main() -> None:
     parser.add_argument("--output",type=Path,required=True)
     parser.add_argument("--cache",type=Path,required=True)
     args=parser.parse_args()
-    root=Path(__file__).resolve().parents[1]
+    root=Path(__file__).resolve().parents[2]
     source=root/"tests/fixtures/musical_fidelity/midi_three_four.mid"
     piece=load_midi(source)
     chosen,stage=project_midi_passage(piece,2,2,
