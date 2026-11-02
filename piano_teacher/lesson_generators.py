@@ -200,14 +200,37 @@ class CodaLessonGenerator:
     name: str = "coda-midi"
     first_measure: int = 1
     last_measure: int | None = None
+    # The research generator still defaults to the complete author-selected
+    # excerpt. Only the desktop registration enables bounded teaching units.
+    teaching_passages: bool = False
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         if (piece.source_format!="midi" or piece.source_musicxml or
                 piece.midi_ticks_per_beat<=0):
             raise ValueError("Coda lesson generation needs an original MIDI piece")
         from .application.coda_midi_curriculum import midi_coda_stages
-        exercises=_coda_piece_sections(
-            piece,first_measure=self.first_measure,last_measure=self.last_measure)
+        if self.teaching_passages:
+            if self.first_measure != 1 or self.last_measure is not None:
+                raise ValueError("Bounded Coda teaching and explicit excerpts cannot be combined")
+            from .adaptive_hybrid_curriculum import _segments
+            passages = _segments(piece)
+            exercises = []
+            for phrase in passages:
+                present = {n.hand for n in phrase.notes}
+                hands = tuple(h for h in ("right", "left") if h in present)
+                if len(hands) == 2:
+                    hands += ("both",)
+                exercises.append(Exercise(
+                    "learn", phrase,
+                    f"coda:excerpt:{phrase.first_bar}-{phrase.last_bar}", hands))
+            # The original full-piece ending is preserved as one ordinary
+            # perform stage; it is never reduced or graded from a scaffold.
+            original = _coda_piece_sections(piece)[-1]
+            exercises.append(original)
+            exercises = tuple(exercises)
+        else:
+            exercises = _coda_piece_sections(
+                piece, first_measure=self.first_measure, last_measure=self.last_measure)
         result={}
         for ex in exercises:
             for hand in lesson_hands(ex):
@@ -220,8 +243,15 @@ class CodaLessonGenerator:
                     Phrase(ex.phrase.number,ex.phrase.first_bar,ex.phrase.last_bar,
                            ex.phrase.start,ex.phrase.end,tuple(n for _,n in selected)),
                     tuple(i for i,_ in selected))
-                result[(ex.key,hand)]=midi_coda_stages(
-                    piece,(original,),kind=ex.kind)
+                # A note sustained beyond a written bar boundary makes
+                # author-style excerpt transformations inapplicable. Keep
+                # the original playable passage rather than truncate it.
+                applicable = (not self.teaching_passages or ex.kind != "learn"
+                    or abs(ex.phrase.end -
+                           piece.bar_boundaries[ex.phrase.last_bar]) <= 1e-7)
+                result[(ex.key,hand)] = (
+                    midi_coda_stages(piece,(original,),kind=ex.kind)
+                    if applicable else (ExerciseStage(original),))
         return LessonPlanDefinition(exercises,result,self.name,
                                     requires_unique_source_ids=True)
 
@@ -610,8 +640,8 @@ def register_composed_lesson_generator(
 
 register_lesson_generator(LessonGeneratorRegistration(
     "coda-midi",
-    lambda **options: CodaLessonGenerator(),
-    course_version=6, owns_timing=True, midi_only=True))
+    lambda **options: CodaLessonGenerator(teaching_passages=True),
+    course_version=7, owns_timing=True, midi_only=True))
 register_lesson_generator(LessonGeneratorRegistration(
     "fukuda-midi",
     lambda **options: FukudaMidiLessonGenerator(
