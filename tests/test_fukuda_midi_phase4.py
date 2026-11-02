@@ -349,3 +349,39 @@ def test_fukuda_one_way_leap_reduces_only_nearby_material():
     assert {x.pitch for x in stage.notes}=={48,68,70,60}
     assert rule_octave_leaps(original(p),bpm=90,
           mistakes=frozenset({"midi-5"})) is None
+
+
+def test_real_performed_midi_loader_and_dtw_full_score_file(tmp_path):
+    from piano_teacher.fukuda_midi_performance import (
+        load_performed_midi,analyze_recorded_midi)
+    score=tmp_path/"original.mid";make_midi(score)
+    performed=mido.MidiFile(str(score))
+    # Simulate authentic slower physical performance plus one wrong key.
+    performed.tracks[0].insert(0,mido.MetaMessage(
+        "set_tempo",tempo=750000,time=0))
+    for msg in performed.tracks[0]:
+        if msg.type in ("note_on","note_off") and msg.note==78:
+            msg.note=90
+    recorded=tmp_path/"recorded.mid";performed.save(recorded)
+    played=load_performed_midi(recorded)
+    assert len(played)==len(load_midi(score).notes)
+    assert len(played)>0
+    assert played[-1].onset>0
+    result=analyze_recorded_midi(score,recorded)
+    assert result["input_format"]=="midi-only"
+    assert result["performed_attacks"]==len(played)
+    assert result["dtw_aligned_onsets"]>0
+    assert any(n["pitch"]==78 and n["kind"] in ("missed","wrong")
+               for n in result["mismatches"])
+    assert "no CQT/NMF" in result["note_source"]
+
+
+def test_bad_midi_performance_releases_fail_closed(tmp_path):
+    from piano_teacher.fukuda_midi_performance import load_performed_midi
+    midi=mido.MidiFile(type=0,ticks_per_beat=480)
+    track=mido.MidiTrack()
+    track.append(mido.Message("note_off",note=64,velocity=0,time=0))
+    midi.tracks.append(track)
+    path=tmp_path/"unmatched.mid";midi.save(path)
+    with pytest.raises(ValueError,match="Orphan"):
+        load_performed_midi(path)
