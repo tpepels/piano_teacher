@@ -7,6 +7,8 @@ on:
       - 'godot/**'
       - 'tests/godot/visual_transport_clock.gd'
       - 'tests/godot/fukuda_midi_strategy.gd'
+      - 'tests/godot/coda_piece_strategy.gd'
+      - 'tests/godot/settings_ownership.gd'
       - 'scripts/check-godot-syntax.sh'
       - 'tests/godot/coda_trial_controls.gd'
       - 'godot/lesson_screen.gd'
@@ -16,6 +18,8 @@ on:
       - 'godot/**'
       - 'tests/godot/visual_transport_clock.gd'
       - 'tests/godot/fukuda_midi_strategy.gd'
+      - 'tests/godot/coda_piece_strategy.gd'
+      - 'tests/godot/settings_ownership.gd'
       - 'scripts/check-godot-syntax.sh'
       - 'tests/godot/coda_trial_controls.gd'
       - 'godot/lesson_screen.gd'
@@ -53,6 +57,18 @@ jobs:
         run: |
           timeout 15s "$GODOT_BIN" --headless --path godot \
             --script "$PWD/tests/godot/visual_transport_clock.gd"
+      - name: Verify whole-piece Coda and composed strategy Settings metadata
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: |
+          timeout 15s "$GODOT_BIN" --headless --path godot \
+            --script "$PWD/tests/godot/coda_piece_strategy.gd"
+      - name: Verify Settings strategy capability contracts
+        env:
+          GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+        run: |
+          timeout 15s "$GODOT_BIN" --headless --path godot \
+            --script "$PWD/tests/godot/settings_ownership.gd" -- preferences
       - name: Verify Phase 4 native Fukuda strategy and lesson navigation
         env:
           GODOT_BIN: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
