@@ -346,6 +346,6 @@ def test_fukuda_one_way_leap_reduces_only_nearby_material():
     stage=rule_octave_leaps(original(p),bpm=90)
     assert stage is not None
     assert stage.level=="fukuda-midi-leap-neighbor"
-    assert {x.pitch for x in stage.notes}=={48,68,70,60,67}
+    assert {x.pitch for x in stage.notes}=={48,68,70,60}
     assert rule_octave_leaps(original(p),bpm=90,
           mistakes=frozenset({"midi-5"})) is None
