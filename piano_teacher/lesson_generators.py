@@ -337,42 +337,42 @@ def _hands_for_learning(exercise: Exercise) -> tuple[str, ...]:
 def source_variants(exercise: Exercise, hand: str, *,
                     grouping: MusicalGrouping | None = None) -> tuple[ExerciseVariant, ...]:
     """Identical source-preserving baseline used by all course generators."""
-        groups = (grouping.for_phrase(exercise.phrase, hand)
-                  if grouping is not None else ())
-        variants = generate_variants(exercise.phrase, hand, groups=groups,
-                                     max_attacks=SETTINGS.focus_max_attacks)
-        if exercise.kind != "learn":
-            return variants[-1:]
-        if (exercise.phrase.first_bar == exercise.phrase.last_bar
-                and len({round(n.start, 6) for n in exercise.phrase.notes
-                         if hand == "both" or n.hand == hand})
-                    > SETTINGS.focus_max_attacks):
-            return _dense_single_measure_variants(exercise.phrase, hand,
-                                                   groups=groups)
-        if hand == "both":
-            return variants[-1:]
-        if len(variants) == 3:
-            skeleton, outline, original = variants
-            # A nearly identical middle stage adds repetition without a
-            # substantial change in the playable note set.
-            if min(len(outline.notes) - len(skeleton.notes),
-                   len(original.notes) - len(outline.notes)) <= len(original.notes) * .15:
-                variants = (skeleton, original)
-        notes = variants[-1].notes if variants else ()
-        onsets = sorted({round(n.start, 6) for n in notes})
-        # A simplified skeleton must not create a one-note lesson when the
-        # original exercise has more playable attacks. Such a stage adds no
-        # useful practice and looks like an accidental short passage.
-        if len(onsets) >= SETTINGS.focus_min_onsets:
-            variants = tuple(v for v in variants
-                             if v.level == "original"
-                             or len({round(n.start, 6) for n in v.notes})
-                                >= SETTINGS.focus_min_onsets)
-        trivial = (len(onsets) == len(notes)
-                   and len(notes) <= max(1.0, exercise.phrase.end - exercise.phrase.start)
-                   and all(b - a >= .5 - 1e-6 for a, b in zip(onsets, onsets[1:]))
-                   and all(abs(n.start * 2 - round(n.start * 2)) < .05 for n in notes))
-        return variants[-1:] if trivial else variants
+    groups = (grouping.for_phrase(exercise.phrase, hand)
+              if grouping is not None else ())
+    variants = generate_variants(exercise.phrase, hand, groups=groups,
+                                 max_attacks=SETTINGS.focus_max_attacks)
+    if exercise.kind != "learn":
+        return variants[-1:]
+    if (exercise.phrase.first_bar == exercise.phrase.last_bar
+            and len({round(n.start, 6) for n in exercise.phrase.notes
+                     if hand == "both" or n.hand == hand})
+                > SETTINGS.focus_max_attacks):
+        return _dense_single_measure_variants(exercise.phrase, hand,
+                                               groups=groups)
+    if hand == "both":
+        return variants[-1:]
+    if len(variants) == 3:
+        skeleton, outline, original = variants
+        # A nearly identical middle stage adds repetition without a
+        # substantial change in the playable note set.
+        if min(len(outline.notes) - len(skeleton.notes),
+               len(original.notes) - len(outline.notes)) <= len(original.notes) * .15:
+            variants = (skeleton, original)
+    notes = variants[-1].notes if variants else ()
+    onsets = sorted({round(n.start, 6) for n in notes})
+    # A simplified skeleton must not create a one-note lesson when the
+    # original exercise has more playable attacks. Such a stage adds no
+    # useful practice and looks like an accidental short passage.
+    if len(onsets) >= SETTINGS.focus_min_onsets:
+        variants = tuple(v for v in variants
+                         if v.level == "original"
+                         or len({round(n.start, 6) for n in v.notes})
+                            >= SETTINGS.focus_min_onsets)
+    trivial = (len(onsets) == len(notes)
+               and len(notes) <= max(1.0, exercise.phrase.end - exercise.phrase.start)
+               and all(b - a >= .5 - 1e-6 for a, b in zip(onsets, onsets[1:]))
+               and all(abs(n.start * 2 - round(n.start * 2)) < .05 for n in notes))
+    return variants[-1:] if trivial else variants
 
 
 
