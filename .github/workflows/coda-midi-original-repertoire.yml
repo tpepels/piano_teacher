@@ -47,6 +47,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coda-midi-author-window-${{ matrix.position }}-shard-${{ matrix.shard }}-${{ github.sha }}
-          path: ${{ runner.temp }}/coda-midi-window-${{ matrix.position }}.json
+          path: ${{ runner.temp }}/coda-midi-window-${{ matrix.position }}-shard-${{ matrix.shard }}.json
           retention-days: 14
           if-no-files-found: warn

@@ -371,9 +371,26 @@ def main():
     args.report.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
     print(json.dumps({k: v for k, v in report.items() if k != "cases"},
                      sort_keys=True))
-    if args.strict and (report["source_rejected"] or
-                        counts["mismatch"] or counts["adapter-unrepresentable"] or
-                        counts["comparison-error"]):
+    strict_failed = (report["source_rejected"] or counts["mismatch"] or
+                     counts["adapter-unrepresentable"] or
+                     counts["comparison-error"] or
+                     any(item["status"] == "author-exception" and
+                         not (item["category"] == "Voice Level: Chordified" and
+                              item["request"] == "chord-0" and
+                              item["reason"].startswith("ValueError: range() arg 3"))
+                         for row in rows for item in row["cases"]))
+    if args.strict and strict_failed:
+        for row in rows:
+            if row["status"] != "compared":
+                print(json.dumps({"file": row["file"], "status": row["status"],
+                                  "reason": row["reason"]}, sort_keys=True))
+            for item in row["cases"]:
+                if item["status"] in ("mismatch", "adapter-unrepresentable",
+                                      "comparison-error") or (
+                        item["status"] == "author-exception" and
+                        item["request"] != "chord-0"):
+                    print(json.dumps({"file": row["file"], "excerpt": row["excerpt"],
+                                      **item}, sort_keys=True))
         raise SystemExit(1)
 
 
