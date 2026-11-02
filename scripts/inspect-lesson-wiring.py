@@ -14,6 +14,9 @@ import json
 import sys
 from pathlib import Path
 
+# Support direct invocation from a clean checkout without a pip -e install.
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+
 from piano_teacher.learning import LearningPlan
 from piano_teacher.lesson_stage_semantics import describe, difference
 from piano_teacher.music import load_midi
