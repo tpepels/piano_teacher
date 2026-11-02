@@ -17,7 +17,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 7
+VERSION = 8
 MAX_RASTER_PIXELS = 8_000_000
 
 
@@ -347,19 +347,30 @@ def extract_tuplets(svgs: list[str] | tuple[str,...], model: dict) -> dict:
                 distance=abs(number_mid-(x1-x0)*aspect*125/space)
                 if not contained and distance > 500:
                     continue
+                bracket_error = 0.0
                 if bracket is not None and not contained:
                     bounds=bracket["bounds"]
                     left=bounds[0]
                     right=bounds[0]+bounds[2]
                     span=(x1-x0)*aspect*250/space
-                    if abs(left)>620 or abs(right-span)>620:
+                    bracket_error=max(abs(left),abs(right-span))
+                    if bracket_error>620:
                         continue
-                candidates.append((ids,x0,y0,space,numeric,bracket))
-            # An ambiguous overlap is never converted into a graphical
-            # guess. Those groups retain the earlier safe fallback.
-            if len(candidates)!=1:
+                # Two legitimate nearby tuplets may both be candidates for
+                # an idless Verovio numeral. Preserve their exact source
+                # identity by choosing the best measured original ink fit,
+                # not by discarding *both* as ambiguous. A tie still fails
+                # closed: no glyph is synthesized or assigned by note order.
+                cost = distance + bracket_error*.35
+                candidates.append((cost,ids,x0,y0,space,numeric,bracket))
+            if not candidates:
                 continue
-            ids,x0,y0,space,numeral,bracket=candidates[0]
+            candidates.sort(key=lambda entry:entry[0])
+            if len(candidates)>1 and candidates[1][0]-candidates[0][0]<60.0:
+                # The original artwork does not identify one source group
+                # unambiguously. Do not invent a tuplet association.
+                continue
+            _,ids,x0,y0,space,numeral,bracket=candidates[0]
             span=(geom.elements[ids[-1]][0]-x0)*aspect*250/space
             if len(ids)==1:
                 # The sole event anchors authentic, unstretched artwork. Its
