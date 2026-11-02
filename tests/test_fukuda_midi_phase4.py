@@ -245,3 +245,39 @@ def test_live_learning_plan_rebuilds_graded_midi_stages_without_mastery_transfer
     assert not any(s.level.startswith("fukuda-midi-")
                    for s in plan.lesson_steps)
     assert original_key in {s.key for s in plan.lesson_steps}
+
+
+def test_real_engine_records_assessed_original_midi_errors_and_restores(tmp_path):
+    from piano_teacher.practice import Assessment,NoteAssessment
+    from piano_teacher.server import PracticeEngine
+    path=tmp_path/"phase4-engine.mid"
+    make_midi(path)
+    engine=PracticeEngine(tmp_path/"state",enable_midi=False)
+    try:
+        engine.set_preferences(exercise_strategy="fukuda-midi")
+        engine.load(str(path))
+        assert engine.plan.lesson_generator.name=="fukuda-midi"
+        assert len(engine.plan.stages)==1
+        source=engine.plan.active_variant.notes
+        assert source
+        # The normal grading pipeline owns these statuses. A MIDI
+        # wrong/missing note is remembered by source ID, not fuzzy pitch.
+        assess=Assessment(tuple(NoteAssessment(note,"missed")
+                                for note in source),0)
+        engine.pending_result=assess
+        engine._commit_pending()
+        assert engine.fukuda_mistakes.problematic(engine.fingerprint)==frozenset(
+            n.source_id for n in source)
+        assert len(engine.plan.stages)>1
+        original_stage=next(x.variant for x in engine.plan.stages
+                            if x.variant.level=="original")
+        assert original_stage.notes==source
+        engine.load(str(path))
+        assert engine.plan.lesson_generator.mistakes
+        assert len(engine.plan.stages)>1
+        engine.reset_progress(confirm=True,fingerprint=engine.fingerprint)
+        assert not engine.fukuda_mistakes.problematic(engine.fingerprint)
+        assert len(engine.plan.stages)==1
+    finally:
+        engine.listen.cancel()
+        engine.db.close()
