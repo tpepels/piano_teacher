@@ -170,20 +170,59 @@ def compile_hybrid_catalog(piece: Piece):
         requires_unique_source_ids=True)
 
 
-def _selection(candidates: tuple[ExerciseStage, ...], statuses: set[str],
-               *, kind: str) -> tuple[ExerciseStage, ...]:
+def _fukuda_relevance(stage: ExerciseStage, original: ExerciseStage,
+                      affected_source_ids: frozenset[str]) -> tuple[int, float] | None:
+    """Prefer simplifications of the failed notes or their immediate context.
+
+    A rule operating on an unrelated chord in the same passage would produce
+    a valid MIDI exercise but teach the wrong difficulty. Score once from
+    actual *removed* source attacks; never infer relevance from a shared pitch.
+    """
+    if not affected_source_ids:
+        return None
+    source = {n.source_id: n for n in original.variant.notes}
+    removed = set(source) - {n.source_id for n in stage.variant.notes}
+    if not removed:
+        return None
+    failed = tuple(source[sid] for sid in affected_source_ids if sid in source)
+    if not failed:
+        return None
+    distance = min(abs(source[sid].start - n.start)
+                   for sid in removed for n in failed)
+    if distance > 2.0 + 1e-7:
+        return None
+    # A direct reduction of the actually failed note is preferred to a
+    # general neighboring reduction; ties retain the author's catalog order.
+    return (0 if removed & affected_source_ids else 1, distance)
+
+
+def _selection(candidates: tuple[ExerciseStage, ...],
+               evidence: Mapping[str, str], *, kind: str
+               ) -> tuple[ExerciseStage, ...]:
     if kind != "learn" or len(candidates) < 2:
         return candidates
     normal = candidates[-1]
-    fukuda = [s for s in candidates[:-1]
-              if s.variant.level.startswith("fukuda-midi-")]
+    statuses = set(evidence.values())
+    pitch_ids = frozenset(sid for sid, status in evidence.items()
+                          if status in {"wrong", "missed", "pitch"})
+    indexed_fukuda = [
+        (relevance, index, stage)
+        for index, stage in enumerate(candidates[:-1])
+        if stage.variant.level.startswith("fukuda-midi-")
+        if (relevance := _fukuda_relevance(
+            stage, normal, pitch_ids)) is not None
+    ]
+    indexed_fukuda.sort(key=lambda item: (*item[0], item[1]))
+    fukuda = [item[2] for item in indexed_fukuda]
+    all_fukuda = [s for s in candidates[:-1]
+                  if s.variant.level.startswith("fukuda-midi-")]
     dotted = [s for s in candidates[:-1]
               if "dotted-" in s.variant.level]
     slow = [s for s in candidates[:-1]
             if "slowdown-" in s.variant.level]
     chord = [s for s in candidates[:-1]
              if "chord-" in s.variant.level]
-    pitch = bool(statuses & {"wrong", "missed", "pitch"})
+    pitch = bool(pitch_ids)
     rhythm = bool(statuses & {"early", "late", "timing"})
     duration = bool(statuses & {"short", "long", "duration"})
     if pitch:
@@ -193,9 +232,9 @@ def _selection(candidates: tuple[ExerciseStage, ...], statuses: set[str],
     elif duration:
         chosen = slow[:2]
     else:
-        # A short initial scaffold, not every generated author exercise.
-        # The complete Coda catalog remains available in Coda-only mode.
-        chosen = [*fukuda[:1], *(chord[:1] or dotted[:1]), *slow[:1]]
+        # Before the first full original performance, present one useful
+        # gentle source-reduction stage, rather than the entire author catalog.
+        chosen = [*all_fukuda[:1], *(chord[:1] or dotted[:1]), *slow[:1]]
     if (pitch and rhythm) or (duration and rhythm):
         chosen.extend(dotted[:1])
     if pitch and duration:
@@ -222,10 +261,10 @@ def select_hybrid_stages(catalog, evidence: Mapping[str, str]):
         for hand in lesson_hands(ex):
             source = (n for n in ex.phrase.notes
                       if hand == "both" or n.hand == hand)
-            statuses = {evidence[n.source_id] for n in source
-                        if n.source_id in evidence}
+            current_evidence = {n.source_id: evidence[n.source_id]
+                                for n in source if n.source_id in evidence}
             stages[(ex.key, hand)] = _selection(
-                catalog.stages(ex, hand), statuses, kind=ex.kind)
+                catalog.stages(ex, hand), current_evidence, kind=ex.kind)
     return LessonPlanDefinition(
         catalog.exercises, stages, catalog.generator_name,
         requires_unique_source_ids=True)
