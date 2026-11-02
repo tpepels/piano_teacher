@@ -138,3 +138,15 @@ def test_author_differential_allows_only_sub_ppq_export_rounding():
     assert not timing_equivalent(a, ((60, 0, .333334),))
     assert invalid_author_chord(tuple((60 + i, 0, 4) for i in range(6)))
     assert not invalid_author_chord(tuple((60 + i, 0, 4) for i in range(5)))
+
+
+def test_author_shortened_independent_held_tone_is_not_a_parity_match():
+    from scripts.probe_coda_midi_author_algorithms import (
+        author_lost_held_note_duration, author_voice_overlap,
+    )
+    source = ((44, 2.0, 3.5), (49, 2.0, 8.0), (52, 2.0, 3.5))
+    damaged = ((44, 2.0, 3.5), (49, 2.0, 3.5), (52, 2.0, 3.5))
+    assert author_lost_held_note_duration(source, damaged)
+    assert not author_lost_held_note_duration(source, source)
+    assert not author_lost_held_note_duration(source, ((44,2,3.5),(49,2,6),(52,2,3.5)))
+    assert not author_lost_held_note_duration(source, ((44,2,3.5),(49,2,3.5)))

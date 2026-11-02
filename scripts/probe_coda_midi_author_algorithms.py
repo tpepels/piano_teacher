@@ -71,6 +71,47 @@ def invalid_author_chord(events):
     return any(len(values) > 5 for values in by_onset.values())
 
 
+def author_lost_held_note_duration(source, actual, *, tolerance=0.000002):
+    """Detect the author's unintended shortest-chord-tone normalization.
+
+    The original flattening routine picks the lowest pitch's duration for
+    an entire simultaneous attack; reconstruction consequently shortens
+    independently held tones even when the exercise has no eligible pair.
+    Verify *every* source pitch/onset is present, and every difference is
+    exactly that incorrect shortening before labelling an author defect.
+    """
+    if len(source) != len(actual):
+        return False
+    src = {(pitch, onset): end for pitch, onset, end in source}
+    out = {(pitch, onset): end for pitch, onset, end in actual}
+    if len(src) != len(source) or len(out) != len(actual) or src.keys() != out.keys():
+        return False
+    by_onset = {}
+    for pitch, onset, end in source:
+        by_onset.setdefault(onset, []).append(end)
+    changed = False
+    for (pitch, onset), end in src.items():
+        observed = out[pitch, onset]
+        if abs(observed - end) <= tolerance:
+            continue
+        if (len(by_onset[onset]) < 2 or observed > end or
+                abs(observed - min(by_onset[onset])) > tolerance):
+            return False
+        changed = True
+    return changed
+
+
+def author_voice_overlap(notes):
+    """Binary original MMR cannot encode overlapping same-pitch events."""
+    pitches = {}
+    for n in notes:
+        key = (n.hand, n.track, n.channel, n.voice, n.pitch)
+        pitches.setdefault(key, []).append((n.start, n.end))
+    return any(any(prev[1] > nxt[0] + 1e-7
+                   for prev, nxt in zip(sorted(spans), sorted(spans)[1:]))
+               for spans in pitches.values())
+
+
 def _original_line(voice_matrix, *, q, numerator, denominator, classes):
     ExerciseLine, MusicMatrixRepresentation, key, meter = classes
     line = ExerciseLine.__new__(ExerciseLine)
@@ -120,7 +161,8 @@ def reference_windows(piece, *, positions=3):
                     continue
                 notes = tuple(n for n in piece.notes
                               if left - 1e-7 <= n.start < right - 1e-7)
-                if not notes or any(n.end > right + 1e-7 for n in notes):
+                if (not notes or any(n.end > right + 1e-7 for n in notes)
+                        or author_voice_overlap(notes)):
                     continue
                 phrase = Phrase(1, first, last, left, right, notes)
                 try:
@@ -228,6 +270,12 @@ def compare_piece(path: Path, classes, *, measure_range=None) -> dict:
                     result["reason"] = (
                         "Original emits blocked chord with more than five "
                         "simultaneous sounding tones")
+                elif (item.category == "Voice Level: Dotted" and
+                      author_lost_held_note_duration(source_expected, actual)):
+                    result["status"] = "author-invalid"
+                    result["reason"] = (
+                        "Original flatten/reconstruction shortens an "
+                        "independently sustained chord tone")
                 elif item.status == "unrepresentable":
                     result["status"] = "adapter-unrepresentable"
                 elif actual == expected:
@@ -260,6 +308,8 @@ def main():
     parser.add_argument("--strict", action="store_true")
     parser.add_argument("--window-position", type=int, choices=(0, 1, 2),
                         default=0, help="Which one of three real-score windows to audit")
+    parser.add_argument("--repertoire-shard", type=int, choices=(0, 1, 2, 3),
+                        help="Shard 17 original-MIDI recordings into 5-file groups")
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--fixtures-only", action="store_true")
     modes.add_argument("--repertoire-only", action="store_true")
@@ -281,6 +331,10 @@ def main():
     repertoire = sorted((ROOT / "midi").glob("*.midi"))
     if len(fixtures) != 16 or len(repertoire) != 17:
         raise AssertionError("MIDI comparison corpus changed; audit the full inventory")
+    if args.repertoire_shard is not None:
+        if not args.repertoire_only:
+            parser.error("--repertoire-shard requires --repertoire-only")
+        repertoire = repertoire[args.repertoire_shard*5:(args.repertoire_shard+1)*5]
     rows = ([compare_piece(path, classes) for path in fixtures]
             if not args.repertoire_only else [])
     for path in ([] if args.fixtures_only else repertoire):
@@ -300,6 +354,7 @@ def main():
         "comparison": "sounding pitch, onset, end (slowdown normalized by factor)",
         "source_files": len(rows),
         "repertoire_window_position": None if args.fixtures_only else args.window_position,
+        "repertoire_shard": args.repertoire_shard,
         "reference_excerpts": len(rows),
         "full_piece_reference_cases": len(fixtures) if not args.repertoire_only else 0,
         "real_repertoire_bounded_excerpts": sum(
