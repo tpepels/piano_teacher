@@ -74,7 +74,7 @@ def test_hybrid_preserves_both_research_families_and_source_final(piece):
                for ex in combined.exercises if ex.kind=="learn")
     assert combined.exercises[-1].kind == "perform"
     assert combined.exercises[-1].phrase.notes == piece.notes
-    assert all(s.key.startswith("course:2:coda-fukuda-midi:") for s in
+    assert all(s.key.startswith("course:3:coda-fukuda-midi:") for s in
                combined.lesson_steps)
     assert combined.lesson_generator.catalog is not None
     catalog = combined.lesson_generator.catalog
@@ -123,7 +123,7 @@ def test_desktop_coda_teaches_bounded_excerpts_before_complete_performance(piece
     assert plan.exercises[-1].phrase.notes == piece.notes
     assert all(step.level == "original" for step in plan.lesson_steps
                if step.kind == "perform")
-    assert all(step.key.startswith("course:7:coda-midi:") for step in plan.lesson_steps)
+    assert all(step.key.startswith("course:8:coda-midi:") for step in plan.lesson_steps)
     for ex in plan.exercises:
         for hand in lesson_hands(ex):
             stages = plan.lesson_definition.stages(ex, hand)
