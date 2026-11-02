@@ -8,6 +8,9 @@ on:
       - '.github/workflows/coda-projected-engraving.yml'
       - 'tests/test_coda_midi_notation_quality.py'
       - 'tests/test_coda_midi_passage_pipeline.py'
+      - 'tests/test_coda_full_catalog_engraving.py'
+      - 'piano_teacher/application/coda_midi_curriculum.py'
+      - 'piano_teacher/lesson_generators.py'
 
 permissions:
   contents: read
@@ -28,7 +31,7 @@ jobs:
       - name: Install only engraving and research dependencies
         run: |
           python -m pip install -e '.[test,coda-research,godot]'
-          python -m compileall -q tests/test_coda_projected_engraving.py tests/test_coda_wider_pipeline.py tests/test_coda_midi_pipeline.py tests/test_coda_midi_notation_quality.py tests/test_coda_midi_passage_pipeline.py
+          python -m compileall -q tests/test_coda_projected_engraving.py tests/test_coda_wider_pipeline.py tests/test_coda_midi_pipeline.py tests/test_coda_midi_notation_quality.py tests/test_coda_midi_passage_pipeline.py tests/test_coda_full_catalog_engraving.py
       # Verify source-authored slur, articulation and beam ink as well as WAV and MIDI.
       # Include rest-bearing quintuplets and septuplets.
       - name: Render and verify five actual Coda MusicXML variants
@@ -45,6 +48,7 @@ jobs:
             tests/test_coda_wider_pipeline.py \
             tests/test_coda_midi_pipeline.py tests/test_coda_midi_notation_quality.py \
             tests/test_coda_midi_passage_pipeline.py \
+            tests/test_coda_full_catalog_engraving.py \
             | tee "$RUNNER_TEMP/coda-score/output.txt"
       - name: Save revision-bound MusicXML and real SVG
         if: always()
