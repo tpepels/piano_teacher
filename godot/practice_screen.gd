@@ -285,7 +285,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
     var speed_text := "%d BPM" % int(roundf(selected_bpm))
     if absf(effective_bpm-selected_bpm) >= .1:
         speed_text += " · plays at %.1f" % effective_bpm
-    elif int(selected_bpm) != int(parsed.get("target_bpm", selected_bpm)):
+    if int(selected_bpm) != int(parsed.get("target_bpm", selected_bpm)):
         speed_text += " · target %d" % int(parsed.get("target_bpm", 0))
     speed_label.text = speed_text
     var recovery_notice: Variant = parsed.get("recovery_notice")
@@ -451,10 +451,11 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         # current-measure caption, so the real exercise stays identified
         # during Play, Pause, Listen and source-note feedback.
         var profile: String = str(parsed.get("exercise_strategy", ""))
-        var course: String = {
+        var course_names: Dictionary = {
             "coda-fukuda-midi":"Coda + Fukuda",
             "coda-midi":"Coda", "fukuda-midi":"Fukuda"
-        }.get(profile, "")
+        }
+        var course: String = str(course_names.get(profile, ""))
         if not course.is_empty():
             passage_text = course + " · " + passage_text
         var family: String = str(parsed.get("stage_family", ""))
