@@ -151,11 +151,19 @@ class LearningPlan:
             return False
         from dataclasses import replace
         previous=self.active_variant.level
+        previous_kind=self.exercise.kind
+        previous_hand=self.hand
         new_generator=replace(self.lesson_generator,mistakes=ids)
         definition=new_generator.generate(self.piece)
         self.lesson_generator=new_generator
         self.lesson_definition=definition
         self.exercises=definition.exercises
+        # The new error sections can replace a single whole-piece exercise
+        # with several shorter lessons. Preserve the full-piece performance
+        # when already there; otherwise focus on the first troubled section.
+        self.index=(len(self.exercises)-1 if previous_kind=="perform" else 0)
+        self.hand_index=(lesson_hands(self.exercise).index(previous_hand)
+                         if previous_hand in lesson_hands(self.exercise) else 0)
         self._variants_cached=None
         self._lesson_steps_cache=None
         self.variant_index=next(
