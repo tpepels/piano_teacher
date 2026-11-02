@@ -67,7 +67,7 @@ def assemble_layout(source_score, *, native_notes: bool = True,
             from ..notation.assets.tuplets import tuplet_fragments
             layout["native_tuplet_fragments"] = tuplet_fragments(
                 source_score.pages, native_model,
-                cache, cache_key)
+                cache, cache_key, notation_xml=notation_xml)
         except Exception as exc:
             print("VEROVIO_TUPLET_FRAGMENTS_UNAVAILABLE:",
                   type(exc).__name__,exc)
