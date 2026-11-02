@@ -3,6 +3,7 @@ from __future__ import annotations
 from bisect import bisect_right
 from collections import Counter
 from dataclasses import dataclass, replace
+from typing import Mapping
 import hashlib
 import json
 import math
@@ -44,7 +45,8 @@ class LearningPlan:
                  timing_strategy: str = "original-timing",
                  tempo_strategy: str = "constant-tempo",
                  lesson_generator: LessonGenerator | None = None,
-                 fukuda_mistakes: frozenset[str] | None = None) -> None:
+                 fukuda_mistakes: frozenset[str] | None = None,
+                 feedback: Mapping[str, str] | None = None) -> None:
         self.piece = piece
         self.timing_strategy = resolve_timing_strategy(timing_strategy)
         self.tempo_strategy = resolve_tempo_strategy(tempo_strategy)
@@ -73,7 +75,8 @@ class LearningPlan:
             self.exercise_strategy.name,
             strategy=self.exercise_strategy, timing=self.timing_strategy,
             tempo=self.tempo_strategy, consolidate=consolidate, warmup=warmup,
-            grouping=self.grouping, mistakes=fukuda_mistakes)
+            grouping=self.grouping, mistakes=fukuda_mistakes,
+            feedback=feedback)
         self.lesson_definition = self.lesson_generator.generate(piece)
         self.exercises = self.lesson_definition.exercises
         self.index = 0

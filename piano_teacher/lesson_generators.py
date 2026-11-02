@@ -475,10 +475,53 @@ class ComposedLessonGenerator:
 
 @dataclass(frozen=True)
 class CodaFukudaMidiLessonGenerator(ComposedLessonGenerator):
-    """Named preset; composition mechanics belong to ComposedLessonGenerator."""
+    """Adaptive short-passage teaching policy with a cached research catalog.
+
+    The generic ComposedLessonGenerator stays available for arbitrary registered
+    combinations. This named application policy selects manageable progressive
+    excerpts and chooses Coda or Fukuda stages from graded error families.
+    """
     components: tuple[LessonGenerator, ...] = (
         CodaLessonGenerator(), FukudaMidiLessonGenerator())
     name: str = "coda-fukuda-midi"
+    error_status: tuple[tuple[str, str], ...] = ()
+    catalog: LessonPlanDefinition | None = None
+
+    def with_mistakes(
+        self, mistakes: frozenset[str], definition: LessonPlanDefinition,
+    ) -> "CodaFukudaMidiLessonGenerator":
+        from dataclasses import replace
+        known = dict(self.error_status)
+        statuses = tuple(sorted((sid, known.get(sid, "missed"))
+                                for sid in mistakes))
+        if statuses == self.error_status and self.mistakes == mistakes:
+            return self
+        return replace(self, mistakes=mistakes, error_status=statuses)
+
+    def with_feedback(
+        self, evidence: Mapping[str, str],
+        definition: LessonPlanDefinition,
+    ) -> "CodaFukudaMidiLessonGenerator":
+        from dataclasses import replace
+        statuses = tuple(sorted(evidence.items()))
+        if statuses == self.error_status:
+            return self
+        return replace(self, mistakes=frozenset(evidence),
+                       error_status=statuses)
+
+    def generate(self, piece: Piece) -> LessonPlanDefinition:
+        from .adaptive_hybrid_curriculum import (
+            compile_hybrid_catalog, select_hybrid_stages)
+        catalog = self.catalog
+        if catalog is None:
+            catalog = compile_hybrid_catalog(piece)
+            # Cache only immutable source candidates. The selected course
+            # remains a separate immutable value per evidence update.
+            object.__setattr__(self, "catalog", catalog)
+        status = dict(self.error_status)
+        for sid in self.mistakes or ():
+            status.setdefault(sid, "missed")
+        return select_hybrid_stages(catalog, status)
 
 
 @dataclass(frozen=True)
@@ -521,6 +564,7 @@ def build_lesson_generator(
     name: str, *, strategy: ExerciseStrategy, timing: object,
     tempo: object, consolidate: bool, warmup: bool,
     grouping: MusicalGrouping | None, mistakes: frozenset[str] | None,
+    feedback: Mapping[str, str] | None = None,
 ) -> LessonGenerator:
     registered = lesson_generator_registration(name)
     if registered is None:
@@ -530,7 +574,7 @@ def build_lesson_generator(
     return registered.factory(
         strategy=strategy, timing=timing, tempo=tempo,
         consolidate=consolidate, warmup=warmup, grouping=grouping,
-        mistakes=mistakes)
+        mistakes=mistakes, feedback=feedback)
 
 
 def register_composed_lesson_generator(
@@ -576,5 +620,6 @@ register_lesson_generator(LessonGeneratorRegistration(
 register_lesson_generator(LessonGeneratorRegistration(
     "coda-fukuda-midi",
     lambda **options: CodaFukudaMidiLessonGenerator(
-        mistakes=options["mistakes"]),
-    course_version=1, owns_timing=True, midi_only=True))
+        mistakes=options["mistakes"],
+        error_status=tuple(sorted((options.get("feedback") or {}).items()))),
+    course_version=2, owns_timing=True, midi_only=True))

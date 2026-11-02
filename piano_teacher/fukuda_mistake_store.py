@@ -34,6 +34,15 @@ class FukudaMistakeStore:
             "SELECT source_id FROM fukuda_mistakes WHERE fingerprint=? AND failures>0",
             (fingerprint,)))
 
+    def evidence(self, fingerprint: str) -> dict[str, str]:
+        """Return stable per-original-attack error families for course selection."""
+        if not fingerprint:
+            raise ValueError("Fukuda evidence needs a source MIDI fingerprint")
+        return {sid: status for sid, status in self.db.execute(
+            "SELECT source_id,status FROM fukuda_mistakes "
+            "WHERE fingerprint=? AND failures>0 ORDER BY source_id",
+            (fingerprint,))}
+
     def observe(self,fingerprint:str,result:Assessment)->frozenset[str]:
         """Atomically update the exact source notes scored in one original take."""
         if not fingerprint or not result.notes:
