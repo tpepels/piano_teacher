@@ -47,14 +47,14 @@ def _attacks(variant: ExerciseVariant, q: int) -> tuple[_Attack, ...]:
     if q <= 0:
         raise ValueError("Coda sparse grid must be positive")
     phrase = variant.phrase
-    by_tick: dict[int, list[tuple[int, int]]] = {}
+    by_tick: dict[int, list[tuple[int, int, int]]] = {}
     pitches: dict[int, list[tuple[int, int]]] = {}
     for index, note in enumerate(variant.notes):
         start = _tick(note.start - phrase.start, q)
         end = _tick(note.end - phrase.start, q)
         if start < 0 or end <= start or note.end > phrase.end + 1e-7:
             raise ValueError("Coda note exceeds selected source excerpt")
-        by_tick.setdefault(start, []).append((index, end - start))
+        by_tick.setdefault(start, []).append((index, note.pitch, end - start))
         pitches.setdefault(note.pitch, []).append((start, end))
     for pitch, spans in pitches.items():
         spans.sort()
@@ -63,11 +63,13 @@ def _attacks(variant: ExerciseVariant, q: int) -> tuple[_Attack, ...]:
                 f"Coda piano roll cannot represent same-pitch overlap: {pitch}")
     attacks = []
     for tick, members in sorted(by_tick.items()):
-        durations = {duration for _, duration in members}
-        if len(durations) != 1:
-            raise ValueError("Coda linear voice has unequal simultaneous durations")
+        # Coda flattens the durations matrix in ascending pitch order and
+        # uses the lowest sounding pitch as the shared onset duration.
+        # Keep all simultaneous source notes, including independently held
+        # tones, rather than rejecting an entire MIDI chord.
+        _, _, duration = min(members, key=lambda member: (member[1], member[0]))
         attacks.append(_Attack(
-            tick, next(iter(durations)), tuple(index for index, _ in members)))
+            tick, duration, tuple(index for index, _, _ in members)))
     return tuple(attacks)
 
 
