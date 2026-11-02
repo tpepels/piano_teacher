@@ -18,7 +18,7 @@ import xml.etree.ElementTree as ET
 
 from PIL import Image
 
-VERSION = 8
+VERSION = 9
 MAX_RASTER_PIXELS = 8_000_000
 
 
@@ -416,7 +416,25 @@ def _report_missing_visible_tuplets(model: dict, artwork: dict) -> None:
         print("VEROVIO_TUPLET_MISSING:", item, flush=True)
 
 
-def tuplet_fragments(svgs,model,cache=None,identity="") -> dict:
+def _missing_visible_groups(model: dict, artwork: dict) -> tuple[tuple[str, ...], ...]:
+    events = {str(event.get("id")): event
+              for event in model.get("notation_events", []) if event.get("id")}
+    missing = []
+    for ids in semantic_tuplets(model):
+        first = events[ids[0]]
+        mark = next((item for item in first.get("tuplet_marks", [])
+                     if item.get("type") == "start"), {})
+        bracket = str(mark.get("bracket", "yes")) == "yes"
+        if str(mark.get("show_number", "actual")) == "none" and not bracket:
+            continue
+        key = "|".join(ids)
+        if key not in artwork or (bracket and not artwork[key].get("bracket")):
+            missing.append(ids)
+    return tuple(missing)
+
+
+def tuplet_fragments(svgs,model,cache=None,identity="",
+                     *, notation_xml: str = "") -> dict:
     key=cache.key("verovio-real-tuplets",VERSION,identity) if (
         cache is not None and identity) else None
     if key:
@@ -425,10 +443,26 @@ def tuplet_fragments(svgs,model,cache=None,identity="") -> dict:
                 isinstance(v,dict) and
                 v.get("source")=="verovio-engraved-tuplet" and
                 isinstance(v.get("number"),dict) for v in stored.values())):
-            _report_missing_visible_tuplets(model,stored)
-            return stored
+            if not _missing_visible_groups(model,stored):
+                _report_missing_visible_tuplets(model,stored)
+                return stored
     results=extract_tuplets(svgs,model)
+    missing = _missing_visible_groups(model,results)
+    if missing and notation_xml:
+        try:
+            from .tuplet_recovery import recover_missing_tuplets
+            recovered = recover_missing_tuplets(notation_xml,model,missing)
+            results.update(recovered)
+            if recovered and os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
+                print("VEROVIO_TUPLET_RECOVERED:", len(recovered),
+                      "source groups", flush=True)
+        except (ValueError,TypeError,RuntimeError,ET.ParseError) as exc:
+            # Retain all original extracted ink even if the isolated Verovio
+            # reference cannot be engraved on this machine.
+            print("VEROVIO_TUPLET_RECOVERY_FAILED:",
+                  type(exc).__name__,str(exc),flush=True)
     _report_missing_visible_tuplets(model,results)
-    if key and results:
+    # A partial atlas should not be cached as a permanently valid result.
+    if key and results and not _missing_visible_groups(model,results):
         cache.write_json("verovio-tuplets",key,results)
     return results
