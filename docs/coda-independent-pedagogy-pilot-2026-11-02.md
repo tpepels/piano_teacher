@@ -3,7 +3,7 @@
 **Protocol ID:** `coda-pedagogy-fixed-performance-pilot-v1`
 
 **Status:** Software infrastructure implemented; **no real participants enrolled
-and no pedagogical effect established**. This protocol is preregistered as
+and no pedagogical effect established**. This protocol is recorded as
 a design document, not a retrospectively successful experiment.
 
 ## Question and comparison
@@ -70,7 +70,7 @@ music played. The result is descriptive until independently reproduced.
 
 The analysis does not treat elapsed practice steps, application mastery
 indicators, total stage counts, generated notes or unit-test success as
-proof of improved learning. A separate prospective power analysis and
+proof of improved learning. External preregistration, a prospective power analysis and
 human study are necessary before confirming a meaningful improvement.
 
 ## Data and privacy

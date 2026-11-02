@@ -1,4 +1,4 @@
-"""Pre-registered, blinded pilot analysis of Coda-versus-heuristic lessons.
+"""Prospectively specified, blinded pilot analysis of Coda-versus-heuristic lessons.
 
 This module NEVER decides pedagogy from synthetic MIDI, stage complexity,
 course length or unit-test success. It processes independent real-player
@@ -140,7 +140,7 @@ def analyze_pilot(
 ) -> dict:
     """Analyze blinded paired-piece strata; does NOT assert causal success.
 
-    A valid evaluation uses the pre-registered fixed-BPM original-score
+    A valid evaluation uses the prospectively specified fixed-BPM original-score
     tests before and after equal-duration Coda or heuristic practice.
     This report remains descriptive until genuine study data are provided.
     """
@@ -192,6 +192,6 @@ def analyze_pilot(
         "arm_A_minus_B_gain":round(effect,8),
         "within_piece_label_permutation_p":round(p,8),
         "permutation_draws":draws,
-        "study_conclusion":"descriptive blinded pilot; independent human efficacy claim requires real recruitment, intervention fidelity, retention and preregistered analysis",
+        "study_conclusion":"descriptive blinded pilot; independent human efficacy claim requires real recruitment, intervention fidelity, retention and prespecified analysis",
         "source":"real physical-MIDI pre/post tests only; cannot be inferred from software fixtures",
     }
