@@ -99,3 +99,22 @@ def test_full_real_repertoire_catalog_does_not_have_dense_capacity_exclusion(fil
         assert all("bounded matrix capacity" not in x.reason for x in rows)
         assert all(x.status != "unrepresentable" or x.reason for x in rows)
     assert all(e.stage is not None for e in catalog if e.status=="generated")
+
+
+@pytest.mark.parametrize("file", sorted(REPERTOIRE.glob("*.midi")), ids=lambda p: p.name)
+def test_complete_repertoire_piece_builds_actual_coda_learning_plan(file):
+    from piano_teacher.learning import LearningPlan
+
+    piece = load_midi(file)
+    plan = LearningPlan(piece, exercise_strategy="coda-midi", consolidate=False)
+    assert plan.piece is piece
+    assert plan.exercise_strategy.name == "coda-midi"
+    assert plan.exercises[0].phrase.first_bar == 1
+    assert plan.exercises[0].phrase.last_bar == len(piece.bar_boundaries)-1
+    assert plan.exercises[-1].kind == "perform"
+    assert plan.lesson_steps
+    assert any(step.level == "coda-slowdown-x2"
+               for step in plan.lesson_steps)
+    assert any(step.level == "coda-slowdown-x4"
+               for step in plan.lesson_steps)
+    assert any(step.level == "original" for step in plan.lesson_steps)
