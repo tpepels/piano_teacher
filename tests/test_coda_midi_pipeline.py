@@ -5,6 +5,7 @@ requirement. This proof uses actual SMF files, original PPQ, production
 engraving/audio, and the same transformed source IDs in software grading.
 Physical keyboard and native graphical Godot remain separate.
 """
+from hashlib import sha256
 from pathlib import Path
 from xml.etree import ElementTree as ET
 import wave
@@ -83,7 +84,8 @@ def test_midi_coda_transformation_engraves_and_grades_identical_ids(
     assert stage.timing.original is original or (
         stage.timing.original.notes==original.notes)
     assert stage.selection.transformed_rhythm
-    assert stage.original_source_sha256 != "e3b0c44298fc1c149afbf4c8996fb924" # not empty-string hash
+    assert len(stage.original_source_sha256)==64
+    assert stage.original_source_sha256!=sha256(b"").hexdigest()
     assert stage.tempo_map.duration_beats==pytest.approx(stage.timing.duration_beats)
 
     expected={n.source_id for n in original.notes}
