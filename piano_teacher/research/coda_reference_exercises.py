@@ -143,8 +143,13 @@ def _safe_group(score:MatrixScore, voice:MatrixVoice,
         return False
     bar=next((j for j,(a,b) in enumerate(zip(score.boundaries,score.boundaries[1:]))
               if a-1e-7 <= start < b-1e-7),None)
-    return (bar is not None and
-            end <= score.boundaries[bar+1]+1e-7 and
+    # The original generator groups equal-duration attacks across measure
+    # boundaries. MIDI has no authored bar-tie/beam/tuplet annotations to
+    # preserve: a cross-bar group is valid if its complete source attacks
+    # fit in the selected excerpt. Retain stricter authored-XML protection.
+    return (bar is not None and end <= score.phrase.end+1e-7 and
+            (not score.original_musicxml or
+             end <= score.boundaries[bar+1]+1e-7) and
             all(score.phrase.notes[i].start>=start-1e-7 and
                 score.phrase.notes[i].end<=end+1e-7 for i in indices))
 
@@ -223,7 +228,9 @@ class CodaReferenceDotted:
                             rest.end > old_end+1e-7
                             for rest in voice.written_rests)
                         if (containing_bar is not None and
-                                new_end<=containing_bar+1e-7 and
+                                new_end<=score.phrase.end+1e-7 and
+                                (not score.original_musicxml or
+                                 new_end<=containing_bar+1e-7) and
                                 new_end<=next_onset+1e-7 and
                                 not rest_conflict and
                                 _safe_group(score,voice,(),guarded,onset,old_end)):
