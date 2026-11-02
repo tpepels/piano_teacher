@@ -308,14 +308,24 @@ def rule_octave_leaps(source: ExerciseVariant, *,
         return stage
     # Pattern 3-B only triggers near a large one-way leap; use one of
     # the paper's neighboring chord/fast rules, not arbitrary pitch shifts.
-    leaps=tuple(b for g in by.values() for a,b in zip(g,g[1:])
+    leaps=tuple((a[1],b[1]) for g in by.values()
+                for a,b in zip(g,g[1:])
                 if abs(a[1].pitch-b[1].pitch)>12)
+    if mistakes is not None:
+        leaps=tuple((a,b) for a,b in leaps
+                    if a.source_id in mistakes or b.source_id in mistakes)
     if not leaps:
         return None
-    inner=rule_chord_outer(source,mistakes=mistakes)
+    # 3-B affects ONLY material adjacent to the detected leap. A remote
+    # chord elsewhere in a hundred-bar piece must never be removed merely
+    # because another passage contains a large melodic interval.
+    neighborhood=frozenset(n.source_id for n in source.notes
+        if any(abs(n.start-b.start)<=2.0 or abs(n.start-a.start)<=2.0
+               for a,b in leaps))
+    inner=rule_chord_outer(source,mistakes=neighborhood)
     if inner is not None:
         return _as_variant(source,"fukuda-midi-leap-neighbor",set(inner.source_indices))
-    fast=rule_fast_thinning(source,bpm=bpm,mistakes=mistakes)
+    fast=rule_fast_thinning(source,bpm=bpm,mistakes=neighborhood)
     if fast is not None:
         return _as_variant(source,"fukuda-midi-leap-neighbor",set(fast.source_indices))
     return None
