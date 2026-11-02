@@ -19,7 +19,8 @@ func run() -> void:
         "exercise_strategy":"coda-midi",
         "available_exercise_strategies":[
             {"id":"legacy","label":"Original progression"},
-            {"id":"coda-midi","label":"Coda · MIDI whole-piece lessons"}
+            {"id":"coda-midi","label":"Coda · MIDI whole-piece lessons",
+             "owns_timing":true, "midi_only":true}
         ],
         "timing_strategy":"original-timing",
         "available_timing_strategies":[
@@ -39,6 +40,18 @@ func run() -> void:
           "Piece-selected Coda must own generated rhythms")
     check(settings.tempo_strategy_picker.disabled,
           "Piece-selected Coda must own generated tempo stages")
+    settings.present_preferences({
+        "music_dir":"/tmp/music",
+        "exercise_strategy":"coda-fukuda-midi",
+        "available_exercise_strategies":[
+            {"id":"coda-fukuda-midi","label":"Combined lessons",
+             "owns_timing":true, "midi_only":true}
+        ]
+    })
+    check(settings.timing_strategy_picker.disabled,
+          "Combined MIDI generators must own their rhythmic stages")
+    check(settings.tempo_strategy_picker.disabled,
+          "Combined MIDI generators must own their tempo stages")
     var lesson=load("res://lesson_screen.gd").new()
     get_root().add_child(lesson)
     await process_frame
