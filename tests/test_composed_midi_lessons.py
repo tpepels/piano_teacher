@@ -389,7 +389,9 @@ def test_arbitrary_registered_composition_with_grading_feedback(piece):
             frozenset({next(n.source_id for n in piece.notes if n.hand == "right")}))
         assert any(ex.key.startswith("fukuda:errors:") for ex in plan.exercises)
         assert plan.refresh_from_mistakes(frozenset())
-        assert len(plan.exercises) == 2
+        assert len(plan.exercises) >= 3
+        assert plan.exercises[-1].kind == "perform"
+        assert plan.exercises[-1].phrase.notes == piece.notes
         with pytest.raises(ValueError, match="Duplicate"):
             generators.register_composed_lesson_generator(
                 key, ("coda-midi", "fukuda-midi"))
