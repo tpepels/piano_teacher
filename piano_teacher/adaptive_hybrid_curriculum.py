@@ -199,53 +199,37 @@ def _fukuda_relevance(stage: ExerciseStage, original: ExerciseStage,
 def _selection(candidates: tuple[ExerciseStage, ...],
                evidence: Mapping[str, str], *, kind: str
                ) -> tuple[ExerciseStage, ...]:
+    """Choose genuinely changed stages using measured source-note differences.
+
+    The complete immutable Coda/Fukuda catalog remains available for
+    research. The desktop teaching path cannot include unchanged aliases
+    or multiple stages with identical audible performances.
+    """
     if kind != "learn" or len(candidates) < 2:
         return candidates
-    normal = candidates[-1]
-    statuses = set(evidence.values())
+    from .lesson_stage_semantics import teaching_sequence
+    original = candidates[-1]
     pitch_ids = frozenset(sid for sid, status in evidence.items()
                           if status in {"wrong", "missed", "pitch"})
-    indexed_fukuda = [
-        (relevance, index, stage)
-        for index, stage in enumerate(candidates[:-1])
-        if stage.variant.level.startswith("fukuda-midi-")
-        if (relevance := _fukuda_relevance(
-            stage, normal, pitch_ids)) is not None
-    ]
-    indexed_fukuda.sort(key=lambda item: (*item[0], item[1]))
-    fukuda = [item[2] for item in indexed_fukuda]
-    all_fukuda = [s for s in candidates[:-1]
-                  if s.variant.level.startswith("fukuda-midi-")]
-    dotted = [s for s in candidates[:-1]
-              if "dotted-" in s.variant.level]
-    slow = [s for s in candidates[:-1]
-            if "slowdown-" in s.variant.level]
-    chord = [s for s in candidates[:-1]
-             if "chord-" in s.variant.level]
-    pitch = bool(pitch_ids)
-    rhythm = bool(statuses & {"early", "late", "timing"})
-    duration = bool(statuses & {"short", "long", "duration"})
-    if pitch:
-        chosen = [*fukuda[:2], *slow[:1]]
-    elif rhythm:
-        chosen = [*dotted[:2], *slow[:1]]
-    elif duration:
-        chosen = slow[:2]
-    else:
-        # Before the first full original performance, present one useful
-        # gentle source-reduction stage, rather than the entire author catalog.
-        chosen = [*all_fukuda[:1], *(chord[:1] or dotted[:1]), *slow[:1]]
-    if (pitch and rhythm) or (duration and rhythm):
-        chosen.extend(dotted[:1])
-    if pitch and duration:
-        chosen.extend(slow[1:2])
-    used = set()
-    ordered = []
-    for stage in chosen:
-        if stage.variant.level not in used:
-            used.add(stage.variant.level)
-            ordered.append(stage)
-    return (*ordered, normal)
+    if pitch_ids:
+        # Filter pitch scaffolds by the graded original MIDI source IDs.
+        # A reduction of an unrelated chord must not masquerade as a
+        # targeted Fukuda repair. Preserve the caller's relevance ordering.
+        ranked = sorted((
+            (relevance, index, stage)
+            for index, stage in enumerate(candidates[:-1])
+            if stage.variant.level.startswith("fukuda-midi-")
+            if (relevance := _fukuda_relevance(
+                stage, original, pitch_ids)) is not None
+        ), key=lambda row: (*row[0], row[1]))
+        candidates = (
+            *(stage for _, _, stage in ranked),
+            *(stage for stage in candidates[:-1]
+              if not stage.variant.level.startswith("fukuda-midi-")),
+            original,
+        )
+    return teaching_sequence(candidates, evidence=dict(evidence))
+
 
 
 def select_hybrid_stages(catalog, evidence: Mapping[str, str]):
