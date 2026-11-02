@@ -79,7 +79,7 @@ def test_whole_piece_coda_plan_has_stages_for_each_lesson_and_original_final(tmp
             assert len(stages)==1
     # Version 7 is a different teaching path; earlier v6 whole-score
     # completion records must not confer passage mastery automatically.
-    assert all(step.key.startswith("course:7:coda-midi:") for step in steps)
+    assert all(step.key.startswith("course:8:coda-midi:") for step in steps)
 
 
 def test_coda_stage_uses_native_score_listen_and_grader_on_original_piece(tmp_path):
