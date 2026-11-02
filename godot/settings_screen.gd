@@ -396,13 +396,20 @@ func present_preferences(values: Dictionary) -> void:
     _present_strategy_picker(learner_strategy_picker,
         values.get("available_learner_strategies", []),
         str(values.get("learner_strategy", "repeated-error")))
-    var coda_mode: bool = str(values.get("exercise_strategy", "")) == "coda-midi"
-    timing_strategy_picker.disabled = coda_mode
-    tempo_strategy_picker.disabled = coda_mode
-    timing_strategy_picker.tooltip_text = ("Coda generates its own rhythmic exercises."
-        if coda_mode else "Choose an independent timing transformation.")
-    tempo_strategy_picker.tooltip_text = ("Coda generates its own slowdown stages."
-        if coda_mode else "Choose an independent tempo policy.")
+    var selected_strategy: String = str(values.get("exercise_strategy", ""))
+    var owns_timing := false
+    for entry in values.get("available_exercise_strategies", []):
+        if entry is Dictionary and str(entry.get("id", "")) == selected_strategy:
+            owns_timing = bool(entry.get("owns_timing", false))
+            break
+    timing_strategy_picker.disabled = owns_timing
+    tempo_strategy_picker.disabled = owns_timing
+    timing_strategy_picker.tooltip_text = (
+        "This lesson generator owns its rhythmic exercises."
+        if owns_timing else "Choose an independent timing transformation.")
+    tempo_strategy_picker.tooltip_text = (
+        "This lesson generator owns its tempo stages."
+        if owns_timing else "Choose an independent tempo policy.")
 
 func _present_strategy_picker(picker: OptionButton, choices: Array, selected: String) -> void:
     picker.clear()

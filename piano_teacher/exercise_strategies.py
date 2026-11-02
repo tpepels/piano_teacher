@@ -396,8 +396,18 @@ def register_exercise_strategy(name: str, label: str, *, midi_only: bool = False
         _MIDI_ONLY_STRATEGIES.add(name)
 
 
-def available_strategies() -> tuple[dict[str, str], ...]:
-    return tuple({"id": key, "label": label} for key, label in APP_STRATEGIES)
+def available_strategies() -> tuple[dict[str, str | bool], ...]:
+    """Expose generator capabilities as metadata, not hard-coded UI names."""
+    from .lesson_generators import lesson_generator_registration
+    result = []
+    for key, label in APP_STRATEGIES:
+        registration = lesson_generator_registration(key)
+        result.append({
+            "id": key, "label": label,
+            "owns_timing": bool(registration and registration.owns_timing),
+            "midi_only": bool(registration and registration.midi_only),
+        })
+    return tuple(result)
 
 
 def resolve_strategy(spec: str | ExerciseStrategy | None, *, piece=None) -> ExerciseStrategy:
