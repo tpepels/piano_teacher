@@ -42,8 +42,8 @@ def prepare_coda_trial(
     passage,stage=project_midi_passage(
         piece,first_bar,last_bar,family=family,bpm=original_plan.bpm)
     if family != "tempo-shaping" and not any(
-        abs(event.exercise_start-(event.source_start-passage.source_start))>1e-7
-        or abs(event.exercise_end-(event.source_end-passage.source_start))>1e-7
+        abs(event.exercise_start-(event.source_start))>1e-7
+        or abs(event.exercise_end-(event.source_end))>1e-7
         for event in stage.timing.events):
         # Coda grouping can return a valid no-op for sparse or unsuitable
         # passages. Keep the existing source lesson active in that case.

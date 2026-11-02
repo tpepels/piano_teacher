@@ -10,7 +10,7 @@ from typing import Literal
 
 ControlRoute = Literal[
     "calibration", "reset", "acknowledgement", "listening",
-    "learning", "transport", "stage"
+    "learning", "transport", "stage", "trial"
 ]
 
 
@@ -26,6 +26,7 @@ class ControlDispatcher:
         "learn", "learn_retry", "open_at", "hints"))
     TRANSPORT = frozenset((
         "practice", "stop", "start", "restart", "pause", "resume"))
+    TRIAL = frozenset(("coda_try", "coda_exit"))
 
     @classmethod
     def route(cls, action: str) -> ControlRoute:
@@ -41,4 +42,6 @@ class ControlDispatcher:
             return "learning"
         if action in cls.TRANSPORT:
             return "transport"
+        if action in cls.TRIAL:
+            return "trial"
         return "stage"

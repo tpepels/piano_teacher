@@ -35,6 +35,7 @@ from .state_projection import (
 from .assessment_service import AssessmentService
 from .application.practice_assessment import PracticeAssessmentPolicies
 from .application.strategy_session import restored_strategy_plan
+from .application.coda_trial import CodaTrial, prepare_coda_trial
 from .application.control_dispatch import ControlDispatcher
 from .application.score_ack import ScoreAckState, choose_score_ack_action
 from .application.transport_commands import (
@@ -131,6 +132,7 @@ class PracticeEngine:
         self._piece_generation = 0
         self.guided_session = GuidedSession()
         self.plan: LearningPlan | None = None
+        self._coda_trial: CodaTrial | None = None
         self.score = None
         self.source = None
         self.is_builtin_warmup = False
@@ -298,6 +300,10 @@ class PracticeEngine:
 
     def set_preferences(self, **changes) -> dict:
         with self.lock:
+            if self._coda_trial is not None and {
+                    "exercise_strategy","timing_strategy","tempo_strategy"
+                    } & changes.keys():
+                raise ValueError("Exit the Coda trial before changing lesson strategies")
             # Validate optional, trained source extraction *before* mutating
             # persistent settings, stopping transport or resetting progress.
             if (changes.get("exercise_strategy") == "rubricnet-trained"
@@ -476,6 +482,7 @@ class PracticeEngine:
             piece = replace(piece, fingering_plan=self.fingering.prepare(piece, fingerprint))
             with self.lock:
                 self._stop()
+                self._coda_trial = None
                 self._reset_trouble()
                 self.course_guided = False
                 self.source = str(source)
@@ -1071,7 +1078,76 @@ class PracticeEngine:
                 return self._control_learning(action, kwargs)
             if route == "transport":
                 return self._control_transport(action, kwargs)
+            if route == "trial":
+                return self._control_coda_trial(action, kwargs)
             return self._change_stage(action, kwargs)
+
+    def _control_coda_trial(self, action: str, kwargs: dict) -> None:
+        """Switch the normal teaching owner to a reversible Coda passage.
+
+        Rendering, Listen and grading consume the same transformed Piece
+        and LearningPlan as ordinary lessons; Coda has no shadow transport.
+        Trial progress is scoped to a distinct fingerprint.
+        """
+        if action == "coda_exit":
+            if self._coda_trial is None:
+                return
+            trial=self._coda_trial
+            self._stop()
+            self._save()
+            self._reset_trouble()
+            self.plan=trial.source_plan
+            self.fingerprint=trial.source_fingerprint
+            self._coda_trial=None
+            self._activate_trial_score("Original MIDI lesson restored")
+            return
+        if self.plan is None:
+            raise ValueError("Open a MIDI piece before trying Coda")
+        if self.is_builtin_warmup:
+            raise ValueError("Coda trials are unavailable for built-in warmups")
+        family=kwargs.get("family")
+        if not isinstance(family,str):
+            raise ValueError("Select a Coda exercise family")
+        # Changing families inside a trial always reuses the untouched
+        # source score and the exact original passage selected on entry.
+        previous=self._coda_trial
+        original=previous.source_plan if previous else self.plan
+        original_fingerprint=(
+            previous.source_fingerprint if previous else self.fingerprint)
+        if previous is None:
+            phrase=original.exercise.phrase
+            first=phrase.first_bar
+            last=min(phrase.last_bar,first+7)
+        else:
+            first=previous.passage.first_bar
+            last=previous.passage.last_bar
+        # Construction must succeed before stopping audio or changing
+        # the active teaching session. An ineligible group is an error,
+        # never a half-switched stage.
+        trial,replacement=prepare_coda_trial(
+            original,source_fingerprint=original_fingerprint,
+            first_bar=first,last_bar=last,family=family)
+        self._stop()
+        self._save()
+        self._reset_trouble()
+        self.plan=replacement
+        self.fingerprint=trial.fingerprint
+        self._coda_trial=trial
+        self._activate_trial_score(
+            "Coda "+family.replace("-"," ")+" ready · original progress separate")
+
+    def _activate_trial_score(self, message: str) -> None:
+        self.open_from_beat=0.0
+        self.mode="practice"
+        self.course_guided=False
+        self.teaching=None
+        self.guided_range=None
+        self.score_artifacts.invalidate()
+        self.tempo_map_cache.invalidate()
+        self.score_revision+=1
+        self.awaiting_score_revision=None
+        self.feedback=message
+        self.next_action="Press Play, or choose Listen to hear this exercise."
 
     def _control_acknowledgement(self, action: str, kwargs: dict) -> None:
         if action == "score_ready":
@@ -1715,6 +1791,16 @@ class PracticeEngine:
                         if key.beat <= beat + 1e-7
                         and key.hand in ("both", self.plan.hand)]
                 state["key_fifths"] = keys[-1].fifths if keys else 0
+            state["coda_trial"] = self._coda_trial is not None
+            state["coda_available"] = (self.plan is not None and
+                not self.is_builtin_warmup and
+                self.plan.piece.source_format == "midi")
+            state["coda_family"] = (
+                self._coda_trial.family if self._coda_trial else "")
+            state["coda_source_bars"] = (
+                [self._coda_trial.passage.first_bar,
+                 self._coda_trial.passage.last_bar]
+                if self._coda_trial else [])
             state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
             state["midi_calibration"] = self.midi_calibration.snapshot(time.monotonic())
             return state
