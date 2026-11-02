@@ -1143,7 +1143,7 @@ class PracticeEngine:
         self.teaching=None
         self.guided_range=None
         self.score_artifacts.invalidate()
-        self.tempo_map_cache.invalidate()
+        self.tempo_map_cache.clear()
         self.score_revision+=1
         self.awaiting_score_revision=None
         self.feedback=message
