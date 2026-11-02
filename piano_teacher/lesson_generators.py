@@ -337,6 +337,63 @@ class FukudaMidiLessonGenerator:
         return LessonPlanDefinition(exercises,result,self.name,
                                     requires_unique_source_ids=True)
 
+def compose_lesson_definitions(
+    primary: LessonPlanDefinition, augmentation: LessonPlanDefinition, *,
+    name: str, merge_matching: bool = True,
+) -> LessonPlanDefinition:
+    """Combine independent course plans with one original performance.
+
+    Only an equivalent complete learn passage (same note multiset, time grid,
+    and hand schedule) may merge its stages. Distinct remedial passages
+    remain separate exercises. Every non-original stage retains its author's
+    exact notes, tempo policy and source IDs. Colliding level names fail.
+    """
+    result = dict(primary.stage_sequences)
+    base = list(primary.exercises)
+    inserted: list[Exercise] = []
+    terminal = [ex for ex in base if ex.kind == "perform"]
+    if len(terminal) != 1:
+        raise ValueError("Composed course requires one terminal performance")
+    for overlay in augmentation.exercises:
+        if overlay.kind == "perform":
+            if (Counter(overlay.phrase.notes) != Counter(terminal[0].phrase.notes)
+                    or overlay.phrase.start != terminal[0].phrase.start
+                    or overlay.phrase.end != terminal[0].phrase.end):
+                raise ValueError("Composed generator changed full-score performance")
+            continue
+        matching = next((
+            ex for ex in base if merge_matching and ex.kind == overlay.kind
+            and ex.phrase.start == overlay.phrase.start
+            and ex.phrase.end == overlay.phrase.end
+            and Counter(ex.phrase.notes) == Counter(overlay.phrase.notes)
+            and lesson_hands(ex) == lesson_hands(overlay)
+        ), None)
+        if matching is None:
+            if any(ex.key == overlay.key for ex in (*base, *inserted)):
+                raise ValueError("Composed generators collide on lesson key")
+            inserted.append(overlay)
+            for hand in lesson_hands(overlay):
+                result[(overlay.key, hand)] = augmentation.stages(overlay, hand)
+            continue
+        for hand in lesson_hands(matching):
+            before = result[(matching.key, hand)]
+            extra = augmentation.stages(overlay, hand)
+            if (before[-1].variant.notes != extra[-1].variant.notes or
+                    before[-1].variant.phrase != extra[-1].variant.phrase):
+                raise ValueError("Cannot merge unrelated source hands")
+            prefixes = tuple(s.variant.level for s in (*extra[:-1], *before))
+            if len(prefixes) != len(set(prefixes)):
+                raise ValueError("Composed algorithms collide on exercise levels")
+            result[(matching.key, hand)] = (*extra[:-1], *before)
+    if any(ex.kind == "perform" for ex in inserted):
+        raise ValueError("Only one final original-score performance is permitted")
+    return LessonPlanDefinition(
+        (*inserted, *base), result, name,
+        requires_unique_source_ids=(
+            primary.requires_unique_source_ids or
+            augmentation.requires_unique_source_ids))
+
+
 @dataclass(frozen=True)
 class CodaFukudaMidiLessonGenerator:
     """Compose complete Coda rhythm/tempo exercises with Fukuda score reduction.
@@ -354,38 +411,20 @@ class CodaFukudaMidiLessonGenerator:
         return replace(self, mistakes=mistakes) if mistakes != self.mistakes else self
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
-        from .fukuda_midi import fukuda_midi_variants
-
-        coda = CodaLessonGenerator().generate(piece)
-        learn = tuple(ex for ex in coda.exercises if ex.kind == "learn")
-        perform = tuple(ex for ex in coda.exercises if ex.kind != "learn")
-        if len(learn) != 1 or len(perform) != 1:
-            raise ValueError("Hybrid Coda/Fukuda needs one source and final performance")
-        stages: dict[tuple[str, str], tuple[ExerciseStage, ...]] = {}
-        for ex in learn:
-            for hand in lesson_hands(ex):
-                coda_stages = coda.stages(ex, hand)
-                original = coda_stages[-1]
-                reductions = fukuda_midi_variants(original.variant, bpm=piece.bpm)
-                preliminary = tuple(ExerciseStage(v) for v in reductions[:-1])
-                levels = {s.variant.level for s in preliminary}
-                if any(s.variant.level in levels for s in coda_stages):
-                    raise ValueError("Hybrid algorithms returned duplicate level names")
-                stages[(ex.key, hand)] = (*preliminary, *coda_stages)
-        for ex in perform:
-            for hand in lesson_hands(ex):
-                stages[(ex.key, hand)] = coda.stages(ex, hand)
-
-        repairs: tuple[Exercise, ...] = ()
+        primary = CodaLessonGenerator().generate(piece)
+        # A complete Fukuda score reduction is always offered, without
+        # restricting it to mistakes. Preserve Coda's whole-piece catalog.
+        full_reductions = FukudaMidiLessonGenerator().generate(piece)
+        combined = compose_lesson_definitions(
+            primary, full_reductions, name=self.name, merge_matching=True)
         if self.mistakes:
-            fukuda = FukudaMidiLessonGenerator(mistakes=self.mistakes).generate(piece)
-            repairs = tuple(ex for ex in fukuda.exercises if ex.kind == "learn")
-            for ex in repairs:
-                for hand in lesson_hands(ex):
-                    stages[(ex.key, hand)] = fukuda.stages(ex, hand)
-        return LessonPlanDefinition(
-            (*repairs, *learn, *perform), stages, self.name,
-            requires_unique_source_ids=True)
+            # New source-specific remedial sections are inserted before the
+            # complete score, rather than replacing any existing Coda stages.
+            repairs = FukudaMidiLessonGenerator(
+                mistakes=self.mistakes).generate(piece)
+            combined = compose_lesson_definitions(
+                combined, repairs, name=self.name, merge_matching=False)
+        return combined
 
 
 @dataclass(frozen=True)
