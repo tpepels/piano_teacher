@@ -36,7 +36,7 @@ class ScoreLibrary:
         self.settings = {'music_dir': str(default_music_dir()), 'fullscreen': True,
                          'last_piece': '', 'midi_device': '', 'metronome': True,
                          'midi_offset_ms': 0,
-                         'exercise_strategy': 'coda-midi', 'timing_strategy': 'original-timing',
+                         'exercise_strategy': 'coda-fukuda-midi', 'timing_strategy': 'original-timing',
                          'tempo_strategy': 'constant-tempo',
                          'diagnosis_strategy': 'error-family',
                          'learner_strategy': 'repeated-error'}
@@ -54,7 +54,7 @@ class ScoreLibrary:
             # First run: create a predictable folder that the user can fill.
             default_music_dir().mkdir(parents=True, exist_ok=True)
         if self.settings['exercise_strategy'] not in {x['id'] for x in available_strategies()}:
-            self.settings['exercise_strategy'] = 'coda-midi'
+            self.settings['exercise_strategy'] = 'coda-fukuda-midi'
         from .lesson_generators import lesson_generator_registration
         selected = lesson_generator_registration(self.settings['exercise_strategy'])
         if selected is not None and selected.owns_timing:
