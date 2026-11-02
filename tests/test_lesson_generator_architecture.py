@@ -36,7 +36,7 @@ def test_whole_piece_coda_does_not_call_heuristic_passage_planner(monkeypatch):
     assert plan.exercises[-1].phrase.notes==piece.notes
     assert plan.exercises[-1].phrase.first_bar==1
     assert plan.exercises[-1].phrase.last_bar==len(piece.bar_boundaries)-1
-    assert all(step.key.startswith("course:4:coda-midi:") for step in plan.lesson_steps)
+    assert all(step.key.startswith("course:5:coda-midi:") for step in plan.lesson_steps)
 
 
 def test_heuristic_generator_preserves_existing_passages_and_keys():
@@ -160,7 +160,7 @@ def test_coda_whole_piece_catalog_does_not_invent_sections_from_density(tmp_path
     assert excerpt.phrase.first_bar==1
     assert excerpt.phrase.last_bar==20
     assert excerpt.phrase.notes==piece.notes
-    assert excerpt.key=="coda:whole-source"
+    assert excerpt.key=="coda:excerpt:1-20"
     assert plan.exercises[-1].kind=="perform"
     assert Counter(n.source_id for n in excerpt.phrase.notes)==Counter(
         n.source_id for n in piece.notes)
@@ -168,3 +168,27 @@ def test_coda_whole_piece_catalog_does_not_invent_sections_from_density(tmp_path
     for number in (1,len(plan.lesson_steps)//2,len(plan.lesson_steps)):
         plan.select_step(number)
         assert plan.lesson_definition is before
+
+
+def test_coda_explicit_measure_range_matches_original_endpoint_request():
+    from piano_teacher.lesson_generators import CodaLessonGenerator
+    piece=load_midi(SOURCE)
+    assert len(piece.bar_boundaries)>2
+    chosen=CodaLessonGenerator(first_measure=2,last_measure=2)
+    plan=LearningPlan(piece,exercise_strategy="coda-midi",
+                      lesson_generator=chosen)
+    assert len(plan.exercises)==2
+    excerpt=plan.exercises[0]
+    assert excerpt.key=="coda:excerpt:2-2"
+    assert excerpt.phrase.first_bar==2
+    assert excerpt.phrase.last_bar==2
+    assert excerpt.phrase.start==piece.bar_boundaries[1]
+    assert excerpt.phrase.end==piece.bar_boundaries[2]
+    assert set(excerpt.phrase.notes)<=set(piece.notes)
+    assert all(excerpt.phrase.start<=n.start<excerpt.phrase.end
+               for n in excerpt.phrase.notes)
+    assert all(step.first_bar==2 and step.last_bar==2
+               for step in plan.lesson_steps)
+    with pytest.raises(ValueError,match="measure range"):
+        LearningPlan(piece,exercise_strategy="coda-midi",
+            lesson_generator=CodaLessonGenerator(first_measure=0,last_measure=1))

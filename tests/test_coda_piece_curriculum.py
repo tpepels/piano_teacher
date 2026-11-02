@@ -54,6 +54,7 @@ def test_whole_piece_coda_plan_has_stages_for_each_lesson_and_original_final(tmp
     assert plan.exercises[0].phrase.notes==piece.notes
     assert plan.exercises[0].phrase.first_bar==1
     assert plan.exercises[0].phrase.last_bar==3
+    assert plan.exercises[0].key=="coda:excerpt:1-3"
     steps=plan.lesson_steps
     assert steps and len(steps)>len(plan.exercises)
     assert len({s.key for s in steps})==len(steps)
@@ -76,7 +77,7 @@ def test_whole_piece_coda_plan_has_stages_for_each_lesson_and_original_final(tmp
             assert len(stages)==1
     # New generator-owned whole-piece courses cannot inherit progress from
     # old per-passage Coda stage keys, even if the notes happen to match.
-    assert all(step.key.startswith("course:4:coda-midi:") for step in steps)
+    assert all(step.key.startswith("course:5:coda-midi:") for step in steps)
 
 
 def test_coda_stage_uses_native_score_listen_and_grader_on_original_piece(tmp_path):
