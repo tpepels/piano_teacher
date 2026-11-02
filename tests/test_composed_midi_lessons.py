@@ -105,6 +105,51 @@ def test_hybrid_preserves_both_research_families_and_source_final(piece):
     assert CodaLessonGenerator().generate(piece).exercises[0].phrase.notes == piece.notes
 
 
+def test_desktop_coda_teaches_bounded_excerpts_before_complete_performance(piece):
+    from collections import Counter
+    from piano_teacher.lesson_generators import lesson_hands
+    from piano_teacher.exercise_strategies import available_strategies
+
+    plan = LearningPlan(piece, exercise_strategy="coda-midi")
+    learned = [ex for ex in plan.exercises if ex.kind == "learn"]
+    assert len(learned) > 1
+    assert plan.exercises[0].phrase.end < plan.exercises[-1].phrase.end
+    assert plan.exercises[0].phrase.last_bar < plan.exercises[-1].phrase.last_bar
+    assert all(1 <= ex.phrase.last_bar - ex.phrase.first_bar + 1 <= 8
+               for ex in learned)
+    assert Counter(n.source_id for ex in learned for n in ex.phrase.notes) == (
+        Counter(n.source_id for n in piece.notes))
+    assert plan.exercises[-1].kind == "perform"
+    assert plan.exercises[-1].phrase.notes == piece.notes
+    assert all(step.level == "original" for step in plan.lesson_steps
+               if step.kind == "perform")
+    assert all(step.key.startswith("course:7:coda-midi:") for step in plan.lesson_steps)
+    for ex in plan.exercises:
+        for hand in lesson_hands(ex):
+            stages = plan.lesson_definition.stages(ex, hand)
+            assert stages[-1].variant.level == "original"
+            assert stages[-1].variant.notes == tuple(
+                n for n in ex.phrase.notes if hand == "both" or n.hand == hand)
+            assert all(set(n.source_id for n in stage.variant.notes) <=
+                       set(n.source_id for n in stages[-1].variant.notes)
+                       for stage in stages)
+    label = next(row["label"] for row in available_strategies()
+                 if row["id"] == "coda-midi")
+    assert "passage" in label.lower()
+
+
+def test_research_coda_retains_full_score_default_and_selected_excerpt(piece):
+    full = CodaLessonGenerator().generate(piece)
+    assert full.exercises[0].phrase.notes == piece.notes
+    assert full.exercises[-1].phrase.notes == piece.notes
+    passage = CodaLessonGenerator(first_measure=1, last_measure=2).generate(piece)
+    assert passage.exercises[0].phrase.first_bar == 1
+    assert passage.exercises[0].phrase.last_bar == 2
+    assert passage.exercises[-1].phrase.notes == passage.exercises[0].phrase.notes
+    with pytest.raises(ValueError, match="cannot be combined"):
+        CodaLessonGenerator(teaching_passages=True,last_measure=2).generate(piece)
+
+
 def test_hybrid_feedback_adds_repairs_without_erasing_coda_and_clears(piece):
     plan = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
     core = plan.lesson_generator.catalog
