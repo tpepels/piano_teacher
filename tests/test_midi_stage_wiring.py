@@ -70,6 +70,10 @@ def test_hybrid_first_stage_is_a_real_source_bound_reduction(piece):
     assert plan.exercise.kind == "learn"
     assert plan.active_phrase.last_bar < len(piece.bar_boundaries)-1
     assert plan.active_variant.level.startswith("fukuda-midi-")
+    assert any(s.variant.level.startswith("fukuda-midi-")
+               for s in plan.stages[:-1])
+    assert any(s.variant.level.startswith("coda-")
+               for s in plan.stages[:-1])
     delta = difference(plan.active_stage, plan.stages[-1])
     assert delta.removed > 0
     assert 0 < delta.active_count < delta.source_count
