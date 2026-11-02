@@ -472,12 +472,24 @@ class PracticeEngine:
                     self.recorder.add(message.note, False, corrected_at - self.run_at)
 
     def load(self, path: str, *, warmup: bool = False):
+        diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
+        began = checkpoint = time.perf_counter()
         with self._fingering_lock:
             source = Path(path).expanduser().resolve()
             fingerprint = hashlib.sha256(source.read_bytes()).hexdigest()
             piece, score = self.preprocessing.load_import(
                 source, fingerprint, importer=import_piece)
+            if diagnostics:
+                now = time.perf_counter()
+                print("SCORE_LOAD_STAGE: import", round((now-checkpoint)*1000, 1),
+                      "ms", source.name, flush=True)
+                checkpoint = now
             piece = replace(piece, fingering_plan=self.fingering.prepare(piece, fingerprint))
+            if diagnostics:
+                now = time.perf_counter()
+                print("SCORE_LOAD_STAGE: fingering", round((now-checkpoint)*1000, 1),
+                      "ms", "status", piece.fingering_plan.status, flush=True)
+                checkpoint = now
             with self.lock:
                 self._stop()
                 self._reset_trouble()
@@ -494,6 +506,11 @@ class PracticeEngine:
                     tempo_strategy=self.library.settings['tempo_strategy'],
                     fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint),
                     feedback=self.fukuda_mistakes.evidence(fingerprint))
+                if diagnostics:
+                    now = time.perf_counter()
+                    print("SCORE_LOAD_STAGE: curriculum", round((now-checkpoint)*1000, 1),
+                          "ms", self.plan.lesson_generator.name, flush=True)
+                    checkpoint = now
                 self.mode = "practice"
                 self.teaching = None
                 self.guided_range = None
@@ -505,6 +522,9 @@ class PracticeEngine:
                 self.pending_result = None
                 self.feedback_marks = []
                 self.feedback_unmapped = 0
+            if diagnostics:
+                print("SCORE_LOAD_STAGE: ready", round((time.perf_counter()-began)*1000, 1),
+                      "ms total", source.name, flush=True)
 
     def fingering_status(self) -> dict:
         """Return the complete original-piece assignments, independent of stage."""
