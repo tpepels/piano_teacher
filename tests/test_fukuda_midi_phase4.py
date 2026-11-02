@@ -193,3 +193,55 @@ def test_incompatible_audio_musicxml_input_and_extra_rules_are_rejected(tmp_path
     with pytest.raises(ValueError,match="MIDI piece"):
         LearningPlan(replace(p,source_format="musicxml"),
                      exercise_strategy="fukuda-midi")
+
+
+def test_mistake_store_isolated_persisted_and_correct_notes_resolved(tmp_path):
+    import sqlite3
+    from piano_teacher.fukuda_mistake_store import FukudaMistakeStore
+    from piano_teacher.practice import Assessment,NoteAssessment
+    path=tmp_path/"mistakes.db"
+    conn=sqlite3.connect(path)
+    try:
+        store=FukudaMistakeStore(conn)
+        p=phrase([60,64,67],[0,1,2],duration=.25)
+        failed=Assessment((NoteAssessment(p.notes[0],"missed"),
+                           NoteAssessment(p.notes[1],"wrong"),
+                           NoteAssessment(p.notes[2],"correct")),0)
+        problems=store.observe("piece-hash",failed)
+        assert problems==frozenset(("midi-0","midi-1"))
+        assert store.problematic("another-piece")==frozenset()
+        success=Assessment((NoteAssessment(p.notes[0],"correct"),
+                            NoteAssessment(p.notes[1],"missed")),0)
+        assert store.observe("piece-hash",success)==frozenset(("midi-1",))
+        conn.close()
+        conn=sqlite3.connect(path)
+        reopened=FukudaMistakeStore(conn)
+        assert reopened.problematic("piece-hash")==frozenset(("midi-1",))
+        reopened.reset("piece-hash")
+        assert not reopened.problematic("piece-hash")
+    finally:
+        conn.close()
+
+
+def test_live_learning_plan_rebuilds_graded_midi_stages_without_mastery_transfer(tmp_path):
+    path=tmp_path/"fukuda.mid"
+    make_midi(path)
+    piece=load_midi(path)
+    plan=LearningPlan(piece,exercise_strategy="fukuda-midi",
+        fukuda_mistakes=frozenset())
+    original_key=plan.identity
+    original_index=plan.variant_index
+    assert not any(s.level.startswith("fukuda-midi-")
+                   for s in plan.lesson_steps)
+    mistakes=frozenset(n.source_id for n in piece.notes)
+    assert plan.update_fukuda_mistakes(mistakes)
+    assert any(s.level.startswith("fukuda-midi-")
+               for s in plan.lesson_steps)
+    assert plan.lesson_definition.generator_name=="fukuda-midi"
+    assert not plan.update_fukuda_mistakes(mistakes)
+    assert all(s.key not in plan.mastered for s in plan.lesson_steps)
+    assert original_key in {s.key for s in plan.lesson_steps}
+    assert plan.update_fukuda_mistakes(frozenset())
+    assert not any(s.level.startswith("fukuda-midi-")
+                   for s in plan.lesson_steps)
+    assert original_key in {s.key for s in plan.lesson_steps}
