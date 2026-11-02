@@ -6,6 +6,9 @@ on:
     paths:
       - '.github/workflows/fukuda-midi-phase4.yml'
       - 'piano_teacher/fukuda_midi.py'
+      - 'piano_teacher/fukuda_mistake_store.py'
+      - 'piano_teacher/server.py'
+      - 'piano_teacher/application/strategy_session.py'
       - 'piano_teacher/lesson_generators.py'
       - 'piano_teacher/learning.py'
       - 'piano_teacher/exercise_strategies.py'
