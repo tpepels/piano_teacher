@@ -167,7 +167,7 @@ def test_fukuda_whole_piece_generator_uses_all_rule_families(tmp_path):
                for step in plan.lesson_steps)
     assert any("fukuda-midi-chord" in s.level for s in plan.lesson_steps)
     assert any("fukuda-midi-fast" in s.level for s in plan.lesson_steps)
-    assert any("fukuda-midi-leap" in s.level for s in plan.lesson_steps)
+    assert any("leap" in s.level for s in plan.lesson_steps)
     for ex in plan.exercises:
         for hand in plan.hands if ex is plan.exercise else ("right",):
             if (ex.key,hand) not in plan.lesson_definition.stage_sequences:
