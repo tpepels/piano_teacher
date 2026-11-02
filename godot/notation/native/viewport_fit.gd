@@ -3,7 +3,7 @@ const InkSpacing := preload("res://notation/native/ink_spacing.gd")
 ## Choose one authentic staff scale and one density for the entire source.
 ## No canvas, clock or tempo ownership. The caller installs the returned density.
 const MAX_STAFF_GAP := 22.0
-const MIN_LOOKAHEAD_BEATS := 1.75
+const MIN_LOOKAHEAD_BEATS := 3.0
 const MIN_READABLE_STAFF_GAP := 14.0
 
 static func choose(score, ink_geometry, preferred: float, playhead_fraction: float) -> Dictionary:
