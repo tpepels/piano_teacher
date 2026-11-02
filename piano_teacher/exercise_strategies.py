@@ -211,6 +211,24 @@ class CodaMidiStrategy:
 
 
 @dataclass(frozen=True)
+class CodaFukudaMidiStrategy:
+    """Selectable handle for the composed whole-piece lesson generator."""
+    name: str = "coda-fukuda-midi"
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
+        return _finish(context, [])
+
+
+@dataclass(frozen=True)
+class RegisteredMidiLessonStrategy:
+    """Default exercise-strategy handle for an external whole-piece generator."""
+    name: str
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
+        return _finish(context, [])
+
+
+@dataclass(frozen=True)
 class FeatureGatedStrategy:
     """Feature-guided strategy selection; no pretrained RubricNet model."""
 
@@ -345,6 +363,7 @@ _FACTORIES = {
     "fukuda-midi": FukudaMidiStrategy,
     "coda-part": CodaPartStrategy,
     "coda-midi": CodaMidiStrategy,
+    "coda-fukuda-midi": CodaFukudaMidiStrategy,
     "feature-gated": FeatureGatedStrategy,
 }
 
@@ -357,9 +376,24 @@ APP_STRATEGIES = (
     ("fukuda", "Fukuda · earlier chord/leap strategy"),
     ("fukuda-midi", "Fukuda · MIDI adaptive simplification"),
     ("coda-midi", "Coda · MIDI whole-piece lessons"),
+    ("coda-fukuda-midi", "Coda + Fukuda · MIDI combined lessons"),
     ("feature-gated", "Feature-guided selection"),
     ("fukuda+coda-part", "Fukuda + Coda"),
 )
+
+
+_MIDI_ONLY_STRATEGIES = {"coda-midi", "fukuda-midi", "coda-fukuda-midi"}
+
+
+def register_exercise_strategy(name: str, label: str, *, midi_only: bool = False) -> None:
+    """Register a selectable whole-piece strategy without modifying factories."""
+    global APP_STRATEGIES
+    if not name or not label or "+" in name or name in _FACTORIES:
+        raise ValueError("Invalid or duplicate exercise strategy registration")
+    _FACTORIES[name] = lambda name=name: RegisteredMidiLessonStrategy(name)
+    APP_STRATEGIES = (*APP_STRATEGIES, (name, label))
+    if midi_only:
+        _MIDI_ONLY_STRATEGIES.add(name)
 
 
 def available_strategies() -> tuple[dict[str, str], ...]:
@@ -374,7 +408,7 @@ def resolve_strategy(spec: str | ExerciseStrategy | None, *, piece=None) -> Exer
                 or not callable(getattr(spec, "generate", None))):
             raise TypeError("Expected a strategy with name and generate")
         return SourcePreservingAdapter(spec)
-    if spec in ("coda-midi","fukuda-midi") and (piece is None or
+    if spec in _MIDI_ONLY_STRATEGIES and (piece is None or
             piece.source_format != "midi" or piece.source_musicxml):
         raise ValueError(f"{spec} lesson generation requires an imported MIDI piece")
     if spec == "rubricnet-trained":

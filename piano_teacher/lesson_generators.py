@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Mapping, Protocol
+from typing import Callable, Mapping, Protocol
 
 from .exercise_pipeline import ExercisePipeline,ExerciseStage
 from .exercise_generator import ExerciseVariant
@@ -28,6 +28,7 @@ class LessonPlanDefinition:
     exercises: tuple[Exercise, ...]
     stage_sequences: Mapping[tuple[str, str], tuple[ExerciseStage, ...]]
     generator_name: str
+    requires_unique_source_ids: bool = False
 
     def __post_init__(self):
         if not self.exercises or len({x.key for x in self.exercises})!=len(self.exercises):
@@ -61,9 +62,9 @@ class LessonPlanDefinition:
                     v=stage.variant
                     if v.phrase.start!=exercise.phrase.start or v.phrase.end!=exercise.phrase.end:
                         raise ValueError("Generated stage changed the source passage boundary")
-                    if self.generator_name=="coda-midi":
-                        # Only original MIDI import guarantees unique IDs,
-                        # required for transformed note-on/offs and grading.
+                    if self.requires_unique_source_ids:
+                        # MIDI-native generator contracts preserve unique
+                        # source identities through notation, Listen and grading.
                         if not v.notes or len({n.source_id for n in v.notes})!=len(v.notes):
                             raise ValueError("Coda stage lost or duplicated MIDI source identities")
                         if not {n.source_id for n in v.notes}<=source_ids:
@@ -221,7 +222,8 @@ class CodaLessonGenerator:
                     tuple(i for i,_ in selected))
                 result[(ex.key,hand)]=midi_coda_stages(
                     piece,(original,),kind=ex.kind)
-        return LessonPlanDefinition(exercises,result,self.name)
+        return LessonPlanDefinition(exercises,result,self.name,
+                                    requires_unique_source_ids=True)
 
 
 def _fukuda_error_sections(piece: Piece, mistakes: frozenset[str]) -> tuple[Exercise, ...]:
@@ -291,6 +293,10 @@ class FukudaMidiLessonGenerator:
     name: str = "fukuda-midi"
     consolidate: bool = False
 
+    def with_mistakes(self, mistakes: frozenset[str]) -> "FukudaMidiLessonGenerator":
+        from dataclasses import replace
+        return replace(self, mistakes=mistakes) if mistakes != self.mistakes else self
+
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         if piece.source_format!="midi" or piece.source_musicxml:
             raise ValueError("Fukuda MIDI requires an imported MIDI piece")
@@ -328,4 +334,123 @@ class FukudaMidiLessonGenerator:
                 else:
                     variants=(original,)
                 result[(exercise.key,hand)]=tuple(ExerciseStage(v) for v in variants)
-        return LessonPlanDefinition(exercises,result,self.name)
+        return LessonPlanDefinition(exercises,result,self.name,
+                                    requires_unique_source_ids=True)
+
+@dataclass(frozen=True)
+class CodaFukudaMidiLessonGenerator:
+    """Compose complete Coda rhythm/tempo exercises with Fukuda score reduction.
+
+    A whole-score lesson is always present. Graded original-note mistakes
+    additionally create source-delimited Fukuda repair exercises *before* the
+    whole-score curriculum; the combined generator owns the course structure.
+    Every component feeds identical ExerciseStage/ExerciseVariant consumers.
+    """
+    mistakes: frozenset[str] | None = None
+    name: str = "coda-fukuda-midi"
+
+    def with_mistakes(self, mistakes: frozenset[str]) -> "CodaFukudaMidiLessonGenerator":
+        from dataclasses import replace
+        return replace(self, mistakes=mistakes) if mistakes != self.mistakes else self
+
+    def generate(self, piece: Piece) -> LessonPlanDefinition:
+        from .fukuda_midi import fukuda_midi_variants
+
+        coda = CodaLessonGenerator().generate(piece)
+        learn = tuple(ex for ex in coda.exercises if ex.kind == "learn")
+        perform = tuple(ex for ex in coda.exercises if ex.kind != "learn")
+        if len(learn) != 1 or len(perform) != 1:
+            raise ValueError("Hybrid Coda/Fukuda needs one source and final performance")
+        stages: dict[tuple[str, str], tuple[ExerciseStage, ...]] = {}
+        for ex in learn:
+            for hand in lesson_hands(ex):
+                coda_stages = coda.stages(ex, hand)
+                original = coda_stages[-1]
+                reductions = fukuda_midi_variants(original.variant, bpm=piece.bpm)
+                preliminary = tuple(ExerciseStage(v) for v in reductions[:-1])
+                levels = {s.variant.level for s in preliminary}
+                if any(s.variant.level in levels for s in coda_stages):
+                    raise ValueError("Hybrid algorithms returned duplicate level names")
+                stages[(ex.key, hand)] = (*preliminary, *coda_stages)
+        for ex in perform:
+            for hand in lesson_hands(ex):
+                stages[(ex.key, hand)] = coda.stages(ex, hand)
+
+        repairs: tuple[Exercise, ...] = ()
+        if self.mistakes:
+            fukuda = FukudaMidiLessonGenerator(mistakes=self.mistakes).generate(piece)
+            repairs = tuple(ex for ex in fukuda.exercises if ex.kind == "learn")
+            for ex in repairs:
+                for hand in lesson_hands(ex):
+                    stages[(ex.key, hand)] = fukuda.stages(ex, hand)
+        return LessonPlanDefinition(
+            (*repairs, *learn, *perform), stages, self.name,
+            requires_unique_source_ids=True)
+
+
+@dataclass(frozen=True)
+class LessonGeneratorRegistration:
+    """One registered whole-course generator, including playback/feedback policy."""
+    name: str
+    factory: Callable[..., LessonGenerator]
+    course_version: int
+    owns_timing: bool = False
+    midi_only: bool = False
+
+
+_REGISTRY: dict[str, LessonGeneratorRegistration] = {}
+
+
+def register_lesson_generator(
+    registration: LessonGeneratorRegistration, *, label: str | None = None,
+) -> None:
+    """Register an independent generator without changing LearningPlan or PracticeEngine.
+
+    For external generators, a matching selectable strategy is installed
+    automatically. The registration is an explicit, startup-time operation.
+    """
+    if not registration.name or registration.course_version < 1:
+        raise ValueError("Invalid lesson generator registration")
+    if registration.name in _REGISTRY:
+        raise ValueError(f"Duplicate lesson generator: {registration.name}")
+    if label is not None:
+        from .exercise_strategies import register_exercise_strategy
+        register_exercise_strategy(
+            registration.name, label, midi_only=registration.midi_only)
+    _REGISTRY[registration.name] = registration
+
+
+def lesson_generator_registration(name: str) -> LessonGeneratorRegistration | None:
+    return _REGISTRY.get(name)
+
+
+def build_lesson_generator(
+    name: str, *, strategy: ExerciseStrategy, timing: object,
+    tempo: object, consolidate: bool, warmup: bool,
+    grouping: MusicalGrouping | None, mistakes: frozenset[str] | None,
+) -> LessonGenerator:
+    registered = lesson_generator_registration(name)
+    if registered is None:
+        return HeuristicLessonGenerator(
+            strategy, timing, tempo, consolidate=consolidate,
+            warmup=warmup, grouping=grouping)
+    return registered.factory(
+        strategy=strategy, timing=timing, tempo=tempo,
+        consolidate=consolidate, warmup=warmup, grouping=grouping,
+        mistakes=mistakes)
+
+
+register_lesson_generator(LessonGeneratorRegistration(
+    "coda-midi",
+    lambda **options: CodaLessonGenerator(),
+    course_version=6, owns_timing=True, midi_only=True))
+register_lesson_generator(LessonGeneratorRegistration(
+    "fukuda-midi",
+    lambda **options: FukudaMidiLessonGenerator(
+        mistakes=options["mistakes"], consolidate=options["consolidate"]),
+    course_version=4, midi_only=True))
+register_lesson_generator(LessonGeneratorRegistration(
+    "coda-fukuda-midi",
+    lambda **options: CodaFukudaMidiLessonGenerator(
+        mistakes=options["mistakes"]),
+    course_version=1, owns_timing=True, midi_only=True))

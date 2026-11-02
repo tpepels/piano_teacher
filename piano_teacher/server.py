@@ -327,9 +327,7 @@ class PracticeEngine:
                     old, settings=self.library.settings,
                     progress=self.progress, fingerprint=self.fingerprint,
                     warmup=self.is_builtin_warmup,
-                    fukuda_mistakes=(self.fukuda_mistakes.problematic(self.fingerprint)
-                        if self.library.settings['exercise_strategy']=="fukuda-midi"
-                        else None))
+                    fukuda_mistakes=self.fukuda_mistakes.problematic(self.fingerprint))
                 self.open_from_beat = 0.0
                 self.mode = "practice"
                 self.course_guided = False
@@ -493,9 +491,7 @@ class PracticeEngine:
                     exercise_strategy=self.library.settings['exercise_strategy'],
                     timing_strategy=self.library.settings['timing_strategy'],
                     tempo_strategy=self.library.settings['tempo_strategy'],
-                    fukuda_mistakes=(self.fukuda_mistakes.problematic(fingerprint)
-                        if self.library.settings['exercise_strategy']=="fukuda-midi"
-                        else None))
+                    fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint))
                 self.mode = "practice"
                 self.teaching = None
                 self.guided_range = None
@@ -581,9 +577,7 @@ class PracticeEngine:
                     exercise_strategy=self.library.settings['exercise_strategy'],
                     timing_strategy=self.library.settings['timing_strategy'],
                     tempo_strategy=self.library.settings['tempo_strategy'],
-                    fukuda_mistakes=(self.fukuda_mistakes.problematic(fingerprint)
-                        if self.library.settings['exercise_strategy']=="fukuda-midi"
-                        else None))
+                    fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint))
         self.open_from_beat = 0.0
         self.course_guided = False
         self.mode = "practice"
@@ -962,7 +956,7 @@ class PracticeEngine:
         result = self.pending_result
         # Source-specific mistakes are learned from authentic original
         # MIDI attempts, never from generated exercises or Listen previews.
-        use_fukuda = (p.lesson_generator.name=="fukuda-midi"
+        use_feedback = (p.accepts_performance_feedback
                       and p.active_variant.level=="original"
                       and not self.is_builtin_warmup
                       and bool(result.notes))
@@ -977,11 +971,11 @@ class PracticeEngine:
             automatic=self.auto, mode=self.mode, warmup=self.is_builtin_warmup,
             observe=self.practice_policy.observe,
             plan_remediation=self.remediation_planner.plan)
-        if use_fukuda:
-            # Reuse graded note identities, not a second contradictory
-            # timing assessment. Source mistakes survive app restarts.
+        if use_feedback:
+            # Reuse graded original source IDs through the selected generator's
+            # feedback contract. No name-based algorithm dispatch in the engine.
             mistakes=self.fukuda_mistakes.observe(self.fingerprint,result)
-            if p.update_fukuda_mistakes(mistakes):
+            if p.refresh_from_mistakes(mistakes):
                 self.score_artifacts.invalidate()
                 self.score_revision += 1
                 self.awaiting_score_revision = None

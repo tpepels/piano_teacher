@@ -16,8 +16,8 @@ from .lesson_settings import SETTINGS
 from .tempo_difficulty import suggested_start_bpm
 from .repeated_passages import exact_repetition_signature
 from .lesson_generators import (
-    Exercise, LessonGenerator, HeuristicLessonGenerator, CodaLessonGenerator,
-    FukudaMidiLessonGenerator,
+    Exercise, LessonGenerator, build_lesson_generator,
+    lesson_generator_registration,
     lesson_hands,
     build_exercises, _course_phrases, _focus_phrases,
     _dense_single_measure_variants, _hands_for_learning, source_variants,
@@ -51,12 +51,17 @@ class LearningPlan:
         # Warmups have their own fixed route; a selected MIDI-Coda policy
         # applies to imported pieces, not the built-in warmup catalog.
         requested = exercise_strategy if exercise_strategy is not None else "legacy"
-        if warmup and requested == "coda-midi":
+        if warmup and (registration := lesson_generator_registration(
+                requested if isinstance(requested, str) else requested.name)
+                ) is not None and registration.midi_only:
             requested = "legacy"
         self.exercise_strategy = resolve_strategy(requested,piece=piece)
-        if self.exercise_strategy.name=="coda-midi" and (
-                self.timing_strategy.name!="original-timing" or
-                self.tempo_strategy.name!="constant-tempo"):
+        self.generator_registration = lesson_generator_registration(
+            self.exercise_strategy.name)
+        if (self.generator_registration is not None
+                and self.generator_registration.owns_timing and
+                (self.timing_strategy.name!="original-timing" or
+                 self.tempo_strategy.name!="constant-tempo")):
             raise ValueError("Coda MIDI lessons generate their own timing and tempo stages")
         self.pipeline = ExercisePipeline(self.exercise_strategy, self.timing_strategy,
                                          self.tempo_strategy)
@@ -64,14 +69,11 @@ class LearningPlan:
         self.grouping = (None if warmup else grouping_for_piece(piece))
         # Produce a complete, immutable course from the entire MIDI Piece
         # before this stateful player owns navigation and mastery.
-        self.lesson_generator = lesson_generator or (
-            CodaLessonGenerator() if self.exercise_strategy.name=="coda-midi"
-            else FukudaMidiLessonGenerator(mistakes=fukuda_mistakes,
-                consolidate=consolidate)
-            if self.exercise_strategy.name=="fukuda-midi"
-            else HeuristicLessonGenerator(
-                self.exercise_strategy,self.timing_strategy,self.tempo_strategy,
-                consolidate=consolidate,warmup=warmup,grouping=self.grouping))
+        self.lesson_generator = lesson_generator or build_lesson_generator(
+            self.exercise_strategy.name,
+            strategy=self.exercise_strategy, timing=self.timing_strategy,
+            tempo=self.tempo_strategy, consolidate=consolidate, warmup=warmup,
+            grouping=self.grouping, mistakes=fukuda_mistakes)
         self.lesson_definition = self.lesson_generator.generate(piece)
         self.exercises = self.lesson_definition.exercises
         self.index = 0
@@ -137,40 +139,43 @@ class LearningPlan:
     def variants(self) -> tuple[ExerciseVariant, ...]:
         return tuple(stage.variant for stage in self.stages)
 
-    def update_fukuda_mistakes(self, ids: frozenset[str]) -> bool:
-        """Update the whole-piece Fukuda exercise catalog after real MIDI grading.
+    @property
+    def accepts_performance_feedback(self) -> bool:
+        """Generators opt in through a common immutable feedback hook."""
+        return callable(getattr(self.lesson_generator, "with_mistakes", None))
 
-        Original stage identities and progress remain valid; new simplified
-        stages have separate source-derived keys and are not mastered.
+    def refresh_from_mistakes(self, ids: frozenset[str]) -> bool:
+        """Regenerate only when the selected generator accepts graded source IDs.
+
+        Preserve existing source-derived mastery keys, but never assign
+        mastery to newly created repairs. Re-select the nearest valid stage.
         """
-        if self.lesson_generator.name!="fukuda-midi":
+        if not isinstance(ids, frozenset):
+            raise TypeError("Generator feedback requires frozen source IDs")
+        update = getattr(self.lesson_generator, "with_mistakes", None)
+        if not callable(update):
             return False
-        if not isinstance(ids,frozenset):
-            raise TypeError("Fukuda source mistakes need frozen source IDs")
-        if self.lesson_generator.mistakes==ids:
+        new_generator = update(ids)
+        if new_generator is self.lesson_generator:
             return False
-        from dataclasses import replace
-        previous=self.active_variant.level
-        previous_kind=self.exercise.kind
-        previous_hand=self.hand
-        new_generator=replace(self.lesson_generator,mistakes=ids)
-        definition=new_generator.generate(self.piece)
-        self.lesson_generator=new_generator
-        self.lesson_definition=definition
-        self.exercises=definition.exercises
-        # The new error sections can replace a single whole-piece exercise
-        # with several shorter lessons. Preserve the full-piece performance
-        # when already there; otherwise focus on the first troubled section.
-        self.index=(len(self.exercises)-1 if previous_kind=="perform" else 0)
-        self.hand_index=(lesson_hands(self.exercise).index(previous_hand)
-                         if previous_hand in lesson_hands(self.exercise) else 0)
-        self._variants_cached=None
-        self._lesson_steps_cache=None
-        self.variant_index=next(
-            (i for i,stage in enumerate(self.stages)
-             if stage.variant.level==previous),len(self.stages)-1)
-        self.streak=self.failures=0
-        self.bpm=self._tempo_for_current_stage()
+        previous = self.active_variant.level
+        previous_kind = self.exercise.kind
+        previous_hand = self.hand
+        definition = new_generator.generate(self.piece)
+        self.lesson_generator = new_generator
+        self.lesson_definition = definition
+        self.exercises = definition.exercises
+        self.index = len(self.exercises) - 1 if previous_kind == "perform" else 0
+        self.hand_index = (lesson_hands(self.exercise).index(previous_hand)
+                           if previous_hand in lesson_hands(self.exercise) else 0)
+        self._variants_cached = None
+        self._lesson_steps_cache = None
+        self._repeated_groups = None
+        self.variant_index = next(
+            (i for i, stage in enumerate(self.stages)
+             if stage.variant.level == previous), len(self.stages) - 1)
+        self.streak = self.failures = 0
+        self.bpm = self._tempo_for_current_stage()
         return True
 
     def _pipeline_stages(self, exercise: Exercise, hand: str) -> tuple[ExerciseStage, ...]:
@@ -196,8 +201,8 @@ class LearningPlan:
         # Sparse MIDI-domain Coda transformations change source attack
         # placement relative to the previous v5 catalog. Do not inherit
         # completed steps or tempo mastery under different musical content.
-        version = (6 if self.lesson_generator.name=="coda-midi" else
-                   4 if self.lesson_generator.name=="fukuda-midi"
+        version = (self.generator_registration.course_version
+                   if self.generator_registration is not None
                    else self.route_version)
         return f"course:{version}{profile}:{exercise.key}:{hand}:{variant.level}:{signature}"
 

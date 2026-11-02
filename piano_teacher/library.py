@@ -55,7 +55,9 @@ class ScoreLibrary:
             default_music_dir().mkdir(parents=True, exist_ok=True)
         if self.settings['exercise_strategy'] not in {x['id'] for x in available_strategies()}:
             self.settings['exercise_strategy'] = 'coda-midi'
-        if self.settings['exercise_strategy']=='coda-midi':
+        from .lesson_generators import lesson_generator_registration
+        selected = lesson_generator_registration(self.settings['exercise_strategy'])
+        if selected is not None and selected.owns_timing:
             self.settings['timing_strategy']='original-timing'
             self.settings['tempo_strategy']='constant-tempo'
         for key, valid, fallback in (
@@ -127,7 +129,9 @@ class ScoreLibrary:
                     raise ValueError("Invalid " + key)
                 resolver(value)
                 new[key] = value
-        if new['exercise_strategy']=='coda-midi':
+        from .lesson_generators import lesson_generator_registration
+        selected = lesson_generator_registration(new['exercise_strategy'])
+        if selected is not None and selected.owns_timing:
             if 'exercise_strategy' in changes:
                 # A piece-selected Coda lesson generates its own rhythmic
                 # and tempo stages. Avoid accidentally stacking old policies.
