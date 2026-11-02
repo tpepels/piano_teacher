@@ -190,3 +190,25 @@ def test_engine_original_errors_replan_and_resume_progress(tmp_path):
     finally:
         engine.listen.cancel()
         engine.db.close()
+
+
+def test_repeated_identical_mistake_revisits_simplification(source):
+    plan = LearningPlan(source, exercise_strategy="coda-fukuda-midi")
+    sid = next(n.source_id for n in source.notes
+               if n.hand == "right" and n.start == 0)
+    assert plan.refresh_from_feedback({sid: "wrong"})
+    focused = plan.exercise.key
+    original_index = next(i for i, s in enumerate(plan.stages)
+                          if s.variant.level == "original")
+    plan.variant_index = original_index
+    assert plan.active_variant.level == "original"
+    # The second failure is the same exact graded note; no new course
+    # compilation or status change occurs, but practice must not stall.
+    assert not plan.refresh_from_feedback({sid: "wrong"})
+    catalog = plan.lesson_generator.catalog
+    assert plan.revisit_source_errors(frozenset({sid}))
+    assert plan.lesson_generator.catalog is catalog
+    assert plan.exercise.key == focused
+    assert plan.variant_index == 0
+    assert plan.active_variant.level.startswith("fukuda-midi-")
+    assert not plan.revisit_source_errors(frozenset({sid}))
