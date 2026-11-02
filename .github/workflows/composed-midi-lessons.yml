@@ -4,23 +4,24 @@ on:
   push:
     paths:
       - '.github/workflows/composed-midi-lessons.yml'
+      - 'piano_teacher/adaptive_hybrid_curriculum.py'
       - 'piano_teacher/lesson_generators.py'
       - 'piano_teacher/learning.py'
       - 'piano_teacher/exercise_strategies.py'
       - 'piano_teacher/library.py'
       - 'piano_teacher/server.py'
+      - 'piano_teacher/fukuda_mistake_store.py'
       - 'piano_teacher/application/strategy_session.py'
+      - 'tests/test_adaptive_hybrid_journey.py'
       - 'tests/test_composed_midi_lessons.py'
       - 'tests/test_composed_midi_repertoire.py'
-      - 'tests/test_adaptive_hybrid_journey.py'
-      - 'piano_teacher/adaptive_hybrid_curriculum.py'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  full-composition-contract:
+  complete-adaptive-curriculum:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     env:
@@ -32,11 +33,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install app and native notation verification dependencies
+      - name: Install native notation and MIDI regression dependencies
         run: timeout 75s python -m pip install -q -e '.[test,coda-research,godot]'
-      - name: Verify complete registered and combined MIDI curriculum
+      - name: Run complete adaptive and original-generator contracts
         run: |
-          timeout 70s python -m pytest -q --tb=short             tests/test_composed_midi_lessons.py             tests/test_lesson_generator_architecture.py             tests/test_fukuda_midi_phase4.py             tests/test_coda_piece_curriculum.py             tests/test_library.py
-      - name: Verify all 17 full-length repertoire MIDI scores
+          timeout 70s python -m pytest -q --tb=short \
+            tests/test_adaptive_hybrid_journey.py \
+            tests/test_composed_midi_lessons.py \
+            tests/test_lesson_generator_architecture.py \
+            tests/test_fukuda_midi_phase4.py \
+            tests/test_coda_piece_curriculum.py \
+            tests/test_library.py
+      - name: Verify all 17 full-length original MIDI scores
         run: |
-          timeout 75s python -m pytest -q --tb=short             tests/test_composed_midi_repertoire.py
+          timeout 75s python -m pytest -q --tb=short \
+            tests/test_composed_midi_repertoire.py
