@@ -191,6 +191,15 @@ class CodaPartStrategy:
 
 
 @dataclass(frozen=True)
+class FukudaMidiStrategy:
+    """Whole-piece MIDI Fukuda rules and MIDI error handling live in lesson generator."""
+    name: str = "fukuda-midi"
+
+    def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
+        return _finish(context, [])
+
+
+@dataclass(frozen=True)
 class CodaMidiStrategy:
     """Piece-selected Coda lesson policy; stage generation is in LearningPlan."""
     name: str = "coda-midi"
@@ -333,6 +342,7 @@ class SourcePreservingAdapter:
 _FACTORIES = {
     "legacy": LegacyStrategy,
     "fukuda": FukudaStrategy,
+    "fukuda-midi": FukudaMidiStrategy,
     "coda-part": CodaPartStrategy,
     "coda-midi": CodaMidiStrategy,
     "feature-gated": FeatureGatedStrategy,
@@ -344,7 +354,7 @@ _FACTORIES = {
 # live-selectable until rendering and MIDI transport share the same timing map.
 APP_STRATEGIES = (
     ("legacy", "Original progression"),
-    ("fukuda", "Fukuda · chord and leap simplification"),
+    ("fukuda-midi", "Fukuda · MIDI adaptive simplification"),
     ("coda-midi", "Coda · MIDI whole-piece lessons"),
     ("feature-gated", "Feature-guided selection"),
     ("fukuda+coda-part", "Fukuda + Coda"),
@@ -363,9 +373,9 @@ def resolve_strategy(spec: str | ExerciseStrategy | None, *, piece=None) -> Exer
                 or not callable(getattr(spec, "generate", None))):
             raise TypeError("Expected a strategy with name and generate")
         return SourcePreservingAdapter(spec)
-    if spec == "coda-midi" and (piece is None or
+    if spec in ("coda-midi","fukuda-midi") and (piece is None or
             piece.source_format != "midi" or piece.source_musicxml):
-        raise ValueError("Coda lesson generation requires an imported MIDI piece")
+        raise ValueError(f"{spec} lesson generation requires an imported MIDI piece")
     if spec == "rubricnet-trained":
         if piece is None:
             raise ValueError("RubricNet-trained requires the original score")

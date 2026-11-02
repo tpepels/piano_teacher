@@ -17,6 +17,7 @@ from .tempo_difficulty import suggested_start_bpm
 from .repeated_passages import exact_repetition_signature
 from .lesson_generators import (
     Exercise, LessonGenerator, HeuristicLessonGenerator, CodaLessonGenerator,
+    FukudaMidiLessonGenerator,
     lesson_hands,
     build_exercises, _course_phrases, _focus_phrases,
     _dense_single_measure_variants, _hands_for_learning, source_variants,
@@ -42,7 +43,8 @@ class LearningPlan:
                  exercise_strategy: str | ExerciseStrategy | None = None,
                  timing_strategy: str = "original-timing",
                  tempo_strategy: str = "constant-tempo",
-                 lesson_generator: LessonGenerator | None = None) -> None:
+                 lesson_generator: LessonGenerator | None = None,
+                 fukuda_mistakes: frozenset[str] | None = None) -> None:
         self.piece = piece
         self.timing_strategy = resolve_timing_strategy(timing_strategy)
         self.tempo_strategy = resolve_tempo_strategy(tempo_strategy)
@@ -64,6 +66,9 @@ class LearningPlan:
         # before this stateful player owns navigation and mastery.
         self.lesson_generator = lesson_generator or (
             CodaLessonGenerator() if self.exercise_strategy.name=="coda-midi"
+            else FukudaMidiLessonGenerator(mistakes=fukuda_mistakes,
+                consolidate=consolidate)
+            if self.exercise_strategy.name=="fukuda-midi"
             else HeuristicLessonGenerator(
                 self.exercise_strategy,self.timing_strategy,self.tempo_strategy,
                 consolidate=consolidate,warmup=warmup,grouping=self.grouping))
@@ -154,7 +159,9 @@ class LearningPlan:
                    else f":{self.profile}")
         # Catalog scope and stage inventory changed: do not credit old
         # v4 density-selected Coda exercise mastery.
-        version = 5 if self.lesson_generator.name=="coda-midi" else self.route_version
+        version = (5 if self.lesson_generator.name=="coda-midi" else
+                   4 if self.lesson_generator.name=="fukuda-midi"
+                   else self.route_version)
         return f"course:{version}{profile}:{exercise.key}:{hand}:{variant.level}:{signature}"
 
     @property

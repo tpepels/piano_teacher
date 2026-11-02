@@ -222,3 +222,42 @@ class CodaLessonGenerator:
                 result[(ex.key,hand)]=midi_coda_stages(
                     piece,(original,),kind=ex.kind)
         return LessonPlanDefinition(exercises,result,self.name)
+
+
+@dataclass(frozen=True)
+class FukudaMidiLessonGenerator:
+    """MIDI-only whole-piece Fukuda score reduction.
+
+    Uses the whole source Piece to identify playable source sections and
+    build three rule families per hand. An optional note-ID set from
+    correctly identified MIDI mistakes restricts simplification to
+    previously failed original-source notes. No audio input is accepted.
+    """
+    mistakes: frozenset[str] | None = None
+    name: str = "fukuda-midi"
+    consolidate: bool = False
+
+    def generate(self, piece: Piece) -> LessonPlanDefinition:
+        if piece.source_format!="midi" or piece.source_musicxml:
+            raise ValueError("Fukuda MIDI requires an imported MIDI piece")
+        from .fukuda_midi import fukuda_midi_variants
+        exercises=build_exercises(piece,consolidate=self.consolidate)
+        result={}
+        for exercise in exercises:
+            for hand in lesson_hands(exercise):
+                selected=tuple((i,n) for i,n in enumerate(exercise.phrase.notes)
+                    if hand=="both" or n.hand==hand)
+                if not selected:
+                    raise ValueError("Fukuda created an empty MIDI hand")
+                original=ExerciseVariant("original",
+                    Phrase(exercise.phrase.number,exercise.phrase.first_bar,
+                        exercise.phrase.last_bar,exercise.phrase.start,
+                        exercise.phrase.end,tuple(n for _,n in selected)),
+                    tuple(i for i,_ in selected))
+                if exercise.kind=="learn" and hand!="both":
+                    variants=fukuda_midi_variants(
+                        original,bpm=piece.bpm,mistakes=self.mistakes)
+                else:
+                    variants=(original,)
+                result[(exercise.key,hand)]=tuple(ExerciseStage(v) for v in variants)
+        return LessonPlanDefinition(exercises,result,self.name)
