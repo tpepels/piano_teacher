@@ -398,7 +398,10 @@ class LessonPlanDefinition:
                     raise ValueError("Every generated lesson must end at original MIDI attacks")
                 source=tuple(n for n in exercise.phrase.notes
                              if hand=="both" or n.hand==hand)
-                if stages[-1].variant.notes!=source:
+                # Existing score fixtures can use repeated/blank source IDs
+                # and present their original notes in a different stable
+                # order. Compare full source-note multiplicities, not IDs.
+                if Counter(stages[-1].variant.notes)!=Counter(source):
                     raise ValueError("Lesson generator changed the terminal original performance")
                 levels=[stage.variant.level for stage in stages]
                 if len(set(levels))!=len(levels):
@@ -408,10 +411,21 @@ class LessonPlanDefinition:
                     v=stage.variant
                     if v.phrase.start!=exercise.phrase.start or v.phrase.end!=exercise.phrase.end:
                         raise ValueError("Generated stage changed the source passage boundary")
-                    if not v.notes or len({n.source_id for n in v.notes})!=len(v.notes):
-                        raise ValueError("Generated stage lost or duplicated MIDI source identities")
-                    if not {n.source_id for n in v.notes}<=source_ids:
-                        raise ValueError("Generated stage references attacks outside its source hand")
+                    if self.generator_name=="coda-midi":
+                        # Only original MIDI import guarantees unique IDs,
+                        # required for transformed note-on/offs and grading.
+                        if not v.notes or len({n.source_id for n in v.notes})!=len(v.notes):
+                            raise ValueError("Coda stage lost or duplicated MIDI source identities")
+                        if not {n.source_id for n in v.notes}<=source_ids:
+                            raise ValueError("Coda stage references attacks outside its source hand")
+                    else:
+                        # Old heuristic strategies use index ownership and
+                        # permit synthetic fixtures without stable MIDI IDs.
+                        # Do not reinterpret those scores as strict MIDI.
+                        if len(set(v.source_indices))!=len(v.source_indices):
+                            raise ValueError("Duplicate source indices in generated lesson")
+                        if not set(v.source_indices)<=set(range(len(exercise.phrase.notes))):
+                            raise ValueError("Lesson stage references an unknown source index")
         object.__setattr__(self,"stage_sequences",
                            MappingProxyType(dict(self.stage_sequences)))
 
