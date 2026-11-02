@@ -390,3 +390,36 @@ def test_bad_midi_performance_releases_fail_closed(tmp_path):
     path=tmp_path/"unmatched.mid";midi.save(path)
     with pytest.raises(ValueError,match="Orphan"):
         load_performed_midi(path)
+
+
+def test_windowed_dtw_handles_long_real_time_performance_without_quadratic_matrix():
+    from time import perf_counter
+    n=720
+    p=phrase([60+(i%12) for i in range(n)],
+             [i*.25 for i in range(n)],duration=.15)
+    performed=[PlayedNote(note.pitch, note.start*.61+.2,
+                          note.end*.61+.2)
+               for i,note in enumerate(p.notes) if i not in (160,427,601)]
+    begun=perf_counter()
+    aligned=align_midi_dtw(p,performed,bpm=97)
+    elapsed=perf_counter()-begun
+    assert len(aligned)>=n-12
+    assert all(a.score_beat<b.score_beat and
+               a.performed_seconds<b.performed_seconds
+               for a,b in zip(aligned,aligned[1:]))
+    assert aligned[0].score_beat==0
+    assert aligned[-1].score_beat==pytest.approx((n-1)*.25)
+    assert elapsed<8  # Bounded CI must expose algorithmic regressions.
+
+
+def test_windowed_dtw_keeps_exact_octave_information_in_mismatch_report():
+    n=520
+    p=phrase([60+i%7 for i in range(n)],
+             [i*.25 for i in range(n)],duration=.2)
+    performed=[PlayedNote(note.pitch+(12 if i==270 else 0),
+                          note.start*.75,note.end*.75)
+               for i,note in enumerate(p.notes)]
+    found=detect_midi_mistakes(p,performed,bpm=80)
+    assert "midi-270" in found.problematic_source_ids
+    assert any(n.pitch==p.notes[270].pitch and n.source_id=="midi-270"
+               for n in found.mismatches)
