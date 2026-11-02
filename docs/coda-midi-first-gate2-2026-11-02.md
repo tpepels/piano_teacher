@@ -97,3 +97,98 @@ than deleted as an unrelated change.
 **Status:** MIDI-first research path functional and bounded verified;
 complete Gate 2/product exercise selection and physical MIDI readiness
 remain open.
+
+
+## 2026-11-02 — passage, long MIDI, notation and Godot contract work
+
+**Status: bounded software verified; physical hardware and in-app Coda
+activation remain UNVERIFIED and disabled.**
+
+### 1. Arbitrary practice measures
+
+`piano_teacher/research/coda_midi_passage.py` adds:
+
+- `select_midi_passage(piece, first_bar, last_bar)` (one through eight
+  measures), with original source `Piece`, original selected note indexes,
+  absolute beat span and attack IDs stored in `MidiPassage`;
+- a local-zero `Piece` and `ExerciseVariant` with the source tempo,
+  active meter/key/clef and exact imported note identities;
+- `project_midi_passage(... family="tempo-shaping"|"dotted-rhythms"|
+  "chordification")` producing the existing single-stage Coda
+  notation/Listen/grading contract from that excerpt, independent of
+  source MusicXML.
+
+The selection **rejects a note sustaining across either selected endpoint**,
+rather than inventing a fresh attack at the beginning or silently clipping
+a real note release at the end. These windows require a later explicit
+continuation/tail policy before arbitrary musical tie crossings can be
+treated as fully supported.
+
+`coda_midi_grid.py` optionally derives a compact exact beat grid by taking
+the GCD of the original source PPQ, selected note-on/off ticks and measure
+boundaries. The normal full-PPQ mode remains unchanged. Long conventional
+passages no longer allocate one high-PPQ tick for every source beat.
+Unrepresentable events and oversized matrices still fail closed.
+
+### 2. Broader MIDI
+
+`tests/test_coda_midi_long_repertoire.py` constructs a deterministic
+48-bar two-hand SMF, selects bars **17–24**, checks absolute-to-local
+timestamp mapping, independent handed tracks (including matching pitches),
+exact matrix ownership and x2-slowdown clean grading. It checks that MIDI
+with overlapping same-pitch note-ons in a single track is **not silently
+merged**: the importer retains the events with an explicit FIFO ambiguity
+warning, and the 128-pitch binary MMR rejects that voice rather than
+claiming lossless parity.
+
+The existing sixteen independently authored SMF fixtures remain part
+of the bounded Coda research suite, including odd 997 PPQ, mixed meter,
+tuplets, held notes and unisons.
+
+### 3. MIDI-inferred notation
+
+`tests/test_coda_midi_notation_quality.py` uses **real imported MIDI**,
+not presumed original notation, to verify generated two-staff rests,
+eighth-note beam elements, voice tags, readable clefs, written tie
+start/stop and tie segment source bindings, as well as triplet
+time-modification and actual SVG. The separate selected-later-bar
+`tests/test_coda_midi_passage_pipeline.py` passes a bar-two MIDI x2
+exercise through actual Verovio SVG, synthesized WAV Listen,
+`LiveInputView` source-note feedback and clean synthetic MIDI grading.
+
+[Bounded Verovio/Listen/grade workflow 41438832266](https://github.com/tpepels/piano_teacher/actions/runs/41438832266):
+**35 tests passed in 3.25 seconds**, including prior Coda cases.
+[Research contracts workflow 41438321708](https://github.com/tpepels/piano_teacher/actions/runs/41438321708):
+passed, including the new long-MIDI and arbitrary passage checks.
+
+### 4. Godot passage-clock handoff
+
+`scripts/research/export_coda_midi_godot_model.py` exports an
+**actual** MIDI-imported, selected bar-two, slowed-stage semantic model
+into a strict JSON boundary. `tests/godot/coda_midi_passage_runtime.gd`
+consumes it through Godot's own `notation/shared/timeline.gd` and
+`visual_transport_clock.gd` on **Godot 4.7.2 headless**, verifying
+source identity, measure grid, constant fixed-playhead motion, pause,
+resume and explicit retry transport identity.
+
+[Godot bounded workflow 41439160029](https://github.com/tpepels/piano_teacher/actions/runs/41439160029):
+**CODA_MIDI_GODOT_FAILURES:0**, success. The fixture contains
+one selected MIDI note and does not exercise the complete application
+service/UI, a physical keyboard, or a hardware audio/MIDI loop.
+
+### Unfinished product gates
+
+- Passage-boundary sustained-note policy; broader real-world performance
+  and register/score readability across longer rendered passages;
+- actual in-app strategy picker and backend orchestration of the
+  selected source excerpt (the prototype is still a research API);
+- complete Godot application and native extension graphical integration
+  under the live teaching state machine;
+- **physical MIDI device testing**, including feedback, onset/offset,
+  rest transitions, pause/resume/retry and Listen against actual hardware.
+
+**Do not claim Coda production readiness or enable its strategies in the
+application based only on these bounded symbolic and headless checks.**
+Existing normal MIDI lesson behavior is not modified by these research
+functions. Source MusicXML reference-parity issue #42 remains separate.
+See active [MIDI-first issue #43](https://github.com/tpepels/piano_teacher/issues/43).

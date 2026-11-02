@@ -1,0 +1,64 @@
+{
+  "date": "2026-11-02",
+  "research_only": true,
+  "gate_2_complete": false,
+  "production_coda_enabled": false,
+  "source_input": "midi",
+  "generated_notation_output": "musicxml",
+  "commit_before_evidence": "3c44f38fa6f731fee9a89adb3ae5f9f6ebf1a981",
+  "passage": {
+    "selection": "piano_teacher/research/coda_midi_passage.py",
+    "max_measures": 8,
+    "source_ids_preserved": true,
+    "absolute_coordinates_preserved": true,
+    "policy": "reject any sustain spanning either selected endpoint",
+    "grid": "original PPQ exact, optional GCD compact exact grid"
+  },
+  "midi_corpus": {
+    "baseline_real_midi_fixtures": 16,
+    "constructed_score_measures": 48,
+    "tested_selection_measures": [
+      17,
+      24
+    ],
+    "same_pitch_cross_track_support": true,
+    "same_pitch_overlap_in_one_voice": "explicit rejection in binary Coda MMR"
+  },
+  "notation_and_audio": {
+    "verovio_run": "https://github.com/tpepels/piano_teacher/actions/runs/41438832266",
+    "passed_tests": 35,
+    "verified": [
+      "generated beams, rests, clefs, voice tags",
+      "written crossbar tie segments",
+      "actual tuplet ratios and SVG",
+      "actual selected later-bar SVG",
+      "Listen WAV",
+      "software MIDI grading and live view"
+    ]
+  },
+  "godot": {
+    "run": "https://github.com/tpepels/piano_teacher/actions/runs/41439160029",
+    "passed": true,
+    "failures": 0,
+    "engine": "Godot 4.7.2 headless",
+    "real_python_generated_midi_passage_model": true,
+    "verified": [
+      "semantic score load",
+      "source note identity",
+      "local beat and bar grid",
+      "fixed-playhead motion",
+      "pause",
+      "resume",
+      "retry"
+    ]
+  },
+  "not_verified": [
+    "complete graphical application",
+    "hardware MIDI keyboard",
+    "physical audio transport",
+    "selection during an in-process teaching session",
+    "passages crossing sustained-note boundaries",
+    "real-world long-corpus score visual quality",
+    "product strategy picker and activation"
+  ]
+}
