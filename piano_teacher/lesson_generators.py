@@ -293,7 +293,10 @@ class FukudaMidiLessonGenerator:
     name: str = "fukuda-midi"
     consolidate: bool = False
 
-    def with_mistakes(self, mistakes: frozenset[str]) -> "FukudaMidiLessonGenerator":
+    def with_mistakes(
+        self, mistakes: frozenset[str],
+        definition: LessonPlanDefinition,
+    ) -> "FukudaMidiLessonGenerator":
         from dataclasses import replace
         return replace(self, mistakes=mistakes) if mistakes != self.mistakes else self
 
@@ -405,18 +408,38 @@ class CodaFukudaMidiLessonGenerator:
     """
     mistakes: frozenset[str] | None = None
     name: str = "coda-fukuda-midi"
+    core: LessonPlanDefinition | None = None
 
-    def with_mistakes(self, mistakes: frozenset[str]) -> "CodaFukudaMidiLessonGenerator":
+    def with_mistakes(
+        self, mistakes: frozenset[str], definition: LessonPlanDefinition,
+    ) -> "CodaFukudaMidiLessonGenerator":
         from dataclasses import replace
-        return replace(self, mistakes=mistakes) if mistakes != self.mistakes else self
+        if mistakes == self.mistakes:
+            return self
+        core = self.core
+        if core is None:
+            # Reuse already compiled whole-piece Coda and Fukuda stages.
+            # Error-focus exercises are separate; omit them when reconstructing
+            # the immutable core. Nothing expensive is recomputed on MIDI grading.
+            whole = tuple(ex for ex in definition.exercises
+                          if ex.kind == "perform" or ex.key.startswith("coda:excerpt:"))
+            ids = {ex.key for ex in whole}
+            stages = {key: val for key, val in definition.stage_sequences.items()
+                      if key[0] in ids}
+            core = LessonPlanDefinition(
+                whole, stages, self.name, requires_unique_source_ids=True)
+        return replace(self, mistakes=mistakes, core=core)
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
-        primary = CodaLessonGenerator().generate(piece)
-        # A complete Fukuda score reduction is always offered, without
-        # restricting it to mistakes. Preserve Coda's whole-piece catalog.
-        full_reductions = FukudaMidiLessonGenerator().generate(piece)
-        combined = compose_lesson_definitions(
-            primary, full_reductions, name=self.name, merge_matching=True)
+        if self.core is None:
+            primary = CodaLessonGenerator().generate(piece)
+            # A complete Fukuda score reduction is always offered, without
+            # restricting it to mistakes. Preserve Coda's whole-piece catalog.
+            full_reductions = FukudaMidiLessonGenerator().generate(piece)
+            combined = compose_lesson_definitions(
+                primary, full_reductions, name=self.name, merge_matching=True)
+        else:
+            combined = self.core
         if self.mistakes:
             # New source-specific remedial sections are inserted before the
             # complete score, rather than replacing any existing Coda stages.

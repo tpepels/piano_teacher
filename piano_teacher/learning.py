@@ -155,10 +155,11 @@ class LearningPlan:
         update = getattr(self.lesson_generator, "with_mistakes", None)
         if not callable(update):
             return False
-        new_generator = update(ids)
+        new_generator = update(ids, self.lesson_definition)
         if new_generator is self.lesson_generator:
             return False
         previous = self.active_variant.level
+        previous_key = self.exercise.key
         previous_kind = self.exercise.kind
         previous_hand = self.hand
         definition = new_generator.generate(self.piece)
@@ -171,9 +172,12 @@ class LearningPlan:
         self._variants_cached = None
         self._lesson_steps_cache = None
         self._repeated_groups = None
-        self.variant_index = next(
-            (i for i, stage in enumerate(self.stages)
-             if stage.variant.level == previous), len(self.stages) - 1)
+        self.variant_index = (0 if (previous_kind == "learn" and
+                                  self.exercise.key != previous_key)
+                              else next(
+                                  (i for i, stage in enumerate(self.stages)
+                                   if stage.variant.level == previous),
+                                  len(self.stages) - 1))
         self.streak = self.failures = 0
         self.bpm = self._tempo_for_current_stage()
         return True
