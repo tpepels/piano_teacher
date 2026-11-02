@@ -60,7 +60,7 @@ def test_full_excerpt_source_identity_engraving_and_slowdown(name,factor,tmp_pat
         listening.cancel()
 
     expected=expected_note_seconds(stage.variant.phrase,tempo)
-    played=[PlayedNote(note.pitch,*expected[note.source_id])
+    played=[PlayedNote(note.pitch,*expected(note)[:2])
             for note in stage.variant.notes]
     assert evaluate(stage.variant.phrase,plan.hand,plan.bpm,played,
                     expected_seconds=expected).clean
