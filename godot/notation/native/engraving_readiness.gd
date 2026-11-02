@@ -20,9 +20,11 @@ static func missing(layout, glyphs, connector_geometry,
         var ids := PackedStringArray()
         for event in group.get("events",[]):
             ids.append(str(event.get("id","")))
-        if ids.is_empty() or not glyphs.has_tuplet("|".join(ids),
-                str(group.get("bracket","yes")) == "yes"):
-            return "Missing engraved Verovio tuplet: "+("|".join(ids))
+        var key: String = "|".join(ids)
+        if ids.is_empty() or not glyphs.tuplet_metadata.has(key):
+            return "Missing engraved Verovio tuplet: "+key
+        if str(group.get("bracket","yes")) == "yes" and not glyphs.has_tuplet(key,true):
+            return "Missing original Verovio tuplet bracket: "+key
     for leader_id in layout.chord_members:
         var event: Dictionary = {}
         for candidate in layout.chord_members[leader_id]:
