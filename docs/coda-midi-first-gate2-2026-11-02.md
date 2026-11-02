@@ -1,3 +1,13 @@
+> **Current piece-level integration (supersedes the temporary trial below):**
+> Coda is selected as the MIDI *piece's lesson-generation strategy*
+> in Settings, and its stages are generated within the normal complete
+> LearningPlan. The temporary `coda_try` / `coda_exit` controls and
+> separate trial fingerprint/session were deleted. Details:
+> [Coda MIDI piece-level lesson integration](coda-midi-piece-lesson-integration-2026-11-02.md).
+>
+> The historical research checkpoints below describe development status,
+> not the current UI.
+
 # Gate 2 — MIDI input first (2026-11-02)
 
 **Product input:** Standard MIDI files (`.mid`, `.midi`). Generated
@@ -193,62 +203,14 @@ Existing normal MIDI lesson behavior is not modified by these research
 functions. Source MusicXML reference-parity issue #42 remains separate.
 See active [MIDI-first issue #43](https://github.com/tpepels/piano_teacher/issues/43).
 
+## 2026-11-02 — piece-level teaching integration
 
-## 2026-11-02 — user-invokable Coda MIDI trial in the teaching session
+The temporary per-lesson Coda trial was replaced with a piece-selectable
+`coda-midi` strategy in Settings. The normal full-piece LearningPlan
+generates Coda voice, part, tempo and rhythmic exercise stages inside each
+selected source passage, ending at the original notes. Normal teaching,
+Listen, engraving, MIDI grading and course persistence own the resulting
+stages. See [the current implementation and use instructions](coda-midi-piece-lesson-integration-2026-11-02.md).
 
-The three MIDI-derived Coda exercise families are now available as
-**explicit opt-in controls** on the actual `Lesson` screen:
-
-- **Slowdown ×2** (written rhythmic slowdown and shared transformed timing)
-- **Dotted 3:1** (only an eligible contiguous source rhythmic group)
-- **Chord blocks** (two-beat eligible grouping)
-
-The new `coda_try`/`coda_exit` commands go through `main.gd`'s existing
-`/control` route, `ControlDispatcher` and the locked `PracticeEngine`
-entrypoint. `application/coda_trial.py` prepares the research
-`project_midi_passage` result for the **current source course passage**
-(up to eight measures), then builds a regular `LearningPlan` from the
-new, locally rebased immutable MIDI-derived `stage.piece`.
-
-The normal learning-plan owners now drive the exercise:
-`ScoreArtifacts` generates MIDI-derived notation, `ListenSession`
-renders the selected transformed MIDI, `PracticeEngine` provides
-transport/learning controls, and the ordinary software/hardware MIDI
-recorder and grader see the same transformed note attacks. There is
-no separate Coda playback/scroll or grading clock.
-
-Trial sessions use a new source-and-transformation-dependent fingerprint
-**distinct from the original piece**. Saved source mastery and tempo
-progress are not credited by trial performances. The exact original
-in-memory `LearningPlan` and fingerprint are restored by
-`coda_exit` (or discarded on loading a new MIDI file). Source audio
-and transport are stopped before a successful transition; a rejected
-trial never stops or replaces a currently selected lesson.
-
-The Lesson screen displays the three trial buttons and, while active,
-a `Return to original MIDI lesson` control. For MIDI-only passage
-selection, zero transformation (when no eligible pair exists),
-cross-boundary sustained notes, or unsupported source inputs, the
-command reports a clear error. Strategy preferences cannot be changed
-mid-trial; exit the trial first.
-
-### Bounded verification
-
-- Actual `PracticeEngine.control("coda_try")`, source fingerprint
-  separation, regular score selection, Listen route, software grading,
-  reset through `coda_exit`, new-score replacement:
-  `tests/test_coda_live_engine.py` in the short Coda suite,
-  [run 41440734124](https://github.com/tpepels/piano_teacher/actions/runs/41440734124), passed.
-- Genuine selected MIDI source isolation:
-  `tests/test_coda_live_trial.py`, same short research suite.
-- Real Lesson screen emits concrete Coda try/exit command payloads and
-  reflects busy/unloaded states: `tests/godot/coda_trial_controls.gd`
-  in [Godot startup suite 41440819810](https://github.com/tpepels/piano_teacher/actions/runs/41440819810), passed.
-- [Fast application contract suite 41440819793](https://github.com/tpepels/piano_teacher/actions/runs/41440819793), passed.
-
-**Still unverified:** physical MIDI keyboard, real time full native
-extension graphical application session, long real repertoire and
-sustained-note passage boundary handling. This is deliberately usable
-as a live experimental trial now, not a claim of physical-MIDI
-regression coverage. Historical original Coda MusicXML parity remains
-issue #42.
+Remaining: broader real-world MIDI recordings and complete physical-keyboard
+validation. This is available for manual in-app testing.
