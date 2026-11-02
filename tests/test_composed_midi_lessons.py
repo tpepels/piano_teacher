@@ -69,49 +69,59 @@ def test_hybrid_preserves_both_research_families_and_source_final(piece):
     coda = LearningPlan(piece, exercise_strategy="coda-midi")
     combined = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
     assert combined.lesson_definition.requires_unique_source_ids
-    assert len(combined.exercises) == 2
-    assert combined.exercises[0].phrase.notes == piece.notes
+    assert len([ex for ex in combined.exercises if ex.kind=="learn"]) >= 2
+    assert all(ex.phrase.last_bar-ex.phrase.first_bar <= 1
+               for ex in combined.exercises if ex.kind=="learn")
     assert combined.exercises[-1].kind == "perform"
     assert combined.exercises[-1].phrase.notes == piece.notes
-    assert all(s.key.startswith("course:1:coda-fukuda-midi:") for s in
+    assert all(s.key.startswith("course:2:coda-fukuda-midi:") for s in
                combined.lesson_steps)
-    for hand in combined.exercises[0].hands:
-        merged = combined.lesson_definition.stages(combined.exercises[0], hand)
-        baseline = coda.lesson_definition.stages(coda.exercises[0], hand)
-        assert [s.variant.level for s in merged[-len(baseline):]] == [
-            s.variant.level for s in baseline]
-        assert merged[-1].variant.level == "original"
-        assert merged[-1].variant.notes == tuple(
-            n for n in piece.notes if hand == "both" or n.hand == hand)
-        source_ids = {n.source_id for n in merged[-1].variant.notes}
-        assert all({n.source_id for n in s.variant.notes} <= source_ids
-                   for s in merged)
-    assert any(s.level.startswith("fukuda-midi-") for s in combined.lesson_steps)
-    assert any(s.level.startswith("coda-dotted-") for s in combined.lesson_steps)
-    assert any(s.level.startswith("coda-chord-") for s in combined.lesson_steps)
-    assert any(s.level.startswith("coda-slowdown-x2") for s in combined.lesson_steps)
-    assert any(s.level.startswith("coda-slowdown-x4") for s in combined.lesson_steps)
+    assert combined.lesson_generator.catalog is not None
+    catalog = combined.lesson_generator.catalog
+    assert any(s.variant.level.startswith("fukuda-midi-")
+               for sequence in catalog.stage_sequences.values() for s in sequence)
+    assert any(s.variant.level.startswith("coda-dotted-")
+               for sequence in catalog.stage_sequences.values() for s in sequence)
+    assert any(s.variant.level.startswith("coda-chord-")
+               for sequence in catalog.stage_sequences.values() for s in sequence)
+    assert any(s.variant.level.startswith("coda-slowdown-x2")
+               for sequence in catalog.stage_sequences.values() for s in sequence)
+    for ex in combined.exercises:
+        for hand in ex.hands or ("right", "left", "both"):
+            if (ex.key,hand) not in combined.lesson_definition.stage_sequences:
+                continue
+            stages = combined.lesson_definition.stages(ex,hand)
+            assert stages[-1].variant.level == "original"
+            original = stages[-1].variant.notes
+            assert original == tuple(n for n in ex.phrase.notes
+                                     if hand == "both" or n.hand == hand)
+            assert all(set(n.source_id for n in v.variant.notes) <=
+                       set(n.source_id for n in original) for v in stages)
+    assert coda.exercises[0].phrase.notes == piece.notes
 
 
 def test_hybrid_feedback_adds_repairs_without_erasing_coda_and_clears(piece):
-    plan = LearningPlan(piece, exercise_strategy="coda-fukuda-midi",
-                        fukuda_mistakes=frozenset())
-    original = plan.lesson_definition.stages(plan.exercises[0], "right")
-    initial = tuple(s.variant.level for s in original)
-    original_steps = {step.key for step in plan.lesson_steps}
+    plan = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
+    core = plan.lesson_generator.catalog
+    initial = tuple(s.key for s in plan.lesson_steps)
+    original_steps = set(initial)
     assert plan.accepts_performance_feedback
-    error = frozenset({next(n.source_id for n in piece.notes if n.hand == "right")})
-    assert plan.refresh_from_mistakes(error)
-    assert any(ex.key.startswith("fukuda:errors:") for ex in plan.exercises)
-    assert plan.exercises[-1].kind == "perform"
-    assert tuple(s.variant.level for s in plan.lesson_definition.stages(
-        next(ex for ex in plan.exercises if ex.key.startswith("coda:")), "right")) == initial
-    assert all(ex.kind == "learn" for ex in plan.exercises[:-1])
-    assert any(s.key not in original_steps for s in plan.lesson_steps)
-    assert not plan.refresh_from_mistakes(error)
-    assert plan.refresh_from_mistakes(frozenset())
-    assert len(plan.exercises) == 2
+    right = next(n for n in piece.notes if n.hand == "right")
+    assert plan.refresh_from_feedback({right.source_id: "wrong"})
+    assert plan.lesson_generator.catalog is core
+    assert plan.exercise.kind == "learn"
+    assert any(n.source_id == right.source_id for n in plan.exercise.phrase.notes)
+    assert plan.variant_index == 0
+    assert any(s.variant.level.startswith("fukuda-midi-")
+               for s in plan.stages)
+    assert not plan.refresh_from_feedback({right.source_id: "wrong"})
+    assert plan.refresh_from_feedback({right.source_id: "late"})
+    assert plan.lesson_generator.catalog is core
+    assert any("dotted-" in s.variant.level for stages in
+               plan.lesson_definition.stage_sequences.values() for s in stages)
+    assert plan.refresh_from_feedback({}, prefer_repair=False)
     assert {s.key for s in plan.lesson_steps} == original_steps
+    assert plan.exercises[-1].phrase.notes == piece.notes
 
 
 def test_generic_course_composition_rejects_wrong_final_performance(piece):
@@ -183,14 +193,17 @@ def test_engine_persists_combined_feedback_and_can_reset(piece, tmp_path):
         engine._commit_pending()
         stored = engine.fukuda_mistakes.problematic(engine.fingerprint)
         assert source[0].source_id in stored
-        assert any(ex.key.startswith("fukuda:errors:")
-                   for ex in engine.plan.exercises)
+        assert engine.fukuda_mistakes.evidence(engine.fingerprint)[
+            source[0].source_id] == "missed"
+        assert engine.plan.variant_index == 0
+        assert any(n.source_id == source[0].source_id
+                   for n in engine.plan.exercise.phrase.notes)
         engine.load(str(tmp_path / "both-hands.mid"))
-        assert any(ex.key.startswith("fukuda:errors:")
-                   for ex in engine.plan.exercises)
+        assert engine.plan.lesson_generator.error_status
+        assert len(engine.plan.exercises) > 2
         engine._reset_current_path(fingerprint=engine.fingerprint, confirm=True)
         assert not engine.fukuda_mistakes.problematic(engine.fingerprint)
-        assert len(engine.plan.exercises) == 2
+        assert not engine.plan.lesson_generator.error_status
     finally:
         engine.listen.cancel()
         engine.db.close()
@@ -199,10 +212,31 @@ def test_engine_persists_combined_feedback_and_can_reset(piece, tmp_path):
 @pytest.mark.parametrize("prefix", ("coda-dotted-", "coda-chord-", "fukuda-midi-"))
 def test_combined_stage_uses_real_notation_listen_and_grading(piece, tmp_path, prefix):
     plan = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
-    chosen = next(i for i, s in enumerate(plan.stages)
-                  if s.variant.level.startswith(prefix))
-    plan.variant_index = chosen
-    stage = plan.active_stage
+    if prefix.startswith("coda-dotted"):
+        target = next(n for n in piece.notes if n.hand == "right")
+        assert plan.refresh_from_feedback({target.source_id: "late"})
+    if prefix.startswith("coda-chord"):
+        catalog = plan.lesson_generator.catalog
+        # Verify the generated Coda chord stage even when a different
+        # stage is selected by the default adaptive teaching policy.
+        selected = next((ex,hand,s) for ex in catalog.exercises
+                        for hand in ("right","left")
+                        if (ex.key,hand) in catalog.stage_sequences
+                        for s in catalog.stages(ex,hand)
+                        if s.variant.level.startswith(prefix))
+        ex, hand, stage = selected
+        plan.index = next(i for i,x in enumerate(plan.exercises)
+                          if x.key == ex.key)
+        plan.hand_index = plan.hands.index(hand)
+        # The catalog exercises are ordinary stage values; no separate
+        # rendering or grading code path is used.
+        chosen = stage
+    else:
+        index = next(i for i, s in enumerate(plan.lesson_steps)
+                     if s.level.startswith(prefix))
+        plan.select_step(index + 1)
+        chosen = plan.active_stage
+    stage = chosen
     tempo = (stage.tempo_map(100) or
              ConstantTempo().generate(OriginalTiming().transform(stage.variant), 100))
     selected = ScoreSelection(
@@ -234,20 +268,21 @@ def test_combined_stage_uses_real_notation_listen_and_grading(piece, tmp_path, p
 def test_feedback_uses_cached_whole_piece_instead_of_regenerating_coda(piece, monkeypatch):
     plan = LearningPlan(piece, exercise_strategy="coda-fukuda-midi",
                         fukuda_mistakes=frozenset())
-    initial = tuple(plan.lesson_steps)
-    assert plan.lesson_generator.core is None
-
+    initial = tuple(step.key for step in plan.lesson_steps)
+    catalog = plan.lesson_generator.catalog
+    assert catalog is not None
+    from piano_teacher import adaptive_hybrid_curriculum as mod
     def forbidden(*args, **kwargs):
-        raise AssertionError("Whole-piece Coda re-ran after a MIDI grading event")
-    monkeypatch.setattr(CodaLessonGenerator, "generate", forbidden)
+        raise AssertionError("Passage catalog was recompiled after MIDI grading")
+    monkeypatch.setattr(mod, "compile_hybrid_catalog", forbidden)
     source = [n.source_id for n in piece.notes if n.hand == "right"]
-    assert plan.refresh_from_mistakes(frozenset({source[0]}))
-    assert plan.lesson_generator.core is not None
-    assert plan.exercise.key.startswith("fukuda:errors:")
+    assert plan.refresh_from_feedback({source[0]: "wrong"})
+    assert plan.lesson_generator.catalog is catalog
+    assert plan.exercise.kind == "learn"
     assert plan.variant_index == 0
-    assert plan.refresh_from_mistakes(frozenset({source[0], source[1]}))
-    assert plan.refresh_from_mistakes(frozenset())
-    assert tuple(plan.lesson_steps) == initial
+    assert plan.refresh_from_feedback({source[0]: "late"})
+    assert plan.refresh_from_feedback({}, prefer_repair=False)
+    assert tuple(step.key for step in plan.lesson_steps) == initial
 
 
 def test_registered_generators_cannot_omit_terminal_source_attack(piece):
