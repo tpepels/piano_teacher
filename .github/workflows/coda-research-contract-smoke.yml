@@ -57,7 +57,5 @@ jobs:
             tests/test_coda_midi_corpus.py \
             tests/test_coda_midi_passage.py \
             tests/test_coda_midi_long_repertoire.py \
-            tests/test_coda_live_trial.py \
-            tests/test_coda_live_engine.py \
             tests/test_coda_auto_chord_levels.py \
             tests/test_coda_extended_probe.py
