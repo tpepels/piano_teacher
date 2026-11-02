@@ -255,17 +255,6 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
             hand_step, str(parsed.get("hand", "left")).to_upper(),
             int(parsed.get("first_bar", 1)), int(parsed.get("last_bar", 8))]
     if not bool(parsed.get("warmup", false)):
-        # Always identify which actual generator and transformed stage the
-        # student is practising. A familiar-looking original score should
-        # never be presented as a novel Fukuda or Coda simplification.
-        var family: String = str(parsed.get("stage_family", ""))
-        var transformation: String = str(parsed.get("stage_label", ""))
-        var change: String = str(parsed.get("stage_change", ""))
-        if not family.is_empty() and not transformation.is_empty():
-            passage_text += " · %s: %s" % [family, transformation]
-            if not change.is_empty() and change != "unchanged source":
-                passage_text += " (%s)" % change
-        passage_label.tooltip_text = passage_text
         var chosen_bar: int = int(parsed.get("selected_start_bar", 1))
         if chosen_bar > int(parsed.get("first_bar", 1)):
             passage_text += " · Start at measure %d" % chosen_bar
@@ -457,6 +446,25 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
             instruction_text = "Tempo %d → %d BPM · retry measures %d–%d" % [
                 previous_tempo, new_tempo, int(notice.get("first_bar", 1)),
                 int(notice.get("last_bar", 1))]
+    if not bool(parsed.get("warmup", false)):
+        # Assemble provenance only after playback/review has selected the
+        # current-measure caption, so the real exercise stays identified
+        # during Play, Pause, Listen and source-note feedback.
+        var profile: String = str(parsed.get("exercise_strategy", ""))
+        var course: String = {
+            "coda-fukuda-midi":"Coda + Fukuda",
+            "coda-midi":"Coda", "fukuda-midi":"Fukuda"
+        }.get(profile, "")
+        if not course.is_empty():
+            passage_text = course + " · " + passage_text
+        var family: String = str(parsed.get("stage_family", ""))
+        var transformation: String = str(parsed.get("stage_label", ""))
+        var change: String = str(parsed.get("stage_change", ""))
+        if not family.is_empty() and not transformation.is_empty():
+            passage_text += " · %s: %s" % [family, transformation]
+            if not change.is_empty() and change != "unchanged source":
+                passage_text += " (%s)" % change
+        passage_label.tooltip_text = passage_text
     passage_label.text = passage_text
     progress_label.text = progress_text
     lesson_info_label.text = instruction_text
