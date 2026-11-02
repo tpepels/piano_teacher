@@ -68,3 +68,28 @@ def test_rejects_duration_with_unbacked_midi_tick():
     phrase=replace(_phrase(piece),notes=tuple(notes))
     with pytest.raises(ValueError,match="original PPQ"):
         midi_coda_quantization(piece,phrase)
+
+
+def test_compact_grid_preserves_source_ticks_without_large_ppq_matrix():
+    from piano_teacher.research.coda_reference_matrix import score_voice_matrices
+    from piano_teacher.research.coda_matrix import MatrixScore
+    piece=load_midi(ROOT/"midi_four_four.mid")
+    phrase=_phrase(piece)
+    raw=midi_coda_quantization(piece,phrase)
+    compact=midi_coda_quantization(piece,phrase,compact=True)
+    assert compact<raw
+    assert compact>=1
+    assert midi_coda_quantization(piece,phrase,compact=True,dotted=True)==compact*2
+    score=MatrixScore.from_phrase(phrase,boundaries=piece.bar_boundaries)
+    matrices=score_voice_matrices(score,quantization=compact)
+    assert sum(len(m.owners) for m in matrices)==len(piece.notes)
+
+
+def test_compact_grid_preserves_unusual_ppq_when_required():
+    piece=load_midi(ROOT/"midi_raw_ppq997.mid")
+    phrase=_phrase(piece)
+    grid=midi_coda_quantization(piece,phrase,compact=True)
+    assert piece.midi_ticks_per_beat % grid == 0
+    for note in piece.notes:
+        assert note.start*grid==pytest.approx(round(note.start*grid),abs=1e-7)
+        assert note.end*grid==pytest.approx(round(note.end*grid),abs=1e-7)
