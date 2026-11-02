@@ -162,3 +162,85 @@ Optional offline diagnostic for an independently recorded MIDI take:
 
 These gaps keep the phase open; a working subset of transformations is
 not a full experimental reproduction certificate.
+
+
+## Phase 4 completion audit (2026-11-02)
+
+### Source-level comparison with Fukuda et al. SMC 2015
+
+The published paper specifies rules in **§3.4.1–§3.4.3**, illustrated
+in Figures 4–6. Those rules can be verified as *behavioral
+invariants*; the publication does not provide a machine-readable
+source/target note-event pair for any figure, nor numeric values for
+the fast-note simplification threshold. We therefore cannot honestly
+claim exact pitch-by-pitch reproduction of Figures 4–8.
+
+| Publication rule | MIDI implementation | Evidence | Remaining paper discrepancy |
+|---|---|---|---|
+| §3.4.1 / Figure 4 | Deleting chord interior pitches while preserving lowest/bass and highest/melody | Unit and full-score regression pass | Author does not specify which interior pitches must be removed when multiple remain |
+| §3.4.2 / Figure 5 | Thin notes in fast consecutive voice with 0.21s configurable threshold, while protecting local melody peaks | Unit/whole-score and full corpus pass | Paper does not publish the threshold; melody protection is an additional precaution, so exact figure output is unproved |
+| §3.4.3 / Figure 6a | Remove an octave-displaced returning leap note | Unit and real MIDI variants pass | Figure's precise event data are not available |
+| §3.4.3 / Figure 6b | Simplify neighboring chord/fast notes around a one-way leap, never unrelated remote material | Local-neighborhood regression and all MIDI corpus pass | Exact neighboring-note selection is not numerically specified |
+| §3.2–3.3 | Chroma cosine DTW and MIDI note-specific missed/wrong/extra/timing detection; no acoustic octave suppression | Explicit expressive-performance and octave-error tests | Acoustic CQT/NMF and piano-spectral harmonic errors are outside MIDI-only product scope |
+| §5 optimization | Windowed DTW on long recordings, with bounded-memory predecessor reconstruction | Long aligned-performance regression | This is an optimization suggested by the paper, not an original provided reference implementation |
+
+The paper's Figure 7 and Figure 8 experiments use excerpts of
+*Grande valse brillante*, Op. 18, and *Étude*, Op. 10 No. 12,
+respectively. Without the original example score-note data,
+performance alignment and author reduction outputs, source-based
+exact match certification is impossible. No replacement fixtures are
+presented as if they were the author's ground truth.
+
+### Full packaged MIDI corpus and native GUI checks
+
+All **16 independent MIDI fixtures** and all **17 real MIDI pieces
+shipped in `midi/`** are included, including long and polyphonic
+repertoire and mixed meters.
+
+- [Fukuda complete-corpus CI 41470556064](https://github.com/tpepels/piano_teacher/actions/runs/41470556064):
+  **33/33 pieces passed**, covering **38,477 original MIDI note
+  attacks and 234 generated exercise stages**.
+- A machine-readable per-score JSON report is retained by CI,
+  including source file SHA-256, note counts, focus-section counts,
+  generated variants and runtime. The audit fails closed on a missing
+  source note, invalid stage index, note crossing a practice boundary,
+  omitted piece, or timeout.
+- [Godot 4.7.2 native GUI check 41470957916](https://github.com/tpepels/piano_teacher/actions/runs/41470957916):
+  headless Settings strategy selection, unlocked ordinary timing/tempo
+  choices, the stage hierarchy and normal Learn/Practice/Perform
+  controls all passed.
+- [Phase 4 bounded tests 41471280742](https://github.com/tpepels/piano_teacher/actions/runs/41471280742):
+  **37 passed** including long-recorded-MIDI windowed DTW.
+- [Application contracts 41471280599](https://github.com/tpepels/piano_teacher/actions/runs/41471280599):
+  **398 passed, 6 skipped**.
+
+**Native physical MIDI:** still not tested from the connected
+development environment. The Godot headless test checks UI
+construction and strategy visibility, **not** actual Bluetooth
+keyboard latency, grading fidelity or ergonomics.
+
+### Explicit decision about free-tempo live following
+
+Fukuda §3.2 aligns **recorded** user performances to the score. It
+does not prescribe a live transport that follows the player's tempo.
+The MIDI-native adaptation implements offline expressive recorded
+MIDI DTW, including a bounded-memory windowed algorithm suitable
+for long recordings. During guided practice, the existing sole
+musical clock remains authoritative for visual movement, Listen
+and MIDI grading. Adding a competing mutable live clock would be
+an unsupported new product feature and violate the agreed shared
+transport timeline. No separate live DTW clock is installed.
+
+### Formal completion status
+
+**Implementation and software corpus verification:** complete for
+the described MIDI-only three-rule adaptation, recorded-performance
+DTW and live practice-session integration.
+
+**Exact author figure parity:** unproven because published paper
+provides no machine-readable note-level reference outputs or
+sufficient numerical rules. **Physical keyboard verification:**
+unperformed and remains a concrete acceptance blocker. The phase
+must remain marked open under the requirement that every agreed
+acceptance criterion actually pass. These facts cannot be converted
+into "passed" by more synthetic tests.
