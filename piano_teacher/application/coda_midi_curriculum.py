@@ -1,10 +1,9 @@
-"""MIDI-first Coda exercise stages for the existing whole-piece LearningPlan.
+"""Original-Coda excerpt catalog adapted to the MIDI-first teaching engine.
 
-Coda is chosen once as a *piece-level lesson-generation strategy*. The
-existing curriculum selects its source passages and hands; this module
-generates progressive per-passage exercises using the actual MIDI attacks.
-All stages are ordinary ExerciseStage objects and share the standard score,
-Listen, assessment, transport and persistence path. No temporary lesson.
+The pinned backend returns categorized exercise alternatives for a
+caller-selected excerpt; it does not define curriculum order. These
+normal ExerciseStages use an app-defined progression with the standard
+notation, Listen and MIDI assessment owners. No shadow teaching session.
 """
 from __future__ import annotations
 
@@ -18,18 +17,26 @@ from ..research.coda_midi_grid import midi_coda_quantization
 from ..research.coda_reference_exercises import (
     CodaReferenceChordification, CodaReferenceDotted, original_coda_levels,
 )
+from ..research.coda_author_catalog import (
+    AUTHOR_SLOWDOWN_FACTORS, catalog_requests,
+)
 
 
 @dataclass(frozen=True)
 class CodaHalfSpeed:
-    """Play the written source at half the active rung's BPM."""
-    name: str = "coda-half-speed"
+    """MIDI playback adapter for the author's x2/x4 written slowdowns.
+
+    Equivalent sounding duration at constant BPM; the original backend
+    lengthens written notation instead. This difference is intentional.
+    """
+    factor: int = 2
+    name: str = "coda-slowdown-tempo"
 
     def generate(self, plan, bpm: float) -> TempoMap:
-        if bpm <= 0:
-            raise ValueError("Coda tempo must be positive")
+        if bpm <= 0 or self.factor not in AUTHOR_SLOWDOWN_FACTORS:
+            raise ValueError("Coda slowdown factor must be 2 or 4 and BPM positive")
         return TempoMap(self.name, (
-            TempoSegment(0.0, plan.duration_beats, float(bpm) / 2.0),
+            TempoSegment(0.0, plan.duration_beats, float(bpm)/self.factor),
         ))
 
 
@@ -61,86 +68,115 @@ def midi_coda_stages(
     piece: Piece, variants: tuple[ExerciseVariant, ...], *,
     kind: str,
 ) -> tuple[ExerciseStage, ...]:
-    """Make one ordered Coda progression for one original-piece passage/hand.
+    """Adapt all original excerpt-category requests into ordered app steps.
 
-    Unsupported groupings are omitted, while a complete original source
-    stage always finishes the progression. MIDI scores never need
-    authored MusicXML: the existing renderer generates written notation.
+    The original Coda backend returns an UNORDERED catalog selected by a
+    caller's measure range. Our teaching order is intentionally an app-only
+    policy: voice → dotted/chord alternatives → slowdown → part → score.
+    All requests for the full imported MIDI excerpt are considered, and
+    unrepresentable/no-op variants are skipped without claiming parity.
     """
-    if piece.source_format!="midi" or piece.source_musicxml:
-        raise ValueError("Coda MIDI lessons require an imported MIDI piece")
+    if piece.source_format != "midi" or piece.source_musicxml:
+        raise ValueError("Coda exercises need imported MIDI notes")
     if not variants:
         return ()
-    if kind!="learn":
-        return tuple(ExerciseStage(v) for v in variants)
     original=variants[-1]
     if original.level!="original":
-        raise ValueError("Coda curriculum must finish with the source")
-    stages=[ExerciseStage(v) for v in variants[:-1]]
-    boundaries=tuple(
-        beat for beat in piece.bar_boundaries
-        if original.phrase.start-1e-7<=beat<=original.phrase.end+1e-7)
-    if (boundaries and
-            abs(boundaries[0]-original.phrase.start)<=1e-7 and
-            abs(boundaries[-1]-original.phrase.end)<=1e-7):
-        # Coda's actual hierarchy starts with isolated source voices,
-        # then a part, then the complete score; all attacks remain tied
-        # to the imported MIDI. The standard hand route already selects
-        # parts, so an identical full-part stage would be redundant.
+        raise ValueError("Coda lesson must end with original MIDI notes")
+    if kind!="learn":
+        return (ExerciseStage(original),)
+
+    # The original's Score Level is the unchanged whole excerpt. Mixed
+    # hands must not be retimed as a made-up cross-voice Coda operation.
+    hands={n.hand for n in original.notes}
+    if len(hands)>1:
+        return (ExerciseStage(original),)
+
+    phrase=original.phrase
+    boundaries=tuple(t for t in piece.bar_boundaries
+                     if phrase.start-1e-7<=t<=phrase.end+1e-7)
+    exact_grid=(len(boundaries)>1 and
+                abs(boundaries[0]-phrase.start)<=1e-7 and
+                abs(boundaries[-1]-phrase.end)<=1e-7)
+    # The Score/Part/Voice categories are source inventory. An author
+    # voice is a subset of one hand. The final full part is mandatory.
+    voices=(original,)
+    if exact_grid:
         try:
             hierarchy=original_coda_levels(
                 original,boundaries=boundaries,source_musicxml="")
-            used={tuple(n.source_id for n in original.notes)}
-            for level in hierarchy:
-                if level.level not in ("voice","part"):
-                    continue
-                key=tuple(n.source_id for n in level.variant.notes)
-                if not key or key in used:
-                    continue
-                used.add(key)
-                stages.append(ExerciseStage(level.variant))
+            candidates=tuple(item.variant for item in hierarchy
+                             if item.level=="voice")
+            if candidates:
+                unique={}
+                for candidate in candidates:
+                    ids=tuple(n.source_id for n in candidate.notes)
+                    unique.setdefault(ids,candidate)
+                voices=tuple(unique.values())
         except ValueError:
-            # Unsupported binary-matrix polyphony must not damage the
-            # full source or suppress the safely playable original.
             pass
-    stages.append(ExerciseStage(
-        ExerciseVariant("coda-slowdown-x2",original.phrase,
-                        original.source_indices),
-        tempo_policy=CodaHalfSpeed()))
-    if (not boundaries or
-            abs(boundaries[0]-original.phrase.start)>1e-7 or
-            abs(boundaries[-1]-original.phrase.end)>1e-7):
-        # No representation-preserving rhythm operation exists without
-        # exact original measure boundaries. Slowdown and original stay.
-        stages.append(ExerciseStage(original))
-        return tuple(stages)
-    # A normal focus/bridge can have notes sustained beyond its ending;
-    # never clip these notes or use an inexact source quantization.
-    try:
-        q=midi_coda_quantization(piece,original.phrase,compact=True)
-        for name,transform in (
-            ("coda-chord-blocks",
-             lambda: CodaReferenceChordification(2*q).transform(
-                 original,boundaries=boundaries,quantization=q,
-                 source_musicxml="")),
-            ("coda-dotted-long-short",
-             lambda: CodaReferenceDotted(True).transform(
-                 original,boundaries=boundaries,quantization=2*q,
-                 source_musicxml="")),
-            ("coda-dotted-short-long",
-             lambda: CodaReferenceDotted(False).transform(
-                 original,boundaries=boundaries,quantization=2*q,
-                 source_musicxml="")),
-        ):
-            try:
-                candidate=_retimed(original,transform().timing,name)
-                if candidate is not None:
-                    stages.append(candidate)
-            except ValueError:
-                # No corresponding exercise for this particular passage:
-                # do not change the original source or claim a match.
-                continue
-    except ValueError:
-        pass
-    stages.append(ExerciseStage(original))
+
+    stages=[]
+    used_levels=set()
+    def append(stage: ExerciseStage):
+        if stage.variant.level in used_levels:
+            raise ValueError("Duplicate Coda exercise level")
+        used_levels.add(stage.variant.level)
+        stages.append(stage)
+
+    quantization=None
+    if exact_grid:
+        try:
+            quantization=midi_coda_quantization(
+                piece,phrase,compact=True)
+        except ValueError:
+            pass
+    first_meter=next(
+        ((n,d) for t,n,d in piece.time_signatures
+         if t<=phrase.start+1e-7),(4,4))
+    numerator,denominator=first_meter
+
+    # Source authors generated per VOICE: dotted x2, ALL automatic
+    # chordification widths, and slowdown x2 and x4. A MIDI source has no
+    # authored MusicXML to preserve, so timing safety guards remain.
+    for voice_index,voice in enumerate(voices):
+        suffix=(f"-voice-{voice_index+1}" if len(voices)>1 else "")
+        if voice.notes!=original.notes:
+            append(ExerciseStage(ExerciseVariant(
+                "coda-voice-original"+suffix,voice.phrase,
+                voice.source_indices)))
+        if quantization is not None:
+            requests=catalog_requests(quantization,numerator,denominator)
+            for req in requests:
+                try:
+                    if req.category=="Voice Level: Dotted":
+                        transformed=CodaReferenceDotted(
+                            req.parameter==(1.5,0.5)).transform(
+                            voice,boundaries=boundaries,
+                            quantization=quantization*2,source_musicxml="")
+                        name="coda-"+req.variant+suffix
+                    elif req.category=="Voice Level: Chordified":
+                        if not isinstance(req.parameter,int) or req.parameter<=0:
+                            continue
+                        transformed=CodaReferenceChordification(
+                            req.parameter).transform(
+                            voice,boundaries=boundaries,
+                            quantization=quantization,source_musicxml="")
+                        name="coda-"+req.variant+suffix
+                    else:
+                        continue
+                    new=_retimed(voice,transformed.timing,name)
+                    if new is not None:
+                        append(new)
+                except ValueError:
+                    # Original may yield None, or our safety guard may
+                    # reject its output. Never silently invent note timing.
+                    continue
+        for factor in AUTHOR_SLOWDOWN_FACTORS:
+            append(ExerciseStage(
+                ExerciseVariant(
+                    f"coda-slowdown-x{factor}"+suffix,voice.phrase,
+                    voice.source_indices),
+                tempo_policy=CodaHalfSpeed(factor=factor)))
+    append(ExerciseStage(original))
     return tuple(stages)
