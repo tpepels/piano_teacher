@@ -1,127 +1,117 @@
-# Coda MIDI — whole-piece lesson-generator architecture (2026-11-02)
+# Coda MIDI: original excerpt catalog and teaching adapter
 
-## Architecture
+**Updated 2026-11-02 — pinned source verified.**
 
-**Input:** one imported MIDI `Piece` containing original source note
-identities, timing, hands, tempo context, and measure boundaries.
+## What Coda actually implements
+
+The original author backend
+[`annieetang/coda_backend@a4eb85df`](https://github.com/annieetang/coda_backend/tree/a4eb85dfc2bd418818ca9ff775c0a11ccccb3530)
+does **not** choose a sequence of practice passages or progression levels.
+
+- [`api/endpoints.py` `/generate`](https://github.com/annieetang/coda_backend/blob/a4eb85dfc2bd418818ca9ff775c0a11ccccb3530/api/endpoints.py#L215-L240):
+  accepts `filename`, `start_measure`, `end_measure`. It passes the
+  selected excerpt to `get_all_exercises`, filters missing output and
+  returns a category catalog.
+- [`music/exercise.py`](https://github.com/annieetang/coda_backend/blob/a4eb85dfc2bd418818ca9ff775c0a11ccccb3530/music/exercise.py#L16-L48):
+  returns the original Score, Part, Voice plus dotted, chordified and
+  slowed-down voice exercises.
+- [`ExerciseLine.generate_exercises`](https://github.com/annieetang/coda_backend/blob/a4eb85dfc2bd418818ca9ff775c0a11ccccb3530/music/exercise.py#L230-L263):
+  requests **both** dotted patterns (3:1, 1:3), **all** source-defined
+  automatic chord widths, and slowed-down factors **2 and 4**.
+- [Coda frontend](https://github.com/annieetang/coda_app/blob/main/frontend/script.js):
+  reads selected start/end measure controls, calls `/generate` and
+  presents categorized cards for a user to choose. It has no automatic
+  teaching-path algorithm.
+
+**Verification:** The bounded
+[pinned-source contract workflow 41450764682](https://github.com/tpepels/piano_teacher/actions/runs/41450764682)
+checks the real source AST and source-defined catalog parameters
+against our independent `coda_author_catalog.py`, without mistaking
+the *absence* of an upstream lesson planner for a missing feature.
+
+## Current MIDI application
 
 ```text
-                     complete MIDI Piece
-                             │
-          select LessonGenerator for entire piece
-                 ┌───────────┴───────────┐
-                 │                       │
-     HeuristicLessonGenerator    CodaLessonGenerator
-     original focus/bridges      whole-piece note/meter analysis
-     + original progression      + independent section selection
-                 └───────────┬───────────┘
-                             │
+                    MIDI source Piece
+                           │
+                CodaLessonGenerator
+           caller-selected measure excerpt
+             (default = entire piece)
+                           │
+                 Coda category catalog
+         Score / Part / Voice / Dotted /
+             Chordified / Slowed Down
+                           │
+               APPLICATION teaching order
+         (source voice, eligible alternatives,
+          slowdown x2/x4, source part,
+          terminal original score)
+                           │
                  LessonPlanDefinition
-                 ├─ ordered Exercise sources
-                 └─ all (exercise,hand) → ExerciseStage sequences
-                             │
-                         LearningPlan
-                   (navigation, tempo, mastery,
-                    feedback and saved progress)
-                             │
-                 existing Score / Listen / MIDI grading
+                           │
+                       LearningPlan
+         ordinary notation / Listen / grading
 ```
 
-`LessonGenerator.generate(piece) -> LessonPlanDefinition` is the
-whole-piece boundary. It receives the full original MIDI piece **once**;
-neither generator receives preselected passages from `LearningPlan`.
+- The **whole MIDI piece** is the default excerpt; no heuristic
+  density-based 2–8-measure segmentation is invoked by Coda.
+- `CodaLessonGenerator(first_measure=N,last_measure=M)` supports
+  selecting an explicit authored MIDI measure range programmatically.
+  This option is **not yet an additional Godot UI control**.
+- The builder checks note identities and source boundaries; if a held
+  note crosses an explicitly selected excerpt endpoint, it rejects
+  rather than inventing a new attack or clipping a release.
+- `piano_teacher/research/coda_author_catalog.py` encodes all six
+  source categories, the two dotted patterns, the automatic chord-level
+  formula (including the author's potentially invalid zero width) and
+  both slowdown factors. This is a **request schema**, not proof that
+  every operation returns a playable exercise.
+- `application/coda_midi_curriculum.py` generates voice-related stages
+  where MIDI timing can be represented safely, attempts every automatic
+  chord width and both dotted patterns, and adds x2 and x4 slowdown
+  playback stages. Unchanged or unsupported variants are omitted,
+  without copying known upstream bugs. The `both` hand route retains
+  the complete original Score Level.
+- **The order in which our application presents these alternatives is
+  explicitly our own teaching policy.** Coda's published backend has
+  no corresponding automatic order to reproduce.
+- A terminal normal-performance stage is also our teaching policy.
+  Our MIDI piece, source identities, default practice controls,
+  notation/Listen/feedback/grading and course progression remain
+  owned by the normal `LearningPlan`.
+- New catalog-shaped Coda course keys use **version 5**, preventing
+  previous passage-first/v4 Coda mastery being credited to a different
+  exercise arrangement. Existing non-Coda version-3 keys are unchanged.
 
-The definition is constructed and validated before teaching starts. It owns
-the ordered source passages and every hand-specific executable stage.
-Its stage mapping is read-only, and the original source notes must appear
-as the final stage for each playable hand/exercise. Coda-produced stages
-must also have unique, source-backed MIDI attack identities.
+## Parity and limits
 
-## Implementation
+| Property | Status |
+|---|---|
+| Published author endpoint's caller-selected score excerpt model | Source-verified |
+| Original six Score/Part/Voice/Dotted/Chordified/Slowed Down category labels | Source-verified |
+| Dotted patterns, chord-width formula, slowdown parameter set | Source-verified |
+| Full MIDI piece as default input excerpt | Implemented as app default |
+| An author's automatic lesson/section selection policy | **Does not exist** |
+| App-generated teaching order | **Application-specific**, not upstream parity |
+| MusicXML-written note-level output parity for every variant | **Not claimed**; prior strict research subset only |
+| MIDI chord width derived from MusicXML notation shortest duration | **Different:** MIDI PPQ-exact grid used |
+| Slowdown written notation output | **Different:** equivalent constant slower BPM for MIDI |
+| Real device audio/MIDI and full graphical Godot session | Not verified in this change |
 
-- `piano_teacher/lesson_generators.py`: `LessonGenerator` protocol,
-  `LessonPlanDefinition` contract, `HeuristicLessonGenerator` and
-  `CodaLessonGenerator`. Unlike the previous design, this module
-  constructs **complete** lesson plans and does not mutate a teaching session.
-- `piano_teacher/lesson_source_planner.py`: previous source-preserving
-  heuristic passage selection, bridge construction and legacy note subsets.
-  No new default behavior for existing heuristic strategies.
-- `piano_teacher/learning.py`: `LearningPlan` now **consumes** the
-  generated definition. It no longer chooses Coda passage boundaries or
-  creates stages when a student navigates to another step. The generator
-  can also be injected for other research strategies and comparison.
-- `piano_teacher/application/coda_midi_curriculum.py`: Coda
-  Score/Part/Voice note isolation (where representable), a genuine
-  half-speed tempo stage, eligible chord blocks and alternating dotted
-  rhythms, and the original MIDI notes as the final stage.
-- `piano_teacher/exercise_strategies.py`: the selected `coda-midi`
-  setting identifies the piece-level generator, retaining the same
-  Settings menu and saved strategy profile.
-- `piano_teacher/server.py` and Godot practice screens continue to
-  use the existing `LearningPlan`. There is **no separate Coda
-  session**, special transport, Listen backend or grading implementation.
+## Bounded tests
 
-### Coda passage selection
+- [Source-AST verification 41450764682](https://github.com/tpepels/piano_teacher/actions/runs/41450764682):
+  passes at the pinned original SHA and retains a machine-readable
+  artifact.
+- [Coda research and whole-excerpt tests 41450885983](https://github.com/tpepels/piano_teacher/actions/runs/41450885983):
+  **203 passed, 1 skipped**.
+- [Application regression 41450885883](https://github.com/tpepels/piano_teacher/actions/runs/41450885883):
+  **398 passed, 6 skipped**.
 
-`CodaLessonGenerator` examines the complete piece's **global attack
-density, bar grid and meter changes** before choosing musical practice
-sections. It uses a global density-derived target, with a maximum of
-eight source measures per learning section and shorter sections when the
-material is denser. It includes one terminal **complete-piece**
-performance containing every original note and the full measure span.
-
-This is currently a **bounded, independent MIDI-first planning policy**,
-not a claim that Tang's original MusicXML Coda backend prescribed this
-segmentation. The optional Coda rhythmic transformations still operate on
-the selected source sections, but **those sections now belong to Coda's
-whole-piece generator**. It can later choose entirely different exercise
-lengths, ordering, repetitions or transformations without changing
-`LearningPlan` or teaching transport.
-
-### Compatibility and persistence
-
-- Other strategies retain the existing heuristic section generator and
-  original **course version 3** keys, preserving saved progress.
-- The new whole-piece Coda generator uses **course version 4** keys to
-  prevent stale progress from the previous passage-first Coda implementation
-  from being credited incorrectly.
-- Original `Piece` and MIDI note-on/off identities remain unchanged.
-- Built-in warmups preserve their original hand tabs, including absent
-  hand material.
-- Coda is selected under **Settings → Exercise strategy**. The prior
-  per-lesson `coda_try` / `coda_exit` controls remain removed.
-- The normal lesson step selection, right/left/both hands, tempo ladder,
-  recovery, Listen, engraving and MIDI grading consume the plan.
-
-## Verification
-
-`tests/test_lesson_generator_architecture.py` explicitly checks:
-- Coda never calls `build_exercises` or accepts heuristic-preselected
-  passages.
-- Both generators receive the **entire MIDI piece**.
-- A custom generator can supply an entirely different lesson sequence.
-- The definition is immutable; navigation does not regenerate it.
-- Existing heuristic passage boundaries and stage-key profile remain.
-- Malformed definitions with missing hands or a missing original final
-  stage fail before the session starts.
-- A longer MIDI recording alternating sparse and dense regions generates
-  **different practice-section lengths** from global piece analysis,
-  covers every original note exactly once across learning sections, and
-  finishes with the complete performance.
-
-`tests/test_coda_piece_curriculum.py` also checks the normal engine,
-score identity, Coda slowdown Listen and grader, strategy switching,
-and built-in warmup preservation.
-
-- [Fast application CI](https://github.com/tpepels/piano_teacher/actions/runs/41447685719): **398 passed, 6 skipped** (baseline prior to the longer new test).
-- [Bounded Coda research CI](https://github.com/tpepels/piano_teacher/actions/runs/41447685621): **198 passed, 1 skipped** (baseline prior to the longer new test).
-- Subsequent change-specific bounded runs must pass before the latest
-  implementation should be considered checked.
-
-**Not yet verified:** graphical native Godot + physical MIDI input on the
-user's computer, exhaustive real repertoire, correctness of inferred
-musical phrase boundaries, educational improvement, or exact original
-Coda backend lesson-selection parity.
+The earlier report's assertion that Coda had an independently reproduced
+global-density lesson segmentation algorithm was incorrect. It has been
+removed. Those tests now assert one entire-score excerpt and an explicit
+caller-selected measure range instead.
 
 ## Try
 
@@ -131,7 +121,11 @@ git pull --ff-only
 ./run.sh
 ```
 
-Open a MIDI piece, use **Settings → Exercise strategy → Coda · MIDI
-whole-piece lessons**, and open **Lesson**. All generated sections and
-stages belong to the same piece. The original complete piece remains
-the terminal performance step.
+Open a MIDI file and choose **Coda · MIDI whole-piece lessons** in
+Settings. The lesson path presents the generated alternatives for that
+complete piece, with the original score as its final performance.
+
+The original source has no automatic curriculum ordering. To develop a
+genuinely automatic pedagogical lesson selector, that must be designed
+and evaluated as a **separate product algorithm**, not called original
+Coda parity.

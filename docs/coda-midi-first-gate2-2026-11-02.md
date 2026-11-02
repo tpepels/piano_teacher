@@ -1,3 +1,11 @@
+> **Original Coda contract correction (2026-11-02):** The pinned
+> Coda backend requires a caller-selected start/end measure and returns
+> an unordered category catalog; it does not choose practice passages
+> or a teaching progression. The MIDI app now selects the *entire piece*
+> as the default excerpt and adapts the original categories, parameters
+> and safe transformations. The teaching order remains an explicit app
+> policy. [Source-verified report](coda-midi-piece-lesson-integration-2026-11-02.md).
+>
 > **Current piece-level integration (supersedes the temporary trial below):**
 > Coda is selected as the MIDI *piece's lesson-generation strategy*
 > in Settings, and its stages are generated within the normal complete
