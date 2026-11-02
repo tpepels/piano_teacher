@@ -2,8 +2,9 @@
 
 **Source:** `piano_teacher/adaptive_hybrid_curriculum.py` and the registered
 `CodaFukudaMidiLessonGenerator`. **Input:** imported MIDI only. **Selection:**
-Settings → Coda + Fukuda · MIDI combined lessons. The Coda-only strategy
-remains the default until human comparison supports a change.
+Settings → Coda + Fukuda · MIDI combined lessons. This is the
+new-install default; existing explicitly saved strategy selections remain
+unchanged. The selected strategy is displayed on the practice screen.
 
 ## End-to-end ownership
 
@@ -41,8 +42,12 @@ status evidence, without independently grading recorded notes.
 
 The selected stages remain manually navigable; the current lesson can
 also advance automatically through existing mastery transitions.
-The full author Coda research catalog remains accessible through
-`coda-midi`, whose whole-piece semantics were deliberately preserved.
+The complete original Coda author catalog is available through
+`CodaLessonGenerator()` in research code. The selectable desktop `coda-midi`
+strategy now uses bounded source-safe passages, filters duplicate/no-op
+stage performances, and retains a full original-piece performance finale.
+The `coda-fukuda-midi` product route selects measured source-note reductions
+and error-specific Coda transformations from its immutable research catalog.
 
 ## Verification
 
@@ -121,3 +126,38 @@ the same phrase is not presented as a remedy for an unrelated failed pitch.
 When no eligible local simplification exists, it falls back to Coda
 slowdown and the unchanged original score. The original candidate catalog
 is retained, including otherwise unused research variants.
+
+## Audited lesson-stage presentation and verification (2026-11-02)
+
+`lesson_stage_semantics.py` compares exact source IDs, pitches, onsets,
+releases and the effective tempo policy before making a stage teachable.
+An alias that merely renames original notes is excluded. Two differently
+named stages with identical source notes, timing and effective tempo policy
+are one teaching performance. A source reduction, actual written timing
+transformation or Coda x2/x4 slowdown remains a genuine exercise.
+Pitch-error Fukuda reductions retain source-ID locality, and without
+diagnosed mistakes the hybrid prioritizes the largest eligible meaningful
+simplification instead of arbitrary catalog insertion order.
+
+The public session snapshot, practice caption, step picker and lesson
+overview identify both the selected course and the active algorithm family,
+including the note-count or timing difference. For tempo-policy stages,
+`effective_bpm` comes from the same tempo map consumed by transport,
+Listen and grading. The practice UI distinguishes the BPM ladder setting
+from the effective playback BPM (e.g., selected 20, Coda x2 → 10).
+
+The native READY camera may preview the first distant attack of a sparse
+stage while stopped. The preview is a retained-ink translation only; starting
+Play uses the original clock, source note ID and grading timeline.
+
+The short local suite includes `tests/test_midi_stage_wiring.py` and the
+headless `tests/godot/idle_note_preview.gd` projection. To compare an actual
+MIDI import against the legacy and both Coda policies, run:
+
+```bash
+.venv/bin/python scripts/inspect-lesson-wiring.py "/path/to/piece.midi"
+```
+
+No retrospective claim of pedagogical superiority is implied. Passing
+software tests do not certify physical MIDI latency or graphical fidelity
+for every score in a live window.
