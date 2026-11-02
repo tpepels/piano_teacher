@@ -123,3 +123,48 @@ def test_immutable_definition_rejects_missing_hand_and_lost_original():
     stages[first]=(replace(stage,variant=broken),)
     with pytest.raises(ValueError,match="end at original"):
         LessonPlanDefinition((exercise,),stages,"broken")
+
+
+def test_whole_piece_analysis_sets_different_section_lengths_for_sparse_and_dense_midi(tmp_path):
+    from collections import Counter
+    import mido
+
+    file=mido.MidiFile(type=1,ticks_per_beat=480)
+    tr=mido.MidiTrack()
+    tr.append(mido.MetaMessage("track_name",name="Right Hand",time=0))
+    tr.append(mido.MetaMessage("time_signature",numerator=4,denominator=4,time=0))
+    events=[]
+    for bar in range(20):
+        starts=(0,) if bar<10 else (0,480,960,1440)
+        for beat in starts:
+            tick=bar*1920+beat
+            pitch=70+(beat//480)%4
+            events.extend(((tick,True,pitch),(tick+240,False,pitch)))
+    last=0
+    for tick,on,pitch in sorted(events,key=lambda entry:(entry[0],entry[1])):
+        tr.append(mido.Message("note_on" if on else "note_off",
+            time=tick-last,note=pitch,velocity=80 if on else 0))
+        last=tick
+    tr.append(mido.MetaMessage("end_of_track",time=20*1920-last))
+    file.tracks.append(tr)
+    path=tmp_path/"sparse-then-dense.mid"
+    file.save(path)
+    piece=load_midi(path)
+    plan=LearningPlan(piece,exercise_strategy="coda-midi")
+    sections=[exercise for exercise in plan.exercises if exercise.kind=="learn"]
+    assert len(sections)>3
+    assert sections[0].first_bar==1
+    assert sections[0].last_bar-sections[0].first_bar+1>=4
+    assert any(0<ex.last_bar-ex.first_bar+1<=2 and ex.first_bar>=11
+               for ex in sections)
+    assert plan.exercises[-1].kind=="perform"
+    assert plan.exercises[-1].phrase.notes==piece.notes
+    assert Counter(n.source_id for ex in sections for n in ex.phrase.notes)==Counter(
+        n.source_id for n in piece.notes)
+    assert all(1<=ex.last_bar-ex.first_bar+1<=8 for ex in sections)
+    # The complete piece-level definition is constructed BEFORE selecting
+    # any step; stage navigation never invokes Coda generation again.
+    before=plan.lesson_definition
+    for number in (1,len(plan.lesson_steps)//2,len(plan.lesson_steps)):
+        plan.select_step(number)
+        assert plan.lesson_definition is before
