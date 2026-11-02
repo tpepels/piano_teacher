@@ -256,6 +256,20 @@ func load_score(candidate: Dictionary) -> bool:
         notice = failure_reason
         return false
     selected_density = ink_density
+    if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
+        var first_note_beat: float = INF
+        for event in layout.ordered_events:
+            if str(event.get("kind", "")) == "note" and not bool(event.get("chord", false)):
+                first_note_beat = minf(first_note_beat,float(event.get("beat",0.0)))
+        print("NATIVE_SCORE_SPACING:", JSON.stringify({
+            "revision":timeline.revision,
+            "duration_beats":timeline.duration_beats,
+            "first_note_beat":first_note_beat if is_finite(first_note_beat) else null,
+            "pixels_per_beat":ink_density,
+            "staff_gap":staff_gap_limit,
+            "lookahead_beats":size.x*(1.0-PLAYHEAD_FRACTION)/ink_density,
+            "density_witness":selected_density_witness
+        }))
     layout.cached_staff_gap = -1.0
     layout.cached_gap_height = -1.0
     layout.cached_offsets_gap = -1.0
@@ -503,7 +517,21 @@ func present(state: Dictionary, transport_beat: float, visual_beat: float = NAN)
             preparation_history.clear()
             _clear_recovery_ink()
     var old_hand: String = active_hand
+    var old_transport: int = transport_id
+    var old_bpm: float = bpm
     super.present(state,transport_beat,visual_beat)
+    if OS.get_environment("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1" and \
+            (old_transport != transport_id or absf(old_bpm-bpm) > .001):
+        print("NATIVE_SCORE_MOTION:", JSON.stringify({
+            "revision":timeline.revision,
+            "transport_id":transport_id,
+            "bpm":bpm,
+            "pixels_per_beat":timeline.pixels_per_beat,
+            "pixels_per_second":timeline.pixels_per_second(bpm),
+            "running":running,
+            "paused":paused,
+            "phase":str(state.get("phase",""))
+        }))
     if old_hand != active_hand:
         _invalidate_retained_segments()
     if score_loop_enabled:
