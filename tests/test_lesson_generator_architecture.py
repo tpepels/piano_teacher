@@ -134,7 +134,7 @@ def test_immutable_definition_rejects_missing_hand_and_lost_original():
         LessonPlanDefinition((exercise,),stages,"broken")
 
 
-def test_coda_whole_piece_catalog_does_not_invent_sections_from_density(tmp_path):
+def test_research_coda_whole_piece_and_desktop_coda_passages_are_distinct(tmp_path):
     from collections import Counter
     import mido
 
