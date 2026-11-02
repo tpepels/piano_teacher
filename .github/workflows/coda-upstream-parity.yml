@@ -22,7 +22,7 @@ jobs:
       - name: Dependencies and syntax
         run: |
           python -m pip install -e '.[test,coda-research]' 'music21>=9.1,<10'
-          python -m compileall -q scripts/compare_coda_upstream.py scripts/probe_coda_upstream_edges.py scripts/probe_coda_upstream_scores.py piano_teacher/research/coda_differential.py piano_teacher/research/coda_discrepancy.py piano_teacher/research/coda_parity_contract.py piano_teacher/research/coda_auto_chord_levels.py scripts/probe_coda_upstream_extended.py piano_teacher/research/coda_native_written.py piano_teacher/research/coda_extended_sources.py
+          python -m compileall -q scripts/compare_coda_upstream.py scripts/probe_coda_upstream_edges.py scripts/probe_coda_upstream_scores.py piano_teacher/research/coda_differential.py piano_teacher/research/coda_discrepancy.py piano_teacher/research/coda_parity_contract.py piano_teacher/research/coda_auto_chord_levels.py scripts/probe_coda_upstream_extended.py piano_teacher/research/coda_native_written.py piano_teacher/research/coda_extended_sources.py scripts/probe_coda_midi_author_algorithms.py
       - name: Pure written/sounding and discrepancy contracts
         run: timeout 20s python -m pytest -q --tb=short tests/test_coda_differential.py tests/test_coda_discrepancy.py tests/test_coda_parity_contract.py
       - name: Checkout exactly published author backend SHA
@@ -173,6 +173,18 @@ jobs:
                             if o["chord_level"] is not None]
                       assert [o["chord_level"] for o in auto]==case["automatic_chord_levels"]
           PY
+      - name: Execute pinned Coda algorithms on raw-MIDI MMR
+        id: midi_algorithms
+        continue-on-error: true
+        run: |
+          timeout 75s python scripts/probe_coda_midi_author_algorithms.py \
+            --upstream "$RUNNER_TEMP/upstream" \
+            --report "$RUNNER_TEMP/coda-diff/midi-domain.json" \
+            > "$RUNNER_TEMP/coda-diff/midi-domain-output.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/coda-diff/midi-domain-output.txt"
+              exit 1
+            }
+          cat "$RUNNER_TEMP/coda-diff/midi-domain-output.txt"
       - name: Retain exact-source evidence and failures
         if: always()
         uses: actions/upload-artifact@v4
