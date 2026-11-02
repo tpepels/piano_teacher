@@ -88,7 +88,7 @@ def test_assessment_and_exposure_must_match_within_piece():
     rows[0]=replace(rows[0],assessment_version="grading-v2")
     with pytest.raises(ValueError,match="version differs"):
         analyze_pilot(tuple(rows),secret=SECRET)
-    with pytest.raises(ValueError,match="Duplicate subject-piece"):
+    with pytest.raises(ValueError,match="one original piece per participant"):
         analyze_pilot(samples()+(samples()[0],),secret=SECRET)
 
 
