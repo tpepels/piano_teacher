@@ -15,9 +15,12 @@ def build_lesson_snapshot(plan, exercise, variant, *, fingerprint: str,
                           warmup: bool, lesson_steps: tuple) -> LessonSnapshot:
     p = plan
     ex = exercise
-    stage_info = describe(p.active_stage, p.stages[-1]) if not warmup else {
-        "family": "Warm-up", "label": "Warm-up practice",
-        "change": "source notes", "meaningful": False}
+    if p.generator_registration is not None and p.generator_registration.midi_only and not warmup:
+        stage_info = describe(p.active_stage, p.stages[-1])
+    else:
+        stage_info = {"family": "Warm-up" if warmup else "Practice",
+                      "label": "Source practice" if not warmup else "Warm-up practice",
+                      "change": "source notes", "meaningful": False}
     return LessonSnapshot(
         title=p.piece.title, kind=ex.kind,
         first_bar=ex.phrase.first_bar, last_bar=ex.phrase.last_bar,
