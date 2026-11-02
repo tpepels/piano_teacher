@@ -125,6 +125,10 @@ class LessonSnapshot(_Snapshot):
     exercise_index: int = 0
     exercise_count: int = 1
     level: str = "original"
+    stage_family: str = "Original"
+    stage_label: str = "Original notes and rhythm"
+    stage_change: str = "unchanged source"
+    stage_meaningful: bool = False
     exercise_strategy: str = "legacy"
     timing_strategy: str = "original-timing"
     tempo_strategy: str = "constant-tempo"
@@ -270,6 +274,12 @@ def project_session_state(snapshot: SessionSnapshot) -> dict:
             exercise_beat if timing.running else timing.play_from_beat, lesson.first_bar),
         "exercise": lesson.exercise_index+1, "exercise_count": lesson.exercise_count,
         "lesson_level": lesson.level, "exercise_strategy": lesson.exercise_strategy,
+        "stage_family": lesson.stage_family, "stage_label": lesson.stage_label,
+        "stage_change": lesson.stage_change,
+        "stage_meaningful": lesson.stage_meaningful,
+        "effective_bpm": (
+            float(timing.tempo_segments[0]["bpm"])
+            if timing.tempo_segments else tempo.bpm),
         "timing_strategy": lesson.timing_strategy, "tempo_strategy": lesson.tempo_strategy,
         "lesson_level_number": lesson.level_number,
         "lesson_level_count": lesson.level_count, "required_notes": lesson.required_notes,
