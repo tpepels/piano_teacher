@@ -22,6 +22,10 @@ var stop_button: Button
 var hand_buttons: Dictionary = {}
 var skip_button: Button
 var placement_button: Button
+var coda_controls: VBoxContainer
+var coda_status: Label
+var coda_buttons: Array[Button] = []
+var coda_exit_button: Button
 var reset_button: Button
 var reset_confirmation: VBoxContainer
 var _reset_fingerprint := ""
@@ -138,6 +142,36 @@ func _ready() -> void:
     course_choices.add_child(skip_button)
     placement_button = _button("Try original notes", func(): command_requested.emit({"action": "place_original"}), false, "primary")
     course_choices.add_child(placement_button)
+    # One-click opt-in to MIDI-derived Coda exercises. The ordinary lesson
+    # screen, Listen transport and MIDI grader are reused by the backend.
+    coda_controls = UI.stack(8)
+    coda_controls.name = "CodaMidiTrial"
+    coda_controls.visible = false
+    path_options.add_child(coda_controls)
+    coda_controls.add_child(UI.label("Coda exercises · MIDI", 16, INK, true))
+    coda_status = UI.label("Try a transformed version of this passage.", 14, MUTED)
+    coda_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    coda_controls.add_child(coda_status)
+    var coda_actions := HFlowContainer.new()
+    coda_actions.add_theme_constant_override("h_separation", 8)
+    coda_controls.add_child(coda_actions)
+    for choice in [
+        ["Slowdown ×2", "tempo-shaping"],
+        ["Dotted 3:1", "dotted-rhythms"],
+        ["Chord blocks", "chordification"]
+    ]:
+        var family: String = str(choice[1])
+        var trial_button := _button(str(choice[0]), func():
+            command_requested.emit({"action":"coda_try", "family":family})
+            practice_requested.emit(), false, "review")
+        trial_button.tooltip_text = "Try this MIDI-derived Coda exercise with separate progress"
+        coda_actions.add_child(trial_button)
+        coda_buttons.append(trial_button)
+    coda_exit_button = _button("Return to original MIDI lesson", func():
+        command_requested.emit({"action":"coda_exit"})
+        practice_requested.emit(), false, "navigation")
+    coda_exit_button.visible = false
+    coda_controls.add_child(coda_exit_button)
     # The outer scroll owns the whole path. A nested expanding ScrollContainer
     # has zero minimum height inside it, hiding every lesson stage.
     var advanced := _button("Advanced practice controls", func(): advanced_requested.emit(), false, "settings")
@@ -191,6 +225,7 @@ func present_context(state: Dictionary, busy: bool) -> void:
     present_busy(busy)
     if not bool(state.get("loaded",false)):
         mode_choice.disabled = true
+        coda_controls.visible = false
         _cancel_path_reset()
         return
     if reset_confirmation.visible and str(state.get("piece_fingerprint","")) != _reset_fingerprint:
@@ -198,6 +233,15 @@ func present_context(state: Dictionary, busy: bool) -> void:
     var learning: bool = str(state.get("mode","practice")) == "learn"
     var warmup: bool = bool(state.get("warmup",false))
     var phase: String = str(state.get("phase","ready"))
+    var coda_enabled: bool = bool(state.get("coda_available",false))
+    var active_trial: bool = bool(state.get("coda_trial",false))
+    coda_controls.visible = coda_enabled
+    coda_exit_button.visible = active_trial
+    var source_bars: Array = state.get("coda_source_bars",[])
+    coda_status.text = ("Trying %s · source bars %s. This is separate from original mastery." %
+        [str(state.get("coda_family","")).replace("-"," "), str(source_bars)]
+        if active_trial else
+        "Try a Coda exercise on the current MIDI passage (up to 8 bars).")
     mode_choice.select(0 if learning else 2 if str(state.get("mode","")) == "perform" else 1)
     mode_choice.set_item_text(1,"Warm-up practice" if warmup else "Practice rhythm")
     for index in [0,2,3]: mode_choice.set_item_disabled(index,warmup)
@@ -217,6 +261,10 @@ func present_context(state: Dictionary, busy: bool) -> void:
 
 func present_busy(busy: bool) -> void:
     _busy = busy
+    for trial_button in coda_buttons:
+        trial_button.disabled = busy
+    if coda_exit_button != null:
+        coda_exit_button.disabled = busy
     reset_button.disabled = busy or not bool(_context.get("loaded",false))
 
 func present_error(message: String) -> void:
