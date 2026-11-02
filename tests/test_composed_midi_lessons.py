@@ -97,7 +97,12 @@ def test_hybrid_preserves_both_research_families_and_source_final(piece):
                                      if hand == "both" or n.hand == hand)
             assert all(set(n.source_id for n in v.variant.notes) <=
                        set(n.source_id for n in original) for v in stages)
-    assert coda.exercises[0].phrase.notes == piece.notes
+    # The desktop Coda course begins with short authored excerpts.
+    # Direct research Coda still reproduces the author's full-score default.
+    assert coda.exercises[0].kind == "learn"
+    assert coda.exercises[0].phrase.notes != piece.notes
+    assert coda.exercises[-1].phrase.notes == piece.notes
+    assert CodaLessonGenerator().generate(piece).exercises[0].phrase.notes == piece.notes
 
 
 def test_hybrid_feedback_adds_repairs_without_erasing_coda_and_clears(piece):
