@@ -423,3 +423,42 @@ def test_windowed_dtw_keeps_exact_octave_information_in_mismatch_report():
     assert "midi-270" in found.problematic_source_ids
     assert any(n.pitch==p.notes[270].pitch and n.source_id=="midi-270"
                for n in found.mismatches)
+
+
+def test_fukuda_long_score_only_teaches_error_bars_not_unrelated_sections(tmp_path):
+    track=mido.MidiTrack()
+    midi=mido.MidiFile(type=1,ticks_per_beat=480)
+    track.append(mido.MetaMessage("track_name",name="Right Hand",time=0))
+    track.append(mido.MetaMessage("time_signature",numerator=4,denominator=4,time=0))
+    events=[]
+    for bar in range(24):
+        for beat in range(4):
+            tick=bar*1920+beat*480
+            p=60+(beat%5)
+            events.extend(((tick,1,p),(tick+240,0,p)))
+    last=0
+    for tick,on,p in sorted(events):
+        track.append(mido.Message("note_on" if on else "note_off",
+                     note=p,velocity=80 if on else 0,time=tick-last))
+        last=tick
+    track.append(mido.MetaMessage("end_of_track",time=24*1920-last))
+    midi.tracks.append(track)
+    path=tmp_path/"long-piece.mid"
+    midi.save(path)
+    original=load_midi(path)
+    troubled=frozenset(n.source_id for n in original.notes
+                       if (4<=n.start<5 or 68<=n.start<69))
+    plan=LearningPlan(original,exercise_strategy="fukuda-midi",
+                      fukuda_mistakes=troubled)
+    focus=[x for x in plan.exercises if x.kind=="learn"]
+    assert len(focus)==2
+    assert focus[0].phrase.first_bar==2
+    assert focus[1].phrase.first_bar==18
+    assert all(x.phrase.last_bar-x.phrase.first_bar+1<=2 for x in focus)
+    assert not any(20<=n.start<68 for x in focus for n in x.phrase.notes)
+    assert plan.exercises[-1].phrase.notes==original.notes
+    for x in focus:
+        for hand in x.hands:
+            final=plan.lesson_definition.stages(x,hand)[-1]
+            assert final.variant.level=="original"
+            assert all(n in original.notes for n in final.variant.notes)
