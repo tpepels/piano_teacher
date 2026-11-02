@@ -1,0 +1,46 @@
+name: Coda original excerpt-catalog contract (bounded)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/coda-author-catalog.yml'
+      - 'scripts/probe_coda_author_catalog_contract.py'
+      - 'piano_teacher/research/coda_author_catalog.py'
+
+permissions:
+  contents: read
+
+jobs:
+  original-catalog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Clone exact published Coda revision
+        run: |
+          timeout 45s git clone --depth 1 -q \
+            https://github.com/annieetang/coda_backend.git "$RUNNER_TEMP/coda-author"
+          test "$(git -C "$RUNNER_TEMP/coda-author" rev-parse HEAD)" = \
+            'a4eb85dfc2bd418818ca9ff775c0a11ccccb3530'
+      - name: Compare original source's endpoint and exercise schema
+        run: |
+          timeout 20s python scripts/probe_coda_author_catalog_contract.py \
+            --upstream "$RUNNER_TEMP/coda-author" \
+            --report "$RUNNER_TEMP/coda-author-contract.json"
+          python - "$RUNNER_TEMP/coda-author-contract.json" <<'PY'
+          import json,sys
+          result=json.load(open(sys.argv[1]))
+          assert result["automatic_lesson_selection"] is False
+          assert result["automatic_lesson_progression"] is False
+          assert len(result["categories"]) == 6
+          PY
+      - name: Retain pinned source-contract evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: original-coda-catalog-${{ github.sha }}
+          path: ${{ runner.temp }}/coda-author-contract.json
+          retention-days: 14
