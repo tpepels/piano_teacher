@@ -14,6 +14,7 @@ return to the unchanged source score.
 """
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from dataclasses import dataclass
 from math import isfinite, sqrt
@@ -215,61 +216,106 @@ def align_midi_dtw(phrase: Phrase, played: Sequence[PlayedNote], *,
                                score[i][1],perf[j][1]) for i,j in pairs)
 
 
-def detect_midi_mistakes(phrase: Phrase, played: Sequence[PlayedNote], *,
-                         hand: str="both", bpm: float=90,
-                         onset_tolerance_s: float=.14) -> MidiMistakeReport:
-    """Detect missed, wrong and extra MIDI events after alignment.
+def detect_midi_mistakes(
+    phrase: Phrase, played: Sequence[PlayedNote], *,
+    hand: str = "both", bpm: float = 90,
+    onset_tolerance_s: float = .14,
+) -> MidiMistakeReport:
+    """Source-ID exact MIDI pitch matching over an expressive DTW alignment.
 
-    Do NOT ignore octave errors: the paper's acoustic-NMF octave errors
-    are transcription artifacts, whereas a MIDI pitch is authoritative.
+    The score following step produces onset anchors. Within each anchor's
+    bounded time neighborhood, a deterministic one-to-one note assignment
+    preserves MIDI pitch and source identity; a wrong pitch near an otherwise
+    unmatched score attack is a wrong note, and unused attacks are extras.
+    All candidate search is indexed, rather than scoring every MIDI note
+    against every performance event (quadratic for full-length recordings).
+    Release durations are checked against an alignment-derived tempo scale.
     """
-    aligned=align_midi_dtw(phrase,played,hand=hand,bpm=bpm)
-    notes=tuple(n for n in phrase.notes if hand=="both" or n.hand==hand)
-    unused=set(range(len(played)))
-    pairs=[]
-    # DTW anchors align even an expressive performance with tempo drift.
-    for n in notes:
-        anchor=min(aligned,key=lambda p:abs(p.score_beat-n.start),
-                   default=None)
-        target=((n.start-phrase.start)*60/bpm if anchor is None
-                else anchor.performed_seconds+
-                    (n.start-anchor.score_beat)*60/bpm)
-        for j in unused:
-            p=played[j]
-            if p.pitch==n.pitch:
-                pairs.append((abs(p.onset-target),n.source_id,j,n,target))
-    taken_ids=set()
-    matches={}
-    for distance,sid,j,n,target in sorted(pairs,key=lambda x:x[0]):
-        # Broad note-matching limit permits DTW-expressive timing while
-        # preventing an unrelated same-pitch note several measures away.
-        if distance>max(.4,1.25*60/bpm):
-            continue
-        if sid not in taken_ids and j in unused:
-            matches[sid]=(j,target)
-            taken_ids.add(sid);unused.remove(j)
-    errors=[]
-    for n in notes:
-        if n.source_id not in matches:
-            # Recognize a wrong pitch at this aligned score event.
-            anchor=min(aligned,key=lambda p:abs(p.score_beat-n.start),
-                       default=None)
-            target=anchor.performed_seconds if anchor is not None else (
-                n.start-phrase.start)*60/bpm
-            candidates=[j for j in unused
-                        if abs(played[j].onset-target)<=onset_tolerance_s]
-            if candidates:
-                unused.remove(min(candidates,key=lambda j:abs(
-                    played[j].onset-target)))
-                errors.append(MidiMismatch(n.source_id,n.pitch,n.start,"wrong"))
+    if not (isfinite(onset_tolerance_s) and 0 <= onset_tolerance_s <= 1):
+        raise ValueError("Invalid Fukuda onset tolerance")
+    aligned = align_midi_dtw(phrase, played, hand=hand, bpm=bpm)
+    notes = tuple(n for n in phrase.notes if hand == "both" or n.hand == hand)
+    ids = [n.source_id for n in notes]
+    if any(not sid for sid in ids) or len(set(ids)) != len(ids):
+        raise ValueError("Fukuda requires unique original MIDI source IDs")
+    unused = set(range(len(played)))
+    aligned_beats = [a.score_beat for a in aligned]
+    seconds_per_beat = 60 / bpm
+    if len(aligned) > 1:
+        span = aligned[-1].score_beat - aligned[0].score_beat
+        elapsed = aligned[-1].performed_seconds - aligned[0].performed_seconds
+        if span > 1e-7 and elapsed > 0:
+            seconds_per_beat = elapsed / span
+
+    def target_for(n: Note) -> float:
+        i = bisect_left(aligned_beats, n.start)
+        neighbors = aligned[max(0, i - 1):min(len(aligned), i + 1)]
+        anchor = min(neighbors, key=lambda a: abs(a.score_beat - n.start),
+                     default=None)
+        if anchor is None:
+            return (n.start - phrase.start) * seconds_per_beat
+        return (anchor.performed_seconds +
+                (n.start - anchor.score_beat) * seconds_per_beat)
+
+    # Note-on multiplicity is explicit, including repeated identical pitches.
+    # Each note can be consumed exactly once; candidate list is locally
+    # bounded in time by the source tempo, rather than full recording length.
+    by_pitch = defaultdict(list)
+    all_onsets = []
+    for j, p in enumerate(played):
+        by_pitch[p.pitch].append((p.onset, j))
+        all_onsets.append((p.onset, j))
+    for group in by_pitch.values():
+        group.sort()
+    all_onsets.sort()
+    window = max(.4, 1.25 * 60 / bpm)
+    candidates = []
+    targets = [(n, target_for(n)) for n in notes]
+    for n, target in targets:
+        sequence = by_pitch[n.pitch]
+        lo = bisect_left(sequence, (target - window, -1))
+        hi = bisect_right(sequence, (target + window, len(played) + 1))
+        for onset, j in sequence[lo:hi]:
+            candidates.append((abs(onset - target), n.start, n.pitch,
+                               n.source_id, j, target))
+    matches = {}
+    for distance, _, _, sid, j, target in sorted(candidates):
+        if sid not in matches and j in unused:
+            matches[sid] = (j, target)
+            unused.remove(j)
+
+    errors = []
+    for n, target in targets:
+        match = matches.get(n.source_id)
+        if match is None:
+            lo = bisect_left(all_onsets, (target - onset_tolerance_s, -1))
+            hi = bisect_right(all_onsets, (target + onset_tolerance_s,
+                                         len(played) + 1))
+            wrong = min(
+                ((abs(onset - target), onset, j)
+                 for onset, j in all_onsets[lo:hi] if j in unused),
+                default=None)
+            if wrong is None:
+                errors.append(MidiMismatch(n.source_id, n.pitch, n.start, "missed"))
             else:
-                errors.append(MidiMismatch(n.source_id,n.pitch,n.start,"missed"))
-        else:
-            j,target=matches[n.source_id]
-            if abs(played[j].onset-target)>onset_tolerance_s:
-                errors.append(MidiMismatch(n.source_id,n.pitch,n.start,"timing"))
-    return MidiMistakeReport(aligned,tuple(errors),
-        tuple((played[j].onset,played[j].pitch) for j in sorted(unused)),hand)
+                unused.remove(wrong[2])
+                errors.append(MidiMismatch(n.source_id, n.pitch, n.start, "wrong"))
+            continue
+        j, expected_onset = match
+        p = played[j]
+        if abs(p.onset - expected_onset) > onset_tolerance_s:
+            errors.append(MidiMismatch(n.source_id, n.pitch, n.start, "timing"))
+        elif p.release is not None:
+            expected_duration = (n.end - n.start) * seconds_per_beat
+            actual_duration = p.release - p.onset
+            tolerance = max(.20, expected_duration * .50)
+            if abs(actual_duration - expected_duration) > tolerance:
+                errors.append(MidiMismatch(n.source_id, n.pitch, n.start, "duration"))
+    return MidiMistakeReport(
+        aligned, tuple(errors),
+        tuple((played[j].onset, played[j].pitch)
+              for j in sorted(unused, key=lambda j: (played[j].onset, j))),
+        hand)
 
 
 def _as_variant(source: ExerciseVariant, level: str,

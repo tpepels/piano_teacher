@@ -512,3 +512,39 @@ def test_retriggered_pedal_pitch_closes_previous_sounding_note(tmp_path):
     assert len(notes) == 2
     assert [(n.onset, n.release) for n in notes] == pytest.approx(
         [(0, .25), (.25, .5)])
+
+
+def test_midi_duration_mistakes_not_hidden_by_exact_pitch_or_dtw():
+    p = phrase([60, 62, 64], [0, 1, 2], duration=.5)
+    played = (PlayedNote(60, 0, .02), PlayedNote(62, .75, 1.125),
+              PlayedNote(64, 1.5, 1.875))
+    result = detect_midi_mistakes(p, played, bpm=80)
+    assert [(e.source_id, e.kind) for e in result.mismatches] == [
+        ("midi-0", "duration")]
+    assert result.extra_pitches == ()
+
+
+def test_midi_repeated_same_pitch_assignment_does_not_reuse_a_note():
+    p = phrase([60, 60, 60], [0, 1, 2], duration=.5)
+    played = (PlayedNote(60, 0, .375), PlayedNote(60, 1.5, 1.875))
+    result = detect_midi_mistakes(p, played, bpm=80)
+    assert len(result.mismatches) == 1
+    assert result.mismatches[0].kind == "missed"
+    assert result.mismatches[0].source_id == "midi-1"
+    assert result.extra_pitches == ()
+
+
+def test_midi_full_length_matching_is_indexed_and_deterministic():
+    from time import perf_counter
+    count = 960
+    p = phrase([60 + i % 12 for i in range(count)],
+               [i * .5 for i in range(count)], duration=.2)
+    played = tuple(PlayedNote(n.pitch, n.start * .63 + .1,
+                              n.end * .63 + .1) for n in p.notes)
+    begun = perf_counter()
+    first = detect_midi_mistakes(p, played, bpm=95)
+    assert not first.mismatches
+    assert not first.extra_pitches
+    second = detect_midi_mistakes(p, played, bpm=95)
+    assert first == second
+    assert perf_counter() - begun < 10
