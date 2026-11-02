@@ -121,3 +121,24 @@ def test_coda_is_new_install_default_but_explicit_legacy_choice_persists(tmp_pat
     library.update(exercise_strategy="legacy")
     again = ScoreLibrary(config_dir=tmp_path / "fresh")
     assert again.settings["exercise_strategy"] == "legacy"
+
+
+def test_coda_piece_strategy_owns_timing_and_migrates_old_selection(tmp_path):
+    import pytest
+    config=tmp_path/"config"
+    library=ScoreLibrary(config_dir=config)
+    with pytest.raises(ValueError,match="generate their own"):
+        library.update(timing_strategy="dotted-long-short")
+    assert library.settings["timing_strategy"]=="original-timing"
+    library.update(exercise_strategy="legacy")
+    library.update(timing_strategy="dotted-long-short",
+                   tempo_strategy="two-phase-tempo")
+    library.update(exercise_strategy="coda-midi")
+    assert library.settings["timing_strategy"]=="original-timing"
+    assert library.settings["tempo_strategy"]=="constant-tempo"
+    stored=library.settings.copy()
+    stored["exercise_strategy"]="coda-part"
+    library.settings_path.write_text(json.dumps(stored))
+    restored=ScoreLibrary(config_dir=config)
+    assert restored.settings["exercise_strategy"]=="coda-midi"
+    assert {x["id"] for x in restored.public_settings()["available_exercise_strategies"]}.__contains__("coda-midi")

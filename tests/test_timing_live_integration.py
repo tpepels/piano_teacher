@@ -82,6 +82,7 @@ def test_combined_timing_stage_still_requires_original_mastery():
 def test_settings_persist_independent_timing_axes(tmp_path):
     cfg = tmp_path / "cfg"
     library = ScoreLibrary(cfg)
+    library.update(exercise_strategy="legacy")
     library.update(timing_strategy="dotted-short-long", tempo_strategy="two-phase-tempo")
     reopened = ScoreLibrary(cfg)
     assert reopened.settings["timing_strategy"] == "dotted-short-long"
@@ -96,12 +97,12 @@ def test_changing_rhythm_resets_active_path_and_restores_previous_profile(tmp_pa
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
         engine.fingerprint = "timing-fixture"
-        engine.library.update(exercise_strategy="coda-part")
-        engine.plan = LearningPlan(score(), exercise_strategy="coda-part")
+        engine.library.update(exercise_strategy="fukuda")
+        engine.plan = LearningPlan(score(), exercise_strategy="fukuda")
         baseline_key = engine.plan.identity
         engine._save()
         engine.set_preferences(timing_strategy="dotted-long-short")
-        assert engine.plan.profile == "coda-part~dotted-long-short"
+        assert engine.plan.profile == "fukuda~dotted-long-short"
         stage(engine.plan, "dotted-long-short")
         transformed_key = engine.plan.identity
         engine.plan.bpm = 55
