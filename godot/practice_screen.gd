@@ -255,6 +255,17 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
             hand_step, str(parsed.get("hand", "left")).to_upper(),
             int(parsed.get("first_bar", 1)), int(parsed.get("last_bar", 8))]
     if not bool(parsed.get("warmup", false)):
+        # Always identify which actual generator and transformed stage the
+        # student is practising. A familiar-looking original score should
+        # never be presented as a novel Fukuda or Coda simplification.
+        var family: String = str(parsed.get("stage_family", ""))
+        var transformation: String = str(parsed.get("stage_label", ""))
+        var change: String = str(parsed.get("stage_change", ""))
+        if not family.is_empty() and not transformation.is_empty():
+            passage_text += " · %s: %s" % [family, transformation]
+            if not change.is_empty() and change != "unchanged source":
+                passage_text += " (%s)" % change
+        passage_label.tooltip_text = passage_text
         var chosen_bar: int = int(parsed.get("selected_start_bar", 1))
         if chosen_bar > int(parsed.get("first_bar", 1)):
             passage_text += " · Start at measure %d" % chosen_bar
@@ -280,12 +291,17 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         tempo_up_button.text = "+%d BPM" % int(parsed.get("manual_tempo_step_bpm", 5))
         tempo_up_button.disabled = (_busy or not bool(parsed.get("can_increase_tempo",false))
             or str(parsed.get("phase","")) in ["count_in","playing","loading"])
-    var speed_text := "%d BPM" % int(parsed.get("bpm", 0))
-    if int(parsed.get("bpm", 0)) != int(parsed.get("target_bpm", parsed.get("bpm", 0))):
+    var selected_bpm: float = float(parsed.get("bpm", 0))
+    var effective_bpm: float = float(parsed.get("effective_bpm", selected_bpm))
+    var speed_text := "%d BPM" % int(roundf(selected_bpm))
+    if absf(effective_bpm-selected_bpm) >= .1:
+        speed_text += " · plays at %.1f" % effective_bpm
+    elif int(selected_bpm) != int(parsed.get("target_bpm", selected_bpm)):
         speed_text += " · target %d" % int(parsed.get("target_bpm", 0))
     speed_label.text = speed_text
     var recovery_notice: Variant = parsed.get("recovery_notice")
-    speed_label.tooltip_text = "Current practice tempo and your selected target"
+    speed_label.tooltip_text = ("Selected tempo %.1f BPM; effective first-segment tempo %.1f BPM; target %d BPM" %
+        [selected_bpm, effective_bpm, int(parsed.get("target_bpm", 0))])
     hand_label.text = "Both hands" if str(parsed.get("hand", "right")) == "both" else str(parsed.get("hand", "right")).capitalize() + " hand"
     hand_label.tooltip_text = "Current hand of the backend lesson"
     game_input_indicator.present(parsed)
