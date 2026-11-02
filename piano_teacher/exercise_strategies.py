@@ -201,7 +201,7 @@ class FukudaMidiStrategy:
 
 @dataclass(frozen=True)
 class CodaMidiStrategy:
-    """Piece-selected Coda lesson policy; stage generation is in LearningPlan."""
+    """Coda teaching passages; research excerpts remain separately selectable."""
     name: str = "coda-midi"
 
     def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
@@ -375,7 +375,7 @@ APP_STRATEGIES = (
     ("legacy", "Original progression"),
     ("fukuda", "Fukuda · earlier chord/leap strategy"),
     ("fukuda-midi", "Fukuda · MIDI adaptive simplification"),
-    ("coda-midi", "Coda · MIDI whole-piece lessons"),
+    ("coda-midi", "Coda · MIDI passage lessons + full-piece performance"),
     ("coda-fukuda-midi", "Coda + Fukuda · MIDI combined lessons"),
     ("feature-gated", "Feature-guided selection"),
     ("fukuda+coda-part", "Fukuda + Coda"),
