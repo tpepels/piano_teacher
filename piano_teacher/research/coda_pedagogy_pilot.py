@@ -151,9 +151,11 @@ def analyze_pilot(
     seen=set()
     by_piece=defaultdict(list)
     for r in observations:
-        if (r.anonymous_subject,r.piece_fingerprint) in seen:
-            raise ValueError("Duplicate subject-piece observation")
-        seen.add((r.anonymous_subject,r.piece_fingerprint))
+        # Avoid falsely treating repeated observations from the same
+        # individual across pieces as independent randomization units.
+        if r.anonymous_subject in seen:
+            raise ValueError("Pilot needs one original piece per participant")
+        seen.add(r.anonymous_subject)
         if assigned_arm(r.anonymous_subject,r.piece_fingerprint,secret=secret)!=r.blinded_arm:
             raise ValueError("Observed group does not match randomized allocation")
         by_piece[r.piece_fingerprint].append(r)
@@ -168,8 +170,10 @@ def analyze_pilot(
         if {r.blinded_arm for r in rows}!={"A","B"}:
             raise ValueError("Both arms required for every piece")
         doses=[r.practice_minutes for r in rows]
-        if min(doses)<1 or max(doses)-min(doses)>0.25:
-            raise ValueError("Practice exposure is unequal or unrecorded")
+        if any(abs(x-15.0)>0.25 for x in doses):
+            raise ValueError("Practice exposure must be 15 minutes ± 15 seconds")
+        if max(doses)-min(doses)>0.25:
+            raise ValueError("Practice exposure is unequal across arms")
         piece_rows.append({"piece":piece,
             "players":len(rows),"target_bpm":rows[0].test_bpm,
             "test_note_attacks":rows[0].original_score_attacks,
