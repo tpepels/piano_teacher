@@ -57,9 +57,16 @@ func present_overview(values: Dictionary) -> void:
     entries = values.get("steps",[]).duplicate(true)
     picker.clear()
     for step in entries:
-        picker.add_item("%d/%d · %d–%d · %s · %s" % [int(step.get("number",0)),entries.size(),
+        picker.add_item("%d/%d · %d–%d · %s · %s: %s" % [
+            int(step.get("number",0)),entries.size(),
             int(step.get("first_bar",1)),int(step.get("last_bar",1)),
-            str(step.get("hand","")).capitalize(),str(step.get("level","")).capitalize()])
+            str(step.get("hand","")).capitalize(),
+            str(step.get("stage_family","Practice")),
+            str(step.get("stage_label",step.get("level","")))])
+        picker.set_item_tooltip(picker.item_count - 1,
+            "%s · %s · %s" % [str(step.get("stage_family","Practice")),
+                str(step.get("stage_label",step.get("level",""))),
+                str(step.get("stage_change",""))])
     _present()
 
 func _present() -> void:
@@ -69,7 +76,13 @@ func _present() -> void:
     next_button.disabled = _busy or not ready or _current >= entries.size()
     if ready and _current >= 1 and _current <= picker.item_count:
         picker.select(_current - 1)
-        picker.text = "Step %d / %d" % [_current,entries.size()]
+        picker.text = "Step %d / %d · %s" % [
+            _current, entries.size(),
+            str(entries[_current - 1].get("stage_label",
+                entries[_current - 1].get("level", "")))]
+        picker.tooltip_text = "Current lesson: %s · %s" % [
+            str(entries[_current - 1].get("stage_family", "Practice")),
+            str(entries[_current - 1].get("stage_label", ""))]
 
 func _select(number: int) -> void:
     if not picker.disabled and number != _current and number >= 1 and number <= entries.size():
