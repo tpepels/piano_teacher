@@ -21,6 +21,9 @@ class Exercise:
     kind: str
     phrase: Phrase
     key: str
+    # Optional generator-owned hand schedule. The original heuristic
+    # still derives this from onset density when this is absent.
+    hands: tuple[str, ...] = ()
 
 
 def _difficult(phrase: Phrase) -> bool:
