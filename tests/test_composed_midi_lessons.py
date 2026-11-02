@@ -265,3 +265,53 @@ def test_registered_generators_cannot_omit_terminal_source_attack(piece):
     with pytest.raises(ValueError, match="terminal original performance"):
         LessonPlanDefinition(plan.exercises, stages, "malformed",
                              requires_unique_source_ids=True)
+
+
+def test_arbitrary_registered_composition_with_grading_feedback(piece):
+    """Plug in a third-party combination with no central name switch."""
+    import piano_teacher.exercise_strategies as strategies
+    import piano_teacher.lesson_generators as generators
+    key = "test-independent-composed-midi"
+    try:
+        generators.register_composed_lesson_generator(
+            key, ("coda-midi", "fukuda-midi"),
+            label="Independent composite", version=7)
+        assert key in {row["id"] for row in available_strategies()}
+        metadata = next(row for row in available_strategies()
+                        if row["id"] == key)
+        assert metadata["midi_only"] and metadata["owns_timing"]
+        plan = LearningPlan(piece, exercise_strategy=key)
+        assert plan.lesson_generator.name == key
+        assert plan.lesson_steps
+        assert all(step.key.startswith("course:7:" + key + ":")
+                   for step in plan.lesson_steps)
+        assert any(s.level.startswith("coda-slowdown-x2")
+                   for s in plan.lesson_steps)
+        assert any(s.level.startswith("fukuda-midi-")
+                   for s in plan.lesson_steps)
+        with pytest.raises(ValueError, match="MIDI piece"):
+            resolve_strategy(key)
+        assert plan.refresh_from_mistakes(
+            frozenset({next(n.source_id for n in piece.notes if n.hand == "right")}))
+        assert any(ex.key.startswith("fukuda:errors:") for ex in plan.exercises)
+        assert plan.refresh_from_mistakes(frozenset())
+        assert len(plan.exercises) == 2
+        with pytest.raises(ValueError, match="Duplicate"):
+            generators.register_composed_lesson_generator(
+                key, ("coda-midi", "fukuda-midi"))
+    finally:
+        generators._REGISTRY.pop(key, None)
+        strategies._FACTORIES.pop(key, None)
+        strategies._MIDI_ONLY_STRATEGIES.discard(key)
+        strategies.APP_STRATEGIES = tuple(
+            row for row in strategies.APP_STRATEGIES if row[0] != key)
+
+
+def test_compositions_reject_nonregistered_components_or_self_reference():
+    from piano_teacher.lesson_generators import register_composed_lesson_generator
+    with pytest.raises(ValueError, match="registered"):
+        register_composed_lesson_generator(
+            "unused-comp", ("coda-midi", "unknown-algorithm"))
+    with pytest.raises(ValueError, match="Invalid"):
+        register_composed_lesson_generator(
+            "self-comp", ("coda-midi", "self-comp"))

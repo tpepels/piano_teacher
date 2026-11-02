@@ -70,3 +70,22 @@ The composition does not establish improved teaching effectiveness. Combining
 two valid exercise-generation policies can produce redundant or poorly ordered
 exercises; user-controlled selection and a future human assessment are required
 to choose a pedagogically superior default.
+
+
+## Extending without adding application branches
+
+The generalized `ComposedLessonGenerator` accepts an ordered collection
+of independent `LessonGenerator` instances. The named Coda/Fukuda preset
+is a configuration of this same class. Its feedback hook provides any
+participant that implements `with_mistakes` with source-identified MIDI
+mistakes; new source-specific repair exercises are composed before the
+preserved core. The generic `register_composed_lesson_generator` entrypoint
+takes any registered generator IDs, a new strategy ID, optional UI label,
+and a version for isolated progress keys. Registration also includes
+MIDI-only applicability and ownership of the exercise's tempo/rhythm.
+
+`available_strategies()` supplies `owns_timing` and `midi_only`
+capability fields. Settings disables independent timing/tempo policies for
+**any** registered generator that owns those decisions, including dynamically
+installed compositions; the UI no longer special-cases the string
+`coda-midi`.

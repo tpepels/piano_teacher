@@ -34,6 +34,22 @@ func preferences(view: Control) -> void:
         "Backend strategy options and current selection are presented")
     view.strategy_picker.item_selected.emit(0)
     check(echoes == ["legacy"], "Changing the picker emits the selected strategy identifier")
+    view.present_preferences({
+        "music_dir":"/scores", "fullscreen":false, "metronome":false,
+        "exercise_strategy":"coda-fukuda-midi",
+        "available_exercise_strategies":[
+            {"id":"coda-fukuda-midi", "label":"Coda + Fukuda", "owns_timing":true}
+        ]})
+    check(view.timing_strategy_picker.disabled and view.tempo_strategy_picker.disabled,
+        "Composed generators own their timing and tempo UI independently of their names")
+    view.present_preferences({
+        "music_dir":"/scores", "fullscreen":false, "metronome":false,
+        "exercise_strategy":"fukuda-midi",
+        "available_exercise_strategies":[
+            {"id":"fukuda-midi", "label":"Fukuda", "owns_timing":false}
+        ]})
+    check(not view.timing_strategy_picker.disabled and not view.tempo_strategy_picker.disabled,
+        "Generators without an owned clock expose independent timing and tempo policies")
     echoes.clear()
     view.present_volume(-3.0)
     check(view.folder_edit.text == "/scores" and not view.fullscreen_toggle.button_pressed
