@@ -510,8 +510,8 @@ def test_retriggered_pedal_pitch_closes_previous_sounding_note(tmp_path):
     midi.save(file)
     notes = load_performed_midi(file)
     assert len(notes) == 2
-    assert [(n.onset, n.release) for n in notes] == pytest.approx(
-        [(0, .25), (.25, .5)])
+    assert [n.onset for n in notes] == pytest.approx([0, .25])
+    assert [n.release for n in notes] == pytest.approx([.25, .5])
 
 
 def test_midi_duration_mistakes_not_hidden_by_exact_pitch_or_dtw():
