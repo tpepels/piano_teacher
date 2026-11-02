@@ -224,6 +224,60 @@ class CodaLessonGenerator:
         return LessonPlanDefinition(exercises,result,self.name)
 
 
+def _fukuda_error_sections(piece: Piece, mistakes: frozenset[str]) -> tuple[Exercise, ...]:
+    """Select real source measures around graded MIDI attack mistakes.
+
+    Source boundaries are never retimed or clipped. The entire original
+    score remains a separate final performance. Consecutive error bars
+    are consolidated and sparse passages expand up to eight bars.
+    """
+    from bisect import bisect_right
+    from .lesson_source_planner import Exercise
+    grid=piece.bar_boundaries
+    count=len(grid)-1
+    errored={max(1,min(count,bisect_right(grid,n.start)-0))
+             for n in piece.notes if n.source_id in mistakes}
+    if not errored:
+        return ()
+    segments=[]
+    for bar in sorted(errored):
+        first=max(1,bar)
+        last=min(count,first+1)
+        while last<count and last-first+1<8:
+            chosen=tuple(n for n in piece.notes
+                         if grid[first-1]-1e-7<=n.start<grid[last]-1e-7)
+            hands={n.hand for n in chosen}
+            attacks=[len({round(n.start,7) for n in chosen if n.hand==h})
+                     for h in hands]
+            sustains=any(n.end>grid[last]+1e-7 for n in chosen)
+            if not sustains and attacks and min(attacks)>=3:
+                break
+            last+=1
+        if segments and first<=segments[-1][1]:
+            segments[-1]=(segments[-1][0],max(last,segments[-1][1]))
+        else:
+            segments.append((first,last))
+    result=[]
+    for first,last in segments:
+        selected=tuple(n for n in piece.notes
+                       if grid[first-1]-1e-7<=n.start<grid[last]-1e-7)
+        if any(n.end>grid[last]+1e-7 for n in selected):
+            # Expand the section or reject; never cut a sounding note.
+            while last<count and any(n.end>grid[last]+1e-7 for n in selected):
+                last+=1
+                selected=tuple(n for n in piece.notes
+                       if grid[first-1]-1e-7<=n.start<grid[last]-1e-7)
+            if any(n.end>grid[last]+1e-7 for n in selected):
+                raise ValueError("Fukuda score contains notes past its source grid")
+        present=tuple(h for h in ("right","left")
+                      if any(n.hand==h for n in selected))
+        hands=present+("both",) if len(present)>1 else present
+        result.append(Exercise("learn",
+            Phrase(len(result)+1,first,last,grid[first-1],grid[last],selected),
+            f"fukuda:errors:{first}-{last}",hands))
+    return tuple(result)
+
+
 @dataclass(frozen=True)
 class FukudaMidiLessonGenerator:
     """MIDI-only whole-piece Fukuda score reduction.
@@ -251,8 +305,10 @@ class FukudaMidiLessonGenerator:
             piece.notes)
         individual=tuple(h for h in ("right","left")
                          if any(n.hand==h for n in piece.notes))
-        exercises=(Exercise("learn",complete,"fukuda:whole-score",
-                            individual+("both",) if len(individual)>1 else individual),
+        exercises=(*(_fukuda_error_sections(piece,self.mistakes)
+                       if self.mistakes else (
+                           Exercise("learn",complete,"fukuda:whole-score",
+                                    individual+("both",) if len(individual)>1 else individual),)),
                    Exercise("perform",complete,"perform:all"))
         result={}
         for exercise in exercises:
@@ -266,7 +322,7 @@ class FukudaMidiLessonGenerator:
                         exercise.phrase.last_bar,exercise.phrase.start,
                         exercise.phrase.end,tuple(n for _,n in selected)),
                     tuple(i for i,_ in selected))
-                if exercise.kind=="learn" and hand!="both":
+                if exercise.kind=="learn":
                     variants=fukuda_midi_variants(
                         original,bpm=piece.bpm,mistakes=self.mistakes)
                 else:
