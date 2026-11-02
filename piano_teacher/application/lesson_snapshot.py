@@ -8,19 +8,28 @@ from __future__ import annotations
 from ..state_projection import LessonSnapshot, TempoSnapshot
 from ..measure_grid import phrase_grid
 from ..lesson_settings import SETTINGS
+from ..lesson_stage_semantics import describe
 
 
 def build_lesson_snapshot(plan, exercise, variant, *, fingerprint: str,
                           warmup: bool, lesson_steps: tuple) -> LessonSnapshot:
     p = plan
     ex = exercise
+    stage_info = describe(p.active_stage, p.stages[-1]) if not warmup else {
+        "family": "Warm-up", "label": "Warm-up practice",
+        "change": "source notes", "meaningful": False}
     return LessonSnapshot(
         title=p.piece.title, kind=ex.kind,
         first_bar=ex.phrase.first_bar, last_bar=ex.phrase.last_bar,
         measure_boundaries=phrase_grid(p.active_phrase, p.piece.bar_boundaries),
         duration_beats=ex.phrase.end-ex.phrase.start,
         exercise_index=p.index, exercise_count=len(p.exercises),
-        level=variant.level, exercise_strategy=p.exercise_strategy.name,
+        level=variant.level,
+        stage_family=stage_info["family"],
+        stage_label=stage_info["label"],
+        stage_change=stage_info["change"],
+        stage_meaningful=stage_info["meaningful"],
+        exercise_strategy=p.exercise_strategy.name,
         timing_strategy=p.timing_strategy.name, tempo_strategy=p.tempo_strategy.name,
         level_number=p.variant_index+1,
         level_count=len(p.variants), required_notes=len(variant.notes),
