@@ -16,6 +16,7 @@ on:
       - 'piano_teacher/notation/lesson.py'
       - 'piano_teacher/notation/source_annotations.py'
       - 'tests/test_coda_*.py'
+      - 'scripts/audit_coda_live_notes.py'
       - 'tests/fixtures/research/*.musicxml'
       - 'tests/fixtures/musical_fidelity/xml_parallel_tied_voices.musicxml'
       - '.github/workflows/coda-research-contract-smoke.yml'
@@ -68,4 +69,18 @@ jobs:
             tests/test_coda_author_catalog.py \
             tests/test_coda_extended_probe.py \
             tests/test_coda_piece_curriculum.py \
-            tests/test_lesson_generator_architecture.py
+            tests/test_lesson_generator_architecture.py \
+            tests/test_coda_live_note_audit.py
+
+      - name: Audit every production Coda stage over independent MIDI corpus
+        run: |
+          timeout 20s python -m scripts.audit_coda_live_notes \
+            --output "$RUNNER_TEMP/coda-live-note-audit.json"
+      - name: Retain complete source attack and grading clock evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coda-live-note-audit-${{ github.sha }}
+          path: ${{ runner.temp }}/coda-live-note-audit.json
+          if-no-files-found: warn
+          retention-days: 14
