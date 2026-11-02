@@ -130,3 +130,26 @@ def test_complete_repertoire_piece_builds_actual_coda_learning_plan(file):
     assert any(step.level.startswith("coda-slowdown-x4")
                for step in plan.lesson_steps)
     assert any(step.level == "original" for step in plan.lesson_steps)
+
+
+def test_unequal_simultaneous_midi_durations_are_never_silently_shortened():
+    from piano_teacher.music import Note
+    notes = (
+        Note(0, 1, 48, 0, 0, "right", "short", "voice"),
+        Note(0, 3, 50, 0, 0, "right", "held", "voice"),
+        Note(1, 2, 52, 0, 0, "right", "next", "voice"),
+        Note(2, 3, 53, 0, 0, "right", "last", "voice"),
+    )
+    variant = ExerciseVariant(
+        "original", Phrase(1, 1, 1, 0, 4, notes), tuple(range(len(notes))))
+    for family, config in (
+        ("dotted", {"long_first": True}),
+        ("dotted", {"long_first": False}),
+        ("chord", {"chord_width": 8}),
+    ):
+        result = sparse_midi_coda(variant, family=family, quantization=4, **config)
+        held = result.timing.events[1]
+        assert held.exercise_start == pytest.approx(0)
+        assert held.exercise_end == pytest.approx(3)
+    assert tuple(n.source_id for n in variant.notes) == (
+        "short", "held", "next", "last")

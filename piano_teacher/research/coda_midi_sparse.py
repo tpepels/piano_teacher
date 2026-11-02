@@ -24,6 +24,7 @@ class _Attack:
     tick: int
     duration: int
     indices: tuple[int, ...]
+    uniform: bool
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,8 @@ def _attacks(variant: ExerciseVariant, q: int) -> tuple[_Attack, ...]:
         # tones, rather than rejecting an entire MIDI chord.
         _, _, duration = min(members, key=lambda member: (member[1], member[0]))
         attacks.append(_Attack(
-            tick, duration, tuple(index for index, _, _ in members)))
+            tick, duration, tuple(index for index, _, _ in members),
+            all(member_duration == duration for _, _, member_duration in members)))
     return tuple(attacks)
 
 
@@ -134,7 +136,8 @@ def sparse_midi_coda(
         for run in runs:
             sequence = run.attacks
             for a, b in zip(sequence[::2], sequence[1::2]):
-                if a.duration != b.duration or b.tick - a.tick != a.duration:
+                if (not a.uniform or not b.uniform or
+                        a.duration != b.duration or b.tick - a.tick != a.duration):
                     continue
                 # Source durations are doubled into the dotted grid, so
                 # 3:1 and 1:3 give strictly integral destination ticks.
@@ -153,7 +156,8 @@ def sparse_midi_coda(
                 next_onset = next((attack.tick for attack in attacks
                                    if attack.tick > last.tick), None)
                 new_end = last.tick + length
-                if (last.duration % 2 == 0 and new_end > last.tick and
+                if (last.uniform and last.duration % 2 == 0 and
+                        new_end > last.tick and
                         new_end <= _tick(phrase.end - phrase.start, q) and
                         (next_onset is None or new_end <= next_onset)):
                     set_time(last.indices, last.tick, new_end)
@@ -177,7 +181,7 @@ def sparse_midi_coda(
                 begin = run.start + bucket * width
                 stop_tick = min(begin + width, run.stop)
                 members = tuple(attacks_in_bucket)
-                if not members:
+                if not members or not all(a.uniform for a in members):
                     continue
                 # The pinned author accidentally excludes a pitch at
                 # sub_end-1 when moving noteheads, losing its identity.
