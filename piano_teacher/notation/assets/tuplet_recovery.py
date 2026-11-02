@@ -38,7 +38,7 @@ def _source_notes(notation_xml: str) -> tuple[dict[str, ET.Element], int]:
 
 
 def _isolated_score(ids: tuple[str, ...], source: dict[str, ET.Element],
-                    divisions: int) -> str | None:
+                    divisions: int, staff: str = "right") -> str | None:
     """Emit only the original attack notes in their original written order."""
     notes = []
     duration = 0
@@ -91,8 +91,8 @@ def _isolated_score(ids: tuple[str, ...], source: dict[str, ET.Element],
     ET.SubElement(meter, "beats").text = str(measure_beats)
     ET.SubElement(meter, "beat-type").text = "4"
     clef = ET.SubElement(attributes, "clef")
-    ET.SubElement(clef, "sign").text = "G"
-    ET.SubElement(clef, "line").text = "2"
+    ET.SubElement(clef, "sign").text = "F" if staff == "left" else "G"
+    ET.SubElement(clef, "line").text = "4" if staff == "left" else "2"
     measure.extend(notes)
     return ET.tostring(root, encoding="unicode")
 
@@ -124,16 +124,28 @@ def recover_missing_tuplets(notation_xml: str, model: dict,
     for ids in missing:
         if any(identifier not in all_events for identifier in ids):
             continue
-        isolated = _isolated_score(ids, source, divisions)
-        if isolated is None or not toolkit.loadData(isolated):
+        first = all_events[ids[0]]
+        if any((all_events[identifier].get("staff") != first.get("staff")
+                or all_events[identifier].get("voice") != first.get("voice")
+                or all_events[identifier].get("measure") != first.get("measure"))
+               for identifier in ids):
             continue
-        # Preserve original semantic marks and IDs. Only the beat origin and
-        # measure number change for this disposable engraving reference.
+        isolated = _isolated_score(
+            ids, source, divisions, str(first.get("staff", "right")))
+        if isolated is None:
+            continue
+        # Preserve original semantic marks and IDs. Only the measure number
+        # changes for this disposable Verovio reference.
         subset = {"notation_events": [
             {**all_events[identifier], "measure": 1}
             for identifier in ids]}
-        pages = [toolkit.renderToSVG(1)]
-        found = extract_tuplets(pages, subset)
+        try:
+            if not toolkit.loadData(isolated):
+                continue
+            pages = [toolkit.renderToSVG(1)]
+            found = extract_tuplets(pages, subset)
+        except (ValueError, TypeError, RuntimeError, ET.ParseError):
+            continue
         key = "|".join(ids)
         if key not in found or found[key].get("note_ids") != list(ids):
             continue
