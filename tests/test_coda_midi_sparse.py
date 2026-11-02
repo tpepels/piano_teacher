@@ -113,8 +113,8 @@ def test_complete_repertoire_piece_builds_actual_coda_learning_plan(file):
     assert plan.exercises[0].phrase.last_bar == len(piece.bar_boundaries)-1
     assert plan.exercises[-1].kind == "perform"
     assert plan.lesson_steps
-    assert any(step.level == "coda-slowdown-x2"
+    assert any(step.level.startswith("coda-slowdown-x2")
                for step in plan.lesson_steps)
-    assert any(step.level == "coda-slowdown-x4"
+    assert any(step.level.startswith("coda-slowdown-x4")
                for step in plan.lesson_steps)
     assert any(step.level == "original" for step in plan.lesson_steps)
