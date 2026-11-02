@@ -74,3 +74,38 @@ Use the [real MIDI keyboard checklist](../verification/coda-fukuda-physical-midi
 to record a complete on-device run, including repeated mistakes, clean
 corrections, stage/BPM restoration, grading and full-score mastery.
 Software CI alone cannot provide this evidence.
+
+
+## Progressive consolidation and accepted-result handoff (2026-11-02)
+
+In addition to individual short source passages and neighboring boundary
+bridges, the curriculum inserts progressively larger **original MIDI**
+connectors after complete adjacent groups of two, four, and eight focus
+passages when those connectors are safe at measure boundaries. Every
+connector uses original note attacks and releases, and its stages never
+substitute synthetic notes or duplicate the full original performance.
+These connectors are traversed by the existing lesson mastery policy.
+The full-score performance remains the unique finale.
+
+Adaptive feedback now distinguishes the **failed attacks from the current
+take** from older mistakes retained elsewhere in the piece. Earlier
+stored evidence can still select future scaffolds, but cannot redirect a
+new assessment to the wrong passage. A passing take containing a small
+number of advisory amber timings retains normal course advancement.
+Changing the future adaptive catalog without changing the currently
+rendered stage no longer invalidates the active score revision, avoiding
+an unnecessary engraving handoff.
+
+### Local, bounded verification
+
+```bash
+cd ~/Projects/piano_teacher
+git pull --ff-only
+bash scripts/verify-hybrid-workflow.sh --focused
+# Optional full 17-score corpus without waiting for GitHub Actions:
+bash scripts/verify-hybrid-workflow.sh --corpus
+```
+
+The local suite verifies software contracts. The existing physical MIDI
+checklist remains required for actual keyboard timing, GUI transitions
+and count-in/retry experience.
