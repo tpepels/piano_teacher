@@ -114,13 +114,18 @@ def test_obsolete_musicxml_recent_is_not_restored(tmp_path):
         'Bach.mid', 'Etudes/Chopin.midi']
 
 
-def test_coda_is_new_install_default_but_explicit_legacy_choice_persists(tmp_path):
+def test_combined_coda_fukuda_is_new_install_default_but_explicit_legacy_persists(tmp_path):
     library = ScoreLibrary(config_dir=tmp_path / "fresh")
-    assert library.settings["exercise_strategy"] == "coda-midi"
-    assert library.public_settings()["exercise_strategy"] == "coda-midi"
+    assert library.settings["exercise_strategy"] == "coda-fukuda-midi"
+    assert library.public_settings()["exercise_strategy"] == "coda-fukuda-midi"
     library.update(exercise_strategy="legacy")
     again = ScoreLibrary(config_dir=tmp_path / "fresh")
     assert again.settings["exercise_strategy"] == "legacy"
+    # A persisted choice of pure Coda must remain selectable and is not
+    # replaced by the new-install default.
+    again.update(exercise_strategy="coda-midi")
+    assert ScoreLibrary(config_dir=tmp_path / "fresh").settings[
+        "exercise_strategy"] == "coda-midi"
 
 
 def test_coda_piece_strategy_owns_timing_and_migrates_old_selection(tmp_path):
@@ -140,5 +145,5 @@ def test_coda_piece_strategy_owns_timing_and_migrates_old_selection(tmp_path):
     stored["exercise_strategy"]="coda-part"
     library.settings_path.write_text(json.dumps(stored))
     restored=ScoreLibrary(config_dir=config)
-    assert restored.settings["exercise_strategy"]=="coda-midi"
+    assert restored.settings["exercise_strategy"]=="coda-fukuda-midi"
     assert {x["id"] for x in restored.public_settings()["available_exercise_strategies"]}.__contains__("coda-midi")
