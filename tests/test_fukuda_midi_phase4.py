@@ -335,3 +335,17 @@ def test_fukuda_midi_family_uses_actual_notation_listen_and_grading(
     played=[PlayedNote(n.pitch,*expected(n)[:2]) for n in stage.variant.notes]
     assert evaluate(stage.variant.phrase,plan.hand,piece.bpm,played,
                     expected_seconds=expected).clean
+
+
+def test_fukuda_one_way_leap_reduces_only_nearby_material():
+    # A difficult unidirectional leap in bar 1 cannot cause unrelated
+    # chord tones in a distant passage to disappear.
+    p=phrase([48,68,70,60,64,67],[0,1,2,6,6,6],duration=.2)
+    assert rule_octave_leaps(original(p),bpm=90) is None
+    p=phrase([48,68,70,60,64,67],[0,1,2,2,2,2],duration=.2)
+    stage=rule_octave_leaps(original(p),bpm=90)
+    assert stage is not None
+    assert stage.level=="fukuda-midi-leap-neighbor"
+    assert {x.pitch for x in stage.notes}=={48,68,70,60,67}
+    assert rule_octave_leaps(original(p),bpm=90,
+          mistakes=frozenset({"midi-5"})) is None
