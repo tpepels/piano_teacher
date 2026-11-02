@@ -178,7 +178,7 @@ jobs:
         id: midi_algorithms
         continue-on-error: true
         run: |
-          timeout 75s python scripts/probe_coda_midi_author_algorithms.py \
+          timeout 95s python scripts/probe_coda_midi_author_algorithms.py \
             --upstream "$RUNNER_TEMP/upstream" \
             --report "$RUNNER_TEMP/coda-diff/midi-domain.json" \
             > "$RUNNER_TEMP/coda-diff/midi-domain-output.txt" 2>&1 || {

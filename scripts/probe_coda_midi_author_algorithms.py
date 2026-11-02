@@ -98,21 +98,70 @@ def _call_author(line, request: str):
     raise ValueError("Unknown author transformation: " + request)
 
 
-def compare_piece(path: Path, classes) -> dict:
+def reference_windows(piece, *, positions=3):
+    """Find independently safe and matrix-bounded 1–8-bar MIDI excerpts.
+
+    Author dense matrices cannot represent full long songs. Do not claim a
+    full-song reference check: enumerate labelled start/middle/end excerpts,
+    rejecting a window if it clips a sounding source note or lacks attacks.
+    """
+    grid = piece.bar_boundaries
+    count = len(grid) - 1
+    anchors = tuple(dict.fromkeys((1, max(1, count // 2), max(1, count - 1))))
+    selected = []
+    for target in anchors[:positions]:
+        match = None
+        for first in sorted(range(1, count + 1), key=lambda n: (abs(n - target), n)):
+            for size in (2, 1, 3, 4, 5, 6, 7, 8):
+                last = min(count, first + size - 1)
+                left, right = grid[first - 1], grid[last]
+                if any(n.start < left - 1e-7 and n.end > left + 1e-7
+                       for n in piece.notes):
+                    continue
+                notes = tuple(n for n in piece.notes
+                              if left - 1e-7 <= n.start < right - 1e-7)
+                if not notes or any(n.end > right + 1e-7 for n in notes):
+                    continue
+                phrase = Phrase(1, first, last, left, right, notes)
+                try:
+                    q = _excerpt_quantization(piece, phrase)
+                except ValueError:
+                    continue
+                if 2 * q * (right - left) * 128 > 1_900_000:
+                    continue
+                match = (first, last)
+                break
+            if match:
+                break
+        if match and match not in selected:
+            selected.append(match)
+    return tuple(selected)
+
+
+def compare_piece(path: Path, classes, *, measure_range=None) -> dict:
     row = {"file": path.name, "sha256": sha256(path.read_bytes()).hexdigest(),
            "status": "compared", "cases": []}
     try:
         piece = load_midi(path)
-        phrase = Phrase(1, 1, len(piece.bar_boundaries) - 1,
-                        piece.bar_boundaries[0], piece.bar_boundaries[-1],
-                        piece.notes)
+        grid = piece.bar_boundaries
+        first, last = (measure_range if measure_range is not None else
+                       (1, len(grid) - 1))
+        left, right = grid[first-1], grid[last]
+        notes = tuple(n for n in piece.notes
+                      if left - 1e-7 <= n.start < right - 1e-7)
+        if any(n.end > right + 1e-7 for n in notes):
+            raise ValueError("Reference excerpt cuts source note releases")
+        phrase = Phrase(1, first, last, left, right, notes)
+        row["excerpt"] = [first, last]
+        row["full_piece"] = measure_range is None
         original = ExerciseVariant(
-            "original", phrase, tuple(range(len(piece.notes))))
+            "original", phrase, tuple(range(len(phrase.notes))))
         catalog = midi_coda_catalog(piece, original)
         q = _excerpt_quantization(piece, phrase)
         meter = _first_meter(piece, phrase.start)
         source = MatrixScore.from_phrase(
-            phrase, boundaries=piece.bar_boundaries, source_musicxml="")
+            phrase, boundaries=tuple(piece.bar_boundaries[first-1:last+1]),
+            source_musicxml="")
         matrices = score_voice_matrices(source, quantization=q)
         grouped = {}
         for part in source.parts:
@@ -227,14 +276,26 @@ def main():
     repertoire = sorted((ROOT / "midi").glob("*.midi"))
     if len(fixtures) != 16 or len(repertoire) != 17:
         raise AssertionError("MIDI comparison corpus changed; audit the full inventory")
-    files = [*fixtures, *repertoire]
-    rows = [compare_piece(path, classes) for path in files]
+    rows = [compare_piece(path, classes) for path in fixtures]
+    for path in repertoire:
+        piece = load_midi(path)
+        windows = reference_windows(piece)
+        if not windows:
+            rows.append({
+                "file": path.name, "status": "source-rejected", "cases": [],
+                "reason": "No safe, bounded, complete-note reference excerpt"})
+        for measure_range in windows:
+            rows.append(compare_piece(path, classes, measure_range=measure_range))
     counts = Counter(item["status"] for row in rows for item in row["cases"])
     report = {
         "reference_revision": AUTHOR_REVISION,
         "source_input": "raw MIDI", "author_algorithm_input": "MIDI-derived MMR",
         "comparison": "sounding pitch, onset, end (slowdown normalized by factor)",
-        "source_files": len(rows),
+        "source_files": len(fixtures) + len(repertoire),
+        "reference_excerpts": len(rows),
+        "full_piece_reference_cases": len(fixtures),
+        "real_repertoire_bounded_excerpts": sum(
+            "excerpt" in row and not row["full_piece"] for row in rows),
         "source_rejected": sum(row["status"] != "compared" for row in rows),
         "source_rejections": [
             {"file": row["file"], "reason": row["reason"]}

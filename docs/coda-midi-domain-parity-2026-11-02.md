@@ -77,3 +77,16 @@ dense reference matrix; `max_cells=None` is permitted only in the sparse
 MIDI quantization chooser. This is necessary to support the 17 complete
 real MIDI repertoire pieces, all of which the earlier bounded dense
 comparison rejected as oversized.
+
+## Pinned original parity for longer repertoire excerpts
+
+The pinned author backend's dense array cannot run directly over the whole
+17-piece repertoire. The differential therefore runs on *safe, explicitly
+bounded* short windows from the beginning, middle and end of every real
+piece. Each chosen window contains original source notes in full, no clipped
+onsets or releases, with independent source voice owners, and a matrix size
+below the original backend's hard limit. All requested operations, original
+failures, and differences are recorded. These samples are separate from the
+full-song production sparse algorithm tests and **do not certify unexamined
+full-song author algorithms**. Individual bounded windows are not assembled
+into a fictitious whole-piece author output.
