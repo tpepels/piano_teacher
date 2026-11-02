@@ -90,10 +90,76 @@ def _chroma(pitches: tuple[int,...]) -> tuple[float,...]:
     return tuple(v/norm for v in out)
 
 
+def _windowed_chroma_dtw(score, perf, chroma_score, chroma_perf):
+    """Bounded-memory, monotone windowed DTW for complete long MIDI scores.
+
+    The author suggests WTW as a faster alternative to quadratic DTW.
+    Store only two cost rows and one byte of predecessor data per
+    candidate cell, not O(n*m) Python objects. Fail on an invalid path.
+    """
+    n,m=len(score),len(perf)
+    radius=min(192,max(24,round(max(n,m)*.04)))
+    min_score,max_score=score[0][0],score[-1][0]
+    min_perf,max_perf=perf[0][0],perf[-1][0]
+    score_span=max(max_score-min_score,1e-8)
+    perf_span=max(max_perf-min_perf,1e-8)
+    prev={0:0.0}
+    paths=[]
+    inf=float("inf")
+    for i in range(1,n+1):
+        center=round(i*m/n)
+        low=max(1,center-radius)
+        high=min(m,center+radius)
+        if i==1:
+            low=1
+        if i==n:
+            high=m
+        row={}
+        direction=bytearray([255])*(high-low+1)
+        a=chroma_score[i-1]
+        normalized=(score[i-1][0]-min_score)/score_span
+        for j in range(low,high+1):
+            similarity=sum(u*v for u,v in zip(a,chroma_perf[j-1]))
+            offset=abs(normalized-(perf[j-1][0]-min_perf)/perf_span)
+            cost=1-similarity+.15*offset
+            choices=((prev.get(j-1,inf),0),
+                     (prev.get(j,inf)+.30,1),
+                     (row.get(j-1,inf)+.30,2))
+            best,step=min(choices,key=lambda item:item)
+            if best<inf:
+                row[j]=best+cost
+                direction[j-low]=step
+        paths.append((low,direction))
+        if not row:
+            raise ValueError("Fukuda windowed DTW has no reachable MIDI path")
+        prev=row
+    if m not in prev:
+        raise ValueError("Fukuda windowed DTW cannot reach performance end")
+    pairs=[]
+    i,j=n,m
+    while i>0 and j>0:
+        low,choices=paths[i-1]
+        if not low<=j<low+len(choices):
+            raise ValueError("Fukuda windowed DTW path left the alignment band")
+        step=choices[j-low]
+        if step==0:
+            pairs.append((i-1,j-1))
+            i-=1;j-=1
+        elif step==1:
+            i-=1
+        elif step==2:
+            j-=1
+        else:
+            raise ValueError("Fukuda windowed DTW reached an unreachable cell")
+    pairs.reverse()
+    return tuple(AlignedOnset(score[a][0],perf[b][0],
+                             score[a][1],perf[b][1]) for a,b in pairs)
+
+
 def align_midi_dtw(phrase: Phrase, played: Sequence[PlayedNote], *,
                    hand: str="both", bpm: float=90,
                    chord_window_seconds: float=.055,
-                   maximum_onsets: int=1500) -> tuple[AlignedOnset,...]:
+                   maximum_onsets: int=20000) -> tuple[AlignedOnset,...]:
     """Monotone DTW chroma alignment; score and performance are real MIDI.
 
     A skipped score event or added played event can align to an adjacent
@@ -111,6 +177,8 @@ def align_midi_dtw(phrase: Phrase, played: Sequence[PlayedNote], *,
         raise ValueError("MIDI DTW exceeds bounded source event count")
     chroma_score=[_chroma(p) for _,p in score]
     chroma_perf=[_chroma(p) for _,p in perf]
+    if n*m>250000:
+        return _windowed_chroma_dtw(score,perf,chroma_score,chroma_perf)
     # Absolute movement is penalized but allowed; offsets are normalized
     # against each recording's actual first/last sounding time.
     min_score,max_score=score[0][0],score[-1][0]
