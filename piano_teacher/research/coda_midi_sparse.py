@@ -177,12 +177,10 @@ def sparse_midi_coda(
                 members = tuple(attacks_in_bucket)
                 if not members:
                     continue
-                # Original loops to sub_end-1 when moving pitches but sums
-                # durations over the whole window. That drops a source
-                # attack at the final tick. Preserve the MIDI grader and
-                # leave this author-defective group unchanged.
-                if any(a.tick == stop_tick - 1 for a in members):
-                    continue
+                # The pinned author accidentally excludes a pitch at
+                # sub_end-1 when moving noteheads, losing its identity.
+                # Include that attack in a playable MIDI chord rather
+                # than reproducing an invalid author output.
                 indices = tuple(i for a in members for i in a.indices)
                 pitches = tuple(variant.notes[i].pitch for i in indices)
                 if (len(members) > 5 or len(pitches) > 5 or
