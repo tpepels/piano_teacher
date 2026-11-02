@@ -153,15 +153,15 @@ def test_whole_piece_analysis_sets_different_section_lengths_for_sparse_and_dens
     plan=LearningPlan(piece,exercise_strategy="coda-midi")
     sections=[exercise for exercise in plan.exercises if exercise.kind=="learn"]
     assert len(sections)>3
-    assert sections[0].first_bar==1
-    assert sections[0].last_bar-sections[0].first_bar+1>=4
-    assert any(0<ex.last_bar-ex.first_bar+1<=2 and ex.first_bar>=11
+    assert sections[0].phrase.first_bar==1
+    assert sections[0].phrase.last_bar-sections[0].phrase.first_bar+1>=4
+    assert any(0<ex.phrase.last_bar-ex.phrase.first_bar+1<=2 and ex.phrase.first_bar>=11
                for ex in sections)
     assert plan.exercises[-1].kind=="perform"
     assert plan.exercises[-1].phrase.notes==piece.notes
     assert Counter(n.source_id for ex in sections for n in ex.phrase.notes)==Counter(
         n.source_id for n in piece.notes)
-    assert all(1<=ex.last_bar-ex.first_bar+1<=8 for ex in sections)
+    assert all(1<=ex.phrase.last_bar-ex.phrase.first_bar+1<=8 for ex in sections)
     # The complete piece-level definition is constructed BEFORE selecting
     # any step; stage navigation never invokes Coda generation again.
     before=plan.lesson_definition
