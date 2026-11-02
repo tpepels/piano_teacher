@@ -125,7 +125,7 @@ def test_immutable_definition_rejects_missing_hand_and_lost_original():
         LessonPlanDefinition((exercise,),stages,"broken")
 
 
-def test_whole_piece_analysis_sets_different_section_lengths_for_sparse_and_dense_midi(tmp_path):
+def test_coda_whole_piece_catalog_does_not_invent_sections_from_density(tmp_path):
     from collections import Counter
     import mido
 
@@ -151,19 +151,19 @@ def test_whole_piece_analysis_sets_different_section_lengths_for_sparse_and_dens
     file.save(path)
     piece=load_midi(path)
     plan=LearningPlan(piece,exercise_strategy="coda-midi")
-    sections=[exercise for exercise in plan.exercises if exercise.kind=="learn"]
-    assert len(sections)>3
-    assert sections[0].phrase.first_bar==1
-    assert sections[0].phrase.last_bar-sections[0].phrase.first_bar+1>=4
-    assert any(0<ex.phrase.last_bar-ex.phrase.first_bar+1<=2 and ex.phrase.first_bar>=11
-               for ex in sections)
+    catalog=[exercise for exercise in plan.exercises if exercise.kind=="learn"]
+    # The pinned author asks the caller for start/end measures, so
+    # selecting the complete source makes ONE excerpt regardless of
+    # global density. It does not invent a sequence of short lessons.
+    assert len(catalog)==1
+    excerpt=catalog[0]
+    assert excerpt.phrase.first_bar==1
+    assert excerpt.phrase.last_bar==20
+    assert excerpt.phrase.notes==piece.notes
+    assert excerpt.key=="coda:whole-source"
     assert plan.exercises[-1].kind=="perform"
-    assert plan.exercises[-1].phrase.notes==piece.notes
-    assert Counter(n.source_id for ex in sections for n in ex.phrase.notes)==Counter(
+    assert Counter(n.source_id for n in excerpt.phrase.notes)==Counter(
         n.source_id for n in piece.notes)
-    assert all(1<=ex.phrase.last_bar-ex.phrase.first_bar+1<=8 for ex in sections)
-    # The complete piece-level definition is constructed BEFORE selecting
-    # any step; stage navigation never invokes Coda generation again.
     before=plan.lesson_definition
     for number in (1,len(plan.lesson_steps)//2,len(plan.lesson_steps)):
         plan.select_step(number)

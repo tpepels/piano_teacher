@@ -50,13 +50,17 @@ def test_whole_piece_coda_plan_has_stages_for_each_lesson_and_original_final(tmp
     plan=LearningPlan(piece,exercise_strategy="coda-midi",consolidate=False)
     assert plan.piece is piece
     assert plan.exercise_strategy.name=="coda-midi"
-    assert len(plan.exercises)>=2
+    assert len(plan.exercises)==2
+    assert plan.exercises[0].phrase.notes==piece.notes
+    assert plan.exercises[0].phrase.first_bar==1
+    assert plan.exercises[0].phrase.last_bar==3
     steps=plan.lesson_steps
     assert steps and len(steps)>len(plan.exercises)
     assert len({s.key for s in steps})==len(steps)
     assert any(s.level=="coda-slowdown-x2" for s in steps)
     assert any(s.level.startswith("coda-dotted-") for s in steps)
-    assert any(s.level=="coda-chord-blocks" for s in steps)
+    assert any(s.level.startswith("coda-chord-") for s in steps)
+    assert any(s.level=="coda-slowdown-x4" for s in steps)
     for ex in plan.exercises:
         hand="both" if ex.kind != "learn" else "right"
         stages=plan._pipeline_stages(ex,hand)
