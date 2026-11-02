@@ -28,6 +28,8 @@ if [[ "$MODE" != "--corpus" ]]; then
   if command -v godot >/dev/null 2>&1; then
     timeout 25s godot --headless --path godot --script \
       res://../tests/godot/idle_note_preview.gd
+    timeout 25s godot --headless --path godot --script \
+      res://../tests/godot/lesson_stage_picker.gd
   else
     echo "GODOT_IDLE_PREVIEW_SKIPPED: Godot binary not installed" >&2
   fi
