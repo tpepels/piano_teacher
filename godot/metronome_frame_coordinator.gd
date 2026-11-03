@@ -41,20 +41,23 @@ func update(state: Dictionary, state_tick_ms: int,
             # preview; the backend will publish its epoch on the next poll.
             beat = float(calibration.get("beat",-2.0)) + \
                 maxf(0.0,float(now_ms-state_tick_ms)/1000.0)*bpm/60.0
+        var count_in := maxi(0,int(calibration.get("count_in",4)))
+        var ticks_per_round := maxi(1,int(calibration.get("ticks",8)))
+        var total := count_in + ticks_per_round * maxi(
+            1,int(calibration.get("rounds",5)))
         settings_view.animate_calibration_beat(
-            beat,true,int(calibration.get("round_beats",12)),
-            int(calibration.get("count_in",4)))
-        var interval := maxi(1,int(calibration.get("round_beats",12)))
-        var total := interval * maxi(1,int(calibration.get("rounds",3)))
+            beat,true,ticks_per_round,count_in)
         if beat >= 0.0 and beat < float(total):
             var tick := floori(beat + .00001)
             if tick != calibration_tick_index:
                 var timely := calibration_tick_index != -999 or beat-float(tick) < .12
                 calibration_tick_index = tick
                 if timely:
-                    var inside_round := posmod(tick,interval)
-                    raw_click.call(inside_round == 0 or
-                        inside_round == int(calibration.get("count_in",4)))
+                    # Only the initial four beats are preparation. The click
+                    # never pauses between the eight-tap measurement rounds.
+                    var round_start := tick >= count_in and \
+                        posmod(tick-count_in,ticks_per_round) == 0
+                    raw_click.call(tick == 0 or round_start)
         return
     calibration_tick_index = -999
     if (settings_view.calibration_beat_pulse != null

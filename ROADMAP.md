@@ -76,6 +76,18 @@ does not certify a clean-machine launch of the final compressed release; that
 is Phase 7. Hardware latency, visual note alignment, physical grading and
 pedagogical effectiveness belong to Phases 6 and 7, not Phase 5.
 
+## Phase 6 — MIDI calibration redesign
+
+Five uninterrupted eight-tap rounds now follow a single four-beat count-in.
+The input callback and displayed/clicked pulse use the same monotonic epoch
+and total beat count. A clearly mistimed tap per round and at most one
+outlying/unreliable whole round can be excluded; at least four consistent
+rounds are required. Apply is explicit and the saved correction remains
+unchanged after cancellation or rejected samples. Python tests cover timeline,
+outliers, missing/double taps and persistence; Godot checks cover the pulse's
+single preparation period. USB/Bluetooth timing accuracy remains a physical
+Phase 6 gate, not certified by synthetic samples.
+
 ## Immediate order of work
 
 **P6 — Prove real user behavior.** The

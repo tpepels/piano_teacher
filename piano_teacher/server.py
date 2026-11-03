@@ -278,7 +278,7 @@ class PracticeEngine:
                     raise ValueError("Connect the MIDI keyboard before calibrating")
                 self._stop()
                 self.midi_calibration.start(time.monotonic())
-                self.feedback = "Tap any key in time with eight clicks"
+                self.feedback = "Tap one key per click through five continuous rounds"
             elif action == "calibration_cancel":
                 self.midi_calibration.cancel()
             elif action == "calibration_apply":

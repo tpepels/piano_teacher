@@ -8,15 +8,20 @@ func _initialize() -> void:
     var failures := 0
     if pulse.visible:
         failures += 1
-    pulse.present_beat(0.0, true, 12, 4)
-    if not pulse.visible or absf(pulse.beat) > .0001:
+    pulse.present_beat(0.0, true, 8, 4)
+    if not pulse.visible or not pulse.is_preparing():
         failures += 1
-    pulse.present_beat(4.25, true, 12, 4)
-    if not pulse.visible or absf(pulse.beat-4.25) > .0001:
+    pulse.present_beat(3.99, true, 8, 4)
+    if not pulse.is_preparing():
         failures += 1
-    pulse.present_beat(12.0, true, 12, 4)
-    if not pulse.visible or pulse.round_beats != 12:
+    pulse.present_beat(4.0, true, 8, 4)
+    if pulse.is_preparing():
         failures += 1
+    # At every subsequent round boundary, preparation must never return.
+    for round_index in range(1, 5):
+        pulse.present_beat(4.0 + float(round_index * 8), true, 8, 4)
+        if pulse.is_preparing() or pulse.round_beats != 8:
+            failures += 1
     pulse.present_beat(-1.0, false)
     if pulse.visible:
         failures += 1
