@@ -444,18 +444,32 @@ class ComposedLessonGenerator:
     name: str
     mistakes: frozenset[str] | None = None
     core: LessonPlanDefinition | None = None
+    # Source-ID error families are an immutable value, independently of the
+    # component set. Custom components may implement with_feedback; older
+    # source-ID-only algorithms receive the same frozenset via with_mistakes.
+    error_status: tuple[tuple[str, str], ...] = ()
 
     def with_mistakes(
         self, mistakes: frozenset[str], definition: LessonPlanDefinition,
     ) -> "ComposedLessonGenerator":
         from dataclasses import replace
-        if mistakes == self.mistakes:
+        statuses = tuple(sorted((sid, dict(self.error_status).get(sid, "missed"))
+                                for sid in mistakes))
+        if mistakes == self.mistakes and statuses == self.error_status:
             return self
-        # A course initially generated without mistakes is exactly the
-        # immutable core. Reuse it, rather than re-running the complete
-        # score generators after each assessed original performance.
         core = self.core or (definition if not self.mistakes else None)
-        return replace(self, mistakes=mistakes, core=core)
+        return replace(self, mistakes=mistakes, error_status=statuses, core=core)
+
+    def with_feedback(
+        self, evidence: Mapping[str, str], definition: LessonPlanDefinition,
+    ) -> "ComposedLessonGenerator":
+        from dataclasses import replace
+        statuses = tuple(sorted(evidence.items()))
+        if statuses == self.error_status and frozenset(evidence) == self.mistakes:
+            return self
+        core = self.core or (definition if not self.mistakes else None)
+        return replace(self, mistakes=frozenset(evidence),
+                       error_status=statuses, core=core)
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         if not self.components:
@@ -475,11 +489,16 @@ class ComposedLessonGenerator:
             # Only feedback-capable components may create remedial lessons.
             # Filter out the baseline score exercise, which is already
             # represented in the full curriculum.
+            evidence = dict(self.error_status)
             for generator in self.components:
-                update = getattr(generator, "with_mistakes", None)
-                if not callable(update):
+                feedback_hook = getattr(generator, "with_feedback", None)
+                mistakes_hook = getattr(generator, "with_mistakes", None)
+                if callable(feedback_hook):
+                    informed = feedback_hook(evidence, combined)
+                elif callable(mistakes_hook):
+                    informed = mistakes_hook(self.mistakes, combined)
+                else:
                     continue
-                informed = update(self.mistakes, combined)
                 responsive = informed.generate(piece)
                 repair_exercises = tuple(ex for ex in responsive.exercises
                                          if ex.kind == "learn"
