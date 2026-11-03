@@ -8,7 +8,8 @@ from piano_teacher.music import Phrase, source_note_id
 from piano_teacher.notation.audit_annotations import CANONICAL_CAPTURE_CONFIG, canonical_piece
 from piano_teacher.notation.lesson import build_lesson_score, infer_piece_clefs
 from piano_teacher.notation.model import build_score_model
-from piano_teacher.score import import_piece, render_layout
+from piano_teacher.importing.pieces import import_piece
+from piano_teacher.engraving.engraving import render_layout
 
 from .capture_store import ROOT
 from .case_catalog import CASES
