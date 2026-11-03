@@ -8,7 +8,8 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from .exercise_contracts import (from .sqlite_transaction import sqlite_atomic
+from .sqlite_transaction import sqlite_atomic
+from .exercise_contracts import (
 
     AssessmentEvidence, LearnerSnapshot, PracticeRecommendation,
     resolve_diagnosis_strategy, resolve_learner_strategy,
