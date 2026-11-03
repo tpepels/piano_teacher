@@ -13,6 +13,7 @@ from numbers import Real
 import sqlite3
 
 from .exercise_generator import ExerciseVariant
+from .sqlite_transaction import sqlite_atomic
 from .measure_grid import phrase_grid, two_bar_chunks
 
 
@@ -191,7 +192,7 @@ class LearnerStateStore:
         """Call only after evidence of improvement, e.g. a clean full take."""
         _identity(fingerprint, stage_key)
         unit = _unit(unit) if unit is not None else None
-        with self.db:
+        with sqlite_atomic(self.db):
             query = "UPDATE learner_units SET resolved=1 WHERE fingerprint=? AND stage_key=?"
             values = (fingerprint, stage_key)
             if unit is not None:

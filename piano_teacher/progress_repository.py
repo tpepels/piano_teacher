@@ -10,6 +10,7 @@ import sqlite3
 from pathlib import Path
 
 from .learning import LearningPlan
+from .sqlite_transaction import sqlite_atomic
 from .lesson_settings import SETTINGS
 from .learner_state import LearnerStateStore
 from .practice_history import AssessmentHistoryStore
@@ -136,40 +137,40 @@ class ProgressRepository:
         p=plan
         if p is None:
             return
-        prior = self.db.execute("SELECT target_bpm FROM sessions WHERE fingerprint=?",
-                                (fingerprint,)).fetchone()
-        if prior and prior[0] is not None and int(prior[0]) != p.target_bpm:
-            # A new piece-wide target must not resurrect the former BPM
-            # ladders on later navigation or after restarting the app.
-            self.db.execute("DELETE FROM stage_tempos WHERE fingerprint=?",
-                            (fingerprint,))
-            self.db.execute("DELETE FROM repeat_tempo_credit WHERE fingerprint=?",
-                            (fingerprint,))
-            # Old per-strategy BPM/streak targets cannot be revived after
-            # changing the piece-wide target tempo.
-            self.db.execute("DELETE FROM strategy_sessions WHERE fingerprint=?",
-                            (fingerprint,))
-        self.db.execute("INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm,p.variant_index,
-                         p.route_version,p.identity,p.exercise.phrase.first_bar,p.exercise.phrase.last_bar,
-                         p.active_variant.level,p.exercise.kind))
-        self.db.execute("""INSERT OR REPLACE INTO strategy_sessions
-            (fingerprint,strategy,exercise,hand,bpm,streak,target_bpm,
-             variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (fingerprint,p.profile,p.index,p.hand,p.bpm,p.streak,p.target_bpm,
-             p.variant_index,p.route_version,p.identity,p.exercise.phrase.first_bar,
-             p.exercise.phrase.last_bar,p.active_variant.level,p.exercise.kind))
-        p.stage_tempos[p.identity] = p.bpm
-        for key, bpm in p.stage_tempos.items():
-            self.db.execute("INSERT OR REPLACE INTO stage_tempos VALUES (?,?,?)",
-                            (fingerprint,key,bpm))
-        for key in p.transferable_tempos:
-            self.db.execute("INSERT OR REPLACE INTO repeat_tempo_credit VALUES (?,?)",
-                            (fingerprint,key))
-        for key, bpm in p.mastered.items():
-            self.db.execute("INSERT OR REPLACE INTO mastery VALUES (?,?,?)", (fingerprint,key,bpm))
-        self.db.commit()
+        with sqlite_atomic(self.db):
+            prior = self.db.execute("SELECT target_bpm FROM sessions WHERE fingerprint=?",
+                                    (fingerprint,)).fetchone()
+            if prior and prior[0] is not None and int(prior[0]) != p.target_bpm:
+                # A new piece-wide target must not resurrect the former BPM
+                # ladders on later navigation or after restarting the app.
+                self.db.execute("DELETE FROM stage_tempos WHERE fingerprint=?",
+                                (fingerprint,))
+                self.db.execute("DELETE FROM repeat_tempo_credit WHERE fingerprint=?",
+                                (fingerprint,))
+                # Old per-strategy BPM/streak targets cannot be revived after
+                # changing the piece-wide target tempo.
+                self.db.execute("DELETE FROM strategy_sessions WHERE fingerprint=?",
+                                (fingerprint,))
+            self.db.execute("INSERT OR REPLACE INTO sessions (fingerprint,exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            (fingerprint,p.index,p.hand,p.bpm,p.streak,p.target_bpm,p.variant_index,
+                             p.route_version,p.identity,p.exercise.phrase.first_bar,p.exercise.phrase.last_bar,
+                             p.active_variant.level,p.exercise.kind))
+            self.db.execute("""INSERT OR REPLACE INTO strategy_sessions
+                (fingerprint,strategy,exercise,hand,bpm,streak,target_bpm,
+                 variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (fingerprint,p.profile,p.index,p.hand,p.bpm,p.streak,p.target_bpm,
+                 p.variant_index,p.route_version,p.identity,p.exercise.phrase.first_bar,
+                 p.exercise.phrase.last_bar,p.active_variant.level,p.exercise.kind))
+            p.stage_tempos[p.identity] = p.bpm
+            for key, bpm in p.stage_tempos.items():
+                self.db.execute("INSERT OR REPLACE INTO stage_tempos VALUES (?,?,?)",
+                                (fingerprint,key,bpm))
+            for key in p.transferable_tempos:
+                self.db.execute("INSERT OR REPLACE INTO repeat_tempo_credit VALUES (?,?)",
+                                (fingerprint,key))
+            for key, bpm in p.mastered.items():
+                self.db.execute("INSERT OR REPLACE INTO mastery VALUES (?,?,?)", (fingerprint,key,bpm))
 
 
     def reset_piece(self, fingerprint: str) -> None:

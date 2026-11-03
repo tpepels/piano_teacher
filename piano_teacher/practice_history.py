@@ -8,7 +8,8 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from .exercise_contracts import (
+from .exercise_contracts import (from .sqlite_transaction import sqlite_atomic
+
     AssessmentEvidence, LearnerSnapshot, PracticeRecommendation,
     resolve_diagnosis_strategy, resolve_learner_strategy,
 )
@@ -39,7 +40,7 @@ class AssessmentHistoryStore:
     def record(self, fingerprint: str, evidence: AssessmentEvidence) -> LearnerSnapshot:
         if not fingerprint or not evidence.assessed or not evidence.statuses:
             raise ValueError("Only actual scored takes may enter learner history")
-        with self.db:
+        with sqlite_atomic(self.db):
             self.db.execute(
                 """INSERT INTO practice_evidence(fingerprint,stage_key,bpm,statuses,extra_notes)
                    VALUES (?,?,?,?,?)""",

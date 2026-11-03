@@ -12,6 +12,7 @@ from collections import Counter
 import sqlite3
 
 from .practice import Assessment
+from .sqlite_transaction import sqlite_atomic
 
 
 class FukudaMistakeStore:
@@ -50,7 +51,7 @@ class FukudaMistakeStore:
         ids=[n.note.source_id for n in result.notes]
         if any(not x for x in ids) or len(ids)!=len(set(ids)):
             raise ValueError("Fukuda needs unique original MIDI attack identities")
-        with self.db:
+        with sqlite_atomic(self.db):
             for entry in result.notes:
                 sid=entry.note.source_id
                 if entry.status=="correct":
