@@ -51,7 +51,12 @@ selected score. Run bounded Python/compilation tests, Godot parse tests,
 the native GDExtension bridge check, the focused Coda/Fukuda workflow and
 the 17-piece corpus. Resolve all failures; verify packaged imports contain
 no removed UI, route, page-PNG or facade modules. Confirm persisted settings
-and course-version migrations do not fabricate mastery or BPM.
+and course-version migrations do not fabricate mastery or BPM. **Remaining
+source debt:** the selectable `LegacyStrategy` / `HeuristicLessonGenerator`
+fallback and the ID-only `with_mistakes` adaptation must be eliminated or
+recast as explicit modern generator capabilities, with callers and tests
+migrated rather than compatibility wrappers retained. Review engine/screen
+forwarding accessors against the same rule.
 
 **P6 — Prove real user behavior.** On the real Beethoven Pathétique II MIDI,
 record READY ink, Step 1 provenance, effective tempo, Play/Listen/Retry,
@@ -78,13 +83,14 @@ functioning.
 | Physical latency/handshake and reconnect remain unproven | Measure timestamp and calibration error with USB and Bluetooth on target device; fault-inject disconnect and recovery |
 | Full packaging, migration and runtime fault handling not accepted | Isolated clean-home install, simulated corrupted cache/old course, crash/reopen, offline start and asset-bundle checks |
 | Application roots may still contain avoidable coordination | Audit `server.py`/`main.gd` for engine-owning transitions and forwarding accessors; move complete responsibilities to narrowly typed owners and delete old paths, not aliases |
+| Heuristic/legacy strategy and ID-only feedback paths remain registered | Migrate tests and saved-course policy to the one typed generator/feedback contract, then delete old strategy and fallback implementations without runtime aliases |
 | Original Fukuda numeric/figure parity is not independently established | Paper-to-code threshold/figure audit; explicitly report MIDI-domain substitutions instead of claiming audio-domain replication |
 
 ## Current blockers
 
 | Blocker | Unblock |
 |---|---|
-| **Post-migration tests have not been reported green** | Run P5 local bounded suite; fix failures before declaring architectural completion |
+| **Post-migration gate is red** | CI reported 5 fast-contract failures (obsolete typed-op tests/default assertions) and a native smoke success-code mismatch; source tests/smoke were repaired on 2026-11-03, but the new commit must be rerun before acceptance |
 | **Native C++/Godot typed-op protocol changed** | Rebuild `scripts/build-inprocess.sh`; run `scripts/verify-native-bridge.sh` and Godot syntax/smoke |
 | **Real Beethoven and physical instrument behavior unobserved** | Reopen Beethoven in combined strategy; capture diagnostic log, framebuffer and keyboard assessment trace |
 | **Research comparison and release evidence missing** | P7 pilot and clean-machine packaging gate, after P6 |
