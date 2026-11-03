@@ -990,6 +990,7 @@ class PracticeEngine:
         )
         engine_before = {key: getattr(self, key) for key in engine_fields}
         visual_offset_before = self.visual_transport.visual_offset_beats
+        score_artifacts_before = self.score_artifacts
         try:
             with sqlite_atomic(self.db):
                 # Source-specific mistakes are learned from authentic original
@@ -1068,6 +1069,7 @@ class PracticeEngine:
             for key, value in engine_before.items():
                 setattr(self, key, value)
             self.visual_transport.visual_offset_beats = visual_offset_before
+            self.score_artifacts = score_artifacts_before
             raise
         self.pending_result = None
         return outcome.message

@@ -65,6 +65,13 @@ class EngineCommands:
                 return self._reply(OK, {"devices": engine.ports()})
             if operation == "score.native_layout":
                 return self._reply(OK, engine.geometry())
+            if operation == "score.next_stage":
+                if values:
+                    raise ValueError("score.next_stage takes no input")
+                return self._reply(OK, engine.next_stage_score())
+            if operation == "score.stage_ready":
+                return self._reply(OK, engine.acknowledge_preloaded_stage(
+                    stage_key=values["stage_key"], revision=values["revision"]))
             if operation == "listen.audio":
                 return OK, engine.demo_audio(values.get("token", "")).read_bytes()
             if operation == "fingering.correct":
