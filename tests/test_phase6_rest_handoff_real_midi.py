@@ -87,9 +87,13 @@ def test_original_real_midi_full_rest_has_no_camera_or_grading_clock_reset(
         transport_id = started["transport_id"]
         downbeat = engine.run_at
         tempo = engine._active_tempo_map()
+        # The unmodified original normally has a constant-tempo policy.
+        # Generated shaped stages supply a TempoMap; both share source beats.
+        seconds_at = (tempo.seconds_at if tempo is not None
+                      else lambda beat: beat * 60.0 / float(started["bpm"]))
         samples = []
         for beat in (3.8,4.0,5.0,6.0,7.8,8.0,8.2,9.0):
-            clock[0] = downbeat + tempo.seconds_at(beat)
+            clock[0] = downbeat + seconds_at(beat)
             state = ask("state.snapshot")
             assert state["transport_id"] == transport_id
             assert state["revision"] == model["revision"]
