@@ -1,6 +1,7 @@
 """Terminal-beat geometry is taken from SVG barlines, never guessed."""
 import pytest
-from piano_teacher.score_geometry import layout_from_pages, locate_beat, parse_svg_geometry
+from piano_teacher.engraving.geometry import layout_from_pages, locate_beat
+from piano_teacher.source_svg import parse_svg_geometry
 
 def svg(body):
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600">' + body + '</svg>'
