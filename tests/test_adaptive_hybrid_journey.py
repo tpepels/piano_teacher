@@ -324,3 +324,55 @@ def test_fukuda_rule_must_affect_the_failed_note_or_nearby_source(tmp_path):
     assert plan.refresh_from_feedback({chord.source_id: "wrong"})
     assert any(s.variant.level.startswith("fukuda-midi-")
                for s in plan.stages)
+
+
+def test_hybrid_source_attack_index_preserves_order_and_safe_release_cuts():
+    """Chronological lookup may not reorder imported tracks or source IDs."""
+    from piano_teacher.adaptive_hybrid_curriculum import (
+        _SourceAttackIndex, _segments, _course_exercises)
+    from piano_teacher.music import Note, Phrase, Piece
+    # Nonchronological original tuple is legal; never turn it into a new
+    # identity/order or silently crop a held note crossing measure two.
+    notes = (
+        Note(4.0, 4.5, 67, 0, 0, "right", "n2"),
+        Note(0.0, 1.0, 60, 0, 0, "right", "n0"),
+        Note(3.5, 4.5, 62, 0, 0, "right", "n1"),
+        Note(8.0, 9.0, 72, 0, 0, "right", "n3"),
+        Note(1.0, 1.5, 64, 0, 0, "right", "n4"),
+    )
+    piece = Piece("Index", 80, notes,
+        (Phrase(1,1,3,0,12,notes),),
+        bar_boundaries=(0,4,8,12))
+    index = _SourceAttackIndex(piece)
+    assert index.notes_in(0, 4) == (notes[1], notes[2], notes[4])
+    assert index.notes_in(0, 4-1e-7) == (notes[1], notes[2], notes[4])
+    assert index.crossing(0,4)
+    assert not index.crossing(0,8)
+    assert index.notes_in(4,8) == (notes[0],)
+    segments = _segments(piece)
+    for section in segments:
+        assert section.notes == tuple(n for n in notes
+            if section.start-1e-7 <= n.start < piece.bar_boundaries[section.last_bar]-1e-7)
+        assert all(n.end <= section.end+1e-7 for n in section.notes)
+    exercises = _course_exercises(piece)
+    assert exercises[-1].phrase.notes == notes
+    assert all(n.source_id in {note.source_id for note in notes}
+               for ex in exercises for n in ex.phrase.notes)
+
+
+def test_index_matches_old_source_window_semantics_at_float_boundaries():
+    from piano_teacher.adaptive_hybrid_curriculum import _SourceAttackIndex
+    from piano_teacher.music import Note, Phrase, Piece
+    notes = tuple(Note(float(i)/4, float(i)/4+.5, 60+i%12, 0, 0,
+                       "right",str(i)) for i in reversed(range(90)))
+    piece = Piece("Window semantics",80,notes,
+        (Phrase(1,1,6,0,24,notes),),
+        bar_boundaries=(0,4,8,12,16,20,24))
+    indexed = _SourceAttackIndex(piece)
+    for start,end in [(0,4),(4,8),(1.5,10),(2,18),
+                      (7.5-1e-7,20-1e-7),(20,24)]:
+        assert indexed.notes_in(start,end) == tuple(
+            n for n in notes if start <= n.start < end)
+        assert indexed.crossing(start,end) == any(
+            start <= n.start < end-1e-7 and n.end > end+1e-7
+            for n in notes)

@@ -7,7 +7,7 @@ renderer, MIDI grader or persistence system is introduced.
 """
 from __future__ import annotations
 
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from collections import Counter
 from dataclasses import replace
 from typing import Mapping, Protocol
@@ -20,13 +20,40 @@ from .lesson_source_planner import Exercise, _focus_phrases, _hands_for_learning
 from .music import Phrase, Piece
 
 
-def _segments(piece: Piece) -> tuple[Phrase, ...]:
+class _SourceAttackIndex:
+    """One source-order-preserving index for repeated passage range queries.
+
+    The long Hanon score previously re-scanned every source note for each
+    passage, seam and consolidation candidate. Sorting once by attack
+    position bounds each query to the notes actually inside that passage.
+    Returned tuples retain the original source note order and identities.
+    """
+
+    def __init__(self, piece: Piece):
+        self._notes = piece.notes
+        onsets = sorted((note.start, index)
+                        for index, note in enumerate(piece.notes))
+        self._starts = tuple(start for start, _ in onsets)
+        self._indices = tuple(index for _, index in onsets)
+
+    def notes_in(self, start: float, end: float) -> tuple:
+        low = bisect_left(self._starts, start)
+        high = bisect_left(self._starts, end)
+        return tuple(self._notes[i] for i in sorted(self._indices[low:high]))
+
+    def crossing(self, start: float, end: float) -> bool:
+        return any(note.end > end + 1e-7
+                   for note in self.notes_in(start, end - 1e-7))
+
+
+def _segments(piece: Piece, *, source: _SourceAttackIndex | None = None) -> tuple[Phrase, ...]:
     """Focus in two-bar units; join sections if a note sustains over the cut.
 
     The segmentation respects original measure boundaries and never crops or
     invents a MIDI attack/release. Entirely silent introductory bars are left
     for the last full-score performance.
     """
+    source = source if source is not None else _SourceAttackIndex(piece)
     base = _focus_phrases(piece)
     if not base:
         raise ValueError("Hybrid curriculum needs at least one playable passage")
@@ -40,10 +67,7 @@ def _segments(piece: Piece) -> tuple[Phrase, ...]:
         # bar, it belongs to this lesson, including its complete duration.
         while True:
             boundary = grid[last]
-            crossing = tuple(n for n in piece.notes if
-                             grid[first - 1] <= n.start < boundary - 1e-7
-                             and n.end > boundary + 1e-7)
-            if not crossing:
+            if not source.crossing(grid[first - 1], boundary):
                 break
             if last == bars:
                 break
@@ -53,13 +77,11 @@ def _segments(piece: Piece) -> tuple[Phrase, ...]:
             i += 1
             last = max(last, base[i].last_bar)
             # The enlarged section might also cross another held note.
-            while last < bars and any(
-                    grid[first - 1] <= n.start < grid[last] - 1e-7
-                    and n.end > grid[last] + 1e-7 for n in piece.notes):
+            while last < bars and source.crossing(
+                    grid[first - 1], grid[last]):
                 last += 1
         start, end = grid[first - 1], grid[last]
-        selected = tuple(n for n in piece.notes
-                         if start - 1e-7 <= n.start < end - 1e-7)
+        selected = source.notes_in(start - 1e-7, end - 1e-7)
         if selected:
             # Some MIDI files end their measure grid before the final
             # sounding key-off. Keep the release in the lesson timeline.
@@ -71,7 +93,8 @@ def _segments(piece: Piece) -> tuple[Phrase, ...]:
 
 
 def _course_exercises(piece: Piece) -> tuple[Exercise, ...]:
-    passages = _segments(piece)
+    source = _SourceAttackIndex(piece)
+    passages = _segments(piece, source=source)
     out = []
     for i, phrase in enumerate(passages):
         ex = Exercise("learn", phrase,
@@ -87,7 +110,7 @@ def _course_exercises(piece: Piece) -> tuple[Exercise, ...]:
         first_bar = max(previous.first_bar, previous.last_bar - 1)
         last_bar = min(phrase.last_bar, phrase.first_bar + 1)
         start, end = piece.bar_boundaries[first_bar - 1], piece.bar_boundaries[last_bar]
-        joined = tuple(n for n in piece.notes if start <= n.start < end)
+        joined = source.notes_in(start, end)
         if (any(n.start < phrase.start for n in joined)
                 and any(n.start >= phrase.start for n in joined)
                 and all(n.end <= end + 1e-7 for n in joined)
@@ -110,8 +133,7 @@ def _course_exercises(piece: Piece) -> tuple[Exercise, ...]:
             first_bar, last_bar = group[0].first_bar, group[-1].last_bar
             start = piece.bar_boundaries[first_bar - 1]
             end = piece.bar_boundaries[last_bar]
-            selected = tuple(n for n in piece.notes
-                             if start - 1e-7 <= n.start < end - 1e-7)
+            selected = source.notes_in(start - 1e-7, end - 1e-7)
             if not selected or any(n.end > end + 1e-7 for n in selected):
                 continue
             # Avoid offering the same measure range twice as a connector.
