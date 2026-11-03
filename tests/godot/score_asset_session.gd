@@ -113,22 +113,22 @@ func test_publication() -> void:
     wire(session,requests,actions,publications)
     check(session.status()["text"] == "Choose a piece to begin" and session.status()["browse_visible"],"empty selection status")
     session.update_context(state(7),100)
-    check(requests.size() == 1 and requests[0]["kind"] == "layout" and requests[0]["path"] == "/score/layout?native=1" and requests[0]["timeout"] == 90.0,"exact native layout request intent")
+    check(requests.size() == 1 and requests[0]["kind"] == "layout" and requests[0]["path"] == "score.native_layout" and requests[0]["timeout"] == 90.0,"exact native layout request intent")
     check(session.layout_pending and not session.timeline_model_pending and not session.is_ready(),"layout is not semantic readiness")
     session.poll(500)
     check(requests.size() == 1 and actions.is_empty(),"model and ack wait for atlas")
     # An unsolicited/out-of-order model cannot bypass the real two-part gate.
-    session.complete_response("model",999,200,body({"revision":7}),501)
+    session.complete_response("model",999,0,body({"revision":7}),501)
     check(renderer.model_calls.is_empty() and actions.is_empty(),"unsolicited model cannot publish")
-    session.complete_response("layout",int(requests[0]["id"]),200,body(layout(7)),600)
+    session.complete_response("layout",int(requests[0]["id"]),0,body(layout(7)),600)
     check(renderer.atlas_calls == [[{"font":"authentic"},{"note":1.0},{"tie":2.0},{"chord":3.0},{"beam":4.0},{"tuplet":5.0},{"slur":6.0},[["a","b"]],true,["a|b"],true]],"authentic atlas arguments and completeness flags preserved")
-    check(requests.size() == 2 and requests[1]["path"] == "/score/model" and requests[1]["timeout"] == 5.0,"model follows published authentic atlas")
+    check(requests.size() == 2 and requests[1]["path"] == "score.semantic" and requests[1]["timeout"] == 5.0,"model follows published authentic atlas")
     check(session.layout_revision == 7 and session.timeline_model_revision == -1 and session.rendered_revision == -1 and not session.is_ready() and actions.is_empty(),"both publications required before acknowledgment")
     var published: Dictionary = session.layout_snapshot()
     check(published == {"revision":7.0,"anchors":[{"id":"a"}],"attack_map":{"source-a":"a"}},"layout publication strips heavy native assets")
     published["anchors"].clear()
     check(session.layout_snapshot()["anchors"].size() == 1,"layout snapshot cannot mutate owned publication")
-    session.complete_response("model",int(requests[1]["id"]),200,body({"revision":7,"notes":[{"id":"a"}]}),700)
+    session.complete_response("model",int(requests[1]["id"]),0,body({"revision":7,"notes":[{"id":"a"}]}),700)
     check(session.is_ready() and session.rendered_revision == 7 and session.timeline_model_revision == 7 and renderer.visible,"matching model and atlas publish one ready score")
     check(actions == [{"action":"score_ready","revision":7}] and publications == [7],"readiness ack is exact and current")
     check(feedback.bindings[-1] == [renderer,7] and feedback.states[-1] == state(7),"feedback binds to actual renderer after model success")
@@ -146,8 +146,8 @@ func test_publication() -> void:
     var context: Dictionary = state(8)
     context["awaiting_score_revision"] = 7
     next_session.update_context(context,0)
-    next_session.complete_response("layout",int(next_requests[-1]["id"]),200,body(layout(8)),1)
-    next_session.complete_response("model",int(next_requests[-1]["id"]),200,body({"revision":8}),2)
+    next_session.complete_response("layout",int(next_requests[-1]["id"]),0,body(layout(8)),1)
+    next_session.complete_response("model",int(next_requests[-1]["id"]),0,body({"revision":8}),2)
     check(next_session.is_ready() and next_actions.is_empty(),"finish-time ack waits for backend awaiting revision to match")
 
 func test_stale_responses() -> void:
@@ -164,31 +164,31 @@ func test_stale_responses() -> void:
     session.complete_response("layout",first,503,body({"error":"old layout failed"}),2)
     check(session.score_error.is_empty() and renderer.atlas_calls.is_empty() and requests.size() == 2,"old layout failure cannot poison new revision; current layout requested")
     var current: int = requests[-1]["id"]
-    session.complete_response("layout",first,200,body(layout(1)),3)
+    session.complete_response("layout",first,0,body(layout(1)),3)
     check(session.layout_pending and requests.size() == 2,"duplicate old reply cannot consume current request slot")
-    session.complete_response("layout",current,200,body(layout(2)),4)
+    session.complete_response("layout",current,0,body(layout(2)),4)
     var old_model: int = requests[-1]["id"]
     session.update_context(state(3),5)
     check(not renderer.visible and not session.is_ready() and session.layout_snapshot().is_empty(),"new revision hides previous asset publication")
-    session.complete_response("layout",int(requests[-1]["id"]),200,body(layout(3)),6)
+    session.complete_response("layout",int(requests[-1]["id"]),0,body(layout(3)),6)
     check(session.layout_revision == 3 and session.timeline_model_pending,"current atlas may finish before previous model drains")
     session.complete_response("model",old_model,500,body({"error":"old model failed"}),7)
     check(session.score_error.is_empty() and renderer.model_calls.is_empty() and requests[-1]["kind"] == "model" and requests[-1]["id"] != old_model,"stale model transport failure drains without current retry delay")
     var model_id: int = requests[-1]["id"]
-    session.complete_response("model",old_model,200,body({"revision":3}),8)
+    session.complete_response("model",old_model,0,body({"revision":3}),8)
     check(session.timeline_model_pending and renderer.model_calls.is_empty(),"old token cannot publish even with current payload revision")
-    session.complete_response("model",model_id,200,body({"revision":2}),9)
+    session.complete_response("model",model_id,0,body({"revision":2}),9)
     check(renderer.model_calls.is_empty() and actions.is_empty(),"wrong model revision ignored")
     session.poll(10)
-    session.complete_response("model",int(requests[-1]["id"]),200,body({"revision":3}),11)
+    session.complete_response("model",int(requests[-1]["id"]),0,body({"revision":3}),11)
     check(session.is_ready() and actions == [{"action":"score_ready","revision":3}],"only current revision completes readiness")
     var replacement: Dictionary = state(3)
     replacement["piece_fingerprint"] = "another-piece"
     session.update_context(replacement,12)
-    session.complete_response("model",model_id,200,body({"revision":3}),13)
+    session.complete_response("model",model_id,0,body({"revision":3}),13)
     check(not session.is_ready() and session.native_score_piece_fingerprint.is_empty(),"piece identity change cannot reuse old readiness even at same revision")
-    session.complete_response("layout",int(requests[-1]["id"]),200,body(layout(3)),14)
-    session.complete_response("model",int(requests[-1]["id"]),200,body({"revision":3}),15)
+    session.complete_response("layout",int(requests[-1]["id"]),0,body(layout(3)),14)
+    session.complete_response("model",int(requests[-1]["id"]),0,body({"revision":3}),15)
     check(session.is_ready() and session.native_score_piece_fingerprint == "another-piece","fresh publication binds current piece identity")
     session.update_context(state(4),16)
     var pending_layout: int = requests[-1]["id"]
@@ -207,7 +207,7 @@ func test_retry() -> void:
     check(not session.retry(0),"retry is inert without a loaded score")
     session.update_context(state(5),10)
     check(not session.retry(11) and requests.size() == 1,"retry cannot duplicate pending layout")
-    session.complete_response("layout",int(requests[-1]["id"]),200,body(layout(5)),20)
+    session.complete_response("layout",int(requests[-1]["id"]),0,body(layout(5)),20)
     session.complete_response("model",int(requests[-1]["id"]),503,body({"error":"busy"}),100)
     check(session.timeline_model_retry_after_ms == 2100 and session.score_error.is_empty() and renderer.notice == "Score model unavailable; retrying","semantic transport failure keeps exact nonfatal backoff")
     session.poll(2099)
@@ -220,10 +220,10 @@ func test_retry() -> void:
     var old_model: int = requests[-1]["id"]
     check(session.retry(4201),"explicit retry resets entire asset publication")
     check(session.layout_revision == -1 and session.timeline_model_revision == -1 and session.rendered_revision == -1,"retry resets all readiness revisions")
-    session.complete_response("layout",int(requests[-1]["id"]),200,body(layout(5)),4202)
-    session.complete_response("model",old_model,200,body({"revision":5}),4203)
+    session.complete_response("layout",int(requests[-1]["id"]),0,body(layout(5)),4202)
+    session.complete_response("model",old_model,0,body({"revision":5}),4203)
     check(renderer.model_calls.is_empty() and actions.is_empty(),"same-revision model from prior retry generation cannot acknowledge new assets")
-    session.complete_response("model",int(requests[-1]["id"]),200,body({"revision":5}),4204)
+    session.complete_response("model",int(requests[-1]["id"]),0,body({"revision":5}),4204)
     check(session.is_ready(),"fresh model completes retried score")
     # Finish-time ack is conditional on the backend awaiting this revision;
     # a later loading poll can repeat an intent dropped by a busy action port.
@@ -252,16 +252,16 @@ func test_failures() -> void:
             session.complete_response("layout",id,0,PackedByteArray(),1)
             check(session.score_error == "Practice engine unavailable. Start Piano Teacher with ./run.sh","unavailable engine message")
         elif damage == "positions":
-            session.complete_response("layout",id,200,body({"revision":9}),1)
+            session.complete_response("layout",id,0,body({"revision":9}),1)
             check(session.score_error == "The engraving engine returned invalid note positions","invalid layout position message")
         else:
             renderer.atlas_ok = damage != "atlas"
-            session.complete_response("layout",id,200,body(layout(9)),1)
+            session.complete_response("layout",id,0,body(layout(9)),1)
             if damage == "model":
                 renderer.model_ok = false
-                session.complete_response("model",int(requests[-1]["id"]),200,body({"revision":9}),2)
+                session.complete_response("model",int(requests[-1]["id"]),0,body({"revision":9}),2)
             elif damage == "model-json":
-                session.complete_response("model",int(requests[-1]["id"]),200,"bad json".to_utf8_buffer(),2)
+                session.complete_response("model",int(requests[-1]["id"]),0,"bad json".to_utf8_buffer(),2)
                 check(session.score_error.is_empty() and session.timeline_model_retry_after_ms == 2002,"malformed semantic response is retried without parser errors")
                 continue
             check(session.score_error == "authentic asset failure","authentic renderer rejection message retained")
@@ -275,12 +275,12 @@ func test_failures() -> void:
     var publications: Array = []
     wire(session,requests,actions,publications)
     session.update_context(state(10),0)
-    session.complete_response("layout",int(requests[-1]["id"]),200,body(layout(11)),1)
+    session.complete_response("layout",int(requests[-1]["id"]),0,body(layout(11)),1)
     check(session.score_error.is_empty() and session.layout_revision == -1 and requests.size() == 1,"layout from advanced server waits for normal revision poll")
     session.update_context(state(11),2)
-    session.complete_response("layout",int(requests[-1]["id"]),200,body(layout(11)),3)
+    session.complete_response("layout",int(requests[-1]["id"]),0,body(layout(11)),3)
     renderer.glyphs.loaded = false
-    session.complete_response("model",int(requests[-1]["id"]),200,body({"revision":10}),4)
+    session.complete_response("model",int(requests[-1]["id"]),0,body({"revision":10}),4)
     var count: int = requests.size()
     session.poll(5)
     check(requests.size() == count,"semantic retry waits for genuine atlas readiness")
@@ -297,7 +297,7 @@ func test_actual_renderer_boundary() -> void:
     var publications: Array = []
     wire(session,requests,actions,publications)
     session.update_context(state(13),0)
-    session.complete_response("layout",int(requests[-1]["id"]),200,body(layout(13)),1)
+    session.complete_response("layout",int(requests[-1]["id"]),0,body(layout(13)),1)
     check(session.score_error == "Missing authentic Verovio glyph: brace" and not session.is_ready(),"real renderer validates authentic atlas at actual publication boundary")
     check(not renderer.visible and feedback.score_revision == -1 and feedback.source_to_id.is_empty(),"actual native feedback is detached from failed assets")
     check(actions.is_empty() and publications.is_empty(),"actual renderer rejection never acknowledges readiness")
