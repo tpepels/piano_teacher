@@ -1,0 +1,65 @@
+name: Phase 6 full engraving recovery acceptance
+
+# Real Verovio/MusicXML recovery, never silently skipped by dependency-light CI.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase6-engraving-recovery.yml'
+      - 'tests/test_instructional_recovery.py'
+      - 'tests/test_phase6_rest_handoff_real_midi.py'
+      - 'tests/test_timed_real_scores_and_recovery.py'
+      - 'tests/test_isolated_source_tuplet_recovery.py'
+      - 'piano_teacher/visual_transport.py'
+      - 'piano_teacher/server.py'
+      - 'piano_teacher/application/score_preparation.py'
+      - 'piano_teacher/application/score_artifacts.py'
+      - 'piano_teacher/application/assessment_commit.py'
+      - 'piano_teacher/sqlite_transaction.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase6-engraving-recovery-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  original-score-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install complete score and assessment runtime
+        run: python -m pip install -e '.[test,godot,coda-research]'
+      - name: Verify Verovio really imported
+        run: |
+          python -c 'import verovio, music21, cairoSVG' 2>/dev/null || python -c 'import verovio, music21, cairosvg; print("REAL_ENGRAVING_DEPENDENCIES_OK")'
+      - name: Run full source-recovery and imported-MIDI grading tests
+        run: |
+          mkdir -p "$RUNNER_TEMP/engraving-recovery"
+          set -o pipefail
+          timeout 210s python -m pytest -q --tb=short \
+            --basetemp="$RUNNER_TEMP/engraving-recovery/work" \
+            --junitxml="$RUNNER_TEMP/engraving-recovery/junit.xml" \
+            tests/test_instructional_recovery.py \
+            tests/test_phase6_rest_handoff_real_midi.py \
+            tests/test_timed_real_scores_and_recovery.py \
+            tests/test_isolated_source_tuplet_recovery.py \
+            2>&1 | tee "$RUNNER_TEMP/engraving-recovery/results.txt"
+      - name: Preserve exact failing cases
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-engraving-recovery-${{ github.sha }}
+          path: ${{ runner.temp }}/engraving-recovery/
+          if-no-files-found: warn
+          retention-days: 14
