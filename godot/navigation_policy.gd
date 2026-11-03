@@ -12,11 +12,11 @@ const START_ACTIONS := [
 ]
 
 static func plan(target: String, previous: String, phase: String,
-        action_pending: bool, post_path: String,
+        action_pending: bool, operation: String,
         control_action: String) -> Dictionary:
     if target == "home":
         target = "practice"
-    var beginning: bool = action_pending and post_path == "practice.command" \
+    var beginning: bool = action_pending and operation == "practice.command" \
         and control_action in START_ACTIONS
     return {
         "target": target,
