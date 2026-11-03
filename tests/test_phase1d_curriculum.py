@@ -74,7 +74,7 @@ def test_manual_stop_during_feedback_discards_uncommitted_mastery(tmp_path):
         n=len(p.active_phrase.notes)
         e.pending_result=type("Result",(),{"correct":n,"extra_notes":0,"notes":[1]*n})()
         e.auto=True
-        e.next_at=99999999
+        e.visual_transport.next_at=99999999
         e.control("stop")
         assert p.streak==0
         assert p.mastered=={}

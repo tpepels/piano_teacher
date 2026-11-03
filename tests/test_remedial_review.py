@@ -42,12 +42,12 @@ def test_invalid_review_does_not_interrupt_running_take(tmp_path):
     try:
         app.plan = LearningPlan(piece)
         app.start()
-        before = (app.running, app.transport_id, app.run_at, app.mode)
+        before = (app.running, app.transport_id, app.visual_transport.run_at, app.mode)
         assignment = SimpleNamespace(
             stage_key=app.plan.identity, guided=False,
             start_beat=1.0, end_beat=4.0, focus="timing")
         with pytest.raises(ValueError, match="Remedial section"):
             app._start_remedial_assignment(assignment)
-        assert (app.running, app.transport_id, app.run_at, app.mode) == before
+        assert (app.running, app.transport_id, app.visual_transport.run_at, app.mode) == before
     finally:
         app.db.close()

@@ -85,7 +85,7 @@ def test_original_real_midi_full_rest_has_no_camera_or_grading_clock_reset(
             started = ask("practice.command",{"action":"start"})
         assert started["running"] and started["preview_only"]
         transport_id = started["transport_id"]
-        downbeat = engine.run_at
+        downbeat = engine.visual_transport.run_at
         tempo = engine._active_tempo_map()
         # The unmodified original normally has a constant-tempo policy.
         # Generated shaped stages supply a TempoMap; both share source beats.
@@ -137,7 +137,7 @@ def test_entire_real_midi_performance_uses_callback_grading_and_saved_review(
         phrase = engine.plan.active_phrase
         tempo = engine._active_tempo_map()
         bpm = engine.plan.bpm
-        origin = engine.run_at
+        origin = engine.visual_transport.run_at
         offset = phrase.start
         notes = [n for n in phrase.notes if engine.plan.hand == "both" or
                  n.hand == engine.plan.hand]

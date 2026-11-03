@@ -47,7 +47,7 @@ def test_clock_snapshot_publishes_its_authoritative_sample_time(harness):
     t[0] += 1.25
     snapshot = e.state()
     assert snapshot.get('clock_sampled_at_ms') == pytest.approx(t[0] * 1000)
-    assert snapshot['clock_beat'] == pytest.approx((t[0] - e.run_at) * e.plan.bpm / 60)
+    assert snapshot['clock_beat'] == pytest.approx((t[0] - e.visual_transport.run_at) * e.plan.bpm / 60)
 
 
 def test_pause_during_count_in_freezes_clock(harness):
@@ -110,10 +110,10 @@ def test_restart_clears_attempt_but_not_mastery(harness, mode):
         assert restarted['phase'] == 'count_in'
         assert restarted['count_in_beats'] == 2.5 and restarted['clock_beat'] == -2.5
         assert restarted['practice_preparation'] is None
-        assert e.transport_id == ident+1 and e.run_at == restart_at+3.75
-        t[0] = e.run_at-.01
+        assert e.transport_id == ident+1 and e.visual_transport.run_at == restart_at+3.75
+        t[0] = e.visual_transport.run_at-.01
         assert e.state()['phase'] == 'count_in'
-        t[0] = e.run_at
+        t[0] = e.visual_transport.run_at
         playing = e.state()
         assert playing['phase'] == 'playing' and playing['clock_beat'] == 0
     else:
@@ -131,7 +131,7 @@ def test_restart_clears_attempt_but_not_mastery(harness, mode):
         assert restarted['visual_target_beat'] == -4
         assert restarted['visual_scroll_speed'] == -5/e.feedback_seconds
         assert e.transport_id == ident and e.recorder is None
-        assert e.next_at == deadline
+        assert e.visual_transport.next_at == deadline
         t[0] = restart_at+e.feedback_seconds/2
         reversing = e.state()
         assert reversing['practice_preparation']['phase'] == 'reverse'
@@ -148,13 +148,13 @@ def test_restart_clears_attempt_but_not_mastery(harness, mode):
         waiting = e.state()
         assert waiting['phase'] == 'recovering' and waiting['midi_notes'] == 0
         assert e.transport_id == ident and e.recorder is None
-        assert e.next_at == deadline
+        assert e.visual_transport.next_at == deadline
         t[0] = deadline
         playing = e.state()
         assert playing['phase'] == 'playing' and playing['clock_beat'] == 0
         assert playing['count_in_beats'] == 0 and playing['visual_scroll_beat'] == 0
         assert playing['practice_preparation']['phase'] == 'complete'
-        assert e.run_at == deadline and e.transport_id == ident+1
+        assert e.visual_transport.run_at == deadline and e.transport_id == ident+1
     assert playing['midi_notes'] == 0 and playing['revision'] == revision
     assert e.recorder is not None and not e.recorder.presses
     assert e.plan.index == 0 and e.plan.mastered == mastery
@@ -192,7 +192,7 @@ def test_paused_preview_never_advances_learning(harness):
     assert state['mastered'] == 0 and state['streak'] == 0
     # The paused duration cannot cause a graded completion or an extra
     # score reload. The preview can still loop after its empty measure.
-    t[0] = e.next_at + .01
+    t[0] = e.visual_transport.next_at + .01
     repeated = e.state()
     assert repeated['phase'] == 'playing' and repeated['preview_only']
     assert repeated['revision'] == revision

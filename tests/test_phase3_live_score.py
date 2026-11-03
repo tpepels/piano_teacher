@@ -26,7 +26,7 @@ def _engine(tmp_path: object, hand: str) -> PracticeEngine:
     engine.start()
     # At 68 BPM, the allowed onset window for beat zero has expired after
     # 0.65 beats, before a two-beat half-note is released.
-    engine.run_at = time.monotonic() - 0.85
+    engine.visual_transport.run_at = time.monotonic() - 0.85
     return engine
 
 
@@ -75,7 +75,7 @@ def test_unconnected_preview_explicitly_disables_note_assessment(tmp_path):
         engine.load(str(path), warmup=True)
         engine.geometry()
         engine.start()
-        engine.run_at = time.monotonic() - .85
+        engine.visual_transport.run_at = time.monotonic() - .85
         state = engine.state()
         assert state["preview_only"]
         assert not state["scoring_available"]

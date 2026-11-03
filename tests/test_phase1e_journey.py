@@ -45,15 +45,15 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
         assert e.state()["count_in_beats"]==4
         # Five missing required pitches: wait until the two-bar boundary,
         # then enter recovery instead of interrupting the current measure.
-        t[0]=e.run_at+7*60/80
+        t[0]=e.visual_transport.run_at+7*60/80
         assert e.state()["phase"]=="playing"
-        t[0]=e.run_at+8*60/80+.02
+        t[0]=e.visual_transport.run_at+8*60/80+.02
         failed=e.state()
         assert failed["phase"]=="recovering"
         assert failed["bpm"]==72
         assert failed["recovery_beat"]==0
         assert failed["mastered"]==0 and failed["streak"]==0
-        t[0]=e.next_at+.01
+        t[0]=e.visual_transport.next_at+.01
         waiting=e.state()
         assert waiting["phase"]=="playing"
         assert waiting["awaiting_score_revision"] is None
@@ -71,12 +71,12 @@ def test_failure_slowdown_recovery_and_three_clean_mastery(tmp_path,monkeypatch)
                 PlayedNote(n.pitch,(n.start-phrase.start)*seconds,
                            (n.end-phrase.start)*seconds) for n in phrase.notes
             ]
-            t[0]=e.run_at+8*seconds+.3
+            t[0]=e.visual_transport.run_at+8*seconds+.3
             feedback=e.state()
             assert feedback["phase"]=="feedback"
             assert feedback["feedback_marks"]
             assert all(mark["status"]=="correct" for mark in feedback["feedback_marks"])
-            t[0]=e.next_at+.01
+            t[0]=e.visual_transport.next_at+.01
             after=e.state()
             if e.plan.active_variant.level == "outline":
                 # A harder generated level starts at the novice pace.
