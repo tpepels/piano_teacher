@@ -6,9 +6,9 @@ import pytest
 
 from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.music import Note, Phrase
-from piano_teacher.raster import rasterize_score
-from piano_teacher.score import _fade_inactive_staff, render_layout
-from piano_teacher.score_geometry import layout_from_pages
+from piano_teacher.engraving.raster import rasterize_score
+from piano_teacher.engraving.engraving import _fade_inactive_staff, render_layout
+from piano_teacher.engraving.geometry import layout_from_pages
 
 
 def svg(body):
