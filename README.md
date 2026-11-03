@@ -1,5 +1,7 @@
 # Piano Teacher
 
+**[Current development roadmap](ROADMAP.md) · [Documentation index](docs/README.md)**
+
 Offline desktop piano practice, built with Godot 4.7 and embedded CPython.
 **One process, one runtime, one transport: in-memory command and MIDI event
 queues.** No HTTP server, localhost port, UDP bridge or separate Python process.
@@ -77,6 +79,6 @@ No compiler, SCons, system Python, pip or localhost service is required
 for end users. Linux hardware drivers are supplied by the operating
 system. See [native runtime and packaging](docs/inprocess-runtime.md).
 
-For further technical references see
-[offline fingering](docs/piano-fingering.md) and the notation audit
-reports in `docs/`.
+For reference specifications, verification and archived research evidence,
+use the [documentation index](docs/README.md). The [roadmap](ROADMAP.md)
+is the only active phase plan.
