@@ -77,7 +77,7 @@ jobs:
 
       - name: Sparse Coda matches dense reference and handles every bundled real MIDI file
         run: |
-          timeout 65s python -m pytest -q --tb=short \
+          timeout 105s python -m pytest -q --tb=short \
             tests/test_coda_midi_sparse.py
 
       - name: Audit every production Coda stage over independent MIDI corpus

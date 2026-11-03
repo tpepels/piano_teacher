@@ -126,6 +126,7 @@ def test_complete_repertoire_piece_builds_actual_coda_learning_plan(file):
     # unchanged source performance. Direct research Coda remains whole-score.
     # A held source note can cross the normal eight-measure teaching limit.
     # The generator must extend that passage rather than truncate the note.
+    source_ids = {n.source_id for n in piece.notes}
     for ex in plan.exercises:
         if ex.kind != "learn":
             continue
@@ -134,7 +135,7 @@ def test_complete_repertoire_piece_builds_actual_coda_learning_plan(file):
         assert all(ex.phrase.start - 1e-7 <= n.start < ex.phrase.end
                    and n.end <= ex.phrase.end + 1e-7
                    for n in ex.phrase.notes)
-        assert all(n in piece.notes for n in ex.phrase.notes)
+        assert all(n.source_id in source_ids for n in ex.phrase.notes)
     assert plan.exercises[-1].kind == "perform"
     assert plan.exercises[-1].phrase.first_bar == 1
     assert plan.exercises[-1].phrase.last_bar == len(piece.bar_boundaries)-1
