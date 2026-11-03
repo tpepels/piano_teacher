@@ -222,7 +222,8 @@ def midi_coda_stages(
     if original.level != "original":
         raise ValueError("Coda lesson must end with original MIDI notes")
     if kind != "learn" or len({n.hand for n in original.notes}) > 1:
-        return (ExerciseStage(original),)
+        return (ExerciseStage(original, origin="original", technique="original",
+                              display_name="Original notes and rhythm"),)
     entries = midi_coda_catalog(piece, original)
     stages = []
     used_levels: set[str] = set()
@@ -242,6 +243,22 @@ def midi_coda_stages(
         if stage.variant.level in used_levels:
             raise ValueError("Duplicate Coda exercise level")
         used_levels.add(stage.variant.level)
-        stages.append(stage)
-    stages.append(ExerciseStage(original))
+        if entry.category == "Voice Level: Dotted":
+            kind_name = ("dotted-long-short" if entry.request == "dotted-long-short"
+                         else "dotted-short-long")
+            readable = ("Long–short rhythm" if kind_name == "dotted-long-short"
+                        else "Short–long rhythm")
+        elif entry.category == "Voice Level: Chordified":
+            kind_name, readable = "chordified", "Chordified rhythm"
+        elif entry.category == "Voice Level: Slowed Down":
+            kind_name, readable = "slowdown", "Slowed playback"
+        else:
+            kind_name, readable = "voice", "Isolated source voice"
+        # This metadata belongs to the author adapter, not the shared
+        # selection policy, notation renderer or UI.
+        stages.append(replace(stage, origin="coda-midi",
+                              technique=kind_name, display_name=readable))
+    stages.append(ExerciseStage(original, origin="original",
+                                technique="original",
+                                display_name="Original notes and rhythm"))
     return tuple(stages)
