@@ -454,3 +454,66 @@ def test_arbitrary_composed_generator_forwards_graded_error_families(piece):
     baseline = fallback.generate(piece)
     repaired = fallback.with_feedback({attack: "wrong"}, baseline).generate(piece)
     assert any(ex.key.startswith("fukuda:errors:") for ex in repaired.exercises)
+
+
+def test_registered_adaptive_composition_uses_unmodified_app_contract(piece):
+    import piano_teacher.exercise_strategies as strategies
+    import piano_teacher.lesson_generators as generators
+    key = "test-new-adaptive-midi"
+    try:
+        generators.register_composed_lesson_generator(
+            key, ("coda-midi", "fukuda-midi"),
+            label="Independent adaptive curriculum", version=9, adaptive=True)
+        plan = LearningPlan(piece, exercise_strategy=key)
+        assert isinstance(plan.lesson_generator,
+                          generators.AdaptiveComposedLessonGenerator)
+        assert plan.lesson_definition.generator_name == key
+        assert all(step.key.startswith(f"course:9:{key}:")
+                   for step in plan.lesson_steps)
+        assert plan.exercises[-1].phrase.notes == piece.notes
+        assert any(s.origin == "fukuda-midi" for s in plan.stages[:-1])
+        assert any(s.origin == "coda-midi" for s in plan.stages[:-1])
+        attack = next(n.source_id for n in piece.notes if n.hand == "right")
+        assert plan.refresh_from_feedback({attack: "late"})
+        assert plan.lesson_generator.error_status == ((attack, "late"),)
+        assert plan.exercises[-1].phrase.notes == piece.notes
+    finally:
+        generators._REGISTRY.pop(key, None)
+        strategies._FACTORIES.pop(key, None)
+        strategies._MIDI_ONLY_STRATEGIES.discard(key)
+        strategies.APP_STRATEGIES = tuple(
+            row for row in strategies.APP_STRATEGIES if row[0] != key)
+
+
+def test_unrelated_adaptive_contributor_is_not_bound_to_coda_fukuda(piece):
+    from dataclasses import dataclass
+    from piano_teacher.lesson_generators import AdaptiveComposedLessonGenerator
+    from piano_teacher.lesson_stage_semantics import describe
+
+    @dataclass(frozen=True)
+    class Independent:
+        name: str = "future-harmonic-algorithm"
+
+        def passage_stages(self, source, original, *, kind):
+            final = ExerciseStage(original, origin="original")
+            if kind != "learn" or len(original.notes) < 4:
+                return (final,)
+            subset = original.notes[::2]
+            reduced = ExerciseVariant(
+                "opaque-lesson-id", replace(original.phrase, notes=subset),
+                original.source_indices[::2])
+            return (ExerciseStage(
+                reduced, origin=self.name, technique="harmonic-outline",
+                display_name="Harmonic guide"), final)
+
+    adaptive = AdaptiveComposedLessonGenerator(
+        (Independent(),), name="future-adaptive")
+    catalog = adaptive.generate(piece)
+    ex = catalog.exercises[0]
+    stages = catalog.stages(ex, "right")
+    assert len(stages) == 2
+    assert stages[0].variant.level == "opaque-lesson-id"
+    assert describe(stages[0], stages[-1])["family"] == "Future Harmonic Algorithm"
+    assert describe(stages[0], stages[-1])["label"] == "Harmonic guide"
+    assert catalog.generator_name == "future-adaptive"
+    assert catalog.exercises[-1].phrase.notes == piece.notes
