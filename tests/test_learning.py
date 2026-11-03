@@ -1,5 +1,6 @@
 from piano_teacher.music import Note, Phrase, Piece
-from piano_teacher.learning import LearningPlan, build_exercises
+from piano_teacher.learning import LearningPlan
+from piano_teacher.lesson_source_planner import build_exercises
 from piano_teacher.lesson_settings import SETTINGS
 
 
