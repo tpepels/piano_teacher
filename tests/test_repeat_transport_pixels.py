@@ -26,7 +26,7 @@ def _perform(engine, now, until=None):
             continue
         events.extend(((note.start-phrase.start,note.pitch,True),(note.end-phrase.start,note.pitch,False)))
     for beat,pitch,down in sorted(events):
-        now[0]=engine.run_at+beat*60/engine.plan.bpm
+        now[0]=engine.visual_transport.run_at+beat*60/engine.plan.bpm
         engine._receive(mido.Message('note_on' if down else 'note_off',
                                      note=pitch,velocity=80 if down else 0))
 
@@ -79,34 +79,34 @@ def transport_capture(request,repeat_originals,tmp_path_factory):
             assert state['revision']==revision
             return state
         if flow=='manual':
-            now[0]=engine.run_at+1/rate
+            now[0]=engine.visual_transport.run_at+1/rate
             engine.control('restart')
         elif flow in ('clean','local-recovery'):
             _perform(engine,now,6.0 if flow=='local-recovery' else None)
-            now[0]=engine.run_at+duration/rate+.21
+            now[0]=engine.visual_transport.run_at+duration/rate+.21
             engine.state()
         elif flow=='failure':
-            now[0]=engine.run_at+duration/rate+.03
+            now[0]=engine.visual_transport.run_at+duration/rate+.03
             engine.state()
         else:
-            now[0]=engine.run_at+duration/rate+.21
+            now[0]=engine.visual_transport.run_at+duration/rate+.21
             engine.state()
         if flow in ('preview','clean'):
-            assert engine._preview_loop_pending if flow=='preview' else engine.pending_result.clean
-            midpoint=engine.run_at+(duration+data['gap_beats']/2)/rate
+            assert engine.visual_transport._preview_loop_pending if flow=='preview' else engine.pending_result.clean
+            midpoint=engine.visual_transport.run_at+(duration+data['gap_beats']/2)/rate
             start=duration;end=duration+data['gap_beats']
         else:
             target=6.0 if flow=='local-recovery' else 0.0
-            assert engine.practice_preparation['source_from_beat']==target
-            assert engine.pending_rewind==target
+            assert engine.visual_transport.practice_preparation['source_from_beat']==target
+            assert engine.visual_transport.pending_rewind==target
             for tag,fraction in [('reverse-before',.25),('reverse',.5),('reverse-after',.75)]:
-                now[0]=engine._visual_rewind_at+engine._visual_rewind_seconds*fraction
+                now[0]=engine.visual_transport._visual_rewind_at+engine.visual_transport._visual_rewind_seconds*fraction
                 reverse=sample(tag)
                 assert reverse['visual_scroll_speed']<0
                 assert reverse['practice_preparation']['source_from_beat']==target
-            measure=engine.practice_preparation['measure']
+            measure=engine.visual_transport.practice_preparation['measure']
             start,end=measure['start_beat'],measure['end_beat']
-            midpoint=engine._preparation_at+measure['duration_beats']*30/engine.plan.bpm
+            midpoint=engine.visual_transport._preparation_at+measure['duration_beats']*30/engine.plan.bpm
         rest_frames=[]
         for index,delta in enumerate((-.125,0,.125)):
             now[0]=midpoint+delta*60/engine.plan.bpm
@@ -125,7 +125,7 @@ def transport_capture(request,repeat_originals,tmp_path_factory):
                 unpaused=sample('unpaused')
                 assert unpaused['visual_scroll_beat']==pytest.approx(paused['visual_scroll_beat'],abs=1e-12)
                 midpoint+=17
-        deadline=engine.next_at
+        deadline=engine.visual_transport.next_at
         now[0]=deadline
         resumed=sample('resumed')
         assert resumed['running'] and resumed['count_in_beats']==0

@@ -44,7 +44,7 @@ def test_loaded_capture_uses_authored_preparation_gap(tmp_path, monkeypatch):
         assert captured.timing is not None
         assert captured.timing.practice_timeline == source_model["practice_timeline"]
         assert captured.timing.visual_gap_beats == 4.0
-        assert engine.visual_gap_beats == 4.0
+        assert engine.visual_transport.visual_gap_beats == 4.0
     finally:
         engine.db.close()
 

@@ -28,7 +28,7 @@ def test_shaped_tempo_then_full_rest_has_no_new_time_origin(tmp_path, monkeypatc
     engine.plan.bpm = 80
     try:
         engine.start()
-        downbeat = engine.run_at
+        downbeat = engine.visual_transport.run_at
         # Authoritative 64 BPM for beats 0..4 and 80 BPM for 4..8;
         # four silent quarter beats then advance at 80 BPM.
         expected_source_seconds = 4 * 60 / 64 + 4 * 60 / 80
@@ -56,7 +56,7 @@ def test_shaped_tempo_then_full_rest_has_no_new_time_origin(tmp_path, monkeypatc
         assert gap_later["visual_scroll_speed"] == pytest.approx(80/60)
 
         deadline = downbeat + expected_source_seconds + 4*60/80
-        assert engine.next_at == pytest.approx(deadline)
+        assert engine.visual_transport.next_at == pytest.approx(deadline)
         clock[0] = deadline + .1
         replay = engine.state()
         assert replay["phase"] == "playing"
@@ -84,9 +84,9 @@ def test_failed_shaped_take_rewinds_from_the_true_visual_position(tmp_path, monk
     try:
         engine.start()
         assert not engine.preview_only
-        clock[0] = engine.run_at + 6.75 + .25
+        clock[0] = engine.visual_transport.run_at + 6.75 + .25
         result = engine.state()
         assert result["phase"] == "recovering"
-        assert engine._visual_rewind_from == pytest.approx(8+.25*80/60)
+        assert engine.visual_transport._visual_rewind_from == pytest.approx(8+.25*80/60)
     finally:
         engine.db.close()

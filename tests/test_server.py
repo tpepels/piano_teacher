@@ -81,7 +81,7 @@ def test_playhead_beat_state_at_countin_and_play(tmp_path):
     assert state["beat"] == 0
     assert state["duration_beats"] == 8
     assert state["phase"] == "count_in"
-    engine.run_at=__import__('time').monotonic() - 1.0
+    engine.visual_transport.run_at=__import__('time').monotonic() - 1.0
     state=engine.state()
     assert state["phase"] == "playing"
     assert 0 < state["beat"] < 8

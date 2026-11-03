@@ -43,14 +43,14 @@ def test_recovery_keeps_feedback_then_reuses_native_score_for_same_chunk(harness
     transport = e.transport_id
     for i in range(8):
         e.recorder.presses.append(PlayedNote(60 + i % 5, i * .75, (i + .5) * .75))
-    now[0] = e.run_at + 16 * .75 + .02
+    now[0] = e.visual_transport.run_at + 16 * .75 + .02
     failed = e.state()
     assert failed["phase"] == "recovering"
     assert failed["bpm"] == 72 and failed["recovery_beat"] == 8
     assert failed["revision"] == revision
     assert failed["feedback_marks"]
     # Polling either endpoint while reading mistakes must keep their geometry.
-    now[0] = e.next_at - .01
+    now[0] = e.visual_transport.next_at - .01
     preparing = e.state()
     assert preparing["phase"] == "recovering"
     assert preparing['practice_preparation']['phase'] == 'preparing'
@@ -58,7 +58,7 @@ def test_recovery_keeps_feedback_then_reuses_native_score_for_same_chunk(harness
     assert (measure['start_beat'], measure['end_beat'], measure['duration_beats']) == (4, 8, 4)
     assert e.engraving() is original
     assert e.transport_id == transport
-    now[0] = e.next_at + .01
+    now[0] = e.visual_transport.next_at + .01
     restarted = e.state()
     assert restarted["phase"] == "playing"
     assert restarted["revision"] == revision
@@ -84,10 +84,10 @@ def test_clean_tempo_restore_reuses_native_score_without_advancing_lesson(harnes
     phrase = e.plan.active_phrase
     e.recorder.presses[:] = [PlayedNote(n.pitch, n.start * 60 / 72, n.end * 60 / 72)
                             for n in phrase.notes]
-    now[0] = e.run_at + 16 * 60 / 72 + .3
+    now[0] = e.visual_transport.run_at + 16 * 60 / 72 + .3
     assert e.state()["phase"] == "feedback"
     assert e.engraving() is original
-    now[0] = e.next_at + .01
+    now[0] = e.visual_transport.next_at + .01
     waiting = e.state()
     assert waiting["bpm"] == expected_bpm
     assert e.plan.identity == identity
@@ -109,7 +109,7 @@ def test_cache_reuses_source_ink_when_transport_bpm_changes(harness):
     assert note_spacing(revised.layout) == pytest.approx(note_spacing(original.layout), rel=.001)
     assert e.plan.target_bpm == 80
     e.start()
-    now[0] = e.run_at + 1
+    now[0] = e.visual_transport.run_at + 1
     e.control("restart")
     assert e.engraving() is revised
     reversing = e.state()
@@ -119,12 +119,12 @@ def test_cache_reuses_source_ink_when_transport_bpm_changes(harness):
     measure = reversing['practice_preparation']['measure']
     assert (measure['start_beat'], measure['end_beat'], measure['duration_beats']) == (-4, 0, 4)
     assert reversing['transition_in_seconds'] == pytest.approx(e.feedback_seconds + 10/3)
-    now[0] = e._preparation_at
+    now[0] = e.visual_transport._preparation_at
     preparing = e.state()
     assert preparing['practice_preparation']['phase'] == 'preparing'
     assert preparing['visual_scroll_beat'] == pytest.approx(-4)
     assert preparing['transition_in_seconds'] == pytest.approx(10/3)
-    now[0] = e.next_at + .01
+    now[0] = e.visual_transport.next_at + .01
     restarted = e.state()
     assert restarted['phase'] == 'playing' and restarted['count_in_beats'] == 0
     assert restarted['clock_beat'] == pytest.approx(.01*72/60)
@@ -135,7 +135,7 @@ def test_manual_restart_during_recovery_keeps_native_score_and_visible_preparati
     e, now = harness
     original = e.engraving()
     e.start()
-    now[0] = e.run_at + 16 * .75 + .02
+    now[0] = e.visual_transport.run_at + 16 * .75 + .02
     assert e.state()["phase"] == "recovering"
     revision = e.score_revision
     e.control("restart")
@@ -150,12 +150,12 @@ def test_manual_restart_during_recovery_keeps_native_score_and_visible_preparati
     assert waiting['transition_in_seconds'] == pytest.approx(
         e.feedback_seconds + 4*60/waiting['bpm'])
     assert waiting['countdown'] == 0 and waiting['count_in_beats'] == 0
-    now[0] = e._preparation_at + 2*60/waiting['bpm']
+    now[0] = e.visual_transport._preparation_at + 2*60/waiting['bpm']
     preparing = e.state()
     assert preparing['practice_preparation']['phase'] == 'preparing'
     assert preparing['visual_scroll_beat'] == pytest.approx(-2)
     assert not preparing['running'] and e.engraving() is original
-    now[0] = e.next_at + .01
+    now[0] = e.visual_transport.next_at + .01
     restarted = e.state()
     assert restarted['phase'] == 'playing' and restarted['play_from_beat'] == 0
     assert restarted['count_in_beats'] == 0 and restarted['revision'] == revision

@@ -63,7 +63,7 @@ def test_failed_strategy_construction_preserves_live_transport_and_preferences(
         recorder = engine.recorder
         transport_id = engine.transport_id
         revision = engine.score_revision
-        run_at = engine.run_at
+        run_at = engine.visual_transport.run_at
         before = dict(engine.library.settings)
         disk = engine.library.settings_path.read_bytes()
 
@@ -81,7 +81,7 @@ def test_failed_strategy_construction_preserves_live_transport_and_preferences(
         assert engine.running
         assert engine.transport_id == transport_id
         assert engine.score_revision == revision
-        assert engine.run_at == run_at
+        assert engine.visual_transport.run_at == run_at
     finally:
         engine.db.close()
 
