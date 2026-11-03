@@ -78,6 +78,7 @@ class ProgressRepository:
                         min(SETTINGS.maximum_bpm, int(row[4])))
                 row = None
         legacy_exercises = None
+        resume_equivalent = False
         if row and restore_session:
             exact = next((step for step in p.lesson_steps if step.key == row[7]), None)
             if exact is not None:
@@ -112,8 +113,19 @@ class ProgressRepository:
                               # target-speed clean streak.
                               and old.kind != "perform")
             p.set_bpm(max(SETTINGS.minimum_bpm, min(SETTINGS.maximum_bpm, int(row[4] or p.piece.bpm))))
-            p.bpm = max(SETTINGS.minimum_bpm, min(p.target_bpm, int(row[2])))
-            p.streak = min(SETTINGS.clean_runs_to_master-1, max(0, int(row[3]))) if equivalent else 0
+            resume_equivalent = equivalent
+            if equivalent:
+                # Only an identical source-backed stage can inherit its
+                # prior tempo ladder and clean-pass streak.
+                p.bpm = max(SETTINGS.minimum_bpm, min(p.target_bpm, int(row[2])))
+                p.streak = min(SETTINGS.clean_runs_to_master-1, max(0, int(row[3])))
+            else:
+                # The old course/version may have a similarly named lesson,
+                # but its note selection or tempo policy can differ.
+                # A stage-key mismatch must not relabel old BPM progress as
+                # earned credit on the newly generated course.
+                p.bpm = p._tempo_for_current_stage()
+                p.streak = 0
         for key,bpm in self.db.execute("SELECT stage_key,bpm FROM stage_tempos WHERE fingerprint=?",(fingerprint,)):
             if any(step.key == key for step in p.lesson_steps):
                 p.stage_tempos[key] = max(SETTINGS.minimum_bpm,
@@ -125,7 +137,7 @@ class ProgressRepository:
                 p.transferable_tempos.add(key)
         # A current session may predate per-stage tempos; retain its exact
         # judged tempo, but only when the stage can be identified reliably.
-        if row is not None and restore_session:
+        if row is not None and restore_session and resume_equivalent:
             p.stage_tempos[p.identity] = p.bpm
         for key,bpm in self.db.execute("SELECT exercise,bpm FROM mastery WHERE fingerprint=?",(fingerprint,)):
             p.mastered[key]=bpm
