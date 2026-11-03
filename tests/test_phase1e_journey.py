@@ -9,7 +9,7 @@ from piano_teacher import server
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.practice import PlayedNote
-from piano_teacher.score import EngravedScore
+from piano_teacher.engraving.engraving import EngravedScore
 from piano_teacher.server import PracticeEngine
 
 
