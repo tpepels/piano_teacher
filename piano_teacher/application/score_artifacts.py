@@ -17,8 +17,8 @@ from ..music import Phrase, Piece
 from ..notation.lesson import LessonScore, build_lesson_score, infer_piece_clefs
 from ..notation.model import build_score_model
 from ..preprocessing_cache import PreprocessingCache
-from ..rendering.legacy.engraving import EngravedScore, render_layout
-from ..rendering.legacy.raster import rasterize_score
+from ..engraving.engraving import EngravedScore, render_layout
+from ..engraving.raster import rasterize_score
 from . import score_preparation
 
 
