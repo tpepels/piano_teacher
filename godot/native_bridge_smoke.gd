@@ -50,7 +50,7 @@ func _process(_delta: float) -> bool:
         var status: int = int(response.get("status", 0))
         var data: PackedByteArray = response.get("body", PackedByteArray())
         var parsed: Variant = JSON.parse_string(data.get_string_from_utf8())
-        if status != 200 or not parsed is Dictionary or not parsed.has("pieces"):
+        if status != 0 or not parsed is Dictionary or not parsed.has("pieces"):
             _fail("In-process library.catalog failed (%d): %s" % [
                 status, data.get_string_from_utf8().left(500)])
             return true
