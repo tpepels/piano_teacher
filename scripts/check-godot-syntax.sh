@@ -30,6 +30,7 @@ for script in \
   res://native_bridge_smoke.gd \
   res://inprocess_request.gd \
   res://score_asset_queue.gd \
+  res://score_asset_session.gd \
   res://demo_player.gd \
   res://library_catalog_coordinator.gd \
   res://midi_device_coordinator.gd; do
@@ -47,7 +48,7 @@ for script in \
   fi
 done
 # Pure SceneTree fixtures execute in-process, without MIDI, score loading or UI.
-for fixture in command_success_effects command_request_state command_success_presenter practice_control_policy metronome_frame_coordinator coda_piece_strategy; do
+for fixture in command_success_effects command_request_state command_success_presenter practice_control_policy metronome_frame_coordinator coda_piece_strategy score_asset_lifecycle; do
   echo "Checking Godot behavior: $fixture"
   timeout 12s "$binary" --headless --path godot --script "$PWD/tests/godot/$fixture.gd"
 done

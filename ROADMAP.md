@@ -78,7 +78,13 @@ pedagogical effectiveness belong to Phases 6 and 7, not Phase 5.
 
 ## Immediate order of work
 
-**P6 — Prove real user behavior.** On the real Beethoven Pathétique II MIDI,
+**P6 — Prove real user behavior.** Score loading now supersedes obsolete
+layout/model requests without waiting for old deadlines, bounds semantic
+retries, and surfaces actionable failure if retained notation never completes.
+The Godot `score_asset_lifecycle` regression runs as part of the bounded
+syntax/behavior CI gate. Physical screen/instrument evidence remains open.
+
+On the real Beethoven Pathétique II MIDI,
 record READY ink, Step 1 provenance, effective tempo, Play/Listen/Retry,
 post-rest handoff and stage changes. Run the
 [physical keyboard acceptance checklist](docs/verification/coda-fukuda-physical-midi-checklist.md)
