@@ -88,3 +88,16 @@ def test_grading_relevance_accepts_any_contributor_and_rejects_remote_reductions
                           {"note0": "wrong"}, kind="learn")
     assert selected == (relevant, baseline)
     assert selected[0].origin == "foreign-algorithm"
+
+
+def test_no_legacy_generator_or_id_only_feedback_contracts():
+    from piano_teacher.exercise_strategies import available_strategies
+    assert "legacy" not in {item["id"] for item in available_strategies()}
+    for path in ("piano_teacher/learning.py", "piano_teacher/lesson_generators.py",
+                 "piano_teacher/exercise_strategies.py"):
+        source = (ROOT / path).read_text()
+        for forbidden in ("HeuristicLessonGenerator", "LegacyStrategy",
+                          "with_mistakes", "refresh_from_mistakes"):
+            assert forbidden not in source
+    assert "No registered lesson generator" in (
+        ROOT / "piano_teacher/lesson_generators.py").read_text()

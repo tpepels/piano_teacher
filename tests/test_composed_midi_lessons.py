@@ -385,10 +385,10 @@ def test_arbitrary_registered_composition_with_grading_feedback(piece):
                    for s in plan.lesson_steps)
         with pytest.raises(ValueError, match="MIDI piece"):
             resolve_strategy(key)
-        assert plan.refresh_from_mistakes(
-            frozenset({next(n.source_id for n in piece.notes if n.hand == "right")}))
+        assert plan.refresh_from_feedback(
+            {next(n.source_id for n in piece.notes if n.hand == "right"): "wrong"})
         assert any(ex.key.startswith("fukuda:errors:") for ex in plan.exercises)
-        assert plan.refresh_from_mistakes(frozenset())
+        assert plan.refresh_from_feedback({})
         assert len(plan.exercises) >= 3
         assert plan.exercises[-1].kind == "perform"
         assert plan.exercises[-1].phrase.notes == piece.notes
@@ -447,8 +447,8 @@ def test_arbitrary_composed_generator_forwards_graded_error_families(piece):
     assert any(ex.key.startswith("fukuda:errors:")
                for ex in updated.exercises)
 
-    # A participant without with_feedback still receives the strict
-    # source-ID set via its with_mistakes protocol.
+    # Fukuda consumes graded feedback and projects relevant failed IDs
+    # to its source-preserving reduction rules.
     fallback = ComposedLessonGenerator(
         (CodaLessonGenerator(), FukudaMidiLessonGenerator()), "id-only")
     baseline = fallback.generate(piece)

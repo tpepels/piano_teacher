@@ -52,11 +52,11 @@ class LearningPlan:
         self.tempo_strategy = resolve_tempo_strategy(tempo_strategy)
         # Warmups have their own fixed route; a selected MIDI-Coda policy
         # applies to imported pieces, not the built-in warmup catalog.
-        requested = exercise_strategy if exercise_strategy is not None else "legacy"
+        requested = exercise_strategy if exercise_strategy is not None else "source-progression"
         if warmup and (registration := lesson_generator_registration(
                 requested if isinstance(requested, str) else requested.name)
                 ) is not None and registration.midi_only:
-            requested = "legacy"
+            requested = "source-progression"
         self.exercise_strategy = resolve_strategy(requested,piece=piece)
         self.generator_registration = lesson_generator_registration(
             self.exercise_strategy.name)
@@ -145,17 +145,7 @@ class LearningPlan:
     @property
     def accepts_performance_feedback(self) -> bool:
         """Generators opt in through a common immutable feedback hook."""
-        return callable(getattr(self.lesson_generator, "with_mistakes", None))
-
-    def refresh_from_mistakes(self, ids: frozenset[str]) -> bool:
-        """Compatibility with source-ID-only generators and saved evidence."""
-        if not isinstance(ids, frozenset):
-            raise TypeError("Generator feedback requires frozen source IDs")
-        hook = getattr(self.lesson_generator, "with_mistakes", None)
-        if not callable(hook):
-            return False
-        return self._refresh_generator(hook(ids, self.lesson_definition),
-                                       focus_ids=ids)
+        return callable(getattr(self.lesson_generator, "with_feedback", None))
 
     def refresh_from_feedback(
         self, evidence: Mapping[str, str], *, prefer_repair: bool = True,
@@ -178,12 +168,7 @@ class LearningPlan:
         if callable(hook):
             updated = hook(evidence, self.lesson_definition)
             return self._refresh_generator(updated, focus_ids=target_ids)
-        old = getattr(self.lesson_generator, "with_mistakes", None)
-        if not callable(old):
-            return False
-        return self._refresh_generator(
-            old(frozenset(evidence), self.lesson_definition),
-            focus_ids=target_ids)
+        return False
 
     def _refresh_generator(
         self, updated: LessonGenerator, *, focus_ids: frozenset[str],
@@ -309,19 +294,14 @@ class LearningPlan:
     def _stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
         return tuple(stage.variant for stage in self.lesson_definition.stages(exercise,hand))
 
-    def _legacy_stage_variants(self, exercise: Exercise, hand: str) -> tuple[ExerciseVariant, ...]:
-        return source_variants(exercise,hand,grouping=self.grouping)
-
     def _stage_key(self, exercise: Exercise, hand: str, variant: ExerciseVariant) -> str:
         phrase = variant.phrase
         events = [(n.start - phrase.start, n.end - phrase.start, n.pitch, n.track, n.channel, n.hand)
                   for n in phrase.notes]
         signature = hashlib.sha256(json.dumps((phrase.end - phrase.start, events),
                                              separators=(",", ":")).encode()).hexdigest()[:16]
-        # Legacy identifiers remain unchanged for existing saved courses.
-        # Nonlegacy strategies cannot inherit unrelated completion/tempo credit.
-        profile = ("" if self.warmup or self.profile == "legacy"
-                   else f":{self.profile}")
+        # Unique generator identity forbids unrelated mastery or BPM migration.
+        profile = f":{self.profile}"
         # Sparse MIDI-domain Coda transformations change source attack
         # placement relative to the previous v5 catalog. Do not inherit
         # completed steps or tempo mastery under different musical content.

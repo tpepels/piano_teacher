@@ -80,9 +80,9 @@ def _finish(context: ExerciseContext,
 
 
 @dataclass(frozen=True)
-class LegacyStrategy:
-    """Adapter for the original generator and its lesson-specific filters."""
-    name: str = "legacy"
+class SourceProgressionStrategy:
+    """Explicit source-preserving practice progression algorithm."""
+    name: str = "source-progression"
 
     def generate(self, context: ExerciseContext, baseline: Baseline) -> tuple[ExerciseVariant, ...]:
         return baseline()
@@ -358,7 +358,7 @@ class SourcePreservingAdapter:
 
 
 _FACTORIES = {
-    "legacy": LegacyStrategy,
+    "source-progression": SourceProgressionStrategy,
     "fukuda": FukudaStrategy,
     "fukuda-midi": FukudaMidiStrategy,
     "coda-part": CodaPartStrategy,
@@ -372,7 +372,7 @@ _FACTORIES = {
 # Experimental timing transformations use a separate contract and are not yet
 # live-selectable until rendering and MIDI transport share the same timing map.
 APP_STRATEGIES = (
-    ("legacy", "Original progression"),
+    ("source-progression", "Source progression"),
     ("fukuda", "Fukuda · earlier chord/leap strategy"),
     ("fukuda-midi", "Fukuda · MIDI adaptive simplification"),
     ("coda-midi", "Coda · MIDI passage lessons + full-piece performance"),
@@ -440,4 +440,4 @@ def resolve_strategy(spec: str | ExerciseStrategy | None, *, piece=None) -> Exer
         raise ValueError("A strategy cannot be composed with itself")
     parts = tuple(_FACTORIES[name]() for name in names)
     strategy = parts[0] if len(parts) == 1 else CompositeStrategy(parts)
-    return strategy if strategy.name == "legacy" else SourcePreservingAdapter(strategy)
+    return SourcePreservingAdapter(strategy)

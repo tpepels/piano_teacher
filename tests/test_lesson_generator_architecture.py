@@ -13,7 +13,7 @@ from piano_teacher.exercise_generator import ExerciseVariant
 from piano_teacher.exercise_pipeline import ExerciseStage
 from piano_teacher.learning import LearningPlan, build_exercises
 from piano_teacher.lesson_generators import (
-    CodaLessonGenerator, Exercise, HeuristicLessonGenerator,
+    CodaLessonGenerator, Exercise, SourceLessonGenerator,
     LessonPlanDefinition,
 )
 from piano_teacher.music import Phrase, load_midi
@@ -48,14 +48,14 @@ def test_desktop_coda_uses_own_bounded_passages_without_legacy_lesson_planner(mo
     assert research.exercises[0].phrase.last_bar==len(piece.bar_boundaries)-1
 
 
-def test_heuristic_generator_preserves_existing_passages_and_keys():
+def test_registered_source_generator_preserves_passages_and_keys():
     piece=load_midi(SOURCE)
     baseline=build_exercises(piece,consolidate=False)
-    plan=LearningPlan(piece,exercise_strategy="legacy")
-    assert isinstance(plan.lesson_generator,HeuristicLessonGenerator)
+    plan=LearningPlan(piece,exercise_strategy="source-progression")
+    assert isinstance(plan.lesson_generator,SourceLessonGenerator)
     assert plan.exercises==baseline
-    assert all(step.key.startswith("course:3:") for step in plan.lesson_steps)
-    assert plan.lesson_definition.generator_name=="legacy"
+    assert all(step.key.startswith("course:4:source-progression:") for step in plan.lesson_steps)
+    assert plan.lesson_definition.generator_name=="source-progression"
     assert plan.lesson_definition.stages(plan.exercise,plan.hand)==plan.stages
 
 
@@ -95,7 +95,7 @@ def test_generator_dependency_injection_receives_entire_source_once():
     piece=load_midi(SOURCE)
     generated=IndependentLessonGenerator()
     plan=LearningPlan(piece,lesson_generator=generated,
-                      exercise_strategy="legacy")
+                      exercise_strategy="source-progression")
     assert generated.calls==1
     assert generated.received_piece is piece
     assert len(plan.exercises)==1

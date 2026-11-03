@@ -93,12 +93,12 @@ def test_resolver_rejects_mistyped_or_duplicate_strategies():
         resolve_strategy("fukuda+fukuda")
 
 
-def test_legacy_default_and_explicit_have_same_stage_keys(monkeypatch):
+def test_source_progression_default_and_explicit_have_same_stage_keys(monkeypatch):
     monkeypatch.delenv("PIANO_EXERCISE_STRATEGY", raising=False)
     p = make_phrase([60, 64, 67, 69, 71], [0, 0, 0, 1, 2])
     piece = Piece("Test", 100, p.notes, (p,))
     default = LearningPlan(piece)
-    explicit = LearningPlan(piece, exercise_strategy="legacy")
+    explicit = LearningPlan(piece, exercise_strategy="source-progression")
     alternative = LearningPlan(piece, exercise_strategy="fukuda")
     assert default.identity == explicit.identity
     assert [s.key for s in default.lesson_steps] == [s.key for s in explicit.lesson_steps]
@@ -108,9 +108,9 @@ def test_legacy_default_and_explicit_have_same_stage_keys(monkeypatch):
                for s in alternative.lesson_steps)
 
 
-def test_explicit_selection_ignores_legacy_env(monkeypatch):
+def test_explicit_selection_ignores_environment_strategy(monkeypatch):
     p = make_phrase([60, 64, 67, 69], [0, 0, 0, 1])
     piece = Piece("Test", 100, p.notes, (p,))
     monkeypatch.setenv("PIANO_EXERCISE_STRATEGY", "fukuda")
-    assert LearningPlan(piece).exercise_strategy.name == "legacy"
-    assert LearningPlan(piece, exercise_strategy="legacy").exercise_strategy.name == "legacy"
+    assert LearningPlan(piece).exercise_strategy.name == "source-progression"
+    assert LearningPlan(piece, exercise_strategy="source-progression").exercise_strategy.name == "source-progression"

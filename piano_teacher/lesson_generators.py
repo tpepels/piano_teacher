@@ -103,8 +103,12 @@ def lesson_hands(exercise: Exercise) -> tuple[str,...]:
 
 
 @dataclass(frozen=True)
-class HeuristicLessonGenerator:
-    """Prior adaptive passage builder, isolated behind a whole-piece interface."""
+class SourceLessonGenerator:
+    """Explicitly registered source-preserving passage generator.
+
+    Builds source-based practice courses under the same immutable whole-piece
+    definition as other algorithms; never selected as an implicit fallback.
+    """
     strategy: ExerciseStrategy
     timing_strategy: object
     tempo_strategy: object
@@ -350,12 +354,14 @@ class FukudaMidiLessonGenerator:
                     mistakes=self.mistakes) if kind == "learn" else (original,))
         return tuple(as_fukuda_stage(variant) for variant in variants)
 
-    def with_mistakes(
-        self, mistakes: frozenset[str],
+    def with_feedback(
+        self, evidence: Mapping[str, str],
         definition: LessonPlanDefinition,
     ) -> "FukudaMidiLessonGenerator":
+        """Use graded source events; note-reduction rules select failed IDs."""
         from dataclasses import replace
-        return replace(self, mistakes=mistakes) if mistakes != self.mistakes else self
+        failed = frozenset(evidence)
+        return replace(self, mistakes=failed) if failed != self.mistakes else self
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         if piece.source_format!="midi" or piece.source_musicxml:
@@ -462,21 +468,9 @@ class ComposedLessonGenerator:
     name: str
     mistakes: frozenset[str] | None = None
     core: LessonPlanDefinition | None = None
-    # Source-ID error families are an immutable value, independently of the
-    # component set. Custom components may implement with_feedback; older
-    # source-ID-only algorithms receive the same frozenset via with_mistakes.
+    # Graded source-ID error families use one generator feedback contract.
+    # Contributors decide which statuses their musical rules require.
     error_status: tuple[tuple[str, str], ...] = ()
-
-    def with_mistakes(
-        self, mistakes: frozenset[str], definition: LessonPlanDefinition,
-    ) -> "ComposedLessonGenerator":
-        from dataclasses import replace
-        statuses = tuple(sorted((sid, dict(self.error_status).get(sid, "missed"))
-                                for sid in mistakes))
-        if mistakes == self.mistakes and statuses == self.error_status:
-            return self
-        core = self.core or (definition if not self.mistakes else None)
-        return replace(self, mistakes=mistakes, error_status=statuses, core=core)
 
     def with_feedback(
         self, evidence: Mapping[str, str], definition: LessonPlanDefinition,
@@ -510,13 +504,9 @@ class ComposedLessonGenerator:
             evidence = dict(self.error_status)
             for generator in self.components:
                 feedback_hook = getattr(generator, "with_feedback", None)
-                mistakes_hook = getattr(generator, "with_mistakes", None)
-                if callable(feedback_hook):
-                    informed = feedback_hook(evidence, combined)
-                elif callable(mistakes_hook):
-                    informed = mistakes_hook(self.mistakes, combined)
-                else:
+                if not callable(feedback_hook):
                     continue
+                informed = feedback_hook(evidence, combined)
                 responsive = informed.generate(piece)
                 repair_exercises = tuple(ex for ex in responsive.exercises
                                          if ex.kind == "learn"
@@ -555,17 +545,6 @@ class AdaptiveComposedLessonGenerator(ComposedLessonGenerator):
     catalog: LessonPlanDefinition | None = None
     compiled_components: tuple[tuple[str, str], ...] = ()
     compiled_piece: Piece | None = None
-
-    def with_mistakes(
-        self, mistakes: frozenset[str], definition: LessonPlanDefinition,
-    ) -> "AdaptiveComposedLessonGenerator":
-        from dataclasses import replace
-        known = dict(self.error_status)
-        statuses = tuple(sorted((sid, known.get(sid, "missed"))
-                                for sid in mistakes))
-        if statuses == self.error_status and mistakes == self.mistakes:
-            return self
-        return replace(self, mistakes=mistakes, error_status=statuses)
 
     def with_feedback(
         self, evidence: Mapping[str, str], definition: LessonPlanDefinition,
@@ -652,9 +631,7 @@ def build_lesson_generator(
 ) -> LessonGenerator:
     registered = lesson_generator_registration(name)
     if registered is None:
-        return HeuristicLessonGenerator(
-            strategy, timing, tempo, consolidate=consolidate,
-            warmup=warmup, grouping=grouping)
+        raise ValueError(f"No registered lesson generator for {name!r}")
     return registered.factory(
         strategy=strategy, timing=timing, tempo=tempo,
         consolidate=consolidate, warmup=warmup, grouping=grouping,
@@ -695,6 +672,19 @@ def register_composed_lesson_generator(
         midi_only=adaptive or any(reg.midi_only for reg in definitions)),
         label=label)
 
+
+# Source-based algorithms register complete curricula; unknown names fail closed.
+for _source_name in (
+    "source-progression", "fukuda", "coda-part", "feature-gated",
+    "fukuda+coda-part",
+):
+    register_lesson_generator(LessonGeneratorRegistration(
+        _source_name,
+        lambda **options: SourceLessonGenerator(
+            options["strategy"], options["timing"], options["tempo"],
+            consolidate=options["consolidate"],
+            warmup=options["warmup"], grouping=options["grouping"]),
+        course_version=4))
 
 register_lesson_generator(LessonGeneratorRegistration(
     "coda-midi",
