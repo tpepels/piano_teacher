@@ -1,5 +1,16 @@
 # Piano Teacher — adaptive MIDI-to-exercise piano tutor
 
+> **Historical milestone record.** Entries below describe the earlier
+> October 2026 development phases and include obsolete HTTP and MusicXML
+> references. They are not the current runtime or input contract. The
+> application now accepts MIDI input only and runs the practice engine
+> inside Godot through an in-process queue, with native Verovio-backed score
+> assets. The current architecture and acceptance criteria are in
+> [system architecture](docs/architecture/system.md),
+> [composable generators](docs/architecture/composed-midi-generators.md)
+> and [embedded runtime](docs/inprocess-runtime.md). No legacy HTTP server
+> or alternate score renderer is shipped as a selectable runtime.
+
 ## Current implementation status — 2026-10-17
 
 - **Teaching interactions implemented:** imported music opens in untimed Learn,
