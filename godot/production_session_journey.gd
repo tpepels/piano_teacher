@@ -2,7 +2,7 @@ extends SceneTree
 ## Phase 6: actual Godot scene, embedded Python, and an authored real score.
 ## Exercise the player-visible journey with controls, not EngineCommands fakes.
 ## Runs against a saved copy of midi/Moonlight_Sonata_I.midi in an isolated home.
-const MAX_MS := 135000
+const MAX_MS := 170000
 const EXPECTED_PIECE := "Moonlight_Sonata_I.midi"
 var app
 var started_ms := 0
@@ -83,7 +83,7 @@ func _process(_delta: float) -> bool:
     if now-started_ms > MAX_MS:
         _fail("Overall journey deadline exceeded")
         return true
-    if now-phase_ms > 35000:
+    if now-phase_ms > (55000 if phase in ["startup","listen_load","listen_playback","stage_change"] else 35000):
         _fail("Phase deadline exceeded")
         return true
     if not app.score_error.is_empty():
@@ -188,6 +188,26 @@ func _process(_delta: float) -> bool:
                 return false
             if int(state.get("revision",-1)) <= initial_revision:
                 _fail("Listen reused stale source revision")
+                return true
+            # A newly engraved Listen score can be ready before synthesis,
+            # download, WAV decoding, and the audio-ready handshake complete.
+            # The user needs an audible synchronized example, not a spinner.
+            var demo: Dictionary = state.get("demo",{}) if state.get("demo") is Dictionary else {}
+            if demo.has("error") or bool(app.demo_player.audio_error):
+                _fail("Listen WAV preparation or decoding failed")
+                return true
+            if not bool(demo.get("audio_available",false)) or \
+                    not bool(demo.get("ready",false)) or \
+                    not bool(app.demo_player.loaded) or \
+                    not bool(state.get("running",false)):
+                return false
+            _advance("listen_playback")
+        "listen_playback":
+            # Count-in can be several seconds before the WAV's first sample.
+            if not bool(app.demo_player.started):
+                return false
+            if app.demo_player.player.stream == null:
+                _fail("Listen entered playback without decoded PCM audio")
                 return true
             if not _press(app.practice_view.listen_button,"Return to practice"):
                 return false

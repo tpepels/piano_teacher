@@ -47,11 +47,14 @@ def test_release_audit_rejects_development_only_godot_scripts(tmp_path):
     godot.mkdir()
     (godot / "production_ui_smoke.gd").write_text("extends SceneTree\\n")
     (godot / "production_ui_smoke.gd.uid").write_text("uid://test\\n")
+    (godot / "production_session_journey.gd").write_text("extends SceneTree\\n")
     (godot / "tests").mkdir()
     errors = auditor.audit_tree(tmp_path, package=True)
     assert any("developer-only Godot fixture: godot/production_ui_smoke.gd"
                in message for message in errors)
     assert any("developer-only Godot fixture: godot/tests"
+               in message for message in errors)
+    assert any("developer-only Godot fixture: godot/production_session_journey.gd"
                in message for message in errors)
     assert any("developer-only Godot UID: godot/production_ui_smoke.gd.uid"
                in message for message in errors)

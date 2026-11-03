@@ -25,6 +25,7 @@ REMOVED_IMPORTS = (
 DEV_ONLY_GODOT_PATHS = (
     "godot/native_bridge_smoke.gd",
     "godot/production_ui_smoke.gd",
+    "godot/production_session_journey.gd",
     "godot/ui_layout_smoke.gd",
     "godot/tests",
 )
