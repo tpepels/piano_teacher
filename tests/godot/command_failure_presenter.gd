@@ -35,15 +35,15 @@ func _initialize() -> void:
     var settings := Settings.new()
     var home := Home.new()
     var presenter = Presenter.new(lib,practice,settings,home)
-    presenter.present("missing","/library/open",false)
+    presenter.present("missing","library.open",false)
     if lib.open_status!="Cannot open score: missing" or \
             not lib.request_error.is_empty():
         failures += 1
-    presenter.present("queue failed","/control",true)
+    presenter.present("queue failed","practice.command",true)
     if lib.open_status!="Cannot open selected music: queue failed" or \
             not lib.request_error.is_empty():
         failures += 1
-    presenter.present("device error","/device",false)
+    presenter.present("device error","midi.device.select",false)
     if lib.request_error!="device error" or practice.message!="device error" or \
             settings.message!="device error" or home.message!="device error":
         failures += 1
