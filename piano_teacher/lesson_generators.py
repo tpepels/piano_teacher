@@ -553,6 +553,7 @@ class AdaptiveComposedLessonGenerator(ComposedLessonGenerator):
     It contains no knowledge of any participating algorithm's names.
     """
     catalog: LessonPlanDefinition | None = None
+    compiled_components: tuple[tuple[str, str], ...] = ()
 
     def with_mistakes(
         self, mistakes: frozenset[str], definition: LessonPlanDefinition,
@@ -578,13 +579,18 @@ class AdaptiveComposedLessonGenerator(ComposedLessonGenerator):
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         from .adaptive_hybrid_curriculum import (
             compile_hybrid_catalog, select_hybrid_stages)
+        # A dataclass copy can change the contributor set; never serve
+        # an old source catalog after an algorithm is replaced.
+        component_key = tuple((generator.name, repr(generator))
+                              for generator in self.components)
         catalog = self.catalog
-        if catalog is None:
+        if catalog is None or self.compiled_components != component_key:
             catalog = compile_hybrid_catalog(
                 piece, components=self.components, name=self.name)
-            # The immutable catalog survives with_feedback dataclass copies;
-            # re-planning only selects stages, never rebuilds source notation.
+            # Immutable catalog is reused for the same source/participants
+            # across evidence updates and remains independent of old plans.
             object.__setattr__(self, "catalog", catalog)
+            object.__setattr__(self, "compiled_components", component_key)
         status = dict(self.error_status)
         for sid in self.mistakes or ():
             status.setdefault(sid, "missed")
