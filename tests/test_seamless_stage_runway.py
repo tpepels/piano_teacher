@@ -213,3 +213,23 @@ def test_acknowledged_stage_without_adoptable_ink_falls_back_to_load(tmp_path):
         assert engine.pending_result is None
     finally:
         engine.db.close()
+
+
+def test_manual_stop_and_restart_do_not_waste_an_already_prepared_step(tmp_path):
+    engine = _engine(tmp_path)
+    try:
+        engine.future_score = Prepared(engine)
+        selection, number = engine._next_stage_selection()
+        engine.acknowledge_preloaded_stage(
+            stage_key=selection.stage_key, revision=selection.revision)
+        engine.control("stop")
+        assert engine._future_stage_ready == (selection.stage_key, selection.revision)
+        engine.plan.set_bpm(engine.plan.target_bpm)
+        engine.plan.streak = 2
+        engine.start()
+        assert engine.running and engine.auto
+        _finish(engine)
+        assert engine.plan.lesson_step_number == number
+        assert engine.awaiting_score_revision is None
+    finally:
+        engine.db.close()
