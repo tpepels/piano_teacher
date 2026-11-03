@@ -16,7 +16,7 @@ static func plan(target: String, previous: String, phase: String,
         control_action: String) -> Dictionary:
     if target == "home":
         target = "practice"
-    var beginning: bool = action_pending and post_path == "/control" \
+    var beginning: bool = action_pending and post_path == "practice.command" \
         and control_action in START_ACTIONS
     return {
         "target": target,
