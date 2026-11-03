@@ -22,6 +22,8 @@ def _engine(tmp_path):
         Note(1, 1.5, 62, 0, 0, "right", "b"),
         Note(2, 2.5, 64, 0, 0, "right", "c"),
         Note(3, 3.5, 65, 0, 0, "right", "d"),
+        Note(0, .75, 48, 1, 0, "left", "e"),
+        Note(2, 2.75, 50, 1, 0, "left", "f"),
     )
     piece = Piece("Seamless source", 110, notes,
                   (Phrase(1, 1, 1, 0, 4, notes),),
@@ -39,7 +41,8 @@ def _engine(tmp_path):
 
 
 def _assess(engine, status="correct"):
-    notes = engine.plan.active_phrase.notes
+    notes = tuple(n for n in engine.plan.active_phrase.notes
+                  if n.hand == engine.plan.hand or engine.plan.hand == "both")
     return Assessment(tuple(NoteAssessment(note, status) for note in notes), 0)
 
 
