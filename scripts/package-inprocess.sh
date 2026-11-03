@@ -55,5 +55,11 @@ p.write_text(s)
 PY
 rm -rf "$STAGE/godot/addons/godot_mcp_toolkit" "$STAGE/godot/.godot"
 python3 scripts/verify-phase5-architecture.py --root "$STAGE" --package
+# Phase 5 gates the assembled real runtime. Creating and clean-machine
+# executing the compressed distributable is a separate Phase 7 release gate.
+if [[ "${PIANO_PACKAGE_AUDIT_ONLY:-0}" == "1" ]]; then
+  echo "Assembled standalone runtime import/assets audit passed"
+  exit 0
+fi
 tar -C dist -czf dist/piano-teacher-linux-x86_64.tar.gz piano-teacher-linux-x86_64
 echo "Package: dist/piano-teacher-linux-x86_64.tar.gz"

@@ -15,6 +15,8 @@ on:
       - 'godot/inprocess_bus.gd'
       - 'scripts/verify-native-bridge.sh'
       - 'scripts/build-inprocess.sh'
+      - 'scripts/package-inprocess.sh'
+      - '.github/workflows/inprocess-native-smoke.yml'
       - 'scripts/install-inprocess-artifact.py'
       - 'run-inprocess.sh'
       - '.github/workflows/inprocess-native-build.yml'

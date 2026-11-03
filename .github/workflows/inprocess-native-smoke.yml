@@ -23,7 +23,7 @@ jobs:
   smoke:
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -58,3 +58,13 @@ jobs:
           XDG_CONFIG_HOME: ${{ runner.temp }}/piano-config
           XDG_DATA_HOME: ${{ runner.temp }}/piano-data
         run: bash scripts/verify-native-bridge.sh
+      - name: Audit assembled standalone runtime imports and native assets
+        env:
+          PIANO_GODOT_BINARY: /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64
+          PIANO_PACKAGE_AUDIT_ONLY: "1"
+        run: |
+          export PIANO_BUNDLED_PYTHON_HOME="$(python -c 'import sys; print(sys.prefix)')"
+          export PIANO_BUNDLED_NODE="$(command -v node)"
+          timeout 100s bash scripts/package-inprocess.sh
+          test -s dist/piano-teacher-linux-x86_64/godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
+          test -x dist/piano-teacher-linux-x86_64/PianoTeacher
