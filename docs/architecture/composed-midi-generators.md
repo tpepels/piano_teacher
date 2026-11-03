@@ -9,8 +9,11 @@ different choice.
 The `LessonGenerator` protocol owns complete whole-score analysis and returns
 one immutable `LessonPlanDefinition`: ordered `Exercise` objects plus a
 `(exercise.key, hand) -> ExerciseStage[]` mapping. Each stage carries an
-`ExerciseVariant`, optional `TempoStrategy`, and rhythm-transformation
-metadata. `LearningPlan` owns navigation, BPM ladders, mastery, persistence
+`ExerciseVariant`, optional `TempoStrategy`, rhythm-transformation
+metadata, and explicit immutable `origin`, `technique`, and
+`display_name` fields. The shared teaching selector chooses by actual
+source-note removals, authored timing changes, and tempo-map changes; the
+application never guesses the producing algorithm from a stage-key prefix. `LearningPlan` owns navigation, BPM ladders, mastery, persistence
 identity and resumption. `PracticeEngine` only settles original-note
 assessments, stores their source IDs, and sends the complete frozen error set
 to generators that implement `with_mistakes(ids, current_definition)`.
@@ -67,8 +70,9 @@ pure, published Coda algorithm catalog:
    introduce the relevant adaptive scaffold. Completed feedback can
    remove unneeded stages without reinterpreting unrelated progress.
 
-The combined policy now uses **course version 2** because the original
-version-1 whole-piece stage route is replaced by a passage-based route.
+The combined policy uses **course version 3** after source-audited stage
+selection. The desktop Coda-only route uses version 8; direct research
+`CodaLessonGenerator()` still supplies the original excerpt contract.
 Saved Coda-only and Fukuda-only progress remains isolated; no incompatible
 whole-piece mastery is silently applied to the new lesson structure.
 
@@ -137,3 +141,31 @@ lesson using measured note/timing/tempo differences. Its current source-ID
 error evidence drives adaptive Coda/Fukuda stage selection. Both routes end
 with unchanged original MIDI notes. The stage provenance is carried to
 `state_projection`, lesson overview and the Godot practice/step-picker UI.
+
+
+## Extensibility verification (2026-11-03)
+
+The generator registration and immutable `LessonPlanDefinition` contract
+support additional MIDI algorithms and combinations without edits to the
+application root. Stage metadata is producer-owned; future generators can
+provide new stage labels and techniques with opaque internal stage IDs.
+`lesson_stage_semantics.teaching_sequence` selects by measured reduction,
+retiming, and tempo-policy differences rather than Coda/Fukuda name parsing.
+
+`ComposedLessonGenerator.with_feedback(evidence, definition)` now forwards
+the complete source-ID -> diagnostic family mapping to participants with a
+`with_feedback` hook, while source-ID-only generators continue receiving
+`with_mistakes`. A composer retains one unchanged original-score finale,
+preserves source note identity, and uses versioned progress namespaces.
+The Coda/Fukuda preset is a specialized cached curriculum using the same
+stage, session, render and grading ports; its author-specific note-local
+repair policy is kept inside that preset rather than the application root.
+
+The bounded focused verification includes opaque third-party stage metadata,
+generic error-aware composition, native in-process dispatcher endpoints,
+source-bound notation publication, and Godot's lesson picker. Source-level
+flexibility is supported by these contracts; physical MIDI timing, native
+framebuffer correctness and independent learner-outcome effectiveness still
+require separate acceptance. Historical Heuristic/Legacy research
+strategies and offline Verovio proof utilities do not run as an alternate
+network backend.
