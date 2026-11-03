@@ -27,7 +27,7 @@ def test_production_bridge_exposes_no_old_network_or_page_endpoints():
         assert "HTTPRequest.new(" not in text
         assert "HTTPClient.new(" not in text
         assert "PacketPeerUDP.new(" not in text
-    assert '"/score/layout"' in (
+    assert '"score.native_layout"' in (
         ROOT / "godot/score_asset_session.gd").read_text()
 
 
