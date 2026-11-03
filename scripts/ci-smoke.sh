@@ -33,6 +33,7 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_state_projection.py::test_snapshot_sends_only_visible_hand_rows_but_preserves_full_step_count \
   tests/test_inprocess_artifact_install.py \
   tests/test_inprocess_transport_structure.py \
+  tests/test_dev_runtime_state.py \
   tests/test_godot_preload_paths.py \
   tests/test_coordination_boundaries.py::test_attempt_progression_uses_explicit_inputs_and_returns_decisions \
   tests/test_coordination_boundaries.py::test_main_callbacks_keep_reply_handling_and_presentation_separate \

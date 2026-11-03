@@ -34,6 +34,9 @@ echo "Building with CPython ABI $PYTHON_VERSION"
 test -s godot/native/bin/libpiano_bridge.linux.template_release.x86_64.so
 cp native/piano_bridge.gdextension.in godot/native/piano_bridge.gdextension
 printf '%s\n' "$PYTHON_VERSION" > godot/native/python-abi.txt
+# Record successful native source/ABI/binary hashes and invalidate older smokes.
+"$PIANO_PYTHON" scripts/dev_runtime_state.py record-native
+rm -f godot/.godot/piano-native-runtime-sha256
 # Local developer builds must validate runtime registration, not just link.
 # CI's compile-only environment has no Godot executable; its separate runtime
 # smoke job verifies the produced artifact with Godot 4.7.
