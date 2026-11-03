@@ -411,3 +411,46 @@ def test_compositions_reject_nonregistered_components_or_self_reference():
     with pytest.raises(ValueError, match="Invalid"):
         register_composed_lesson_generator(
             "self-comp", ("coda-midi", "self-comp"))
+
+
+def test_arbitrary_composed_generator_forwards_graded_error_families(piece):
+    """A future source-aware algorithm receives late/wrong, not just IDs."""
+    from dataclasses import dataclass
+    from piano_teacher.lesson_generators import (
+        ComposedLessonGenerator, FukudaMidiLessonGenerator)
+    observed = []
+
+    @dataclass(frozen=True)
+    class SourceAware:
+        mistakes: frozenset[str] | None = None
+        name: str = "future-tempo-adapter"
+
+        def with_feedback(self, evidence, definition):
+            observed.append(dict(evidence))
+            return replace(self, mistakes=frozenset(evidence))
+
+        def generate(self, source):
+            generated = FukudaMidiLessonGenerator(
+                mistakes=self.mistakes).generate(source)
+            return replace(generated, generator_name=self.name)
+
+    composed = ComposedLessonGenerator(
+        (CodaLessonGenerator(), SourceAware()), "future-composition")
+    initial = composed.generate(piece)
+    attack = next(n.source_id for n in piece.notes if n.hand == "right")
+    changed = composed.with_feedback({attack: "late"}, initial)
+    updated = changed.generate(piece)
+    assert observed == [{attack: "late"}]
+    assert changed.error_status == ((attack, "late"),)
+    assert updated.exercises[-1].kind == "perform"
+    assert updated.exercises[-1].phrase.notes == piece.notes
+    assert any(ex.key.startswith("fukuda:errors:")
+               for ex in updated.exercises)
+
+    # A participant without with_feedback still receives the strict
+    # source-ID set via its with_mistakes protocol.
+    fallback = ComposedLessonGenerator(
+        (CodaLessonGenerator(), FukudaMidiLessonGenerator()), "id-only")
+    baseline = fallback.generate(piece)
+    repaired = fallback.with_feedback({attack: "wrong"}, baseline).generate(piece)
+    assert any(ex.key.startswith("fukuda:errors:") for ex in repaired.exercises)
