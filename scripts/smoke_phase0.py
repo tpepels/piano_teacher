@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""Real Phase 0 MIDI -> Verovio -> PNG -> in-memory commands -> count-in."""
+"""Real Phase 0 MIDI -> native engraving -> typed commands -> count-in."""
 from __future__ import annotations
 
 import argparse
-from io import BytesIO
 import json
 from pathlib import Path
 import sys
 import tempfile
-import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import mido
@@ -40,20 +38,19 @@ def make_fixture(path: Path) -> None:
     midi.save(path)
 
 
-def query(commands: EngineCommands, path: str, data: dict | None = None):
-    method = "POST" if data is not None else "GET"
+def query(commands: EngineCommands, operation: str, data: dict | None = None) -> dict:
+    """Execute the actual typed in-process operation (no route emulation)."""
     status, response = commands.request(
-        method, path, json.dumps(data) if data is not None else "")
-    if status != 200:
-        if path == "/library/open" and data == {"id": "../outside.mid"}:
-            assert status == 400 and "error" in json.loads(response)
-            return "application/json", response
-        raise RuntimeError(f"{path}: command {status}: {response.decode()}")
-    return ("image/png" if path.startswith("/score.png") else "application/json"), response
+        operation, json.dumps(data) if data is not None else "{}")
+    decoded = json.loads(response)
+    if status != 0:
+        raise RuntimeError(f"{operation}: status {status}: {decoded}")
+    if not isinstance(decoded, dict):
+        raise TypeError(f"{operation} did not return a JSON object")
+    return decoded
 
 
-def check(path: Path | None = None):
-    from PIL import Image
+def check(path: Path | None = None) -> None:
     with tempfile.TemporaryDirectory(prefix="piano-phase0-") as directory:
         temp = Path(directory)
         library = temp / "music"
@@ -66,48 +63,49 @@ def check(path: Path | None = None):
         engine = PracticeEngine(temp / "data", enable_midi=False)
         commands = EngineCommands(engine=engine)
         try:
-            query(commands, "/settings", {"music_dir": str(library)})
-            _, data = query(commands, "/library")
-            items = json.loads(data)["pieces"]
-            assert len(items) == 1, "Generated/imported score missing from library"
-            _, data = query(commands, "/library/open", {"id": items[0]["id"]})
-            state = json.loads(data)
+            settings = query(commands, "settings.update", {"music_dir": str(library)})
+            assert settings["music_dir"] == str(library)
+            listing = query(commands, "library.catalog")
+            pieces = listing["pieces"]
+            assert len(pieces) == 1, "MIDI fixture missing from actual library"
+            state = query(commands, "library.open", {"id": pieces[0]["id"]})
+            revision = int(state["revision"])
             assert state["loaded"] and state["exercise_count"] >= 1
-            print(f"PASS import: {state['title']}, {state['exercise_count']} exercise(s)", flush=True)
-            _, data = query(commands, "/score/layout")
-            layout = json.loads(data)
-            assert layout["pages"] > 0 and layout["anchors"], "Engraving has no note coordinates"
-            print(f"PASS engraving: {layout['pages']} page(s), {len(layout['anchors'])} anchors", flush=True)
-            mime, image = query(commands, "/score.png?page=0")
-            assert mime == "image/png" and image.startswith(b"\\x89PNG\\r\\n\\x1a\\n".decode("unicode_escape").encode("latin1"))
-            with Image.open(BytesIO(image)) as png:
-                png.verify()
-                assert png.width >= 600 and png.height >= 30
-            print("PASS rendered score: valid PNG pixels", flush=True)
-            _, data = query(commands, "/control", {"action": "start"})
-            beginning = json.loads(data)
-            assert beginning["phase"] == "count_in" and beginning["preview_only"]
-            _, paused_raw = query(commands, "/control", {"action": "pause"})
-            paused = json.loads(paused_raw)
-            assert paused["phase"] == "paused" and paused["clock_beat"] < 0
-            _, resumed_raw = query(commands, "/control", {"action": "resume"})
-            resumed = json.loads(resumed_raw)
-            assert resumed["phase"] == "count_in"
-            assert resumed["transport_id"] == beginning["transport_id"]
-            _, restarted_raw = query(commands, "/control", {"action": "restart"})
-            restarted = json.loads(restarted_raw)
-            assert restarted["phase"] == "count_in"
-            assert restarted["transport_id"] > beginning["transport_id"]
-            engine.run_at = time.monotonic() - .25
-            assert json.loads(query(commands, "/state")[1])["phase"] == "playing"
-            engine.run_at = time.monotonic() - beginning["duration"] - 1
-            ending = json.loads(query(commands, "/state")[1])
-            assert not ending["running"] and ending["mastered"] == 0
-            query(commands, "/library/open", {"id": "../outside.mid"})
-            print("PASS in-process practice clock, preview and command handling", flush=True)
+            print(f"PASS import: {state['title']}, {state['exercise_count']} exercises", flush=True)
+
+            layout = query(commands, "score.native_layout")
+            assert int(layout.get("revision", -1)) == revision and layout.get("anchors"), (
+                "Native engraving must supply the source note anchors")
+            print(f"PASS native engraving: {len(layout['anchors'])} anchors", flush=True)
+
+            model = query(commands, "score.semantic")
+            assert int(model.get("revision", -1)) == revision and model.get("notes"), (
+                "Engraving and model must describe the same selected revision")
+            print(f"PASS semantic score: {len(model['notes'])} notes", flush=True)
+
+            acknowledged = query(commands, "practice.command",
+                                 {"action": "score_ready", "revision": revision})
+            assert acknowledged["loaded"] and acknowledged["phase"] != "loading", (
+                "Native score must acknowledge its selected revision")
+
+            started = query(commands, "practice.command", {"action": "start"})
+            assert started["phase"] == "count_in" and started["preview_only"], (
+                "Software-only playback must count in without awarding mastery")
+            first_transport = started["transport_id"]
+            paused = query(commands, "practice.command", {"action": "pause"})
+            assert paused["paused"] and paused["clock_beat"] < 0
+            resumed = query(commands, "practice.command", {"action": "resume"})
+            assert resumed["running"] and not resumed["paused"]
+            assert resumed["transport_id"] == first_transport
+            restarted = query(commands, "practice.command", {"action": "restart"})
+            assert restarted["running"] and restarted["transport_id"] > first_transport
+            assert restarted["mastered"] == 0
+            denied, error = commands.request("library.open", '{"id":"../outside.mid"}')
+            assert denied == 1 and "error" in json.loads(error)
+            print("PASS typed MIDI transport and library containment", flush=True)
         finally:
             engine.db.close()
-    print("PHASE 0 EMBEDDED ENGINE SMOKE PASSED", flush=True)
+    print("PHASE 0 TYPED IN-PROCESS SMOKE PASSED", flush=True)
 
 
 def main() -> int:

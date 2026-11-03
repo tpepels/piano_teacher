@@ -48,3 +48,27 @@ def test_native_launcher_is_executable_and_contains_no_server():
     assert '127.0.0.1' not in content
     assert "PianoNative" not in content  # verified by native preflight
     assert (ROOT / "run.sh").stat().st_mode & 0o111
+
+
+def test_smoke_phase0_uses_typed_inprocess_operations():
+    """The developer smoke must use the same commands as the native bridge."""
+    from smoke_phase0 import query
+
+    class Probe:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, operation, payload):
+            self.calls.append((operation, payload))
+            return 0, b'{"revision":5,"notes":[1]}'
+
+    probe = Probe()
+    assert query(probe, "score.semantic") == {"revision":5,"notes":[1]}
+    assert query(probe, "library.open", {"id":"piece.mid"})["revision"] == 5
+    assert probe.calls == [
+        ("score.semantic", "{}"),
+        ("library.open", '{"id": "piece.mid"}'),
+    ]
+    source = (ROOT / "scripts" / "smoke_phase0.py").read_text()
+    assert 'commands.request("GET"' not in source
+    assert '"/library/open"' not in source
