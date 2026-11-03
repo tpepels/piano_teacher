@@ -52,6 +52,8 @@ class Prepared:
         self.adoptions = []
     def ready(self, _selection):
         return True
+    def warm(self, _selection, *, number, label):
+        pass
     def adopt(self, selection):
         self.adoptions.append(selection)
         return self.assets
