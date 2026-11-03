@@ -149,3 +149,38 @@ def test_failure_after_progress_write_rolls_back_all_evidence_and_plan(
         assert engine.db.execute("SELECT count(*) FROM strategy_sessions").fetchone()[0] == 1
     finally:
         engine.db.close()
+
+
+def test_runtime_settlement_failure_stops_retries_without_losing_pending_take(
+        tmp_path, monkeypatch):
+    engine = _engine(tmp_path)
+    try:
+        engine.pending_result = _result(engine, "correct")
+        pending = engine.pending_result
+        engine.auto = True
+        engine.next_at = 30.0
+        before = _durable_counts(engine)
+        real_save = engine.progress.save
+        attempts = []
+
+        def fail_after_sql(*args, **kwargs):
+            attempts.append(1)
+            real_save(*args, **kwargs)
+            raise OSError("simulated full disk")
+
+        monkeypatch.setattr(engine.progress, "save", fail_after_sql)
+        engine._advance_pending_feedback(31.0)
+        assert len(attempts) == 1
+        assert engine.pending_result is pending
+        assert not engine.auto and engine.next_at == 0
+        assert "Could not save" in engine.feedback
+        assert _durable_counts(engine) == before
+        engine._advance_pending_feedback(31.1)
+        assert len(attempts) == 1
+        monkeypatch.setattr(engine.progress, "save", real_save)
+        engine._commit_pending()
+        assert engine.pending_result is None
+        assert engine.db.execute(
+            "SELECT count(*) FROM practice_evidence").fetchone()[0] == 1
+    finally:
+        engine.db.close()
