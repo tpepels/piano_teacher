@@ -53,8 +53,8 @@ every descriptor score, aggregate and sigmoid output and ordinal class.
 
 This checks the inference numerical path only. **The complete RubricNet
 algorithm requires the original MusicXML feature extractor and independent
-held-out dataset validation as well.** The current feature-gated app strategy
-is still heuristic and must not be presented as trained RubricNet.
+held-out dataset validation as well.** Historical feature-gated exercise selection was heuristic; no RubricNet
+lesson strategy is registered in the current MIDI-only desktop runtime.
 
 The official reference checkpoint-parity run **passed** on GitHub Actions:
 [run 41092489234](https://github.com/tpepels/piano_teacher/actions/runs/41092489234).
@@ -73,9 +73,8 @@ classes = result.all_classes
 A passing test in `tests/test_rubricnet_reproduction.py` additionally
 exercises these **real bundled** model assets and strict descriptor contracts.
 
-Next: reproduce `predict.py::check_features_extractor` with
-`inven01.musicxml`, then validate the public CIPI split labels and
-reported metrics. Keep optional heavy dependencies off routine push CI.
+The official MusicXML feature oracle and public CIPI validation are
+reproduced in the separate research sections below. Keep optional heavy dependencies off routine push CI.
 
 ## Held-out evaluation against original CIPI data
 
