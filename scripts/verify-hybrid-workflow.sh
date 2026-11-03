@@ -25,7 +25,10 @@ if [[ "$MODE" != "--corpus" ]]; then
     tests/test_coda_piece_curriculum.py \
     tests/test_midi_stage_wiring.py \
     tests/test_strategy_handoff.py \
-    tests/test_state_projection.py
+    tests/test_state_projection.py \
+    tests/test_runtime_architecture_contract.py \
+    tests/test_inprocess_dispatcher.py \
+    tests/test_phase6_inprocess.py
   if command -v godot >/dev/null 2>&1; then
     timeout 25s godot --headless --path godot --script \
       res://../tests/godot/idle_note_preview.gd
