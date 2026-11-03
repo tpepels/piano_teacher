@@ -132,7 +132,7 @@ at `bf99fc8`. CI covers the named software contracts; it does not prove
 hardware behavior or all unselected research tests.
 
 **Remaining maintainability risks (do not confuse with completed Phase 5):**
-- `TransportField` still forwards sixteen public `PracticeEngine` fields
+- `TransportField` still forwards seventeen public `PracticeEngine` fields
   to the `VisualTransport` owner. There is no duplicate stored clock,
   but these accessors enlarge the engine-facing API. Remove them only
   together with every production/test caller and a proven equivalent
