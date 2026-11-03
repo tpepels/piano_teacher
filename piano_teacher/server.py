@@ -1416,7 +1416,20 @@ class PracticeEngine:
             deadline = self.next_at
             previous_revision = self.score_revision
             previous_identity = self.plan.identity
-            message = self._commit_pending()
+            try:
+                message = self._commit_pending()
+            except Exception as exc:
+                # A transient disk/generator failure cannot settle partial
+                # evidence or repeatedly retry the same transaction at 20ms.
+                # The pending graded attempt remains available for inspection.
+                self.auto = False
+                self.next_at = 0.0
+                self.feedback = "Could not save the assessment"
+                self.next_action = (
+                    "Check storage or lesson generation, then Retry the attempt.")
+                print("ASSESSMENT_SETTLEMENT_FAILED:",
+                      type(exc).__name__, str(exc), flush=True)
+                return
             self.feedback_marks=[]
             self.feedback_unmapped=0
             assignment = self._remediation_pending
