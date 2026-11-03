@@ -5,9 +5,6 @@ from collections import Counter
 from dataclasses import replace
 import builtins
 import json
-import threading
-from urllib.request import urlopen
-from http.server import ThreadingHTTPServer
 
 import pytest
 
@@ -16,7 +13,8 @@ from piano_teacher.music import Note, Phrase, Piece, KeySignature
 from piano_teacher.practice import evaluate, PlayedNote
 from piano_teacher.notation.model import SCHEMA, build_score_model
 from piano_teacher.learning import LearningPlan
-from piano_teacher.server import Handler, PracticeEngine
+from piano_teacher.server import PracticeEngine
+from piano_teacher.inprocess import EngineCommands
 
 
 def fixture():
@@ -227,30 +225,20 @@ def test_engine_exposes_same_current_variant_without_touching_engraving(tmp_path
         engine.db.close()
 
 
-def test_http_semantic_endpoint_is_json_and_does_not_trigger_png(tmp_path):
+def test_native_semantic_command_matches_selected_source_without_engraving(tmp_path):
     phrase, boundaries, meters = fixture()
     engine = PracticeEngine(tmp_path, enable_midi=False)
     engine.plan = LearningPlan(Piece("Phase A", 80, phrase.notes, (phrase,),
         bar_boundaries=boundaries, time_signatures=meters))
-    handler = type("PhaseAScoreHandler", (Handler,), {
-        "engine": engine, "log_message": lambda self, *args: None})
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    runner = threading.Thread(target=httpd.serve_forever, daemon=True)
-    runner.start()
     try:
-        with urlopen(f"http://127.0.0.1:{httpd.server_port}/score/model",
-                     timeout=3) as response:
-            assert response.headers.get_content_type() == "application/json"
-            payload = json.load(response)
+        command = EngineCommands(engine=engine)
+        code, data = command.request("GET", "/score/model")
+        assert code == 200
+        payload = json.loads(data)
         assert payload["schema"] == SCHEMA
-        # The active learning variant may be a two-note skeleton, not the
-        # full imported piece. Never leak eliminated tones into the renderer.
         assert len(payload["notes"]) == len(engine.display_phrase().notes)
         assert {n["id"] for n in payload["notes"]} == {
             n.source_id for n in engine.display_phrase().notes}
         assert engine.score_artifacts.cached_layout(engine._score_selection()) is None
     finally:
-        httpd.shutdown()
-        httpd.server_close()
-        runner.join(timeout=3)
         engine.db.close()
