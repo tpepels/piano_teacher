@@ -88,8 +88,8 @@ def test_consolidated_stage_still_needs_three_clean_target_speed_full_plays():
     assert plan.target_bpm == 80
 
 
-def test_legacy_progress_maps_by_original_span_without_awarding_larger_mastery(tmp_path):
-    # Legacy index 3 means learn bars 5-6, not new course exercise index 3.
+def test_unversioned_session_row_cannot_restore_old_course_position_or_mastery(tmp_path):
+    # Obsolete positional rows remain stored but have no runnable stage ID.
     with sqlite3.connect(tmp_path / "progress.db") as db:
         db.execute("CREATE TABLE sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER, target_bpm INTEGER, variant_index INTEGER)")
         db.execute("INSERT INTO sessions VALUES (?,?,?,?,?,?,?)", ("legacy", 3, "left", 30, 2, 70, 0))
@@ -102,8 +102,8 @@ def test_legacy_progress_maps_by_original_span_without_awarding_larger_mastery(t
         engine._restore()
         plan = engine.plan
         assert (plan.exercise.phrase.first_bar, plan.exercise.phrase.last_bar) == (1, 8)
-        assert plan.hand == "left" and plan.target_bpm == 70 and plan.bpm == 30
-        assert plan.streak == 0
+        assert plan.target_bpm == 70
+        assert plan.bpm != 30 and plan.streak == 0
         assert plan.lesson_steps_mastered == 0
         engine._save()
         assert engine.db.execute("SELECT exercise FROM mastery WHERE fingerprint=?", ("legacy",)).fetchall() == [("learn:1-2:right:original",)]
@@ -205,7 +205,7 @@ def test_complete_song_includes_initial_rests_and_sustained_final_measures():
     assert plan.active_variant.level == "original" and plan.active_phrase.end >= max(n.end for n in notes)
 
 
-def test_legacy_full_song_streak_is_reset_when_sustained_ending_is_restored(tmp_path):
+def test_unversioned_full_song_row_cannot_skip_to_final_performance(tmp_path):
     notes = (Note(0, 1, 60, 0, 0, "right"), Note(8, 24, 64, 0, 0, "right"))
     piece = Piece("Held end", 100, notes,
                   (Phrase(1, 1, 2, 0, 8, notes[:1]), Phrase(2, 3, 4, 8, 16, notes[1:])),
@@ -218,14 +218,14 @@ def test_legacy_full_song_streak_is_reset_when_sustained_ending_is_restored(tmp_
         engine.plan = LearningPlan(piece, consolidate=True)
         engine.fingerprint = "ending"
         engine._restore()
-        assert engine.plan.exercise.kind == "perform"
-        assert engine.plan.active_phrase.end == 24
+        assert engine.plan.exercise.kind == "learn"
+        assert engine.plan.exercises[-1].phrase.end == 24
         assert engine.plan.streak == 0
     finally:
         engine.db.close()
 
 
-def test_legacy_identical_stage_keeps_real_mastery_and_clean_streak(tmp_path):
+def test_unversioned_equal_looking_stage_does_not_transfer_mastery(tmp_path):
     piece = course_piece(2)
     with sqlite3.connect(tmp_path / "progress.db") as db:
         db.execute("CREATE TABLE sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER, target_bpm INTEGER, variant_index INTEGER)")
@@ -237,14 +237,14 @@ def test_legacy_identical_stage_keeps_real_mastery_and_clean_streak(tmp_path):
         engine.plan = LearningPlan(piece, consolidate=True)
         engine.fingerprint = "exact"
         engine._restore()
-        assert engine.plan.hand == "right" and engine.plan.streak == 2
-        assert engine.plan.lesson_steps_mastered == 1
-        assert engine.plan.mastered["learn:1-2:left:original"] == 90
+        assert engine.plan.hand == "right" and engine.plan.streak == 0
+        assert engine.plan.lesson_steps_mastered == 0
+        assert "learn:1-2:left:original" not in engine.plan.mastered
     finally:
         engine.db.close()
 
 
-def test_bad_legacy_hand_does_not_crash_course_restoration(tmp_path):
+def test_invalid_historical_hand_is_not_replayed(tmp_path):
     with sqlite3.connect(tmp_path / "progress.db") as db:
         db.execute("CREATE TABLE sessions (fingerprint TEXT PRIMARY KEY, exercise INTEGER, hand TEXT, bpm INTEGER, streak INTEGER)")
         db.execute("INSERT INTO sessions VALUES (?,?,?,?,?)", ("bad-hand", 0, "unavailable", 40, 2))

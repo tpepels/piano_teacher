@@ -109,3 +109,12 @@ def test_learning_plan_does_not_reexport_source_builder_or_own_generation_pipeli
     source = (ROOT / "piano_teacher/learning.py").read_text()
     assert "from .lesson_source_planner import" not in source
     assert "self.pipeline = ExercisePipeline" not in source
+
+
+def test_progress_repository_never_reconstructs_unversioned_courses():
+    source = (ROOT / "piano_teacher/progress_repository.py").read_text()
+    assert "build_exercises" not in source
+    assert "generate_variants" not in source
+    assert "legacy_mastery" not in source
+    assert "strategy_sessions" in source
+    assert "step_key" in source
