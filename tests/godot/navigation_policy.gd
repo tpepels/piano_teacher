@@ -11,11 +11,11 @@ func _initialize() -> void:
     if not playing["pause"]:
         failures += 1
     var starting = Policy.plan("library","practice","ready",
-        true,"/control","start")
+        true,"practice.command","start")
     if not starting["pause"]:
         failures += 1
     var pending_settings = Policy.plan("settings","settings","playing",
-        true,"/control","pause")
+        true,"practice.command","pause")
     if pending_settings["pause"] or pending_settings["remember_settings"]:
         failures += 1
     var home = Policy.plan("home","practice","playing",false,"","")
