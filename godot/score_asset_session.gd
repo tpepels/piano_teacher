@@ -108,7 +108,7 @@ func request_layout() -> bool:
     if layout_pending or not _loaded:
         return false
     requested_layout_revision = revision
-    _begin_request("layout","/score/layout",90.0)
+    _begin_request("layout","score.native_layout",90.0)
     return true
 
 func request_model() -> bool:
@@ -117,7 +117,7 @@ func request_model() -> bool:
             layout_revision != revision or not is_instance_valid(_renderer) or \
             not _renderer.glyphs.ready():
         return false
-    _begin_request("model","/score/model",5.0)
+    _begin_request("model","score.semantic",5.0)
     return true
 
 func retry(_now_ms: int) -> bool:
@@ -178,7 +178,7 @@ func _drain_stale(kind: String, now_ms: int) -> void:
         poll(now_ms)
 
 func _complete_layout(code: int, body: PackedByteArray) -> void:
-    if code != 200:
+    if code != 0:
         _fail(_command_failure(code,body))
         return
     var parsed: Variant = _decode_json(body)
@@ -207,7 +207,7 @@ func _complete_model(code: int, body: PackedByteArray, now_ms: int) -> void:
     if not is_instance_valid(_renderer) or layout_revision != revision or not score_error.is_empty():
         return
     var candidate: Variant = _decode_json(body)
-    if code == 200 and candidate is Dictionary:
+    if code == 0 and candidate is Dictionary:
         if int(candidate.get("revision",-1)) != revision:
             return
         if not _renderer.load_score(candidate):
