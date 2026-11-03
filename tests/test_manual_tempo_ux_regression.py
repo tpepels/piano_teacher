@@ -3,12 +3,8 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import replace
-from http.server import ThreadingHTTPServer
 import json
-from threading import Thread
 import time
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
 
 from mido import Message
 import pytest
@@ -17,7 +13,8 @@ from piano_teacher.learning import LearningPlan
 from piano_teacher.lesson_settings import SETTINGS
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.practice import PlayedNote, evaluate
-from piano_teacher.server import Handler, PracticeEngine
+from piano_teacher.server import PracticeEngine
+from piano_teacher.inprocess import EngineCommands
 
 
 def _piece():
@@ -286,115 +283,94 @@ def test_manual_tempo_without_piano_remains_ungraded_preview(tmp_path, action):
 
 
 @contextmanager
-def _http(engine):
-    class LocalHandler(Handler):
-        pass
-
-    LocalHandler.engine = engine
-    service = ThreadingHTTPServer(("127.0.0.1", 0), LocalHandler)
-    thread = Thread(target=service.serve_forever, daemon=True)
-    thread.start()
-    base = f"http://127.0.0.1:{service.server_port}"
-
-    def request(route, payload=None):
-        body = None if payload is None else json.dumps(payload).encode()
-        req = Request(base + route, data=body,
-                      headers={"Content-Type": "application/json"})
-        try:
-            response = urlopen(req, timeout=5)
-        except HTTPError as error:
-            response = error
-        with response:
-            assert response.headers.get_content_type() == "application/json"
-            return response.status, json.load(response)
-
-    try:
-        yield request
-    finally:
-        service.shutdown()
-        service.server_close()
-        thread.join(timeout=5)
+def _commands(engine):
+    """Exercise the registered typed in-process command surface."""
+    transport = EngineCommands(engine=engine)
+    def request(operation, payload=None):
+        status, response = transport.request(operation, json.dumps(payload or {}))
+        return status, json.loads(response)
+    yield request
 
 
-def test_http_manual_buttons_respect_bounds_and_survive_invalid_selection(tmp_path):
-    with _engine(tmp_path) as engine, _http(engine) as request:
+def test_typed_manual_buttons_respect_bounds_and_survive_invalid_selection(tmp_path):
+    with _engine(tmp_path) as engine, _commands(engine) as request:
         for payload in ({"action": "select_step", "number": number}
                         for number in (0, -1, len(engine.plan.lesson_steps) + 1,
                                        "not-a-step", None)):
-            status, error = request("/control", payload)
-            assert status == 400 and error["error"]
-            assert request("/state")[1]["bpm"] == 40
-        status, error = request("/control", {"action": "select_step"})
-        assert status == 400 and error["error"]
+            status, error = request("practice.command", payload)
+            assert status == 1 and error["error"]
+            assert request("state.snapshot")[1]["bpm"] == 40
+        status, error = request("practice.command", {"action": "select_step"})
+        assert status == 1 and error["error"]
 
-        status, state = request("/control", {"action": "tempo_down"})
-        assert status == 200 and state["bpm"] == 35
+        status, state = request("practice.command", {"action": "tempo_down"})
+        assert status == 0 and state["bpm"] == 35
         assert state["manual_tempo_step_bpm"] == 5
         assert state["can_decrease_tempo"] and state["can_increase_tempo"]
         while state["bpm"] > SETTINGS.minimum_bpm:
             before = state["bpm"]
-            status, state = request("/control", {"action": "tempo_down"})
-            assert status == 200
+            status, state = request("practice.command", {"action": "tempo_down"})
+            assert status == 0
             assert state["bpm"] == max(SETTINGS.minimum_bpm, before - 5)
         assert not state["can_decrease_tempo"] and state["can_increase_tempo"]
-        assert request("/control", {"action": "tempo_down"})[1]["bpm"] == SETTINGS.minimum_bpm
+        assert request("practice.command", {"action": "tempo_down"})[1]["bpm"] == SETTINGS.minimum_bpm
         while state["bpm"] < state["target_bpm"]:
             before = state["bpm"]
-            status, state = request("/control", {"action": "tempo_up"})
-            assert status == 200
+            status, state = request("practice.command", {"action": "tempo_up"})
+            assert status == 0
             assert state["bpm"] == min(state["target_bpm"], before + 5)
         assert state["target_bpm"] == 113
         assert not state["can_increase_tempo"] and state["can_decrease_tempo"]
-        assert request("/control", {"action": "tempo_up"})[1]["bpm"] == 113
-        assert request("/control", {"action": "tempo_down"})[1]["bpm"] == 108
-        assert request("/lesson")[1]["completed_steps"] == 0
+        assert request("practice.command", {"action": "tempo_up"})[1]["bpm"] == 113
+        assert request("practice.command", {"action": "tempo_down"})[1]["bpm"] == 108
+        assert request("lesson.overview")[1]["completed_steps"] == 0
         assert state["lesson_step"] == 1 and state["streak"] == 0
         _assert_no_mastery(engine)
 
 
 @pytest.mark.parametrize("action", ["tempo_down", "tempo_up", "select_step"])
-def test_http_manual_controls_require_loaded_music(tmp_path, action):
+def test_typed_manual_controls_require_loaded_music(tmp_path, action):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        with _http(engine) as request:
-            status, error = request("/control", {"action": action, "number": 1})
-            assert status == 400
+        with _commands(engine) as request:
+            status, error = request("practice.command", {"action": action, "number": 1})
+            assert status == 1
             assert error == {"error": "Open a piece first"}
-            status, state = request("/state")
-            assert status == 200 and not state["loaded"] and not state["running"]
+            status, state = request("state.snapshot")
+            assert status == 0 and not state["loaded"] and not state["running"]
     finally:
         engine.db.close()
 
 
 @pytest.mark.parametrize("number", [2.9, True, False],
                          ids=["fractional", "true", "false"])
-def test_http_step_selection_requires_an_integer_not_lossy_coercion(tmp_path, number):
-    with _engine(tmp_path) as engine, _http(engine) as request:
-        status, _ = request("/control", {"action": "select_step", "number": number})
-        assert status == 400
-        state = request("/state")[1]
+def test_typed_step_selection_requires_an_integer_not_lossy_coercion(tmp_path, number):
+    with _engine(tmp_path) as engine, _commands(engine) as request:
+        status, _ = request("practice.command", {"action": "select_step", "number": number})
+        assert status == 1
+        state = request("state.snapshot")[1]
         assert state["lesson_step"] == 1 and state["bpm"] == 40
         _assert_no_mastery(engine)
 
 
 @pytest.mark.parametrize("number", [2, 2.0, "2", " +2 ", "02"])
-def test_http_step_selection_keeps_safe_integer_input_compatibility(tmp_path, number):
-    # Keep legacy integer strings and whole floats (JSON clients may send 2.0).
+def test_typed_step_selection_keeps_safe_integer_input_compatibility(tmp_path, number):
+    # Accept safe integer text and whole floats without lossy truncation.
     # These name exactly one stage; fractional values and booleans do not.
-    with _engine(tmp_path) as engine, _http(engine) as request:
-        request("/control", {"action": "tempo_down"})
-        status, selected = request("/control", {"action": "select_step", "number": number})
-        assert status == 200
+    with _engine(tmp_path) as engine, _commands(engine) as request:
+        request("practice.command", {"action": "tempo_down"})
+        status, selected = request("practice.command", {"action": "select_step", "number": number})
+        assert status == 0
         assert selected["lesson_step"] == 2 and selected["bpm"] == 40
-        status, previous = request("/control", {"action": "select_step", "number": 1})
-        assert status == 200
+        status, previous = request("practice.command", {"action": "select_step", "number": 1})
+        assert status == 0
         assert previous["lesson_step"] == 1 and previous["bpm"] == 35
         _assert_no_mastery(engine)
 
 
 @pytest.mark.parametrize("phase", ["count_in", "playing", "paused", "feedback", "loading"])
-def test_http_invalid_stage_preserves_transport_and_pending_assessment(tmp_path, phase):
-    with _engine(tmp_path) as engine, _http(engine) as request:
+def test_typed_invalid_stage_preserves_transport_and_pending_assessment(tmp_path, phase):
+    with _engine(tmp_path) as engine, _commands(engine) as request:
         engine.control("select_step", number=2)
         engine.control("tempo_down")
         engine.control("select_step", number=1)
@@ -402,20 +378,20 @@ def test_http_invalid_stage_preserves_transport_and_pending_assessment(tmp_path,
             engine.control("tempo_up")
         _commit_take(engine)
         assert _commit_take(engine)["streak"] == 2
-        request("/control", {"action": "start"})
+        request("practice.command", {"action": "start"})
         if phase in ("playing", "paused"):
             engine.visual_transport.run_at = time.monotonic() - .25
             engine._receive(Message("note_on", note=60, velocity=90))
         if phase == "paused":
-            request("/control", {"action": "pause"})
+            request("practice.command", {"action": "pause"})
         elif phase == "feedback":
             engine.control("stop")
             engine.pending_result = _assessment(engine)
             engine.auto = True
             engine.visual_transport.next_at = time.monotonic() + 60
         elif phase == "loading":
-            request("/control", {"action": "practice"})
-        before = request("/state")[1]
+            request("practice.command", {"action": "practice"})
+        before = request("state.snapshot")[1]
         assert before["phase"] == phase
         recorder, pending = engine.recorder, engine.pending_result
         transport = (engine.visual_transport.run_at, engine.visual_transport.next_at, engine.visual_transport.paused_at,
@@ -428,9 +404,9 @@ def test_http_invalid_stage_preserves_transport_and_pending_assessment(tmp_path,
             -float("inf"), 10 ** 100,
         ))]
         for arguments in invalid:
-            status, error = request("/control", {"action": "select_step", **arguments})
-            assert status == 400 and error["error"], arguments
-            after = request("/state")[1]
+            status, error = request("practice.command", {"action": "select_step", **arguments})
+            assert status == 1 and error["error"], arguments
+            after = request("state.snapshot")[1]
             for field in ("phase", "running", "paused", "auto", "transport_id", "revision",
                           "lesson_step", "bpm", "target_bpm", "streak", "take_result",
                           "feedback", "next_action", "pause_context", "awaiting_score_revision",
