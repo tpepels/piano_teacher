@@ -1,4 +1,4 @@
-"""Selected notation, engraving and image caches, independent of session state.
+"""Selected notation and source engraving, independent of session state.
 
 The application serializes calls under its existing lock. This owner receives
 source values, never an engine, learning plan, transport or renderer callback.
@@ -18,7 +18,6 @@ from ..notation.lesson import LessonScore, build_lesson_score, infer_piece_clefs
 from ..notation.model import build_score_model
 from ..preprocessing_cache import PreprocessingCache
 from ..engraving.engraving import EngravedScore, render_layout
-from ..engraving.raster import rasterize_score
 from . import score_preparation
 
 
@@ -40,11 +39,6 @@ class ScoreSelection:
                 phrase.first_bar, phrase.last_bar, phrase.start, phrase.end)
 
 
-def validate_png_width(width: int) -> None:
-    if not 600 <= width <= 12000:
-        raise ValueError("Invalid engraving image width")
-
-
 class ScoreArtifacts:
     def __init__(self, preprocessing: PreprocessingCache):
         self.preprocessing = preprocessing
@@ -59,7 +53,6 @@ class ScoreArtifacts:
         self._layout: EngravedScore | None = None
         self._layout_source_bpm: float | None = None
         self._layout_key: str | None = None
-        self._png: dict[tuple[int, int], bytes] = {}
 
     def _selected_notation(self, selected: ScoreSelection) -> LessonScore:
         if selected.identity != self._notation_identity or self._notation is None:
@@ -86,7 +79,7 @@ class ScoreArtifacts:
         return self._selected_notation(selected).musicxml
 
     def source_model(self, selected: ScoreSelection) -> dict:
-        """Internal source contract; HTTP callers use the isolated semantic response."""
+        """Internal source contract; the command queue publishes a semantic snapshot."""
         notation = self._selected_notation(selected)
         if self._model is None:
             self._model = build_score_model(notation,
@@ -154,50 +147,15 @@ class ScoreArtifacts:
         self._layout_identity = selected.identity
         self._layout_source_bpm = piece.bpm
         self._layout_key = key
-        self._png.clear()
         return layout
 
-    def engraved(self, selected: ScoreSelection, page: int = 0) -> str:
-        score = self.engraving(selected)
-        if not 0 <= page < len(score.pages):
-            raise ValueError("Invalid score page")
-        return score.pages[page]
-
-    def engraved_png(self, selected: ScoreSelection, page: int = 0, *, width: int = 2000) -> bytes:
-        validate_png_width(width)
-        score = self.engraving(selected)
-        if width > 7200 and not bool(getattr(score, "layout", {}).get("continuous_score", False)):
-            raise ValueError("Invalid engraving image width")
-        if not 0 <= page < len(score.pages):
-            raise ValueError("Invalid score page")
-        key = (page, width)
-        if key not in self._png:
-            # Retain one resolution per page in process memory.
-            for cached in tuple(self._png):
-                if cached[0] == page:
-                    del self._png[cached]
-            png_key = self.preprocessing.key("png", self._layout_key, page, width) if self._layout_key else None
-            png = self.preprocessing.read_png(png_key) if png_key else None
-            if png is None:
-                png = (rasterize_score(score.pages[page]) if width == 2000
-                       else rasterize_score(score.pages[page], width=width))
-                if png_key:
-                    self.preprocessing.write_png(png_key, png)
-            else:
-                print("PREPROCESS_PNG_CACHE_HIT:", page, width)
-            self._png[key] = png
-        return self._png[key]
-
-    def geometry(self, selected: ScoreSelection, *, native_notes: bool = True) -> dict:
+    def geometry(self, selected: ScoreSelection) -> dict:
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
         began = time.perf_counter()
         score = self.engraving(selected)
         if diagnostics:
             print("SCORE_GEOMETRY_STAGE: engraving",
                   round((time.perf_counter()-began)*1000, 1), "ms", flush=True)
-        if not native_notes:
-            return score_preparation.assemble_layout(score,
-                native_notes=False, revision=selected.revision)
         checkpoint = time.perf_counter()
         notation = self._selected_notation(selected)
         model = self.semantic_score(selected)
@@ -205,7 +163,7 @@ class ScoreArtifacts:
             print("SCORE_GEOMETRY_STAGE: semantic",
                   round((time.perf_counter()-checkpoint)*1000, 1), "ms", flush=True)
         checkpoint = time.perf_counter()
-        prepared = score_preparation.assemble_layout(score, native_notes=True,
+        prepared = score_preparation.assemble_layout(score,
             native_model=model, notation_xml=notation.musicxml,
             cache=self.preprocessing, cache_key=self._layout_key or "",
             revision=selected.revision)
