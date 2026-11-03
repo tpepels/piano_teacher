@@ -25,7 +25,7 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE/runtime" "$STAGE/bin"
 cp -a godot "$STAGE/godot"
 cp -a piano_teacher "$STAGE/piano_teacher"
-cp -a midi "$STAGE/midi" 2>/dev/null || true
+# Imported test/repertoire MIDI files are development data, not redistributable app assets.
 cp -a "$PIANO_BUNDLED_PYTHON_HOME" "$STAGE/runtime/python"
 cp "$PIANO_GODOT_BINARY" "$STAGE/bin/godot"
 cp "$PIANO_BUNDLED_NODE" "$STAGE/bin/node"
@@ -57,6 +57,7 @@ PY
 # one entry scene; test scripts and their imported .uid files are excluded.
 rm -rf "$STAGE/godot/addons/godot_mcp_toolkit" "$STAGE/godot/.godot" \
   "$STAGE/godot/tests"
+rm -f "$STAGE/godot/.mcp.json"
 for fixture in native_bridge_smoke production_ui_smoke production_session_journey ui_layout_smoke; do
   rm -f "$STAGE/godot/$fixture.gd" "$STAGE/godot/$fixture.gd.uid"
 done

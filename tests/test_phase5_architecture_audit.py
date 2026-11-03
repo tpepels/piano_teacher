@@ -58,3 +58,18 @@ def test_release_audit_rejects_development_only_godot_scripts(tmp_path):
                in message for message in errors)
     assert any("developer-only Godot UID: godot/production_ui_smoke.gd.uid"
                in message for message in errors)
+
+
+def test_release_audit_rejects_developer_midi_and_mcp_configuration(tmp_path):
+    source = tmp_path / "piano_teacher"
+    source.mkdir()
+    (source / "__init__.py").write_text("")
+    midi = tmp_path / "midi"
+    midi.mkdir()
+    (midi / "demo.mid").write_bytes(b"development fixture")
+    godot = tmp_path / "godot"
+    godot.mkdir()
+    (godot / ".mcp.json").write_text('{"mcpServers": {}}')
+    errors = auditor.audit_tree(tmp_path, package=True)
+    assert any("developer MIDI repertoire" in issue for issue in errors)
+    assert any("development-only MCP configuration" in issue for issue in errors)

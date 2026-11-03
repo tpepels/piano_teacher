@@ -80,7 +80,8 @@ part of short CI.
 `scripts/package-inprocess.sh` assembles the distributable desktop
 directory with Godot, GDExtension, CPython and offline inference runtime.
 No compiler, SCons, system Python, pip or localhost service is required
-for end users. Linux hardware drivers are supplied by the operating
+for end users. Developer MIDI repertoire and MCP editor configuration are
+excluded from the distributable. Linux hardware drivers are supplied by the operating
 system. See [native runtime and packaging](docs/inprocess-runtime.md).
 
 For reference specifications, verification and archived research evidence,

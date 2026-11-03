@@ -85,6 +85,10 @@ def audit_tree(root: Path, *, package: bool = False) -> list[str]:
             result.append("Package includes a development-only MCP server")
         if (root / "godot/.godot").exists():
             result.append("Package includes the Godot editor cache")
+        if (root / "godot/.mcp.json").exists():
+            result.append("Package includes a development-only MCP configuration")
+        if (root / "midi").exists():
+            result.append("Package includes developer MIDI repertoire")
         for path in DEV_ONLY_GODOT_PATHS:
             if (root / path).exists():
                 result.append(f"Package includes developer-only Godot fixture: {path}")
