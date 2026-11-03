@@ -87,7 +87,7 @@ func is_ready() -> bool:
 
 func status() -> Dictionary:
     var ready: bool = is_ready()
-    var stalled: bool = _loaded and _preparing_since_ms >= 0 and \
+    var stalled: bool = _loaded and _preparing_since_ms != -1 and \
         Time.get_ticks_msec() - _preparing_since_ms >= SLOW_PREPARATION_MS
     var text := ""
     if not score_error.is_empty():
