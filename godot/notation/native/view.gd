@@ -717,6 +717,10 @@ func _place_retained_score(playhead_x: float, camera_clock: float,
         active_segments[segment] = true
         var silence_start: float = pass_start+timeline.duration_beats
         var silence_end: float = pass_start+stride
+        # An acknowledged next step replaces the repeat-rest area: its
+        # different music is already present on the same horizontal axis.
+        if silence_end > runway_cutoff_beat - .0001:
+            continue
         if silence_start > virtual_right+.7 or silence_end < virtual_left-.7:
             continue
         var replaced := false

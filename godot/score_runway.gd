@@ -148,7 +148,9 @@ func present_frame(state: Dictionary, global_beat: float) -> void:
     var stride: float = float(state.get("practice_timeline",{}).get("stride_beats",0.0))
     if stride <= 0.0:
         return
-    var next_start: float = float(state.get("visual_offset_beats",0.0)) + stride
+    var next_start: float = (float(state.get("visual_offset_beats",0.0)) +
+        float(state.get("duration_beats",0.0)) +
+        .20 * float(state.get("bpm",60.0)) / 60.0)
     var local_beat: float = global_beat - next_start
     _future.present_clock(local_beat,local_beat)
     if _future.retained_ready() and not _acknowledged and not _ack_waiting \

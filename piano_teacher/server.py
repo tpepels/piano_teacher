@@ -43,7 +43,7 @@ from .application.transport_commands import (
 )
 from .application.stage_change import prepare_stage_change, apply_stage_change, guided_reentry
 from .application.practice_transitions import TransitionContext, decide_transition
-from .application.attempt_progression import AttemptProgression, AttemptTick, repeat_deadline, plan_full_passage
+from .application.attempt_progression import AttemptProgression, AttemptTick, repeat_deadline, plan_full_passage, SETTLEMENT_SECONDS
 from .application.feedback_route import FeedbackFacts, select_feedback_route
 from .application.assessment_settlement import assess_completed_take
 from .application.assessment_commit import commit_assessed_result
@@ -1048,7 +1048,12 @@ class PracticeEngine:
                     self.review_stage_identity = None
                     # The upcoming score was rendered before this committed
                     # stage change. Do not reset the moving camera to beat 0.
-                    old_stride = previous_phrase_end - previous_phrase_start + previous_gap
+                    # The next pre-engraved stage begins immediately after the
+                    # final graded note's bounded settlement window, without
+                    # inserting a full rest/count-in between different steps.
+                    stage_advance_beats = (
+                        previous_phrase_end - previous_phrase_start
+                        + SETTLEMENT_SECONDS * outcome.previous_bpm / 60.0)
                     self.score_revision += 1
                     if (self.auto and self._future_stage_ready ==
                             (p.identity, self.score_revision)):
@@ -1056,7 +1061,7 @@ class PracticeEngine:
                         prebuilt = self.future_score.adopt(next_selected)
                         if prebuilt is not None:
                             self.score_artifacts = prebuilt
-                            self.visual_transport.visual_offset_beats += old_stride
+                            self.visual_transport.visual_offset_beats += stage_advance_beats
                         else:
                             self.visual_transport.visual_offset_beats = 0.0
                     else:
@@ -1660,6 +1665,22 @@ class PracticeEngine:
             self.auto = False
             self.visual_transport.cancel_preparation()
         self.next_action = next_full_attempt(self.plan, result)
+        # A fully pre-rendered next stage on the third accepted target-speed
+        # take is allowed to advance on the first post-grading tick. Failed
+        # attempts, lower BPM clean repetitions and unprepared stages keep
+        # the existing musical rewind/rest schedule.
+        if (self.auto and result.passed and
+                self.plan.bpm >= self.plan.target_bpm and
+                self.plan.streak + 1 >= SETTINGS.clean_runs_to_master):
+            planned = self._next_stage_selection()
+            if planned is not None:
+                selection, _number = planned
+                if (self._future_stage_ready ==
+                        (selection.stage_key, selection.revision) and
+                        self.future_score.ready(selection)):
+                    self.visual_transport.next_at = now
+                    self._advance_pending_feedback(now)
+                    return
         if decision.deadline_action == "clear":
             self.visual_transport.next_at = 0
         elif decision.deadline_action == "schedule":

@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from ..lesson_timing import lead_in_beats, preparation_meter
+
+SETTLEMENT_SECONDS = .20
 from ..measure_grid import phrase_grid, next_chunk_end, bar_number_at
 from ..music import Phrase
 
@@ -166,7 +168,7 @@ class AttemptProgression:
         ending = (min(total_beats,tick.review_end)
                   if tick.review_end is not None else total_beats)
         duration = seconds_at(ending)-seconds_at(tick.from_beat)
-        settlement = .20
+        settlement = SETTLEMENT_SECONDS
         if tick.preview or (tick.auto and tick.review_end is None):
             settlement = min(settlement,tick.gap_beats*60/tick.bpm)
         if tick.now < tick.run_at+duration+settlement:
