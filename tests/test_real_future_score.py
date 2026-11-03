@@ -43,5 +43,18 @@ def test_full_coda_fukuda_future_score_is_source_bound_and_prepared(tmp_path):
             stage_key=selection.stage_key,
             revision=selection.revision)["accepted"]
         assert engine.future_score.adopt(selection) is not None
+        # The primary prepared score can advance immediately; the following
+        # generated step must already be warming in the same bounded queue.
+        farther = engine._next_stage_selection(offset=2)
+        if farther is not None:
+            third_selection, third_number = farther
+            started = time.monotonic()
+            while (not engine.future_score.ready(third_selection) and
+                   time.monotonic() - started < 40):
+                time.sleep(.025)
+            assert engine.future_score.ready(third_selection), (
+                "Second lookahead stage was not fully pre-engraved", third_number)
+            assert engine.future_score.adopt(third_selection) is not None
+            assert len(engine.future_score._ready) <= 2
     finally:
         engine.db.close()
