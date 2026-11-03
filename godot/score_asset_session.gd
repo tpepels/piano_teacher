@@ -1,8 +1,7 @@
 extends RefCounted
-## Owns one revision's native layout/atlas/model publication and HTTP lifecycle.
-## Borrows actual renderer/feedback components; retains no Main, widgets, HTTP
-## nodes or callbacks. Transport adapters echo the emitted request ID on every
-## start result/response. A stale reply drains its slot without publishing data.
+## Owns one revision's native layout/atlas/model in-process request lifecycle.
+## Borrows renderer and feedback components but no application root, widgets
+## or transport resources. An obsolete worker response never publishes data.
 signal request_requested(kind: String, request_id: int, path: String, timeout_seconds: float)
 signal assets_invalidated(revision: int)
 signal layout_published(revision: int, values: Dictionary)
@@ -41,7 +40,7 @@ var _state: Dictionary = {}
 var _layout: Dictionary = {}
 var _generation := 0
 var _next_request_id := 0
-# Exactly two request slots, matching the two existing HTTPRequest endpoints.
+# Exactly two in-process command slots: native layout and semantic model.
 var _requests: Dictionary = {}
 
 func _init(renderer, native_feedback = null) -> void:
@@ -109,7 +108,7 @@ func request_layout() -> bool:
     if layout_pending or not _loaded:
         return false
     requested_layout_revision = revision
-    _begin_request("layout","/score/layout?native=1",90.0)
+    _begin_request("layout","/score/layout",90.0)
     return true
 
 func request_model() -> bool:
@@ -180,7 +179,7 @@ func _drain_stale(kind: String, now_ms: int) -> void:
 
 func _complete_layout(code: int, body: PackedByteArray) -> void:
     if code != 200:
-        _fail(_http_failure(code,body))
+        _fail(_command_failure(code,body))
         return
     var parsed: Variant = _decode_json(body)
     if not parsed is Dictionary or not parsed.has("anchors"):
@@ -289,10 +288,10 @@ static func _decode_json(body: PackedByteArray) -> Variant:
         return null
     return document.data
 
-static func _http_failure(code: int, body: PackedByteArray) -> String:
+static func _command_failure(code: int, body: PackedByteArray) -> String:
     var response: Variant = _decode_json(body)
     if response is Dictionary:
-        return str(response.get("error","Request failed (HTTP %d)" % code))
+        return str(response.get("error","Command failed (status %d)" % code))
     if code == 0:
         return "Practice engine unavailable. Start Piano Teacher with ./run.sh"
-    return "Practice engine request failed (HTTP %d)" % code
+    return "In-process practice command failed (status %d)" % code
