@@ -21,6 +21,7 @@ if [[ "$MODE" != "--corpus" ]]; then
     tests/test_adaptive_hybrid_journey.py \
     tests/test_composed_midi_lessons.py \
     tests/test_lesson_generator_architecture.py \
+    tests/test_course_consolidation.py \
     tests/test_fukuda_midi_phase4.py \
     tests/test_coda_piece_curriculum.py \
     tests/test_midi_stage_wiring.py \

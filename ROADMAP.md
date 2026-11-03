@@ -50,7 +50,9 @@ paths have been removed; source lessons now require explicit generator
 registration and every feedback-capable generator consumes graded source-ID
 evidence via `with_feedback`. The ID-only `with_mistakes` and implicit
 legacy generator fallback have been deleted, along with stale LearningPlan
-planning forwarders. A source import-graph audit runs in fast CI and the
+planning forwarders and unversioned progress reconstruction. Only an exact
+current versioned stage key can restore a completed streak or BPM; stale
+unversioned records remain stored but are never executed. A source import-graph audit runs in fast CI and the
 standalone packager checks its assembled distribution for the canonical
 modules, native assets and absence of the editor server. Latest fast
 contracts passed at `1390f79`; native GDExtension startup and actual assembled

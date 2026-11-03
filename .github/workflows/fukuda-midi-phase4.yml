@@ -16,6 +16,8 @@ on:
       - 'piano_teacher/application/strategy_session.py'
       - 'piano_teacher/lesson_generators.py'
       - 'piano_teacher/learning.py'
+      - 'piano_teacher/progress_repository.py'
+      - 'tests/test_course_consolidation.py'
       - 'piano_teacher/exercise_strategies.py'
       - 'tests/test_fukuda_midi_phase4.py'
 
