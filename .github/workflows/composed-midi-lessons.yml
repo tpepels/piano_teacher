@@ -17,6 +17,7 @@ on:
       - 'tests/test_adaptive_hybrid_journey.py'
       - 'tests/test_composed_midi_lessons.py'
       - 'tests/test_composed_midi_repertoire.py'
+      - 'tests/test_phase6_rest_handoff_real_midi.py'
   workflow_dispatch:
 
 permissions:
@@ -47,6 +48,8 @@ jobs:
             tests/test_fukuda_midi_phase4.py \
             tests/test_coda_piece_curriculum.py \
             tests/test_library.py
+      - name: Verify real-MIDI internal rest transport without hardware
+        run: timeout 55s python -m pytest -q --tb=short tests/test_phase6_rest_handoff_real_midi.py
       - name: Verify all 17 full-length original MIDI scores
         run: |
           timeout 75s python -m pytest -q --tb=short \
