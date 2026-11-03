@@ -998,63 +998,63 @@ class PracticeEngine:
         engine_before = {key: getattr(self, key) for key in engine_fields}
         try:
             with sqlite_atomic(self.db):
-            # Source-specific mistakes are learned from authentic original
-            # MIDI attempts, never from generated exercises or Listen previews.
-            use_feedback = (p.accepts_performance_feedback
-                          and p.active_variant.level=="original"
-                          and not self.is_builtin_warmup
-                          and bool(result.notes))
-            if result.passed:
-                self._reset_trouble()
-                self.learner_progress.resolve_trouble(
-                    fingerprint=self.fingerprint, stage_key=p.identity)
-            self.retry_range = None
-            outcome = commit_assessed_result(
-                plan=p, result=result, fingerprint=self.fingerprint,
-                automatic=self.auto, mode=self.mode, warmup=self.is_builtin_warmup,
-                observe=self.practice_policy.observe,
-                plan_remediation=self.remediation_planner.plan)
-            if use_feedback:
-                # Reuse graded original source IDs through the selected generator's
-                # feedback contract. No name-based algorithm dispatch in the engine.
-                self.fukuda_mistakes.observe(self.fingerprint, result)
-                evidence = self.fukuda_mistakes.evidence(self.fingerprint)
-                failed_ids = frozenset(n.note.source_id for n in result.notes
-                                       if n.status != "correct")
-                accepted = result.passed
-                settled_stage = p.identity
-                changed = p.refresh_from_feedback(
-                    evidence, prefer_repair=not accepted and bool(failed_ids),
-                    focus_ids=failed_ids)
-                if not changed and not accepted and failed_ids:
-                    changed = p.revisit_source_errors(failed_ids)
-                if changed and p.identity != settled_stage:
-                    # Re-engrave only if the next *active score* has changed.
-                    # An accepted take may update the future practice catalog
-                    # while retaining exactly the same active source notes.
-                    self._remediation_pending = None
-                    self.score_artifacts.invalidate()
+                # Source-specific mistakes are learned from authentic original
+                # MIDI attempts, never from generated exercises or Listen previews.
+                use_feedback = (p.accepts_performance_feedback
+                              and p.active_variant.level=="original"
+                              and not self.is_builtin_warmup
+                              and bool(result.notes))
+                if result.passed:
+                    self._reset_trouble()
+                    self.learner_progress.resolve_trouble(
+                        fingerprint=self.fingerprint, stage_key=p.identity)
+                self.retry_range = None
+                outcome = commit_assessed_result(
+                    plan=p, result=result, fingerprint=self.fingerprint,
+                    automatic=self.auto, mode=self.mode, warmup=self.is_builtin_warmup,
+                    observe=self.practice_policy.observe,
+                    plan_remediation=self.remediation_planner.plan)
+                if use_feedback:
+                    # Reuse graded original source IDs through the selected generator's
+                    # feedback contract. No name-based algorithm dispatch in the engine.
+                    self.fukuda_mistakes.observe(self.fingerprint, result)
+                    evidence = self.fukuda_mistakes.evidence(self.fingerprint)
+                    failed_ids = frozenset(n.note.source_id for n in result.notes
+                                           if n.status != "correct")
+                    accepted = result.passed
+                    settled_stage = p.identity
+                    changed = p.refresh_from_feedback(
+                        evidence, prefer_repair=not accepted and bool(failed_ids),
+                        focus_ids=failed_ids)
+                    if not changed and not accepted and failed_ids:
+                        changed = p.revisit_source_errors(failed_ids)
+                    if changed and p.identity != settled_stage:
+                        # Re-engrave only if the next *active score* has changed.
+                        # An accepted take may update the future practice catalog
+                        # while retaining exactly the same active source notes.
+                        self._remediation_pending = None
+                        self.score_artifacts.invalidate()
+                        self.score_revision += 1
+                        self.awaiting_score_revision = None
+                if outcome.remediation is not None and not (
+                        use_feedback and changed):
+                    self._remediation_pending = outcome.remediation
+                if outcome.accelerated:
+                    self.recovery_notice = {
+                        "kind": "speedup", "errors": 0,
+                        "from_bpm": outcome.previous_bpm, "to_bpm": p.bpm,
+                        "first_bar": p.active_phrase.first_bar,
+                        "last_bar": p.active_phrase.last_bar,
+                        "expires_at": time.monotonic() + 7.0,
+                    }
+                if outcome.stage_changed:
+                    self.open_from_beat = 0.0
+                    self.performance_summary = None
+                    self.review_stage_identity = None
+                    # Engraving depends on notation, not changes of tempo alone.
                     self.score_revision += 1
-                    self.awaiting_score_revision = None
-            if outcome.remediation is not None and not (
-                    use_feedback and changed):
-                self._remediation_pending = outcome.remediation
-            if outcome.accelerated:
-                self.recovery_notice = {
-                    "kind": "speedup", "errors": 0,
-                    "from_bpm": outcome.previous_bpm, "to_bpm": p.bpm,
-                    "first_bar": p.active_phrase.first_bar,
-                    "last_bar": p.active_phrase.last_bar,
-                    "expires_at": time.monotonic() + 7.0,
-                }
-            if outcome.stage_changed:
-                self.open_from_beat = 0.0
-                self.performance_summary = None
-                self.review_stage_identity = None
-                # Engraving depends on notation, not changes of tempo alone.
-                self.score_revision += 1
-                self.visual_offset_beats = 0.0
-            self._save()
+                    self.visual_offset_beats = 0.0
+                self._save()
 
         except Exception:
             vars(p).clear()
