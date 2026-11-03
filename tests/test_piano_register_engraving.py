@@ -127,7 +127,7 @@ def test_mutating_source_hand_in_binding_is_rejected_even_on_a_different_display
 
 
 def test_full_verovio_preserves_remote_note_source_identity_hand_pitch_and_clock():
-    from piano_teacher.score import render_layout
+    from piano_teacher.engraving.engraving import render_layout
     score,model=_synthetic((36,60,64,67))
     reference=render_layout(score,1,1,'right',total_beats=2,continuous=True)
     low=next(n for n in reference.layout['notes'] if n['source_id']=='key-36')
@@ -136,7 +136,7 @@ def test_full_verovio_preserves_remote_note_source_identity_hand_pitch_and_clock
 
 
 def test_reference_dimming_uses_performing_hand_in_a_mixed_display_staff():
-    from piano_teacher.score import _fade_inactive_staff
+    from piano_teacher.engraving.engraving import _fade_inactive_staff
     svg='''<svg xmlns="http://www.w3.org/2000/svg"><g class="system"><g class="measure">
     <g class="staff" id="upper"/><g class="staff" id="lower"><path id="rail"/>
     <g class="layer" id="resident"><g class="note" id="left-key"/></g>
@@ -197,7 +197,7 @@ def test_transferred_rh_half_and_resident_lh_quarter_keep_separate_notation_voic
 @pytest.mark.parametrize('shared,selected,opacity',(
     (False,'right',1.),(False,'left',.48),(True,'right',1.),(True,'left',1.)))
 def test_real_reference_ledger_opacity_follows_the_transferred_note(shared,selected,opacity):
-    from piano_teacher.score import render_layout
+    from piano_teacher.engraving.engraving import render_layout
     notes=tuple(Note(0,2,p,0,0,'right',f'r-{p}','r') for p in (36,60,64,67))
     notes+=(Note(0,1 if shared else 2,36 if shared else 48,1,0,'left','l-key','l'),)
     phrase=Phrase(1,1,1,0,4,notes)
