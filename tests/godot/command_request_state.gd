@@ -26,7 +26,7 @@ func _initialize() -> void:
     if state.action_requested("play") or state.control_action != "start":
         failures += 1
     var first: Dictionary = state.finish()
-    if state.pending or first["path"] != "practice.command" or first["action"] != "start" or \
+    if state.pending or first["operation"] != "practice.command" or first["action"] != "start" or \
             int(first["started_ms"]) != 150 or first["resume_saved"]:
         failures += 1
     var queued: Dictionary = state.take_library()
