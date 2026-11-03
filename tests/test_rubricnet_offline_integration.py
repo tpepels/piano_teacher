@@ -124,12 +124,13 @@ def test_failed_trained_selection_cannot_change_persisted_settings_or_progress(
         engine.plan = LearningPlan(score())
         engine.fingerprint = "unchanged-score"
         before = engine.plan.identity
+        saved_strategy = engine.library.settings["exercise_strategy"]
         def unavailable(_):
             raise RubricNetUnavailable("missing research environment")
         monkeypatch.setattr(strategies, "_trained_rubricnet_from_xml", unavailable)
         with pytest.raises(RubricNetUnavailable):
             engine.set_preferences(exercise_strategy="rubricnet-trained")
-        assert engine.library.settings["exercise_strategy"] == "coda-midi"
+        assert engine.library.settings["exercise_strategy"] == saved_strategy
         assert engine.plan.identity == before
         assert engine.plan.mastered == {}
         assert engine.library.settings["exercise_strategy"] != "rubricnet-trained"
