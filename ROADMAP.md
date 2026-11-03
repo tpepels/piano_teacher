@@ -104,6 +104,54 @@ caches are untracked and source .gd.uid files are retained; fast CI rejects
 reintroduced generated/indexed debris. Editor-only MCP tools remain in the
 development tree but are excluded from release staging.
 
+## Maintainability review — 2026-11-03
+
+**Reviewed:** `PracticeEngine` (`server.py`), Godot `main.gd`,
+their state/transition/command collaborators, and all 24
+`piano_teacher/application/` Python modules. Extracted services do not
+import `PracticeEngine` to mutate the root. The two application roots
+remain sizeable, but their largest methods are bounded; line counts
+alone do not justify another architectural rewrite.
+
+**Defects corrected on `main`:**
+- Obsolete `run_before_assessment` test imports replaced with real
+  `_run_pre_assessment_transition` integration tests, which now run
+  in the fast gate.
+- Assessment settlement and progress commits use the required
+  `Assessment.passed` field. The warning-accepted/not-clean case has
+  a regression test; no fallback `getattr` contract remains.
+- Strategy preference changes validate proposed settings and construct
+  a replacement lesson before stopping the current take or persisting
+  a new strategy. Settings are written atomically before publishing
+  the new in-memory snapshot. Generator failures and settings write
+  failures preserve the running attempt and previous preferences.
+  A successful source-to-Coda+Fukuda change is tested with imported MIDI.
+
+[Fast verification: 444 passed, 6 skipped](https://github.com/tpepels/piano_teacher/actions/runs/41699630295)
+at `bf99fc8`. CI covers the named software contracts; it does not prove
+hardware behavior or all unselected research tests.
+
+**Remaining maintainability risks (do not confuse with completed Phase 5):**
+- `TransportField` still forwards sixteen public `PracticeEngine` fields
+  to the `VisualTransport` owner. There is no duplicate stored clock,
+  but these accessors enlarge the engine-facing API. Remove them only
+  together with every production/test caller and a proven equivalent
+  transport regression; do not introduce a compatibility alias.
+- `_commit_pending` remains a multi-effect transaction spanning
+  graded evidence, learning-plan advancement and persistence.
+  Test failures injected between evidence recording, stage changes
+  and durable saving before changing that ownership.
+- `main.gd` retains startup/request-response sequencing with several
+  injected presenters. Verify interrupted, stale and timed-out commands
+  end-to-end before extracting more wrappers; preserve reply ordering.
+- `score_preparation.py` has broad fragment-extraction exception handlers
+  that publish incomplete assets. Verify these failures appear as explicit
+  notation errors and cannot publish a partially usable score.
+
+These are focused acceptance tasks for runtime reliability and API
+simplification. No second roadmap, HTTP fallback, new application root
+or broad structural rewrite is authorized by this review.
+
 ## Immediate order of work
 
 **P6 — Prove real user behavior.** The
