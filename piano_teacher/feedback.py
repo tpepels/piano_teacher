@@ -8,7 +8,7 @@ from __future__ import annotations
 from .music import Phrase, note_name, source_note_id
 from .practice import Assessment
 from typing import Callable
-from .rendering.legacy.geometry import locate_beat
+from .engraving.geometry import locate_beat
 
 
 def project_assessment(assessment: Assessment, phrase: Phrase, bpm: float, layout: dict, *,
