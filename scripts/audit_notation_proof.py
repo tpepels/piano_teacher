@@ -17,7 +17,7 @@ from piano_teacher.notation.model import build_score_model
 from piano_teacher.notation.proof import (
     verify_generated_engraving, verify_original_musicxml,
 )
-from piano_teacher.score import import_piece
+from piano_teacher.importing.pieces import import_piece
 # Works both as an imported module and as a direct script from the repo root.
 if __package__:
     from scripts.notation_release_provenance import current_provenance
