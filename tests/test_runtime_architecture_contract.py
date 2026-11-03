@@ -65,3 +65,26 @@ def test_shared_teaching_selection_is_independent_of_built_in_stage_names():
     assert info["label"] == "Harmonic guide"
     assert info["removed"] == 2
     assert info["meaningful"] is True
+
+
+def test_grading_relevance_accepts_any_contributor_and_rejects_remote_reductions():
+    from piano_teacher.adaptive_hybrid_curriculum import _selection
+    notes = tuple(Note(float(i), float(i+0.5), 60+i, 0, 0,
+                       "right", f"note{i}") for i in (0, 1, 2, 3, 7))
+    source = Phrase(1, 1, 2, 0, 8, notes)
+    baseline = ExerciseStage(ExerciseVariant("original", source, tuple(range(5))),
+                             origin="original")
+    def reduction(removed_index, origin):
+        indices = tuple(i for i in range(5) if i != removed_index)
+        selected = tuple(notes[i] for i in indices)
+        return ExerciseStage(
+            ExerciseVariant(f"opaque-{origin}",
+                            Phrase(1, 1, 2, 0, 8, selected), indices),
+            origin=origin, technique="note-reduction",
+            display_name="Source reduction")
+    relevant = reduction(0, "foreign-algorithm")
+    distant = reduction(4, "different-algorithm")
+    selected = _selection((distant, relevant, baseline),
+                          {"note0": "wrong"}, kind="learn")
+    assert selected == (relevant, baseline)
+    assert selected[0].origin == "foreign-algorithm"
