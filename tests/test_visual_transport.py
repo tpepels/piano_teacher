@@ -75,10 +75,11 @@ def test_resume_keeps_inactive_clock_sentinels_and_source_position_unchanged():
     assert not t.paused and t.paused_at == 0
 
 
-def test_transport_engine_alias_has_exactly_one_state_owner(tmp_path):
+def test_transport_has_exactly_one_state_owner_without_engine_aliases(tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        assert engine.visual_transport.run_at == engine.visual_transport.run_at
+        assert not hasattr(engine, "run_at")
+        assert not hasattr(engine, "pending_rewind")
         engine.visual_transport.run_at = 123.5
         engine.visual_transport._preview_loop_pending = True
         engine.visual_transport.visual_gap_beats = 7
