@@ -28,7 +28,7 @@ jobs:
       OMP_NUM_THREADS: "1"
       PYTHONUNBUFFERED: "1"
       PIANO_TEACHER_TIMING_DIAGNOSTICS: "1"
-      PIANO_PHASE6_PERF_OUT: ${{ runner.temp }}/phase6-score-perf
+      PIANO_PHASE6_PERF_OUT: /tmp/phase6-score-perf
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,6 +50,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: phase6-score-perf-${{ github.sha }}
-          path: ${{ runner.temp }}/phase6-score-perf/
+          path: /tmp/phase6-score-perf/
           if-no-files-found: error
           retention-days: 14
