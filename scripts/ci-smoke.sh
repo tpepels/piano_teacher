@@ -66,6 +66,7 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_midi_polyphonic_stems.py \
   tests/test_midi_visual_fast_path.py \
   tests/test_midi_calibration.py \
+  tests/test_calibration_grading_integration.py \
   tests/test_forgiving_midi_practice.py \
   tests/test_midi_only_product.py \
   tests/test_library.py \
