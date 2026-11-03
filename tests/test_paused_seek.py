@@ -13,7 +13,7 @@ def test_paused_seek_reloads_practice_at_source_bar_with_fresh_count_in(lesson, 
     if mode == 'perform':
         e.control('perform')
         acknowledge(e)
-    now[0] = e.run_at+.2
+    now[0] = e.visual_transport.run_at+.2
     send(e, now, now[0], 90)
     e.control('pause')
     before = e.state()
@@ -136,6 +136,6 @@ def test_seek_abandons_paused_feedback_without_committing_its_clean_result(lesso
     e.control('seek', bar=3)
     assert e.pending_result is None and not e.plan.mastered
     acknowledge(e)
-    assert e.play_from_beat == 8
+    assert e.visual_transport.play_from_beat == 8
     partial = finish_take(e, now, 16)
     assert partial['phase'] == 'recovering' and not e.plan.mastered

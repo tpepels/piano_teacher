@@ -40,7 +40,7 @@ def test_note_on_publishes_to_memory_without_waiting_for_release(tmp_path):
         engine.plan = LearningPlan(piece, exercise_strategy="source-progression")
         engine.midi.port = SimpleNamespace(closed=False)
         engine.start()
-        engine.run_at = time.monotonic() - .015
+        engine.visual_transport.run_at = time.monotonic() - .015
         engine._receive(SimpleNamespace(type="note_on", note=60,
                                         velocity=85, channel=0))
         events = engine.live_events.after(0)

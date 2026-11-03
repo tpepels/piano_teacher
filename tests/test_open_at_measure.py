@@ -65,7 +65,7 @@ def test_practice_starts_exact_selected_bar_only_after_start(tmp_path):
         state = engine.state()
         assert state["phase"] == "count_in"
         assert state["selected_start_bar"] == 6
-        assert engine.play_from_beat > 0
+        assert engine.visual_transport.play_from_beat > 0
         assert state["preview_only"]  # No connected Kawai is required.
     finally:
         engine.db.close()

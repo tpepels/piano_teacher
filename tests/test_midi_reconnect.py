@@ -72,7 +72,7 @@ def test_unplug_stops_attempt_and_retains_saved_device_for_replug(connected):
     assert engine.midi.port is None and engine.midi.device == ""
     assert old_port.closed
     assert not engine.running and engine.recorder is None
-    assert not engine.auto and engine.next_at == 0
+    assert not engine.auto and engine.visual_transport.next_at == 0
     assert "disconnected" in engine.feedback.lower()
     assert "USB Piano" in engine.feedback
     assert engine.preferences()["midi_device"] == "USB Piano"
@@ -107,7 +107,7 @@ def test_unplug_during_clean_feedback_discards_pending_mastery(connected):
     engine.start()
     engine.running = False
     engine.pending_result = SimpleNamespace(correct=1, notes=[object()], extra_notes=0)
-    engine.next_at = 1.0
+    engine.visual_transport.next_at = 1.0
     midi.names = []
 
     engine.ports()
@@ -320,7 +320,7 @@ def test_device_release_cancels_the_take_before_the_backend_closes(connected, mo
     def closing():
         assert engine.lock._is_owned()
         observed.append((engine.running, engine.recorder, engine.auto,
-                         engine.next_at, engine.midi.port))
+                         engine.visual_transport.next_at, engine.midi.port))
         close()
 
     monkeypatch.setattr(old_port, "close", closing)

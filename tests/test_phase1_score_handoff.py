@@ -24,7 +24,7 @@ def test_auto_advance_waits_for_correct_revision(tmp_path, monkeypatch):
             notes=[1]
         e.pending_result=Result()
         e.running=False
-        e.next_at=now[0]-.1
+        e.visual_transport.next_at=now[0]-.1
         e.auto=True
         e.plan.hand_index=len(e.plan.hands)-1
         e.plan.bpm=e.plan.piece.bpm
