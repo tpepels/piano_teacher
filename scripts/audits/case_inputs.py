@@ -104,7 +104,9 @@ def fixture(case: AuditCase = CASES[0], *, piece=None,
                               total_beats=end-first, bpm=piece.bpm, continuous=compact)
     key = cache.key("native-comparison-art", score.musicxml, case.hand,
                     piece.bpm, compact, CANONICAL_CAPTURE_CONFIG) if cache is not None else ""
-    atlas = assemble_layout(engraving, native_notes=True, native_model=model,
+    # The audit must use the same strictly native preparation signature as
+    # the application. The removed native_notes switch never reaches runtime.
+    atlas = assemble_layout(engraving, native_model=model,
                             notation_xml=score.musicxml, cache=cache, cache_key=key)
     return {
         "capture_config": dict(CANONICAL_CAPTURE_CONFIG),

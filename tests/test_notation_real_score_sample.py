@@ -25,6 +25,8 @@ SAMPLES = {
         "real-score-rests", "Peace_Piece_-_Bill_Evans_(Piano_Solo).midi", 1, 2, "both"),
     "real-score-dense": AuditCase(
         "real-score-dense", "Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi", 5, 6, "both"),
+    "real-score-moonlight": AuditCase(
+        "real-score-moonlight", "Moonlight_Sonata_I.midi", 1, 2, "both"),
 }
 
 

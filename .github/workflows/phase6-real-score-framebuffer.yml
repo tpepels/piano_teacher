@@ -1,0 +1,72 @@
+name: Phase 6 real-score framebuffer (Godot 4.7.2)
+
+# A bounded, unwaived three-score visual proof, separate from the full
+# notation/corpus audit. Source-only changes rerun this focused gate.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase6-real-score-framebuffer.yml'
+      - 'scripts/audits/case_inputs.py'
+      - 'tests/test_notation_real_score_sample.py'
+      - 'tests/godot/native_verovio_overlay.gd'
+      - 'piano_teacher/application/score_preparation.py'
+      - 'piano_teacher/notation/phase3_pixels.py'
+      - 'godot/notation/native/**'
+      - 'godot/notation/shared/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase6-real-pixels-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-bound-pixels:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      LIBGL_ALWAYS_SOFTWARE: "1"
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install software framebuffer and native engraving dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri libgl1 libx11-6 libxcursor1 libxinerama1 libxi6 libxrandr2 unzip
+          python -m pip install -e '.[godot,test]' numpy
+          curl --fail --location --silent --show-error --retry 2 --max-time 65 \
+            'https://github.com/godotengine/godot-builds/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip' \
+            -o /tmp/godot.zip
+          mkdir -p /tmp/godot-bin
+          unzip -q /tmp/godot.zip -d /tmp/godot-bin
+          sudo install -m 755 /tmp/godot-bin/Godot_v4.7.2-stable_linux.x86_64 /usr/local/bin/godot
+          godot --headless --version
+      - name: Verify independent real-source ink and negative controls
+        id: pixels
+        run: |
+          mkdir -p "$RUNNER_TEMP/phase6-real-pixels"
+          printf '%s\n' "${{ github.sha }}" > "$RUNNER_TEMP/phase6-real-pixels/revision.txt"
+          set -o pipefail
+          timeout 180s xvfb-run -a -s '-screen 0 1700x1000x24' \
+            python -m pytest -q --tb=short \
+              --basetemp="$RUNNER_TEMP/phase6-real-pixels/captures" \
+              --junitxml="$RUNNER_TEMP/phase6-real-pixels/junit.xml" \
+              tests/test_notation_real_score_sample.py \
+            2>&1 | tee "$RUNNER_TEMP/phase6-real-pixels/pytest.txt"
+          grep -q '3 passed' "$RUNNER_TEMP/phase6-real-pixels/pytest.txt"
+      - name: Preserve actual PNG frames, source XML, control mutations and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-real-pixels-${{ github.sha }}
+          path: ${{ runner.temp }}/phase6-real-pixels/
+          if-no-files-found: error
+          retention-days: 14

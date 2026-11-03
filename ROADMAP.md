@@ -142,6 +142,18 @@ without modifying the source MIDI. The
 passed at `c2a7ab7`, including state-response delay injection. Neither is
 a measurement of physical USB/Bluetooth input latency.
 
+**P6 — Independent real-score pixel proof.** The targeted
+`phase6-real-score-framebuffer.yml` gate runs on matching Godot 4.7.2,
+generates source-registered production PNGs for Peace Piece measures 1–2,
+Chopin Nocturne measures 5–6 and Moonlight Sonata measures 1–2, verifies
+real written rest/notehead ink, and demands that deliberate framebuffer
+damage is rejected by the same pixel oracle. Missing/mismatched source
+symbols or output frames fail the build; captured evidence is uploaded with
+the exact source SHA. This is a bounded sample, **not** full-score coverage.
+Its first current-revision run must pass before this gate can be accepted.
+The fixture assembler now uses the single canonical native layout path,
+with no obsolete `native_notes` switch.
+
 **P6 — Score preparation.** Score loading now supersedes obsolete
 layout/model requests without waiting for old deadlines, bounds semantic
 retries, and surfaces actionable failure if retained notation never completes.
