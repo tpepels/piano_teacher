@@ -5,6 +5,7 @@ extends Node
 const Request := preload("res://inprocess_request.gd")
 const NativeView := preload("res://notation/native/view.gd")
 const NativeAssets := preload("res://native_score_assets.gd")
+signal renderer_promoted(new_renderer)
 
 var stage
 var score_session
@@ -105,6 +106,10 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
         _failure = "Future score lacks authentic layout or semantic model"
         return
     _future = NativeView.new()
+    # Preserve the active learner's horizontal density setting across
+    # precompiled stages; retain native collision fitting if it needs more.
+    if is_instance_valid(stage.renderer):
+        _future.set_density(float(stage.renderer.configured_density))
     _future.runway_overlay = true
     _future.set_transport_overlay_enabled(false)
     _future.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -217,6 +222,7 @@ func promote_if_ready(state: Dictionary) -> bool:
     new_renderer.set_transport_overlay_enabled(true)
     stage.renderer = new_renderer
     score_session.adopt_prepared(state,new_renderer,_layout)
+    renderer_promoted.emit(new_renderer)
     if old != null and is_instance_valid(old):
         _clear_tail()
         old.runway_overlay = true

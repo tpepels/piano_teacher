@@ -202,6 +202,9 @@ func _ready() -> void:
     score_runway = ScoreRunway.new()
     add_child(score_runway)
     score_runway.configure(self,practice_view.stage,score_session,inprocess_bus)
+    score_runway.renderer_promoted.connect(func(renderer):
+        renderer.fingering_change_requested.connect(
+            _on_fingering_change_requested))
     layout_request = score_queue.layout_request
     timeline_model_request = score_queue.model_request
 
