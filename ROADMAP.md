@@ -32,9 +32,9 @@ mastery from visual previews; three clean full-target performances required.
 | **0 — Foundation** | MIDI import, library, native startup, one process | Implemented; typed-bridge rebuild unverified | Cold Godot startup + open real MIDI |
 | **1 — Practice engine** | Count-in, transport, recovery, retry, tempo ladder, progress | Implemented in software; physical behavior open | Real full session with no clock/stage divergence |
 | **2 — Notation fidelity** | Source IDs, hands, ties, rests, tuplets, native ink and geometry | Broad test/evidence coverage; real-score visual gaps remain possible | Independent framebuffer/original-note parity on required corpus |
-| **3 — Original Coda, MIDI-domain** | Four algorithms; pinned author-differential reproduction and source-safe desktop lesson path | **Algorithm scope completed 2026-11-02**; post-refactor retest pending | Existing 1,273-request differential and whole-piece/17-piece corpus, then current refactor regression |
+| **3 — Original Coda, MIDI-domain** | Four algorithms; pinned author-differential reproduction and source-safe desktop lesson path | **Algorithm scope complete; post-consolidation Coda tests green** | Existing 1,273-request differential and whole-piece/17-piece corpus, then current refactor regression |
 | **4 — Fukuda + composed strategies** | MIDI-domain reductions, source-local feedback, recorded-MIDI alignment, generic whole-piece/adaptive composition | **Code integrated**; live combined-path acceptance and paper figure parity not established | Focused + corpus tests, source-effect comparison, physical original-to-remediation loop |
-| **5 — One architecture, no compatibility layers** | Canonical engraving, native-only score assets, typed IPC, pluggable generator ownership; delete obsolete Qt/HTTP/facades | **Implementation consolidated**; native extension/packaging acceptance still open | Current focused/corpus gates, native extension smoke, source import graph and assembled-package audit |
+| **5 — One architecture, no compatibility layers** | Canonical engraving, native-only score assets, typed IPC, pluggable generator ownership; delete obsolete Qt/HTTP/facades | **Source and hybrid gates green; assembled-package gate pending** | Current focused/corpus gates, native extension smoke, source import graph and assembled-package audit |
 | **6 — Real instrument + UX performance** | Beethoven opening, READY ink, scrolling vs BPM, Listen, error/retry, rests, reconnect, latency, longer pieces | **Open** | Signed real Godot + USB/Bluetooth MIDI evidence across full checklist |
 | **7 — Teaching study + release** | Independent pedagogical effectiveness, clean-machine distribution, long-session reliability | **Not complete** | Prespecified learner comparison, reproducible package and unattended long-session acceptance |
 
@@ -54,9 +54,15 @@ planning forwarders and unversioned progress reconstruction. Only an exact
 current versioned stage key can restore a completed streak or BPM; stale
 unversioned records remain stored but are never executed. A source import-graph audit runs in fast CI and the
 standalone packager checks its assembled distribution for the canonical
-modules, native assets and absence of the editor server. Latest fast
-contracts passed at `1390f79`; native GDExtension startup and actual assembled
-package verification require the corresponding acceptance logs.
+modules, native assets and absence of the editor server. Current fast contracts pass [403 tests / 6 skipped](https://github.com/tpepels/piano_teacher/actions/runs/41636511045).
+The [Fukuda suite](https://github.com/tpepels/piano_teacher/actions/runs/41636328757),
+[composed curriculum and 17-piece repertoire](https://github.com/tpepels/piano_teacher/actions/runs/41636328743),
+and [Coda research/corpus](https://github.com/tpepels/piano_teacher/actions/runs/41636328719)
+are green. A prior
+[native typed-operation smoke](https://github.com/tpepels/piano_teacher/actions/runs/41635585245)
+also passed. The new assembled-package audit is wired into the
+[current native build/run](https://github.com/tpepels/piano_teacher/actions/runs/41636328908);
+until it passes, P5 cannot be signed off.
 
 Close P5 **only** when the current native build/typed `library.catalog` smoke,
 fast/focused Coda+Fukuda suite, 17-piece corpus, Godot parser, and assembled
