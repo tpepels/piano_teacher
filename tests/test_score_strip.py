@@ -7,8 +7,8 @@ import pytest
 from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.lesson_validation import require_lesson_alignment
 from piano_teacher.music import Note, Phrase
-from piano_teacher.raster import rasterize_score
-from piano_teacher.score import render_layout
+from piano_teacher.engraving.raster import rasterize_score
+from piano_teacher.engraving.engraving import render_layout
 
 
 @pytest.mark.parametrize('bars,held,crossed', [(2, False, False), (40, False, False),
