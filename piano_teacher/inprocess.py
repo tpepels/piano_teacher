@@ -80,26 +80,18 @@ class EngineCommands:
         if path in commands:
             return self._reply(200, getattr(engine, commands[path])())
         if path == "/score/layout":
-            raw = query.get("native", ["1"])[0]
-            if raw not in ("0", "1"):
-                raise ValueError("native must be 0 or 1")
-            return self._reply(200, engine.geometry(native_notes=raw == "1"))
+            # Native notation is the sole supported interactive renderer.
+            # No legacy page-layout or non-native mode is exposed.
+            if query:
+                raise ValueError("Score layout does not accept rendering modes")
+            return self._reply(200, engine.geometry())
         if path == "/demo.wav":
             return 200, engine.demo_audio(query.get("token", [""])[0]).read_bytes()
-        if path == "/score.svg":
-            return 200, engine.engraved(int(query.get("page", ["0"])[0])).encode("utf-8")
-        if path == "/score.png":
-            page = int(query.get("page", ["0"])[0])
-            if "width" in query:
-                return 200, engine.engraved_png(page, width=int(query["width"][0]))
-            return 200, engine.engraved_png(page)
         return self._reply(404, {"error": f"Unknown command: {path}"})
 
     def _post(self, path: str, data: dict) -> tuple[int, bytes]:
         engine = self.engine
-        if path == "/load":
-            engine.load(data["path"])
-        elif path == "/fingering":
+        if path == "/fingering":
             engine.correct_fingering(data["source_id"], data["finger"],
                                      fingerprint=data.get("fingerprint"))
         elif path == "/library/open":
