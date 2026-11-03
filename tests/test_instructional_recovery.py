@@ -482,14 +482,32 @@ def test_disconnected_piano_replaces_old_play_instruction(lesson):
     assert 'piano' in state['next_action'].lower() and 'connect' in state['next_action'].lower()
 
 
-def test_loading_piece_starts_new_trouble_history_and_fresh_instruction(lesson, tmp_path, monkeypatch):
+def test_loading_piece_starts_new_trouble_history_and_fresh_instruction(lesson, tmp_path):
     e, now, grid = lesson()
     fail_later_chunk(e, now, grid)
-    piece = e.plan.piece
+    # Reopen an actual MIDI file: Coda+Fukuda must never accept a synthetic
+    # Piece via a mocked import on the normal library/load path.
     path = tmp_path / 'reimport.mid'
-    path.write_bytes(b'controlled import fixture')
-    monkeypatch.setattr(server, 'import_piece', lambda _: (piece, object()))
+    midi = mido.MidiFile(ticks_per_beat=480)
+    metadata = mido.MidiTrack()
+    metadata.append(mido.MetaMessage(
+        'set_tempo', tempo=500000, time=0))
+    metadata.append(mido.MetaMessage(
+        'time_signature', numerator=4, denominator=4, time=0))
+    midi.tracks.append(metadata)
+    track = mido.MidiTrack()
+    track.append(mido.MetaMessage('track_name', name='Right Hand', time=0))
+    for beat in range(16):
+        pitch = (60, 62, 64, 65)[beat % 4]
+        track.append(mido.Message('note_on', note=pitch, velocity=90,
+                                  channel=0, time=0 if beat == 0 else 240))
+        track.append(mido.Message('note_off', note=pitch, velocity=0,
+                                  channel=0, time=240))
+    track.append(mido.MetaMessage('end_of_track', time=240))
+    midi.tracks.append(track)
+    midi.save(path)
     e.load(str(path))
+    assert e.plan.piece.source_format == 'midi'
     # Reimport is tested using the original four-bar error window.
     e.plan = LearningPlan(e.plan.piece, consolidate=True)
     ready = e.state()
