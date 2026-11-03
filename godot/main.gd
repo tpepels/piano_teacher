@@ -472,7 +472,7 @@ func _update_visual_frame_rate(state: Dictionary) -> void:
 func _navigate(screen: String) -> void:
     var decision: Dictionary = NavigationPolicy.plan(
         screen,current_screen,str(last_state.get("phase","")),
-        command_state.pending,command_state.post_path,command_state.control_action)
+        command_state.pending,command_state.operation,command_state.control_action)
     screen = str(decision["target"])
     var previous_screen: String = str(decision["previous"])
     if bool(decision["remember_settings"]):
@@ -951,38 +951,38 @@ func _flush_transport_action() -> void:
     if not action.is_empty():
         _send_action({"action":action})
 
-func _send_command(path: String, payload: Dictionary) -> void:
-    if not command_state.begin(path,Time.get_ticks_msec()):
+func _send_command(operation: String, payload: Dictionary) -> void:
+    if not command_state.begin(operation,Time.get_ticks_msec()):
         return
     practice_view.present_busy(true)
-    var err: int = command_state.dispatch(action_request,path,payload)
+    var err: int = command_state.dispatch(action_request,operation,payload)
     if err != OK:
         practice_view.present_busy(false)
         practice_view.present_message("Cannot reach practice engine", true)
-        if path == "fingering.correct":
+        if operation == "fingering.correct":
             fingering_save_error = "Cannot reach practice engine. Try the correction again."
             _present_fingering_status(last_state.get("fingering",{}))
 
 func _on_action(code: int, body: PackedByteArray) -> void:
     var completed: Dictionary = command_state.finish()
     practice_view.present_busy(false)
-    var path: String = str(completed["path"])
-    if path == "practice.command":
+    var operation: String = str(completed["operation"])
+    if operation == "practice.command":
         practice_view.finish_action()
     var resume_saved: bool = bool(completed["resume_saved"])
     var completed_action: String = str(completed["action"])
     if code != 0:
         var message := _command_failure(code, body)
-        if path == "fingering.correct":
+        if operation == "fingering.correct":
             fingering_save_error = message
             _present_fingering_status(last_state.get("fingering",{}))
         var queued_library_failed: bool = command_state.discard_library()
-        command_failure_presenter.present(message,path,queued_library_failed)
+        command_failure_presenter.present(message,operation,queued_library_failed)
         _flush_transport_action()
         return
-    var opened: Variant = _decode_json(body) if path == "library.open" else null
+    var opened: Variant = _decode_json(body) if operation == "library.open" else null
     var decision: Dictionary = CommandSuccessPolicy.decide(
-        path,completed_action,resume_saved,opened)
+        operation,completed_action,resume_saved,opened)
     if str(decision["kind"]) == "fingering":
         fingering_save_error = ""
     elif str(decision["kind"]) == "library_open":
