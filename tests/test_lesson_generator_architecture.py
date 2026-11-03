@@ -11,7 +11,8 @@ import pytest
 
 from piano_teacher.exercise_generator import ExerciseVariant
 from piano_teacher.exercise_pipeline import ExerciseStage
-from piano_teacher.learning import LearningPlan, build_exercises
+from piano_teacher.learning import LearningPlan
+from piano_teacher.lesson_source_planner import build_exercises
 from piano_teacher.lesson_generators import (
     CodaLessonGenerator, Exercise, SourceLessonGenerator,
     LessonPlanDefinition,

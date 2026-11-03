@@ -7,10 +7,10 @@ from typing import Mapping
 import hashlib
 import json
 import math
-from .exercise_strategies import ExerciseContext, ExerciseStrategy, resolve_strategy
-from .exercise_pipeline import ExercisePipeline, ExerciseStage
+from .exercise_strategies import ExerciseStrategy, resolve_strategy
+from .exercise_pipeline import ExerciseStage
 from .music import Phrase, Piece
-from .exercise_generator import ExerciseVariant, generate_variants
+from .exercise_generator import ExerciseVariant
 from .exercise_contracts import resolve_timing_strategy, resolve_tempo_strategy
 from .musical_groups import grouping_for_piece, MusicalGrouping
 from .lesson_settings import SETTINGS
@@ -20,8 +20,6 @@ from .lesson_generators import (
     Exercise, LessonGenerator, build_lesson_generator,
     lesson_generator_registration,
     lesson_hands,
-    build_exercises, _course_phrases, _focus_phrases,
-    _dense_single_measure_variants, _hands_for_learning, source_variants,
 )
 
 @dataclass(frozen=True)
@@ -65,8 +63,6 @@ class LearningPlan:
                 (self.timing_strategy.name!="original-timing" or
                  self.tempo_strategy.name!="constant-tempo")):
             raise ValueError("Coda MIDI lessons generate their own timing and tempo stages")
-        self.pipeline = ExercisePipeline(self.exercise_strategy, self.timing_strategy,
-                                         self.tempo_strategy)
         self.warmup = warmup
         self.grouping = (None if warmup else grouping_for_piece(piece))
         # Produce a complete, immutable course from the entire MIDI Piece

@@ -1,8 +1,7 @@
-"""Source-preserving heuristic MIDI passage and note-stage utilities.
+"""Source-preserving MIDI passage segmentation and note-stage utilities.
 
-This module retains the existing adaptive course segmentation and the
-legacy exact note-selection algorithm, independent of Coda's whole-piece
-lesson generation and of the stateful LearningPlan consumer.
+The explicitly registered SourceLessonGenerator owns this source-based
+algorithm. It is independent of Coda's selection and LearningPlan navigation.
 """
 from __future__ import annotations
 

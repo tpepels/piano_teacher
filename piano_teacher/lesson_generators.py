@@ -18,8 +18,7 @@ from .lesson_settings import SETTINGS
 from .music import Piece,Phrase
 from .musical_groups import MusicalGrouping
 from .lesson_source_planner import (
-    Exercise,build_exercises,_course_phrases,_focus_phrases,
-    _dense_single_measure_variants,_hands_for_learning,source_variants,
+    Exercise,build_exercises,_hands_for_learning,source_variants,
 )
 
 @dataclass(frozen=True)
