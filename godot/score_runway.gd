@@ -37,6 +37,8 @@ func configure(host: Node, practice_stage, session, bus: Node) -> void:
     _ack.request_completed.connect(_on_ack_reply)
 
 func _discard() -> void:
+    if stage != null and stage.renderer != null and is_instance_valid(stage.renderer):
+        stage.renderer.runway_cutoff_beat = INF
     _fetch.cancel_request()
     _ack.cancel_request()
     if _future != null and is_instance_valid(_future):
@@ -93,6 +95,13 @@ func _on_future_reply(code: int, body: PackedByteArray) -> void:
         return
     _bundle = value
     _layout = installed["layout"]
+    # The future stage's own notes and active hand are positioned on a
+    # local score axis; Main feeds it the global minus next-stage origin.
+    _future.present({
+        "running":true,"paused":false,"phase":"playing",
+        "score_loop_enabled":false,"play_from_beat":0.0,
+        "hand":str(value.get("hand","both")),
+        "practice_preparation":null},-50.0,-50.0)
     _next_poll_ms = 0
 
 func _on_ack_reply(code: int, body: PackedByteArray) -> void:
@@ -102,6 +111,7 @@ func _on_ack_reply(code: int, body: PackedByteArray) -> void:
             bool(value.get("accepted",false))
     if not _acknowledged:
         _failure = "Future score acknowledgement rejected"
+        _next_poll_ms = Time.get_ticks_msec() + 1000
 
 func _request_if_needed(state: Dictionary, now_ms: int) -> void:
     if _future != null or _ack_waiting or now_ms < _next_poll_ms or \
@@ -131,6 +141,9 @@ func update_state(state: Dictionary, now_ms: int) -> void:
 func present_frame(state: Dictionary, global_beat: float) -> void:
     _visual_beat = global_beat
     if _future == null or not is_instance_valid(_future) or _bundle.is_empty():
+        if stage != null and stage.has_method("present_runway_steps") and \
+                stage.renderer != null and is_instance_valid(stage.renderer):
+            stage.present_runway_steps(state,global_beat)
         return
     var stride: float = float(state.get("practice_timeline",{}).get("stride_beats",0.0))
     if stride <= 0.0:
@@ -138,7 +151,8 @@ func present_frame(state: Dictionary, global_beat: float) -> void:
     var next_start: float = float(state.get("visual_offset_beats",0.0)) + stride
     var local_beat: float = global_beat - next_start
     _future.present_clock(local_beat,local_beat)
-    if _future.retained_ready() and not _acknowledged and not _ack_waiting:
+    if _future.retained_ready() and not _acknowledged and not _ack_waiting \
+            and Time.get_ticks_msec() >= _next_poll_ms:
         _ack_waiting = _ack.request("score.stage_ready",{
             "stage_key":_bundle["stage_key"],
             "revision":_bundle["revision"]}) == OK

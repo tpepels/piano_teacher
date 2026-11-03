@@ -71,7 +71,8 @@ func advance(state: Dictionary, beat: float, visual_beat: float,
 
     var stage = practice_view.stage
     if stage.renderer != null and bool(state.get("loaded",false)):
-        stage.renderer.present_clock(beat,visual_beat)
+        stage.renderer.present_clock(beat,visual_beat -
+            float(stage.renderer.runway_origin_beat))
     if stage.effects != null and moving:
         stage.effects.sync_beat(
             beat,maxi(1,int(round(float(state.get("count_in_bar_beats",4))))),

@@ -27,6 +27,7 @@ const MidiDeviceCoordinator := preload("res://midi_device_coordinator.gd")
 const ScoreAssetSession := preload("res://score_asset_session.gd")
 const ScoreAssetQueue := preload("res://score_asset_queue.gd")
 const InProcessBus := preload("res://inprocess_bus.gd")
+const ScoreRunway := preload("res://score_runway.gd")
 const PracticeFrameCoordinator := preload("res://practice_frame_coordinator.gd")
 const PracticeStatePresenter := preload("res://practice_state_presenter.gd")
 const CommandFailurePresenter := preload("res://command_failure_presenter.gd")
@@ -151,6 +152,7 @@ var last_seen_midi_visual_sequence := 0
 var live_midi_feedback = LiveMidiFeedback.new()
 var state_poll_timer: Timer
 var inprocess_bus: Node
+var score_runway
 var native_started := false
 
 func _ready() -> void:
@@ -197,6 +199,9 @@ func _ready() -> void:
     _update_responsive_layout()
     state_request = _new_request(_on_state)
     score_queue.attach(self, score_session, inprocess_bus)
+    score_runway = ScoreRunway.new()
+    add_child(score_runway)
+    score_runway.configure(self,practice_view.stage,score_session,inprocess_bus)
     layout_request = score_queue.layout_request
     timeline_model_request = score_queue.model_request
 
@@ -811,6 +816,8 @@ func _process(_delta: float) -> void:
         frame_diagnostics,listen_sync_diagnostics,phase0_smoke_mode)
     if not arrivals.is_empty():
         score_effects.record_preview(arrivals,practice_view.stage,ticks)
+    if score_runway != null and bool(last_state.get("loaded",false)):
+        score_runway.present_frame(last_state,_unrolled_score_beat_at(beat,ticks))
 
 func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> void:
     if sample_started_ms < 0:
@@ -858,13 +865,18 @@ func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) ->
         if sample_started_ms < 0 else sample_started_ms)
     last_state_tick = int((started_ms+received_ms)/2.0)
     visual_transport_clock.accept(parsed,last_state_tick,received_ms)
+    if score_runway != null:
+        score_runway.promote_if_ready(parsed)
     if demo_player != null and bool(parsed.get("loaded",false)):
         demo_player.synchronize(parsed,_transport_beat_at(received_ms))
     score_session.update_context(parsed,received_ms)
+    if score_runway != null:
+        score_runway.update_state(parsed,received_ms)
     if bool(parsed.get("loaded",false)) and practice_view.stage.renderer != null:
         var beat: float = _transport_beat_at(received_ms)
         practice_view.stage.renderer.present(
-            parsed,beat,_unrolled_score_beat_at(beat,received_ms))
+            parsed,beat,_unrolled_score_beat_at(beat,received_ms) -
+            float(practice_view.stage.renderer.runway_origin_beat))
     state_presenter.present(
         parsed,current_screen,command_state.pending,_native_score_ready(),
         fingering_save_error,

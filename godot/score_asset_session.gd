@@ -322,6 +322,9 @@ func _retry_model(now_ms: int, notice: String) -> void:
     _publish_status()
 
 func _reset_assets() -> void:
+    if is_instance_valid(_renderer):
+        _renderer.runway_origin_beat = 0.0
+        _renderer.runway_cutoff_beat = INF
     # Supersede both in-flight operations immediately on score change or Retry.
     # The queue cancels the old adapter when its replacement is dispatched.
     _requests.clear()
