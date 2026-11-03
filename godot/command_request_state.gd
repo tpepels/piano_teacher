@@ -31,8 +31,8 @@ func dispatch(adapter, path: String, payload: Dictionary) -> int:
     ## is supplied for this call, never retained or obtained from Main.
     assert(pending and post_path == path)
     adapter.timeout = 360.0 if path in [
-        "/fingering","/load","/library/open"] else 5.0
-    var err: int = int(adapter.request(path,JSON.stringify(payload),"POST"))
+        "fingering.correct","library.open","library.open"] else 5.0
+    var err: int = int(adapter.request(path,payload))
     if err != OK:
         request_failed()
     return err
@@ -45,10 +45,10 @@ func finish() -> Dictionary:
         "path": post_path,
         "action": control_action,
         "started_ms": started_ms,
-        "resume_saved": post_path == "/library/open" and resume_requested,
+        "resume_saved": post_path == "library.open" and resume_requested,
     }
     pending = false
-    if post_path == "/library/open":
+    if post_path == "library.open":
         resume_requested = false
     return metadata
 
