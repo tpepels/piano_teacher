@@ -24,6 +24,7 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_score_artifacts.py::test_native_geometry_and_semantics_reuse_one_source_projection \
   tests/test_score_artifacts.py::test_native_layout_retry_reuses_prepared_ink_without_stale_or_mutable_data \
   tests/test_native_score_preparation_failures.py \
+  tests/test_score_artifacts.py::test_failed_native_asset_preparation_does_not_cache_partial_geometry \
   tests/test_adaptive_hybrid_journey.py::test_hybrid_source_attack_index_preserves_order_and_safe_release_cuts \
   tests/test_adaptive_hybrid_journey.py::test_index_matches_old_source_window_semantics_at_float_boundaries \
   tests/test_lesson_generator_architecture.py::test_large_course_stage_index_preserves_step_numbers_and_mastery_across_navigation \
