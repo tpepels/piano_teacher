@@ -32,17 +32,17 @@ func _initialize() -> void:
     owner.show_picker()
     if not owner.picker_requested or owner.pending:
         failures += 1
-    owner.receive(200, '{"devices":["Piano A","MIDI Through"]}'.to_utf8_buffer(),
+    owner.receive(0, '{"devices":["Piano A","MIDI Through"]}'.to_utf8_buffer(),
         "settings", "", "Piano A")
     if owner.picker_requested or not settings.showed or posts.size() != 1:
         failures += 1
     if posts.size() == 1 and posts[0]["payload"] != {"name":"Piano A"}:
         failures += 1
-    owner.receive(200, '{"devices":["Piano A"]}'.to_utf8_buffer(),
+    owner.receive(0, '{"devices":["Piano A"]}'.to_utf8_buffer(),
         "settings", "Already connected", "Piano A")
     if posts.size() != 1:
         failures += 1
-    owner.receive(200, '{"devices":["MIDI Through"]}'.to_utf8_buffer(),
+    owner.receive(0, '{"devices":["MIDI Through"]}'.to_utf8_buffer(),
         "settings", "", "MIDI Through")
     if posts.size() != 1:
         failures += 1
