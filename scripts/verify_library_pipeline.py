@@ -111,7 +111,7 @@ def check_one(path: Path, evidence: Path, *, godot: str | None) -> dict:
                 count_in = engine.state()
                 if count_in["phase"] != "count_in" or not count_in["preview_only"]:
                     raise AssertionError("Timed transport did not enter ungraded count-in")
-                engine.run_at = time.monotonic() - 0.01
+                engine.visual_transport.run_at = time.monotonic() - 0.01
                 playing = engine.state()
                 if playing["phase"] != "playing" or playing["clock_beat"] <= 0:
                     raise AssertionError("Timed score playback clock did not advance")

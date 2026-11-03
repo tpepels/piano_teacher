@@ -200,7 +200,7 @@ def test_preview_does_not_unlock_hands(tmp_path):
     try:
         engine.load_library(PREFIX + "chords")
         engine.start()
-        engine.run_at = 0  # Let the normal engine clock finish the preview.
+        engine.visual_transport.run_at = 0  # Let the normal engine clock finish the preview.
         engine._update()
         assert engine.plan.hand == "right" and not engine.plan.mastered
         assert engine.plan.streak == 0

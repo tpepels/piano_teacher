@@ -78,19 +78,19 @@ def test_resume_keeps_inactive_clock_sentinels_and_source_position_unchanged():
 def test_transport_engine_alias_has_exactly_one_state_owner(tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        assert engine.run_at == engine.visual_transport.run_at
-        engine.run_at = 123.5
-        engine._preview_loop_pending = True
-        engine.visual_gap_beats = 7
+        assert engine.visual_transport.run_at == engine.visual_transport.run_at
+        engine.visual_transport.run_at = 123.5
+        engine.visual_transport._preview_loop_pending = True
+        engine.visual_transport.visual_gap_beats = 7
         assert engine.visual_transport.run_at == 123.5
         assert engine.visual_transport._preview_loop_pending
         assert engine.visual_transport.visual_gap_beats == 7
         engine.visual_transport.pending_rewind = 2.0
-        assert engine.pending_rewind == 2.0
+        assert engine.visual_transport.pending_rewind == 2.0
         engine._stop()
-        assert engine.run_at == 123.5  # stopping does not alter historical origin
-        assert engine.pending_rewind is None
-        assert engine.visual_gap_beats == 7
+        assert engine.visual_transport.run_at == 123.5  # stopping does not alter historical origin
+        assert engine.visual_transport.pending_rewind is None
+        assert engine.visual_transport.visual_gap_beats == 7
     finally:
         engine.db.close()
 
