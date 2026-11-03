@@ -31,7 +31,7 @@ def commit_assessed_result(
     """Use the original stage identity for evidence before applying mastery."""
     stage = plan.identity
     bpm = plan.bpm
-    accepted = getattr(result, "passed", result.clean)
+    accepted = result.passed
     recommendation = observe_assessed_take(
         fingerprint=fingerprint, stage_key=stage, bpm=bpm,
         result=result, observe=observe)

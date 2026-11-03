@@ -978,7 +978,7 @@ class PracticeEngine:
                       and not self.is_builtin_warmup
                       and bool(result.notes))
         self.pending_result = None
-        if getattr(result, "passed", result.clean):
+        if result.passed:
             self._reset_trouble()
             self.learner_progress.resolve_trouble(
                 fingerprint=self.fingerprint, stage_key=p.identity)
@@ -995,7 +995,7 @@ class PracticeEngine:
             evidence = self.fukuda_mistakes.evidence(self.fingerprint)
             failed_ids = frozenset(n.note.source_id for n in result.notes
                                    if n.status != "correct")
-            accepted = getattr(result, "passed", result.clean)
+            accepted = result.passed
             settled_stage = p.identity
             changed = p.refresh_from_feedback(
                 evidence, prefer_repair=not accepted and bool(failed_ids),
@@ -1579,7 +1579,7 @@ class PracticeEngine:
     def _finish_full_passage(self, result, total_beats: float, duration: float, now: float):
         """Settle a full take using independent transport decisions."""
         decision = plan_full_passage(
-            accepted=getattr(result, "passed", result.clean),
+            accepted=result.passed,
             automatic=self.auto, warmup=self.is_builtin_warmup,
             retry_pending=self._retry_previous_pass,
             run_at=self.run_at, duration=duration, total_beats=total_beats,

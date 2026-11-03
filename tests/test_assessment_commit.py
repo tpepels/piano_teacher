@@ -23,9 +23,10 @@ class Plan:
         return "Continue"
 
 
-def take(*, clean=False):
+def take(*, clean=False, passed=None):
     return SimpleNamespace(
-        clean=clean, correct=1, extra_notes=0,
+        clean=clean, passed=clean if passed is None else passed,
+        correct=1, extra_notes=0,
         notes=[SimpleNamespace(status="wrong")])
 
 
@@ -88,3 +89,15 @@ def test_remediation_requires_unaccepted_automatic_practice(monkeypatch):
             observe=lambda *_: None, plan_remediation=remediate)
         assert outcome.remediation is None
         assert calls == []
+
+
+def test_accepted_warning_uses_passed_not_clean_for_stage_advancement(monkeypatch):
+    """Advisory amber timings may pass while failing the stricter clean criterion."""
+    monkeypatch.setattr(module, "observe_assessed_take", lambda **kw: None)
+    plan = Plan(outcome="advance")
+    result = module.commit_assessed_result(
+        plan=plan, result=take(clean=False, passed=True), fingerprint="piece",
+        automatic=True, mode="practice", warmup=False,
+        observe=lambda *_: None, plan_remediation=lambda *args, **kw: None)
+    assert result.stage_changed
+    assert plan.calls == [(1, 1, 0, True)]

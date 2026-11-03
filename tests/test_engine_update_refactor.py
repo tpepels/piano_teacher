@@ -1,4 +1,4 @@
-"""Characterize state-tick boundaries after splitting the update loop."""
+"""Engine clock transitions after decomposition into pure decisions and locked effects."""
 from __future__ import annotations
 
 from piano_teacher.learning import LearningPlan
@@ -68,10 +68,8 @@ def test_no_auto_commit_when_feedback_is_manual(tmp_path, monkeypatch):
         app.db.close()
 
 from dataclasses import replace
-from types import SimpleNamespace
-
 from piano_teacher.application.practice_transitions import (
-    TransitionContext, phase, run_before_assessment,
+    TransitionContext, phase,
 )
 
 
@@ -100,9 +98,9 @@ def test_preview_continuation_uses_original_deadline_and_never_grades(tmp_path):
         called = []
         app._source_model = lambda: {"practice_timeline": {"stride_beats": 12.0}}
         app._continue_at = lambda deadline: called.append(deadline)
-        assert run_before_assessment(app, 199.9)
+        assert app._run_pre_assessment_transition(199.9)
         assert called == []
-        assert run_before_assessment(app, 201.0)
+        assert app._run_pre_assessment_transition(201.0)
         assert called == [200.0]
         assert app.visual_offset_beats == 12.0
     finally:
@@ -118,9 +116,9 @@ def test_rewind_waits_for_deadline_then_resumes_exact_target(tmp_path):
         called = []
         app._continue_at = lambda deadline, *, from_beat: called.append(
             (deadline, from_beat))
-        assert run_before_assessment(app, 89.9)
+        assert app._run_pre_assessment_transition(89.9)
         assert called == []
-        assert run_before_assessment(app, 90.0)
+        assert app._run_pre_assessment_transition(90.0)
         assert called == [(90.0, 3.0)]
     finally:
         app.db.close()
@@ -132,11 +130,11 @@ def test_loading_and_paused_takes_cannot_finish_assessment(tmp_path):
         app.running = True
         app.run_at = 0.0
         app.awaiting_score_revision = 42
-        assert run_before_assessment(app, 100.0)
+        assert app._run_pre_assessment_transition(100.0)
         app.awaiting_score_revision = None
         app.paused = True
-        assert run_before_assessment(app, 100.0)
+        assert app._run_pre_assessment_transition(100.0)
         app.paused = False
-        assert not run_before_assessment(app, 100.0)
+        assert not app._run_pre_assessment_transition(100.0)
     finally:
         app.db.close()

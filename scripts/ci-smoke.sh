@@ -51,6 +51,7 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_coordination_boundaries.py::test_command_request_owner_has_no_scene_or_application_dependencies \
   tests/test_coordination_boundaries.py::test_learner_navigation_validates_before_transport_changes \
   tests/test_practice_transitions.py \
+  tests/test_engine_update_refactor.py \
   tests/test_guided_session.py \
   tests/test_guided_engine.py::test_engine_guided_session_is_the_single_controller_and_recovery_owner \
   tests/test_coordination_boundaries.py::test_transition_selection_and_guidance_own_narrow_inputs \
