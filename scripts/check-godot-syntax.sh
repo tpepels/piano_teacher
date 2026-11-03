@@ -29,6 +29,7 @@ for script in \
   res://inprocess_bus.gd \
   res://native_bridge_smoke.gd \
   res://production_ui_smoke.gd \
+  res://production_session_journey.gd \
   res://inprocess_request.gd \
   res://score_asset_queue.gd \
   res://score_asset_session.gd \

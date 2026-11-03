@@ -107,6 +107,15 @@ continues along the same visual and grading beat axis across the silence.
 This establishes software clock continuity, not the target-device frame
 cadence or MIDI input response.
 
+**P6 — Actual repertoire and session.** A bounded native integration
+journey uses the repository's genuine `Moonlight_Sonata_I.midi` and drives
+the production scene through ready notation, Play/Pause/Resume, a full
+backward/retry preparation measure, Listen/return, selection of step 2,
+manual -5 BPM and closing/reopening the saved lesson. Both score revisions
+and visible native noteheads are checked at every publication boundary.
+This is a new required CI gate, not yet accepted until the native workflow
+passes. It does not assert microphone/audio output or physical MIDI grading.
+
 **P6 — Score preparation.** Score loading now supersedes obsolete
 layout/model requests without waiting for old deadlines, bounds semantic
 retries, and surfaces actionable failure if retained notation never completes.
