@@ -1,16 +1,21 @@
-"""Pre-engrave the next MIDI lesson stage on one bounded in-process worker.
+"""Pre-engrave the next two MIDI lesson stages on one bounded worker.
 
-A complete, source-identity-checked score bundle is published only after
-its semantic model, Verovio assets and required source geometry agree.
-The current MIDI callback/transport never waits for that work.
+The physical MIDI clock owns neither this queue nor its serialization. A
+source/revision-keyed result is published only when the genuine Verovio
+geometry and semantic model have both completed. Two small lookahead slots
+are retained; navigation cannot publish results from an old source piece.
 """
 from __future__ import annotations
 
+from collections import OrderedDict, deque
 import json
 from threading import Lock, Thread
 
 from .score_artifacts import ScoreArtifacts, ScoreSelection
 from ..preprocessing_cache import PreprocessingCache
+
+MAX_LOOKAHEAD = 2
+MAX_QUEUED = 2
 
 
 def _reply(value: dict) -> bytes:
@@ -21,80 +26,99 @@ class FutureScore:
     def __init__(self, cache_folder):
         self._folder = cache_folder
         self._guard = Lock()
-        self._key = None
-        self._pending = None
+        self._source = None
+        self._pending = deque()
         self._active = False
-        self._result = None
-        self._payload: bytes | None = None
-        self._artifacts = None
-        self._error = ""
+        self._working = None
+        # key -> (prepared reply bytes, ScoreArtifacts)
+        self._ready = OrderedDict()
+        self._errors = {}
+
+    def _enqueue(self, selection: ScoreSelection, number: int,
+                 label: str, *, primary: bool) -> None:
+        scope = (id(selection.piece), selection.fingerprint)
+        if self._source != scope:
+            self._source = scope
+            self._ready.clear()
+            self._errors.clear()
+            self._pending.clear()
+        key = selection.identity
+        if key not in self._ready and key not in self._errors and key != self._working:
+            if not any(pending[0].identity == key for pending in self._pending):
+                if primary:
+                    self._pending.appendleft((selection, number, label, scope))
+                else:
+                    self._pending.append((selection, number, label, scope))
+                while len(self._pending) > MAX_QUEUED:
+                    self._pending.pop()
+        if not self._active and self._pending:
+            self._active = True
+            Thread(target=self._build, daemon=True,
+                   name="PianoTeacherFutureScore").start()
 
     def ensure(self, selection: ScoreSelection, *, number: int,
                label: str) -> bytes:
-        key = selection.identity
+        """Return an already serialized reply, never encode glyphs on MIDI worker."""
         with self._guard:
-            if self._key != key:
-                self._key = key
-                self._pending = (selection, number, label)
-                self._result = None
-                self._payload = None
-                self._artifacts = None
-                self._error = ""
-            if not self._active and self._pending is not None:
-                self._active = True
-                Thread(target=self._build, daemon=True,
-                       name="PianoTeacherFutureScore").start()
-            if self._payload is not None:
-                return self._payload
-            if self._error:
-                return _reply({"status": "error", "error": self._error,
+            self._enqueue(selection, number, label, primary=True)
+            key = selection.identity
+            if key in self._ready:
+                return self._ready[key][0]
+            if key in self._errors:
+                return _reply({"status": "error", "error": self._errors[key],
                                "step_number": number})
             return _reply({"status": "preparing", "step_number": number})
 
+    def warm(self, selection: ScoreSelection, *, number: int,
+             label: str) -> None:
+        """Queue stage +2 behind the already requested stage +1."""
+        with self._guard:
+            self._enqueue(selection, number, label, primary=False)
+
     def ready(self, selection: ScoreSelection) -> bool:
         with self._guard:
-            return self._key == selection.identity and self._result is not None
+            return selection.identity in self._ready
 
     def adopt(self, selection: ScoreSelection) -> ScoreArtifacts | None:
         with self._guard:
-            if self._key != selection.identity or self._result is None:
-                return None
-            return self._artifacts
+            item = self._ready.get(selection.identity)
+            return item[1] if item is not None else None
 
     def _build(self) -> None:
         while True:
             with self._guard:
-                request = self._pending
-                self._pending = None
-                if request is None:
+                if not self._pending:
                     self._active = False
+                    self._working = None
                     return
-            selection, number, label = request
+                selection, number, label, scope = self._pending.popleft()
+                self._working = selection.identity
             try:
-                # Separate, bounded score owner: no mutation of the active
-                # lesson or native UI, and no second MIDI/transport engine.
                 assets = ScoreArtifacts(PreprocessingCache(self._folder))
                 layout = assets.geometry(selection)
                 model = assets.semantic_score(selection)
-                result = {"step_number": number,
-                          "stage_key": selection.stage_key,
-                          "hand": selection.hand,
-                          "stage_label": label,
-                          "revision": selection.revision,
-                          "fingerprint": selection.fingerprint,
-                          "layout": layout, "model": model}
-                # Build the heavy JSON reply on the background worker, never
-                # during a MIDI assessment or authoritative clock tick.
-                payload = _reply({"status": "ready", **result})
+                payload = _reply({
+                    "status": "ready", "step_number": number,
+                    "stage_key": selection.stage_key,
+                    "hand": selection.hand, "stage_label": label,
+                    "revision": selection.revision,
+                    "fingerprint": selection.fingerprint,
+                    "layout": layout, "model": model,
+                })
                 error = ""
             except Exception as exc:
-                result = None
-                payload = None
                 assets = None
+                payload = None
                 error = f"{type(exc).__name__}: {exc}"
             with self._guard:
-                if self._key == selection.identity:
-                    self._result = result
-                    self._payload = payload
-                    self._artifacts = assets
-                    self._error = error
+                self._working = None
+                if self._source != scope:
+                    continue
+                key = selection.identity
+                if error:
+                    self._errors[key] = error
+                else:
+                    self._ready[key] = (payload, assets)
+                    self._ready.move_to_end(key)
+                    while len(self._ready) > MAX_LOOKAHEAD:
+                        self._ready.popitem(last=False)
