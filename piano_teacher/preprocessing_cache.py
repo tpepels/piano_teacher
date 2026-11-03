@@ -1,7 +1,7 @@
 """Versioned, bounded, on-disk preprocessed music and engraving cache.
 
-Cache files contain JSON or PNG bytes, never pickle. The original MIDI/XML
-is authoritative; corrupt, old or missing cache entries are ordinary misses.
+Cache files contain source-identity-bound compressed JSON, never pickle.
+The original MIDI is authoritative; old or corrupt entries are cache misses.
 """
 from __future__ import annotations
 
@@ -130,19 +130,11 @@ class PreprocessingCache:
         except (TypeError, ValueError):
             pass
 
-    def read_png(self, key: str) -> bytes | None:
-        data = self._read("png", key, "png")
-        return data if data is not None and data.startswith(b"\x89PNG\r\n\x1a\n") else None
-
-    def write_png(self, key: str, data: bytes) -> None:
-        if data.startswith(b"\x89PNG\r\n\x1a\n"):
-            self._write("png", key, "png", data)
-
     def load_import(self, source: Path, fingerprint: str, *, importer=None):
-        """Return (Piece, original score). The runtime uses only Piece.
+        """Return cached MIDI Piece and optional importer diagnostics.
 
-        On a cached MusicXML load the optional original music21 score is None.
-        Lesson notation is rebuilt from the canonical Piece in both paths.
+        The original MIDI bytes and canonical source-note IDs always govern
+        native notation. A cache hit never creates a second source model.
         """
         if importer is None:
             from .importing.pieces import import_piece
