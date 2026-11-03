@@ -10,7 +10,7 @@ from typing import Callable, Sequence
 import uuid
 
 from piano_teacher.notation.audit_annotations import CANONICAL_CAPTURE_CONFIG
-from piano_teacher.raster import rasterize_score
+from piano_teacher.engraving.raster import rasterize_score
 
 from . import capture_store
 from .capture_store import CaptureProvenanceError, atomic_json
