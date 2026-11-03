@@ -77,8 +77,9 @@ def test_native_dispatcher_get_routes_match_expected_ui_contract():
         200, {"devices": ["Bluetooth Keyboard"]})
     assert _decode(bridge.request("GET", "/library")) == (200, {"pieces": ["first.mid"]})
     assert _decode(bridge.request("GET", "/lesson")) == (200, {"steps": [1, 2]})
-    assert _decode(bridge.request("GET", "/score/layout?native=0")) == (200, {"native": False})
-    assert _decode(bridge.request("GET", "/score/layout?native=1")) == (200, {"native": True})
+    assert _decode(bridge.request("GET", "/score/layout")) == (200, {"native": True})
+    assert _decode(bridge.request("GET", "/score/layout?native=0"))[0] == 400
+    assert _decode(bridge.request("GET", "/score/layout?native=1"))[0] == 400
     assert _decode(bridge.request("GET", "/score/model")) == (200, {"revision": 17})
     assert bridge.request("GET", "/demo.wav?token=abc") == (200, b"RIFFabc")
 
@@ -92,12 +93,14 @@ def test_native_dispatcher_post_and_errors():
     assert engine.changes == [{"metronome": False}]
     assert _decode(bridge.request("POST", "/library/open", '{"id":"first.mid"}'))[0] == 200
     assert engine.library_id == "first.mid"
-    assert _decode(bridge.request("POST", "/load", '{"path":"/music/first.mid"}'))[0] == 200
-    assert engine.loaded == "/music/first.mid"
+    assert _decode(bridge.request("POST", "/load", '{"path":"/music/first.mid"}'))[0] == 404
+    assert engine.loaded is None
+    assert _decode(bridge.request("GET", "/score.svg?page=0"))[0] == 404
+    assert _decode(bridge.request("GET", "/score.png?page=0"))[0] == 404
     assert _decode(bridge.request("GET", "/missing"))[0] == 404
     assert _decode(bridge.request("PUT", "/state"))[0] == 405
     assert _decode(bridge.request("POST", "/control", "[]"))[0] == 400
-    assert _decode(bridge.request("POST", "/load", "{}"))[0] == 400
+    assert _decode(bridge.request("POST", "/library/open", "{}"))[0] == 400
 
 
 def test_real_embedded_engine_does_not_create_network_visual_publisher(tmp_path):
