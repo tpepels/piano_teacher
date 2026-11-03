@@ -53,7 +53,13 @@ s = s.replace('[autoload]\n\nMCPRuntimeServer="*res://addons/godot_mcp_toolkit/r
 s = s.replace('[editor_plugins]\n\nenabled=PackedStringArray("res://addons/godot_mcp_toolkit/plugin.cfg")\n\n', '')
 p.write_text(s)
 PY
-rm -rf "$STAGE/godot/addons/godot_mcp_toolkit" "$STAGE/godot/.godot"
+# Development smoke fixtures are source-only. The standalone package has
+# one entry scene; test scripts and their imported .uid files are excluded.
+rm -rf "$STAGE/godot/addons/godot_mcp_toolkit" "$STAGE/godot/.godot" \
+  "$STAGE/godot/tests"
+for fixture in native_bridge_smoke production_ui_smoke ui_layout_smoke; do
+  rm -f "$STAGE/godot/$fixture.gd" "$STAGE/godot/$fixture.gd.uid"
+done
 python3 scripts/verify-phase5-architecture.py --root "$STAGE" --package
 # Phase 5 gates the assembled real runtime. Creating and clean-machine
 # executing the compressed distributable is a separate Phase 7 release gate.

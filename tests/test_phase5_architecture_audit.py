@@ -37,3 +37,21 @@ def test_release_audit_rejects_editor_server_and_missing_native_assets(tmp_path)
     assert any("MCPRuntimeServer" not in x and "development-only runtime" in x
                for x in errors)
     assert any("Package missing required asset" in x for x in errors)
+
+
+def test_release_audit_rejects_development_only_godot_scripts(tmp_path):
+    pkg = tmp_path / "piano_teacher"
+    pkg.mkdir()
+    (pkg / "__init__.py").write_text("")
+    godot = tmp_path / "godot"
+    godot.mkdir()
+    (godot / "production_ui_smoke.gd").write_text("extends SceneTree\\n")
+    (godot / "production_ui_smoke.gd.uid").write_text("uid://test\\n")
+    (godot / "tests").mkdir()
+    errors = auditor.audit_tree(tmp_path, package=True)
+    assert any("developer-only Godot fixture: godot/production_ui_smoke.gd"
+               in message for message in errors)
+    assert any("developer-only Godot fixture: godot/tests"
+               in message for message in errors)
+    assert any("developer-only Godot UID: godot/production_ui_smoke.gd.uid"
+               in message for message in errors)

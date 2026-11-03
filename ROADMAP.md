@@ -124,6 +124,11 @@ post-rest handoff and stage changes. Run the
 with both USB and Bluetooth where available. Fix source-specific failures
 in the single clock/score pipeline, not by adding alternative paths.
 
+**Release package hygiene.** Standalone staging now explicitly excludes
+Godot test fixtures, smoke scripts, editor-only .uid files and MCP plugins.
+The package audit rejects these sources if a future change includes them;
+clean-machine installed execution remains a Phase 7 gate.
+
 **P7 — Validate pedagogy and ship.** Preregister a human within-piece or
 counterbalanced study comparing meaningful learning outcomes across Coda,
 Fukuda, combined and original-note practice. Keep generated sequences and

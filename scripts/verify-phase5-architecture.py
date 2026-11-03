@@ -22,6 +22,12 @@ REMOVED_IMPORTS = (
     "piano_teacher.score_geometry", "piano_teacher.raster",
     "piano_teacher.rendering.legacy",
 )
+DEV_ONLY_GODOT_PATHS = (
+    "godot/native_bridge_smoke.gd",
+    "godot/production_ui_smoke.gd",
+    "godot/ui_layout_smoke.gd",
+    "godot/tests",
+)
 
 
 def audit_tree(root: Path, *, package: bool = False) -> list[str]:
@@ -78,6 +84,11 @@ def audit_tree(root: Path, *, package: bool = False) -> list[str]:
             result.append("Package includes a development-only MCP server")
         if (root / "godot/.godot").exists():
             result.append("Package includes the Godot editor cache")
+        for path in DEV_ONLY_GODOT_PATHS:
+            if (root / path).exists():
+                result.append(f"Package includes developer-only Godot fixture: {path}")
+            if path.endswith(".gd") and (root / (path+".uid")).exists():
+                result.append(f"Package includes developer-only Godot UID: {path}.uid")
         project = root / "godot/project.godot"
         if project.is_file() and ("MCPRuntimeServer" in project.read_text()
                                   or "godot_mcp_toolkit" in project.read_text()):
