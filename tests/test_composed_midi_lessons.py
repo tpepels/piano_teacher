@@ -527,3 +527,9 @@ def test_unrelated_adaptive_contributor_is_not_bound_to_coda_fukuda(piece):
     selected = new_course.stages(new_course.exercises[0], "right")[0]
     assert selected.origin == "replacement-algorithm"
     assert new_course.exercises[-1].phrase.notes == piece.notes
+    # An immutable generator may be reused for another imported MIDI.
+    # Its cached source candidates must belong to that exact Piece.
+    other_piece = replace(piece, title="Independent new MIDI")
+    other_course = adaptive.generate(other_piece)
+    assert adaptive.compiled_piece is other_piece
+    assert other_course.exercises[-1].phrase.notes == other_piece.notes
