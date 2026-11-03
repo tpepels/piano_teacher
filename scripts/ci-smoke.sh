@@ -39,6 +39,7 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_assessment_settlement.py \
   tests/test_assessment_evidence.py \
   tests/test_assessment_commit.py \
+  tests/test_assessment_atomicity.py \
   tests/test_control_routing.py \
   tests/test_control_engine_routes.py \
   tests/test_score_ack.py \
