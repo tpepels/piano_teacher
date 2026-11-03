@@ -649,9 +649,10 @@ func _on_lesson(code: int, body: PackedByteArray) -> void:
     lesson_session.complete_response(_decode_json(body) if code == 0 else null,
         "" if code == 0 else _command_failure(code, body), Time.get_ticks_msec())
 
-func _refresh_score_status(_status: Dictionary = {}) -> void:
-    if practice_view != null:
-        practice_view.present_score(_native_score_ready(), score_error)
+func _refresh_score_status(status: Dictionary = {}) -> void:
+    if practice_view != null and score_session != null:
+        practice_view.present_score(
+            status if not status.is_empty() else score_session.status())
 
 func _score_failed(message: String) -> void:
     if score_session != null:

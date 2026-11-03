@@ -14,6 +14,7 @@ const MODEL_RETRY_MS := 2000
 const MODEL_MAX_ATTEMPTS := 3
 const MODEL_TIMEOUT_SECONDS := 30.0
 const RETAINED_INK_TIMEOUT_MS := 45000
+const SLOW_PREPARATION_MS := 10000
 const NativeScoreAssets := preload("res://native_score_assets.gd")
 const ASSET_KEYS := ["native_glyphs","native_note_templates","native_tie_templates",
     "native_chord_templates","native_beam_fragments","native_tuplet_fragments",
@@ -44,6 +45,7 @@ var _layout: Dictionary = {}
 var _generation := 0
 var _model_failures := 0
 var _retained_started_ms := -1
+var _preparing_since_ms := -1
 var _next_request_id := 0
 # Exactly two in-process command slots: native layout and semantic model.
 var _requests: Dictionary = {}
@@ -54,7 +56,7 @@ func _init(renderer, native_feedback = null) -> void:
     if is_instance_valid(renderer) and renderer.has_signal("retained_ink_compiled"):
         renderer.connect("retained_ink_compiled",_finish_native_score)
 
-func update_context(state: Dictionary, _now_ms: int) -> void:
+func update_context(state: Dictionary, now_ms: int) -> void:
     var loaded: bool = bool(state.get("loaded",false))
     var next_revision: int = int(state.get("revision",0))
     var fingerprint: String = str(state.get("piece_fingerprint",""))
@@ -66,6 +68,7 @@ func update_context(state: Dictionary, _now_ms: int) -> void:
         revision = next_revision
         _generation += 1
         _reset_assets()
+        _preparing_since_ms = now_ms if _loaded else -1
         if _loaded:
             request_layout()
     if str(_state.get("phase","")) == "loading" and is_ready():
@@ -84,6 +87,8 @@ func is_ready() -> bool:
 
 func status() -> Dictionary:
     var ready: bool = is_ready()
+    var stalled: bool = _loaded and _preparing_since_ms >= 0 and \
+        Time.get_ticks_msec() - _preparing_since_ms >= SLOW_PREPARATION_MS
     var text := ""
     if not score_error.is_empty():
         text = "Unable to display sheet music:\n"+score_error
@@ -96,9 +101,9 @@ func status() -> Dictionary:
             text = "Compiling sheet music…"
     else:
         text = "Choose a piece to begin"
-    return {"ready":ready,"visible":not ready,"text":text,
-        "retry_visible":not ready and not score_error.is_empty(),
-        "browse_visible":not ready and score_error.is_empty() and not _loaded}
+    return {"ready":ready,"visible":not ready,"text":text,"error":score_error,
+        "retry_visible":not ready and (not score_error.is_empty() or stalled),
+        "browse_visible":not ready and (not _loaded or not score_error.is_empty() or stalled)}
 
 func poll(now_ms: int) -> void:
     if not _loaded or not score_error.is_empty():
@@ -136,11 +141,13 @@ func request_model() -> bool:
     _begin_request("model","score.semantic",MODEL_TIMEOUT_SECONDS)
     return true
 
-func retry(_now_ms: int) -> bool:
-    if not _loaded or layout_pending:
+func retry(now_ms: int) -> bool:
+    if not _loaded:
         return false
+    # Explicit Retry cancels a pending layout as well as failed attempts.
     _generation += 1
     _reset_assets()
+    _preparing_since_ms = now_ms
     return request_layout()
 
 func request_start_result(kind: String, request_id: int, error: int, now_ms: int) -> void:
@@ -261,6 +268,7 @@ func _finish_native_score() -> void:
     if rendered_revision == revision:
         return
     rendered_revision = revision
+    _preparing_since_ms = -1
     _retained_started_ms = -1
     score_error = ""
     _publish_status()

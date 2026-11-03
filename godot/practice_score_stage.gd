@@ -334,26 +334,17 @@ func present_fingering(summary: Variant, placement_issues: int, fingering_save_e
 
 
 
-func present_score_status(loaded: bool, ready: bool, score_error: String) -> void:
+func present_score_status(status: Dictionary) -> void:
     if score_status_panel == null:
         return
-    score_status_panel.visible = not ready
-    # Phase guidance already has captions below the score and count-in
-    # lights. An opaque capsule must never cover engraved noteheads.
+    score_status_panel.visible = bool(status.get("visible",true))
+    # One session owns loading phase, readiness and recovery controls.
     phase_cue.visible = score_status_panel.visible
+    score_retry_button.visible = score_status_panel.visible and \
+        bool(status.get("retry_visible",false))
+    score_browse_button.visible = score_status_panel.visible and \
+        bool(status.get("browse_visible",false))
     if not score_status_panel.visible:
         return
-    if not score_error.is_empty():
-        score_status_label.text = "Unable to display sheet music:\n" + score_error
-        score_status_label.tooltip_text = score_status_label.text
-        score_retry_button.visible = true
-        score_browse_button.visible = true
-    elif loaded:
-        score_status_label.text = "Preparing sheet music…"
-        score_retry_button.visible = false
-        score_browse_button.visible = false
-    else:
-        score_status_label.text = "Choose a piece to begin"
-        score_retry_button.visible = false
-        score_browse_button.visible = true
-
+    score_status_label.text = str(status.get("text","Preparing sheet music…"))
+    score_status_label.tooltip_text = score_status_label.text

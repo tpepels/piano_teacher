@@ -115,6 +115,22 @@ func run() -> void:
     session.poll(55200)
     check(not session.score_error.is_empty() and bool(session.status()["retry_visible"]),
         "stuck retained ink must terminate with Retry")
+    # Once preparation is visibly slow, Retry works even with layout pending.
+    var hanging := Session.new(FakeRenderer.new())
+    hanging.update_context({"loaded":true,"revision":20,
+        "piece_fingerprint":"slow","phase":"loading"},Time.get_ticks_msec())
+    hanging._preparing_since_ms = Time.get_ticks_msec() - 12000
+    check(bool(hanging.status()["retry_visible"]) and
+        bool(hanging.status()["browse_visible"]),
+        "a stalled in-flight layout must expose Retry and Browse")
+    var old_request: int = hanging.pending_id("layout")
+    check(hanging.retry(Time.get_ticks_msec()) and
+        hanging.pending_id("layout") > old_request,
+        "Retry must supersede an outstanding 90-second layout")
+    hanging.complete_response("layout",old_request,3,
+        "{\"error\":\"stale\"}".to_utf8_buffer(),Time.get_ticks_msec())
+    check(hanging.score_error.is_empty() and hanging.layout_pending,
+        "old layout completion must not override a manual Retry")
     var second_renderer := FakeRenderer.new()
     var second := Session.new(second_renderer)
     second.update_context({"loaded":true,"revision":9,

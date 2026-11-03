@@ -51,7 +51,9 @@ var ui_scale := 1.0
 var _state: Dictionary = {}
 var _previous_state: Dictionary = {}
 var _score_ready := false
-var _score_error := ""
+var _score_status: Dictionary = {"ready":false,"visible":true,
+    "text":"Choose a piece to begin","error":"","retry_visible":false,
+    "browse_visible":true}
 var _busy := false
 var _audio_error := false
 var _active := true
@@ -243,7 +245,7 @@ func present(parsed: Dictionary, ready: bool, busy := false, audio_error := fals
         stage.renderer.visible = false
         game_streak.present({})
         feedback_label.text = str(parsed.get("feedback","Open a score"))
-        present_score(ready,_score_error)
+        present_score(_score_status)
         return
     title_label.text = str(parsed.get("title", "Piano Teacher")).replace("_", " ")
     var kind := str(parsed.get("kind", "learn")).capitalize()
@@ -511,12 +513,12 @@ func present_busy(busy: bool) -> void:
     practice_skip_button.disabled = busy or not bool(_state.get("skip_available",false))
     stage.steps.present_busy(busy)
 
-func present_score(ready: bool, error: String) -> void:
-    _score_ready = ready
-    _score_error = error
-    stage.present_score_status(bool(_state.get("loaded",false)),ready,error)
-    start_button.disabled = not _active_transport(_state) and not ready
-    practice_retry_button.disabled = not bool(_state.get("loaded",false)) or not ready
+func present_score(status: Dictionary) -> void:
+    _score_status = status.duplicate(true)
+    _score_ready = bool(status.get("ready",false))
+    stage.present_score_status(status)
+    start_button.disabled = not _active_transport(_state) and not _score_ready
+    practice_retry_button.disabled = not bool(_state.get("loaded",false)) or not _score_ready
 
 func present_message(message: String, reveal := false) -> void:
     feedback_label.text = message
