@@ -7,6 +7,25 @@ var failures: Array[String] = []
 func _initialize() -> void:
     call_deferred("_audit")
 
+func _recompile_retained_source(renderer) -> void:
+    # The native view paints authenticated source ink once into a child
+    # CanvasItem. Redrawing the parent alone merely moves that cached ink.
+    # A causal pixel intervention must re-record the affected source child.
+    var source = renderer.retained_first_once
+    if source == null:
+        failures.append("Missing retained source for controlled pixel intervention")
+        return
+    source.compiled = false
+    source.queue_redraw()
+    await process_frame
+    await process_frame
+    if not source.compiled:
+        failures.append("Source retained ink did not recompile after intervention")
+        return
+    renderer.queue_redraw()
+    await process_frame
+    await RenderingServer.frame_post_draw
+
 func _capture_schedule(fixture: Dictionary, density: float) -> Dictionary:
     # Density chooses capture cost only. Python must establish actual motion,
     # viewport coverage and ownership from the saved images independently.
@@ -154,10 +173,7 @@ func _audit() -> void:
                         if other_index != slur_index:
                             retained_slurs.append(original_slurs[other_index])
                     renderer.layout.slur_pairs = retained_slurs
-                    renderer.queue_redraw()
-                    await process_frame
-                    await process_frame
-                    await RenderingServer.frame_post_draw
+                    await _recompile_retained_source(renderer)
                     var slur_file := "slur-without-%d-%.5f.png" % [slur_index,at]
                     if view.get_texture().get_image().save_png(
                             folder.path_join(slur_file)) != OK:
@@ -167,10 +183,7 @@ func _audit() -> void:
                         "clock":at, "baseline_file":filename, "file":slur_file
                     })
                 renderer.layout.slur_pairs = original_slurs
-                renderer.queue_redraw()
-                await process_frame
-                await process_frame
-                await RenderingServer.frame_post_draw
+                await _recompile_retained_source(renderer)
                 var slur_restored_file := "slur-restored-%.5f.png" % at
                 if view.get_texture().get_image().save_png(
                         folder.path_join(slur_restored_file)) != OK:
@@ -209,10 +222,7 @@ func _audit() -> void:
                     if str(candidate.get("id","")) != str(suppressed.get("id","")):
                         reduced.append(candidate)
                 renderer.layout.ordered_events = reduced
-                renderer.queue_redraw()
-                await process_frame
-                await process_frame
-                await RenderingServer.frame_post_draw
+                await _recompile_retained_source(renderer)
                 var control: Image = view.get_texture().get_image()
                 var control_file: String = ("rest-without-%d-%.5f.png" % [
                     rest_index,at])
@@ -227,12 +237,9 @@ func _audit() -> void:
                     "file":control_file
                 })
                 renderer.layout.ordered_events = original_events
-                renderer.queue_redraw()
+                await _recompile_retained_source(renderer)
             renderer.layout.ordered_events = original_events
-            renderer.queue_redraw()
-            await process_frame
-            await process_frame
-            await RenderingServer.frame_post_draw
+            await _recompile_retained_source(renderer)
             var restored_file := "restored-%.5f.png" % at
             view.get_texture().get_image().save_png(folder.path_join(restored_file))
             result["rest_difference_frames"].append({
