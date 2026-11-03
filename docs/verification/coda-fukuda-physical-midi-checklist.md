@@ -56,4 +56,12 @@ The bounded [adaptive/composed curriculum checks](https://github.com/tpepels/pia
 cover source-ID continuity, computed stage selection, target-tempo
 mastery, progress persistence, score rendering, Listen and grading.
 The [Godot 4.7.2 smoke workflow](https://github.com/tpepels/piano_teacher/actions/workflows/godot-startup-check.yml)
-checks native screen contracts. Neither is a physical MIDI test.
+checks native screen contracts. The
+[actual production-scene native test](https://github.com/tpepels/piano_teacher/actions/runs/41663899894)
+passed at `aecbb09`, covering last-piece startup, retained score readiness,
+and Play/Pause/Resume on a generated two-hand source. The
+[real-MIDI written-rest regression](https://github.com/tpepels/piano_teacher/actions/runs/41665774242)
+passed at `cc7efe9` across a full silent measure. Frame-level notehead
+travel acceptance, the actual Beethoven score, and the eight physical
+keyboard checks are still separate gates. None of these CI runs is a
+physical MIDI test.

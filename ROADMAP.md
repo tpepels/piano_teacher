@@ -29,7 +29,7 @@ mastery from visual previews; three clean full-target performances required.
 
 | Phase | Scope | Status as of this document | Exit evidence |
 |---|---|---|---|
-| **0 — Foundation** | MIDI import, library, native startup, one process | Native two-hand MIDI open/engraving/transport passed; production UI cold start unverified | Cold production Godot UI with real MIDI |
+| **0 — Foundation** | MIDI import, library, native startup, one process | **Software acceptance complete**: cold production UI, saved real MIDI, native notation and Play/Pause/Resume passed in CI at `aecbb09` | [Production scene and embedded runtime evidence](https://github.com/tpepels/piano_teacher/actions/runs/41663899894) |
 | **1 — Practice engine** | Count-in, transport, recovery, retry, tempo ladder, progress | Implemented in software; physical behavior open | Real full session with no clock/stage divergence |
 | **2 — Notation fidelity** | Source IDs, hands, ties, rests, tuplets, native ink and geometry | Broad test/evidence coverage; real-score visual gaps remain possible | Independent framebuffer/original-note parity on required corpus |
 | **3 — Original Coda, MIDI-domain** | Four algorithms; pinned author-differential reproduction and source-safe desktop lesson path | **Algorithm scope complete; post-consolidation Coda tests green** | Existing 1,273-request differential and whole-piece/17-piece corpus, then current refactor regression |
@@ -87,13 +87,25 @@ to the exact build revision and reruns on changes to the score pipeline.
 This establishes embedded software integration, not Godot framebuffer
 correctness or physical MIDI keyboard behavior.
 
-**P6 — Production UI gate.** A new real production-scene smoke opens
-`main.tscn` with the actual embedded Python worker, auto-resumes the saved two-hand MIDI
-file, verifies retained native noteheads and dismissal of the loading overlay,
-then exercises Play/Pause/Resume while retaining the transport identity.
-This test must pass on its own source/build SHA before production UI
-integration can be accepted. It does not substitute for framebuffer
-inspection or physical keyboard testing.
+**P6 — Production UI gate.** The real-scene
+[acceptance run](https://github.com/tpepels/piano_teacher/actions/runs/41663899894)
+passed at `aecbb09`. `main.tscn` starts the embedded Python worker, reopens
+the saved MIDI, compiles retained notation, dismisses the loading overlay
+and starts, pauses and resumes the same transport. Commit `4feb8ac`
+adds stronger checks for actual viewport-visible noteheads, stationary
+pause positions and scroll displacement at the displayed BPM. These
+new frame-level checks remain pending native runtime acceptance; the
+Godot parser and fast Python contracts passed at that revision.
+None of these checks is a framebuffer pixel or physical MIDI test.
+
+**P6 — Real-source written rest.** The
+[bounded real-MIDI regression](https://github.com/tpepels/piano_teacher/actions/runs/41665774242)
+passed at `cc7efe9`, including the composed-generator contracts and the
+17-piece MIDI corpus. Its newly generated three-measure, two-hand source
+contains a full silent measure, and the unchanged original performance
+continues along the same visual and grading beat axis across the silence.
+This establishes software clock continuity, not the target-device frame
+cadence or MIDI input response.
 
 **P6 — Score preparation.** Score loading now supersedes obsolete
 layout/model requests without waiting for old deadlines, bounds semantic
