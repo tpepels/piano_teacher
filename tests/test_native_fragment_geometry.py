@@ -36,7 +36,7 @@ def test_native_slur_preserves_original_texture_pixels(tmp_path):
     if not binary or not os.environ.get("DISPLAY"):
         pytest.skip("Godot with a display is required for pixel verification")
     import verovio
-    from piano_teacher.score import _create_verovio_toolkit
+    from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
     from piano_teacher.notation.assets.slurs import extract_slurs
 
     xml = """<score-partwise version="4.0"><work><work-title> </work-title></work>
