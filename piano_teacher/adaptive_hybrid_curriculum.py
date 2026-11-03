@@ -10,12 +10,11 @@ from __future__ import annotations
 from bisect import bisect_right
 from collections import Counter
 from dataclasses import replace
-from typing import Mapping
+from typing import Mapping, Protocol
 
-from .application.coda_midi_curriculum import midi_coda_stages
 from .exercise_generator import ExerciseVariant
 from .exercise_pipeline import ExerciseStage
-from .fukuda_midi import fukuda_midi_variants, as_fukuda_stage
+from .fukuda_midi import as_fukuda_stage
 from .lesson_settings import SETTINGS
 from .lesson_source_planner import Exercise, _focus_phrases, _hands_for_learning
 from .music import Phrase, Piece
@@ -132,9 +131,30 @@ def _course_exercises(piece: Piece) -> tuple[Exercise, ...]:
     return tuple(out)
 
 
-def compile_hybrid_catalog(piece: Piece):
-    """Compile *all* candidates once; later feedback only selects stages."""
+class PassageContributor(Protocol):
+    """A generator capable of supplying stages for a selected MIDI passage."""
+    @property
+    def name(self) -> str: ...
+    def passage_stages(self, piece: Piece, original: ExerciseVariant, *,
+                       kind: str) -> tuple[ExerciseStage, ...]: ...
+
+
+def compile_hybrid_catalog(
+    piece: Piece, *, components: tuple[PassageContributor, ...] | None = None,
+):
+    """Compile independent contributor stages once, then select via feedback.
+
+    The composer owns segmentation, not any generator. Adding a MIDI
+    algorithm requires a passage_stages method and source-safe terminal
+    original notes; the catalog compiler contains no author-name branches.
+    """
     from .lesson_generators import LessonPlanDefinition, lesson_hands
+    if components is None:
+        from .lesson_generators import (
+            CodaLessonGenerator, FukudaMidiLessonGenerator)
+        components = (FukudaMidiLessonGenerator(), CodaLessonGenerator())
+    if not components or len({component.name for component in components}) != len(components):
+        raise ValueError("Adaptive composition requires unique passage contributors")
     if (piece.source_format != "midi" or piece.source_musicxml
             or piece.midi_ticks_per_beat <= 0):
         raise ValueError("Hybrid lessons require imported MIDI with PPQ")
@@ -151,19 +171,21 @@ def compile_hybrid_catalog(piece: Piece):
             if exercise.kind != "learn":
                 stages[(exercise.key, hand)] = (as_fukuda_stage(original),)
                 continue
-            # Keep every applicable author candidate in the immutable catalog.
-            # Coda transforms only source-safe bar-boundary passages.
-            coda = (midi_coda_stages(piece, (original,), kind="learn")
-                    if (abs(exercise.phrase.end -
-                            piece.bar_boundaries[exercise.phrase.last_bar])
-                        <= 1e-7)
-                    else (as_fukuda_stage(original),))
-            fukuda = fukuda_midi_variants(original, bpm=piece.bpm)
-            variants = (*tuple(as_fukuda_stage(v) for v in fukuda[:-1]),
-                        *coda)
+            produced = []
+            for component in components:
+                stages_for_passage = component.passage_stages(
+                    piece, original, kind=exercise.kind)
+                if (not stages_for_passage or
+                        stages_for_passage[-1].variant.level != "original" or
+                        Counter(stages_for_passage[-1].variant.notes) !=
+                        Counter(original.notes)):
+                    raise ValueError(
+                        "Passage contributor must end in the exact original MIDI")
+                produced.extend(stages_for_passage[:-1])
+            variants = (*produced, as_fukuda_stage(original))
             levels = [stage.variant.level for stage in variants]
             if len(set(levels)) != len(levels):
-                raise ValueError("Hybrid candidate stage names overlap")
+                raise ValueError("Adaptive passage contributors collide on stage names")
             stages[(exercise.key, hand)] = variants
     return LessonPlanDefinition(
         exercises, stages, "coda-fukuda-midi",
