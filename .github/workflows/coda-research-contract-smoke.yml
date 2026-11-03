@@ -10,6 +10,7 @@ on:
       - 'piano_teacher/application/coda_midi_curriculum.py'
       - 'piano_teacher/exercise_strategies.py'
       - 'piano_teacher/learning.py'
+      - 'piano_teacher/progress_repository.py'
       - 'piano_teacher/lesson_generators.py'
       - 'piano_teacher/lesson_source_planner.py'
       - 'tests/test_lesson_generator_architecture.py'
