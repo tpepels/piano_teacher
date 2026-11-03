@@ -236,3 +236,39 @@ def test_native_geometry_and_semantics_reuse_one_source_projection(
     owner.invalidate()
     assert owner.semantic_score(changed)["revision"] == changed.revision
     assert calls == [selected.revision, changed.revision, changed.revision]
+
+
+def test_native_layout_retry_reuses_prepared_ink_without_stale_or_mutable_data(
+        artifacts_api, selected, rendering, tmp_path, monkeypatch):
+    """The second IPC layout response must not rebuild Verovio fragments.
+
+    Source/stage/revision changes still prepare different notation. A client
+    mutating a JSON response cannot corrupt later layouts, even after Retry.
+    """
+    from piano_teacher.application import score_preparation
+    compiled = []
+    def assemble(score, **kwargs):
+        compiled.append(kwargs["revision"])
+        return {"revision":kwargs["revision"],
+                "notes":kwargs["native_model"]["notes"],
+                "source_musicxml":kwargs["notation_xml"],
+                "native_beam_fragments":{"source":{"ids":["first"]}}}
+    monkeypatch.setattr(score_preparation, "assemble_layout", assemble)
+    owner = artifacts_api.ScoreArtifacts(PreprocessingCache(tmp_path))
+    one = owner.geometry(selected)
+    one["notes"].clear()
+    one["native_beam_fragments"]["source"]["ids"].clear()
+    again = owner.geometry(selected)
+    assert compiled == [7]
+    assert len(again["notes"]) == 2
+    assert again["native_beam_fragments"]["source"]["ids"] == ["first"]
+    assert len(rendering) == 1
+    next_source = replace(selected, stage_key="next-stage", revision=8)
+    fresh = owner.geometry(next_source)
+    assert fresh["revision"] == 8
+    assert compiled == [7, 8]
+    owner.geometry(next_source)
+    assert compiled == [7, 8]
+    owner.invalidate()
+    owner.geometry(next_source)
+    assert compiled == [7, 8, 8]

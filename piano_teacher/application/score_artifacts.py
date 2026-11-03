@@ -50,6 +50,8 @@ class ScoreArtifacts:
         self._notation: LessonScore | None = None
         self._model: dict | None = None
         self._projected_model: dict | None = None
+        self._prepared_layout_identity: tuple | None = None
+        self._prepared_layout: dict | None = None
         self._layout_identity: tuple | None = None
         self._layout: EngravedScore | None = None
         self._layout_source_bpm: float | None = None
@@ -158,6 +160,12 @@ class ScoreArtifacts:
         return layout
 
     def geometry(self, selected: ScoreSelection) -> dict:
+        # A transient renderer retry or second layout request for the same
+        # source revision must not re-extract every Verovio beam/tie/tuplet
+        # fragment. Preserve an owned immutable snapshot; callers cannot
+        # mutate the layout subsequently served to another request.
+        if selected.identity == self._prepared_layout_identity and self._prepared_layout is not None:
+            return deepcopy(self._prepared_layout)
         diagnostics = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
         began = time.perf_counter()
         score = self.engraving(selected)
@@ -179,4 +187,6 @@ class ScoreArtifacts:
             print("SCORE_GEOMETRY_STAGE: native-assets",
                   round((time.perf_counter()-checkpoint)*1000, 1), "ms",
                   "total", round((time.perf_counter()-began)*1000, 1), "ms", flush=True)
-        return prepared
+        self._prepared_layout_identity = selected.identity
+        self._prepared_layout = prepared
+        return deepcopy(prepared)
