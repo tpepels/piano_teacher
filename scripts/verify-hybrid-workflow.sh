@@ -27,6 +27,7 @@ if [[ "$MODE" != "--corpus" ]]; then
     tests/test_strategy_handoff.py \
     tests/test_state_projection.py \
     tests/test_runtime_architecture_contract.py \
+    tests/test_phase5_architecture_audit.py \
     tests/test_inprocess_dispatcher.py \
     tests/test_phase6_inprocess.py
   if command -v godot >/dev/null 2>&1; then

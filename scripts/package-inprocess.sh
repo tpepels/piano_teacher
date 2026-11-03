@@ -54,5 +54,6 @@ s = s.replace('[editor_plugins]\n\nenabled=PackedStringArray("res://addons/godot
 p.write_text(s)
 PY
 rm -rf "$STAGE/godot/addons/godot_mcp_toolkit" "$STAGE/godot/.godot"
+python3 scripts/verify-phase5-architecture.py --root "$STAGE" --package
 tar -C dist -czf dist/piano-teacher-linux-x86_64.tar.gz piano-teacher-linux-x86_64
 echo "Package: dist/piano-teacher-linux-x86_64.tar.gz"

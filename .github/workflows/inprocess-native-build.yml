@@ -5,6 +5,15 @@ on:
     branches: [main]
     paths:
       - 'native/**'
+      - 'piano_teacher/inprocess.py'
+      - 'piano_teacher/server.py'
+      - 'piano_teacher/lesson_generators.py'
+      - 'piano_teacher/learning.py'
+      - 'piano_teacher/exercise_strategies.py'
+      - 'piano_teacher/engraving/**'
+      - 'godot/native_bridge_smoke.gd'
+      - 'godot/inprocess_bus.gd'
+      - 'scripts/verify-native-bridge.sh'
       - 'scripts/build-inprocess.sh'
       - 'scripts/install-inprocess-artifact.py'
       - 'run-inprocess.sh'

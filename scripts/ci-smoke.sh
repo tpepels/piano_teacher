@@ -9,6 +9,7 @@ PYTHON="${PYTHON:-python}"
 find scripts -type f -name '*.sh' -print0 | xargs -0 -r bash -n
 # Focused, self-contained MIDI and state/assessment contracts.
 timeout 25s "$PYTHON" -m pytest -q \
+  tests/test_phase5_architecture_audit.py \
   tests/test_practice_warning_policy.py \
   tests/test_live_input_index.py \
   tests/test_engine_command_errors.py \
