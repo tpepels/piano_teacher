@@ -80,7 +80,7 @@ def test_normal_midi_produces_no_repair_warning(tmp_path):
 def test_repaired_midi_passes_full_notation_import(tmp_path):
     import pytest
     pytest.importorskip("music21")
-    from piano_teacher.score import import_piece
+    from piano_teacher.importing.pieces import import_piece
 
     path = _write_file(tmp_path / "engrave.mid", zero=True, orphan=True)
     piece, notation = import_piece(path)
