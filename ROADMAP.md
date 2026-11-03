@@ -93,10 +93,11 @@ passed at `aecbb09`. `main.tscn` starts the embedded Python worker, reopens
 the saved MIDI, compiles retained notation, dismisses the loading overlay
 and starts, pauses and resumes the same transport. Commit `4feb8ac`
 adds stronger checks for actual viewport-visible noteheads, stationary
-pause positions and scroll displacement at the displayed BPM. These
-new frame-level checks remain pending native runtime acceptance; the
-Godot parser and fast Python contracts passed at that revision.
-None of these checks is a framebuffer pixel or physical MIDI test.
+pause positions and scroll displacement at the displayed BPM. The
+stronger frame-level checks passed in the later
+[real-score native runtime gate](https://github.com/tpepels/piano_teacher/actions/runs/41678370190)
+at `d92d9e6`. Neither check substitutes for an independent pixel proof or
+physical MIDI test.
 
 **P6 — Real-source written rest.** The
 [bounded real-MIDI regression](https://github.com/tpepels/piano_teacher/actions/runs/41665774242)
@@ -113,8 +114,10 @@ the production scene through ready notation, Play/Pause/Resume, a full
 backward/retry preparation measure, Listen/return, selection of step 2,
 manual -5 BPM and closing/reopening the saved lesson. Both score revisions
 and visible native noteheads are checked at every publication boundary.
-This is a new required CI gate, not yet accepted until the native workflow
-passes. It does not assert microphone/audio output or physical MIDI grading.
+The native workflow
+[passed at `d92d9e6`](https://github.com/tpepels/piano_teacher/actions/runs/41678370190),
+including decoded Listen WAV playback and the staged runtime audit. Sound-card
+output and physical MIDI grading still require real hardware.
 
 **P6 — Real-score viewport coverage.** Two further production-scene
 cases now select the real `Peace_Piece_-_Bill_Evans_(Piano_Solo).midi` and
@@ -122,9 +125,22 @@ cases now select the real `Peace_Piece_-_Bill_Evans_(Piano_Solo).midi` and
 library. The full file SHA-256 must match the loaded backend fingerprint.
 Each case verifies retained visible noteheads at READY, at least two beats
 of lookahead, a stationary Pause and source-clock-aligned motion on Resume.
-They are new runtime CI gates, not accepted until the exact native workflow
-passes. Screen-pixel contours remain covered by the separate native
-notation/proof suite, not by headless geometry assertions.
+Both
+[passed at `d92d9e6`](https://github.com/tpepels/piano_teacher/actions/runs/41678370190),
+including SHA-256 source identity, actual retained notehead presence, Pause and
+BPM-consistent Resume. Independent framebuffer pixel verification remains
+separate from these headless compositing checks.
+
+**P6 — Graded software-input callback.** The
+[bounded Coda + Fukuda test and 17-score corpus](https://github.com/tpepels/piano_teacher/actions/runs/41676220356)
+passed at `23ca2ca`. This additional real MIDI fixture delivers original
+note-on/off messages through `PracticeEngine._receive`, including a whole
+silent bar; one clean whole-piece performance and a second take with a
+deliberate wrong RH pitch produce correctly source-bound performance reviews
+without modifying the source MIDI. The
+[backend-calibrated click and display-clock regression](https://github.com/tpepels/piano_teacher/actions/runs/41676891067)
+passed at `c2a7ab7`, including state-response delay injection. Neither is
+a measurement of physical USB/Bluetooth input latency.
 
 **P6 — Score preparation.** Score loading now supersedes obsolete
 layout/model requests without waiting for old deadlines, bounds semantic
