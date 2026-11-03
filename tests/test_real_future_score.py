@@ -1,6 +1,7 @@
 """Full Verovio prefetch of the next actual MIDI lesson stage."""
 from __future__ import annotations
 
+import json
 import time
 
 from scripts.smoke_phase0 import make_fixture
@@ -20,10 +21,10 @@ def test_full_coda_fukuda_future_score_is_source_bound_and_prepared(tmp_path):
         selection, number = engine._next_stage_selection()
         assert number == 2
         started = time.monotonic()
-        future = engine.next_stage_score()
+        future = json.loads(engine.next_stage_score())
         while future["status"] == "preparing" and time.monotonic() - started < 40:
             time.sleep(.025)
-            future = engine.next_stage_score()
+            future = json.loads(engine.next_stage_score())
         assert future["status"] == "ready", future
         assert future["stage_key"] == selection.stage_key
         assert future["fingerprint"] == engine.fingerprint

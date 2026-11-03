@@ -1960,14 +1960,17 @@ class PracticeEngine:
             revision=self.score_revision + 1, fingerprint=self.fingerprint,
             transformed_rhythm=future.active_stage.transformed_rhythm), number
 
-    def next_stage_score(self) -> dict:
+    def next_stage_score(self) -> bytes:
         """Begin ahead-of-time score preparation without blocking MIDI timing."""
         with self.lock:
             planned = self._next_stage_selection()
             if planned is None:
-                return {"status": "none"}
+                return b'{"status":"none"}'
             selection, number = planned
-            return self.future_score.ensure(selection, number=number)
+            future_step = self.plan.lesson_steps[number - 1]
+            label = future_step.level.replace("-", " ").capitalize()
+            return self.future_score.ensure(
+                selection, number=number, label=label)
 
     def acknowledge_preloaded_stage(self, *, stage_key: str,
                                     revision: int) -> dict:

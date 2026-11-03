@@ -68,7 +68,9 @@ class EngineCommands:
             if operation == "score.next_stage":
                 if values:
                     raise ValueError("score.next_stage takes no input")
-                return self._reply(OK, engine.next_stage_score())
+                # Heavy JSON was already encoded by the background prefetch
+                # worker. The musical clock only transfers these bytes.
+                return OK, engine.next_stage_score()
             if operation == "score.stage_ready":
                 return self._reply(OK, engine.acknowledge_preloaded_stage(
                     stage_key=values["stage_key"], revision=values["revision"]))
