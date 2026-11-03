@@ -38,16 +38,16 @@ def test_preview_continues_after_one_empty_measure_without_reloading(tmp_path):
         first_revision = app.score_revision
         length = app.plan.active_phrase.end - app.plan.active_phrase.start
         # Simulate the end of one ungraded passage, one beat into its gap.
-        app.run_at = time.monotonic() - (length + 1) * 60 / app.plan.bpm
+        app.visual_transport.run_at = time.monotonic() - (length + 1) * 60 / app.plan.bpm
         app._update()
-        assert app._preview_loop_pending and not app.running
+        assert app.visual_transport._preview_loop_pending and not app.running
         position = app.state()
-        assert length < position["visual_scroll_beat"] < length + app.visual_gap_beats
+        assert length < position["visual_scroll_beat"] < length + app.visual_transport.visual_gap_beats
         assert position["visual_scroll_speed"] > 0
-        app.next_at = time.monotonic() - .01
+        app.visual_transport.next_at = time.monotonic() - .01
         app._update()
         assert app.running and app.preview_only
-        assert app.visual_offset_beats == length + app.visual_gap_beats
+        assert app.visual_transport.visual_offset_beats == length + app.visual_transport.visual_gap_beats
         assert app.count_in_beats == 0.0
         assert app.score_revision == first_revision
         assert app.state()["score_loop_enabled"]
@@ -66,12 +66,12 @@ def test_clean_auto_take_increases_bpm_without_reengraving(tmp_path):
         app.running = False
         app.pending_result = SimpleNamespace(
             correct=2, notes=[object(), object()], extra_notes=0, clean=True)
-        app.next_at = time.monotonic() - .1
+        app.visual_transport.next_at = time.monotonic() - .1
         app._update()
         assert app.plan.bpm > bpm
         assert app.score_revision == original_revision
         assert app.running and app.auto
-        assert app.visual_offset_beats == length + app.visual_gap_beats
+        assert app.visual_transport.visual_offset_beats == length + app.visual_transport.visual_gap_beats
         assert app.count_in_beats == 0
         assert app.plan.streak == 0
     finally:
@@ -87,22 +87,22 @@ def test_failed_auto_take_moves_back_in_place_and_never_advances_repeat(tmp_path
         app.running = False
         app.pending_result = SimpleNamespace(
             correct=1, notes=[object(), object()], extra_notes=0, clean=False)
-        app._retry_previous_pass = True
-        app._visual_rewind_from = length
-        app._visual_rewind_to = 0.0
-        app._visual_rewind_at = time.monotonic() - .25
-        app._visual_rewind_seconds = 1.0
+        app.visual_transport._retry_previous_pass = True
+        app.visual_transport._visual_rewind_from = length
+        app.visual_transport._visual_rewind_to = 0.0
+        app.visual_transport._visual_rewind_at = time.monotonic() - .25
+        app.visual_transport._visual_rewind_seconds = 1.0
         before = app.state()
         assert before["visual_scroll_speed"] < 0
         assert 0 < before["visual_scroll_beat"] < length
         revision = app.score_revision
-        app.next_at = time.monotonic() - .1
+        app.visual_transport.next_at = time.monotonic() - .1
         app._update()
-        assert app.visual_offset_beats == 0.0
+        assert app.visual_transport.visual_offset_beats == 0.0
         assert app.plan.bpm == app.plan.start_bpm
         assert app.score_revision == revision
         assert app.running
-        assert not app._retry_previous_pass
+        assert not app.visual_transport._retry_previous_pass
     finally:
         app.db.close()
 
@@ -113,20 +113,20 @@ def test_backward_recovery_is_still_local_to_source_measure_grid(tmp_path):
         app.midi.port = object()
         app.start()
         app.running = False
-        app.pending_rewind = 4.0
-        app._visual_rewind_from = 8.0
-        app._visual_rewind_to = 4.0
-        app._visual_rewind_at = time.monotonic() - .25
-        app._visual_rewind_seconds = 1.0
-        app.next_at = time.monotonic() + 1
+        app.visual_transport.pending_rewind = 4.0
+        app.visual_transport._visual_rewind_from = 8.0
+        app.visual_transport._visual_rewind_to = 4.0
+        app.visual_transport._visual_rewind_at = time.monotonic() - .25
+        app.visual_transport._visual_rewind_seconds = 1.0
+        app.visual_transport.next_at = time.monotonic() + 1
         progress = app.state()
         assert progress["visual_scroll_speed"] < 0
         assert 4 < progress["visual_scroll_beat"] < 8
-        app.next_at = time.monotonic() - .1
+        app.visual_transport.next_at = time.monotonic() - .1
         app._update()
         assert app.running
-        assert app.play_from_beat == 4.0
-        assert app.visual_offset_beats == 0
+        assert app.visual_transport.play_from_beat == 4.0
+        assert app.visual_transport.visual_offset_beats == 0
     finally:
         app.db.close()
 
@@ -195,24 +195,24 @@ def test_paused_empty_measure_resumes_at_identical_visual_position(tmp_path, mon
     try:
         app.start()
         duration = app.plan.active_phrase.end - app.plan.active_phrase.start
-        now[0] = app.run_at + (duration + 1) * 60 / app.plan.bpm
+        now[0] = app.visual_transport.run_at + (duration + 1) * 60 / app.plan.bpm
         before = app.state()
-        assert app._preview_loop_pending
+        assert app.visual_transport._preview_loop_pending
         assert before["phase"] == "preview_gap"
         assert before["visual_scroll_speed"] > 0
         position = before["visual_scroll_beat"]
-        deadline = app.next_at
+        deadline = app.visual_transport.next_at
         app.control("pause")
         now[0] += 45
         assert app.state()["phase"] == "paused"
         assert app.state()["visual_scroll_beat"] == pytest.approx(position)
         app.control("resume")
         assert app.state()["visual_scroll_beat"] == pytest.approx(position)
-        assert app.next_at == pytest.approx(deadline + 45)
-        now[0] = app.next_at + .01
+        assert app.visual_transport.next_at == pytest.approx(deadline + 45)
+        now[0] = app.visual_transport.next_at + .01
         after = app.state()
         assert after["running"]
-        assert after["visual_scroll_beat"] == pytest.approx(duration + app.visual_gap_beats,
+        assert after["visual_scroll_beat"] == pytest.approx(duration + app.visual_transport.visual_gap_beats,
                                                               abs=.1)
     finally:
         app.db.close()
@@ -227,12 +227,12 @@ def test_paused_rewind_resumes_without_skipping_backward_frames(tmp_path, monkey
         app.midi.port = object()
         app.start()
         app.running = False
-        app.pending_rewind = 4.0
-        app._visual_rewind_from = 8.0
-        app._visual_rewind_to = 4.0
-        app._visual_rewind_at = now[0]
-        app._visual_rewind_seconds = 2.0
-        app.next_at = now[0] + 2.0
+        app.visual_transport.pending_rewind = 4.0
+        app.visual_transport._visual_rewind_from = 8.0
+        app.visual_transport._visual_rewind_to = 4.0
+        app.visual_transport._visual_rewind_at = now[0]
+        app.visual_transport._visual_rewind_seconds = 2.0
+        app.visual_transport.next_at = now[0] + 2.0
         now[0] += .5
         before = app.state()
         assert before["phase"] == "recovering"
@@ -245,7 +245,7 @@ def test_paused_rewind_resumes_without_skipping_backward_frames(tmp_path, monkey
         assert app.state()["visual_scroll_beat"] == pytest.approx(position)
         now[0] += .25
         assert 4 < app.state()["visual_scroll_beat"] < position
-        now[0] = app.next_at + .01
+        now[0] = app.visual_transport.next_at + .01
         after = app.state()
         assert after["phase"] == "playing"
         assert after["play_from_beat"] == 4.0
@@ -302,25 +302,25 @@ def clocked_engine(tmp_path, monkeypatch):
 def record_clean(app):
     phrase = app.plan.active_phrase
     app.recorder.presses = [
-        PlayedNote(note.pitch, (note.start-phrase.start-app.play_from_beat)*60/app.plan.bpm,
-                   (note.end-phrase.start-app.play_from_beat)*60/app.plan.bpm)
-        for note in phrase.notes if note.start >= phrase.start+app.play_from_beat]
+        PlayedNote(note.pitch, (note.start-phrase.start-app.visual_transport.play_from_beat)*60/app.plan.bpm,
+                   (note.end-phrase.start-app.visual_transport.play_from_beat)*60/app.plan.bpm)
+        for note in phrase.notes if note.start >= phrase.start+app.visual_transport.play_from_beat]
 
 
 def test_preview_uses_upcoming_meter_and_preserves_poll_overshoot(clocked_engine):
     app, now = clocked_engine(grid=(0, .5, 3.5, 4.5),
                               meters=((0, 3, 4), (3.5, 2, 4)))
     app.start()
-    assert app.visual_gap_beats == 3
+    assert app.visual_transport.visual_gap_beats == 3
     revision = app.score_revision
-    end_at = app.run_at + 4.5*60/80
+    end_at = app.visual_transport.run_at + 4.5*60/80
     now[0] = end_at + .21
     app._update()
-    assert app.next_at == pytest.approx(end_at + 3*60/80)
-    deadline = app.next_at
+    assert app.visual_transport.next_at == pytest.approx(end_at + 3*60/80)
+    deadline = app.visual_transport.next_at
     now[0] = deadline + .125
     state = app.state()
-    assert app.run_at == pytest.approx(deadline)
+    assert app.visual_transport.run_at == pytest.approx(deadline)
     assert state["visual_scroll_beat"] == pytest.approx(7.5 + .125*80/60)
     assert state["count_in_beats"] == 0
     assert state["revision"] == revision
@@ -330,12 +330,12 @@ def test_partial_preview_gap_starts_at_source_end_then_repeats_from_zero(clocked
     app, now = clocked_engine()
     app.open_from_beat = 4
     app.start()
-    end_at = app.run_at + 4*60/80
+    end_at = app.visual_transport.run_at + 4*60/80
     now[0] = end_at + .3
     state = app.state()
     assert state["visual_scroll_beat"] == pytest.approx(8.4)
-    assert app.next_at == pytest.approx(end_at + 4*60/80)
-    now[0] = app.next_at + .1
+    assert app.visual_transport.next_at == pytest.approx(end_at + 4*60/80)
+    now[0] = app.visual_transport.next_at + .1
     repeated = app.state()
     assert repeated["play_from_beat"] == 0
     assert repeated["visual_scroll_beat"] == pytest.approx(12 + .1*80/60)
@@ -346,15 +346,15 @@ def test_fast_clean_take_restarts_at_rest_end_without_feedback_hold(clocked_engi
                               connected=True, bpm=240)
     app.start()
     record_clean(app)
-    end_at = app.run_at + 2*60/240
+    end_at = app.visual_transport.run_at + 2*60/240
     now[0] = end_at + .21
     app._update()
     assert app.pending_result.clean
-    assert app.next_at == pytest.approx(end_at + .25)
+    assert app.visual_transport.next_at == pytest.approx(end_at + .25)
     now[0] = end_at + .3
     state = app.state()
     assert state["running"] and state["count_in_beats"] == 0
-    assert app.run_at == pytest.approx(end_at + .25)
+    assert app.visual_transport.run_at == pytest.approx(end_at + .25)
     assert state["visual_scroll_beat"] == pytest.approx(3.2)
 
 
@@ -362,14 +362,14 @@ def test_failed_take_reverses_to_full_preparation_then_replays_same_pass(clocked
     app, now = clocked_engine(connected=True)
     app.start()
     revision = app.score_revision
-    now[0] = app.run_at + 8*60/80 + .21
+    now[0] = app.visual_transport.run_at + 8*60/80 + .21
     state = app.state()
     prep = state["practice_preparation"]
     assert prep["pass_start_beat"] == 0 and prep["source_from_beat"] == 0
     assert (prep["measure"]["start_beat"], prep["measure"]["end_beat"]) == (-4, 0)
     assert prep["phase"] == "reverse"
     assert state["visual_scroll_speed"] < 0
-    reverse_end = app._visual_rewind_at + app._visual_rewind_seconds
+    reverse_end = app.visual_transport._visual_rewind_at + app.visual_transport._visual_rewind_seconds
     now[0] = reverse_end
     prepared = app.state()
     assert prepared["practice_preparation"]["phase"] == "preparing"
@@ -382,7 +382,7 @@ def test_failed_take_reverses_to_full_preparation_then_replays_same_pass(clocked
     assert repeated["visual_offset_beats"] == 0
     assert repeated["visual_scroll_beat"] == pytest.approx(.1*80/60)
     assert repeated["revision"] == revision
-    assert not app._retry_previous_pass
+    assert not app.visual_transport._retry_previous_pass
 
 
 def test_local_failure_prepares_in_target_meter_and_keeps_adaptive_escalation(clocked_engine):
@@ -393,19 +393,19 @@ def test_local_failure_prepares_in_target_meter_and_keeps_adaptive_escalation(cl
     record_clean(app)
     # First two bars succeed; miss the later canonical two-bar unit.
     app.recorder.presses = [note for note in app.recorder.presses if note.onset < 6*60/80]
-    now[0] = app.run_at + 14*60/80 + .03
+    now[0] = app.visual_transport.run_at + 14*60/80 + .03
     first = app.state()
     assert first["recovery_beat"] == 6 and first["bpm"] == 72
     prep = first["practice_preparation"]["measure"]
     assert (prep["start_beat"], prep["end_beat"], prep["meter"]) == (2, 6, [4, 4])
-    now[0] = app.next_at + .1
+    now[0] = app.visual_transport.next_at + .1
     retry = app.state()
     assert retry["running"] and retry["play_from_beat"] == 6
     assert retry["visual_offset_beats"] == 0 and retry["count_in_beats"] == 0
-    now[0] = app.run_at + 8*60/72 + .03
+    now[0] = app.visual_transport.run_at + 8*60/72 + .03
     second = app.state()
     assert second["guided_recovery"] and second["recovery_beat"] == 6
-    now[0] = app.next_at + .01
+    now[0] = app.visual_transport.next_at + .01
     guided = app.state()
     assert guided["mode"] == "learn" and guided["first_bar"] == 3
     assert guided["last_bar"] == 4
@@ -414,8 +414,8 @@ def test_local_failure_prepares_in_target_meter_and_keeps_adaptive_escalation(cl
 def test_manual_retry_preparation_pauses_and_resumes_without_skipping(clocked_engine):
     app, now = clocked_engine()
     app.start()
-    app.visual_offset_beats = 12
-    now[0] = app.run_at + 6*60/80
+    app.visual_transport.visual_offset_beats = 12
+    now[0] = app.visual_transport.run_at + 6*60/80
     revision = app.score_revision
     app.control("restart")
     state = app.state()
@@ -423,18 +423,18 @@ def test_manual_retry_preparation_pauses_and_resumes_without_skipping(clocked_en
     assert state["practice_preparation"]["pass_start_beat"] == 12
     assert state["practice_preparation"]["measure"]["start_beat"] == 8
     assert state["visual_scroll_speed"] < 0
-    now[0] = app._visual_rewind_at + app._visual_rewind_seconds + .75
+    now[0] = app.visual_transport._visual_rewind_at + app.visual_transport._visual_rewind_seconds + .75
     preparing = app.state()
     position = preparing["visual_scroll_beat"]
-    deadline = app.next_at
+    deadline = app.visual_transport.next_at
     assert preparing["practice_preparation"]["phase"] == "preparing"
     app.control("pause")
     now[0] += 30
     assert app.state()["visual_scroll_beat"] == pytest.approx(position)
     app.control("resume")
     assert app.state()["visual_scroll_beat"] == pytest.approx(position)
-    assert app.next_at == pytest.approx(deadline + 30)
-    now[0] = app.next_at + .1
+    assert app.visual_transport.next_at == pytest.approx(deadline + 30)
+    now[0] = app.visual_transport.next_at + .1
     repeated = app.state()
     assert repeated["visual_scroll_beat"] == pytest.approx(12 + .1*80/60)
     assert repeated["count_in_beats"] == 0 and repeated["revision"] == revision
@@ -446,13 +446,13 @@ def test_short_meter_rest_does_not_wait_for_longer_assessment_grace(clocked_engi
                               connected=True, bpm=240)
     app.start()
     record_clean(app)
-    deadline = app.run_at + 1.5*60/240
+    deadline = app.visual_transport.run_at + 1.5*60/240
     now[0] = deadline + .01
     state = app.state()
     assert state["visual_offset_beats"] == 1.5
     assert state["visual_scroll_beat"] == pytest.approx(1.54)
     assert state["running"] and state["count_in_beats"] == 0
-    assert app.run_at == pytest.approx(deadline)
+    assert app.visual_transport.run_at == pytest.approx(deadline)
 
 
 def test_semantic_response_cannot_corrupt_cached_transport_contract(clocked_engine):
@@ -469,14 +469,14 @@ def test_clean_partial_take_prepares_whole_source_without_earning_mastery(clocke
     app, now = clocked_engine(connected=True)
     app.start(from_beat=4)
     record_clean(app)
-    now[0] = app.run_at + 4*60/80 + .21
+    now[0] = app.visual_transport.run_at + 4*60/80 + .21
     finished = app.state()
     assert finished["recovery_beat"] == 0
     assert finished["practice_preparation"]["source_from_beat"] == 0
     assert finished["visual_scroll_speed"] < 0
     assert app.pending_result is None and not app.plan.mastered
     assert app.plan.streak == 0
-    now[0] = app.next_at + .1
+    now[0] = app.visual_transport.next_at + .1
     whole = app.state()
     assert whole["play_from_beat"] == 0 and whole["count_in_beats"] == 0
     assert whole["visual_offset_beats"] == 0
@@ -525,11 +525,11 @@ def test_semantic_cache_distinguishes_guided_fragments_at_same_revision(clocked_
 def test_manual_tempo_cancels_preparation_without_reengraving(clocked_engine, phase, paused):
     app, now = clocked_engine()
     app.start()
-    now[0] = app.run_at + 6*60/80
+    now[0] = app.visual_transport.run_at + 6*60/80
     app.control("restart")
-    deadline = app.next_at
-    now[0] = (app._visual_rewind_at + .5 if phase == "reverse"
-              else app._preparation_at + .5)
+    deadline = app.visual_transport.next_at
+    now[0] = (app.visual_transport._visual_rewind_at + .5 if phase == "reverse"
+              else app.visual_transport._preparation_at + .5)
     before = app.state()
     assert before["practice_preparation"]["phase"] == phase
     if paused:
@@ -541,7 +541,7 @@ def test_manual_tempo_cancels_preparation_without_reengraving(clocked_engine, ph
     assert ready["phase"] == "ready" and ready["bpm"] == 120
     assert not ready["running"] and not ready["paused"]
     assert ready["practice_preparation"] is None and ready["recovery_beat"] is None
-    assert app.next_at == 0 and not app._preparation_pending
+    assert app.visual_transport.next_at == 0 and not app.visual_transport._preparation_pending
     assert ready["revision"] == before["revision"]
     assert ready["practice_timeline"] == before["practice_timeline"]
     assert app._source_model() is cached
@@ -552,17 +552,17 @@ def test_manual_tempo_cancels_preparation_without_reengraving(clocked_engine, ph
 def test_preparation_survives_recovery_and_forward_continuation_until_stop(clocked_engine):
     app, now = clocked_engine()
     app.start()
-    now[0] = app.run_at + 6*60/80
+    now[0] = app.visual_transport.run_at + 6*60/80
     app.control("restart")
-    now[0] = app.next_at + .1
+    now[0] = app.visual_transport.next_at + .1
     replay = app.state()
     preparation = replay["practice_preparation"]
     assert preparation["phase"] == "complete"
     assert preparation["pass_start_beat"] == 0
     assert preparation["measure"]["start_beat"] == -4
-    now[0] = app.run_at + 8*60/80 + .21
+    now[0] = app.visual_transport.run_at + 8*60/80 + .21
     app.state()
-    now[0] = app.next_at + .1
+    now[0] = app.visual_transport.next_at + .1
     forward = app.state()
     assert forward["visual_offset_beats"] == 12
     assert forward["practice_preparation"] == preparation
@@ -588,7 +588,7 @@ def test_manual_retry_preparation_is_only_for_continuous_practice(
                              if exercise.kind == "perform"))
         app.plan.set_bpm(80)
     app.start(mode=mode)
-    now[0] = app.run_at + .5
+    now[0] = app.visual_transport.run_at + .5
     revision = app.score_revision
     app.control("restart")
     state = app.state()
@@ -598,12 +598,12 @@ def test_manual_retry_preparation_is_only_for_continuous_practice(
     if continuous:
         assert not state["running"] and state["count_in_beats"] == 0
         assert state["practice_preparation"]["measure"]["duration_beats"] == 3
-        assert app.next_at == pytest.approx(now[0] + app.feedback_seconds + 3*60/80)
+        assert app.visual_transport.next_at == pytest.approx(now[0] + app.feedback_seconds + 3*60/80)
     else:
         assert state["running"] and state["count_in_beats"] == 3
         assert state["practice_preparation"] is None
-        assert app.next_at == 0 and not app._preparation_pending
-        assert app.run_at == pytest.approx(now[0] + 3*60/80)
+        assert app.visual_transport.next_at == 0 and not app.visual_transport._preparation_pending
+        assert app.visual_transport.run_at == pytest.approx(now[0] + 3*60/80)
 
 
 MIDI_HANDOFFS = ("preview", "clean", "failed", "manual", "local")
@@ -625,7 +625,7 @@ def midi_handoff(clocked_engine, monkeypatch):
         app.start()
         phrase = app.plan.active_phrase
         if kind == "manual":
-            now[0] = app.run_at + 2
+            now[0] = app.visual_transport.run_at + 2
             app.control("restart")
         else:
             if kind in ("clean", "local"):
@@ -633,20 +633,20 @@ def midi_handoff(clocked_engine, monkeypatch):
                 if kind == "local":
                     app.recorder.presses = [note for note in app.recorder.presses
                                            if note.onset < 6*60/80]
-            now[0] = app.run_at + (phrase.end-phrase.start)*60/app.plan.bpm + .21
+            now[0] = app.visual_transport.run_at + (phrase.end-phrase.start)*60/app.plan.bpm + .21
             app._update()
-        assert not app.running and app.next_at > now[0]
+        assert not app.running and app.visual_transport.next_at > now[0]
         assert app.recorder is None or kind == "preview"  # Preview retains its old, ungraded take.
         if kind == "local":
-            assert app.pending_rewind == 6 and app.plan.bpm == 72
+            assert app.visual_transport.pending_rewind == 6 and app.plan.bpm == 72
         if kind == "preview":
-            assert app._preview_loop_pending
+            assert app.visual_transport._preview_loop_pending
             # A piano has connected since the previous silent preview.
             app.midi.port = object()
-        target = app.pending_rewind if app.pending_rewind is not None else 0
+        target = app.visual_transport.pending_rewind if app.visual_transport.pending_rewind is not None else 0
         note = next(n for n in phrase.notes if n.start == phrase.start + target
                     and (app.plan.hand == "both" or n.hand == app.plan.hand))
-        return app, now, app.next_at, note
+        return app, now, app.visual_transport.next_at, note
 
     return prepare
 
@@ -680,7 +680,7 @@ def test_midi_deadline_handoff_retains_first_attack_release_and_feedback(
     assert calls == [received_at]
     assert app.running and app.transport_id == transport + 1
     assert app.score_revision == revision and app.count_in_beats == 0
-    assert app.run_at == pytest.approx(deadline)
+    assert app.visual_transport.run_at == pytest.approx(deadline)
     assert app.midi.input_at == received_at
     assert app.midi.probe.events[-1]["at_s"] == pytest.approx(
         round(received_at-probe_start, 4))
@@ -701,9 +701,9 @@ def test_midi_deadline_handoff_retains_first_attack_release_and_feedback(
     assert recorder.presses[0].release == pytest.approx(now[0]-deadline)
     assert not app.live_input.held
     phrase = app.plan.active_phrase
-    scored_phrase = replace(phrase, start=phrase.start+app.play_from_beat,
+    scored_phrase = replace(phrase, start=phrase.start+app.visual_transport.play_from_beat,
                             notes=tuple(n for n in phrase.notes
-                                        if n.start >= phrase.start+app.play_from_beat))
+                                        if n.start >= phrase.start+app.visual_transport.play_from_beat))
     result = evaluate(scored_phrase, app.plan.hand, app.plan.bpm, recorder.presses)
     assert next(n.status for n in result.notes if n.note.source_id == note.source_id) == "correct"
 
@@ -720,12 +720,12 @@ def test_midi_during_preparation_is_ungraded_and_release_cannot_invent_attack(
         app._receive(midi_note(note.pitch))
         assert not app.running and app.recorder is previous_recorder
         assert previous_recorder is None or not previous_recorder.presses
-        assert app.transport_id == transport and app.next_at == deadline
+        assert app.transport_id == transport and app.visual_transport.next_at == deadline
         assert app.live_input.events[-1]["status"] == "heard"
         assert not app.live_input.used
     now[0] = deadline
     app._receive(midi_note(note.pitch, is_on=False))
-    assert app.running and app.run_at == pytest.approx(deadline)
+    assert app.running and app.visual_transport.run_at == pytest.approx(deadline)
     assert not app.recorder.presses and not app.live_input.held
     now[0] += .001
     app._receive(midi_note(note.pitch))
@@ -746,15 +746,15 @@ def test_paused_midi_does_not_consume_handoff_and_resume_keeps_deadline(
         now[0] += 30
         app._receive(midi_note(note.pitch))
         app._receive(midi_note(note.pitch, is_on=False))
-        assert app.paused and not app.running and app.recorder is previous_recorder
+        assert app.visual_transport.paused and not app.running and app.recorder is previous_recorder
         assert previous_recorder is None or not previous_recorder.presses
-        assert app.next_at == deadline and app.transport_id == transport
+        assert app.visual_transport.next_at == deadline and app.transport_id == transport
         assert app.live_input.events[-1]["status"] == "heard"
     app.control("resume")
-    assert app.next_at == pytest.approx(deadline + 30)
+    assert app.visual_transport.next_at == pytest.approx(deadline + 30)
     now[0] = deadline + 30
     app._receive(midi_note(note.pitch))
-    assert app.run_at == pytest.approx(deadline + 30)
+    assert app.visual_transport.run_at == pytest.approx(deadline + 30)
     assert app.recorder.presses == [PlayedNote(note.pitch, 0, None)]
     assert app.live_input.events[-1]["status"] == "on_time"
 
@@ -762,14 +762,14 @@ def test_paused_midi_does_not_consume_handoff_and_resume_keeps_deadline(
 def test_playing_and_non_note_midi_do_not_poll_transport(clocked_engine, monkeypatch):
     app, now = clocked_engine(connected=True)
     app.start()
-    now[0] = app.run_at + .001
+    now[0] = app.visual_transport.run_at + .001
     with monkeypatch.context() as patch:
         patch.setattr(app, "_update", lambda: pytest.fail("Ordinary MIDI polled transport"))
         app._receive(midi_note(60))
         app._receive(midi_note(60, is_on=False))
         app._receive(SimpleNamespace(type="control_change", control=64, value=127, channel=0))
     app.control("restart")
-    now[0] = app.next_at
+    now[0] = app.visual_transport.next_at
     with monkeypatch.context() as patch:
         patch.setattr(app, "_update", lambda: pytest.fail("Non-note MIDI consumed handoff"))
         app._receive(SimpleNamespace(type="control_change", control=64, value=0, channel=0))
@@ -795,15 +795,15 @@ def test_midi_settles_unpolled_source_before_next_attack(
     transport = app.transport_id
     revision = app.score_revision
     phrase = app.plan.active_phrase
-    deadline = app.run_at + (phrase.end-phrase.start)*60/app.plan.bpm \
-        + app.visual_gap_beats*60/app.plan.bpm
-    assert app.running and app.next_at == 0 and app.pending_result is None
+    deadline = app.visual_transport.run_at + (phrase.end-phrase.start)*60/app.plan.bpm \
+        + app.visual_transport.visual_gap_beats*60/app.plan.bpm
+    assert app.running and app.visual_transport.next_at == 0 and app.pending_result is None
     if preview:
         app.midi.port = object()
     now[0] = received_at = deadline + overshoot
     note = phrase.notes[0]
     app._receive(midi_note(note.pitch))
-    assert app.run_at == pytest.approx(deadline)
+    assert app.visual_transport.run_at == pytest.approx(deadline)
     assert app.running and app.transport_id == transport + 1
     assert app.score_revision == revision and app.count_in_beats == 0
     assert app.plan.streak == (0 if preview else 1)
@@ -835,13 +835,13 @@ def test_unpolled_source_keeps_predeadline_held_release_on_old_take(clocked_engi
     held = recorder.presses[last]
     recorder.presses[last] = replace(held, release=None)
     recorder.active[held.pitch].append(last)
-    run_at, transport = app.run_at, app.transport_id
+    run_at, transport = app.visual_transport.run_at, app.transport_id
     # Inside the short rest, while the last key from the old take is held.
     now[0] = run_at + 1*60/240 + .01
     monkeypatch.setattr(app, "_update", lambda: pytest.fail("Pre-deadline release settled transport"))
     app._receive(midi_note(held.pitch, is_on=False))
     assert app.recorder is recorder and app.transport_id == transport
-    assert app.run_at == run_at and app.next_at == 0
+    assert app.visual_transport.run_at == run_at and app.visual_transport.next_at == 0
     assert recorder.presses[last].release == pytest.approx(now[0]-run_at)
 
 
@@ -858,12 +858,12 @@ def test_unpolled_source_does_not_advance_excluded_transport(
         app.auto = False
     elif excluded == "paused":
         app.control("pause")
-    run_at, transport, recorder = app.run_at, app.transport_id, app.recorder
+    run_at, transport, recorder = app.visual_transport.run_at, app.transport_id, app.recorder
     now[0] = run_at + 1.5*60/240 + .001
     monkeypatch.setattr(app, "_update", lambda: pytest.fail("Excluded transport settled on MIDI"))
     app._receive(midi_note(60, is_on=False))
-    assert app.run_at == run_at and app.transport_id == transport
-    assert app.recorder is recorder and app.next_at == 0
+    assert app.visual_transport.run_at == run_at and app.transport_id == transport
+    assert app.recorder is recorder and app.visual_transport.next_at == 0
 
 
 @pytest.fixture
@@ -900,15 +900,15 @@ def test_real_peace_preview_rest_is_four_beats_through_pause_and_next_copy(
     before = app.semantic_score()
     app.start()
     assert app.count_in_meter == [4, 4] and app.count_in_bar_beats == 4
-    assert app.visual_gap_beats == 4
-    source_end = app.run_at + 4.5*60/bpm
+    assert app.visual_transport.visual_gap_beats == 4
+    source_end = app.visual_transport.run_at + 4.5*60/bpm
     now[0] = source_end + .21
     gap = app.state()
     assert gap["phase"] == "preview_gap"
     assert gap["practice_timeline"]["gap"]["meter"] == [4, 4]
     assert gap["practice_timeline"]["gap"]["source_meter"] == [1, 8]
-    assert app.next_at == pytest.approx(source_end + 4*60/bpm)
-    deadline = app.next_at
+    assert app.visual_transport.next_at == pytest.approx(source_end + 4*60/bpm)
+    deadline = app.visual_transport.next_at
     now[0] = source_end + 2*60/bpm
     midpoint = app.state()
     assert midpoint["visual_scroll_beat"] == pytest.approx(6.5)
@@ -917,7 +917,7 @@ def test_real_peace_preview_rest_is_four_beats_through_pause_and_next_copy(
     assert app.state()["visual_scroll_beat"] == pytest.approx(6.5)
     app.control("resume")
     assert app.state()["visual_scroll_beat"] == pytest.approx(6.5)
-    assert app.next_at == pytest.approx(deadline + 23)
+    assert app.visual_transport.next_at == pytest.approx(deadline + 23)
     now[0] = deadline + 23 + .031
     repeated = app.state()
     assert repeated["running"] and repeated["count_in_beats"] == 0
@@ -939,12 +939,12 @@ def test_real_peace_clean_repeat_uses_same_four_beat_rest_and_preserves_grading(
     app, now = peace_timing_engine(hand, connected=True)
     app.start()
     record_clean(app)
-    source_end = app.run_at + 4.5*60/56
+    source_end = app.visual_transport.run_at + 4.5*60/56
     now[0] = source_end + .21
     feedback = app.state()
     assert feedback["take_result"]["clean"]
-    assert app.next_at == pytest.approx(source_end + 4*60/56)
-    now[0] = app.next_at + .01
+    assert app.visual_transport.next_at == pytest.approx(source_end + 4*60/56)
+    now[0] = app.visual_transport.next_at + .01
     repeated = app.state()
     assert repeated["running"] and repeated["count_in_beats"] == 0
     assert repeated["visual_scroll_beat"] == pytest.approx(8.5 + .01*56/60)
@@ -957,19 +957,19 @@ def test_real_peace_manual_retry_uses_same_preparation_meter_as_repeat(
         peace_timing_engine, hand):
     app, now = peace_timing_engine(hand)
     app.start()
-    now[0] = app.run_at + 1
+    now[0] = app.visual_transport.run_at + 1
     app.control("restart")
     reversing = app.state()
     measure = reversing["practice_preparation"]["measure"]
     assert measure["duration_beats"] == 4
     assert measure["meter"] == [4, 4] and measure["source_meter"] == [1, 8]
     assert (measure["start_beat"], measure["end_beat"]) == (-4, 0)
-    assert app.next_at == pytest.approx(app._preparation_at + 4*60/56)
-    now[0] = app._preparation_at + 2*60/56
+    assert app.visual_transport.next_at == pytest.approx(app.visual_transport._preparation_at + 4*60/56)
+    now[0] = app.visual_transport._preparation_at + 2*60/56
     preparing = app.state()
     assert preparing["practice_preparation"]["phase"] == "preparing"
     assert preparing["visual_scroll_beat"] == pytest.approx(-2)
-    now[0] = app.next_at + .01
+    now[0] = app.visual_transport.next_at + .01
     repeated = app.state()
     assert repeated["running"] and repeated["count_in_beats"] == 0
     assert repeated["visual_scroll_beat"] == pytest.approx(.01*56/60)
@@ -1002,7 +1002,7 @@ def test_forward_derivative_through_source_gap_and_repeat(
     source_notes = app.plan.active_phrase.notes
     app.control("tempo", bpm=bpm)
     app.start()
-    run_at, rate = app.run_at, bpm/60
+    run_at, rate = app.visual_transport.run_at, bpm/60
     samples = []
     for beat in (.25, .5, length-.125, length+.125, length+.5,
                  stride-.125, stride, stride+.125):
@@ -1013,7 +1013,7 @@ def test_forward_derivative_through_source_gap_and_repeat(
         assert_motion_rate(first, second, rate)
     assert samples[4]["phase"] == "preview_gap"
     assert samples[-1]["visual_offset_beats"] == stride
-    assert app.run_at == pytest.approx(run_at+stride/rate)
+    assert app.visual_transport.run_at == pytest.approx(run_at+stride/rate)
     assert app._source_model() is cached
     assert app.semantic_score() == before
     assert app.plan.active_phrase.notes == source_notes
@@ -1035,19 +1035,19 @@ def test_paused_derivative_is_zero_and_resume_preserves_motion(
     if phase == "clean_gap":
         record_clean(app)
     if phase in ("reverse", "preparing"):
-        app.visual_offset_beats = 12
-        now[0] = app.run_at+1/rate
+        app.visual_transport.visual_offset_beats = 12
+        now[0] = app.visual_transport.run_at+1/rate
         app.control("restart")
         if phase == "reverse":
-            now[0] += app._visual_rewind_seconds/4
-            rate = -5/app._visual_rewind_seconds  # Absolute beat 13 back to 8.
+            now[0] += app.visual_transport._visual_rewind_seconds/4
+            rate = -5/app.visual_transport._visual_rewind_seconds  # Absolute beat 13 back to 8.
         else:
-            now[0] = app._preparation_at+1/rate
+            now[0] = app.visual_transport._preparation_at+1/rate
     else:
         beat = -.25 if phase == "count_in" else (9 if "gap" in phase else 1)
-        now[0] = app.run_at+beat/rate
+        now[0] = app.visual_transport.run_at+beat/rate
     before = app.state()
-    deadline = app.next_at
+    deadline = app.visual_transport.next_at
     app.control("pause")
     first = motion_sample(app, now, now[0]+10)
     second = motion_sample(app, now, now[0]+10)
@@ -1058,7 +1058,7 @@ def test_paused_derivative_is_zero_and_resume_preserves_motion(
     assert resumed["visual_scroll_beat"] == pytest.approx(before["visual_scroll_beat"])
     assert resumed["visual_scroll_speed"] == pytest.approx(rate)
     if deadline:
-        assert app.next_at == pytest.approx(deadline+20)
+        assert app.visual_transport.next_at == pytest.approx(deadline+20)
     following = motion_sample(app, now, now[0]+.05)
     assert_motion_rate(resumed, following, rate)
 
@@ -1076,31 +1076,31 @@ def test_failed_recovery_derivative_preserves_same_copy_and_source_model(
     cached = app._source_model()
     source_notes = app.plan.active_phrase.notes
     app.start()
-    app.visual_offset_beats = 12
+    app.visual_transport.visual_offset_beats = 12
     rate = bpm/60
-    failed = motion_sample(app, now, app.run_at+8/rate+.21)
+    failed = motion_sample(app, now, app.visual_transport.run_at+8/rate+.21)
     assert failed["take_result"]["clean"] is False
     measure = failed["practice_preparation"]["measure"]
     assert (measure["start_beat"], measure["end_beat"], measure["duration_beats"]) == (8, 12, 4)
-    start, seconds = app._visual_rewind_at, app._visual_rewind_seconds
+    start, seconds = app.visual_transport._visual_rewind_at, app.visual_transport._visual_rewind_seconds
     first = motion_sample(app, now, start+seconds/4)
     second = motion_sample(app, now, start+seconds/2)
     reverse_rate = (8-(20+.21*rate))/seconds
     assert_motion_rate(first, second, reverse_rate)
     assert first["visual_scroll_beat"] == pytest.approx(20+.21*rate+reverse_rate*seconds/4)
-    first = motion_sample(app, now, app._preparation_at)
-    second = motion_sample(app, now, app._preparation_at+1/rate)
+    first = motion_sample(app, now, app.visual_transport._preparation_at)
+    second = motion_sample(app, now, app.visual_transport._preparation_at+1/rate)
     assert first["visual_scroll_beat"] == pytest.approx(8)
     assert second["visual_scroll_beat"] == pytest.approx(9)
     assert_motion_rate(first, second, rate)
-    deadline = app.next_at
-    assert deadline == pytest.approx(app._preparation_at+4/rate)
+    deadline = app.visual_transport.next_at
+    assert deadline == pytest.approx(app.visual_transport._preparation_at+4/rate)
     first = motion_sample(app, now, deadline-.01)
     second = motion_sample(app, now, deadline+.01)
     assert_motion_rate(first, second, rate)
     assert second["visual_scroll_beat"] == pytest.approx(12+.01*rate)
     assert second["visual_offset_beats"] == 12
-    assert app.run_at == pytest.approx(deadline)
+    assert app.visual_transport.run_at == pytest.approx(deadline)
     assert app._source_model() is cached
     assert app.semantic_score() == before
     assert app.plan.active_phrase.notes == source_notes
@@ -1124,12 +1124,12 @@ def test_clean_handoff_derivative_preserves_deadline_and_source_model(
     record_clean(app)
     recorder = app.recorder
     presses = list(recorder.presses)
-    run_at, rate = app.run_at, bpm/60
+    run_at, rate = app.visual_transport.run_at, bpm/60
     first = motion_sample(app, now, run_at+8/rate+.21)
     second = motion_sample(app, now, now[0]+.05)
     assert first["take_result"] == {"clean": True, "correct": 2, "total": 2}
     assert_motion_rate(first, second, rate)
-    deadline = app.next_at
+    deadline = app.visual_transport.next_at
     assert deadline == pytest.approx(run_at+12/rate)
     last_gap = motion_sample(app, now, deadline-.01)
     opening = motion_sample(app, now, deadline)
@@ -1141,7 +1141,7 @@ def test_clean_handoff_derivative_preserves_deadline_and_source_model(
     following = motion_sample(app, now, deadline+.01)
     assert_motion_rate(opening, following, next_rate)
     assert following["visual_scroll_beat"] == pytest.approx(12+.01*next_rate)
-    assert app.run_at == pytest.approx(deadline)
+    assert app.visual_transport.run_at == pytest.approx(deadline)
     assert app._source_model() is cached
     assert app.semantic_score() == before
     assert app.plan.active_phrase.notes == source_notes
@@ -1158,12 +1158,12 @@ def test_coda_practice_finishes_before_adaptive_retry_or_guided_switch(clocked_e
     app.plan.set_bpm(80)
     app.start()
     transport = app.transport_id
-    now[0] = app.run_at + 8*60/80 + .03
+    now[0] = app.visual_transport.run_at + 8*60/80 + .03
     halfway = app.state()
     assert halfway["phase"] == "playing"
-    assert halfway["running"] and app.pending_rewind is None
+    assert halfway["running"] and app.visual_transport.pending_rewind is None
     assert app.transport_id == transport and halfway["mode"] == "practice"
-    now[0] = app.run_at + 16*60/80 + .03
+    now[0] = app.visual_transport.run_at + 16*60/80 + .03
     finished = app.state()
     assert finished["phase"] == "recovering"
     assert not finished["guided_recovery"]

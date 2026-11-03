@@ -21,7 +21,7 @@ def test_section_review_never_advances_mastery(tmp_path):
         result = Obj(summary="Review feedback")
         engine.auto = True
         engine.review_end_beat = 4.0
-        engine.pending_rewind = 2.0
+        engine.visual_transport.pending_rewind = 2.0
         engine.open_from_beat = 2.0
         engine.retry_range = {"first_bar":1}
         identity = engine.plan.identity
@@ -29,7 +29,7 @@ def test_section_review_never_advances_mastery(tmp_path):
         assert not engine.auto
         assert engine.review_session_complete
         assert engine.review_end_beat is None
-        assert engine.pending_rewind is None and engine.retry_range is None
+        assert engine.visual_transport.pending_rewind is None and engine.retry_range is None
         assert engine.open_from_beat == 0
         assert engine.pending_result is None
         assert engine.plan.identity == identity
@@ -58,9 +58,9 @@ def test_partial_recovery_schedules_whole_passage_without_mastery(tmp_path):
     try:
         calls = []
         engine._schedule_preparation = lambda *args, **kwargs: calls.append((args, kwargs))
-        engine.play_from_beat = 2.0
-        engine.run_at = 90.0
-        engine.visual_offset_beats = 8.0
+        engine.visual_transport.play_from_beat = 2.0
+        engine.visual_transport.run_at = 90.0
+        engine.visual_transport.visual_offset_beats = 8.0
         engine.retry_range = {"first_bar":1}
         identity = engine.plan.identity
         engine._finish_partial_recovery(Obj(summary="Partial pass"), 100)
@@ -82,6 +82,6 @@ def test_full_passage_result_waits_for_feedback_commit(tmp_path):
         engine._finish_full_passage(result, 8, 8, 100)
         assert engine.pending_result is result
         assert engine.plan.streak == 1 and not engine.plan.mastered
-        assert engine.next_at == 0
+        assert engine.visual_transport.next_at == 0
     finally:
         engine.db.close()

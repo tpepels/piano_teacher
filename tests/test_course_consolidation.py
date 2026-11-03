@@ -143,7 +143,7 @@ def test_preview_of_consolidated_material_cannot_award_mastery(tmp_path, monkeyp
     try:
         engine.start()
         assert engine.state()["preview_only"]
-        now[0] = engine.run_at + engine.state()["duration"] + 1
+        now[0] = engine.visual_transport.run_at + engine.state()["duration"] + 1
         assert not engine.state()["running"]
         assert not engine.plan.mastered and engine.plan.streak == 0
     finally:

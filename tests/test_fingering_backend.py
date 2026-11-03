@@ -180,7 +180,7 @@ def test_correction_keeps_learning_notes_grading_and_transport(engine, music):
     assert engine.score_artifacts.cached_layout(engine._score_selection()) is not None
     assert engine.score_artifacts.engraving_cache_key is not None
     engine.running = True
-    engine.run_at = 123.5
+    engine.visual_transport.run_at = 123.5
     engine.transport_id = 42
     revision, bpm, target = engine.score_revision, learning.bpm, learning.target_bpm
     played = [PlayedNote(n.pitch, (n.start - phrase.start) * 60 / bpm,
@@ -192,7 +192,7 @@ def test_correction_keeps_learning_notes_grading_and_transport(engine, music):
     assert learning.piece.phrases is piece.phrases
     assert learning.active_phrase is phrase
     assert evaluate(phrase, learning.hand, bpm, played) == before
-    assert (engine.running, engine.run_at, engine.transport_id) == (True, 123.5, 42)
+    assert (engine.running, engine.visual_transport.run_at, engine.transport_id) == (True, 123.5, 42)
     assert (learning.bpm, learning.target_bpm) == (bpm, target)
     assert engine.score_revision == revision + 1
     assert engine.score_artifacts.cached_layout(engine._score_selection()) is None

@@ -32,20 +32,20 @@ def test_pending_feedback_commits_only_at_the_deadline(tmp_path, monkeypatch):
         called = []
         app.auto = True
         app.pending_result = object()
-        app.next_at = 200.0
+        app.visual_transport.next_at = 200.0
         app.feedback_marks = [{"status":"missed"}]
         app.feedback_unmapped = 1
         monkeypatch.setattr("piano_teacher.server.time.monotonic", lambda: 199.0)
         monkeypatch.setattr(app, "_commit_pending", lambda: called.append("commit") or "Piece mastered")
         app._update()
         assert called == []
-        assert app.next_at == 200 and app.auto
+        assert app.visual_transport.next_at == 200 and app.auto
         assert app.feedback_marks
         monkeypatch.setattr("piano_teacher.server.time.monotonic", lambda: 200.0)
         app._update()
         assert called == ["commit"]
         assert app.feedback_marks == [] and app.feedback_unmapped == 0
-        assert app.next_at == 0 and app.auto is False
+        assert app.visual_transport.next_at == 0 and app.auto is False
         assert app.feedback == "Piece mastered"
         app._update()
         assert called == ["commit"]
@@ -58,12 +58,12 @@ def test_no_auto_commit_when_feedback_is_manual(tmp_path, monkeypatch):
     try:
         app.auto = False
         app.pending_result = object()
-        app.next_at = 10
+        app.visual_transport.next_at = 10
         monkeypatch.setattr("piano_teacher.server.time.monotonic", lambda: 100.0)
         monkeypatch.setattr(app, "_commit_pending", lambda: (_ for _ in ()).throw(AssertionError("unexpected commit")))
         app._update()
         assert app.pending_result is not None
-        assert app.next_at == 10
+        assert app.visual_transport.next_at == 10
     finally:
         app.db.close()
 
@@ -92,8 +92,8 @@ def test_transition_priority_is_explicit_and_pure():
 def test_preview_continuation_uses_original_deadline_and_never_grades(tmp_path):
     app = _app(tmp_path)
     try:
-        app._preview_loop_pending = True
-        app.next_at = 200.0
+        app.visual_transport._preview_loop_pending = True
+        app.visual_transport.next_at = 200.0
         app.running = False
         called = []
         app._source_model = lambda: {"practice_timeline": {"stride_beats": 12.0}}
@@ -102,7 +102,7 @@ def test_preview_continuation_uses_original_deadline_and_never_grades(tmp_path):
         assert called == []
         assert app._run_pre_assessment_transition(201.0)
         assert called == [200.0]
-        assert app.visual_offset_beats == 12.0
+        assert app.visual_transport.visual_offset_beats == 12.0
     finally:
         app.db.close()
 
@@ -110,8 +110,8 @@ def test_preview_continuation_uses_original_deadline_and_never_grades(tmp_path):
 def test_rewind_waits_for_deadline_then_resumes_exact_target(tmp_path):
     app = _app(tmp_path)
     try:
-        app.pending_rewind = 3.0
-        app.next_at = 90.0
+        app.visual_transport.pending_rewind = 3.0
+        app.visual_transport.next_at = 90.0
         app.running = False
         called = []
         app._continue_at = lambda deadline, *, from_beat: called.append(
@@ -128,13 +128,13 @@ def test_loading_and_paused_takes_cannot_finish_assessment(tmp_path):
     app = _app(tmp_path)
     try:
         app.running = True
-        app.run_at = 0.0
+        app.visual_transport.run_at = 0.0
         app.awaiting_score_revision = 42
         assert app._run_pre_assessment_transition(100.0)
         app.awaiting_score_revision = None
-        app.paused = True
+        app.visual_transport.paused = True
         assert app._run_pre_assessment_transition(100.0)
-        app.paused = False
+        app.visual_transport.paused = False
         assert not app._run_pre_assessment_transition(100.0)
     finally:
         app.db.close()

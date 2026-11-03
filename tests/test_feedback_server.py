@@ -27,7 +27,7 @@ def test_score_feedback_waits_until_displayed_before_curriculum_advance(tmp_path
     # Only a connected MIDI piano can produce graded performance feedback.
     e.midi.port = object()
     e.control('start')
-    e.run_at=time.monotonic()-5
+    e.visual_transport.run_at=time.monotonic()-5
     first=e.state()
     assert first['phase']=='feedback'
     assert first['revision']==0
@@ -36,7 +36,7 @@ def test_score_feedback_waits_until_displayed_before_curriculum_advance(tmp_path
     assert first["take_result"]["clean"] is False
     assert first["take_result"]["total"] == 1
     assert e.plan.failures==0
-    deadline = e.next_at
+    deadline = e.visual_transport.next_at
     now[0] = deadline-.01
     second=e.state()
     # Keep the completed score readable throughout feedback, then automatically
