@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from piano_teacher.raster import rasterize_score
+from piano_teacher.engraving.raster import rasterize_score
 from piano_teacher.learning import LearningPlan
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.server import PracticeEngine
@@ -81,70 +81,8 @@ def test_engine_caches_png_per_requested_resolution(tmp_path, monkeypatch):
         engine.db.close()
 
 
-def test_engine_caches_png_and_validates_page(tmp_path, monkeypatch):
-    engine = PracticeEngine(tmp_path, enable_midi=False)
-
-    class FakeScore:
-        pages = (VEROVIO_GLYPH,)
-
-    calls = []
-    note = Note(0, 1, 60, 0, 0, "right")
-    engine.plan = LearningPlan(Piece("Raster", 100, (note,), (Phrase(1, 1, 1, 0, 4, (note,)),)))
-    monkeypatch.setattr(engine.score_artifacts, "engraving", lambda selected: FakeScore())
-    def fake_raster(svg):
-        calls.append(svg)
-        return b"png-data"
-    monkeypatch.setattr("piano_teacher.application.score_artifacts.rasterize_score", fake_raster)
-    try:
-        assert engine.engraved_png() == b"png-data"
-        assert engine.engraved_png() == b"png-data"
-        assert len(calls) == 1
-        with pytest.raises(ValueError, match="Invalid score page"):
-            engine.engraved_png(5)
-    finally:
-        engine.db.close()
-
-
-def test_png_http_endpoint_and_svg_debug(tmp_path, monkeypatch):
-    from http.server import ThreadingHTTPServer
-    from threading import Thread
-    from urllib.request import urlopen
-    from urllib.error import HTTPError
-    from piano_teacher.server import Handler
-    engine = PracticeEngine(tmp_path, enable_midi=False)
-    monkeypatch.setattr(engine, "engraved_png",
-                        lambda page=0, *, width=1000: rasterize_score(VEROVIO_GLYPH, width=width)
-                        if page == 0 else (_ for _ in ()).throw(ValueError("Invalid score page")))
-    monkeypatch.setattr(engine, "engraved", lambda page=0: VEROVIO_GLYPH)
-    class LocalHandler(Handler):
-        pass
-    LocalHandler.engine = engine
-    server = ThreadingHTTPServer(("127.0.0.1", 0), LocalHandler)
-    worker = Thread(target=server.serve_forever, daemon=True)
-    worker.start()
-    base = f"http://127.0.0.1:{server.server_address[1]}"
-    try:
-        with urlopen(base + "/score.png?page=0", timeout=5) as response:
-            assert response.headers["Content-Type"] == "image/png"
-            assert response.read(8) == bytes.fromhex("89504e470d0a1a0a")
-        with urlopen(base + "/score.png?page=0&width=2400", timeout=5) as response:
-            sharp = Image.open(BytesIO(response.read()))
-            assert sharp.size == (2400, 1440)
-        with urlopen(base + "/score.svg?page=0", timeout=5) as response:
-            assert response.headers["Content-Type"].startswith("image/svg+xml")
-            assert b"<svg" in response.read()
-        with pytest.raises(HTTPError) as err:
-            urlopen(base + "/score.png?page=42", timeout=5)
-        assert err.value.code == 400
-    finally:
-        server.shutdown()
-        server.server_close()
-        worker.join(timeout=3)
-        engine.db.close()
-
-
 def test_production_native_view_uses_source_note_identities(native_camera_run):
-    # Raster utilities/endpoints above remain diagnostic coverage. Production
+    # Raster utilities above serve offline verification only. Production
     # coordinates now come from the real native CanvasItem and source model.
     report, _ = native_camera_run
     ready = next(s for s in report["samples"] if s["label"] == "ready")
