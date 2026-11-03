@@ -34,7 +34,7 @@ mastery from visual previews; three clean full-target performances required.
 | **2 — Notation fidelity** | Source IDs, hands, ties, rests, tuplets, native ink and geometry | Broad test/evidence coverage; real-score visual gaps remain possible | Independent framebuffer/original-note parity on required corpus |
 | **3 — Original Coda, MIDI-domain** | Four algorithms; pinned author-differential reproduction and source-safe desktop lesson path | **Algorithm scope complete; post-consolidation Coda tests green** | Existing 1,273-request differential and whole-piece/17-piece corpus, then current refactor regression |
 | **4 — Fukuda + composed strategies** | MIDI-domain reductions, source-local feedback, recorded-MIDI alignment, generic whole-piece/adaptive composition | **Code integrated**; live combined-path acceptance and paper figure parity not established | Focused + corpus tests, source-effect comparison, physical original-to-remediation loop |
-| **5 — One architecture, no compatibility layers** | Canonical engraving, native-only score assets, typed IPC, pluggable generator ownership; delete obsolete Qt/HTTP/facades | **Source and hybrid gates green; assembled-package gate pending** | Current focused/corpus gates, native extension smoke, source import graph and assembled-package audit |
+| **5 — One architecture, no compatibility layers** | Canonical engraving, native-only score assets, typed IPC, pluggable generator ownership; delete obsolete Qt/HTTP/facades | **COMPLETE — 2026-11-03** | All required fast/focused/corpus, native load, Godot parser, source graph and staged-package checks passed; see evidence below |
 | **6 — Real instrument + UX performance** | Beethoven opening, READY ink, scrolling vs BPM, Listen, error/retry, rests, reconnect, latency, longer pieces | **Open** | Signed real Godot + USB/Bluetooth MIDI evidence across full checklist |
 | **7 — Teaching study + release** | Independent pedagogical effectiveness, clean-machine distribution, long-session reliability | **Not complete** | Prespecified learner comparison, reproducible package and unattended long-session acceptance |
 
@@ -43,31 +43,40 @@ importing MusicXML nor reproducing Fukuda's acoustic front-end is silently
 added to the product scope. Original Fukuda paper thresholds and figure
 reproduction remain research claims until independently checked.
 
+## Completed Phase 5 — verified implementation
+
+**P5 — Architecture consolidation.** Implemented and accepted on 2026-11-03.
+The product uses one MIDI-only, native Godot/embedded-CPython runtime, one typed
+in-memory operation queue, and explicitly registered independent whole-piece
+lesson generators. Unregistered generators fail rather than selecting a
+heuristic fallback. `LegacyStrategy`, `HeuristicLessonGenerator`,
+`with_mistakes`, unversioned lesson reconstruction, stale LearningPlan
+forwarders and obsolete Qt/HTTP/page-image paths are removed. Graded
+source-ID evidence enters every adaptive generator through `with_feedback`.
+Saved strategy/version stage identities isolate BPM and mastery; unversioned
+records remain in storage but cannot award credit.
+
+**Recorded acceptance evidence:**
+
+| Gate | Reproducible result |
+|---|---|
+| Fast architecture, import graph and Python state contracts | [403 passed, 6 skipped at `f9ae15b`](https://github.com/tpepels/piano_teacher/actions/runs/41637045068) |
+| Fukuda source MIDI contracts | [43 passed at `b1aa9ae`](https://github.com/tpepels/piano_teacher/actions/runs/41636328757) |
+| Composed Coda+Fukuda and course persistence | [98 passed, then 17-piece real MIDI corpus passed at `b1aa9ae`](https://github.com/tpepels/piano_teacher/actions/runs/41636328743) |
+| Independent Coda research and full MIDI repertoire | [235 passed / 1 skipped, 51 passed; stage audit passed at `b1aa9ae`](https://github.com/tpepels/piano_teacher/actions/runs/41636328719) |
+| Godot GDScript parser | [Green at `e47ec35`](https://github.com/tpepels/piano_teacher/actions/runs/41631177422); commit comparison through `f9ae15b` contains no `godot/` changes |
+| Compiled native CPython/Godot bridge | [Build passed at `b1aa9ae`](https://github.com/tpepels/piano_teacher/actions/runs/41636328908) |
+| Embedded Godot typed `library.catalog` and assembled standalone runtime | [Both passed at `f9ae15b`](https://github.com/tpepels/piano_teacher/actions/runs/41637102956), including `PIANO_NATIVE_CLASS_OK`, `PIANO_NATIVE_LIBRARY_OK` and `PHASE5_ARCHITECTURE_AUDIT_OK` |
+
+The native smoke uses the matching built artifact and confirms one registered
+`PianoNative` class with a working embedded Python typed operation. The staged
+package audit checks the actual copied runtime, relative import graph,
+required binaries and removal of editor-only runtime code. As intended, it
+does not certify a clean-machine launch of the final compressed release; that
+is Phase 7. Hardware latency, visual note alignment, physical grading and
+pedagogical effectiveness belong to Phases 6 and 7, not Phase 5.
+
 ## Immediate order of work
-
-**P5 — Verify consolidation.** The obsolete Qt, HTTP and engraving facade
-paths have been removed; source lessons now require explicit generator
-registration and every feedback-capable generator consumes graded source-ID
-evidence via `with_feedback`. The ID-only `with_mistakes` and implicit
-legacy generator fallback have been deleted, along with stale LearningPlan
-planning forwarders and unversioned progress reconstruction. Only an exact
-current versioned stage key can restore a completed streak or BPM; stale
-unversioned records remain stored but are never executed. A source import-graph audit runs in fast CI and the
-standalone packager checks its assembled distribution for the canonical
-modules, native assets and absence of the editor server. Current fast contracts pass [403 tests / 6 skipped](https://github.com/tpepels/piano_teacher/actions/runs/41636511045).
-The [Fukuda suite](https://github.com/tpepels/piano_teacher/actions/runs/41636328757),
-[composed curriculum and 17-piece repertoire](https://github.com/tpepels/piano_teacher/actions/runs/41636328743),
-and [Coda research/corpus](https://github.com/tpepels/piano_teacher/actions/runs/41636328719)
-are green. A prior
-[native typed-operation smoke](https://github.com/tpepels/piano_teacher/actions/runs/41635585245)
-also passed. The new assembled-package audit is wired into the
-[current native build/run](https://github.com/tpepels/piano_teacher/actions/runs/41636328908);
-until it passes, P5 cannot be signed off.
-
-Close P5 **only** when the current native build/typed `library.catalog` smoke,
-fast/focused Coda+Fukuda suite, 17-piece corpus, Godot parser, and assembled
-release import audit all pass. Keep hardware latency, actual Beethoven
-framebuffer behavior and pedagogical studies under P6/P7.
 
 **P6 — Prove real user behavior.** On the real Beethoven Pathétique II MIDI,
 record READY ink, Step 1 provenance, effective tempo, Play/Listen/Retry,
@@ -86,7 +95,7 @@ functioning.
 
 | Critique | Required resolution or research |
 |---|---|
-| Verification may lag behind the latest commit | Require hash-specific fast, focused, corpus, native and assembled-bundle evidence before closing P5 |
+| Later production commits require fresh acceptance evidence | Re-run the affected fast/focused, corpus and native gates against the changed revision; do not claim hardware or release validation from source checks |
 | Sparse opening and dense note spacing may still be visually wrong | Native framebuffer captures before/after Play at fixed BPM; measure first attack x-position and pixels/beat against timing |
 | Score preparation and large-piece transitions may stall | Profile cold/warm import, engraving, atlas and command queues per stage; require bounded P95 and no duplicate compilation |
 | Stage choice might be repetitive or musically ineffective | Expose actual removed/retimed/source-preserved notes; inspect stages on a varied corpus, then run P7 study |
@@ -101,8 +110,6 @@ functioning.
 
 | Blocker | Unblock |
 |---|---|
-| **Native extension and assembled package require current acceptance** | Fast Python and import-graph audit are green; verify the latest [native build](https://github.com/tpepels/piano_teacher/actions/workflows/inprocess-native-build.yml), embedded typed-op smoke and complete staged-package audit. Do not substitute source inspection for those gates |
-| **Native C++/Godot typed-op protocol changed** | Rebuild `scripts/build-inprocess.sh`; run `scripts/verify-native-bridge.sh` and Godot syntax/smoke |
 | **Real Beethoven and physical instrument behavior unobserved** | Reopen Beethoven in combined strategy; capture diagnostic log, framebuffer and keyboard assessment trace |
 | **Research comparison and release evidence missing** | P7 pilot and clean-machine packaging gate, after P6 |
 
@@ -110,13 +117,15 @@ functioning.
 
 ```bash
 git pull --ff-only
-bash scripts/build-inprocess.sh
-bash scripts/verify-native-bridge.sh
+# Re-run on any new production change:
 bash scripts/ci-smoke.sh
 bash scripts/check-godot-syntax.sh
 bash scripts/verify-hybrid-workflow.sh --focused
-# Run separately when the focused gates are green:
 bash scripts/verify-hybrid-workflow.sh --corpus
+# Rebuild the native binary when C++/bridge/runtime inputs change:
+bash scripts/build-inprocess.sh
+bash scripts/verify-native-bridge.sh
+# Staged standalone audit is performed by the native runtime smoke CI.
 ```
 
 Do not run or wait for long CI during interactive development. A focused
