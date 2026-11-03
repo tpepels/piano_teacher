@@ -124,3 +124,9 @@ must pass with authentic current-SHA PNGs before its results can supersede
 the historical 4.5.1 entries above. The separate bounded
 `phase6-real-score-framebuffer.yml` gate verifies the original Peace Piece,
 Chopin and Moonlight MIDI samples; neither selected test is whole-corpus proof.
+
+
+The current [Godot 4.7.2 targeted source-derived run](https://github.com/tpepels/piano_teacher/actions/runs/41683609789)
+passed following the controlled retained-source recompilation fix.
+The historical 4.5.1 traces above remain archival evidence; the current
+pixel oracle validates live generated source ink on matching renderer 4.7.2.

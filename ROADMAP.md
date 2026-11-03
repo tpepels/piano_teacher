@@ -150,9 +150,15 @@ real written rest/notehead ink, and demands that deliberate framebuffer
 damage is rejected by the same pixel oracle. Missing/mismatched source
 symbols or output frames fail the build; captured evidence is uploaded with
 the exact source SHA. This is a bounded sample, **not** full-score coverage.
-Its first current-revision run must pass before this gate can be accepted.
-The fixture assembler now uses the single canonical native layout path,
-with no obsolete `native_notes` switch.
+The
+[Godot 4.7.2 pixel gate](https://github.com/tpepels/piano_teacher/actions/runs/41682551172)
+passed all three samples, including the otherwise missing causal eighth-rest
+control. The fixture assembler uses the canonical native layout path without
+`native_notes`, and the controlled experiment now recompiles the retained
+CanvasItem before its ablated PNG. The expanded, source-derived
+[slur/three-voice framebuffer job](https://github.com/tpepels/piano_teacher/actions/runs/41683609789)
+also passed on Godot 4.7.2. The sampled proofs remain distinct from complete
+pixel-level validation of every source event on every page.
 
 **P6 — CPU and memory instrumentation.** The
 `phase6-score-performance.yml` source-bound gate profiles actual Moonlight
@@ -161,7 +167,22 @@ cached response, next-lesson score generation and 160 real backend state
 polls under a practice transport. It exports wall times, p95/max polling,
 actual note counts, source hashes and peak process RSS. These are bounded
 Linux CI software budgets, not USB/Bluetooth/display latency targets. The
-first measured run is pending; breaches remain failures, not waived samples.
+real-score
+[performance CI](https://github.com/tpepels/piano_teacher/actions/runs/41685438881)
+passed: Moonlight (1,164 source notes) cold load ~0.45 s, first native
+score ~2.85 s, state P95 ~0.9 ms; Hanon (18,058 source notes) cold load
+~5.78 s, curriculum ~4.56 s, state P95 ~3.61 ms, peak RSS ~194 MB.
+This replaces an observed ~27.8 s Hanon load and ~22.1 ms state P95
+at the first benchmark. Full-piece beam inference is explicitly declared
+only by source-heuristic generators; the adaptive MIDI-domain author
+contributors avoid unused global MusicXML. Source attacks are indexed once
+for each composed curriculum, and the HUD freezes only the current
+exercise's hand rows while retaining an accurate complete lesson count.
+An immutable stage-key index keeps step-number and mastery lookups fast.
+The CI budgets now require Hanon cold load below 15 s and state P95 below
+12 ms, Moonlight below 8 s and 8 ms respectively, with stricter
+native-ink and memory bounds. CI-host timings cannot establish local
+frame pacing, Bluetooth or USB input latency.
 
 **P6 — Score preparation.** Score loading now supersedes obsolete
 layout/model requests without waiting for old deadlines, bounds semantic

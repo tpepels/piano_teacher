@@ -39,10 +39,15 @@ def test_real_score_cold_and_cached_native_pipeline(
     engine = PracticeEngine(tmp_path / label, enable_midi=False)
     engine.set_preferences(exercise_strategy="coda-fukuda-midi")
     elapsed = {}
+    # Budgets have clear margin above measured GitHub runner times, but
+    # reject the original >27s startup and >22ms P95 frame-service stalls.
     report = {"score": filename, "sha256":expected_fingerprint,
-              "limits": {"cold_load_ms": 45000, "cold_ink_ms": 60000,
-                         "warm_ink_ms": 5000, "state_p95_ms": 100,
-                         "rss_peak_mb": 1600}}
+              "limits": {"cold_load_ms": 15000 if label=="hanon" else 8000,
+                         "cold_ink_ms": 20000,
+                         "next_stage_ink_ms": 4000,
+                         "warm_ink_ms": 2000,
+                         "state_p95_ms": 12 if label=="hanon" else 8,
+                         "rss_peak_mb": 512}}
 
     def time_call(key, callback):
         started = time.perf_counter()
@@ -114,7 +119,8 @@ def test_real_score_cold_and_cached_native_pipeline(
         output.mkdir(parents=True,exist_ok=True)
         (output / (label+".json")).write_text(json.dumps(report,indent=2)+"\n")
         print("PHASE6_PERFORMANCE:",json.dumps(report,sort_keys=True))
-        for field in ("cold_load_ms","cold_ink_ms","warm_ink_ms"):
+        for field in ("cold_load_ms","cold_ink_ms","warm_ink_ms",
+                      "next_stage_ink_ms"):
             assert elapsed[field] <= report["limits"][field], (field,report)
         assert report["polls"]["p95_ms"] <= report["limits"]["state_p95_ms"], report
         assert report["rss_peak_mb"] <= report["limits"]["rss_peak_mb"], report
