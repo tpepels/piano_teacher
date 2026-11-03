@@ -463,3 +463,26 @@ def fukuda_midi_variants(original: ExerciseVariant, *, bpm: float,
         seen.add(signature)
         stages.append(variant)
     return (*stages,original)
+
+
+def as_fukuda_stage(variant: ExerciseVariant):
+    """Attach author-owned provenance to a MIDI reduction.
+
+    Stage naming is an internal generator concern. Teaching/UI code consumes
+    the metadata and never needs to know Fukuda level-string conventions.
+    """
+    from .exercise_pipeline import ExerciseStage
+    labels = {
+        "fukuda-midi-chord-outer": ("chord-reduction", "Outer chord notes"),
+        "fukuda-midi-fast-thin": ("fast-reduction", "Fewer fast notes"),
+        "fukuda-midi-return-leap": ("return-leap", "Simplified wide leaps"),
+        "fukuda-midi-leap-neighbor": ("leap-neighbor", "Neighboring leap practice"),
+    }
+    if variant.level == "original":
+        return ExerciseStage(variant, origin="original", technique="original",
+                             display_name="Original notes and rhythm")
+    if variant.level not in labels:
+        raise ValueError(f"Unknown Fukuda source-reduction stage: {variant.level}")
+    technique, label = labels[variant.level]
+    return ExerciseStage(variant, origin="fukuda-midi",
+                         technique=technique, display_name=label)
