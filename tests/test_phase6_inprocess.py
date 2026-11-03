@@ -1,11 +1,8 @@
-"""Full in-memory command navigation with actual engraved PNGs."""
+"""Full in-process navigation with source-owned native notation assets."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
-
-from PIL import Image
-from io import BytesIO
 
 from piano_teacher.server import PracticeEngine
 from piano_teacher.inprocess import EngineCommands
@@ -13,7 +10,7 @@ from piano_teacher.inprocess import EngineCommands
 FIXTURE = Path(__file__).parent / "fixtures" / "musical_fidelity" / "midi_four_four.mid"
 
 
-def test_import_open_measure_navigation_geometry_png_over_real_queue(tmp_path):
+def test_import_open_measure_navigation_native_notation_over_real_queue(tmp_path):
     music = tmp_path / "music"
     music.mkdir()
     (music / "real.mid").write_bytes(FIXTURE.read_bytes())
@@ -22,12 +19,12 @@ def test_import_open_measure_navigation_geometry_png_over_real_queue(tmp_path):
 
     commands = EngineCommands(engine=engine)
 
-    def request(route, payload=None, *, raw=False):
+    def request(route, payload=None):
         verb = "POST" if payload is not None else "GET"
         status, data = commands.request(
             verb, route, json.dumps(payload) if payload is not None else "")
         assert status == 200, (status, data[:500])
-        return data if raw else json.loads(data)
+        return json.loads(data)
 
     try:
         listed = request("/library")
@@ -45,11 +42,14 @@ def test_import_open_measure_navigation_geometry_png_over_real_queue(tmp_path):
         layout = request("/score/layout")
         assert layout["notes"] and layout["systems"]
         assert layout["attack_map"]
-        first = request("/score.png?page=0", raw=True)
-        image = Image.open(BytesIO(first))
-        image.load()
-        assert image.width > 100 and image.height > 100
-        assert image.getbbox() is not None
+        assert layout["native_note_templates"]
+        assert layout["native_glyphs"]
+        assert layout["revision"] == selected["revision"]
+        model = request("/score/model")
+        assert model["revision"] == selected["revision"]
+        assert model["notes"]
+        assert all(note["id"] for note in model["notes"])
+        assert request("/score/layout")["revision"] == model["revision"]
         request("/control", {"action": "next"})
         after_next = request("/state")
         assert after_next["loaded"]
