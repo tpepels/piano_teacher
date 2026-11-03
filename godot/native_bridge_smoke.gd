@@ -93,11 +93,11 @@ func _process(_delta: float) -> bool:
                 print("PIANO_NATIVE_MIDI_OPEN_OK revision=",revision)
                 _submit("score.native_layout")
             "score.native_layout":
+                var anchors: Variant = values.get("anchors")
                 if int(values.get("revision",-1)) != revision or \
-                        not values.has("anchors") or \
-                        not values["anchors"] is Dictionary or \
-                        values["anchors"].is_empty():
-                    _fail("Actual Verovio note coordinates missing or stale")
+                        not anchors is Array or anchors.is_empty():
+                    _fail("Verovio anchors missing, empty or stale (revision=%d, keys=%s)" % [
+                        int(values.get("revision",-1)),str(values.keys())])
                     return true
                 print("PIANO_NATIVE_SCORE_GEOMETRY_OK anchors=",
                     values["anchors"].size())
