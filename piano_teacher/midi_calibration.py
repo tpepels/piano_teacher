@@ -105,6 +105,10 @@ class MidiTapCalibration:
                  else "count_in" if local_beat < self.count_in else "tap")
         return {
             "active": self.active, "bpm": self.bpm,
+            # Both timestamps use the same monotonic origin as incoming
+            # MIDI callback timestamps, even before any score is opened.
+            "start_at_ms": self.start_at * 1000.0,
+            "sampled_at_ms": now * 1000.0,
             "beat": beat, "round": round_index+1, "rounds": self.rounds,
             "phase": phase, "count_in": self.count_in,
             "countdown": (self.count_in - int(local_beat)

@@ -27,9 +27,20 @@ func update(state: Dictionary, state_tick_ms: int,
     var calibration: Dictionary = state.get("midi_calibration", {})
     if bool(calibration.get("active",false)):
         recovery_click_tick = -999
-        var beat := float(calibration.get("beat",-2.0)) + \
-            maxf(0.0,float(now_ms-state_tick_ms)/1000.0) * \
-            float(calibration.get("bpm",80.0))/60.0
+        var bpm: float = maxf(1.0,float(calibration.get("bpm",80.0)))
+        var beat: float
+        # State replies can be delayed while the in-process worker prepares
+        # notation. Project click/beat from the backend's actual monotonic
+        # epoch, not from the midpoint of a potentially queued request.
+        var start_backend_ms: float = float(calibration.get("start_at_ms",NAN))
+        if is_finite(start_backend_ms) and bool(clock.has_backend_offset):
+            beat = (float(now_ms)-float(clock.backend_offset_ms)-
+                start_backend_ms)*bpm/60000.0
+        else:
+            # Before the first clock calibration, retain a bounded startup
+            # preview; the backend will publish its epoch on the next poll.
+            beat = float(calibration.get("beat",-2.0)) + \
+                maxf(0.0,float(now_ms-state_tick_ms)/1000.0)*bpm/60.0
         settings_view.animate_calibration_beat(
             beat,true,int(calibration.get("round_beats",12)),
             int(calibration.get("count_in",4)))

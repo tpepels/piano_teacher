@@ -88,3 +88,24 @@ def test_calibration_applies_only_after_three_reliable_rounds(tmp_path):
         assert app.library.settings["midi_offset_ms"] == 0
     finally:
         app.db.close()
+
+
+def test_calibration_epoch_is_backend_sampled_not_a_poll_midpoint(tmp_path):
+    session = MidiTapCalibration()
+    session.start(100.0)
+    captured = session.snapshot(100.25)
+    assert captured["start_at_ms"] == pytest.approx(101000.0)
+    assert captured["sampled_at_ms"] == pytest.approx(100250.0)
+    assert captured["beat"] == pytest.approx(-1.0)
+
+    # Opening Settings without any score must still establish clock
+    # translation for the calibration's visual pulse.
+    engine = PracticeEngine(tmp_path/"fresh", enable_midi=False)
+    try:
+        state = engine.state()
+        assert not state["loaded"]
+        assert "clock_sampled_at_ms" in state
+        assert state["midi_calibration"]["sampled_at_ms"] == pytest.approx(
+            state["clock_sampled_at_ms"], abs=20)
+    finally:
+        engine.db.close()

@@ -153,6 +153,7 @@ functioning.
 | Score preparation and large-piece transitions may stall | Score projection is now reused per selected revision across geometry + semantic commands; profile cold/warm import, engraving, atlas and command queues per stage; require bounded P95 |
 | Stage choice might be repetitive or musically ineffective | Expose actual removed/retimed/source-preserved notes; inspect stages on a varied corpus, then run P7 study |
 | Audio, visual scroll and MIDI grading could drift under load | Record common source-ID/beat traces, audio position and note-on timestamps; compare under pause/retry/rest/tempo changes |
+| Calibration pulse drift under delayed score/device snapshots | Calibration beat now uses the same backend monotonic epoch as MIDI events; a Godot regression injects stale snapshots and verifies the visible downbeat/click. This is a software correction only; hardware audio/USB/Bluetooth offsets still require measurement |
 | Physical latency/handshake and reconnect remain unproven | Measure timestamp and calibration error with USB and Bluetooth on target device; fault-inject disconnect and recovery |
 | Full packaging, migration and runtime fault handling not accepted | Isolated clean-home install, simulated corrupted cache/old course, crash/reopen, offline start and asset-bundle checks |
 | Application roots may still contain avoidable coordination | Audit `server.py`/`main.gd` for engine-owning transitions and forwarding accessors; move complete responsibilities to narrowly typed owners and delete old paths, not aliases |

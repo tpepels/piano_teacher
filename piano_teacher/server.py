@@ -1767,8 +1767,14 @@ class PracticeEngine:
                         if key.beat <= beat + 1e-7
                         and key.hand in ("both", self.plan.hand)]
                 state["key_fifths"] = keys[-1].fifths if keys else 0
+            # A score-free Settings screen still needs an authoritative
+            # backend clock epoch for its MIDI tap calibration. Midpoint-only
+            # UI extrapolation drifts when score and device requests queue.
+            calibration_sample_at = time.monotonic()
+            state.setdefault("clock_sampled_at_ms", calibration_sample_at * 1000.0)
             state["midi_offset_ms"] = self.library.settings["midi_offset_ms"]
-            state["midi_calibration"] = self.midi_calibration.snapshot(time.monotonic())
+            state["midi_calibration"] = self.midi_calibration.snapshot(
+                calibration_sample_at)
             return state
 
     def _set_snapshot_visual_gap(self, beats: float) -> None:
