@@ -12,6 +12,7 @@ class MockView:
     var runway_origin_beat := 0.0
     var runway_cutoff_beat := INF
     var runway_overlay := true
+    var retained_annotations := Node2D.new()
     var cleared := 0
     var timeline := {"pixels_per_beat": 100.0}
     var previous_camera := NAN
