@@ -606,22 +606,22 @@ func _build_settings_screen() -> void:
     settings_view.choose_devices_requested.connect(_show_devices)
     settings_view.refresh_devices_requested.connect(_request_devices)
     settings_view.save_folder_requested.connect(func(path: String):
-        _send_command("/settings", {"music_dir": path}))
+        _send_command("settings.update", {"music_dir": path}))
     settings_view.device_selected.connect(_choose_device)
     settings_view.tempo_requested.connect(func(bpm: int):
         _send_action({"action": "tempo", "bpm": bpm}))
     settings_view.strategy_requested.connect(func(strategy: String):
-        _send_command("/settings", {"exercise_strategy": strategy}))
+        _send_command("settings.update", {"exercise_strategy": strategy}))
     settings_view.timing_strategy_requested.connect(func(strategy: String):
-        _send_command("/settings", {"timing_strategy": strategy}))
+        _send_command("settings.update", {"timing_strategy": strategy}))
     settings_view.tempo_strategy_requested.connect(func(strategy: String):
-        _send_command("/settings", {"tempo_strategy": strategy}))
+        _send_command("settings.update", {"tempo_strategy": strategy}))
     settings_view.diagnosis_strategy_requested.connect(func(strategy: String):
-        _send_command("/settings", {"diagnosis_strategy": strategy}))
+        _send_command("settings.update", {"diagnosis_strategy": strategy}))
     settings_view.learner_strategy_requested.connect(func(strategy: String):
-        _send_command("/settings", {"learner_strategy": strategy}))
+        _send_command("settings.update", {"learner_strategy": strategy}))
     settings_view.metronome_requested.connect(func(enabled: bool):
-        _send_command("/settings", {"metronome": enabled}))
+        _send_command("settings.update", {"metronome": enabled}))
     settings_view.calibration_requested.connect(func(action: String):
         _send_action({"action": action}))
     settings_view.volume_changed.connect(_on_listen_volume_changed)
@@ -642,12 +642,12 @@ func _build_lesson_screen() -> void:
     lesson_session.request_failed.connect(lesson_view.present_error)
 
 func _request_lesson() -> void:
-    if lesson_request == null or lesson_request.request("/lesson") != OK:
+    if lesson_request == null or lesson_request.request("lesson.overview") != OK:
         lesson_session.complete_response(null, "Cannot request lesson overview", Time.get_ticks_msec())
 
-func _on_lesson(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
-    lesson_session.complete_response(_decode_json(body) if code == 200 else null,
-        "" if code == 200 else _command_failure(code, body), Time.get_ticks_msec())
+func _on_lesson(code: int, body: PackedByteArray) -> void:
+    lesson_session.complete_response(_decode_json(body) if code == 0 else null,
+        "" if code == 0 else _command_failure(code, body), Time.get_ticks_msec())
 
 func _refresh_score_status(_status: Dictionary = {}) -> void:
     if practice_view != null:
@@ -700,17 +700,14 @@ func _resume_last_music_on_start(catalog: Dictionary) -> void:
 func _request_library() -> void:
     library_catalog.request_catalog()
 
-func _on_library(result: int, code: int,
-        headers: PackedStringArray, body: PackedByteArray) -> void:
-    # Keep the existing application callback contract for in-process clients.
-    library_catalog.on_catalog(result, code, headers, body)
+func _on_library(code: int, body: PackedByteArray) -> void:
+    library_catalog.on_catalog(code, body)
 
 func _request_library_health() -> void:
     library_catalog.request_health()
 
-func _on_library_health(result: int, code: int,
-        headers: PackedStringArray, body: PackedByteArray) -> void:
-    library_catalog.on_health(result, code, headers, body)
+func _on_library_health(code: int, body: PackedByteArray) -> void:
+    library_catalog.on_health(code, body)
 
 func _start_library_health() -> void:
     library_catalog.start_health(command_state.pending)
@@ -726,19 +723,19 @@ func _open_library_piece(identifier: String, resume_saved := false) -> void:
         return
     library_view.present_open_status("Opening score…")
     command_state.resume_requested = resume_saved
-    _send_command("/library/open", {"id": identifier})
+    _send_command("library.open", {"id": identifier})
 
 
 func _request_settings() -> void:
     if settings_pending or settings_request == null:
         return
     settings_pending = true
-    if settings_request.request("/settings") != OK:
+    if settings_request.request("settings.snapshot") != OK:
         settings_pending = false
 
-func _on_settings(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+func _on_settings(code: int, body: PackedByteArray) -> void:
     settings_pending = false
-    if code != 200:
+    if code != 0:
         settings_view.present_message(_command_failure(code, body))
         return
     var parsed = _decode_json(body)
@@ -759,7 +756,7 @@ func _apply_window_mode(fullscreen: bool) -> void:
 
 func _on_fullscreen_toggle(enabled: bool) -> void:
     _apply_window_mode(enabled)
-    _send_command("/settings", {"fullscreen": enabled})
+    _send_command("settings.update", {"fullscreen": enabled})
 
 func _toggle_fullscreen() -> void:
     var enabled := get_window().mode != Window.MODE_FULLSCREEN
@@ -786,7 +783,7 @@ func _poll() -> void:
     if not state_pending and not command_state.pending:
         state_pending = true
         state_request_started_ms = Time.get_ticks_msec()
-        if state_request.request("/state") != OK:
+        if state_request.request("state.snapshot") != OK:
             state_pending = false
 
 func _process(_delta: float) -> void:
@@ -814,14 +811,14 @@ func _process(_delta: float) -> void:
     if not arrivals.is_empty():
         score_effects.record_preview(arrivals,practice_view.stage,ticks)
 
-func _on_state(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, sample_started_ms: int = -1) -> void:
+func _on_state(code: int, body: PackedByteArray, sample_started_ms: int = -1) -> void:
     if sample_started_ms < 0:
         state_pending = false
         # A pre-action snapshot can arrive after the control response. It
         # must not put a fresh count-in or paused attempt back in its old state.
         if command_state.started_ms > 0 and state_request_started_ms <= command_state.started_ms:
             return
-    if code != 200:
+    if code != 0:
         practice_view.present_message(_command_failure(code, body))
         return
     var parsed = _decode_json(body)
@@ -887,8 +884,7 @@ func _request_layout() -> void:
     if score_session != null:
         score_session.request_layout()
 
-func _on_layout(_result: int, code: int, _headers: PackedStringArray,
-        body: PackedByteArray) -> void:
+func _on_layout(code: int, body: PackedByteArray) -> void:
     if score_session != null:
         var began: int = Time.get_ticks_msec()
         score_session.complete_response(
@@ -907,8 +903,7 @@ func _request_timeline_model() -> void:
     if score_session != null:
         score_session.request_model()
 
-func _on_timeline_model(_result: int, code: int,
-        _headers: PackedStringArray, body: PackedByteArray) -> void:
+func _on_timeline_model(code: int, body: PackedByteArray) -> void:
     if score_session != null:
         var began: int = Time.get_ticks_msec()
         score_session.complete_response(
@@ -928,7 +923,7 @@ func _send_action(command: Dictionary) -> void:
         practice_view.begin_action(requested, previous_action)
         return
     practice_view.begin_action(requested)
-    _send_command("/control", command)
+    _send_command("practice.command", command)
 
 
 func _present_fingering_status(summary: Variant) -> void:
@@ -949,7 +944,7 @@ func _on_fingering_change_requested(source_id: String, finger: Variant) -> void:
     var fingerprint: String = native_score_piece_fingerprint
     if not fingerprint.is_empty():
         payload["fingerprint"] = fingerprint
-    _send_command("/fingering",payload)
+    _send_command("fingering.correct",payload)
 
 func _flush_transport_action() -> void:
     var action: String = command_state.take_transport()
@@ -964,28 +959,28 @@ func _send_command(path: String, payload: Dictionary) -> void:
     if err != OK:
         practice_view.present_busy(false)
         practice_view.present_message("Cannot reach practice engine", true)
-        if path == "/fingering":
+        if path == "fingering.correct":
             fingering_save_error = "Cannot reach practice engine. Try the correction again."
             _present_fingering_status(last_state.get("fingering",{}))
 
-func _on_action(_result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+func _on_action(code: int, body: PackedByteArray) -> void:
     var completed: Dictionary = command_state.finish()
     practice_view.present_busy(false)
     var path: String = str(completed["path"])
-    if path == "/control":
+    if path == "practice.command":
         practice_view.finish_action()
     var resume_saved: bool = bool(completed["resume_saved"])
     var completed_action: String = str(completed["action"])
-    if code != 200:
+    if code != 0:
         var message := _command_failure(code, body)
-        if path == "/fingering":
+        if path == "fingering.correct":
             fingering_save_error = message
             _present_fingering_status(last_state.get("fingering",{}))
         var queued_library_failed: bool = command_state.discard_library()
         command_failure_presenter.present(message,path,queued_library_failed)
         _flush_transport_action()
         return
-    var opened: Variant = _decode_json(body) if path == "/library/open" else null
+    var opened: Variant = _decode_json(body) if path == "library.open" else null
     var decision: Dictionary = CommandSuccessPolicy.decide(
         path,completed_action,resume_saved,opened)
     if str(decision["kind"]) == "fingering":
@@ -993,7 +988,7 @@ func _on_action(_result: int, code: int, _headers: PackedStringArray, body: Pack
     elif str(decision["kind"]) == "library_open":
         score_error = ""
     command_success_effects.apply(decision,opened,
-        _result,code,_headers,body,int(completed["started_ms"]))
+        code,body,int(completed["started_ms"]))
     _flush_transport_action()
     _poll()
     var deferred_library: Dictionary = command_state.take_library()
@@ -1025,8 +1020,7 @@ func _restart_practice() -> void:
 func _request_devices() -> void:
     midi_devices.discover()
 
-func _on_devices(_result: int, code: int,
-        _headers: PackedStringArray, body: PackedByteArray) -> void:
+func _on_devices(code: int, body: PackedByteArray) -> void:
     midi_devices.receive(code, body, current_screen,
         str(last_state.get("device", "")),
         str(preferences.get("midi_device", "")))
