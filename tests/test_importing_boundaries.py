@@ -23,8 +23,7 @@ else:
     first, _ = cache.load_import(path, fingerprint)
     second, original = cache.load_import(path, fingerprint)
     assert first == second and original is None
-assert 'piano_teacher.score' not in sys.modules, 'Source importing initialized the rendering facade'
-assert 'piano_teacher.rendering.legacy.engraving' not in sys.modules
+assert 'piano_teacher.engraving.engraving' not in sys.modules, 'Source import must not initialize Verovio engraving'
 '''
     run = subprocess.run([sys.executable, '-c', source, str(tmp_path), operation],
         cwd=ROOT, capture_output=True, text=True, timeout=20)
