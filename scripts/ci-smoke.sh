@@ -6,6 +6,7 @@ set -Eeuo pipefail
 cd "$(dirname "$0")/.."
 PYTHON="${PYTHON:-python}"
 "$PYTHON" -m compileall -q piano_teacher tests scripts
+"$PYTHON" scripts/audit-transport-forwarding.py
 find scripts -type f -name '*.sh' -print0 | xargs -0 -r bash -n
 # Focused, self-contained MIDI and state/assessment contracts.
 timeout 25s "$PYTHON" -m pytest -q \
