@@ -607,7 +607,10 @@ class PracticeEngine:
         self._save()
 
     def _stop(self):
-        self._future_stage_ready = None
+        # Stopping/restarting a take does not invalidate precompiled next
+        # notation. Its stage-key + score revision remain authoritative:
+        # navigation, library changes and generation mismatches fail that
+        # identity check automatically at the next settlement.
         self._prepared_stage_published = False
         self.guided_session.stop()
         self.visual_transport.reset_for_stop(
