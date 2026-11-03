@@ -50,6 +50,8 @@ jobs:
             tests/test_library.py
       - name: Verify real-MIDI internal rest transport without hardware
         run: timeout 55s python -m pytest -q --tb=short tests/test_phase6_rest_handoff_real_midi.py
+      - name: Verify real MIDI callback grading and error review across rest
+        run: timeout 75s python -m pytest -q --tb=short tests/test_phase6_rest_handoff_real_midi.py::test_entire_real_midi_performance_uses_callback_grading_and_saved_review
       - name: Verify all 17 full-length original MIDI scores
         run: |
           timeout 75s python -m pytest -q --tb=short \

@@ -107,3 +107,109 @@ def test_original_real_midi_full_rest_has_no_camera_or_grading_clock_reset(
         assert path.read_bytes() == original_bytes
     finally:
         engine.db.close()
+
+
+def test_entire_real_midi_performance_uses_callback_grading_and_saved_review(
+        tmp_path, monkeypatch):
+    """Actual MIDI note messages enter the locked engine; no fake assessment.
+
+    A full written rest must survive the grading path, including repeats and
+    one deliberately wrong pitch on the following measure. Hardware latency
+    is deliberately not asserted by this software clock fixture.
+    """
+    clock = [2000.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
+    folder = tmp_path/"music"
+    folder.mkdir()
+    path = folder/"graded-rest.mid"
+    write_rest_source(path)
+    original = path.read_bytes()
+    engine = PracticeEngine(tmp_path/"grading", enable_midi=False)
+    engine.midi.port = object()  # A connected software port; callbacks are real.
+    commands = EngineCommands(engine=engine)
+
+    def ask(op, payload=None):
+        status, body = commands.request(op, json.dumps(payload or {}))
+        assert status == 0, (op, status, body[:400])
+        return json.loads(body)
+
+    def send_original(*, wrong_pitch=False):
+        phrase = engine.plan.active_phrase
+        tempo = engine._active_tempo_map()
+        bpm = engine.plan.bpm
+        origin = engine.run_at
+        offset = phrase.start
+        notes = [n for n in phrase.notes if engine.plan.hand == "both" or
+                 n.hand == engine.plan.hand]
+        assert len(notes) >= 6
+        changed_note = next(n for n in notes if n.start-offset >= 8
+                            and n.hand == "right")
+        def relative(at):
+            return (tempo.seconds_at(at-offset) if tempo is not None
+                    else (at-offset)*60.0/bpm)
+
+        events = []
+        for note in notes:
+            pitch = note.pitch+1 if wrong_pitch and note is changed_note else note.pitch
+            channel = 0 if note.hand == "right" else 1
+            events.append((relative(note.start), 1, pitch, channel))
+            events.append((relative(note.end), 0, pitch, channel))
+        events.sort(key=lambda item:(item[0],item[1],item[2]))
+        before = engine.midi.input_count
+        for seconds, on, pitch, channel in events:
+            clock[0] = origin+seconds
+            message = mido.Message("note_on" if on else "note_off",
+                                   note=pitch, velocity=86 if on else 0,
+                                   channel=channel)
+            engine._receive(message)
+            if 4 < seconds*bpm/60 < 8:
+                pytest.fail("Fixture unexpectedly contains MIDI within the written rest")
+        assert engine.midi.input_count-before == len(notes)
+        last_beat = phrase.end-phrase.start
+        last_seconds = (tempo.seconds_at(last_beat) if tempo is not None
+                        else last_beat*60.0/bpm)
+        clock[0] = origin+last_seconds+0.6
+        final = ask("state.snapshot")
+        assert not final["running"] and not final["preview_only"]
+        assert engine.performance_summary is not None
+        return final, engine.performance_summary, changed_note
+
+    try:
+        ask("settings.update",{"music_dir":str(folder),
+                               "exercise_strategy":"coda-fukuda-midi"})
+        opened = ask("library.open",{"id":path.name})
+        assert opened["loaded"]
+        ready = ask("practice.command",{"action":"perform","scope":"whole"})
+        revision = ready["revision"]
+        model = ask("score.semantic")
+        assert model["revision"] == revision and len(model["notes"]) >= 6
+        started = ask("practice.command",{"action":"score_ready",
+                                          "revision":revision})
+        if not started["running"]:
+            started = ask("practice.command",{"action":"start"})
+        assert started["running"] and not started["preview_only"]
+        first_transport = started["transport_id"]
+        clean, clean_review, _ = send_original()
+        assert clean["transport_id"] == first_transport
+        assert clean_review["correct"] == clean_review["total"]
+        assert clean_review["total"] >= 6
+        assert clean_review["wrong"] == clean_review["missed"] == 0
+        assert not clean_review["weakest_bars"]
+        assert not clean["feedback_unmapped"]
+        assert path.read_bytes() == original
+
+        restarted = ask("practice.command",{"action":"start"})
+        assert restarted["transport_id"] > first_transport
+        assert restarted["revision"] == revision
+        broken, review, changed = send_original(wrong_pitch=True)
+        assert review["correct"] < review["total"]
+        assert review["wrong"] >= 1
+        assert review["weakest_bars"]
+        assert any(mark["source_id"] == changed.source_id
+                   and mark["status"] == "wrong"
+                   for mark in engine.feedback_marks)
+        assert broken["revision"] == revision
+        assert path.read_bytes() == original
+    finally:
+        engine.listen.cancel()
+        engine.db.close()
