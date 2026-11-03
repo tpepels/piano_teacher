@@ -217,3 +217,34 @@ def test_selected_coda_and_fukuda_stages_publish_generator_owned_metadata(piece)
                         assert stage.technique and stage.display_name
         assert plan.exercises[-1].kind == "perform"
         assert plan.exercises[-1].phrase.notes == piece.notes
+
+
+def test_third_party_pitch_and_dynamic_exercises_are_not_dropped_as_noops(piece):
+    from piano_teacher.exercise_generator import ExerciseVariant
+    from piano_teacher.lesson_stage_semantics import teaching_sequence
+
+    baseline = LearningPlan(piece, exercise_strategy="coda-fukuda-midi").stages[-1]
+    original = baseline.variant
+    first = original.notes[0]
+    pitched = ExerciseStage(
+        ExerciseVariant("custom-interval-drill",
+            replace(original.phrase, notes=(replace(first, pitch=first.pitch + 1),
+                *original.notes[1:])), original.source_indices),
+        origin="external-pitch-generator", technique="pitch-change",
+        display_name="Interval drill")
+    dynamics = ExerciseStage(
+        ExerciseVariant("custom-accent-drill",
+            replace(original.phrase, notes=(replace(first, velocity=max(1, first.velocity-10)),
+                *original.notes[1:])), original.source_indices),
+        origin="external-dynamics-generator", technique="dynamic-change",
+        display_name="Accent drill")
+    changed_pitch = difference(pitched, baseline)
+    changed_dynamic = difference(dynamics, baseline)
+    assert changed_pitch.pitch_changed == 1 and changed_pitch.meaningful
+    assert changed_dynamic.velocity_changed == 1 and changed_dynamic.meaningful
+    assert fingerprint(pitched) != fingerprint(baseline)
+    assert fingerprint(dynamics) != fingerprint(baseline)
+    assert teaching_sequence((pitched, dynamics, baseline)) == (
+        pitched, dynamics, baseline)
+    assert describe(pitched, baseline)["label"] == "Interval drill"
+    assert describe(dynamics, baseline)["change"] == "1 changed dynamics"
