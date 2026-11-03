@@ -35,8 +35,8 @@ mastery from visual previews; three clean full-target performances required.
 | **3 — Original Coda, MIDI-domain** | Four algorithms; pinned author-differential reproduction and source-safe desktop lesson path | **Algorithm scope complete; post-consolidation Coda tests green** | Existing 1,273-request differential and whole-piece/17-piece corpus, then current refactor regression |
 | **4 — Fukuda + composed strategies** | MIDI-domain reductions, source-local feedback, recorded-MIDI alignment, generic whole-piece/adaptive composition | **Code integrated**; live combined-path acceptance and paper figure parity not established | Focused + corpus tests, source-effect comparison, physical original-to-remediation loop |
 | **5 — One architecture, no compatibility layers** | Canonical engraving, native-only score assets, typed IPC, pluggable generator ownership; delete obsolete Qt/HTTP/facades | **COMPLETE — 2026-11-03** | All required fast/focused/corpus, native load, Godot parser, source graph and staged-package checks passed; see evidence below |
-| **6 — Real instrument + UX performance** | Beethoven opening, READY ink, scrolling vs BPM, Listen, error/retry, rests, reconnect, latency, longer pieces | **Open** | Signed real Godot + USB/Bluetooth MIDI evidence across full checklist |
-| **7 — Teaching study + release** | Independent pedagogical effectiveness, clean-machine distribution, long-session reliability | **Not complete** | Prespecified learner comparison, reproducible package and unattended long-session acceptance |
+| **6 — Real instrument + UX performance** | Beethoven opening, READY ink, scrolling vs BPM, Listen, error/retry, rests, reconnect, latency, longer pieces | **Software recovery suite green; physical acceptance open** | Signed real Godot + USB/Bluetooth MIDI evidence across full checklist |
+| **7 — Teaching study + release** | Independent pedagogical effectiveness, clean-machine distribution, long-session reliability | **Synthetic endurance passed; release and human study open** | Prespecified learner comparison, reproducible package and unattended real-time session acceptance |
 
 Phase 3 deliberately covers the original *MIDI-domain* algorithms. Neither
 importing MusicXML nor reproducing Fukuda's acoustic front-end is silently
@@ -145,10 +145,13 @@ consolidation and do not certify physical MIDI or release readiness.
 - [Phase 6 real-score framebuffer](https://github.com/tpepels/piano_teacher/actions/runs/41708452848)
   passed after the native fragment error behavior change.
 
-**Still unproven:** all optional full-engraving recovery scenarios after the
-new hardening, physical keyboard latency and long-duration operational fault
-tolerance. Those are Phase 6/7 acceptance issues, not an alternate architecture
-or a reason to introduce compatibility layers.
+**Subsequent software acceptance (2026-11-03):**
+- [Real Verovio/music21 engraving recovery: 51 passed](https://github.com/tpepels/piano_teacher/actions/runs/41710805927). All tests in the targeted instructional-recovery, silent-bar, retimed-source and isolated-tuplet modules passed in a full score runtime; no optional-import skipping.
+- [Extended fast CI: 513 passed, 6 skipped](https://github.com/tpepels/piano_teacher/actions/runs/41711521908). In-process worker endurance covers 250 preview repeats with ten simulated 10-minute pauses, 100 rapid pause/resume sequences and 100 real-imported-MIDI full performances with intentionally wrong notes. Source bytes, saved mastery and notation revisions remain stable in these synthetic-clock runs. The transport alias audit remains at zero.
+- MIDI library opening preflights lesson generation and persisted-stage restoration before stopping a running session. Typed command tests inject invalid MIDI, generator failure and restore failure and verify the original transport, MIDI recorder, source ID and score revision survive unchanged.
+- A bounded [full-engraving recovery workflow](https://github.com/tpepels/piano_teacher/blob/main/.github/workflows/phase6-engraving-recovery.yml) now runs on affected source changes and supports explicit manual reruns; it retains failure artifacts.
+
+**Still unproven:** physical USB/Bluetooth input and audio latency, target-device frame cadence, continuous real-time operation under actual system suspension, all-repertoire rendered correctness, clean-machine release installation and comparative teaching effectiveness. Virtual-clock endurance does not establish uninterrupted real-time reliability. These are Phase 6/7 acceptance issues, not an alternate architecture or a reason to introduce compatibility layers.
 
 ## Immediate order of work
 
