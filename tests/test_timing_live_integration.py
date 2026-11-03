@@ -82,7 +82,7 @@ def test_combined_timing_stage_still_requires_original_mastery():
 def test_settings_persist_independent_timing_axes(tmp_path):
     cfg = tmp_path / "cfg"
     library = ScoreLibrary(cfg)
-    library.update(exercise_strategy="legacy")
+    library.update(exercise_strategy="source-progression")
     library.update(timing_strategy="dotted-short-long", tempo_strategy="two-phase-tempo")
     reopened = ScoreLibrary(cfg)
     assert reopened.settings["timing_strategy"] == "dotted-short-long"

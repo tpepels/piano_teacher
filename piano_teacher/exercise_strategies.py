@@ -440,4 +440,4 @@ def resolve_strategy(spec: str | ExerciseStrategy | None, *, piece=None) -> Exer
         raise ValueError("A strategy cannot be composed with itself")
     parts = tuple(_FACTORIES[name]() for name in names)
     strategy = parts[0] if len(parts) == 1 else CompositeStrategy(parts)
-    return SourcePreservingAdapter(strategy)
+    return strategy if isinstance(strategy, SourceProgressionStrategy) else SourcePreservingAdapter(strategy)

@@ -37,7 +37,7 @@ def test_note_on_publishes_to_memory_without_waiting_for_release(tmp_path):
                   (Phrase(1, 1, 1, 0, 4, notes),), bar_boundaries=(0, 4))
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        engine.plan = LearningPlan(piece, exercise_strategy="legacy")
+        engine.plan = LearningPlan(piece, exercise_strategy="source-progression")
         engine.midi.port = SimpleNamespace(closed=False)
         engine.start()
         engine.run_at = time.monotonic() - .015

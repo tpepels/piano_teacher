@@ -676,7 +676,7 @@ def register_composed_lesson_generator(
 # Source-based algorithms register complete curricula; unknown names fail closed.
 for _source_name in (
     "source-progression", "fukuda", "coda-part", "feature-gated",
-    "fukuda+coda-part",
+    "fukuda+coda-part", "rubricnet-trained",
 ):
     register_lesson_generator(LessonGeneratorRegistration(
         _source_name,

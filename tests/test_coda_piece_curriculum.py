@@ -136,7 +136,7 @@ def test_engine_changes_strategy_on_loaded_midi_without_swapping_piece(tmp_path)
         assert engine.plan.piece is source
         engine.set_preferences(exercise_strategy="coda-midi")
         first=engine.plan.identity
-        engine.set_preferences(exercise_strategy="legacy")
+        engine.set_preferences(exercise_strategy="source-progression")
         assert engine.plan.piece is source
         assert engine.fingerprint==fingerprint
         engine.set_preferences(exercise_strategy="coda-midi")
@@ -156,4 +156,4 @@ def test_warmups_ignore_selected_midi_piece_strategy():
     piece=Piece("Warmup",60,notes,(Phrase(1,1,1,0,4,notes),),
                 bar_boundaries=(0,4),time_signatures=((0,4,4),))
     plan=LearningPlan(piece,warmup=True,exercise_strategy="coda-midi")
-    assert plan.exercise_strategy.name=="legacy"
+    assert plan.exercise_strategy.name=="source-progression"

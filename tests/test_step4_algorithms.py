@@ -192,7 +192,7 @@ def test_repeated_timing_or_duration_errors_route_to_partial_nonmastery_retry(
     piece = source(4, two_bars=False)
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
-        engine.plan = LearningPlan(piece, exercise_strategy="legacy")
+        engine.plan = LearningPlan(piece, exercise_strategy="source-progression")
         engine.fingerprint = "timing-errors"
         identity = engine.plan.identity
         result = Assessment(tuple(NoteAssessment(n, status if i < 2 else "correct")

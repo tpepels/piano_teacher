@@ -101,9 +101,9 @@ def test_builtin_warmups_keep_shared_original_stage_keys():
         Note(0, 1, 48, 1, 0, "left", "l", "v"),
     )
     piece = Piece("Warmup", 60, notes, (Phrase(1, 1, 1, 0, 4, notes),))
-    legacy = LearningPlan(piece, warmup=True, exercise_strategy="legacy")
+    source_plan = LearningPlan(piece, warmup=True, exercise_strategy="source-progression")
     fukuda = LearningPlan(piece, warmup=True, exercise_strategy="fukuda")
-    assert legacy.identity == fukuda.identity
+    assert source_plan.identity == fukuda.identity
 
 
 def test_history_is_persistent_scoped_and_bounded(tmp_path):
@@ -151,22 +151,22 @@ def test_live_strategy_switch_rebuilds_plan_without_transferring_mastery(tmp_pat
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
         source = simple_piece()
-        engine.plan = LearningPlan(source, exercise_strategy="legacy")
+        engine.plan = LearningPlan(source, exercise_strategy="source-progression")
         engine.fingerprint = "synthetic-hash"
-        legacy_key = engine.plan.identity
-        engine.plan.mastered[legacy_key] = 80
+        source_key = engine.plan.identity
+        engine.plan.mastered[source_key] = 80
         engine._save()
         options = engine.set_preferences(exercise_strategy="fukuda")
         assert options["exercise_strategy"] == "fukuda"
         assert engine.plan.exercise_strategy.name == "fukuda"
-        assert legacy_key != engine.plan.identity
+        assert source_key != engine.plan.identity
         assert engine.plan.identity not in engine.plan.mastered
         assert engine.plan.streak == 0
         assert engine.score_revision > 0
-        engine.set_preferences(exercise_strategy="legacy")
-        assert engine.plan.exercise_strategy.name == "legacy"
-        assert legacy_key in engine.plan.mastered
-        assert engine.plan.identity == legacy_key
+        engine.set_preferences(exercise_strategy="source-progression")
+        assert engine.plan.exercise_strategy.name == "source-progression"
+        assert source_key in engine.plan.mastered
+        assert engine.plan.identity == source_key
     finally:
         engine.db.close()
 
@@ -175,18 +175,18 @@ def test_switched_strategies_keep_independent_stage_bpm_and_positions(tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
         engine.fingerprint = "independent-steps"
-        engine.plan = LearningPlan(simple_piece(), exercise_strategy="legacy")
+        engine.plan = LearningPlan(simple_piece(), exercise_strategy="source-progression")
         engine.plan.increase_tempo()
-        legacy_bpm = engine.plan.bpm
+        source_bpm = engine.plan.bpm
         engine._save()
         engine.set_preferences(exercise_strategy="fukuda")
         engine.plan.increase_tempo()
         engine.plan.increase_tempo()
         fukuda_bpm = engine.plan.bpm
         engine._save()
-        assert fukuda_bpm > legacy_bpm
-        engine.set_preferences(exercise_strategy="legacy")
-        assert engine.plan.bpm == legacy_bpm
+        assert fukuda_bpm > source_bpm
+        engine.set_preferences(exercise_strategy="source-progression")
+        assert engine.plan.bpm == source_bpm
         engine.set_preferences(exercise_strategy="fukuda")
         assert engine.plan.bpm == fukuda_bpm
     finally:
@@ -196,7 +196,7 @@ def test_switched_strategies_keep_independent_stage_bpm_and_positions(tmp_path):
 def test_environment_no_longer_overrides_saved_selection(tmp_path, monkeypatch):
     monkeypatch.setenv("PIANO_EXERCISE_STRATEGY", "coda-part")
     piece = simple_piece()
-    assert LearningPlan(piece).exercise_strategy.name == "legacy"
+    assert LearningPlan(piece).exercise_strategy.name == "source-progression"
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
         engine.set_preferences(exercise_strategy="fukuda")

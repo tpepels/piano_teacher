@@ -114,13 +114,13 @@ def test_obsolete_musicxml_recent_is_not_restored(tmp_path):
         'Bach.mid', 'Etudes/Chopin.midi']
 
 
-def test_combined_coda_fukuda_is_new_install_default_but_explicit_legacy_persists(tmp_path):
+def test_combined_coda_fukuda_is_new_install_default_but_explicit_source_progression_persists(tmp_path):
     library = ScoreLibrary(config_dir=tmp_path / "fresh")
     assert library.settings["exercise_strategy"] == "coda-fukuda-midi"
     assert library.public_settings()["exercise_strategy"] == "coda-fukuda-midi"
-    library.update(exercise_strategy="legacy")
+    library.update(exercise_strategy="source-progression")
     again = ScoreLibrary(config_dir=tmp_path / "fresh")
-    assert again.settings["exercise_strategy"] == "legacy"
+    assert again.settings["exercise_strategy"] == "source-progression"
     # A persisted choice of pure Coda must remain selectable and is not
     # replaced by the new-install default.
     again.update(exercise_strategy="coda-midi")
@@ -135,15 +135,27 @@ def test_coda_piece_strategy_owns_timing_and_migrates_old_selection(tmp_path):
     with pytest.raises(ValueError,match="generate their own"):
         library.update(timing_strategy="dotted-long-short")
     assert library.settings["timing_strategy"]=="original-timing"
-    library.update(exercise_strategy="legacy")
+    library.update(exercise_strategy="source-progression")
     library.update(timing_strategy="dotted-long-short",
                    tempo_strategy="two-phase-tempo")
     library.update(exercise_strategy="coda-midi")
     assert library.settings["timing_strategy"]=="original-timing"
     assert library.settings["tempo_strategy"]=="constant-tempo"
     stored=library.settings.copy()
-    stored["exercise_strategy"]="coda-part"
+    stored["exercise_strategy"]="legacy"
     library.settings_path.write_text(json.dumps(stored))
     restored=ScoreLibrary(config_dir=config)
     assert restored.settings["exercise_strategy"]=="coda-fukuda-midi"
     assert {x["id"] for x in restored.public_settings()["available_exercise_strategies"]}.__contains__("coda-midi")
+
+
+def test_removed_strategy_is_not_selectable_and_saved_value_migrates(tmp_path):
+    import pytest
+    library = ScoreLibrary(config_dir=tmp_path)
+    with pytest.raises(ValueError, match="Unknown exercise strategy"):
+        library.update(exercise_strategy="legacy")
+    stored = dict(library.settings, exercise_strategy="legacy")
+    library.settings_path.write_text(json.dumps(stored))
+    restored = ScoreLibrary(config_dir=tmp_path)
+    assert restored.settings["exercise_strategy"] == "coda-fukuda-midi"
+    assert "legacy" not in {x["id"] for x in restored.public_settings()["available_exercise_strategies"]}
