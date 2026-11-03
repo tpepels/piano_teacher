@@ -275,7 +275,7 @@ def test_semantic_runner_is_headless_and_writes_identity_bound_ledger(tmp_path):
     script = ('import sys; from scripts.audit_phase3_semantics import main; '
               'code=main(); '
               'assert not any(x in sys.modules for x in '
-              '["piano_teacher.score", "piano_teacher.notation.phase3_pixels", '
+              '["piano_teacher.engraving.engraving", "piano_teacher.notation.phase3_pixels", '
               '"scripts.audit_phase3_whole_pieces", "scripts.check_native_verovio_overlay"]); '
               'raise SystemExit(code)')
     completed = subprocess.run([sys.executable, '-c', script, '--index', '7', '--hand', 'left',
