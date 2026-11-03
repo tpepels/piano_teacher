@@ -113,6 +113,12 @@ fingering inference. The resulting Linux application starts one
 process and asks the host only for the OS, MIDI/ALSA drivers, GPU/display
 drivers, and standard runtime libraries.
 
+The packager now invokes `scripts/verify-phase5-architecture.py --package`
+on the assembled directory before emitting the tarball. Source-only runs
+(`python3 scripts/verify-phase5-architecture.py`) check the canonical
+Python relative-import graph and absence of deleted compatibility modules.
+An audit of the source tree is not proof that a release archive starts.
+
 The package build must still be checked on a clean target machine.
 Developer compilation and Python contract checks alone do not certify
 a portable release or physical Bluetooth latency.

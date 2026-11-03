@@ -46,9 +46,10 @@ original author-style requested excerpt. The new-install product default is
 ## Validation and current limitations
 
 Source-identity-preserving generation, stage uniqueness, score/Listen/grader
-projection, registration, and source-local feedback are covered by focused and
-corpus suites. These results predate the latest canonical engraving + native
-typed IPC refactor and **must be rerun** before accepting the current build.
+projection, registration, and source-local feedback are covered by the
+focused and corpus suites. The fast source/import audit runs in bounded CI;
+native typed-IPC startup and the assembled standalone package are separate
+Phase 5 acceptance gates.
 
 Passing generation contracts does not prove that the live Godot score is
 visible at READY, that real audio/MIDI timing is aligned, or that combining
