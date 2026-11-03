@@ -30,13 +30,12 @@ func request_catalog() -> void:
     if pending or catalog_request == null:
         return
     pending = true
-    if catalog_request.request("/library") != OK:
+    if catalog_request.request("library.catalog") != OK:
         pending = false
 
-func on_catalog(_result: int, code: int,
-        _headers: PackedStringArray, body: PackedByteArray) -> void:
+func on_catalog(code: int, body: PackedByteArray) -> void:
     pending = false
-    if code != 200:
+    if code != 0:
         _library_view.present_request_error(_failure.call(code, body))
         _home_view.present_catalog_unavailable()
         return
@@ -52,19 +51,18 @@ func request_health() -> void:
     if health_request == null or health_pending:
         return
     health_pending = true
-    if health_request.request("/library/health") != OK:
+    if health_request.request("library.health_status") != OK:
         health_pending = false
 
 func start_health(action_pending: bool) -> void:
     if action_pending or health_running:
         return
     _library_view.present_health_message("Starting music file check…")
-    _send_command.call("/library/health", {})
+    _send_command.call("library.health.start", {})
 
-func on_health(_result: int, code: int,
-        _headers: PackedStringArray, body: PackedByteArray) -> void:
+func on_health(code: int, body: PackedByteArray) -> void:
     health_pending = false
-    if code != 200:
+    if code != 0:
         _library_view.present_health_message(
             "Cannot check music files: " + _failure.call(code, body))
         return
