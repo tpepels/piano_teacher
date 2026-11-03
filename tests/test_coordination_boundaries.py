@@ -153,7 +153,7 @@ def test_command_error_publication_has_injected_screen_dependencies():
     main = (ROOT / "godot/main.gd").read_text()
     presenter = (ROOT / "godot/command_failure_presenter.gd").read_text()
     handler = main.split("func _on_action(", 1)[1].split("\nfunc ", 1)[0]
-    assert "command_failure_presenter.present(message,path,queued_library_failed)" in handler
+    assert "command_failure_presenter.present(message,operation,queued_library_failed)"
     assert "CommandFailurePresenter.new(" in main
     assert "func _init(library, practice, settings, home)" in presenter
     assert "app." not in presenter
@@ -310,17 +310,17 @@ def test_command_request_owner_has_no_scene_or_application_dependencies():
     main = (ROOT/"godot/main.gd").read_text()
     queue = (ROOT/"godot/command_request_state.gd").read_text()
     assert "CommandRequestState.new()" in main
-    assert "command_state.begin(path,Time.get_ticks_msec())" in main
+    assert "command_state.begin(operation,Time.get_ticks_msec())" in main
     assert "command_state.finish()" in main
     assert "command_state.take_transport()" in main
     assert "command_state.queue_library(identifier,resume_saved)" in main
     assert "command_state.discard_library()" in main
     assert "command_state.take_library()" in main
     assert "app." not in queue and "get_tree()" not in queue
-    assert "func dispatch(adapter, path: String, payload: Dictionary)" in queue
-    assert "adapter.request(path,JSON.stringify(payload),\"POST\")" in queue
-    assert "command_state.dispatch(action_request,path,payload)" in main
-    assert "action_request.request(path" not in main
+    assert "func dispatch(adapter, operation_name: String, payload: Dictionary)" in queue
+    assert 'adapter.request(operation_name,payload)' in queue
+    assert "command_state.dispatch(action_request,operation,payload)" in main
+    assert "action_request.request(operation" in main
 
 
 def test_learner_navigation_validates_before_transport_changes():
