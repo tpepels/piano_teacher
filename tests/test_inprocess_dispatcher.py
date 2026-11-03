@@ -17,7 +17,6 @@ class FakeEngine:
     def __init__(self):
         self.controls = []
         self.changes = []
-        self.loaded = None
         self.library_id = None
 
     def advance_clock(self):
@@ -57,9 +56,6 @@ class FakeEngine:
     def set_preferences(self, **kwargs):
         self.changes.append(kwargs)
 
-    def load(self, path):
-        self.loaded = path
-
     def load_library(self, identifier):
         self.library_id = identifier
 
@@ -69,69 +65,63 @@ def _decode(result):
     return status, json.loads(body)
 
 
-def test_native_dispatcher_get_routes_match_expected_ui_contract():
+def test_typed_read_operations_follow_the_app_contract():
     bridge = EngineCommands(engine=FakeEngine())
-    assert _decode(bridge.request("GET", "/state")) == (
-        200, {"phase": "ready", "revision": 17, "source": None})
-    assert _decode(bridge.request("GET", "/devices")) == (
-        200, {"devices": ["Bluetooth Keyboard"]})
-    assert _decode(bridge.request("GET", "/library")) == (200, {"pieces": ["first.mid"]})
-    assert _decode(bridge.request("GET", "/lesson")) == (200, {"steps": [1, 2]})
-    assert _decode(bridge.request("GET", "/score/layout")) == (200, {"native": True})
-    assert _decode(bridge.request("GET", "/score/layout?native=0"))[0] == 400
-    assert _decode(bridge.request("GET", "/score/layout?native=1"))[0] == 400
-    assert _decode(bridge.request("GET", "/score/model")) == (200, {"revision": 17})
-    assert bridge.request("GET", "/demo.wav?token=abc") == (200, b"RIFFabc")
+    assert _decode(bridge.request("state.snapshot")) == (
+        0, {"phase": "ready", "revision": 17, "source": None})
+    assert _decode(bridge.request("midi.devices")) == (
+        0, {"devices": ["Bluetooth Keyboard"]})
+    assert _decode(bridge.request("library.catalog")) == (
+        0, {"pieces": ["first.mid"]})
+    assert _decode(bridge.request("lesson.overview")) == (
+        0, {"steps": [1, 2]})
+    assert _decode(bridge.request("score.native_layout")) == (0, {"native": True})
+    assert _decode(bridge.request("score.semantic")) == (0, {"revision": 17})
+    assert bridge.request("listen.audio", '{"token":"abc"}') == (0, b"RIFFabc")
 
 
-def test_native_dispatcher_post_and_errors():
+def test_typed_mutations_and_invalid_operands():
     engine = FakeEngine()
     bridge = EngineCommands(engine=engine)
-    assert _decode(bridge.request("POST", "/control", '{"action":"play"}'))[0] == 200
+    assert _decode(bridge.request("practice.command", '{"action":"play"}'))[0] == 0
     assert engine.controls == [{"action": "play"}]
-    assert _decode(bridge.request("POST", "/settings", '{"metronome":false}'))[0] == 200
+    assert _decode(bridge.request("settings.update", '{"metronome":false}'))[0] == 0
     assert engine.changes == [{"metronome": False}]
-    assert _decode(bridge.request("POST", "/library/open", '{"id":"first.mid"}'))[0] == 200
+    assert _decode(bridge.request("library.open", '{"id":"first.mid"}'))[0] == 0
     assert engine.library_id == "first.mid"
-    assert _decode(bridge.request("POST", "/load", '{"path":"/music/first.mid"}'))[0] == 404
-    assert engine.loaded is None
-    assert _decode(bridge.request("GET", "/score.svg?page=0"))[0] == 404
-    assert _decode(bridge.request("GET", "/score.png?page=0"))[0] == 404
-    assert _decode(bridge.request("GET", "/missing"))[0] == 404
-    assert _decode(bridge.request("PUT", "/state"))[0] == 405
-    assert _decode(bridge.request("POST", "/control", "[]"))[0] == 400
-    assert _decode(bridge.request("POST", "/library/open", "{}"))[0] == 400
+    assert _decode(bridge.request("unknown.operation"))[0] == 2
+    assert _decode(bridge.request("practice.command", "[]"))[0] == 1
+    assert _decode(bridge.request("library.open", "{}"))[0] == 1
+    assert _decode(bridge.request("state.snapshot", '{"mutate":true}'))[0] == 1
 
 
-def test_real_embedded_engine_does_not_create_network_visual_publisher(tmp_path):
+def test_real_embedded_engine_has_one_shared_transport_and_event_ring(tmp_path):
     visual = LiveEventRing()
     engine = PracticeEngine(tmp_path, enable_midi=False, live_events=visual)
     bridge = EngineCommands(engine=engine)
     try:
-        status, values = _decode(bridge.request("GET", "/state"))
-        assert status == 200 and not values["loaded"]
+        status, values = _decode(bridge.request("state.snapshot"))
+        assert status == 0 and not values["loaded"]
         assert not hasattr(engine.live_events, "socket")
-        status, values = _decode(bridge.request("GET", "/settings"))
-        assert status == 200 and "exercise_strategy" in values
+        status, values = _decode(bridge.request("settings.snapshot"))
+        assert status == 0 and "exercise_strategy" in values
         visual.publish({"sequence": 4, "transport_id": 11,
                         "status": "on_time", "pitch": 60})
         assert bridge.drain_midi_events(3)[0]["sequence"] == 4
         assert bridge.drain_midi_events(4) == []
-        status, payload = _decode(bridge.request("GET", "/midi/live?since=3"))
-        assert status == 200 and payload[0]["sequence"] == 4
-        assert _decode(bridge.request("GET", "/midi/live?since=4")) == (200, [])
-        assert _decode(bridge.request("GET", "/midi/live?since=-1"))[0] == 400
+        status, payload = _decode(bridge.request("midi.events", '{"since":3}'))
+        assert status == 0 and payload[0]["sequence"] == 4
+        assert _decode(bridge.request("midi.events", '{"since":4}')) == (0, [])
+        assert _decode(bridge.request("midi.events", '{"since":-1}'))[0] == 1
     finally:
         engine.db.close()
 
 
-def test_native_worker_tick_is_independent_of_state_requests():
+def test_worker_tick_is_independent_of_snapshot_requests():
     engine = FakeEngine()
     bridge = EngineCommands(engine=engine)
     assert bridge.tick() == 20
     assert bridge.tick() == 20
     assert engine.ticks == 2
-    # The state route is presentation only; the native worker can advance
-    # musical deadlines without making any such request.
-    assert _decode(bridge.request("GET", "/state"))[0] == 200
+    assert _decode(bridge.request("state.snapshot"))[0] == 0
     assert engine.ticks == 2
