@@ -25,7 +25,7 @@ func discover() -> void:
     if pending or request == null:
         return
     pending = true
-    if request.request("/devices") != OK:
+    if request.request("midi.devices") != OK:
         pending = false
 
 func show_picker() -> void:
@@ -33,7 +33,7 @@ func show_picker() -> void:
     discover()
 
 func choose(name: String) -> void:
-    _send_command.call("/device", {"name":name})
+    _send_command.call("midi.device.select", {"name":name})
     if not name.is_empty():
         _settings.present_device_selection(name)
 
@@ -45,7 +45,7 @@ func maybe_restore(saved: String, connected: String) -> void:
 func receive(code: int, body: PackedByteArray, screen: String,
         connected: String, saved: String) -> void:
     pending = false
-    if code != 200:
+    if code != 0:
         picker_requested = false
         if screen == "settings":
             _settings.present_message(
