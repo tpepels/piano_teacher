@@ -1944,13 +1944,13 @@ class PracticeEngine:
         )
         return capture_session_snapshot(values, reads)
 
-    def _next_stage_selection(self) -> tuple[ScoreSelection, int] | None:
+    def _next_stage_selection(self, *, offset: int = 1) -> tuple[ScoreSelection, int] | None:
         """Snapshot an upcoming lesson without mutating its active cursor."""
         if self.plan is None or self.is_builtin_warmup or self.mode != "practice":
             return None
         import copy
         p = self.plan
-        number = p.lesson_step_number + 1
+        number = p.lesson_step_number + offset
         if number > len(p.lesson_steps):
             return None
         future = copy.copy(p)
@@ -1964,6 +1964,12 @@ class PracticeEngine:
             revision=self.score_revision + 1, fingerprint=self.fingerprint,
             transformed_rhythm=future.active_stage.transformed_rhythm), number
 
+    @staticmethod
+    def _stage_runway_label(step) -> str:
+        hand = {"right": "Right hand", "left": "Left hand",
+                "both": "Both hands"}.get(step.hand, step.hand.capitalize())
+        return f'{hand} · {step.level.replace("-", " ").capitalize()}'
+
     def next_stage_score(self) -> bytes:
         """Begin ahead-of-time score preparation without blocking MIDI timing."""
         with self.lock:
@@ -1972,10 +1978,7 @@ class PracticeEngine:
                 return b'{"status":"none"}'
             selection, number = planned
             future_step = self.plan.lesson_steps[number - 1]
-            hand_name = {"right": "Right hand", "left": "Left hand",
-                         "both": "Both hands"}.get(future_step.hand,
-                                                   future_step.hand.capitalize())
-            label = f'{hand_name} · {future_step.level.replace("-", " ").capitalize()}'
+            label = self._stage_runway_label(future_step)
             return self.future_score.ensure(
                 selection, number=number, label=label)
 
@@ -1992,6 +1995,15 @@ class PracticeEngine:
             if not self.future_score.ready(selection):
                 raise ValueError("Next lesson notation is not yet prepared")
             self._future_stage_ready = (stage_key, revision)
+            # Prepare one more source-identity-bound stage while this step is
+            # still being played. The next stage remains first in the queue.
+            farther = self._next_stage_selection(offset=2)
+            if farther is not None:
+                ahead_selection, ahead_number = farther
+                ahead_step = self.plan.lesson_steps[ahead_number-1]
+                self.future_score.warm(
+                    ahead_selection, number=ahead_number,
+                    label=self._stage_runway_label(ahead_step))
             return {"accepted": True, "step_number": number,
                     "revision": revision, "stage_key": stage_key}
 
