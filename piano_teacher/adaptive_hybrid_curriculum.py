@@ -141,6 +141,7 @@ class PassageContributor(Protocol):
 
 def compile_hybrid_catalog(
     piece: Piece, *, components: tuple[PassageContributor, ...] | None = None,
+    name: str = "coda-fukuda-midi",
 ):
     """Compile independent contributor stages once, then select via feedback.
 
@@ -188,7 +189,7 @@ def compile_hybrid_catalog(
                 raise ValueError("Adaptive passage contributors collide on stage names")
             stages[(exercise.key, hand)] = variants
     return LessonPlanDefinition(
-        exercises, stages, "coda-fukuda-midi",
+        exercises, stages, name,
         requires_unique_source_ids=True)
 
 
