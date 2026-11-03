@@ -9,8 +9,9 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from piano_teacher.score import import_piece, render_layout
-from piano_teacher.raster import rasterize_score
+from piano_teacher.importing.pieces import import_piece
+from piano_teacher.engraving.engraving import render_layout
+from piano_teacher.engraving.raster import rasterize_score
 from piano_teacher.notation.lesson import build_lesson_score
 from piano_teacher.lesson_validation import require_lesson_alignment
 
