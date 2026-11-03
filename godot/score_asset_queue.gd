@@ -16,12 +16,10 @@ func attach(host: Node, owner, bus: Node) -> void:
     host.add_child(layout_request)
     host.add_child(model_request)
     layout_request.request_completed.connect(
-        func(_result: int, code: int, _headers: PackedStringArray,
-                body: PackedByteArray):
+        func(code: int, body: PackedByteArray):
             deliver("layout", code, body))
     model_request.request_completed.connect(
-        func(_result: int, code: int, _headers: PackedStringArray,
-                body: PackedByteArray):
+        func(code: int, body: PackedByteArray):
             deliver("model", code, body))
     owner.request_requested.connect(start)
 
