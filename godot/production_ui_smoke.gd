@@ -43,11 +43,10 @@ func _process(_delta: float) -> bool:
     if not app.native_started:
         return false
     if not requested:
-        if app.command_state.pending:
+        if not app.startup_last_music_checked:
             return false
         requested = true
-        app._open_library_piece(FIXTURE,true)
-        print("PHASE6_PRODUCTION_OPEN_REQUESTED")
+        print("PHASE6_PRODUCTION_LAST_PIECE_REQUESTED:",FIXTURE)
         return false
     if not app.score_error.is_empty():
         _fail("Production UI rejected native score: "+str(app.score_error))
@@ -65,6 +64,10 @@ func _process(_delta: float) -> bool:
             return true
         if int(app.score_session.rendered_revision) != int(app.last_state.get("revision",-1)):
             _fail("Rendered score and backend source revisions differ")
+            return true
+        if str(app.current_screen) != "practice" or \
+                not bool(app.last_state.get("loaded",false)):
+            _fail("Startup did not navigate to the loaded practice screen")
             return true
         ready_seen = true
         print("PHASE6_PRODUCTION_NOTATION_READY notes=",notes,

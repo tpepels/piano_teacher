@@ -28,6 +28,7 @@ for script in \
   res://notation/native/view.gd \
   res://inprocess_bus.gd \
   res://native_bridge_smoke.gd \
+  res://production_ui_smoke.gd \
   res://inprocess_request.gd \
   res://score_asset_queue.gd \
   res://score_asset_session.gd \

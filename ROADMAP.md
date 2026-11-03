@@ -88,7 +88,7 @@ This establishes embedded software integration, not Godot framebuffer
 correctness or physical MIDI keyboard behavior.
 
 **P6 — Production UI gate.** A new real production-scene smoke opens
-`main.tscn` with the actual embedded Python worker, selects a two-hand MIDI
+`main.tscn` with the actual embedded Python worker, auto-resumes the saved two-hand MIDI
 file, verifies retained native noteheads and dismissal of the loading overlay,
 then exercises Play/Pause/Resume while retaining the transport identity.
 This test must pass on its own source/build SHA before production UI
