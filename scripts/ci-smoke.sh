@@ -18,6 +18,7 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_phase0_smoke.py \
   tests/test_transport_projection.py \
   tests/test_inprocess_dispatcher.py \
+  tests/test_score_artifacts.py::test_native_geometry_and_semantics_reuse_one_source_projection \
   tests/test_inprocess_artifact_install.py \
   tests/test_inprocess_transport_structure.py \
   tests/test_godot_preload_paths.py \

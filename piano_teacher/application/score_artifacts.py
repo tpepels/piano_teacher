@@ -49,6 +49,7 @@ class ScoreArtifacts:
         self._notation_identity: tuple | None = None
         self._notation: LessonScore | None = None
         self._model: dict | None = None
+        self._projected_model: dict | None = None
         self._layout_identity: tuple | None = None
         self._layout: EngravedScore | None = None
         self._layout_source_bpm: float | None = None
@@ -72,6 +73,7 @@ class ScoreArtifacts:
             self._notation = notation
             self._notation_identity = selected.identity
             self._model = None
+            self._projected_model = None
         return self._notation
 
     def notation_musicxml(self, selected: ScoreSelection) -> str:
@@ -88,9 +90,15 @@ class ScoreArtifacts:
         return self._model
 
     def semantic_score(self, selected: ScoreSelection) -> dict:
-        return project_model(deepcopy(self.source_model(selected)),
-            selected.piece.fingering_plan,
-            source_musicxml=selected.piece.source_musicxml)
+        # Native geometry needs this exact projection, then score.semantic
+        # requests it again. Build the source/fingering mapping once for a
+        # selected stage and revision; return isolated snapshots to consumers.
+        source = self.source_model(selected)
+        if self._projected_model is None:
+            self._projected_model = project_model(deepcopy(source),
+                selected.piece.fingering_plan,
+                source_musicxml=selected.piece.source_musicxml)
+        return deepcopy(self._projected_model)
 
     def cached_layout(self, selected: ScoreSelection) -> EngravedScore | None:
         """Feedback may read only ink belonging to this exact source selection."""

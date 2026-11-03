@@ -206,3 +206,33 @@ def test_only_native_semantic_geometry_is_published(
     assert set(result["note_ids"]) == {"source-r", "source-l"}
     assert "<score-partwise" in result["source_xml"]
     assert len(calls) == 1 and "native_notes" not in calls[0]
+
+
+def test_native_geometry_and_semantics_reuse_one_source_projection(
+        artifacts_api, selected, rendering, tmp_path, monkeypatch):
+    """The native layout and semantic-score requests must not regenerate the
+    full original-score fingering projection for one unchanged revision."""
+    from piano_teacher.application import score_preparation
+    origin = artifacts_api.project_model
+    calls = []
+    def project(*args, **kwargs):
+        calls.append(args[0]["revision"])
+        return origin(*args, **kwargs)
+    def assemble(score, **kwargs):
+        return {"revision": kwargs["revision"],
+                "notes": kwargs["native_model"]["notes"]}
+    monkeypatch.setattr(artifacts_api, "project_model", project)
+    monkeypatch.setattr(score_preparation, "assemble_layout", assemble)
+    owner = artifacts_api.ScoreArtifacts(PreprocessingCache(tmp_path))
+    native = owner.geometry(selected)
+    semantic = owner.semantic_score(selected)
+    assert native["notes"] == semantic["notes"]
+    assert calls == [selected.revision]
+    semantic["notes"].clear()
+    assert owner.semantic_score(selected)["notes"] == native["notes"]
+    changed = replace(selected, revision=selected.revision + 1)
+    assert owner.semantic_score(changed)["revision"] == changed.revision
+    assert calls == [selected.revision, changed.revision]
+    owner.invalidate()
+    assert owner.semantic_score(changed)["revision"] == changed.revision
+    assert calls == [selected.revision, changed.revision, changed.revision]

@@ -112,7 +112,7 @@ functioning.
 |---|---|
 | Later production commits require fresh acceptance evidence | Re-run the affected fast/focused, corpus and native gates against the changed revision; do not claim hardware or release validation from source checks |
 | Sparse opening and dense note spacing may still be visually wrong | Native framebuffer captures before/after Play at fixed BPM; measure first attack x-position and pixels/beat against timing |
-| Score preparation and large-piece transitions may stall | Profile cold/warm import, engraving, atlas and command queues per stage; require bounded P95 and no duplicate compilation |
+| Score preparation and large-piece transitions may stall | Score projection is now reused per selected revision across geometry + semantic commands; profile cold/warm import, engraving, atlas and command queues per stage; require bounded P95 |
 | Stage choice might be repetitive or musically ineffective | Expose actual removed/retimed/source-preserved notes; inspect stages on a varied corpus, then run P7 study |
 | Audio, visual scroll and MIDI grading could drift under load | Record common source-ID/beat traces, audio position and note-on timestamps; compare under pause/retry/rest/tempo changes |
 | Physical latency/handshake and reconnect remain unproven | Measure timestamp and calibration error with USB and Bluetooth on target device; fault-inject disconnect and recovery |
