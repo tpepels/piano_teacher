@@ -5,6 +5,8 @@ Bluetooth/USB scheduling or the actual timing of a human performance.
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from piano_teacher import server
@@ -129,7 +131,7 @@ def test_100_real_midi_performances_keep_source_and_grading_isolated(
     takes must not confer mastery or advance the canonical original source.
     """
     import mido
-    from tests.test_phase6_rest_handoff_real_midi import write_rest_source
+    from test_phase6_rest_handoff_real_midi import write_rest_source
 
     clock = [5000.0]
     monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
@@ -143,9 +145,9 @@ def test_100_real_midi_performances_keep_source_and_grading_isolated(
     bridge = EngineCommands(engine=engine)
 
     def command(operation, payload):
-        status, body = bridge.request(operation, __import__("json").dumps(payload))
+        status, body = bridge.request(operation, json.dumps(payload))
         assert status == 0, (operation, status, body[:200])
-        return __import__("json").loads(body)
+        return json.loads(body)
 
     try:
         command("settings.update", {"music_dir": str(folder)})
