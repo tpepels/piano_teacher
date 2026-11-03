@@ -62,14 +62,21 @@
    application coordination roots. Both delegate to service/presentation
    collaborators, but their size and remaining orchestration are not
    proof of full separation. This is still maintainability debt.
+5. The in-memory command protocol still carries GET/POST method names,
+   path-like route identifiers, numeric status codes and response slots
+   resembling the former HTTP interface. It makes no network calls and
+   does not start a server, but it has not yet been redesigned as a
+   fully typed IPC message schema. The native C++/Godot/Python protocol
+   must be migrated together before claiming complete removal of
+   HTTP-shaped protocol semantics.
 
 ## Bounded acceptance
 
 Run `bash scripts/verify-hybrid-workflow.sh --focused`, then
 `bash scripts/verify-hybrid-workflow.sh --corpus` separately when needed.
-The focused suite now covers stage metadata and arbitrary contributor
-registration, composed feedback, source timing and semantic model
-projection, removed in-process routes, a genuine native-score/model
+The focused suite now covers stage metadata, arbitrary contributor
+registration, generic source-local error repairs, composed feedback,
+source timing and semantic model projection, removed in-process routes, a genuine native-score/model
 request, and Godot's settings/step-picker/READY test.
 
 This document is a source audit, not a claim of a completed local run.
