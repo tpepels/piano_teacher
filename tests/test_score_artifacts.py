@@ -6,7 +6,7 @@ import pytest
 from piano_teacher.application import score_artifacts
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.preprocessing_cache import PreprocessingCache
-from piano_teacher.rendering.legacy.engraving import EngravedScore
+from piano_teacher.engraving.engraving import EngravedScore
 
 
 @pytest.fixture
