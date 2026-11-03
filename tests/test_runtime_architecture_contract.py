@@ -118,3 +118,8 @@ def test_progress_repository_never_reconstructs_unversioned_courses():
     assert "legacy_mastery" not in source
     assert "strategy_sessions" in source
     assert "step_key" in source
+
+
+def test_engine_preferences_have_no_unselectable_musicxml_model_precheck():
+    source = (ROOT / "piano_teacher/server.py").read_text()
+    assert "resolve_strategy(\"rubricnet-trained\"" not in source

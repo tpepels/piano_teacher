@@ -412,7 +412,7 @@ def available_strategies() -> tuple[dict[str, str | bool], ...]:
 
 def resolve_strategy(spec: str | ExerciseStrategy | None, *, piece=None) -> ExerciseStrategy:
     if spec is None:
-        spec = "coda-part"
+        spec = "source-progression"
     if not isinstance(spec, str):
         if (not isinstance(getattr(spec, "name", None), str)
                 or not callable(getattr(spec, "generate", None))):

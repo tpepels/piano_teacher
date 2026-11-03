@@ -114,3 +114,7 @@ def test_explicit_selection_ignores_environment_strategy(monkeypatch):
     monkeypatch.setenv("PIANO_EXERCISE_STRATEGY", "fukuda")
     assert LearningPlan(piece).exercise_strategy.name == "source-progression"
     assert LearningPlan(piece, exercise_strategy="source-progression").exercise_strategy.name == "source-progression"
+
+
+def test_unset_strategy_uses_the_canonical_source_progression():
+    assert resolve_strategy(None).name == "source-progression"
