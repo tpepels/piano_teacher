@@ -20,41 +20,40 @@ def test_import_open_measure_navigation_native_notation_over_real_queue(tmp_path
     commands = EngineCommands(engine=engine)
 
     def request(route, payload=None):
-        verb = "POST" if payload is not None else "GET"
         status, data = commands.request(
-            verb, route, json.dumps(payload) if payload is not None else "")
-        assert status == 200, (status, data[:500])
+            route, json.dumps(payload) if payload is not None else "")
+        assert status == 0, (status, data[:500])
         return json.loads(data)
 
     try:
-        listed = request("/library")
+        listed = request("library.catalog")
         assert listed["pieces"][0]["id"] == "real.mid"
-        opened = request("/library/open", {"id": "real.mid"})
+        opened = request("library.open", {"id": "real.mid"})
         assert opened["loaded"] is True
         assert opened["piece_last_bar"] > 0
         assert opened["running"] is False
         start = min(2, opened["piece_last_bar"])
-        selected = request("/control", {"action": "open_at", "bar": start,
+        selected = request("practice.command", {"action": "open_at", "bar": start,
                                         "mode": "practice"})
         assert selected["mode"] == "practice"
         assert selected["selected_start_bar"] >= start
         assert not selected["running"]
-        layout = request("/score/layout")
+        layout = request("score.native_layout")
         assert layout["notes"] and layout["systems"]
         assert layout["attack_map"]
         assert layout["native_note_templates"]
         assert layout["native_glyphs"]
         assert layout["revision"] == selected["revision"]
-        model = request("/score/model")
+        model = request("score.semantic")
         assert model["revision"] == selected["revision"]
         assert model["notes"]
         assert all(note["id"] for note in model["notes"])
-        assert request("/score/layout")["revision"] == model["revision"]
-        request("/control", {"action": "next"})
-        after_next = request("/state")
+        assert request("score.native_layout")["revision"] == model["revision"]
+        request("practice.command", {"action": "next"})
+        after_next = request("state.snapshot")
         assert after_next["loaded"]
-        request("/control", {"action": "previous"})
-        after_previous = request("/state")
+        request("practice.command", {"action": "previous"})
+        after_previous = request("state.snapshot")
         assert after_previous["loaded"]
         assert 1 <= after_previous["selected_start_bar"] <= after_previous["piece_last_bar"]
         assert not after_previous["running"]
