@@ -1,7 +1,9 @@
 extends SceneTree
 ## Actual production scene -> embedded Python -> MIDI -> Verovio -> retained
 ## notation -> practice transport. No synthetic score-session doubles.
-const FIXTURE := "phase6_native_fixture.mid"
+const DEFAULT_FIXTURE := "phase6_native_fixture.mid"
+var fixture_name := DEFAULT_FIXTURE
+var expected_fingerprint := ""
 const MAX_MS := 95000
 
 var app
@@ -28,6 +30,11 @@ func _initialize() -> void:
     call_deferred("_boot")
 
 func _boot() -> void:
+    var arguments: PackedStringArray = OS.get_cmdline_user_args()
+    if not arguments.is_empty():
+        fixture_name = arguments[0]
+    if arguments.size() >= 2:
+        expected_fingerprint = arguments[1]
     begun_ms = Time.get_ticks_msec()
     root.size = Vector2i(1280,800)
     var scene: PackedScene = load("res://main.tscn")
@@ -65,7 +72,7 @@ func _process(_delta: float) -> bool:
         if not app.startup_last_music_checked:
             return false
         requested = true
-        print("PHASE6_PRODUCTION_LAST_PIECE_REQUESTED:",FIXTURE)
+        print("PHASE6_PRODUCTION_LAST_PIECE_REQUESTED:",fixture_name)
         return false
     if not app.score_error.is_empty():
         _fail("Production UI rejected native score: "+str(app.score_error))
@@ -73,6 +80,10 @@ func _process(_delta: float) -> bool:
     if not ready_seen:
         if not app.score_session.is_ready():
             return false
+        if not expected_fingerprint.is_empty() and \
+                str(app.last_state.get("piece_fingerprint","")) != expected_fingerprint:
+            _fail("Loaded a different MIDI from the requested real score")
+            return true
         var renderer = app.practice_view.stage.renderer
         var notes: int = renderer.timeline.notes.size()
         if not renderer.visible or notes <= 0 or not renderer.retained_ready():

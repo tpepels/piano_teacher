@@ -116,6 +116,16 @@ and visible native noteheads are checked at every publication boundary.
 This is a new required CI gate, not yet accepted until the native workflow
 passes. It does not assert microphone/audio output or physical MIDI grading.
 
+**P6 — Real-score viewport coverage.** Two further production-scene
+cases now select the real `Peace_Piece_-_Bill_Evans_(Piano_Solo).midi` and
+`Chopin_-_Nocturne_Op_9_No_2_(E_Flat_Major).midi` through the persisted
+library. The full file SHA-256 must match the loaded backend fingerprint.
+Each case verifies retained visible noteheads at READY, at least two beats
+of lookahead, a stationary Pause and source-clock-aligned motion on Resume.
+They are new runtime CI gates, not accepted until the exact native workflow
+passes. Screen-pixel contours remain covered by the separate native
+notation/proof suite, not by headless geometry assertions.
+
 **P6 — Score preparation.** Score loading now supersedes obsolete
 layout/model requests without waiting for old deadlines, bounds semantic
 retries, and surfaces actionable failure if retained notation never completes.
