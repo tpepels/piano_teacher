@@ -476,6 +476,16 @@ class PracticeEngine:
                       "ms", "status", piece.fingering_plan.status, flush=True)
                 checkpoint = now
             with self.lock:
+                # Construct and restore a complete candidate before changing
+                # the current session. A generator failure must leave the
+                # selected score, active MIDI take and source revision intact.
+                candidate = LearningPlan(piece, warmup=warmup,
+                    exercise_strategy=self.library.settings['exercise_strategy'],
+                    timing_strategy=self.library.settings['timing_strategy'],
+                    tempo_strategy=self.library.settings['tempo_strategy'],
+                    fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint),
+                    feedback=self.fukuda_mistakes.evidence(fingerprint))
+                self.progress.restore(candidate, fingerprint)
                 self._stop()
                 self._reset_trouble()
                 self.course_guided = False
@@ -485,12 +495,7 @@ class PracticeEngine:
                 self.fingerprint = fingerprint
                 self._piece_generation += 1
                 self.score_artifacts.invalidate()
-                self.plan = LearningPlan(piece, warmup=warmup,
-                    exercise_strategy=self.library.settings['exercise_strategy'],
-                    timing_strategy=self.library.settings['timing_strategy'],
-                    tempo_strategy=self.library.settings['tempo_strategy'],
-                    fukuda_mistakes=self.fukuda_mistakes.problematic(fingerprint),
-                    feedback=self.fukuda_mistakes.evidence(fingerprint))
+                self.plan = candidate
                 if diagnostics:
                     now = time.perf_counter()
                     print("SCORE_LOAD_STAGE: curriculum", round((now-checkpoint)*1000, 1),
@@ -500,7 +505,6 @@ class PracticeEngine:
                 self.teaching = None
                 self.guided_range = None
                 self.score = score
-                self._restore()
                 self.feedback = "Press Start to practice"
                 self.next_action = "Press Start to practice."
                 self.score_revision += 1
