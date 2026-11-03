@@ -28,7 +28,7 @@ if [[ -n "$PY_LIB" ]]; then
 fi
 echo "Importing native extension into the Godot project ..."
 timeout 35s "$GODOT_BIN" --headless --path godot --editor --import
-echo "Checking extension registration, embedded Python and /library ..."
+echo "Checking extension registration, embedded Python and library.catalog ..."
 timeout 18s "$GODOT_BIN" --headless --path godot \
   --script res://native_bridge_smoke.gd
 
