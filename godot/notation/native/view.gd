@@ -500,6 +500,10 @@ func paint_retained_annotations(canvas: CanvasItem) -> void:
                 "active_hand":active_hand,"play_from_beat":play_from_beat,
                 "score_loop_enabled":score_loop_enabled,
                 "preparation_history":preparation_history})
+    if runway_overlay:
+        # The future overlay reuses the same fixed staff, brace and playhead
+        # drawn by the current primary renderer. Only its notes scroll in.
+        return
     # The genuine Verovio brace belongs ABOVE scrolling source ink at the
     # fixed left-hand edge, not inside the translated source segments.
     var staff_top: float = layout.staff_center("right")-2.0*gap

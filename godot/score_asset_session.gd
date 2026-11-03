@@ -101,6 +101,9 @@ func adopt_prepared(state: Dictionary, prepared_renderer, prepared_layout: Dicti
     if is_instance_valid(_feedback):
         _feedback.bind_score(_renderer,revision)
         _feedback.present(_state)
+    # Reset source-ID-scoped hit overlays without hiding the already
+    # compiled notation or blanking the score viewport.
+    assets_invalidated.emit(revision)
     layout_published.emit(revision,layout_snapshot())
     score_published.emit(revision)
     _publish_status()
