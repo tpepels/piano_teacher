@@ -34,28 +34,18 @@ def restored_strategy_plan(
     if has_saved:
         return replacement
 
-    # On first selection, retain a nearby musical location but never copy
-    # clean streak, mastery or an earned transformed-stage BPM.
-    preferred = previous.active_variant.level
-    if previous.exercise.kind == "learn":
-        candidates = replacement._pipeline_stages(
-            replacement.exercises[
-                min(previous.index, len(replacement.exercises)-1)],
-            previous.hand)
-        experimental = sorted(
-            (stage for stage in candidates if
-             stage.shaped_tempo or stage.transformed_rhythm),
-            key=lambda stage: (
-                stage.shaped_tempo and stage.transformed_rhythm,
-                stage.transformed_rhythm, stage.shaped_tempo),
-            reverse=True)
-        if experimental:
-            preferred = experimental[0].variant.level
+    # On first selection, keep the nearest *source measure*, not the
+    # preceding generator's unrelated exercise index, hand catalog or level.
+    # The new curriculum owns its order: begin at its first genuinely
+    # selected stage for that source passage. Earlier code force-selected
+    # the first rhythm/tempo experiment in a guessed exercise, bypassing
+    # Fukuda's opening reduction and crashing if that exercise had no
+    # matching hand. Explicitly saved sessions above still resume exactly.
     replacement.restore_location(
         kind=previous.exercise.kind,
         first_bar=previous.exercise.phrase.first_bar,
         last_bar=previous.exercise.phrase.last_bar,
-        hand=previous.hand, level=preferred)
+        hand=previous.hand, level="")
     replacement.streak = 0
     replacement.bpm = replacement._tempo_for_current_stage()
     return replacement
