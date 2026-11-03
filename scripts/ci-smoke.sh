@@ -48,7 +48,6 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_visual_transport.py \
   tests/test_transport_field_ownership.py \
   tests/test_phase1_transport.py \
-  tests/test_instructional_recovery.py \
   tests/test_inprocess_scheduler.py \
   tests/test_snapshot_capture_ports.py \
   tests/test_manual_tempo_ux_regression.py \

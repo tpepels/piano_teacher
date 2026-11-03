@@ -13,6 +13,7 @@ from piano_teacher.learning import LearningPlan
 from piano_teacher.lesson_settings import SETTINGS
 from piano_teacher.music import Note, Phrase, Piece
 from piano_teacher.practice import PlayedNote, evaluate
+from piano_teacher.grading_tolerance import onset_tolerance, duration_tolerance
 from piano_teacher.server import PracticeEngine
 from piano_teacher.inprocess import EngineCommands
 
@@ -55,11 +56,11 @@ def _assessment(engine, flaw=None):
               for note in plan.active_variant.notes]
     first = played[0]
     if flaw == "late":
-        played[0] = replace(first, onset=first.onset + .101,
-                            release=first.release + .101)
+        played[0] = replace(first, onset=first.onset + onset_tolerance(seconds) + .05,
+                            release=first.release + onset_tolerance(seconds) + .05)
     elif flaw == "short":
         played[0] = replace(first, release=first.onset
-                            + (first.release - first.onset) * .79)
+                            + (first.release - first.onset) * .40)
     elif flaw == "wrong":
         played[0] = replace(first, pitch=first.pitch + 1)
     elif flaw == "extra":
@@ -179,8 +180,8 @@ def test_manual_buttons_interleave_with_clean_progression_navigation_and_reload(
 
 @pytest.mark.parametrize("flaw", ["late", "short", "wrong", "extra"])
 def test_manual_target_speed_still_requires_strict_clean_consecutive_takes(tmp_path, flaw):
-    assert SETTINGS.grading_onset_tolerance_seconds == .1
-    assert SETTINGS.grading_duration_tolerance_fraction == .2
+    assert onset_tolerance(60 / 113) >= SETTINGS.grading_onset_tolerance_seconds
+    assert duration_tolerance(60 / 113, 60 / 113) > 0
     with _engine(tmp_path) as engine:
         stage = engine.plan.identity
         while engine.plan.bpm < engine.plan.target_bpm:

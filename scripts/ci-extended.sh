@@ -79,6 +79,10 @@ timeout 100s "$PYTHON" -m pytest -q \
   tests/test_learning.py \
   tests/test_midi_beaming.py \
   tests/test_source_beam_pixel_fidelity.py
+# Instructional recovery includes authentic Verovio note and rest geometry.
+# It requires the optional [godot] dependencies and must not run under the
+# lightweight (dependency-free engraving) push CI environment.
+timeout 180s "$PYTHON" -m pytest -q tests/test_instructional_recovery.py
 # A genuinely rendered (headless Godot) two-bar source score. This catches
 # timing-line drift and source-ink disappearance without a corpus audit.
 timeout 50s "$PYTHON" -m pytest -q \

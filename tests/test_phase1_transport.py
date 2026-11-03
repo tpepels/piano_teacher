@@ -201,15 +201,18 @@ def test_paused_preview_never_advances_learning(harness):
     assert e.plan.identity == stage
 
 
-def test_godot_uses_one_clock_and_freezes_on_pause():
-    script = (Path(__file__).resolve().parents[1] / 'godot' / 'main.gd').read_text()
-    for source in ['func _transport_beat_now() -> float:',
-                   'var beat: float = _transport_beat_now()',
-                   'var clock: float = _transport_beat_now()',
-                   'not bool(last_state.get("paused", false))',
-                   'func _toggle_pause() -> void:',
-                   'func _restart_practice() -> void:']:
-        assert source in script
+def test_godot_uses_single_transport_sample_for_music_and_metronome():
+    root = Path(__file__).resolve().parents[1] / 'godot'
+    main = (root / 'main.gd').read_text()
+    click_owner = (root / 'metronome_frame_coordinator.gd').read_text()
+    assert 'visual_transport_clock.accept(parsed,last_state_tick,received_ms)' in main
+    assert 'var beat: float = _transport_beat_at(ticks)' in main
+    assert '_update_count_in(beat,ticks)' in main
+    assert 'func _toggle_pause() -> void:' in main
+    assert 'func _restart_practice() -> void:' in main
+    assert 'if paused:' in click_owner
+    assert 'count_tick_index = int(floor(beat + .00001))' in click_owner
+    assert 'count_click.call(posmod(tick,bar) == 0,beat)' in click_owner
 
 
 def test_three_four_count_in_retains_meter_for_click_accents(harness):
@@ -223,9 +226,12 @@ def test_three_four_count_in_retains_meter_for_click_accents(harness):
     e.start()
     assert e.state()['count_in_bar_beats'] == pytest.approx(3)
     assert e.state()['count_in_beats'] < 3
-    source = (Path(__file__).resolve().parents[1] / 'godot' / 'main.gd').read_text()
-    # Metronome accents still follow the source meter. Numeric labels were
-    # deliberately removed in Phase 7.6d; the beat lights use that meter.
-    assert 'posmod(tick, bar_beats) == 0' in source
-    assert 'last_state.get("count_in_bar_beats", 4)' in source
-    assert 'game_count_in.present(beat,' in source
+    # The current metronome coordinator consumes the same authored source
+    # meter in both normal and preparation phases; Main only supplies beat.
+    root = Path(__file__).resolve().parents[1] / 'godot'
+    clicks = (root / 'metronome_frame_coordinator.gd').read_text()
+    main = (root / 'main.gd').read_text()
+    assert 'state.get("count_in_bar_beats",4)' in clicks
+    assert 'posmod(tick,bar) == 0' in clicks
+    assert 'practice_view.stage.count_in.present(beat,bar,true,paused)' in clicks
+    assert 'metronome_frame.update(last_state,last_state_tick,sampled_beat,now_ms)' in main
