@@ -111,3 +111,16 @@ to full real-score or full-corpus coverage. This run also recaptured the
 samples after moving the playhead beneath score ink; earlier frame
 evidence stays historical. See `docs/native-real-score-sample.md` for
 separately captured genuine MIDI performances and denominators.
+
+
+## Phase 6 current-engine rerun
+
+The targeted overlapping-slur/tie and three-voice negative-control job is
+updated to **Godot 4.7.2**, matching the production desktop renderer. The
+capture fixture now recompiles the affected retained source CanvasItem after
+each single-construct intervention and after restoration, so a stale cached
+image cannot masquerade as successful source suppression. The first rerun
+must pass with authentic current-SHA PNGs before its results can supersede
+the historical 4.5.1 entries above. The separate bounded
+`phase6-real-score-framebuffer.yml` gate verifies the original Peace Piece,
+Chopin and Moonlight MIDI samples; neither selected test is whole-corpus proof.
