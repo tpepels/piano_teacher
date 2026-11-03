@@ -99,14 +99,14 @@ def test_bounded_retry_stops_at_selected_chunk_and_cannot_grant_mastery(tmp_path
         assert engine.review_end_beat < phrase.end-phrase.start
         assert engine.state()["duration"] == pytest.approx(
             (target["end_beat"]-target["start_beat"]) * 60 / engine.plan.bpm)
-        engine.run_at = time.monotonic() - 2000
+        engine.visual_transport.run_at = time.monotonic() - 2000
         final = engine.state()
         assert final["phase"] == "review"
         assert final["performance_summary"]["missed"] > 0
         assert engine.review_end_beat is None
         assert engine.plan.mastered == {}
         assert not engine.running
-        assert engine.next_at == 0
+        assert engine.visual_transport.next_at == 0
     finally:
         engine.db.close()
 

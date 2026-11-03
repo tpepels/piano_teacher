@@ -158,7 +158,7 @@ def test_runtime_settlement_failure_stops_retries_without_losing_pending_take(
         engine.pending_result = _result(engine, "correct")
         pending = engine.pending_result
         engine.auto = True
-        engine.next_at = 30.0
+        engine.visual_transport.next_at = 30.0
         before = _durable_counts(engine)
         real_save = engine.progress.save
         attempts = []
@@ -172,7 +172,7 @@ def test_runtime_settlement_failure_stops_retries_without_losing_pending_take(
         engine._advance_pending_feedback(31.0)
         assert len(attempts) == 1
         assert engine.pending_result is pending
-        assert not engine.auto and engine.next_at == 0
+        assert not engine.auto and engine.visual_transport.next_at == 0
         assert "Could not save" in engine.feedback
         assert _durable_counts(engine) == before
         engine._advance_pending_feedback(31.1)

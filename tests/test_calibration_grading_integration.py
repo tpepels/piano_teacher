@@ -65,7 +65,7 @@ def _perform_real_practice(engine, piece, now, *, wrong_first_pitch=False):
 
     engine.start(mode="practice")
     assert engine.running and engine.auto and not engine.preview_only
-    run_at = engine.run_at
+    run_at = engine.visual_transport.run_at
     observed_onsets = []
     observed_live = []
     for index, note in enumerate(engine.plan.active_phrase.notes):

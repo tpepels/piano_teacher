@@ -127,13 +127,13 @@ def test_start_and_loop_continuation_share_cached_grid_and_clock(tmp_path,monkey
     try:
         engine.start()
         assert engine.preview_only
-        assert engine.run_at==123.0+engine.count_in_beats*60/engine.plan.bpm
+        assert engine.visual_transport.run_at==123.0+engine.count_in_beats*60/engine.plan.bpm
         first_grid = engine.attempt_progression._grid
         first_transport = engine.transport_id
         engine.start(loop_continuation=True)
         assert engine.attempt_progression._grid is first_grid
         assert engine.transport_id==first_transport+1
-        assert engine.run_at==123.0
+        assert engine.visual_transport.run_at==123.0
         assert engine.count_in_beats==0.0
         assert not engine.auto
     finally:

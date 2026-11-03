@@ -29,7 +29,7 @@ def test_tempo_capped_lead_and_five_errors_slow_ten_percent(tmp_path,monkeypatch
         assert e.state()["lead_in_bars"]==1
         assert e.state()["count_in_beats"]==2.5
         assert e.state()["clock_beat"]==pytest.approx(-2.5)
-        start=e.run_at
+        start=e.visual_transport.run_at
         sec=60/e.plan.bpm
         for i in range(3):
             e.recorder.presses.append(PlayedNote(60+i,i*sec,(i+.5)*sec))
@@ -39,14 +39,14 @@ def test_tempo_capped_lead_and_five_errors_slow_ten_percent(tmp_path,monkeypatch
         assert state["recovery_beat"]==0
         assert state["bpm"]==36
         assert state["streak"]==0 and state["mastered"]==0
-        deadline=e.next_at
+        deadline=e.visual_transport.next_at
         now[0]=deadline+.01
         waiting=e.state()
         assert waiting["phase"]=="playing"
         assert waiting["awaiting_score_revision"] is None
         assert waiting["revision"] == state["revision"]
         assert waiting["count_in_beats"] == 0
-        assert e.run_at == deadline
+        assert e.visual_transport.run_at == deadline
         assert waiting["clock_beat"] == (deadline+.01-deadline)*36/60
     finally:
         e.db.close()
@@ -55,7 +55,7 @@ def test_tempo_capped_lead_and_five_errors_slow_ten_percent(tmp_path,monkeypatch
 def test_complete_current_chunk_before_rewinding(tmp_path,monkeypatch):
     e,now=boot(tmp_path,monkeypatch,4)
     try:
-        start=e.run_at
+        start=e.visual_transport.run_at
         sec=60/e.plan.bpm
         for i in range(8):
             e.recorder.presses.append(PlayedNote(60+i,i*sec,(i+.5)*sec))
@@ -66,14 +66,14 @@ def test_complete_current_chunk_before_rewinding(tmp_path,monkeypatch):
         now[0]=start+16*sec+.01
         assert e.state()["phase"]=="recovering"
         assert e.state()["recovery_beat"]==8
-        deadline=e.next_at
+        deadline=e.visual_transport.next_at
         now[0]=deadline+.01
         waiting=e.state()
         assert waiting["phase"]=="playing"
         assert waiting["awaiting_score_revision"] is None
         assert waiting["play_from_beat"]==8
         assert waiting["count_in_beats"]==0
-        assert waiting["bpm"] == 36 and e.run_at == deadline
+        assert waiting["bpm"] == 36 and e.visual_transport.run_at == deadline
         assert waiting["clock_beat"] == (deadline+.01-deadline)*36/60
     finally:
         e.db.close()
@@ -83,7 +83,7 @@ def test_partial_retry_never_grants_full_mastery(tmp_path,monkeypatch):
     e,now=boot(tmp_path,monkeypatch,4)
     try:
         e.start(from_beat=8)
-        start=e.run_at
+        start=e.visual_transport.run_at
         sec=60/e.plan.bpm
         for i in range(8,16):
             e.recorder.presses.append(PlayedNote(60+i,(i-8)*sec,(i-7.5)*sec))
@@ -92,7 +92,7 @@ def test_partial_retry_never_grants_full_mastery(tmp_path,monkeypatch):
         assert state["phase"]=="recovering"
         assert state["mastered"]==0 and state["streak"]==0
         assert state["recovery_beat"]==0
-        now[0]=e.next_at+.01
+        now[0]=e.visual_transport.next_at+.01
         assert e.state()["play_from_beat"]==0
     finally:
         e.db.close()
@@ -101,7 +101,7 @@ def test_partial_retry_never_grants_full_mastery(tmp_path,monkeypatch):
 def test_stop_cancels_pending_retry(tmp_path,monkeypatch):
     e,now=boot(tmp_path,monkeypatch,2)
     try:
-        now[0]=e.run_at+8*60/e.plan.bpm+.1
+        now[0]=e.visual_transport.run_at+8*60/e.plan.bpm+.1
         assert e.state()["phase"]=="recovering"
         e.control("stop")
         now[0]+=100
@@ -123,7 +123,7 @@ def test_custom_target_recovers_instead_of_running_to_original_midi_speed(tmp_pa
     try:
         e.control("tempo", bpm=80)
         e.start()
-        now[0] = e.run_at + 8 * 60 / e.plan.bpm + .1
+        now[0] = e.visual_transport.run_at + 8 * 60 / e.plan.bpm + .1
         assert e.state()["bpm"] == 72
         assert e.plan.target_bpm == 80
         e.plan.apply_result(correct=8, total=8)
