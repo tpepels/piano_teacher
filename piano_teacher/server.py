@@ -19,7 +19,7 @@ from .application.midi_connection import MidiConnection, MidiNotice
 from .application.listen_session import ListenSelection, ListenSession
 from .practice import Recorder
 from .importing.pieces import import_piece
-from .rendering.legacy.engraving import EngravedScore
+from .engraving.engraving import EngravedScore
 from .fingering import FingeringService
 from .library import ScoreLibrary
 from .preprocessing_cache import PreprocessingCache
