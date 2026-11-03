@@ -1,5 +1,7 @@
 # Embedded runtime
 
+Technical contract only. The sole active development plan is [ROADMAP.md](../ROADMAP.md).
+
 Piano Teacher is a **single Godot process** using a CPython interpreter
 inside a C++ Godot 4.7 GDExtension. There is no alternate application
 runtime, HTTP service, UDP listener or port binding.
@@ -28,7 +30,7 @@ runtime, HTTP service, UDP listener or port binding.
   queue, with completion callbacks delivered on Godot's main thread.
   Its condition-variable wait has a bounded monotonic wakeup: the same worker
   calls `EngineCommands.tick()` to advance automatic attempts, recovery and
-  other musical deadlines even when the UI does not request `/state`.
+  other musical deadlines even when the UI does not request `state.snapshot`.
   Writes re-evaluate the wakeup cadence immediately. No second clock or
   Python scheduler thread is created.
 - `piano_teacher.inprocess.EngineCommands` dispatches typed engine
@@ -40,13 +42,13 @@ runtime, HTTP service, UDP listener or port binding.
 - The Python GIL is held only while invoking Python; the C++ queue
   uses a condition variable rather than an extra polling thread.
 
-Godot uses one `inprocess_request.gd` adapter for commands and one
-`score_asset_queue.gd` adapter for native score layout and semantic model
-requests. The former direct-file-load, SVG/PNG page, and non-native layout
-command endpoints have been removed from the runtime. The remaining
-resource-style names are identifiers inside the same in-memory worker queue;
-they are not HTTP requests or URLs on a network. No source code should
-instantiate `HTTPRequest` or `PacketPeerUDP`.
+Godot uses `inprocess_request.gd` for typed operation requests and
+`score_asset_queue.gd` for revision-bound `score.native_layout` and
+`score.semantic` responses. The native C++ bridge accepts only an operation
+name and JSON payload (or returns raw audio bytes); results use internal
+status values `0=success, 1=invalid, 2=unknown, 3=failed`. No HTTP
+method, URL, socket, network adapter or compatibility route exists.
+`listen.audio` delivers PCM bytes directly to Godot's sound owner.
 
 ## Presentation and progression boundaries
 
@@ -54,7 +56,7 @@ instantiate `HTTPRequest` or `PacketPeerUDP`.
 - `session_snapshot_builder.py` receives `SnapshotValues` (explicit capture facts) and `SnapshotReadPorts` (named clock, learner, source, Listen, and guided services). It never receives `PracticeEngine`, `MidiConnection`, the library, or a renderer. `PracticeEngine` assembles these values under its existing lock; one explicitly named write port synchronizes the source-derived preparation gap.
 - `practice_frame_coordinator.gd` and `practice_state_presenter.gd` receive only their visual collaborators at construction rather than the entire application. `main.gd` owns request sequencing, accepted-state transport updates and clock sampling; the frame coordinator receives the sampled beat and returns ungraded onset cues.
 - `assessment_settlement.py` grades completed takes and projects score ink using explicit assessment policies and a lazy layout lookup. Projection failures preserve the graded result and report unmapped notes. `assessment_evidence.py` validates durable graded observations; `assessment_commit.py` applies results to the selected `LearningPlan`, then returns the stage/tempo/remediation outcome. Only the engine changes transport, revision, feedback duration or session persistence.
-- `feedback_route.py` chooses remediation, guided continuation, score-revision wait, repeat or stop using immutable facts; the engine applies the decision. `guided_fragment.py` selects complete source-measure teaching units and skips silent opening units. `GuidedSession` is the single owner of the teaching controller, source fragment, prepared flag and guided return context; the engine retains compatibility accessors and score/MIDI authority. `LearnerProgress` selects unfinished guided ideas and persists completed guided preparation without receiving the engine.
+- `feedback_route.py` chooses remediation, guided continuation, score-revision wait, repeat or stop using immutable facts; the engine applies the decision. `guided_fragment.py` selects complete source-measure teaching units and skips silent opening units. `GuidedSession` owns the teaching controller, source fragment, prepared flag and guided return context; the engine remains the authoritative transaction boundary for score and MIDI operations. `LearnerProgress` selects unfinished guided ideas and persists completed guided preparation without receiving the engine.
 - `control_dispatch.py` classifies commands; `score_ack.py` and `transport_commands.py` select acknowledgment, start/restart, pause and deadline-shift decisions from explicit facts. `VisualTransport` owns both source-derived preparation-rest selection and the absolute reverse/forward deadline. Under its existing RLock, `PracticeEngine` applies transport effects. `stage_change.py` changes only `LearningPlan` selection/tempo and determines how guided teaching reenters after stage/tempo changes; `course_navigation.py` validates source-measure opening, and `AssessmentService` validates assessed review intervals. `GuidedSession` now supplies the same source-selected fragment used for controller binding and visible notation. `LearnerProgress` owns guided resume, rolling trouble, original placement and skip persistence.
 - `practice_control_policy.gd` chooses Play/Pause/Retry/Listen commands without view access, while `metronome_frame_coordinator.gd` retains audio-click counters and presents count-in/calibration/retry phases using the same visual transport clock. `main.gd` only invokes these owners with sampled state and callback ports.
 - `command_failure_presenter.gd` publishes failed command messages to injected views. `command_success_policy.gd` classifies accepted replies and `command_success_presenter.gd` publishes view effects. `navigation_policy.gd` decides pause-on-leave and Settings return behavior from explicit screen/transport facts. `command_request_state.gd` owns in-flight command metadata, queued Pause/Stop, deferred library selections, JSON serialization, bounded dispatch timeouts and immediate send-error resets. It accepts an injected request adapter per send, retaining no scene or application reference. `command_success_effects.gd` applies accepted-response effects in their original order via narrowly injected callbacks, without an application-root reference. `main.gd` retains response classification, state acceptance, actual screen navigation and request error presentation.
@@ -73,7 +75,7 @@ instantiate `HTTPRequest` or `PacketPeerUDP`.
   scroll projection. Busy-button state is updated only on transitions.
 - Snapshot projection generates the shifted tempo segment list once for both
   MIDI-time and visual-rest transport fields.
-- `/diagnostics/performance` now exposes bounded `engine_tick` latency
+- `performance.diagnostics` exposes bounded `engine_tick` latency
   alongside `midi_callback` and `full_state` latency. These measurements
   exclude physical MIDI hardware and actual display latency.
 
@@ -95,7 +97,7 @@ same CPython ABI as the developer's interpreter.
 
 The build imports the Godot resource index and runs
 `scripts/verify-native-bridge.sh`: the class must register, embedded
-Python must load, and a command for `/library` must return a JSON
+Python must load, and the typed `library.catalog` operation must return a JSON
 catalogue. A broken extension must prevent the app from opening.
 
 Godot loads native extensions with local symbol scope. The extension
@@ -122,7 +124,7 @@ Run `bash scripts/ci-smoke.sh` and
 native smoke runs on the developer machine at build/start and in the
 bounded GitHub native workflow.
 
-Use the in-process `/diagnostics/performance` command for MIDI
+Use the typed in-process `performance.diagnostics` operation for MIDI
 callback and state-projection processing times. The bounded local checks
 `tests/test_inprocess_scheduler.py` and
 `tests/test_prepared_sprite_plans.py` cover poll-independent loop progression
