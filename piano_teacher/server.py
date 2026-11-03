@@ -1459,15 +1459,10 @@ class PracticeEngine:
                 course_guided=self.course_guided,
                 score_changed=self.score_revision != previous_revision,
                 message=message))
-            if route == "remediation":
-                self._start_remedial_assignment(assignment)
-                return
-            if route == "guided_stage":
-                self._begin_course_stage()
-                return
-            # A score is considered ready only if its *exact* post-feedback
-            # artifacts were adopted during the successful SQLite settlement.
-            # A stale UI acknowledgement cannot bypass the loading handshake.
+            # Exact, precompiled source-bound ink is already on the screen,
+            # including after guided-origin practice. This fast path must be
+            # checked BEFORE the ordinary guided-stage reentry, or the latter
+            # reopens a lesson and interrupts the scrolling view.
             if (route in ("await_score", "guided_stage") and
                     self._prepared_stage_published and
                     self._future_stage_ready ==
@@ -1477,6 +1472,12 @@ class PracticeEngine:
                 self._continue_at(deadline)
                 return
             self._prepared_stage_published = False
+            if route == "remediation":
+                self._start_remedial_assignment(assignment)
+                return
+            if route == "guided_stage":
+                self._begin_course_stage()
+                return
             if route == "await_score":
                 self.awaiting_score_revision = self.score_revision
                 self.auto = False
