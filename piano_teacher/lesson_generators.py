@@ -545,37 +545,32 @@ class ComposedLessonGenerator:
 
 
 @dataclass(frozen=True)
-class CodaFukudaMidiLessonGenerator(ComposedLessonGenerator):
-    """Adaptive short-passage teaching policy with a cached research catalog.
+class AdaptiveComposedLessonGenerator(ComposedLessonGenerator):
+    """Pluggable source-bound passage teaching over independent generators.
 
-    The generic ComposedLessonGenerator stays available for arbitrary registered
-    combinations. This named application policy selects manageable progressive
-    excerpts and chooses Coda or Fukuda stages from graded error families.
+    Unlike ordinary complete-course composition, this policy compiles
+    contributors' passage stages once, then reselects by the error family.
+    It contains no knowledge of any participating algorithm's names.
     """
-    components: tuple[LessonGenerator, ...] = (
-        FukudaMidiLessonGenerator(), CodaLessonGenerator())
-    name: str = "coda-fukuda-midi"
-    error_status: tuple[tuple[str, str], ...] = ()
     catalog: LessonPlanDefinition | None = None
 
     def with_mistakes(
         self, mistakes: frozenset[str], definition: LessonPlanDefinition,
-    ) -> "CodaFukudaMidiLessonGenerator":
+    ) -> "AdaptiveComposedLessonGenerator":
         from dataclasses import replace
         known = dict(self.error_status)
         statuses = tuple(sorted((sid, known.get(sid, "missed"))
                                 for sid in mistakes))
-        if statuses == self.error_status and self.mistakes == mistakes:
+        if statuses == self.error_status and mistakes == self.mistakes:
             return self
         return replace(self, mistakes=mistakes, error_status=statuses)
 
     def with_feedback(
-        self, evidence: Mapping[str, str],
-        definition: LessonPlanDefinition,
-    ) -> "CodaFukudaMidiLessonGenerator":
+        self, evidence: Mapping[str, str], definition: LessonPlanDefinition,
+    ) -> "AdaptiveComposedLessonGenerator":
         from dataclasses import replace
         statuses = tuple(sorted(evidence.items()))
-        if statuses == self.error_status:
+        if statuses == self.error_status and frozenset(evidence) == self.mistakes:
             return self
         return replace(self, mistakes=frozenset(evidence),
                        error_status=statuses)
@@ -585,14 +580,23 @@ class CodaFukudaMidiLessonGenerator(ComposedLessonGenerator):
             compile_hybrid_catalog, select_hybrid_stages)
         catalog = self.catalog
         if catalog is None:
-            catalog = compile_hybrid_catalog(piece, components=self.components)
-            # Cache only immutable source candidates. The selected course
-            # remains a separate immutable value per evidence update.
+            catalog = compile_hybrid_catalog(
+                piece, components=self.components, name=self.name)
+            # The immutable catalog survives with_feedback dataclass copies;
+            # re-planning only selects stages, never rebuilds source notation.
             object.__setattr__(self, "catalog", catalog)
         status = dict(self.error_status)
         for sid in self.mistakes or ():
             status.setdefault(sid, "missed")
         return select_hybrid_stages(catalog, status)
+
+
+@dataclass(frozen=True)
+class CodaFukudaMidiLessonGenerator(AdaptiveComposedLessonGenerator):
+    """Default adaptive MIDI preset using two interchangeable contributors."""
+    components: tuple[LessonGenerator, ...] = (
+        FukudaMidiLessonGenerator(), CodaLessonGenerator())
+    name: str = "coda-fukuda-midi"
 
 
 @dataclass(frozen=True)
@@ -650,7 +654,7 @@ def build_lesson_generator(
 
 def register_composed_lesson_generator(
     name: str, component_names: tuple[str, ...], *,
-    label: str | None = None, version: int = 1,
+    label: str | None = None, version: int = 1, adaptive: bool = False,
 ) -> None:
     """Compose any registered generators without changing application roots.
 
@@ -665,17 +669,21 @@ def register_composed_lesson_generator(
                         for part in component_names)
     if any(definition is None for definition in definitions):
         raise ValueError("Compositions require registered whole-piece generators")
+    if adaptive and not all(reg.midi_only for reg in definitions):
+        raise ValueError("Adaptive passage composition requires MIDI generators")
 
     def factory(**options):
         participants = tuple(reg.factory(
             **{**options, "mistakes": None}) for reg in definitions)
-        return ComposedLessonGenerator(
-            participants, name, mistakes=options["mistakes"])
+        kind = AdaptiveComposedLessonGenerator if adaptive else ComposedLessonGenerator
+        return kind(
+            participants, name, mistakes=options["mistakes"],
+            error_status=tuple(sorted((options.get("feedback") or {}).items())))
 
     register_lesson_generator(LessonGeneratorRegistration(
         name, factory, version,
         owns_timing=any(reg.owns_timing for reg in definitions),
-        midi_only=any(reg.midi_only for reg in definitions)),
+        midi_only=adaptive or any(reg.midi_only for reg in definitions)),
         label=label)
 
 
