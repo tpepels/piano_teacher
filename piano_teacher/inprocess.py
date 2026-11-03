@@ -1,7 +1,8 @@
-"""In-process Godot/Python commands and bounded MIDI event retrieval.
+"""Typed in-memory command dispatcher for the embedded Godot Python worker.
 
-The Godot GDExtension calls request() on a worker thread. Responses
-contain status and compact JSON or binary audio bytes.
+Operations are namespaced application intents, with one JSON payload and
+one result code. This protocol has no methods, routes, URLs, HTTP status
+codes, server, socket or separate transport clock.
 """
 from __future__ import annotations
 
@@ -9,110 +10,96 @@ import json
 import os
 import time
 import traceback
-from urllib.parse import parse_qs
 
 from .server import PracticeEngine
-from .live_event_ring import LiveEventRing
+
+OK = 0
+INVALID = 1
+UNKNOWN = 2
+FAILED = 3
 
 
 class EngineCommands:
+    READS = {
+        "state.snapshot": "state",
+        "fingering.status": "fingering_status",
+        "library.catalog": "library_listing",
+        "library.health_status": "library_health_status",
+        "lesson.overview": "lesson_overview",
+        "settings.snapshot": "preferences",
+        "exercise.diagnostics": "exercise_diagnostics",
+        "hardware.diagnostics": "hardware_diagnostics",
+        "performance.diagnostics": "performance_diagnostics",
+        "score.semantic": "semantic_score",
+    }
+
     def __init__(self, *, engine: PracticeEngine | None = None):
         self.engine = engine if engine is not None else PracticeEngine()
         self.owned = engine is None
 
     def tick(self) -> int:
-        """Existing native worker advances the engine on an independent timer.
-
-        Return milliseconds until its next wakeup. Nothing here accesses
-        Godot or creates another thread/transport.
-        """
+        """The same native worker advances all musical deadlines."""
         return self.engine.advance_clock()
 
     @staticmethod
     def _reply(status: int, value: object) -> tuple[int, bytes]:
         return status, json.dumps(value, separators=(",", ":")).encode("utf-8")
 
-    def request(self, method: str, target: str, body: str = "") -> tuple[int, bytes]:
-        began = time.perf_counter()
+    def request(self, operation: str, payload_json: str = "") -> tuple[int, bytes]:
+        started = time.perf_counter()
         try:
-            route, _, query_string = target.partition("?")
-            if method == "GET":
-                return self._get(route, parse_qs(query_string))
-            if method == "POST":
-                payload = json.loads(body) if body else {}
-                if not isinstance(payload, dict):
-                    raise ValueError("Command body must be a JSON object")
-                return self._post(route, payload)
-            return self._reply(405, {"error": "Unsupported command"})
+            values = json.loads(payload_json) if payload_json else {}
+            if not isinstance(values, dict):
+                raise ValueError("Command payload must be a JSON object")
+            engine = self.engine
+            if operation in self.READS:
+                if values:
+                    raise ValueError(f"{operation} takes no input")
+                return self._reply(OK, getattr(engine, self.READS[operation])())
+            if operation == "midi.events":
+                since = values.get("since", 0)
+                if type(since) is not int or since < 0:
+                    raise ValueError("MIDI event sequence must be nonnegative")
+                return self._reply(OK, self.drain_midi_events(since))
+            if operation == "midi.devices":
+                return self._reply(OK, {"devices": engine.ports()})
+            if operation == "score.native_layout":
+                return self._reply(OK, engine.geometry())
+            if operation == "listen.audio":
+                return OK, engine.demo_audio(values.get("token", "")).read_bytes()
+            if operation == "fingering.correct":
+                engine.correct_fingering(values["source_id"], values["finger"],
+                                         fingerprint=values.get("fingerprint"))
+            elif operation == "library.open":
+                engine.load_library(values["id"])
+            elif operation == "library.health.start":
+                return self._reply(OK, engine.start_library_health())
+            elif operation == "settings.update":
+                engine.set_preferences(**values)
+            elif operation == "midi.device.select":
+                engine.connect(values.get("name", ""))
+            elif operation == "hardware.action":
+                return self._reply(OK, engine.hardware_diagnostics_action(
+                    values.get("action", "")))
+            elif operation == "practice.command":
+                engine.control(**values)
+            else:
+                return self._reply(UNKNOWN, {"error": f"Unknown operation: {operation}"})
+            return self._reply(
+                OK, engine.preferences() if operation == "settings.update" else engine.state())
         except (KeyError, ValueError, TypeError, RuntimeError) as exc:
-            return self._reply(400, {"error": str(exc)})
+            return self._reply(INVALID, {"error": str(exc)})
         except Exception as exc:
             traceback.print_exc()
-            return self._reply(500, {"error": f"Practice engine error: {exc}"})
+            return self._reply(FAILED, {"error": f"Practice engine error: {exc}"})
         finally:
             if os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1":
-                elapsed_ms = (time.perf_counter() - began) * 1000.0
-                if elapsed_ms >= 24.0:
-                    print("INPROCESS_COMMAND_SLOW:", method, target.partition("?")[0],
+                elapsed_ms = (time.perf_counter() - started) * 1000.0
+                if elapsed_ms >= 24:
+                    print("INPROCESS_COMMAND_SLOW:", operation,
                           round(elapsed_ms, 2), "ms", flush=True)
 
-    def _get(self, path: str, query: dict) -> tuple[int, bytes]:
-        engine = self.engine
-        commands = {
-            "/state": "state",
-            "/fingering": "fingering_status",
-            "/library": "library_listing",
-            "/library/health": "library_health_status",
-            "/lesson": "lesson_overview",
-            "/settings": "preferences",
-            "/exercise/diagnostics": "exercise_diagnostics",
-            "/diagnostics/hardware": "hardware_diagnostics",
-            "/diagnostics/performance": "performance_diagnostics",
-            "/score/model": "semantic_score",
-        }
-        if path == "/midi/live":
-            since = int(query.get("since", ["0"])[0])
-            if since < 0:
-                raise ValueError("MIDI event sequence must be nonnegative")
-            return self._reply(200, self.drain_midi_events(since))
-        if path == "/devices":
-            return self._reply(200, {"devices": engine.ports()})
-        if path in commands:
-            return self._reply(200, getattr(engine, commands[path])())
-        if path == "/score/layout":
-            # Native notation is the sole supported interactive renderer.
-            # No legacy page-layout or non-native mode is exposed.
-            if query:
-                raise ValueError("Score layout does not accept rendering modes")
-            return self._reply(200, engine.geometry())
-        if path == "/demo.wav":
-            return 200, engine.demo_audio(query.get("token", [""])[0]).read_bytes()
-        return self._reply(404, {"error": f"Unknown command: {path}"})
-
-    def _post(self, path: str, data: dict) -> tuple[int, bytes]:
-        engine = self.engine
-        if path == "/fingering":
-            engine.correct_fingering(data["source_id"], data["finger"],
-                                     fingerprint=data.get("fingerprint"))
-        elif path == "/library/open":
-            engine.load_library(data["id"])
-        elif path == "/library/health":
-            return self._reply(200, engine.start_library_health())
-        elif path == "/settings":
-            engine.set_preferences(**data)
-        elif path == "/device":
-            engine.connect(data.get("name", ""))
-        elif path == "/diagnostics/hardware":
-            return self._reply(200,
-                               engine.hardware_diagnostics_action(data.get("action", "")))
-        elif path == "/control":
-            engine.control(**data)
-        else:
-            return self._reply(404, {"error": f"Unknown command: {path}"})
-        return self._reply(200, engine.preferences() if path == "/settings" else engine.state())
-
     def drain_midi_events(self, since: int) -> list[dict]:
-        # Presentation cannot mutate the recorder or assessment clock.
         with self.engine.lock:
             return self.engine.live_events.after(since)
 
