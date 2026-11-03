@@ -116,19 +116,15 @@ def test_invalid_worker_response_is_never_relabelled_as_trained(monkeypatch):
         RubricNetExtractor().extract("<score-partwise/>")
 
 
-def test_failed_trained_selection_cannot_change_persisted_settings_or_progress(
-        monkeypatch, tmp_path):
-    import piano_teacher.exercise_strategies as strategies
+def test_unselectable_musicxml_model_cannot_change_saved_settings_or_progress(
+        tmp_path):
     engine = PracticeEngine(tmp_path, enable_midi=False)
     try:
         engine.plan = LearningPlan(score())
         engine.fingerprint = "unchanged-score"
         before = engine.plan.identity
         saved_strategy = engine.library.settings["exercise_strategy"]
-        def unavailable(_):
-            raise RubricNetUnavailable("missing research environment")
-        monkeypatch.setattr(strategies, "_trained_rubricnet_from_xml", unavailable)
-        with pytest.raises(RubricNetUnavailable):
+        with pytest.raises(ValueError, match="Unknown exercise strategy"):
             engine.set_preferences(exercise_strategy="rubricnet-trained")
         assert engine.library.settings["exercise_strategy"] == saved_strategy
         assert engine.plan.identity == before
