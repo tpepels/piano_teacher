@@ -36,3 +36,8 @@ def test_stable_source_uid_and_historical_evidence_are_preserved():
         "docs/archive/development/NOTATION_RENDERING-2026-10-19.md",
     ]
     assert auditor.audit_paths(allowed) == []
+
+
+def test_workflow_filters_and_canonical_markdown_links_resolve():
+    assert auditor.audit_workflow_triggers(ROOT) == []
+    assert auditor.audit_core_document_links(ROOT) == []

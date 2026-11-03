@@ -9,7 +9,6 @@ on:
       - 'piano_teacher/fukuda_midi_performance.py'
       - 'scripts/analyze_fukuda_midi.py'
       - 'scripts/audit_fukuda_full_midi_corpus.py'
-      - 'piano_teacher/fukuda_mistake_store.py'
       - 'piano_teacher/server.py'
       - 'piano_teacher/preprocessing_cache.py'
       - 'piano_teacher/fukuda_mistake_store.py'

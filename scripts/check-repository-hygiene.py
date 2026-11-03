@@ -33,6 +33,70 @@ def audit_paths(paths: list[str]) -> list[str]:
     return issues
 
 
+
+def audit_workflow_triggers(root: Path = ROOT) -> list[str]:
+    """Check literal path filters against live files, separately per event."""
+    import re
+
+    issues = []
+    for workflow in sorted((root / ".github" / "workflows").glob("*.yml")):
+        event = ""
+        in_paths = False
+        seen = set()
+        for line in workflow.read_text(encoding="utf-8").splitlines():
+            section = re.match(r"^  (push|pull_request|workflow_call|workflow_dispatch|workflow_run):\s*$", line)
+            if section:
+                event = section.group(1)
+                in_paths = False
+            if line == "    paths:" and event in ("push", "pull_request"):
+                in_paths = True
+                seen = set()
+                continue
+            if not in_paths:
+                continue
+            entry = re.match(r"^      - ['\"]?([^'\"]+?)['\"]?\s*$", line)
+            if entry:
+                target = entry.group(1)
+                if target in seen:
+                    issues.append(f"{workflow.name}: duplicate {event} path {target}")
+                seen.add(target)
+                if not any(char in target for char in "*?[]{}!") and not (root / target).is_file():
+                    issues.append(f"{workflow.name}: missing {event} trigger {target}")
+            elif line.strip() and not line.startswith("      "):
+                in_paths = False
+    return issues
+
+
+def audit_core_document_links(root: Path = ROOT) -> list[str]:
+    """Only live entry points and technical contracts; archives are historical."""
+    import re
+    from urllib.parse import unquote
+
+    issues = []
+    canonical = (
+        "README.md", "ROADMAP.md", "docs/README.md",
+        "docs/architecture/system.md",
+        "docs/architecture/composed-midi-generators.md",
+        "docs/inprocess-runtime.md",
+        "docs/archive/development/README.md",
+        "scripts/research/README.md",
+    )
+    for relative in canonical:
+        page = root / relative
+        if not page.is_file():
+            issues.append(f"Missing canonical document: {relative}")
+            continue
+        text = page.read_text(encoding="utf-8")
+        for match in re.finditer(r"(?<!!)\[[^\]]+\]\(([^)]+)\)", text):
+            target = match.group(1).split()[0].split("#")[0].strip("<>")
+            if not target or "://" in target or target.startswith(("mailto:", "data:")):
+                continue
+            absolute = (page.parent / unquote(target)).resolve()
+            if not absolute.is_file():
+                issues.append(f"{relative}: unresolved local link {target}")
+    return issues
+
+
 def audit_repo(root: Path = ROOT) -> list[str]:
     completed = subprocess.run(
         ["git", "-C", str(root), "ls-files", "-z"],
@@ -43,6 +107,8 @@ def audit_repo(root: Path = ROOT) -> list[str]:
     paths = [part.decode("utf-8", errors="replace")
              for part in completed.stdout.split(b"\0") if part]
     issues = audit_paths(paths)
+    issues.extend(audit_workflow_triggers(root))
+    issues.extend(audit_core_document_links(root))
     for name in ("README.md", "ROADMAP.md", "docs/README.md"):
         if name not in paths:
             issues.append(f"Missing canonical documentation entry: {name}")

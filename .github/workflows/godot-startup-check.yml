@@ -10,9 +10,7 @@ on:
       - 'tests/godot/coda_piece_strategy.gd'
       - 'tests/godot/settings_ownership.gd'
       - 'scripts/check-godot-syntax.sh'
-      - 'tests/godot/coda_trial_controls.gd'
       - 'tests/godot/score_asset_lifecycle.gd'
-      - 'godot/lesson_screen.gd'
       - '.github/workflows/godot-startup-check.yml'
   pull_request:
     paths:
@@ -22,9 +20,7 @@ on:
       - 'tests/godot/coda_piece_strategy.gd'
       - 'tests/godot/settings_ownership.gd'
       - 'scripts/check-godot-syntax.sh'
-      - 'tests/godot/coda_trial_controls.gd'
       - 'tests/godot/score_asset_lifecycle.gd'
-      - 'godot/lesson_screen.gd'
       - '.github/workflows/godot-startup-check.yml'
 
 permissions:
