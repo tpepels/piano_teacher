@@ -21,16 +21,15 @@ func _init(view_presenter, on_state: Callable, on_navigate: Callable,
     refresh_score = on_score
 
 func apply(decision: Dictionary, opened: Variant,
-        result: int, code: int, headers: PackedStringArray,
-        body: PackedByteArray, started_ms: int) -> void:
+        code: int, body: PackedByteArray, started_ms: int) -> void:
     presenter.present_accepted(decision)
     match str(decision["kind"]):
         "fingering":
-            publish_state.call(result, code, headers, body, started_ms)
+            publish_state.call(code, body, started_ms)
         "control":
             if bool(decision["refresh_settings"]):
                 request_settings.call()
-            publish_state.call(result, code, headers, body, started_ms)
+            publish_state.call(code, body, started_ms)
             if bool(decision["navigate_practice"]):
                 navigate_practice.call("practice")
         "library_health":
@@ -42,7 +41,7 @@ func apply(decision: Dictionary, opened: Variant,
                     if bool(decision["publish_state"]):
                         # A resumed lesson is restored by backend state,
                         # never by a second open-at request.
-                        publish_state.call(result, code, headers, body, started_ms)
+                        publish_state.call(code, body, started_ms)
                     refresh_score.call()
                 "picker":
                     presenter.present_source_picker(opened)
