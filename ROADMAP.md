@@ -104,53 +104,51 @@ caches are untracked and source .gd.uid files are retained; fast CI rejects
 reintroduced generated/indexed debris. Editor-only MCP tools remain in the
 development tree but are excluded from release staging.
 
-## Maintainability review — 2026-11-03
+## Maintainability hardening — completed 2026-11-03
 
-**Reviewed:** `PracticeEngine` (`server.py`), Godot `main.gd`,
-their state/transition/command collaborators, and all 24
-`piano_teacher/application/` Python modules. Extracted services do not
-import `PracticeEngine` to mutate the root. The two application roots
-remain sizeable, but their largest methods are bounded; line counts
-alone do not justify another architectural rewrite.
+This review and targeted implementation cover the backend practice settlement,
+frontend command lifecycle and the transport/score-preparation ownership gaps
+identified after Phase 5. They do not reopen Phase 5's completed architectural
+consolidation and do not certify physical MIDI or release readiness.
 
-**Defects corrected on `main`:**
-- Obsolete `run_before_assessment` test imports replaced with real
-  `_run_pre_assessment_transition` integration tests, which now run
-  in the fast gate.
-- Assessment settlement and progress commits use the required
-  `Assessment.passed` field. The warning-accepted/not-clean case has
-  a regression test; no fallback `getattr` contract remains.
-- Strategy preference changes validate proposed settings and construct
-  a replacement lesson before stopping the current take or persisting
-  a new strategy. Settings are written atomically before publishing
-  the new in-memory snapshot. Generator failures and settings write
-  failures preserve the running attempt and previous preferences.
-  A successful source-to-Coda+Fukuda change is tested with imported MIDI.
+**Completed changes on `main`:**
+- Unified graded evidence, Fukuda mistakes, learner trouble resolution and
+  persisted mastery/progress with SQLite nested savepoints. Failures in evidence
+  observation, adaptive feedback or the final progress write rollback every
+  durable change, restore the current `LearningPlan` and retain the pending
+  take. Automatic transition retries stop with an explicit save failure
+  rather than attempting writes on every frame. Injection and subsequent
+  successful-retry tests exercise each failure boundary.
+- Godot in-process command requests unregister canceled/timed-out callbacks
+  and ignore duplicate, obsolete or out-of-order completions. Dispatch failures
+  reset outstanding command state and publish an error rather than leaving a
+  busy indicator. The real request/command-state fixtures run in Godot 4.7.
+- Deleted all 17 `TransportField` forwards from `PracticeEngine` and the
+  entire descriptor class. The engine, all audited tests and development tools
+  now use the single `VisualTransport` state owner. A tracked-source check
+  rejects reintroduced field aliases; zero remaining aliases were found.
+- Replaced obsolete HTTP request tests with typed `EngineCommands` tests.
+  Old clock assertions were updated to the current metronome coordinator.
+  Native-engraving-dependent instructional-recovery tests run only in the
+  full, optional Godot/Verovio environment, never in dependency-minimal CI.
+- Native score fragment extraction fails with explicit stage-specific errors
+  instead of publishing empty tie, beam, chord, tuplet or slur fragments after
+  exceptions. Error injection covers all fragment builders and verifies that
+  unsuccessful layouts are not cached.
 
-[Fast verification: 444 passed, 6 skipped](https://github.com/tpepels/piano_teacher/actions/runs/41699630295)
-at `bf99fc8`. CI covers the named software contracts; it does not prove
-hardware behavior or all unselected research tests.
+**Verified gates:**
+- [Fast CI at `e99902b`: 507 passed, 6 skipped](https://github.com/tpepels/piano_teacher/actions/runs/41708617452).
+- [Godot parser and request fixtures](https://github.com/tpepels/piano_teacher/actions/runs/41705203537) passed after the request lifecycle change.
+- [Fukuda](https://github.com/tpepels/piano_teacher/actions/runs/41707025702)
+  and [composed strategy](https://github.com/tpepels/piano_teacher/actions/runs/41707025653)
+  regression gates passed after transport ownership migration.
+- [Phase 6 real-score framebuffer](https://github.com/tpepels/piano_teacher/actions/runs/41708452848)
+  passed after the native fragment error behavior change.
 
-**Remaining maintainability risks (do not confuse with completed Phase 5):**
-- `TransportField` still forwards seventeen public `PracticeEngine` fields
-  to the `VisualTransport` owner. There is no duplicate stored clock,
-  but these accessors enlarge the engine-facing API. Remove them only
-  together with every production/test caller and a proven equivalent
-  transport regression; do not introduce a compatibility alias.
-- `_commit_pending` remains a multi-effect transaction spanning
-  graded evidence, learning-plan advancement and persistence.
-  Test failures injected between evidence recording, stage changes
-  and durable saving before changing that ownership.
-- `main.gd` retains startup/request-response sequencing with several
-  injected presenters. Verify interrupted, stale and timed-out commands
-  end-to-end before extracting more wrappers; preserve reply ordering.
-- `score_preparation.py` has broad fragment-extraction exception handlers
-  that publish incomplete assets. Verify these failures appear as explicit
-  notation errors and cannot publish a partially usable score.
-
-These are focused acceptance tasks for runtime reliability and API
-simplification. No second roadmap, HTTP fallback, new application root
-or broad structural rewrite is authorized by this review.
+**Still unproven:** all optional full-engraving recovery scenarios after the
+new hardening, physical keyboard latency and long-duration operational fault
+tolerance. Those are Phase 6/7 acceptance issues, not an alternate architecture
+or a reason to introduce compatibility layers.
 
 ## Immediate order of work
 
@@ -300,7 +298,7 @@ functioning.
 | Calibration pulse drift under delayed score/device snapshots | Calibration beat now uses the same backend monotonic epoch as MIDI events; a Godot regression injects stale snapshots and verifies the visible downbeat/click. This is a software correction only; hardware audio/USB/Bluetooth offsets still require measurement |
 | Physical latency/handshake and reconnect remain unproven | Measure timestamp and calibration error with USB and Bluetooth on target device; fault-inject disconnect and recovery |
 | Full packaging, migration and runtime fault handling not accepted | Isolated clean-home install, simulated corrupted cache/old course, crash/reopen, offline start and asset-bundle checks |
-| Application roots may still contain avoidable coordination | Audit `server.py`/`main.gd` for engine-owning transitions and forwarding accessors; move complete responsibilities to narrowly typed owners and delete old paths, not aliases |
+| Residual application orchestration | Maintain the established transaction and request boundaries; use failing end-to-end tests before extracting more responsibilities. No transport forwarding remains |
 | Removed strategies can survive in historical test fixtures or saved preferences | Prevent runtime registration, reject obsolete selection, migrate unknown saved choice to the default hybrid; retain historical fixtures only as test data |
 | Original Fukuda numeric/figure parity is not independently established | Paper-to-code threshold/figure audit; explicitly report MIDI-domain substitutions instead of claiming audio-domain replication |
 
