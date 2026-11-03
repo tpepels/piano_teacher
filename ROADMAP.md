@@ -164,7 +164,7 @@ possible without cluttering the practice stage.
 - A bounded background **FutureScore** worker pre-engraves the next exact
   source-keyed Coda/Fukuda stage, including semantic notes, authentic Verovio
   assets and fingering projection. Its large reply is serialized off the
-  authoritative MIDI command worker. One next stage is retained at a time.
+  authoritative MIDI command worker. Two upcoming stages are cached with one worker and bounded memory.
 - The in-process Godot **ScoreRunway** builds the future retained native
   ink ahead of use and sends an exact stage-key/revision acknowledgement.
   On a passing third clean full-target run, the engine adopts the already
@@ -181,7 +181,9 @@ possible without cluttering the practice stage.
   no longer requires a manual native rebuild; an unsuccessful preflight exits
   with an error instead of opening a broken UI.
 
-**Software gates:** `tests/test_seamless_stage_runway.py` covers clean
+**Software gates:** `tests/test_future_score_lookahead.py` verifies
+two-stage caching and exclusion of stale in-flight jobs;
+`tests/test_seamless_stage_runway.py` covers clean
 consecutive transitions, preloader failure, guided-origin practice and
 unchanged failure recovery; `tests/godot/seamless_score_runway.gd` checks
 retained renderer promotion and outgoing scrolling ink;

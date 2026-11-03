@@ -15,6 +15,8 @@ on:
       - 'piano_teacher/server.py'
       - 'piano_teacher/application/score_preparation.py'
       - 'piano_teacher/application/score_artifacts.py'
+      - 'piano_teacher/application/future_score.py'
+      - 'tests/test_real_future_score.py'
       - 'piano_teacher/application/assessment_commit.py'
       - 'piano_teacher/sqlite_transaction.py'
 
