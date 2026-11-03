@@ -11,6 +11,9 @@ on:
       - 'tests/test_phase6_score_performance.py'
       - 'piano_teacher/application/score_artifacts.py'
       - 'piano_teacher/runtime_timings.py'
+      - 'piano_teacher/learning.py'
+      - 'piano_teacher/lesson_generators.py'
+      - 'piano_teacher/adaptive_hybrid_curriculum.py'
 
 permissions:
   contents: read

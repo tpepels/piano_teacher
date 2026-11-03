@@ -210,3 +210,42 @@ def test_coda_explicit_measure_range_matches_original_endpoint_request():
     with pytest.raises(ValueError,match="measure range"):
         LearningPlan(piece,exercise_strategy="coda-midi",
             lesson_generator=CodaLessonGenerator(first_measure=0,last_measure=1))
+
+
+def test_only_registered_group_owners_compile_full_piece_midi_beams(monkeypatch):
+    """Adaptive MIDI contributors cannot trigger unused full-score XML work."""
+    import piano_teacher.learning as learning
+    from piano_teacher.lesson_generators import lesson_generator_registration
+    piece = load_midi(SOURCE)
+    calls = []
+    original = learning.grouping_for_piece
+
+    def grouping(source):
+        calls.append(source)
+        return original(source)
+
+    monkeypatch.setattr(learning, "grouping_for_piece", grouping)
+    for strategy in ("coda-midi", "fukuda-midi", "coda-fukuda-midi"):
+        assert not lesson_generator_registration(strategy).requires_grouping
+        plan = LearningPlan(piece, exercise_strategy=strategy)
+        assert plan.grouping is None
+        assert plan.exercises[-1].phrase.notes == piece.notes
+        assert calls == [], (strategy, calls)
+    assert lesson_generator_registration("source-progression").requires_grouping
+    original_route = LearningPlan(piece, exercise_strategy="source-progression")
+    assert calls == [piece]
+    assert original_route.grouping is not None
+    assert original_route.exercises[0].phrase.notes
+
+
+def test_registered_composed_source_generator_propagates_group_ownership():
+    from piano_teacher.lesson_generators import (
+        lesson_generator_registration, register_composed_lesson_generator)
+    name = "group-ownership-test-source-composition"
+    if lesson_generator_registration(name) is None:
+        register_composed_lesson_generator(
+            name, ("source-progression", "fukuda"),
+            label="Group Ownership Test")
+    registered = lesson_generator_registration(name)
+    assert registered is not None and registered.requires_grouping
+    assert not lesson_generator_registration("coda-fukuda-midi").requires_grouping

@@ -64,7 +64,16 @@ class LearningPlan:
                  self.tempo_strategy.name!="constant-tempo")):
             raise ValueError("Coda MIDI lessons generate their own timing and tempo stages")
         self.warmup = warmup
-        self.grouping = (None if warmup else grouping_for_piece(piece))
+        # Full-piece MIDI beam inference constructs and reparses MusicXML
+        # for *every source attack*. It is only required by generators
+        # explicitly declaring grouped-source pedagogy. MIDI-domain Coda /
+        # Fukuda authors derive their own groups from their selected passage;
+        # compiling source-wide beams for them blocks startup unnecessarily.
+        needs_grouping = bool(
+            self.generator_registration is not None
+            and self.generator_registration.requires_grouping)
+        self.grouping = (grouping_for_piece(piece)
+                         if not warmup and needs_grouping else None)
         # Produce a complete, immutable course from the entire MIDI Piece
         # before this stateful player owns navigation and mastery.
         self.lesson_generator = lesson_generator or build_lesson_generator(

@@ -594,6 +594,7 @@ class LessonGeneratorRegistration:
     course_version: int
     owns_timing: bool = False
     midi_only: bool = False
+    requires_grouping: bool = False
 
 
 _REGISTRY: dict[str, LessonGeneratorRegistration] = {}
@@ -668,7 +669,8 @@ def register_composed_lesson_generator(
     register_lesson_generator(LessonGeneratorRegistration(
         name, factory, version,
         owns_timing=any(reg.owns_timing for reg in definitions),
-        midi_only=adaptive or any(reg.midi_only for reg in definitions)),
+        midi_only=adaptive or any(reg.midi_only for reg in definitions),
+        requires_grouping=any(reg.requires_grouping for reg in definitions)),
         label=label)
 
 
@@ -683,7 +685,7 @@ for _source_name in (
             options["strategy"], options["timing"], options["tempo"],
             consolidate=options["consolidate"],
             warmup=options["warmup"], grouping=options["grouping"]),
-        course_version=4))
+        course_version=4, requires_grouping=True))
 
 register_lesson_generator(LessonGeneratorRegistration(
     "coda-midi",

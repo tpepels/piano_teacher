@@ -20,6 +20,8 @@ timeout 25s "$PYTHON" -m pytest -q \
   tests/test_inprocess_dispatcher.py \
   tests/test_score_artifacts.py::test_native_geometry_and_semantics_reuse_one_source_projection \
   tests/test_score_artifacts.py::test_native_layout_retry_reuses_prepared_ink_without_stale_or_mutable_data \
+  tests/test_lesson_generator_architecture.py::test_only_registered_group_owners_compile_full_piece_midi_beams \
+  tests/test_lesson_generator_architecture.py::test_registered_composed_source_generator_propagates_group_ownership \
   tests/test_inprocess_artifact_install.py \
   tests/test_inprocess_transport_structure.py \
   tests/test_godot_preload_paths.py \
