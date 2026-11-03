@@ -204,6 +204,21 @@ class CodaLessonGenerator:
     # excerpt. Only the desktop registration enables bounded teaching units.
     teaching_passages: bool = False
 
+    def passage_stages(self, piece: Piece, original: ExerciseVariant, *,
+                       kind: str) -> tuple[ExerciseStage, ...]:
+        """Contribute source-backed passage stages to any adaptive composer."""
+        from .application.coda_midi_curriculum import midi_coda_stages
+        phrase = original.phrase
+        if (kind == "learn" and
+                abs(phrase.end - piece.bar_boundaries[phrase.last_bar]) > 1e-7):
+            # Preserve a sounding MIDI release beyond the barline. This
+            # particular passage cannot be transformed at authored meter
+            # boundaries, but it can still be practised as original notes.
+            return (ExerciseStage(original, origin="original",
+                                  technique="original",
+                                  display_name="Original notes and rhythm"),)
+        return midi_coda_stages(piece, (original,), kind=kind)
+
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         if (piece.source_format!="midi" or piece.source_musicxml or
                 piece.midi_ticks_per_beat<=0):
@@ -327,6 +342,14 @@ class FukudaMidiLessonGenerator:
     name: str = "fukuda-midi"
     consolidate: bool = False
 
+    def passage_stages(self, piece: Piece, original: ExerciseVariant, *,
+                       kind: str) -> tuple[ExerciseStage, ...]:
+        """Contribute MIDI-native reductions without owning passage choice."""
+        from .fukuda_midi import fukuda_midi_variants, as_fukuda_stage
+        variants = (fukuda_midi_variants(original, bpm=piece.bpm,
+                    mistakes=self.mistakes) if kind == "learn" else (original,))
+        return tuple(as_fukuda_stage(variant) for variant in variants)
+
     def with_mistakes(
         self, mistakes: frozenset[str],
         definition: LessonPlanDefinition,
@@ -337,7 +360,6 @@ class FukudaMidiLessonGenerator:
     def generate(self, piece: Piece) -> LessonPlanDefinition:
         if piece.source_format!="midi" or piece.source_musicxml:
             raise ValueError("Fukuda MIDI requires an imported MIDI piece")
-        from .fukuda_midi import fukuda_midi_variants, as_fukuda_stage
         # Whole-score assessment first gives Fukuda's three rule families
         # access to any musical pattern across the original piece, not only
         # whichever two-bar focus window another strategy selected.
@@ -365,12 +387,8 @@ class FukudaMidiLessonGenerator:
                         exercise.phrase.last_bar,exercise.phrase.start,
                         exercise.phrase.end,tuple(n for _,n in selected)),
                     tuple(i for i,_ in selected))
-                if exercise.kind=="learn":
-                    variants=fukuda_midi_variants(
-                        original,bpm=piece.bpm,mistakes=self.mistakes)
-                else:
-                    variants=(original,)
-                result[(exercise.key,hand)]=tuple(as_fukuda_stage(v) for v in variants)
+                result[(exercise.key, hand)] = self.passage_stages(
+                    piece, original, kind=exercise.kind)
         return LessonPlanDefinition(exercises,result,self.name,
                                     requires_unique_source_ids=True)
 
@@ -535,7 +553,7 @@ class CodaFukudaMidiLessonGenerator(ComposedLessonGenerator):
     excerpts and chooses Coda or Fukuda stages from graded error families.
     """
     components: tuple[LessonGenerator, ...] = (
-        CodaLessonGenerator(), FukudaMidiLessonGenerator())
+        FukudaMidiLessonGenerator(), CodaLessonGenerator())
     name: str = "coda-fukuda-midi"
     error_status: tuple[tuple[str, str], ...] = ()
     catalog: LessonPlanDefinition | None = None
@@ -567,7 +585,7 @@ class CodaFukudaMidiLessonGenerator(ComposedLessonGenerator):
             compile_hybrid_catalog, select_hybrid_stages)
         catalog = self.catalog
         if catalog is None:
-            catalog = compile_hybrid_catalog(piece)
+            catalog = compile_hybrid_catalog(piece, components=self.components)
             # Cache only immutable source candidates. The selected course
             # remains a separate immutable value per evidence update.
             object.__setattr__(self, "catalog", catalog)
