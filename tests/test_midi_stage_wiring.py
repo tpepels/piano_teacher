@@ -171,3 +171,49 @@ def test_live_engine_state_and_step_overview_show_actual_selected_strategy(piece
     finally:
         engine.listen.cancel()
         engine.db.close()
+
+
+def test_third_party_midi_stage_uses_explicit_metadata_not_level_prefix(piece):
+    """An external algorithm must be selectable without any Coda/Fukuda naming."""
+    from piano_teacher.exercise_generator import ExerciseVariant
+    from piano_teacher.lesson_stage_semantics import teaching_sequence
+
+    baseline = LearningPlan(piece, exercise_strategy="coda-fukuda-midi").stages[-1]
+    source = baseline.variant
+    subset = source.notes[::2]
+    assert len(subset) >= 2
+    custom = ExerciseStage(
+        ExerciseVariant("opaque-harmonic-7", replace(source.phrase, notes=subset),
+                        source.source_indices[::2]),
+        origin="third-party-harmony",
+        technique="voice-leading",
+        display_name="Simplified harmonic skeleton")
+    stages = teaching_sequence((custom, baseline))
+    assert stages == (custom, baseline)
+    report = describe(custom, baseline)
+    assert report["origin"] == "third-party-harmony"
+    assert report["technique"] == "voice-leading"
+    assert report["family"] == "Third Party Harmony"
+    assert report["label"] == "Simplified harmonic skeleton"
+    assert report["removed"] > 0
+    assert report["meaningful"] is True
+
+
+def test_selected_coda_and_fukuda_stages_publish_generator_owned_metadata(piece):
+    for name in ("coda-midi", "fukuda-midi", "coda-fukuda-midi"):
+        plan = LearningPlan(piece, exercise_strategy=name)
+        for ex in plan.exercises:
+            from piano_teacher.lesson_generators import lesson_hands
+            for hand in lesson_hands(ex):
+                stages = plan.lesson_definition.stages(ex, hand)
+                for stage in stages:
+                    if stage.variant.level == "original":
+                        assert describe(stage, stages[-1])["family"] == "Original"
+                    elif stage.variant.level.startswith("fukuda-midi-"):
+                        assert stage.origin == "fukuda-midi"
+                        assert stage.technique and stage.display_name
+                    elif stage.variant.level.startswith("coda-"):
+                        assert stage.origin == "coda-midi"
+                        assert stage.technique and stage.display_name
+        assert plan.exercises[-1].kind == "perform"
+        assert plan.exercises[-1].phrase.notes == piece.notes
