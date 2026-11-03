@@ -20,15 +20,15 @@ def test_library_and_settings_queue_commands(tmp_path):
         return status, json.loads(body)
 
     try:
-        assert "music_dir" in get("settings.update")[1]
+        assert "music_dir" in get("settings.snapshot")[1]
         status, settings = post("settings.update", {"music_dir": str(music), "fullscreen": False})
         assert status == 0 and settings["fullscreen"] is False
         assert settings["music_dir"] == str(music)
         status, listing = get("library.catalog")
-        assert status == 200 and listing["count"] == 1
+        assert status == 0 and listing["count"] == 1
         assert listing["pieces"][0]["id"] == "Prelude.mid"
         status, error = post("settings.update", {"music_dir": str(tmp_path / "absent")})
         assert status == 1 and "error" in error
-        assert get("settings.update")[1]["music_dir"] == str(music)
+        assert get("settings.snapshot")[1]["music_dir"] == str(music)
     finally:
         engine.db.close()
