@@ -1,0 +1,59 @@
+"""Static and semantic guards for the MIDI-only in-process application."""
+from pathlib import Path
+
+from piano_teacher.exercise_pipeline import ExerciseStage
+from piano_teacher.exercise_generator import ExerciseVariant
+from piano_teacher.lesson_stage_semantics import describe, teaching_sequence
+from piano_teacher.music import Note, Phrase
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_production_bridge_exposes_no_old_network_or_page_endpoints():
+    source = (ROOT / "piano_teacher/inprocess.py").read_text()
+    assert '"/load"' not in source
+    assert '"/score.svg"' not in source
+    assert '"/score.png"' not in source
+    assert 'native_notes=raw' not in source
+    assert 'engine.geometry()' in source
+    for path in (
+        ROOT / "godot/main.gd",
+        ROOT / "godot/score_asset_session.gd",
+        ROOT / "godot/inprocess_bus.gd",
+        ROOT / "godot/inprocess_request.gd",
+    ):
+        text = path.read_text()
+        assert "HTTPRequest.new(" not in text
+        assert "HTTPClient.new(" not in text
+        assert "PacketPeerUDP.new(" not in text
+    assert '"/score/layout"' in (
+        ROOT / "godot/score_asset_session.gd").read_text()
+
+
+def test_shared_teaching_selection_is_independent_of_built_in_stage_names():
+    for path in ("piano_teacher/lesson_stage_semantics.py",):
+        text = (ROOT / path).read_text()
+        assert 'startswith("fukuda-midi-")' not in text
+        assert 'startswith("coda-")' not in text
+    notes = (
+        Note(0, 1, 60, 0, 0, "right", "source1"),
+        Note(1, 2, 62, 0, 0, "right", "source2"),
+        Note(2, 3, 64, 0, 0, "right", "source3"),
+        Note(3, 4, 65, 0, 0, "right", "source4"),
+    )
+    whole = Phrase(1, 1, 1, 0, 4, notes)
+    original = ExerciseStage(ExerciseVariant("original", whole,
+                                            (0, 1, 2, 3)), origin="original")
+    partial = ExerciseStage(
+        ExerciseVariant("completely-opaque-17",
+                        Phrase(1, 1, 1, 0, 4, (notes[0], notes[2])), (0, 2)),
+        origin="future-piano-pedagogue",
+        technique="sparse-harmonic-guide", display_name="Harmonic guide")
+    selected = teaching_sequence((partial, original))
+    assert selected == (partial, original)
+    info = describe(partial, original)
+    assert info["family"] == "Future Piano Pedagogue"
+    assert info["label"] == "Harmonic guide"
+    assert info["removed"] == 2
+    assert info["meaningful"] is True
