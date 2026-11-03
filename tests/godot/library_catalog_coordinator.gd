@@ -43,28 +43,28 @@ func _initialize() -> void:
     coordinator.request_catalog()
     if coordinator.pending:
         failures += 1
-    coordinator.on_catalog(0,200,PackedStringArray(),
+    coordinator.on_catalog(0,
         '{"pieces":[{"id":"test"}]}'.to_utf8_buffer())
     if lib.catalog.get("pieces",[]).size() != 1 or home.catalog != lib.catalog:
         failures += 1
-    coordinator.on_catalog(0,503,PackedStringArray(),PackedByteArray())
-    if lib.error != "Command 503" or not home.unavailable:
+    coordinator.on_catalog(3,PackedByteArray())
+    if lib.error != "Command 3" or not home.unavailable:
         failures += 1
     coordinator.start_health(true)
     if posts.size() != 0:
         failures += 1
     coordinator.start_health(false)
-    if posts.size() != 1 or posts[0]["path"] != "/library/health":
+    if posts.size() != 1 or posts[0]["path"] != "library.health.start":
         failures += 1
-    coordinator.on_health(0,200,PackedStringArray(),
+    coordinator.on_health(0,
         '{"running":true,"files":7}'.to_utf8_buffer())
     if not coordinator.health_running or lib.health.get("files",-1) != 7:
         failures += 1
     coordinator.start_health(false)
     if posts.size() != 1:
         failures += 1
-    coordinator.on_health(0,500,PackedStringArray(),PackedByteArray())
-    if lib.message != "Cannot check music files: Command 500":
+    coordinator.on_health(3,PackedByteArray())
+    if lib.message != "Cannot check music files: Command 3":
         failures += 1
     print("LIBRARY_COORDINATOR_FAILURES:",failures)
     quit(0 if failures == 0 else 1)
