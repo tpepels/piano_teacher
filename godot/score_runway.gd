@@ -119,7 +119,7 @@ func _request_if_needed(state: Dictionary, now_ms: int) -> void:
         return
     if str(state.get("mode","")) != "practice" or \
             not score_session.is_ready() or \
-            int(state.get("lesson_step",0)) >= int(state.get("lesson_step_count",0)):
+            int(state.get("lesson_step",0)) >= int(state.get("lesson_steps",0)):
         return
     if _fetch.request("score.next_stage") != OK:
         _next_poll_ms = now_ms + 1000
