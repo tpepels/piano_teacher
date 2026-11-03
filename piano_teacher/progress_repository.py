@@ -139,6 +139,12 @@ class ProgressRepository:
         # judged tempo, but only when the stage can be identified reliably.
         if row is not None and restore_session and resume_equivalent:
             p.stage_tempos[p.identity] = p.bpm
+        elif row is not None and restore_session:
+            # An incompatible saved *session* cannot donate its tempo, but
+            # a separately stored CURRENT-version stage tempo is still valid.
+            # Read this only after current stage keys and repeated-motif
+            # transferable credits have been loaded above.
+            p.bpm = p._tempo_for_current_stage()
         for key,bpm in self.db.execute("SELECT exercise,bpm FROM mastery WHERE fingerprint=?",(fingerprint,)):
             p.mastered[key]=bpm
         # Preserve legacy rows, and recognize them only when the exact same
