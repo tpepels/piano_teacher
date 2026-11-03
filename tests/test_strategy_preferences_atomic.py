@@ -1,8 +1,6 @@
 """Atomic preference publication and failure-safe strategy switching."""
 from __future__ import annotations
 
-import json
-
 import pytest
 
 from piano_teacher.learning import LearningPlan
@@ -118,5 +116,36 @@ def test_failed_settings_write_keeps_active_session_even_after_preflight(
         assert engine.plan is plan
         assert engine.running
         assert engine.score_revision == revision
+    finally:
+        engine.db.close()
+
+
+def test_successful_strategy_switch_installs_matching_midi_course(tmp_path):
+    """A valid commit stops the old take and publishes the new course together."""
+    from scripts.smoke_phase0 import make_fixture
+    from piano_teacher.music import load_midi
+
+    source = tmp_path / "actual.mid"
+    make_fixture(source)
+    engine = PracticeEngine(tmp_path / "app", enable_midi=False)
+    try:
+        engine.set_preferences(exercise_strategy="source-progression")
+        engine.plan = LearningPlan(
+            load_midi(source), exercise_strategy="source-progression")
+        engine.fingerprint = "real-midi-strategy-fixture"
+        engine.start()
+        old_plan = engine.plan
+        old_revision = engine.score_revision
+
+        response = engine.set_preferences(
+            exercise_strategy="coda-fukuda-midi")
+        assert response["exercise_strategy"] == "coda-fukuda-midi"
+        assert engine.library.settings["exercise_strategy"] == "coda-fukuda-midi"
+        assert engine.plan is not old_plan
+        assert engine.plan.exercise_strategy.name == "coda-fukuda-midi"
+        assert not engine.running and engine.recorder is None
+        assert engine.score_revision == old_revision + 1
+        assert ScoreLibrary(tmp_path / "app" / "config").settings[
+            "exercise_strategy"] == "coda-fukuda-midi"
     finally:
         engine.db.close()
