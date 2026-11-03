@@ -15,6 +15,7 @@ import time
 from .learning import LearningPlan
 from .sqlite_transaction import sqlite_atomic
 from .application.score_artifacts import ScoreArtifacts, ScoreSelection
+from .application.future_score import FutureScore
 from .application.midi_connection import MidiConnection, MidiNotice
 from .application.listen_session import ListenSelection, ListenSession
 from .practice import Recorder
@@ -178,6 +179,8 @@ class PracticeEngine:
         self.fingering = FingeringService(data_dir / "fingering")
         self.preprocessing = PreprocessingCache(data_dir / "preprocessed")
         self.score_artifacts = ScoreArtifacts(self.preprocessing)
+        self.future_score = FutureScore(data_dir / "preprocessed")
+        self._future_stage_ready: tuple[str, int] | None = None
         self.progress = ProgressRepository(data_dir / "progress.db")
         # Keep the public db handle for LearnerStateStore and existing clients.
         self.db = self.progress.db
@@ -603,6 +606,7 @@ class PracticeEngine:
         self._save()
 
     def _stop(self):
+        self._future_stage_ready = None
         self.guided_session.stop()
         self.visual_transport.reset_for_stop(
             rewind_seconds=SETTINGS.feedback_seconds)
@@ -971,6 +975,9 @@ class PracticeEngine:
             return ""
         p = self.plan
         result = self.pending_result
+        previous_phrase_start, previous_phrase_end = (
+            p.active_phrase.start, p.active_phrase.end)
+        previous_gap = self.visual_transport.visual_gap_beats
         # Snapshots contain only the mutating LearningPlan collections.
         # Source Piece, exercises and immutable stage definitions are shared.
         plan_before = {key: (value.copy() if isinstance(value, (dict, list, set))
@@ -1038,9 +1045,21 @@ class PracticeEngine:
                     self.open_from_beat = 0.0
                     self.performance_summary = None
                     self.review_stage_identity = None
-                    # Engraving depends on notation, not changes of tempo alone.
+                    # The upcoming score was rendered before this committed
+                    # stage change. Do not reset the moving camera to beat 0.
+                    old_stride = previous_phrase_end - previous_phrase_start + previous_gap
                     self.score_revision += 1
-                    self.visual_transport.visual_offset_beats = 0.0
+                    if (self.auto and self._future_stage_ready ==
+                            (p.identity, self.score_revision)):
+                        next_selected = self._score_selection()
+                        prebuilt = self.future_score.adopt(next_selected)
+                        if prebuilt is not None:
+                            self.score_artifacts = prebuilt
+                            self.visual_transport.visual_offset_beats += old_stride
+                        else:
+                            self.visual_transport.visual_offset_beats = 0.0
+                    else:
+                        self.visual_transport.visual_offset_beats = 0.0
                 self._save()
 
         except Exception:
@@ -1436,8 +1455,13 @@ class PracticeEngine:
                 self._begin_course_stage()
                 return
             if route == "await_score":
-                # Wait until Godot has acknowledged the next score revision;
-                # never consume a count-in against stale notation ink.
+                if self._future_stage_ready == (self.plan.identity, self.score_revision):
+                    # Godot has already compiled the exact future notation.
+                    # Continue at the old absolute deadline without a loading
+                    # screen or a second count-in. Any failure still rewinds.
+                    self._future_stage_ready = None
+                    self._continue_at(deadline)
+                    return
                 self.awaiting_score_revision = self.score_revision
                 self.auto = False
                 self.feedback = "Preparing next passage"
@@ -1883,6 +1907,51 @@ class PracticeEngine:
             set_visual_gap_beats=self._set_snapshot_visual_gap,
         )
         return capture_session_snapshot(values, reads)
+
+    def _next_stage_selection(self) -> tuple[ScoreSelection, int] | None:
+        """Snapshot an upcoming lesson without mutating its active cursor."""
+        if self.plan is None or self.is_builtin_warmup or self.mode != "practice":
+            return None
+        import copy
+        p = self.plan
+        number = p.lesson_step_number + 1
+        if number > len(p.lesson_steps):
+            return None
+        future = copy.copy(p)
+        future.stage_tempos = p.stage_tempos.copy()
+        future.transferable_tempos = p.transferable_tempos.copy()
+        future.mastered = p.mastered.copy()
+        future.select_step(number)
+        return ScoreSelection(
+            piece=future.piece, phrase=future.active_phrase,
+            hand=future.hand, stage_key=future.identity,
+            revision=self.score_revision + 1, fingerprint=self.fingerprint,
+            transformed_rhythm=future.active_stage.transformed_rhythm), number
+
+    def next_stage_score(self) -> dict:
+        """Begin ahead-of-time score preparation without blocking MIDI timing."""
+        with self.lock:
+            planned = self._next_stage_selection()
+            if planned is None:
+                return {"status": "none"}
+            selection, number = planned
+            return self.future_score.ensure(selection, number=number)
+
+    def acknowledge_preloaded_stage(self, *, stage_key: str,
+                                    revision: int) -> dict:
+        """Only a fully compiled and exact source-bound future ink may advance."""
+        with self.lock:
+            planned = self._next_stage_selection()
+            if planned is None:
+                raise ValueError("No next lesson step to preload")
+            selection, number = planned
+            if selection.stage_key != stage_key or selection.revision != revision:
+                raise ValueError("Preloaded step no longer matches the active course")
+            if not self.future_score.ready(selection):
+                raise ValueError("Next lesson notation is not yet prepared")
+            self._future_stage_ready = (stage_key, revision)
+            return {"accepted": True, "step_number": number,
+                    "revision": revision, "stage_key": stage_key}
 
     def _score_selection(self) -> ScoreSelection:
         """Capture the selected source under the application lock."""
