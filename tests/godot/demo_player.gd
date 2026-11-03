@@ -13,8 +13,8 @@ func run() -> void:
     demo.token = "lesson-a"
     demo.revision = 8
     demo.audio_path = path
-    demo._downloaded(HTTPRequest.RESULT_SUCCESS, 200, PackedStringArray(), PackedByteArray())
-    check(demo.player.stream is AudioStreamWAV, "Downloads load a real PCM stream")
+    demo._downloaded(0, FileAccess.get_file_as_bytes(path))
+    check(demo.player.stream is AudioStreamWAV, "Typed worker audio loads a real PCM stream")
     check(demo.player.stream.data.size() > 2000, "Stream carries rendered samples")
     check(not demo.player.playing, "Audio waits for backend ready acknowledgement")
     var state: Dictionary = {"mode":"listen", "revision":8, "running":true, "paused":false, "clock_beat":0.0, "bpm":80, "demo":{"token":"lesson-a", "ready":true}}
