@@ -232,8 +232,8 @@ def test_native_semantic_command_matches_selected_source_without_engraving(tmp_p
         bar_boundaries=boundaries, time_signatures=meters))
     try:
         command = EngineCommands(engine=engine)
-        code, data = command.request("GET", "/score/model")
-        assert code == 200
+        code, data = command.request("score.semantic")
+        assert code == 0
         payload = json.loads(data)
         assert payload["schema"] == SCHEMA
         assert len(payload["notes"]) == len(engine.display_phrase().notes)
