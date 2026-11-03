@@ -5,6 +5,15 @@ A stateless application collaborator: no PracticeEngine access, no new cache.
 from __future__ import annotations
 
 
+class NativeScorePreparationError(RuntimeError):
+    """Selected score cannot publish an incomplete native ink fragment."""
+
+
+def _failed(stage: str, exc: Exception) -> NativeScorePreparationError:
+    return NativeScorePreparationError(
+        f"Native score {stage} preparation failed: {type(exc).__name__}: {exc}")
+
+
 def assemble_layout(source_score, *,
                     native_model: dict,
                     notation_xml: str,
@@ -25,13 +34,12 @@ def assemble_layout(source_score, *,
     # Variable chord patterns are pre-engraved individually and
     # reused via a disk cache; unsupported patterns remain native.
     layout["native_note_templates"] = note_templates(cache)
-    # Extraction failures remain explicit missing native assets. The
-    # native compositor rejects incomplete ink; it never selects pages.
+    # Missing required Verovio assets cannot be published as a partially
+    # usable native score. The caller retries the same selected source.
     try:
         layout["native_tie_templates"] = tie_templates(cache)
     except Exception as exc:
-        print("VEROVIO_TIE_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
-        layout["native_tie_templates"] = {}
+        raise _failed("tie templates", exc) from exc
     # These fragments are cut directly from this lesson's original
     # Verovio engraving. They retain the two real note identities,
     # leaving the Godot transport in complete control of timing.
@@ -48,11 +56,7 @@ def assemble_layout(source_score, *,
             print("VEROVIO_NATIVE_BEAMS:",
                   len(layout["native_beam_fragments"]))
     except Exception as exc:
-        print("VEROVIO_BEAM_FRAGMENTS_UNAVAILABLE:",
-              type(exc).__name__,exc)
-        layout["native_beam_fragments"] = {}
-        layout["native_required_beam_groups"] = []
-        layout["native_beams_complete"] = False
+        raise _failed("beam fragments", exc) from exc
     try:
         directions = {str(identifier): bool(fragment["stem_up"])
             for fragment in layout["native_beam_fragments"].values()
@@ -60,17 +64,14 @@ def assemble_layout(source_score, *,
         layout["native_chord_templates"] = chord_templates(
             native_model, cache, stem_directions=directions)
     except Exception as exc:
-        print("VEROVIO_CHORD_TEMPLATE_UNAVAILABLE:", type(exc).__name__, exc)
-        layout["native_chord_templates"] = {}
+        raise _failed("chord templates", exc) from exc
     try:
         from ..notation.assets.tuplets import tuplet_fragments
         layout["native_tuplet_fragments"] = tuplet_fragments(
             source_score.pages, native_model,
             cache, cache_key, notation_xml=notation_xml)
     except Exception as exc:
-        print("VEROVIO_TUPLET_FRAGMENTS_UNAVAILABLE:",
-              type(exc).__name__,exc)
-        layout["native_tuplet_fragments"] = {}
+        raise _failed("tuplet fragments", exc) from exc
     try:
         from ..notation.assets.slurs import (
             slur_fragments, slur_pairs_from_xml)
@@ -87,10 +88,6 @@ def assemble_layout(source_score, *,
             native_model,cache,
             cache_key)
     except Exception as exc:
-        print("VEROVIO_SLUR_FRAGMENTS_UNAVAILABLE:",
-              type(exc).__name__,exc)
-        layout["native_slur_fragments"] = {}
-        layout["native_required_slur_pairs"] = []
-        layout["native_slurs_complete"] = False
+        raise _failed("slur fragments", exc) from exc
     return layout
 
