@@ -153,6 +153,50 @@ consolidation and do not certify physical MIDI or release readiness.
 
 **Still unproven:** physical USB/Bluetooth input and audio latency, target-device frame cadence, continuous real-time operation under actual system suspension, all-repertoire rendered correctness, clean-machine release installation and comparative teaching effectiveness. Virtual-clock endurance does not establish uninterrupted real-time reliability. These are Phase 6/7 acceptance issues, not an alternate architecture or a reason to introduce compatibility layers.
 
+## Phase 6 — continuous lesson runway and developer launch
+
+**Implementation (2026-11-03):** The scrolling native score is now the
+primary practice interaction. Stage numbers, hand and current/next notation
+level are projected at musical positions on that same beat axis; the former
+step selector lives in **Lesson Path**, where explicit navigation remains
+possible without cluttering the practice stage.
+
+- A bounded background **FutureScore** worker pre-engraves the next exact
+  source-keyed Coda/Fukuda stage, including semantic notes, authentic Verovio
+  assets and fingering projection. Its large reply is serialized off the
+  authoritative MIDI command worker. One next stage is retained at a time.
+- The in-process Godot **ScoreRunway** builds the future retained native
+  ink ahead of use and sends an exact stage-key/revision acknowledgement.
+  On a passing third clean full-target run, the engine adopts the already
+  prepared source model, commits mastery, and continues at the same musical
+  deadline **without a new count-in or score-load panel**. The outgoing
+  stage stays visible to the left until it scrolls out. No new scoring clock
+  or alternate teaching implementation is introduced.
+- Failed takes still use their existing backwards rewind and authentic
+  preparation rest. Pause/resume and manual Stop/Retry retain identity-bound
+  next-stage preparation; a changed source/revision cannot adopt stale ink.
+- `./run.sh` now checks actual native inputs, binary and CPython ABI. It
+  rebuilds when the compiled bridge is stale, and rechecks Godot registration
+  and embedded Python when source/runtime inputs change. A Python-only pull
+  no longer requires a manual native rebuild; an unsuccessful preflight exits
+  with an error instead of opening a broken UI.
+
+**Software gates:** `tests/test_seamless_stage_runway.py` covers clean
+consecutive transitions, preloader failure, guided-origin practice and
+unchanged failure recovery; `tests/godot/seamless_score_runway.gd` checks
+retained renderer promotion and outgoing scrolling ink;
+`tests/test_real_future_score.py` prepares the actual Coda/Fukuda MIDI
+notation/Verovio bundle in the full engraving workflow. The existing
+`run.sh` fingerprint regressions also run in fast CI.
+
+**Acceptance limitation:** no captured keyboard/GPU session yet proves
+glitch-free transitions on the target computer. A future score that cannot
+be prepared and acknowledged still falls back to an explicit score revision
+handshake and may interrupt scrolling; silently displaying stale notation
+is prohibited. Real long/complex pieces and automatic adaptive
+replanning remain mandatory Phase 6 acceptance cases. This feature does
+not close physical performance or teaching-effectiveness gates.
+
 ## Immediate order of work
 
 **P6 — Prove real user behavior.** The
@@ -321,7 +365,10 @@ bash scripts/ci-smoke.sh
 bash scripts/check-godot-syntax.sh
 bash scripts/verify-hybrid-workflow.sh --focused
 bash scripts/verify-hybrid-workflow.sh --corpus
-# Rebuild the native binary when C++/bridge/runtime inputs change:
+# Daily developer start: only stale native inputs rebuild; changed runtime
+# inputs are preflighted against the actual Godot + embedded Python process:
+./run.sh
+# To diagnose build/preflight failures independently:
 bash scripts/build-inprocess.sh
 bash scripts/verify-native-bridge.sh
 # Staged standalone audit is performed by the native runtime smoke CI.
