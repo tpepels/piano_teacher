@@ -9,8 +9,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from .learning import LearningPlan, build_exercises
-from .exercise_generator import generate_variants
+from .learning import LearningPlan
 from .lesson_settings import SETTINGS
 from .learner_state import LearnerStateStore
 from .practice_history import AssessmentHistoryStore
@@ -55,113 +54,78 @@ class ProgressRepository:
         p = plan
         if p is None:
             return
-        row = self.db.execute("""SELECT exercise,hand,bpm,streak,target_bpm,
-                      variant_index,route_version,step_key,first_bar,last_bar,
-                      level,exercise_kind FROM strategy_sessions
-                      WHERE fingerprint=? AND strategy=?""",
-                      (fingerprint, p.profile)).fetchone()
-        if row is None:
-            row = self.db.execute("SELECT exercise,hand,bpm,streak,target_bpm,variant_index,route_version,step_key,first_bar,last_bar,level,exercise_kind FROM sessions WHERE fingerprint=?",(fingerprint,)).fetchone()
-        # The session row is piece-wide, while mastery/tempo/history keys are
-        # strategy-specific. Never restore another strategy's session BPM
-        # or clean streak, including after changing the preference offline.
-        if row and isinstance(row[7], str) and row[7].startswith("course:"):
-            segments = row[7].split(":")
-            saved_strategy = (segments[2] if len(segments) > 2
-                              and segments[2] not in ("learn", "connect", "perform", "warmup")
-                              else "legacy")
-            if saved_strategy != p.profile and not p.warmup:
-                # Target tempo belongs to the piece, not the chosen exercise
-                # generator. Do not inherit position, BPM or clean streak.
-                if row[4] is not None:
-                    p.target_bpm = max(SETTINGS.minimum_bpm,
-                        min(SETTINGS.maximum_bpm, int(row[4])))
-                row = None
-        legacy_exercises = None
-        resume_equivalent = False
-        if row and restore_session:
-            exact = next((step for step in p.lesson_steps if step.key == row[7]), None)
-            if exact is not None:
-                p.restore_location(kind=exact.kind, first_bar=exact.first_bar, last_bar=exact.last_bar,
-                                   hand=exact.hand, level=exact.level)
-                equivalent = True
-            elif row[6] and row[8] is not None and row[9] is not None:
-                p.restore_location(kind=row[11] or "learn", first_bar=int(row[8]), last_bar=int(row[9]),
-                                   hand=row[1], level=row[10] or "original")
-                equivalent = False
-            else:
-                # Old integer positions refer to the old two-bar route. Never
-                # interpret them as positions in the new consolidated course.
-                legacy_exercises = build_exercises(p.piece, consolidate=False, adaptive_focus=False)
-                old = legacy_exercises[min(max(0, int(row[0])), len(legacy_exercises) - 1)]
-                hand = row[1] if row[1] in ("right", "left", "both") else "both"
-                old_variants = generate_variants(old.phrase, hand)
-                if not old_variants:
-                    hand = "both"
-                    old_variants = generate_variants(old.phrase, hand)
-                old_variant = old_variants[min(max(0, int(row[5] or 0)), len(old_variants) - 1)]
-                p.restore_location(kind=old.kind, first_bar=old.phrase.first_bar, last_bar=old.phrase.last_bar,
-                                   hand=hand, level=old_variant.level)
-                equivalent = (row[1] == hand and p.hand == hand and p.active_variant.level == old_variant.level
-                              and p.active_phrase.start == old_variant.phrase.start
-                              and p.active_phrase.end == old_variant.phrase.end
-                              and p.active_phrase.notes == old_variant.notes
-                              # Old unversioned whole-performance rows did
-                              # not record whether the final sustained note
-                              # or previously silent measures were included.
-                              # Reuse their tempo, but never an unverifiable
-                              # target-speed clean streak.
-                              and old.kind != "perform")
-            p.set_bpm(max(SETTINGS.minimum_bpm, min(SETTINGS.maximum_bpm, int(row[4] or p.piece.bpm))))
-            resume_equivalent = equivalent
-            if equivalent:
-                # Only an identical source-backed stage can inherit its
-                # prior tempo ladder and clean-pass streak.
-                p.bpm = max(SETTINGS.minimum_bpm, min(p.target_bpm, int(row[2])))
-                p.streak = min(SETTINGS.clean_runs_to_master-1, max(0, int(row[3])))
-            else:
-                # The old course/version may have a similarly named lesson,
-                # but its note selection or tempo policy can differ.
-                # A stage-key mismatch must not relabel old BPM progress as
-                # earned credit on the newly generated course.
-                p.bpm = p._tempo_for_current_stage()
-                p.streak = 0
-        for key,bpm in self.db.execute("SELECT stage_key,bpm FROM stage_tempos WHERE fingerprint=?",(fingerprint,)):
-            if any(step.key == key for step in p.lesson_steps):
-                p.stage_tempos[key] = max(SETTINGS.minimum_bpm,
-                                          min(p.target_bpm,int(bpm)))
+        # The piece-wide target is independent of the selected curriculum.
+        # The sessions table is the current per-piece target owner. Its old
+        # positional fields are never interpreted as lesson indices.
+        saved_target = self.db.execute(
+            "SELECT target_bpm FROM sessions WHERE fingerprint=?", (fingerprint,)
+        ).fetchone()
+        if saved_target and saved_target[0] is not None:
+            p.target_bpm = max(SETTINGS.minimum_bpm, min(
+                SETTINGS.maximum_bpm, int(saved_target[0])))
+
+        # One source of session position: an explicitly saved strategy with a
+        # versioned, content-derived stage identity. Unknown historical course
+        # rows are retained on disk but never executed or awarded credit.
+        row = self.db.execute(
+            """SELECT step_key, first_bar, last_bar, hand, level, exercise_kind,
+                      bpm, streak FROM strategy_sessions
+               WHERE fingerprint=? AND strategy=?""",
+            (fingerprint, p.profile),
+        ).fetchone()
+        current = {step.key: step for step in p.lesson_steps}
+        exact = False
+        if row and restore_session and isinstance(row[0], str):
+            selected = current.get(row[0])
+            if selected is not None:
+                p.restore_location(
+                    kind=selected.kind, first_bar=selected.first_bar,
+                    last_bar=selected.last_bar, hand=selected.hand,
+                    level=selected.level)
+                exact = p.identity == selected.key
+            elif row[1] is not None and row[2] is not None:
+                # After a generator version change, retain a navigable
+                # source-measure location, never old proficiency or tempo.
+                p.restore_location(
+                    kind=row[5] or "learn",
+                    first_bar=int(row[1]), last_bar=int(row[2]),
+                    hand=row[3] if row[3] in ("right", "left", "both") else "both",
+                    level=row[4] or "")
+
+        p.stage_tempos.clear()
+        p.transferable_tempos.clear()
+        p.mastered.clear()
+        for key, bpm in self.db.execute(
+            "SELECT stage_key, bpm FROM stage_tempos WHERE fingerprint=?",
+            (fingerprint,),
+        ):
+            if key in current:
+                p.stage_tempos[key] = max(SETTINGS.minimum_bpm, min(
+                    p.target_bpm, int(bpm)))
         for (key,) in self.db.execute(
-                "SELECT stage_key FROM repeat_tempo_credit WHERE fingerprint=?",
-                (fingerprint,)):
+            "SELECT stage_key FROM repeat_tempo_credit WHERE fingerprint=?",
+            (fingerprint,),
+        ):
             if key in p.stage_tempos:
                 p.transferable_tempos.add(key)
-        # A current session may predate per-stage tempos; retain its exact
-        # judged tempo, but only when the stage can be identified reliably.
-        if row is not None and restore_session and resume_equivalent:
-            p.stage_tempos[p.identity] = p.bpm
-        elif row is not None and restore_session:
-            # An incompatible saved *session* cannot donate its tempo, but
-            # a separately stored CURRENT-version stage tempo is still valid.
-            # Read this only after current stage keys and repeated-motif
-            # transferable credits have been loaded above.
-            p.bpm = p._tempo_for_current_stage()
-        for key,bpm in self.db.execute("SELECT exercise,bpm FROM mastery WHERE fingerprint=?",(fingerprint,)):
-            p.mastered[key]=bpm
-        # Preserve legacy rows, and recognize them only when the exact same
-        # hand, level and source events still form an individual course stage.
-        legacy_mastery = [(key, bpm) for key, bpm in p.mastered.items() if not key.startswith("course:")]
-        if legacy_mastery and restore_session and p.profile == 'legacy':
-            legacy_exercises = legacy_exercises or build_exercises(p.piece, consolidate=False)
-            for old in legacy_exercises:
-                for hand in ("right", "left", "both"):
-                    for variant in generate_variants(old.phrase, hand):
-                        legacy_key = f"{old.key}:{hand}:{variant.level}"
-                        if legacy_key not in p.mastered:
-                            continue
-                        new_key = p._stage_key(old, hand, variant)
-                        if any(step.key == new_key for step in p.lesson_steps):
-                            p.mastered[new_key] = p.mastered[legacy_key]
+        for key, bpm in self.db.execute(
+            "SELECT exercise, bpm FROM mastery WHERE fingerprint=?",
+            (fingerprint,),
+        ):
+            if key in current:
+                p.mastered[key] = bpm
 
+        if exact:
+            # A matching, current-version source stage may safely restore its
+            # deliberate BPM and clean-pass streak; no other row may.
+            p.bpm = max(SETTINGS.minimum_bpm, min(
+                p.target_bpm, int(row[6])))
+            p.streak = min(SETTINGS.clean_runs_to_master - 1,
+                           max(0, int(row[7])))
+            p.stage_tempos[p.identity] = p.bpm
+        else:
+            p.bpm = p._tempo_for_current_stage()
+            p.streak = 0
 
     def has_strategy_session(self, fingerprint: str, strategy: str) -> bool:
         return self.db.execute(
