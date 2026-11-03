@@ -217,6 +217,11 @@ func promote_if_ready(state: Dictionary) -> bool:
     _future = null
     new_renderer.modulate.a = 1.0
     new_renderer.runway_overlay = false
+    # Retained note ink is unchanged; its fixed brace and annotation canvas
+    # was intentionally omitted while this was a transparent future layer.
+    # Repaint that one small layer at promotion, never all score segments.
+    if is_instance_valid(new_renderer.retained_annotations):
+        new_renderer.retained_annotations.queue_redraw()
     new_renderer.runway_origin_beat = float(state.get("visual_offset_beats",0.0))
     new_renderer.runway_cutoff_beat = INF
     new_renderer.set_transport_overlay_enabled(true)
@@ -226,6 +231,8 @@ func promote_if_ready(state: Dictionary) -> bool:
     if old != null and is_instance_valid(old):
         _clear_tail()
         old.runway_overlay = true
+        if is_instance_valid(old.retained_annotations):
+            old.retained_annotations.queue_redraw()
         old.runway_cutoff_beat = (float(state.get("visual_offset_beats",0.0)) -
             former_origin)
         old.set_transport_overlay_enabled(false)
