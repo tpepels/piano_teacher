@@ -272,3 +272,29 @@ def test_native_layout_retry_reuses_prepared_ink_without_stale_or_mutable_data(
     owner.invalidate()
     owner.geometry(next_source)
     assert compiled == [7, 8, 8]
+
+
+def test_failed_native_asset_preparation_does_not_cache_partial_geometry(
+        artifacts_api, selected, rendering, tmp_path, monkeypatch):
+    from piano_teacher.application import score_preparation
+    owner = artifacts_api.ScoreArtifacts(PreprocessingCache(tmp_path))
+    calls = []
+
+    def assemble(_score, **kwargs):
+        calls.append(kwargs["revision"])
+        if len(calls) == 1:
+            raise score_preparation.NativeScorePreparationError(
+                "Native score slur fragments preparation failed: injected")
+        return {"revision": kwargs["revision"], "native_slurs_complete": True}
+
+    monkeypatch.setattr(score_preparation, "assemble_layout", assemble)
+    with pytest.raises(score_preparation.NativeScorePreparationError,
+                       match="slur fragments"):
+        owner.geometry(selected)
+    assert owner._prepared_layout is None
+    assert owner._prepared_layout_identity is None
+    retry = owner.geometry(selected)
+    assert retry["revision"] == selected.revision
+    assert retry["native_slurs_complete"]
+    assert calls == [selected.revision, selected.revision]
+    assert len(rendering) == 1  # Retry reuses the valid source engraving.
