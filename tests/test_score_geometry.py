@@ -3,9 +3,8 @@ import math
 import pytest
 from piano_teacher.source_svg import _transform, _apply
 
-from piano_teacher.score_geometry import (
-    parse_svg_geometry, layout_from_pages, locate_beat,
-)
+from piano_teacher.source_svg import parse_svg_geometry
+from piano_teacher.engraving.geometry import layout_from_pages, locate_beat
 
 
 def svg(body, *, viewbox="0 0 1000 600"):
@@ -91,7 +90,8 @@ def test_no_false_precision_when_missing_timed_glyphs():
 def test_nested_verovio_svg_viewbox_maps_notehead_to_outer_page():
     # Actual Verovio pattern: CSS-sized page and a separate 22000-unit
     # engraving coordinate system inside <svg class="definition-scale">.
-    from piano_teacher.score_geometry import parse_svg_geometry, layout_from_pages
+    from piano_teacher.source_svg import parse_svg_geometry
+    from piano_teacher.engraving.geometry import layout_from_pages
     xml = (
         '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1056 255">'
         '<svg class="definition-scale" viewBox="0 0 22000 5310">'
