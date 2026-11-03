@@ -554,6 +554,7 @@ class AdaptiveComposedLessonGenerator(ComposedLessonGenerator):
     """
     catalog: LessonPlanDefinition | None = None
     compiled_components: tuple[tuple[str, str], ...] = ()
+    compiled_piece: Piece | None = None
 
     def with_mistakes(
         self, mistakes: frozenset[str], definition: LessonPlanDefinition,
@@ -584,13 +585,15 @@ class AdaptiveComposedLessonGenerator(ComposedLessonGenerator):
         component_key = tuple((generator.name, repr(generator))
                               for generator in self.components)
         catalog = self.catalog
-        if catalog is None or self.compiled_components != component_key:
+        if (catalog is None or self.compiled_components != component_key
+                or self.compiled_piece is not piece):
             catalog = compile_hybrid_catalog(
                 piece, components=self.components, name=self.name)
             # Immutable catalog is reused for the same source/participants
             # across evidence updates and remains independent of old plans.
             object.__setattr__(self, "catalog", catalog)
             object.__setattr__(self, "compiled_components", component_key)
+            object.__setattr__(self, "compiled_piece", piece)
         status = dict(self.error_status)
         for sid in self.mistakes or ():
             status.setdefault(sid, "missed")
