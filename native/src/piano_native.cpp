@@ -126,7 +126,7 @@ void PianoNative::initialize_python() {
 void PianoNative::worker_loop() {
     initialize_python();
     // Command responses and musical deadlines share this one worker.
-    // A stopped UI or slow /state polling must never be the engine's timer.
+    // An idle UI or slow state snapshots must never be the engine's timer.
     // Waiting releases the queue mutex and the CPython GIL.
     using Clock = std::chrono::steady_clock;
     auto next_tick = Clock::now();
@@ -204,7 +204,7 @@ int PianoNative::tick_engine() {
 }
 
 PianoNative::Reply PianoNative::execute(const Command &command) {
-    Reply output{command.id, 500, {}};
+    Reply output{command.id, 3, {}};
     if (!engine_) {
         std::lock_guard<std::mutex> guard(mutex_);
         const std::string detail = failure_.empty() ? "Python bridge unavailable" : failure_;
