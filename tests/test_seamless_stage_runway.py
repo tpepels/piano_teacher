@@ -144,3 +144,72 @@ def test_wrong_take_keeps_existing_backward_recovery_not_stage_promotion(
         assert engine.pending_result is not None
     finally:
         engine.db.close()
+
+
+def test_two_consecutive_prepared_stage_transitions_keep_global_beat(tmp_path):
+    engine = _engine(tmp_path)
+    try:
+        prepared = Prepared(engine)
+        engine.future_score = prepared
+        first_offset = engine.visual_transport.visual_offset_beats
+        for advancement in (2, 3):
+            engine.plan.streak = 2
+            engine.plan.set_bpm(engine.plan.target_bpm)
+            selection, target_number = engine._next_stage_selection()
+            assert target_number == advancement
+            current_bpm = engine.plan.bpm
+            length = (engine.plan.active_phrase.end -
+                      engine.plan.active_phrase.start)
+            engine.acknowledge_preloaded_stage(
+                stage_key=selection.stage_key, revision=selection.revision)
+            finished_at = _finish(engine)
+            assert engine.plan.lesson_step_number == advancement
+            assert engine.awaiting_score_revision is None
+            assert engine.running
+            assert engine.count_in_beats == 0.0
+            assert engine.visual_transport.run_at == pytest.approx(finished_at)
+            first_offset += length + SETTLEMENT_SECONDS * current_bpm / 60.0
+            assert engine.visual_transport.visual_offset_beats == pytest.approx(first_offset)
+        assert len(prepared.adoptions) == 2
+        assert prepared.adoptions[0].stage_key != prepared.adoptions[1].stage_key
+    finally:
+        engine.db.close()
+
+
+def test_preloaded_stage_continues_in_guided_origin_practice(tmp_path):
+    engine = _engine(tmp_path)
+    try:
+        engine.course_guided = True
+        prepared = Prepared(engine)
+        engine.future_score = prepared
+        selection, next_number = engine._next_stage_selection()
+        engine.acknowledge_preloaded_stage(
+            stage_key=selection.stage_key, revision=selection.revision)
+        _finish(engine)
+        assert engine.plan.lesson_step_number == next_number
+        assert engine.running and engine.mode == "practice"
+        assert engine.awaiting_score_revision is None
+    finally:
+        engine.db.close()
+
+
+def test_acknowledged_stage_without_adoptable_ink_falls_back_to_load(tmp_path):
+    engine = _engine(tmp_path)
+    try:
+        class Unavailable(Prepared):
+            def adopt(self, _selection):
+                return None
+
+        engine.future_score = Unavailable(engine)
+        selection, _ = engine._next_stage_selection()
+        engine.acknowledge_preloaded_stage(
+            stage_key=selection.stage_key, revision=selection.revision)
+        first_revision = engine.score_revision
+        _finish(engine)
+        assert engine.score_revision == first_revision + 1
+        assert engine.awaiting_score_revision == engine.score_revision
+        assert not engine.running and not engine.auto
+        assert engine.visual_transport.visual_offset_beats == 0.0
+        assert engine.pending_result is None
+    finally:
+        engine.db.close()
