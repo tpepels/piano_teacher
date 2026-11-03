@@ -10,6 +10,8 @@ from __future__ import annotations
 from bisect import bisect_left, bisect_right
 from collections import Counter
 from dataclasses import replace
+import os
+import time
 from typing import Mapping, Protocol
 
 from .exercise_generator import ExerciseVariant
@@ -181,7 +183,13 @@ def compile_hybrid_catalog(
     if (piece.source_format != "midi" or piece.source_musicxml
             or piece.midi_ticks_per_beat <= 0):
         raise ValueError("Hybrid lessons require imported MIDI with PPQ")
+    diagnose = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
+    began = time.perf_counter()
     exercises = _course_exercises(piece)
+    if diagnose:
+        print("HYBRID_CATALOG: excerpts", round((time.perf_counter()-began)*1000,1),
+              "ms count",len(exercises),flush=True)
+    stage_started = time.perf_counter()
     stages = {}
     for exercise in exercises:
         for hand in lesson_hands(exercise):
@@ -210,9 +218,17 @@ def compile_hybrid_catalog(
             if len(set(levels)) != len(levels):
                 raise ValueError("Adaptive passage contributors collide on stage names")
             stages[(exercise.key, hand)] = variants
-    return LessonPlanDefinition(
+    if diagnose:
+        print("HYBRID_CATALOG: stages",round((time.perf_counter()-stage_started)*1000,1),
+              "ms count",len(stages),flush=True)
+    validated = time.perf_counter()
+    result = LessonPlanDefinition(
         exercises, stages, name,
         requires_unique_source_ids=True)
+    if diagnose:
+        print("HYBRID_CATALOG: validation",round((time.perf_counter()-validated)*1000,1),
+              "ms total",round((time.perf_counter()-began)*1000,1),flush=True)
+    return result
 
 
 def _reduction_relevance(stage: ExerciseStage, original: ExerciseStage,

@@ -556,8 +556,12 @@ class AdaptiveComposedLessonGenerator(ComposedLessonGenerator):
                        error_status=statuses)
 
     def generate(self, piece: Piece) -> LessonPlanDefinition:
+        import os
+        import time
         from .adaptive_hybrid_curriculum import (
             compile_hybrid_catalog, select_hybrid_stages)
+        diagnose = os.environ.get("PIANO_TEACHER_TIMING_DIAGNOSTICS") == "1"
+        began = time.perf_counter()
         # A dataclass copy can change the contributor set; never serve
         # an old source catalog after an algorithm is replaced.
         component_key = tuple((generator.name, repr(generator))
@@ -575,7 +579,11 @@ class AdaptiveComposedLessonGenerator(ComposedLessonGenerator):
         status = dict(self.error_status)
         for sid in self.mistakes or ():
             status.setdefault(sid, "missed")
-        return select_hybrid_stages(catalog, status)
+        selected = select_hybrid_stages(catalog, status)
+        if diagnose:
+            print("HYBRID_CATALOG: select",round((time.perf_counter()-began)*1000,1),
+                  "ms exercises",len(selected.exercises),flush=True)
+        return selected
 
 
 @dataclass(frozen=True)
