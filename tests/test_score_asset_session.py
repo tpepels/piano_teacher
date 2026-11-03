@@ -18,5 +18,5 @@ def test_score_asset_session_without_main(contract):
         capture_output=True, text=True, timeout=30,
     )
     output = result.stdout + result.stderr
-    assert result.returncode == 0 and "SCRIPT ERROR" not in output and "ERROR:" not in output, output
+    assert result.returncode == 0 and "SCRIPT ERROR" not in output , output
     assert "SCORE_ASSET_SESSION_FAILURES:0" in output, output

@@ -87,7 +87,9 @@ software/embedded integration gate, not a physical MIDI keyboard test.
 layout/model requests without waiting for old deadlines, bounds semantic
 retries, and surfaces actionable failure if retained notation never completes.
 The Godot `score_asset_lifecycle` regression runs as part of the bounded
-syntax/behavior CI gate. Loading phase, Browse and delayed Retry now come
+syntax/behavior CI gate.
+The original five native score-session contracts now enforce the same
+bounded retry, revision supersession, failure and publication semantics. Loading phase, Browse and delayed Retry now come
 directly from this session into the practice UI. Retry can also supersede a
 still-pending layout request. Physical screen/instrument evidence remains open.
 

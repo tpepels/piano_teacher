@@ -52,4 +52,8 @@ for fixture in command_success_effects command_request_state command_success_pre
   echo "Checking Godot behavior: $fixture"
   timeout 12s "$binary" --headless --path godot --script "$PWD/tests/godot/$fixture.gd"
 done
+for contract in publication stale retry failure native; do
+  echo "Checking Godot score-session contract: $contract"
+  timeout 12s "$binary" --headless --path godot --script "$PWD/tests/godot/score_asset_session.gd" -- "$contract"
+done
 echo "GODOT_STARTUP_SYNTAX_OK"
