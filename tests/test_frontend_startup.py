@@ -16,6 +16,7 @@ def test_single_launcher_requires_embedded_engine_preflight():
     script = (ROOT / "run.sh").read_text()
     assert 'export PYTHONPATH=' in script
     assert "scripts/verify-native-bridge.sh" in script
-    assert "piano-native-verified" in script
+    assert "piano-native-runtime-sha256" in script
+    assert "scripts/dev_runtime_state.py check-native" in script
     assert 'exec "$GODOT"' in script
     assert "8765" not in script
