@@ -193,7 +193,7 @@ def compile_hybrid_catalog(
         requires_unique_source_ids=True)
 
 
-def _fukuda_relevance(stage: ExerciseStage, original: ExerciseStage,
+def _reduction_relevance(stage: ExerciseStage, original: ExerciseStage,
                       affected_source_ids: frozenset[str]) -> tuple[int, float] | None:
     """Prefer simplifications of the failed notes or their immediate context.
 
@@ -215,7 +215,7 @@ def _fukuda_relevance(stage: ExerciseStage, original: ExerciseStage,
     if distance > 2.0 + 1e-7:
         return None
     # A direct reduction of the actually failed note is preferred to a
-    # general neighboring reduction; ties retain the author's catalog order.
+    # general neighboring reduction, independent of the contributor's name.
     return (0 if removed & affected_source_ids else 1, distance)
 
 
@@ -235,20 +235,22 @@ def _selection(candidates: tuple[ExerciseStage, ...],
     pitch_ids = frozenset(sid for sid, status in evidence.items()
                           if status in {"wrong", "missed", "pitch"})
     if pitch_ids:
-        # Filter pitch scaffolds by the graded original MIDI source IDs.
-        # A reduction of an unrelated chord must not masquerade as a
-        # targeted Fukuda repair. Preserve the caller's relevance ordering.
+        # Every reduction contributor uses the same source-ID relevance
+        # constraint. No future algorithm must add a special-case branch:
+        # reductions unrelated to the failed notes are excluded, while
+        # genuine rhythm and tempo exercises remain available.
+        from .lesson_stage_semantics import difference
         ranked = sorted((
             (relevance, index, stage)
             for index, stage in enumerate(candidates[:-1])
-            if stage.origin == "fukuda-midi"
-            if (relevance := _fukuda_relevance(
+            if difference(stage, original).removed > 0
+            if (relevance := _reduction_relevance(
                 stage, original, pitch_ids)) is not None
         ), key=lambda row: (*row[0], row[1]))
         candidates = (
             *(stage for _, _, stage in ranked),
             *(stage for stage in candidates[:-1]
-              if stage.origin != "fukuda-midi"),
+              if difference(stage, original).removed == 0),
             original,
         )
     return teaching_sequence(candidates, evidence=dict(evidence))
