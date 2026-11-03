@@ -14,7 +14,7 @@ import time
 
 from .learning import LearningPlan
 from .exercise_strategies import resolve_strategy
-from .application.score_artifacts import ScoreArtifacts, ScoreSelection, validate_png_width
+from .application.score_artifacts import ScoreArtifacts, ScoreSelection
 from .application.midi_connection import MidiConnection, MidiNotice
 from .application.listen_session import ListenSelection, ListenSession
 from .practice import Recorder
@@ -1871,19 +1871,10 @@ class PracticeEngine:
         with self.lock:
             return self.score_artifacts.engraving(self._score_selection())
 
-    def engraved(self, page: int = 0) -> str:
+    def geometry(self) -> dict:
+        """Publish the selected native score and semantic asset revision."""
         with self.lock:
-            return self.score_artifacts.engraved(self._score_selection(), page)
-
-    def engraved_png(self, page: int = 0, *, width: int = 2000) -> bytes:
-        # Preserve invalid-width validation even when no piece is loaded.
-        validate_png_width(width)
-        with self.lock:
-            return self.score_artifacts.engraved_png(self._score_selection(), page, width=width)
-
-    def geometry(self, *, native_notes: bool = True) -> dict:
-        with self.lock:
-            return self.score_artifacts.geometry(self._score_selection(), native_notes=native_notes)
+            return self.score_artifacts.geometry(self._score_selection())
 
     def lesson_overview(self) -> dict:
         with self.lock:
