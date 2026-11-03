@@ -4,8 +4,6 @@ First selection transfers only the source location. An explicitly saved
 strategy session can resume its own stage, but a foreign course's exercise
 index, hand and variant are never reused as new stage selectors.
 """
-from dataclasses import replace
-
 import mido
 
 from piano_teacher.application.strategy_session import restored_strategy_plan
@@ -119,3 +117,60 @@ def test_existing_saved_combined_selection_is_not_reset(tmp_path):
     assert result.active_phrase.first_bar == 3
     assert result.hand == "left"
     assert result.active_variant.level == "original"
+
+
+def test_old_course_version_resumes_source_location_without_stale_bpm_or_credit(tmp_path):
+    from piano_teacher.progress_repository import ProgressRepository
+    piece = _piece(tmp_path)
+    repo = ProgressRepository(tmp_path / "migration.sqlite")
+    try:
+        before = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
+        before.bpm = min(before.target_bpm, before.start_bpm + 25)
+        before.streak = 2
+        old_bpm = before.bpm
+        old_key = before.identity
+        repo.save(before, "source-midi")
+        # Model a saved course v2 that has been superseded by v3, including
+        # its separate per-stage BPM record. No reset/delete is allowed.
+        obsolete = old_key.replace("course:3:", "course:2:", 1)
+        assert obsolete != old_key
+        for table in ("sessions", "strategy_sessions"):
+            repo.db.execute(
+                f"UPDATE {table} SET step_key=? WHERE fingerprint=?",
+                (obsolete, "source-midi"))
+        repo.db.execute(
+            "UPDATE stage_tempos SET stage_key=? WHERE fingerprint=?",
+            (obsolete, "source-midi"))
+        repo.db.execute("INSERT OR REPLACE INTO mastery VALUES (?,?,?)",
+                        ("source-midi", obsolete, old_bpm))
+        repo.db.commit()
+        after = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
+        repo.restore(after, "source-midi")
+        assert after.active_phrase.first_bar == before.active_phrase.first_bar
+        assert after.bpm == after.start_bpm
+        assert after.bpm != old_bpm
+        assert after.streak == 0
+        assert after.identity not in after.stage_tempos
+        assert after.identity not in after.mastered
+        assert after.target_bpm == before.target_bpm
+    finally:
+        repo.close()
+
+
+def test_exact_saved_course_keeps_its_independent_stage_bpm_and_streak(tmp_path):
+    from piano_teacher.progress_repository import ProgressRepository
+    piece = _piece(tmp_path)
+    repo = ProgressRepository(tmp_path / "exact.sqlite")
+    try:
+        original = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
+        original.bpm = min(original.target_bpm, original.start_bpm + 15)
+        original.streak = 2
+        repo.save(original, "source-midi")
+        restored = LearningPlan(piece, exercise_strategy="coda-fukuda-midi")
+        repo.restore(restored, "source-midi")
+        assert restored.identity == original.identity
+        assert restored.bpm == original.bpm
+        assert restored.streak == original.streak
+        assert restored.stage_tempos[restored.identity] == original.bpm
+    finally:
+        repo.close()
