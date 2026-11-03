@@ -7,11 +7,12 @@ import verovio
 
 from piano_teacher.music import Note, Phrase
 from piano_teacher.notation.lesson import build_lesson_score, LessonScore
-from piano_teacher.score import render_layout, _create_verovio_toolkit
+from piano_teacher.engraving.engraving import render_layout
+from piano_teacher.notation.assets.runtime import _create_verovio_toolkit
 from piano_teacher.lesson_validation import require_lesson_alignment
 from piano_teacher.feedback import project_assessment
 from piano_teacher.practice import Assessment, NoteAssessment
-from piano_teacher.score_geometry import locate_beat
+from piano_teacher.engraving.geometry import locate_beat
 
 
 def note(start, end, pitch=60, *, hand='right', identity='attack', voice='1', track=0):
