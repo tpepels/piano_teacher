@@ -24,12 +24,15 @@ if [[ "$MODE" != "--corpus" ]]; then
     tests/test_fukuda_midi_phase4.py \
     tests/test_coda_piece_curriculum.py \
     tests/test_midi_stage_wiring.py \
+    tests/test_strategy_handoff.py \
     tests/test_state_projection.py
   if command -v godot >/dev/null 2>&1; then
     timeout 25s godot --headless --path godot --script \
       res://../tests/godot/idle_note_preview.gd
     timeout 25s godot --headless --path godot --script \
       res://../tests/godot/lesson_stage_picker.gd
+    timeout 25s godot --headless --path godot --script \
+      res://../tests/godot/settings_ownership.gd -- preferences
   else
     echo "GODOT_IDLE_PREVIEW_SKIPPED: Godot binary not installed" >&2
   fi
