@@ -88,6 +88,22 @@ outliers, missing/double taps and persistence; Godot checks cover the pulse's
 single preparation period. USB/Bluetooth timing accuracy remains a physical
 Phase 6 gate, not certified by synthetic samples.
 
+The calibration-to-grading regression passes through the MIDI callback,
+recorder, final assessment and saved correction after reopening the engine.
+It checks 180 ms delayed attacks both before Apply (late) and after Apply
+(correct), plus an unchanged wrong-pitch rejection. The bounded Python CI
+run https://github.com/tpepels/piano_teacher/actions/runs/41694522464
+passed 426 tests (6 skipped) at c5a898d. No hardware measurement was involved.
+
+## Repository housekeeping
+
+The root README and this roadmap are the only active entry points. Historic
+notation/raster plans are under docs/archive/development/ and the optional
+RubricNet reference tooling is explicitly research-only. Godot .godot/ editor
+caches are untracked and source .gd.uid files are retained; fast CI rejects
+reintroduced generated/indexed debris. Editor-only MCP tools remain in the
+development tree but are excluded from release staging.
+
 ## Immediate order of work
 
 **P6 — Prove real user behavior.** The

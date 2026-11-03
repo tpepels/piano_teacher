@@ -45,8 +45,11 @@ the desktop process and has no separate CLI or network listener.
   allowing a provisional mint playhead pulse before final hold grading.
 - Wrong/missed/extra pitches are failures; yellow warnings cause a retry
   when at least half of distinct attacks are yellow.
-- MIDI calibration uses a visible breathing beat and three rounds, each
-  with a count-in; measured offsets require explicit application.
+- MIDI calibration uses a visible breathing beat, one initial four-beat
+  count-in, and five uninterrupted eight-tap rounds. Robust outlier filtering
+  requires at least four consistent rounds; the measured offset is saved only
+  after explicit application. The same correction feeds live MIDI feedback
+  and final assessment.
 - Overlapping MIDI voices retain their independent sounding durations and
   separate opposing stems in internally generated MusicXML for engraving.
 - Offline fingering inference uses the included adapter. For a developer
@@ -66,8 +69,9 @@ bash scripts/verify-native-bridge.sh
 godot --headless --path godot --script "$PWD/tests/godot/visual_transport_clock.gd"
 ```
 
-The fast checks do not substitute for physical MIDI, rendering or audio
-verification. Run exhaustive notation diagnostics locally using
+The fast checks include a calibration-to-grading MIDI callback regression
+and a tracked-file hygiene audit. They do not substitute for physical MIDI,
+rendering or audio verification. Run exhaustive notation diagnostics locally using
 `bash scripts/verify-notation.sh` when explicitly needed; they are not
 part of short CI.
 
@@ -82,3 +86,11 @@ system. See [native runtime and packaging](docs/inprocess-runtime.md).
 For reference specifications, verification and archived research evidence,
 use the [documentation index](docs/README.md). The [roadmap](ROADMAP.md)
 is the only active phase plan.
+
+## Development-only editor tools
+
+The vendored Godot MCP toolkit under godot/addons/godot_mcp_toolkit/ is
+optional editor tooling. It is **not** part of the application architecture
+and is stripped from release packages. Do not enable its editor WebSocket
+service when testing network-free runtime behavior. Godot-generated .godot/
+caches are ignored, whereas source .gd.uid identifiers are committed.

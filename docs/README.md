@@ -21,6 +21,7 @@
 - `docs/research-*.md`, `docs/coda-*.md` and dated notation reports are experiments, comparisons or implementation evidence. Their time-relative claims must not override ROADMAP.
 - `docs/evidence/` contains captured images, logs, corpus ledgers and provenance.
 - [Archived plans and superseded architecture](archive/development/README.md) preserve old material without an active implementation track.
+- Godot MCP under godot/addons/godot_mcp_toolkit/ is optional editor tooling, excluded from the production runtime and standalone package.
 
 ## Rules
 

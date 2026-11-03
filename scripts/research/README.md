@@ -122,46 +122,20 @@ oracle with these optional dependencies. The resulting source-to-model command
 is **not** yet an app-native difficulty strategy: packaging/porting the exact
 extractor, input-score parity and classroom/device acceptance remain open.
 
-## Offline application strategy (optional)
+## Research-only scope (not a desktop strategy)
 
-The full published extractor's 14 required original Python modules are
-vendored **byte-for-byte** under
-`piano_teacher/research/_upstream_rubricnet/`, including the MIT license.
-The trained five-fold model is already bundled separately. The program
-requires **no internet access when using RubricNet** after one-time setup.
+The RubricNet tools above reproduce the published model and MusicXML feature
+extractor for research verification. They are **not selectable lesson generators**
+in Piano Teacher, and the desktop never accepts MusicXML as user input.
+The current production default remains MIDI-only Coda + Fukuda.
 
-To install optional extractor requirements without adding Torch or training
-modules to the normal Piano Teacher environment:
+For optional extractor/model experiments, use the scripts/research/ Python
+tools in an isolated environment and scripts/setup-rubricnet.sh for their
+optional requirements. Do **not** install a RubricNet worker into the desktop
+session, change run.sh, or attempt to select rubricnet-trained, legacy, or
+feature-gated in Settings: none is a current runtime strategy.
 
-```bash
-cd ~/Projects/piano_teacher
-bash scripts/setup-rubricnet.sh
-./run.sh
-```
-
-`run.sh` uses `.rubricnet-venv/bin/python` for the isolated optional worker.
-The trainer, checkpoint loader and full research checkout are **not**
-imported into the practice service. If launching the backend manually,
-set `PIANO_TEACHER_RUBRICNET_PYTHON` to that interpreter path.
-
-In Godot Settings → Practice, select **RubricNet · trained score difficulty
-(optional setup)**. This sets an independent `rubricnet-trained` profile;
-the default `legacy` strategy and existing `feature-gated` heuristic
-remain unchanged. Switching an open score validates trained extraction before
-saving the selection and stopping the current session.
-
-The actual source MusicXML is passed to the original extractor, which returns
-12 named descriptors. The five authentic trained models predict whole-piece
-difficulty. **Exercise selection after prediction is our explicit heuristic
-rule, not a learned RubricNet policy:** classes 0–2 use the baseline path,
-3–5 Coda part-splitting, 6–8 combined Fukuda+Coda source-preserving drills.
-
-The upstream extractor assumes a conventional two-hand score. Short,
-rest-only, sparsely pitched, or otherwise unsupported scores can produce
-undefined features; those are refused with an error and **no surrogate
-difficulty**. Broader positive/negative fixture acceptance is tracked in
-`tests/test_rubricnet_real_scores.py`. Only the optional research test job
-imports Torch/scientific packages. Ordinary CI stays short.
-
-The trained difficulty class is not calibrated to the learner's skill and
-does not establish that the selected exercise improves learning.
+The published model's MusicXML descriptor scores are not independently
+validated for arbitrary MIDI transcriptions and are not a learner skill
+measurement. Future research must establish MIDI feature parity and
+independent pedagogical effectiveness before proposing product integration.
