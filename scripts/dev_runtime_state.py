@@ -50,7 +50,7 @@ def _hash_tree(root: Path, files: list[Path]) -> str:
         source = root / relative
         if not source.is_file():
             raise FileNotFoundError(f"Required runtime input missing: {relative}")
-        h.update(relative.as_posix().encode("utf-8") + b"\\0")
+        h.update(relative.as_posix().encode("utf-8") + b"\0")
         h.update(bytes.fromhex(_hash_file(source)))
     return h.hexdigest()
 
@@ -113,7 +113,7 @@ def record_native(root: Path = ROOT) -> None:
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
             json.dump(state, stream, sort_keys=True, indent=2)
-            stream.write("\\n")
+            stream.write("\n")
         os.replace(name, target)
     finally:
         if os.path.exists(name):
@@ -150,7 +150,7 @@ def runtime_signature(godot: Path, root: Path = ROOT) -> str:
             version = metadata.version(package)
         except metadata.PackageNotFoundError:
             version = "NOT_INSTALLED"
-        h.update(f"{package}={version}\\n".encode("utf-8"))
+        h.update(f"{package}={version}\n".encode("utf-8"))
     return h.hexdigest()
 
 
@@ -170,7 +170,7 @@ def main() -> int:
                 parser.error("--godot is required for runtime-signature")
             print(runtime_signature(args.godot, args.root))
     except (OSError, ValueError, TypeError) as exc:
-        parser.exit(1, f"Could not inspect native runtime: {exc}\\n")
+        parser.exit(1, f"Could not inspect native runtime: {exc}\n")
     return 0
 
 
