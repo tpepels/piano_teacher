@@ -119,3 +119,99 @@ def test_rapid_pause_resume_and_worker_ticks_never_advance_a_frozen_take(
         assert engine.score_revision == 0
     finally:
         engine.db.close()
+
+
+def test_100_real_midi_performances_keep_source_and_grading_isolated(
+        tmp_path, monkeypatch):
+    """Real MIDI importer -> typed perform -> callbacks -> 100 graded reviews.
+
+    One wrong attack in every tenth take must remain an error, while clean
+    takes must not confer mastery or advance the canonical original source.
+    """
+    import mido
+    from tests.test_phase6_rest_handoff_real_midi import write_rest_source
+
+    clock = [5000.0]
+    monkeypatch.setattr(server.time, "monotonic", lambda: clock[0])
+    folder = tmp_path / "music"
+    folder.mkdir()
+    source = folder / "repeated-performance.mid"
+    write_rest_source(source)
+    source_bytes = source.read_bytes()
+    engine = PracticeEngine(tmp_path / "app", enable_midi=False)
+    engine.midi.port = object()
+    bridge = EngineCommands(engine=engine)
+
+    def command(operation, payload):
+        status, body = bridge.request(operation, __import__("json").dumps(payload))
+        assert status == 0, (operation, status, body[:200])
+        return __import__("json").loads(body)
+
+    try:
+        command("settings.update", {"music_dir": str(folder)})
+        opened = command("library.open", {"id": source.name})
+        selected = command("practice.command", {"action": "perform", "scope": "whole"})
+        assert selected["mode"] == "perform"
+        assert engine.plan.active_variant.level == "original"
+        assert engine.plan.hand == "both"
+        revision = selected["revision"]
+        fingerprint = engine.fingerprint
+        note_count = len(engine.plan.active_phrase.notes)
+        assert note_count >= 6
+        ready = command("practice.command",
+                        {"action": "score_ready", "revision": revision})
+        if not ready["running"]:
+            ready = command("practice.command", {"action": "start"})
+        assert ready["running"] and not ready["preview_only"]
+
+        for cycle in range(100):
+            phrase = engine.plan.active_phrase
+            origin = engine.visual_transport.run_at
+            bpm = engine.plan.bpm
+            tempo = engine._active_tempo_map()
+            def elapsed(beat):
+                return (tempo.seconds_at(beat) if tempo is not None
+                        else beat * 60.0 / bpm)
+            error_take = cycle % 10 == 9
+            expected_wrong = next(n for n in phrase.notes if n.hand == "right")
+            events = []
+            for note in phrase.notes:
+                pitch = note.pitch + 2 if error_take and note is expected_wrong else note.pitch
+                events.extend((
+                    (elapsed(note.start - phrase.start), 1, pitch, note.hand),
+                    (elapsed(note.end - phrase.start), 0, pitch, note.hand)))
+            events.sort(key=lambda x: (x[0], x[1], x[2]))
+            prior_input_count = engine.midi.input_count
+            for seconds, pressed, pitch, hand in events:
+                clock[0] = origin + seconds
+                engine._receive(mido.Message(
+                    "note_on" if pressed else "note_off",
+                    note=pitch, velocity=88 if pressed else 0,
+                    channel=0 if hand == "right" else 1))
+            assert engine.midi.input_count - prior_input_count == note_count
+            clock[0] = origin + elapsed(phrase.end - phrase.start) + 0.7
+            reviewed = engine.state()
+            summary = engine.performance_summary
+            assert not reviewed["running"] and not reviewed["preview_only"]
+            assert summary is not None
+            assert summary["total"] == note_count
+            if error_take:
+                assert summary["wrong"] >= 1
+                assert summary["correct"] < note_count
+            else:
+                assert summary["correct"] == note_count
+                assert summary["missed"] == summary["wrong"] == 0
+            assert engine.score_revision == revision
+            assert engine.fingerprint == fingerprint
+            assert engine.plan.active_variant.level == "original"
+            assert engine.plan.hand == "both"
+            assert engine.plan.mastered == {}
+            assert source.read_bytes() == source_bytes
+            if cycle < 99:
+                ready = command("practice.command", {"action": "start"})
+                assert ready["running"] and not ready["preview_only"]
+                assert ready["mode"] == "perform"
+        assert engine.db.execute("SELECT count(*) FROM mastery").fetchone()[0] == 0
+    finally:
+        engine.listen.cancel()
+        engine.db.close()
