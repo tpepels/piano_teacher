@@ -1,0 +1,55 @@
+name: Phase 6 full MIDI cold/warm performance
+
+# Explicit small real-score benchmark, not a broad nightly stress gate.
+# Independent of device/Bluetooth and framebuffer latency.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/phase6-score-performance.yml'
+      - 'tests/test_phase6_score_performance.py'
+      - 'piano_teacher/application/score_artifacts.py'
+      - 'piano_teacher/runtime_timings.py'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: phase6-score-perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-score-cpu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    env:
+      OPENBLAS_NUM_THREADS: "1"
+      OMP_NUM_THREADS: "1"
+      PYTHONUNBUFFERED: "1"
+      PIANO_TEACHER_TIMING_DIAGNOSTICS: "1"
+      PIANO_PHASE6_PERF_OUT: ${{ runner.temp }}/phase6-score-perf
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install actual MIDI and Verovio score runtime
+        run: python -m pip install -e '.[godot,test]'
+      - name: Measure large-score load, native asset cache and live state P95
+        run: |
+          mkdir -p "$PIANO_PHASE6_PERF_OUT"
+          set -o pipefail
+          timeout 225s python -m pytest -q -s --tb=short \
+            --basetemp="$RUNNER_TEMP/phase6-perf-test" \
+            --junitxml="$PIANO_PHASE6_PERF_OUT/junit.xml" \
+            tests/test_phase6_score_performance.py \
+            2>&1 | tee "$PIANO_PHASE6_PERF_OUT/pytest.txt"
+      - name: Upload numerical timings and failures at the exact revision
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase6-score-perf-${{ github.sha }}
+          path: ${{ runner.temp }}/phase6-score-perf/
+          if-no-files-found: error
+          retention-days: 14

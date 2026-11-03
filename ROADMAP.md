@@ -154,6 +154,15 @@ Its first current-revision run must pass before this gate can be accepted.
 The fixture assembler now uses the single canonical native layout path,
 with no obsolete `native_notes` switch.
 
+**P6 — CPU and memory instrumentation.** The
+`phase6-score-performance.yml` source-bound gate profiles actual Moonlight
+and Hanon imports, first Verovio/native asset compilation, same-revision
+cached response, next-lesson score generation and 160 real backend state
+polls under a practice transport. It exports wall times, p95/max polling,
+actual note counts, source hashes and peak process RSS. These are bounded
+Linux CI software budgets, not USB/Bluetooth/display latency targets. The
+first measured run is pending; breaches remain failures, not waived samples.
+
 **P6 — Score preparation.** Score loading now supersedes obsolete
 layout/model requests without waiting for old deadlines, bounds semantic
 retries, and surfaces actionable failure if retained notation never completes.
